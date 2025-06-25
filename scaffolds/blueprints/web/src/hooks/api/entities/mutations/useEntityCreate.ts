@@ -101,8 +101,7 @@ export const useEntityCreate = () => {
         description: data.organization.description,
         website: data.organization.website
       })
-      console.log('organization', organization)
-      console.log('data', data)
+
       // Then, create the entity with the organization ID
       const response = await apiClient.post<EntityCreateResponseDto>('/entities', {
         name: data.name,
