@@ -1,4 +1,4 @@
-import { Locale } from '@prisma/client'
+import { Locale } from '@/generated/prisma/client'
 import { TranslationService } from '../../services/translation.service'
 
 export const getPasswordResetHtmlTemplate = (resetUrl: string, translationService: TranslationService, locale: Locale, firstName?: string): string => {

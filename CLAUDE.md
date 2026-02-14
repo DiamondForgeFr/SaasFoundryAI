@@ -5,8 +5,8 @@ CLI tool that scaffolds production-ready SaaS projects (NestJS + React + Postgre
 ## Tech Stack
 
 - **CLI**: Node.js, Commander, Inquirer, TypeScript
-- **Generated Backend**: NestJS 11, Prisma 6, PostgreSQL 16, JWT + Passport
-- **Generated Frontend**: React 19, React Router v7, Vite, TailwindCSS, ShadCN UI, React Query, React Hook Form + Zod, i18next
+- **Generated Backend**: NestJS 11, Prisma 7 (driver adapters + PrismaPg), PostgreSQL 16, JWT + Passport, Zod 4
+- **Generated Frontend**: React 19, React Router v7, Vite 7, TailwindCSS 4, Radix UI (unified), ShadCN UI, React Query, React Hook Form + Zod 4, i18next
 - **Infra**: Docker multi-stage builds, Nginx, `saasfoundry-network`
 
 ## Project Structure
@@ -81,4 +81,4 @@ scripts/          # Version management (tag-manager.sh)
 - This is a **scaffold/generator** CLI — the code in `scaffolds/` is template code, not application code
 - **NEVER** modify scaffold templates without considering the impact on generated projects
 - Current version: 1.0.0-beta (npm package `saasfoundry`)
-- Node.js >= 20.0.0 required
+- Node.js >= 20.19.0 required (Prisma 7 + Vite 7)

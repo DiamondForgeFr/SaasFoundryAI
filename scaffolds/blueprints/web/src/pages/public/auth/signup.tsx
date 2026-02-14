@@ -98,7 +98,7 @@ export function SignUp() {
                   <Input id={inputId} placeholder={placeholder} type={showPassword ? 'text' : 'password'} autoComplete={autoComplete} {...field} />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700 focus:outline-hidden"
                     onClick={togglePasswordVisibility}
                     tabIndex={-1}
                   >

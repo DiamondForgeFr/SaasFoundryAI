@@ -5,7 +5,7 @@
 # ===============================
 
 # 1. Configuration
-readonly MIGRATIONS_DIR="prisma/migrations"
+readonly MIGRATIONS_DIR="prisma/schema/migrations"
 readonly SQL_FUNCTIONS_DIR="prisma/sql/functions"
 readonly SQL_TRIGGERS_DIR="prisma/sql/triggers"
 readonly SQL_DATASETS_DIR="prisma/sql/datasets"

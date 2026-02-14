@@ -2,7 +2,7 @@
  * Resources
  */
 import { ApiProperty } from '@nestjs/swagger'
-import { Locale } from '@prisma/client'
+import { Locale } from '@/generated/prisma/client'
 import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator'
 
 /**

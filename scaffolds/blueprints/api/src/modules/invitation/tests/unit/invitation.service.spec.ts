@@ -3,7 +3,7 @@
  */
 import { BadRequestException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { Locale, TokenType } from '@prisma/client'
+import { Locale, TokenType } from '@/generated/prisma/client'
 
 /**
  * Dependencies

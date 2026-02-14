@@ -1,4 +1,4 @@
-import { User } from '@prisma/client'
+import { User } from '@/generated/prisma/client'
 import { Request } from 'express'
 
 export interface AuthenticatedRequest extends Request {

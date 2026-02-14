@@ -95,7 +95,7 @@ export function MultiSelectFilter({
               placeholder={placeholder}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full rounded border bg-white py-1 pl-7 pr-7 text-sm focus:border-gray-200 focus:outline-none focus:ring-0"
+              className="w-full rounded border bg-white py-1 pl-7 pr-7 text-sm focus:border-gray-200 focus:outline-hidden focus:ring-0"
               style={{ boxShadow: 'none' }}
             />
             {selected.length > 0 && (
@@ -103,7 +103,7 @@ export function MultiSelectFilter({
                 type="button"
                 aria-label="Reset selection"
                 onClick={handleReset}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-hidden"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

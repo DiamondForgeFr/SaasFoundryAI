@@ -3,7 +3,7 @@
  */
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { Locale, TokenType } from '@prisma/client'
+import { Locale, TokenType } from '@/generated/prisma/client'
 import * as bcrypt from 'bcrypt'
 import { Response } from 'express'
 import ms from 'ms'
@@ -20,7 +20,7 @@ import { EmailService } from '@modules/email/services/email.service'
 /**
  * Type
  */
-import type { User, UserToken } from '@prisma/client'
+import type { User, UserToken } from '@/generated/prisma/client'
 
 import type { RequestPasswordResetDto } from '@modules/auth/dto/requests/request-password-reset.dto'
 import type { ResetPasswordDto } from '@modules/auth/dto/requests/reset-password.dto'

@@ -2,7 +2,7 @@
  * Resources
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { OrganizationType } from '@prisma/client'
+import { OrganizationType } from '@/generated/prisma/client'
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator'
 
 /**

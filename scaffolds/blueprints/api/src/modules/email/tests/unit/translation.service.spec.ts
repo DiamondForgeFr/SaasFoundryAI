@@ -2,7 +2,7 @@
  * Resources
  */
 import { Provider } from '@nestjs/common'
-import { Locale } from '@prisma/client'
+import { Locale } from '@/generated/prisma/client'
 
 /**
  * Dependencies

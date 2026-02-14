@@ -3,7 +3,7 @@
  */
 import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
-import { Locale, OrganizationType } from '@prisma/client'
+import { Locale, OrganizationType } from '@/generated/prisma/client'
 import cookieParser from 'cookie-parser'
 import * as dotenv from 'dotenv'
 import request from 'supertest'

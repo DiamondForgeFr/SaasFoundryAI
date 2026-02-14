@@ -30,7 +30,7 @@ import { SignUpResponseDto } from '@modules/auth/dto/responses/signup.response.d
 /**
  * Type
  */
-import type { User } from '@prisma/client'
+import type { User } from '@/generated/prisma/client'
 import type { Request, Response } from 'express'
 
 // Extend Request type to include user property

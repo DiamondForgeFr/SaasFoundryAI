@@ -19,7 +19,7 @@ export type EnvConfigType = z.infer<typeof envSchema>
  */
 export const envSchema = z.object({
   // Server Configuration
-  PORT: z.string().transform(Number).default('3500'),
+  PORT: z.string().default('3500').transform(Number),
   FRONTEND_URL: z.string().url(),
 
   // Database Configuration
@@ -72,7 +72,7 @@ export class EnvConfig {
       return envSchema.parse(process.env)
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const missingVariables = error.errors.map((err) => err.path.join('.'))
+        const missingVariables = error.issues.map((err) => err.path.join('.'))
         console.error(`❌ Environment validation failed:\n${missingVariables.join('\n')}`)
         throw new Error(`Environment validation failed:\n${missingVariables.join('\n')}`)
       }

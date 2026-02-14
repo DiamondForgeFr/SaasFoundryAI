@@ -2,7 +2,7 @@
  * Resources
  */
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
-import { OrganizationType } from '@prisma/client'
+import { OrganizationType } from '@/generated/prisma/client'
 
 /**
  * Dependencies

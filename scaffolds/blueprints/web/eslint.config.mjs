@@ -26,6 +26,8 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/incompatible-library': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'no-trailing-spaces': 'error',
       'prettier/prettier': [

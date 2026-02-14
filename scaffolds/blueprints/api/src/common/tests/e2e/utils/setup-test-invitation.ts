@@ -2,9 +2,10 @@
  * Utility for setting up test invitation data for E2E tests
  */
 import { PrismaService } from '@configs/prisma/services/prisma.service'
-import { Locale, TokenType } from '@prisma/client'
+import { Locale, TokenType } from '@/generated/prisma/client'
 import * as bcrypt from 'bcrypt'
 import * as jwt from 'jsonwebtoken'
+import type { StringValue } from 'ms'
 
 /**
  * Invitation test data configuration
@@ -29,7 +30,7 @@ export interface InvitationTestConfig {
   /** JWT secret for invitation tokens (defaults to test secret) */
   jwtSecret?: string
   /** JWT expiration time for invitation tokens (defaults to 1d) */
-  jwtExpiresIn?: string
+  jwtExpiresIn?: StringValue
 }
 
 /**

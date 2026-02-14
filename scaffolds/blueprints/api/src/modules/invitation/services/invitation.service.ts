@@ -3,7 +3,7 @@
  */
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { InvitationStatus, Locale, TokenType } from '@prisma/client'
+import { InvitationStatus, Locale, TokenType } from '@/generated/prisma/client'
 import * as bcrypt from 'bcrypt'
 
 /**
@@ -29,7 +29,7 @@ import { ListInvitationsResponseDto } from '@modules/invitation/dto/responses/li
  * Types
  */
 import type { AuthTokens, TokenPayload } from '@modules/auth/services/auth.service'
-import type { User } from '@prisma/client'
+import type { User } from '@/generated/prisma/client'
 
 /**
  * Exports
