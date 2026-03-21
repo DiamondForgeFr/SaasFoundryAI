@@ -23,6 +23,7 @@ services:
 
   s3-init:
     image: minio/mc:latest
+    container_name: saasfoundry-s3-init
     depends_on:
       s3-dev:
         condition: service_healthy

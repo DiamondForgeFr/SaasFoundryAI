@@ -245,6 +245,14 @@ export async function createApiApp({
     await writeFile(dockerComposePath, dockerComposeContent)
   }
 
+  // Update Docker Compose project name and container names in docker-compose.db-test.yml
+  const dbTestComposePath = `${apiPath}/docker-compose.db-test.yml`
+  if (await fileExists(dbTestComposePath)) {
+    let dbTestContent = await readFile(dbTestComposePath, 'utf8')
+    dbTestContent = dbTestContent.replace(/saasfoundry-db-test/g, `${projectName}-db-test`)
+    await writeFile(dbTestComposePath, dbTestContent)
+  }
+
   // Update network name (and MailerSend config if applicable) in GitHub Actions deployment.yml
   const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
   if (await fileExists(deploymentYmlPath)) {

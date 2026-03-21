@@ -1,3 +1,4 @@
+name: saasfoundry-web
 services:
   ################
   # Frontend App #

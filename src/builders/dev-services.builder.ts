@@ -49,6 +49,7 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
       .replace(/myminio http:\/\/s3-dev:9000 minioadmin minioadmin/, `myminio http://s3-dev:9000 ${accessKey} ${secretKey}`)
       .replace(/myminio\/saasfoundry-uploads/g, `myminio/${bucket}`)
       .replace(/saasfoundry-network/g, `${projectName}-network`)
+      .replace(/saasfoundry-s3-init/g, `${projectName}-s3-init`)
 
     // Extract both s3-dev and s3-init service blocks
     const s3ServiceBlock = s3Customized.match(/services:\n([\s\S]*?)(?=\nvolumes:)/)?.[1] || ''
@@ -60,6 +61,7 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
   // --- Assemble unified file ---
   const lines: string[] = []
 
+  lines.push(`name: ${projectName}`)
   lines.push('services:')
   lines.push(serviceBlocks.join('\n\n'))
 
