@@ -42,7 +42,7 @@ export async function getUserStartProjectInputs() {
       name: 'isMonorepo',
       message: 'How would you like to structure your project?',
       choices: [
-        { name: 'Monorepo: Single Git repository for Backend and Frontend (centralized management) - Coming soon', value: true, disabled: true },
+        { name: 'Monorepo: Single Git repository with Turborepo (centralized management, shared tooling)', value: true },
         { name: 'Multirepo: Separate Git repositories for Backend and Frontend (independent management)', value: false }
       ],
       default: false

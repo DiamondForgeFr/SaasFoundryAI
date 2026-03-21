@@ -74,6 +74,13 @@ export interface CreateS3AppParams {
   s3Credentials?: S3Credentials
 }
 
+export interface CreateMonorepoRootParams {
+  projectName: string
+  projectDescription: string
+  monorepoUrl?: string
+  mainBranch: string
+}
+
 export interface CreateDevServicesParams {
   apiPath: string
   projectName: string

@@ -38,8 +38,12 @@ export async function createApiApp({
   packageJson.keywords = [projectName, 'saasfoundry', 'backend', 'nest', 'prisma']
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
   const nvm = getNvmPrefix()
-  await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
-  await exec(`${nvm}cd ${apiPath} && npx prisma generate > /dev/null 2>&1`)
+
+  // For monorepo, npm install and prisma generate are handled by the monorepo root builder
+  if (!isMonorepo) {
+    await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
+    await exec(`${nvm}cd ${apiPath} && npx prisma generate > /dev/null 2>&1`)
+  }
 
   // Update .env
   const envPath = `${apiPath}/.env`
@@ -164,7 +168,11 @@ export async function createApiApp({
     pkg.dependencies['@aws-sdk/client-s3'] = '3.750.0'
     pkg.devDependencies['@types/multer'] = '2.0.0'
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2))
-    await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
+
+    // For monorepo, npm install is handled by the monorepo root builder
+    if (!isMonorepo) {
+      await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
+    }
 
     // Uncomment storage configuration in env.service.ts
     const envServicePath = `${apiPath}/src/configs/env/services/env.service.ts`

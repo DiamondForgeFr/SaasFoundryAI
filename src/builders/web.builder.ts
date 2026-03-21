@@ -24,8 +24,12 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   packageJson.repository.url = frontendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
   packageJson.keywords = [projectName, 'saasfoundry', 'frontend', 'react', 'vite']
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
-  const nvm = getNvmPrefix()
-  await exec(`${nvm}npm install --prefix ${webPath} > /dev/null 2>&1`)
+
+  // For monorepo, npm install is handled by the monorepo root builder
+  if (!isMonorepo) {
+    const nvm = getNvmPrefix()
+    await exec(`${nvm}npm install --prefix ${webPath} > /dev/null 2>&1`)
+  }
 
   // Update Docker network name in docker-compose.yml
   const dockerComposePath = `${webPath}/docker-compose.yml`

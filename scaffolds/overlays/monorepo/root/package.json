@@ -1,0 +1,65 @@
+{
+  "name": "saasfoundry",
+  "version": "0.0.0",
+  "description": "SaaSFoundry monorepo",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agachet/saasfoundry"
+  },
+  "homepage": "https://github.com/agachet/saasfoundry/#readme",
+  "bugs": {
+    "url": "https://github.com/agachet/saasfoundry/issues"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=20.19.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=10.0.0",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=./apps/api",
+    "dev:web": "turbo run dev --filter=./apps/web",
+    "format": "turbo run format",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "type-check": "turbo run type-check",
+    "test:unit": "turbo run test:unit",
+    "test:e2e": "turbo run test:e2e",
+    "test:full": "turbo run test:full",
+    "db:update:dev": "npm run db:update:dev -w apps/api",
+    "db:update:prod": "npm run db:update:prod -w apps/api",
+    "db:init:test": "npm run db:init:test -w apps/api",
+    "services:up": "npm run services:up -w apps/api",
+    "services:down": "npm run services:down -w apps/api",
+    "services:reset": "npm run services:reset -w apps/api",
+    "version:manage": "./scripts/tag-manager.sh \"$(git symbolic-ref --short HEAD)\"",
+    "prepare": "if [ \"$HUSKY\" != \"0\" ]; then husky; fi",
+    "postinstall": "if [ \"$HUSKY\" != \"0\" ] && [ -d './scripts' ]; then find ./scripts -type f -name '*.sh' -exec chmod +x {} +; fi"
+  },
+  "keywords": [
+    "saasfoundry",
+    "monorepo",
+    "turborepo"
+  ],
+  "devDependencies": {
+    "@commitlint/cli": "20.4.1",
+    "@commitlint/config-conventional": "20.4.1",
+    "husky": "9.1.7",
+    "prettier": "3.8.1",
+    "turbo": "2.5.4"
+  }
+}

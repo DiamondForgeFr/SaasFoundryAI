@@ -6,6 +6,7 @@ import { exec } from 'shelljs'
 
 import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
+import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
 import { getUserStartProjectInputs } from '../prompts/project.prompts'
 import { initAndStartDb } from '../runners/database.runner'
@@ -38,7 +39,7 @@ export async function newCommand() {
 
   // Calculate total steps
   const hasDevServices = startProjectAnswers.dbSetup === 'docker' || startProjectAnswers.s3Setup === 'docker'
-  const totalSteps = 3 + (hasDevServices ? 1 : 0)
+  const totalSteps = 3 + (hasDevServices ? 1 : 0) + (startProjectAnswers.isMonorepo ? 1 : 0)
   let currentStep = 0
 
   const updateProgress = () => {
@@ -119,6 +120,18 @@ export async function newCommand() {
       s3Setup: startProjectAnswers.s3Setup
     })
     updateProgress()
+
+    // Create monorepo root structure (turbo.json, root package.json, husky, etc.)
+    if (startProjectAnswers.isMonorepo) {
+      spinner.text = 'Setting up Turborepo monorepo root...'
+      await createMonorepoRoot({
+        projectName: startProjectAnswers.projectName,
+        projectDescription: startProjectAnswers.projectDescription,
+        monorepoUrl: startProjectAnswers.monorepoUrl,
+        mainBranch: startProjectAnswers.mainBranch
+      })
+      updateProgress()
+    }
 
     spinner.succeed(chalk.green('Project setup completed successfully'))
   } catch (error) {
@@ -213,7 +226,7 @@ export async function newCommand() {
         if (startApps !== 'backend' && startApps !== 'all') {
           const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
           await openTerminal(apiPath, {
-            command: getHuskySetupCommand(),
+            command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
             description: 'Opening terminal for backend...'
           })
         }
@@ -222,7 +235,7 @@ export async function newCommand() {
         if (startApps !== 'frontend' && startApps !== 'all') {
           const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
           await openTerminal(webPath, {
-            command: getHuskySetupCommand(),
+            command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
             description: 'Opening terminal for frontend...'
           })
         }
@@ -263,11 +276,11 @@ export async function newCommand() {
       console.log(chalk.blue('Opening terminals for your project...'))
 
       await openTerminal(apiPath, {
-        command: getHuskySetupCommand(),
+        command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
         description: 'Opening terminal for backend...'
       })
       await openTerminal(webPath, {
-        command: getHuskySetupCommand(),
+        command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
         description: 'Opening terminal for frontend...'
       })
     }
@@ -279,11 +292,11 @@ export async function newCommand() {
     console.log(chalk.blue('Opening terminals for your project...'))
 
     await openTerminal(apiPath, {
-      command: getHuskySetupCommand(),
+      command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
       description: 'Opening terminal for backend...'
     })
     await openTerminal(webPath, {
-      command: getHuskySetupCommand(),
+      command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
       description: 'Opening terminal for frontend...'
     })
   }
