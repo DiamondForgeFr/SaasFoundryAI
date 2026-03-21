@@ -12,6 +12,8 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   // Copy monorepo root overlay to project root (current directory)
   await copy(resolve(overlaysPath, 'monorepo/root'), '.', { overwrite: true })
 
+  const nvm = getNvmPrefix()
+
   // Update root package.json
   const packageJsonPath = 'package.json'
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
@@ -19,6 +21,8 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   packageJson.description = projectDescription
   packageJson.repository.url = monorepoUrl || 'https://github.com/agachet/saasfoundry.git'
   packageJson.keywords = [projectName, 'saasfoundry', 'monorepo', 'turborepo']
+  const npmVersion = exec(`${nvm}npm --version`, { silent: true }).stdout.trim()
+  packageJson.packageManager = `npm@${npmVersion}`
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
 
   // Update deployment workflow references with project-specific names
@@ -40,7 +44,6 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   }
 
   // Install all dependencies at root (npm workspaces hoists everything)
-  const nvm = getNvmPrefix()
   await exec(`${nvm}npm install > /dev/null 2>&1`)
 
   // Generate Prisma client from the API workspace

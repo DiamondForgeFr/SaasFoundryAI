@@ -3,6 +3,18 @@ import { exec } from 'shelljs'
 import { getHuskySetupCommand, openTerminal } from './terminal.runner'
 
 /**
+ * Starts monorepo apps via Turborepo in a single terminal at root
+ */
+export async function startMonorepoApps(choice: 'all' | 'backend' | 'frontend'): Promise<void> {
+  const commandMap = { all: 'npm run dev', backend: 'npm run dev:api', frontend: 'npm run dev:web' }
+  const success = await openTerminal('.', {
+    command: commandMap[choice],
+    description: 'Starting apps via Turborepo...'
+  })
+  if (!success) throw new Error('Failed to start monorepo apps')
+}
+
+/**
  * Waits for a server to be ready by checking its health endpoint
  * @param url The health endpoint URL to check
  * @param timeout Maximum time to wait in milliseconds

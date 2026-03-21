@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "description": "SaaSFoundry monorepo",
   "private": true,
+  "packageManager": "npm@10.9.2",
   "workspaces": ["apps/*", "packages/*"],
   "repository": {
     "type": "git",

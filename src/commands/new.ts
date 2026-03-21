@@ -11,7 +11,7 @@ import { createWebApp } from '../builders/web.builder'
 import { getUserStartProjectInputs } from '../prompts/project.prompts'
 import { initAndStartDb } from '../runners/database.runner'
 import { initAndStartS3 } from '../runners/s3.runner'
-import { startBackend, startFrontend, waitForServer } from '../runners/server.runner'
+import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '../runners/server.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
 import { checkNodeVersion, setDefaultDbCredentials } from '../utils'
 
@@ -219,25 +219,29 @@ export async function newCommand() {
           }
         ])
 
-        if (startApps === 'backend' || startApps === 'all') await startBackend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
-        if (startApps === 'frontend' || startApps === 'all') await startFrontend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
+        if (startProjectAnswers.isMonorepo) {
+          if (startApps !== 'none') await startMonorepoApps(startApps)
+        } else {
+          if (startApps === 'backend' || startApps === 'all') await startBackend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
+          if (startApps === 'frontend' || startApps === 'all') await startFrontend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
 
-        // If user didn't choose to start the backend, open a contextualized terminal for it
-        if (startApps !== 'backend' && startApps !== 'all') {
-          const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
-          await openTerminal(apiPath, {
-            command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
-            description: 'Opening terminal for backend...'
-          })
-        }
+          // If user didn't choose to start the backend, open a contextualized terminal for it
+          if (startApps !== 'backend' && startApps !== 'all') {
+            const apiPath = `apps/${startProjectAnswers.projectName}-api`
+            await openTerminal(apiPath, {
+              command: getHuskySetupCommand(),
+              description: 'Opening terminal for backend...'
+            })
+          }
 
-        // If user didn't choose to start the frontend, open a contextualized terminal for it
-        if (startApps !== 'frontend' && startApps !== 'all') {
-          const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
-          await openTerminal(webPath, {
-            command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
-            description: 'Opening terminal for frontend...'
-          })
+          // If user didn't choose to start the frontend, open a contextualized terminal for it
+          if (startApps !== 'frontend' && startApps !== 'all') {
+            const webPath = `apps/${startProjectAnswers.projectName}-web`
+            await openTerminal(webPath, {
+              command: getHuskySetupCommand(),
+              description: 'Opening terminal for frontend...'
+            })
+          }
         }
 
         // Open browser with API docs if backend is started
@@ -269,36 +273,44 @@ export async function newCommand() {
         }
       }
     } else {
-      // User doesn't want to start services, open terminals for both apps
-      const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
-      const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
-
+      // User doesn't want to start services, open terminals
       console.log(chalk.blue('Opening terminals for your project...'))
 
+      if (startProjectAnswers.isMonorepo) {
+        await openTerminal('.', { description: 'Opening terminal at monorepo root...' })
+      } else {
+        const apiPath = `apps/${startProjectAnswers.projectName}-api`
+        const webPath = `apps/${startProjectAnswers.projectName}-web`
+
+        await openTerminal(apiPath, {
+          command: getHuskySetupCommand(),
+          description: 'Opening terminal for backend...'
+        })
+        await openTerminal(webPath, {
+          command: getHuskySetupCommand(),
+          description: 'Opening terminal for frontend...'
+        })
+      }
+    }
+  } else {
+    // Nothing to start (DB=manual, S3=manual/credentials), open terminals
+    console.log(chalk.blue('Opening terminals for your project...'))
+
+    if (startProjectAnswers.isMonorepo) {
+      await openTerminal('.', { description: 'Opening terminal at monorepo root...' })
+    } else {
+      const apiPath = `apps/${startProjectAnswers.projectName}-api`
+      const webPath = `apps/${startProjectAnswers.projectName}-web`
+
       await openTerminal(apiPath, {
-        command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
+        command: getHuskySetupCommand(),
         description: 'Opening terminal for backend...'
       })
       await openTerminal(webPath, {
-        command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
+        command: getHuskySetupCommand(),
         description: 'Opening terminal for frontend...'
       })
     }
-  } else {
-    // Nothing to start (DB=manual, S3=manual/credentials), open terminals for both apps
-    const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
-    const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
-
-    console.log(chalk.blue('Opening terminals for your project...'))
-
-    await openTerminal(apiPath, {
-      command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
-      description: 'Opening terminal for backend...'
-    })
-    await openTerminal(webPath, {
-      command: startProjectAnswers.isMonorepo ? undefined : getHuskySetupCommand(),
-      description: 'Opening terminal for frontend...'
-    })
   }
 
   // Display success message with project name
