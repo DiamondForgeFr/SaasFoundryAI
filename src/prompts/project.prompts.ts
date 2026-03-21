@@ -45,7 +45,7 @@ export async function getUserStartProjectInputs() {
         { name: 'Monorepo: Single Git repository with Turborepo (centralized management, shared tooling)', value: true },
         { name: 'Multirepo: Separate Git repositories for Backend and Frontend (independent management)', value: false }
       ],
-      default: false
+      default: true
     },
     {
       type: 'list',
