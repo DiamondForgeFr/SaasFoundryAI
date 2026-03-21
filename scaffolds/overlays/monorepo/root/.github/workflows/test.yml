@@ -1,0 +1,256 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [master, main, develop]
+
+jobs:
+  install:
+    name: Install dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-warnings
+
+      - name: Cache node_modules and turbo
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-${{ hashFiles('**/package-lock.json') }}-
+            ${{ runner.os }}-turbo-
+
+  build:
+    name: Build affected packages
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-${{ hashFiles('**/package-lock.json') }}-
+            ${{ runner.os }}-turbo-
+
+      - name: Build affected packages
+        run: npx turbo run build --affected
+
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .turbo
+            apps/api/dist
+            apps/web/dist
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+
+  test-code-compliance:
+    name: Code compliance (Prettier / ESLint / Type Check)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .turbo
+            apps/api/dist
+            apps/web/dist
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+
+      - name: Install reviewdog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
+
+      - name: Run Prettier with Reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx prettier --check . | sed 's/\(^.*$\)/::warning file=.::\1/' | reviewdog -efm="%f:%l:%c: %m" \
+            -reporter=github-pr-check \
+            -level=warning \
+            -filter-mode=added
+
+      - name: Run ESLint via Turbo
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx turbo run lint --affected
+
+      - name: Run Type Check via Turbo
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx turbo run type-check --affected
+
+      - name: Format code
+        run: npm run format
+
+  test-unit:
+    name: Unit tests
+    needs: [build, test-code-compliance]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .turbo
+            apps/api/dist
+            apps/web/dist
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+
+      - name: Run unit tests on affected packages
+        run: npx turbo run test:unit --affected -- --passWithNoTests
+
+  test-e2e-api:
+    name: E2E tests (API)
+    needs: [build, test-code-compliance]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d test_db" --health-interval 5s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .turbo
+            apps/api/dist
+            apps/web/dist
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+
+      - name: Wait for database to be ready
+        run: |
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5433 -U test_user -d test_db; then
+              echo "PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "  Attempt $i/30..."
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready in time."
+          exit 1
+
+      - name: Setup test database
+        run: npm run db:init:test
+
+      - name: Run API E2E tests
+        run: npx turbo run test:e2e --filter=*-api
+
+  test-e2e-web:
+    name: E2E tests (Web)
+    needs: [build, test-code-compliance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .turbo
+            apps/api/dist
+            apps/web/dist
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Web E2E tests
+        run: npx turbo run test:e2e --filter=*-web
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 30

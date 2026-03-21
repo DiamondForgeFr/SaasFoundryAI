@@ -1,5 +1,5 @@
 import { copy } from 'fs-extra'
-import { readFile, rename, writeFile } from 'fs/promises'
+import { readFile, rename, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
@@ -27,7 +27,11 @@ export async function createApiApp({
 
   await copy(resolve(blueprintsPath, 'api'), apiPath)
   if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/api'), apiPath, { overwrite: true })
-  else await copy(resolve(overlaysPath, 'monorepo/api'), apiPath, { overwrite: true })
+  else {
+    await copy(resolve(overlaysPath, 'monorepo/api'), apiPath, { overwrite: true })
+    // Remove per-app CI workflows (monorepo uses root-level workflows)
+    await rm(`${apiPath}/.github`, { recursive: true, force: true })
+  }
 
   // Update package.json
   const packageJsonPath = `${apiPath}/package.json`

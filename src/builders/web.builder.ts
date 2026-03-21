@@ -1,5 +1,5 @@
 import { copy } from 'fs-extra'
-import { readFile, writeFile } from 'fs/promises'
+import { readFile, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
@@ -14,7 +14,11 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
 
   await copy(resolve(blueprintsPath, 'web'), webPath)
   if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/web'), webPath, { overwrite: true })
-  else await copy(resolve(overlaysPath, 'monorepo/web'), webPath, { overwrite: true })
+  else {
+    await copy(resolve(overlaysPath, 'monorepo/web'), webPath, { overwrite: true })
+    // Remove per-app CI workflows (monorepo uses root-level workflows)
+    await rm(`${webPath}/.github`, { recursive: true, force: true })
+  }
 
   // Update package.json
   const packageJsonPath = `${webPath}/package.json`

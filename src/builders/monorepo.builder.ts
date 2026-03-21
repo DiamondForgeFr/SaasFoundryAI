@@ -4,7 +4,7 @@ import { resolve } from 'path'
 import { exec } from 'shelljs'
 
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
-import { getNvmPrefix, validateProjectName } from '../utils'
+import { fileExists, getNvmPrefix, validateProjectName } from '../utils'
 
 export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch }: CreateMonorepoRootParams) {
   validateProjectName(projectName)
@@ -20,6 +20,24 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   packageJson.repository.url = monorepoUrl || 'https://github.com/agachet/saasfoundry.git'
   packageJson.keywords = [projectName, 'saasfoundry', 'monorepo', 'turborepo']
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
+
+  // Update deployment workflow references with project-specific names
+  const deployApiPath = '.github/workflows/deployment-api.yml'
+  if (await fileExists(deployApiPath)) {
+    let content = await readFile(deployApiPath, 'utf8')
+    content = content.replace(/saasfoundry-network/g, `${projectName}-network`)
+    content = content.replace(/saasfoundry-api/g, `${projectName}-api`)
+    await writeFile(deployApiPath, content)
+  }
+
+  const deployWebPath = '.github/workflows/deployment-web.yml'
+  if (await fileExists(deployWebPath)) {
+    let content = await readFile(deployWebPath, 'utf8')
+    content = content.replace(/saasfoundry-network/g, `${projectName}-network`)
+    content = content.replace(/saasfoundry-web/g, `${projectName}-web`)
+    content = content.replace(/saasfoundry-api/g, `${projectName}-api`)
+    await writeFile(deployWebPath, content)
+  }
 
   // Install all dependencies at root (npm workspaces hoists everything)
   const nvm = getNvmPrefix()
