@@ -58,7 +58,7 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: process.env.CI ? 'npm run preview --mode test' : process.env.E2E_DEBUG ? 'npm run dev --mode test' : 'npm run build && npm run preview --mode test',
+    command: process.env.CI ? 'npm run preview -- --mode test' : process.env.E2E_DEBUG ? 'npm run dev -- --mode test' : 'npm run build && npm run preview -- --mode test',
     url: process.env.E2E_DEBUG ? 'http://localhost:5173' : 'http://localhost:4173',
     reuseExistingServer: !process.env.CI
   }

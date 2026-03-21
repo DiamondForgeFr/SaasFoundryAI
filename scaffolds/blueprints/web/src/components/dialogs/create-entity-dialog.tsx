@@ -138,7 +138,7 @@ export function CreateEntityDialog({ isOpen, onOpenChange }: CreateEntityDialogP
           <DialogDescription>{tAccount('entities.tk_create-entity-description_')}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form onSubmit={(e) => form.handleSubmit(handleSubmit)(e)} className="space-y-4">
             {hasPermission('ENTITY_CREATION') && hasPermission('ORGANIZATION_CREATION') && (
               <div data-testid="organization-details" className="space-y-4 rounded-md border p-4">
                 <h3 className="text-sm font-medium">{tAccount('organizations.tk_organization-details_')}</h3>
