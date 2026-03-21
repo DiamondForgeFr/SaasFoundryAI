@@ -297,5 +297,15 @@ export async function getUserStartProjectInputs() {
     }
   ])
 
-  return { ...answers, ...s3Answers }
+  // Analytics setup (asked after S3 configuration)
+  const analyticsAnswers = await inquirer.prompt<Answers>([
+    {
+      type: 'confirm',
+      name: 'includeAnalytics',
+      message: 'Would you like to include anonymous user analytics (Umami)? (privacy-friendly, self-hosted)',
+      default: true
+    }
+  ])
+
+  return { ...answers, ...s3Answers, ...analyticsAnswers }
 }

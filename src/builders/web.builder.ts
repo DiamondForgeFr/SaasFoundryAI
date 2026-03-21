@@ -6,7 +6,7 @@ import { exec } from 'shelljs'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, validateProjectName } from '../utils'
 
-export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup }: CreateWebAppParams) {
+export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics }: CreateWebAppParams) {
   validateProjectName(projectName)
 
   // Create the WEB app directory
@@ -62,6 +62,27 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     if (await fileExists(webEnvPath)) {
       let webEnvContent = await readFile(webEnvPath, 'utf8')
       webEnvContent = webEnvContent.replace(/VITE_STORAGE_ENABLED=.*$/m, 'VITE_STORAGE_ENABLED="true"')
+      await writeFile(webEnvPath, webEnvContent)
+    }
+  }
+
+  // Analytics (Umami) integration
+  if (includeAnalytics) {
+    // Copy analytics overlay module
+    await copy(resolve(overlaysPath, 'modules/analytics'), `${webPath}/src/lib/analytics`)
+
+    // Uncomment analytics code in main.tsx
+    const mainTsxPath = `${webPath}/src/main.tsx`
+    let mainTsxContent = await readFile(mainTsxPath, 'utf8')
+    mainTsxContent = mainTsxContent.replace(/\/\/ TODO monitoring-active: /g, '')
+    await writeFile(mainTsxPath, mainTsxContent)
+
+    // Uncomment analytics env vars in .env
+    const webEnvPath = `${webPath}/.env`
+    if (await fileExists(webEnvPath)) {
+      let webEnvContent = await readFile(webEnvPath, 'utf8')
+      webEnvContent = webEnvContent.replace(/# VITE_ANALYTICS_URL=""/, 'VITE_ANALYTICS_URL=""')
+      webEnvContent = webEnvContent.replace(/# VITE_ANALYTICS_WEBSITE_ID=""/, 'VITE_ANALYTICS_WEBSITE_ID=""')
       await writeFile(webEnvPath, webEnvContent)
     }
   }

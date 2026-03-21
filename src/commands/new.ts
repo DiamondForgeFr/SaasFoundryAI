@@ -117,7 +117,8 @@ export async function newCommand() {
       projectDescription: startProjectAnswers.projectDescription,
       frontendRepoUrl: startProjectAnswers.frontendRepoUrl || '',
       mainBranch: startProjectAnswers.mainBranch,
-      s3Setup: startProjectAnswers.s3Setup
+      s3Setup: startProjectAnswers.s3Setup,
+      includeAnalytics: startProjectAnswers.includeAnalytics
     })
     updateProgress()
 

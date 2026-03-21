@@ -36,6 +36,7 @@ export interface Answers {
   mailersendSenderName?: string
   s3Setup: 'docker' | 'credentials' | 'manual'
   s3Credentials?: S3Credentials
+  includeAnalytics: boolean
 }
 
 export interface CreateApiAppParams {
@@ -60,6 +61,7 @@ export interface CreateWebAppParams {
   frontendRepoUrl: string
   mainBranch: string
   s3Setup: 'docker' | 'credentials' | 'manual'
+  includeAnalytics: boolean
 }
 
 export interface CreateDbAppParams {
