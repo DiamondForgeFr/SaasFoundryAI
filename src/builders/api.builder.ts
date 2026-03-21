@@ -31,6 +31,11 @@ export async function createApiApp({
     await copy(resolve(overlaysPath, 'monorepo/api'), apiPath, { overwrite: true })
     // Remove per-app CI workflows (monorepo uses root-level workflows)
     await rm(`${apiPath}/.github`, { recursive: true, force: true })
+    // Point ESLint custom rule to monorepo root shared file
+    const eslintConfigPath = `${apiPath}/eslint.config.mjs`
+    let eslintConfig = await readFile(eslintConfigPath, 'utf8')
+    eslintConfig = eslintConfig.replace(`'./eslint-rules/no-version-prefix.mjs'`, `'../../eslint-rules/no-version-prefix.mjs'`)
+    await writeFile(eslintConfigPath, eslintConfig)
   }
 
   // Update package.json

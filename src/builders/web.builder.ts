@@ -18,6 +18,11 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     await copy(resolve(overlaysPath, 'monorepo/web'), webPath, { overwrite: true })
     // Remove per-app CI workflows (monorepo uses root-level workflows)
     await rm(`${webPath}/.github`, { recursive: true, force: true })
+    // Point ESLint custom rule to monorepo root shared file
+    const eslintConfigPath = `${webPath}/eslint.config.mjs`
+    let eslintConfig = await readFile(eslintConfigPath, 'utf8')
+    eslintConfig = eslintConfig.replace(`'./eslint-rules/no-version-prefix.js'`, `'../../eslint-rules/no-version-prefix.mjs'`)
+    await writeFile(eslintConfigPath, eslintConfig)
   }
 
   // Update package.json
