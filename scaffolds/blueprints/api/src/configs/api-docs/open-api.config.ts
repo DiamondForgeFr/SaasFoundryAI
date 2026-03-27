@@ -4,7 +4,7 @@ export const openApiConfig = {
   version: process.env.npm_package_version || '1.0.0',
   contact: {
     name: 'SaaSFoundry Team',
-    url: 'https://github.com/AGachet/SaaSFoundry',
+    url: 'https://github.com/DiamondForgeFr/SaaSFoundry',
     email: 'anthony.gachet@diamondforge.fr'
   },
   license: {
