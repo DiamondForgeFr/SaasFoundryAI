@@ -378,6 +378,89 @@ Every SaaSFoundry project includes:
 - **Type safety** (TypeScript + Prisma) catches AI mistakes early
 - **ESLint + Prettier** auto-format AI-generated code
 
+### 🎯 Claude Code Skills System
+
+SaaSFoundry projects come with a comprehensive **skills library** that enhances AI capabilities with specialized workflows and integrations.
+
+#### 📦 Core Skills (Always Installed)
+
+**Git Workflows:**
+- **`git-commit`** - Create commits with conventional commit messages
+- **`git-create-pr`** - Generate PR with auto-generated title and description
+- **`git-fix-pr-comments`** - Automatically implement PR review feedback
+- **`git-merge`** - Intelligent branch merging with conflict resolution
+
+**Code Quality:**
+- **`utils-fix-errors`** - Fix all ESLint and TypeScript errors in parallel
+- **`utils-fix-grammar`** - Fix grammar and spelling while preserving formatting
+
+**Development Workflows:**
+- **`utils-oneshot`** - Ultra-fast feature implementation (Explore → Code → Test)
+- **`workflow-apex`** - APEX methodology with adversarial review *(API only)*
+- **`workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate) *(API only)*
+
+#### 🚀 Advanced Skills (Optional - Requires Configuration)
+
+These skills integrate with external services and require API tokens:
+
+**Documentation & Research:**
+- **`tool-context7`** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
+  - Prevents hallucinated APIs and deprecated patterns
+  - Real-time access to latest framework docs
+
+**Project Management:**
+- **`tool-atlassian`** - Jira/Confluence integration
+  - Create tickets, update status, sync documentation
+  - Track AI-generated features in your workflow
+
+- **`tool-notion`** - Notion workspace integration
+  - Create pages, databases, and views
+  - Document architecture decisions and feature specs
+
+**Design Integration:**
+- **`tool-figma`** - Figma design system integration
+  - Read designs and components
+  - Generate code from Figma mockups
+  - Maintain design-code consistency
+
+#### ⚙️ Skills Configuration
+
+**During project creation (`sf new`):**
+```bash
+sf new
+# ... project setup questions ...
+
+📚 Advanced Skills (Optional)
+? Select advanced skills to install
+  ◯ Context7 - Up-to-date library documentation
+  ◯ Atlassian - Jira/Confluence integration
+  ◯ Notion - Notion workspace integration
+  ◯ Figma - Figma design system integration
+
+# For each selected skill, browser opens to generate API token
+# You can skip and configure later when Claude prompts you
+```
+
+**Adding skills later (`sf update`):**
+```bash
+sf update
+
+# Detects available skills not yet installed
+? Which modules would you like to add?
+  ◯ Advanced Skill: Context7
+  ◉ Advanced Skill: Notion
+  ◯ Advanced Skill: Figma
+
+# Prompts for credentials only for newly selected skills
+```
+
+#### 🔐 Credential Management
+
+- Each skill stores credentials in its own `.env` file (`.claude/skills-optional/tool-{name}/.env`)
+- Credentials are **never** committed to git (`.gitignore` protected)
+- No global config - skills are project-scoped
+- When Claude needs a skill without credentials, it prompts you to configure it
+
 ### 🚀 Quick Start for AI Development
 
 #### 1. **Connect Claude Code**
@@ -397,14 +480,20 @@ code .  # or cursor .
 
 # Implement features
 "Create a new user profile endpoint with avatar upload"
+"Use oneshot to implement dark mode toggle"
 
 # Fix and improve
-"Fix all TypeScript errors"
+"Fix all TypeScript errors"  # Triggers utils-fix-errors skill
 "Add validation to the login form"
 
-# Review and test
-"Run all tests and show me the results"
-"Create a PR for this feature"
+# Git workflows
+"Commit these changes"  # Triggers git-commit skill
+"Create a PR for this feature"  # Triggers git-create-pr skill
+
+# Advanced skills (if configured)
+"Get the latest React Router v7 documentation"  # Uses tool-context7
+"Create a Jira ticket for this bug"  # Uses tool-atlassian
+"Generate code from this Figma design"  # Uses tool-figma
 ```
 
 #### 3. **AI-Assisted Workflows**
@@ -427,10 +516,11 @@ code .  # or cursor .
 
 #### ✅ DO
 - **Use CLAUDE.md** - Keep it updated with project decisions
-- **Leverage skills** - Use pre-built skills for common tasks
+- **Leverage skills** - Core skills are always available, configure advanced skills as needed
 - **Trust the guards** - Let tests and CI/CD catch issues
 - **Iterate with AI** - Use AI for rapid prototyping, then refine
 - **Review AI code** - Especially for security-sensitive areas
+- **Configure Context7** - Avoid hallucinated APIs with up-to-date library docs
 
 #### ❌ DON'T
 - **Skip tests** - AI-generated code must pass all tests
