@@ -48,7 +48,7 @@ export function getAvailableModules(manifest: SaaSFoundryManifest): AvailableMod
   for (const skill of allSkills) {
     if (!installedSkills.includes(skill)) {
       const skillDescriptions = {
-        context7: 'Up-to-date library documentation (React, Vite, Prisma, etc.)',
+        context7: 'Up-to-date library documentation (React, Vite, Prisma, etc.) [free, no credentials]',
         atlassian: 'Jira/Confluence integration (tickets, wiki, sprints)',
         notion: 'Notion workspace integration (pages, databases, views)',
         figma: 'Figma design system integration (designs, components)'
@@ -228,7 +228,11 @@ export async function getStorageModuleConfig(projectName: string): Promise<{ s3S
 export async function getSkillCredentials(skill: string): Promise<AdvancedSkillCredentials> {
   switch (skill) {
     case 'context7':
-      return await promptContext7Credentials()
+      // Context7 is a free public API - no credentials needed
+      console.log(chalk.blue('\n📚 Context7 - Free Public API'))
+      console.log(chalk.gray('Context7 provides up-to-date library documentation without requiring API keys.'))
+      console.log(chalk.gray('No configuration needed!\n'))
+      return {}
     case 'atlassian':
       return await promptAtlassianCredentials()
     case 'notion':

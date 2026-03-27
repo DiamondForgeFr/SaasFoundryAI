@@ -42,7 +42,7 @@ export async function promptAdvancedSkills(): Promise<string[]> {
       message: 'Select advanced skills to install (use spacebar to select)',
       choices: [
         {
-          name: 'Context7 - Up-to-date library documentation (React, Vite, Prisma, etc.)',
+          name: 'Context7 - Up-to-date library documentation (React, Vite, Prisma, etc.) [free, no credentials]',
           value: 'context7',
           checked: false
         },
@@ -77,44 +77,14 @@ async function openBrowser(url: string): Promise<void> {
 }
 
 /**
- * Prompt for Context7 API key
+ * Context7 uses a free public API - no credentials needed
+ * This function is kept for compatibility but doesn't collect any credentials
  */
 export async function promptContext7Credentials(): Promise<Partial<AdvancedSkillCredentials>> {
-  console.log(chalk.yellow('\n🔑 Context7 Configuration'))
-  console.log(chalk.yellow('You need a Context7 API key to fetch up-to-date library documentation.'))
-  console.log(chalk.yellow('Opening https://context7.com in your browser in few seconds...'))
-
-  await new Promise((resolve) => setTimeout(resolve, 3000))
-  await openBrowser('https://context7.com')
-
-  const { ready } = await inquirer.prompt<{ ready: boolean }>([
-    {
-      type: 'confirm',
-      name: 'ready',
-      message: 'Are you ready to configure your Context7 credentials?',
-      default: true
-    }
-  ])
-
-  if (ready) {
-    const { context7ApiKey } = await inquirer.prompt<{ context7ApiKey: string }>([
-      {
-        type: 'input',
-        name: 'context7ApiKey',
-        message: 'Enter your Context7 API key',
-        validate: (input: string) => {
-          if (!input) return 'API key is required'
-          return true
-        }
-      }
-    ])
-
-    return { context7ApiKey }
-  } else {
-    console.log(chalk.yellow('Context7 skill will be set up but disabled until you configure it.'))
-    console.log(chalk.gray('Claude will prompt you to configure it when you try to use it.\n'))
-    return {}
-  }
+  console.log(chalk.blue('\n📚 Context7 - Free Public API'))
+  console.log(chalk.gray('Context7 provides up-to-date library documentation without requiring API keys.'))
+  console.log(chalk.gray('No configuration needed!\n'))
+  return {}
 }
 
 /**

@@ -5,7 +5,53 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/.env"
+
+# --- Multi-Account Credentials Support ---
+# Load credentials from centralized location if project is configured
+load_credentials() {
+  local TOOL_NAME="notion"
+  local CREDENTIALS_DIR="$HOME/.claude/credentials/$TOOL_NAME"
+  local MANIFEST_PATH=".saasfoundry.json"
+
+  # Check if we're in a SaaSFoundry project
+  if [[ -f "$MANIFEST_PATH" ]]; then
+    # Read configured account from manifest
+    ACCOUNT_NAME=$(python3 -c "
+import json, sys
+try:
+    with open('$MANIFEST_PATH') as f:
+        manifest = json.load(f)
+        accounts = manifest.get('skillsAccounts', {})
+        print(accounts.get('$TOOL_NAME', ''), end='')
+except: pass
+" 2>/dev/null)
+
+    # Load centralized credentials if account is configured
+    if [[ -n "$ACCOUNT_NAME" ]]; then
+      CREDENTIALS_FILE="$CREDENTIALS_DIR/$ACCOUNT_NAME.env"
+      if [[ -f "$CREDENTIALS_FILE" ]]; then
+        source "$CREDENTIALS_FILE"
+        return
+      else
+        echo "Error: Account '$ACCOUNT_NAME' configured but credentials not found at $CREDENTIALS_FILE" >&2
+        echo "Run: sf tools add $TOOL_NAME $ACCOUNT_NAME" >&2
+        exit 1
+      fi
+    fi
+  fi
+
+  # Fallback to local .env file
+  if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    source "$SCRIPT_DIR/.env"
+  else
+    echo "Error: No credentials found. Either:" >&2
+    echo "  1. Run 'sf tools add $TOOL_NAME <account>' and 'sf tools use $TOOL_NAME <account>'" >&2
+    echo "  2. Create $SCRIPT_DIR/.env with required credentials" >&2
+    exit 1
+  fi
+}
+
+load_credentials
 
 BASE="https://api.notion.com/v1"
 
