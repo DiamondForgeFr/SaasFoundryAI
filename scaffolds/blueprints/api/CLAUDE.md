@@ -11,6 +11,17 @@ Production-ready NestJS API generated with **SaaSFoundry** - An AI-First develop
 - **Logging**: Winston (daily rotation)
 - **API Docs**: OpenAPI/Swagger (auto-generated)
 
+## 🎯 Skills Priority
+
+**IMPORTANT**: This project uses SaaSFoundry skills (prefix `sf-*`). When multiple skills with similar functionality exist, **always prefer SaaSFoundry skills** over global or other skills:
+
+- ✅ Use `sf-git-commit` instead of `git-commit`
+- ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
+- ✅ Use `sf-workflow-apex` instead of `workflow-apex`
+- ✅ Use `sf-tool-atlassian` instead of `tool-atlassian`
+
+SaaSFoundry skills are specifically optimized for this project's structure, conventions, and workflows.
+
 ## Project Structure
 
 ```

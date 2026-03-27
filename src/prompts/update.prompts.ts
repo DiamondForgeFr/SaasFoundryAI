@@ -57,7 +57,7 @@ export function getAvailableModules(manifest: SaaSFoundryManifest): AvailableMod
       available.push({
         name: `Advanced Skill: ${skill.charAt(0).toUpperCase() + skill.slice(1)}`,
         description: skillDescriptions[skill as keyof typeof skillDescriptions],
-        value: `skill-${skill}`
+        value: `sf-skill-${skill}`
       })
     }
   }

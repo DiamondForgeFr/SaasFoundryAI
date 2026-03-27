@@ -7,21 +7,21 @@ This directory contains Claude Code configuration and skills for AI-assisted dev
 ```
 .claude/
 ├── skills/              # Core skills (always installed)
-│   ├── git-commit/      # Quick commit with conventional messages
-│   ├── git-create-pr/   # Create PR with auto-generated description
-│   ├── git-fix-pr-comments/  # Implement PR review feedback
-│   ├── git-merge/       # Intelligent branch merging
-│   ├── utils-fix-errors/     # Fix ESLint and TypeScript errors
-│   ├── utils-fix-grammar/    # Fix grammar and spelling
-│   ├── utils-oneshot/   # Ultra-fast feature implementation
-│   ├── workflow-apex/   # APEX methodology (full with review)
-│   └── workflow-apex-free/   # APEX methodology (free)
+│   ├── sf-git-commit/      # Quick commit with conventional messages
+│   ├── sf-git-create-pr/   # Create PR with auto-generated description
+│   ├── sf-git-fix-pr-comments/  # Implement PR review feedback
+│   ├── sf-git-merge/       # Intelligent branch merging
+│   ├── sf-utils-fix-errors/     # Fix ESLint and TypeScript errors
+│   ├── sf-utils-fix-grammar/    # Fix grammar and spelling
+│   ├── sf-utils-oneshot/   # Ultra-fast feature implementation
+│   ├── sf-workflow-apex/   # APEX methodology (full with review)
+│   └── sf-workflow-apex-free/   # APEX methodology (free)
 │
 ├── skills-optional/     # Advanced skills (require external services)
-│   ├── tool-context7/   # Up-to-date library documentation
-│   ├── tool-atlassian/  # Jira/Confluence integration
-│   ├── tool-notion/     # Notion workspace integration
-│   └── tool-figma/      # Figma design integration
+│   ├── sf-tool-context7/   # Up-to-date library documentation
+│   ├── sf-tool-atlassian/  # Jira/Confluence integration
+│   ├── sf-tool-notion/     # Notion workspace integration
+│   └── sf-tool-figma/      # Figma design integration
 │
 └── README.md            # This file
 ```
@@ -31,28 +31,28 @@ This directory contains Claude Code configuration and skills for AI-assisted dev
 ### Core Skills (Always Available)
 
 #### Git Workflows
-- **git-commit** - Create commits with conventional commit messages
-- **git-create-pr** - Create PR with auto-generated title and description
-- **git-fix-pr-comments** - Automatically implement PR review feedback
-- **git-merge** - Intelligent branch merging with conflict resolution
+- **sf-git-commit** - Create commits with conventional commit messages
+- **sf-git-create-pr** - Create PR with auto-generated title and description
+- **sf-git-fix-pr-comments** - Automatically implement PR review feedback
+- **sf-git-merge** - Intelligent branch merging with conflict resolution
 
 #### Code Quality
-- **utils-fix-errors** - Fix all ESLint and TypeScript errors in parallel
-- **utils-fix-grammar** - Fix grammar and spelling errors while preserving formatting
+- **sf-utils-fix-errors** - Fix all ESLint and TypeScript errors in parallel
+- **sf-utils-fix-grammar** - Fix grammar and spelling errors while preserving formatting
 
 #### Development Workflows
-- **utils-oneshot** - Ultra-fast feature implementation (Explore → Code → Test)
-- **workflow-apex-free** - APEX methodology (Analyze-Plan-Execute-Validate)
-- **workflow-apex** - APEX methodology with adversarial review (for critical features)
+- **sf-utils-oneshot** - Ultra-fast feature implementation (Explore → Code → Test)
+- **sf-workflow-apex-free** - APEX methodology (Analyze-Plan-Execute-Validate)
+- **sf-workflow-apex** - APEX methodology with adversarial review (for critical features)
 
 ### Advanced Skills (Optional - Require Configuration)
 
 These skills integrate with external services and require API tokens/credentials:
 
-- **tool-context7** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
-- **tool-atlassian** - Jira/Confluence integration (create tickets, update status, etc.)
-- **tool-notion** - Notion workspace integration (create pages, databases, etc.)
-- **tool-figma** - Figma design system integration (get designs, components, etc.)
+- **sf-tool-context7** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
+- **sf-tool-atlassian** - Jira/Confluence integration (create tickets, update status, etc.)
+- **sf-tool-notion** - Notion workspace integration (create pages, databases, etc.)
+- **sf-tool-figma** - Figma design system integration (get designs, components, etc.)
 
 > **Note**: Advanced skills are located in `skills-optional/`. To enable them, configure the required credentials during project setup or when Claude prompts you.
 

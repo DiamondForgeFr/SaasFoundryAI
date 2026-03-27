@@ -385,40 +385,40 @@ SaaSFoundry projects come with a comprehensive **skills library** that enhances 
 #### 📦 Core Skills (Always Installed)
 
 **Git Workflows:**
-- **`git-commit`** - Create commits with conventional commit messages
-- **`git-create-pr`** - Generate PR with auto-generated title and description
-- **`git-fix-pr-comments`** - Automatically implement PR review feedback
-- **`git-merge`** - Intelligent branch merging with conflict resolution
+- **`sf-git-commit`** - Create commits with conventional commit messages
+- **`sf-git-create-pr`** - Generate PR with auto-generated title and description
+- **`sf-git-fix-pr-comments`** - Automatically implement PR review feedback
+- **`sf-git-merge`** - Intelligent branch merging with conflict resolution
 
 **Code Quality:**
-- **`utils-fix-errors`** - Fix all ESLint and TypeScript errors in parallel
-- **`utils-fix-grammar`** - Fix grammar and spelling while preserving formatting
+- **`sf-utils-fix-errors`** - Fix all ESLint and TypeScript errors in parallel
+- **`sf-utils-fix-grammar`** - Fix grammar and spelling while preserving formatting
 
 **Development Workflows:**
-- **`utils-oneshot`** - Ultra-fast feature implementation (Explore → Code → Test)
-- **`workflow-apex`** - APEX methodology with adversarial review *(API only)*
-- **`workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate) *(API only)*
+- **`sf-utils-oneshot`** - Ultra-fast feature implementation (Explore → Code → Test)
+- **`sf-workflow-apex`** - APEX methodology with adversarial review *(API only)*
+- **`sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate) *(API only)*
 
 #### 🚀 Advanced Skills (Optional - Requires Configuration)
 
 These skills integrate with external services and require API tokens:
 
 **Documentation & Research:**
-- **`tool-context7`** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
+- **`sf-tool-context7`** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
   - Prevents hallucinated APIs and deprecated patterns
   - Real-time access to latest framework docs
 
 **Project Management:**
-- **`tool-atlassian`** - Jira/Confluence integration
+- **`sf-tool-atlassian`** - Jira/Confluence integration
   - Create tickets, update status, sync documentation
   - Track AI-generated features in your workflow
 
-- **`tool-notion`** - Notion workspace integration
+- **`sf-tool-notion`** - Notion workspace integration
   - Create pages, databases, and views
   - Document architecture decisions and feature specs
 
 **Design Integration:**
-- **`tool-figma`** - Figma design system integration
+- **`sf-tool-figma`** - Figma design system integration
   - Read designs and components
   - Generate code from Figma mockups
   - Maintain design-code consistency

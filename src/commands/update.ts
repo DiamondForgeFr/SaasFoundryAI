@@ -380,8 +380,8 @@ export async function updateCommand() {
 
   // Collect credentials for selected skills
   for (const module of selectedModules) {
-    if (module.startsWith('skill-')) {
-      const skillName = module.replace('skill-', '')
+    if (module.startsWith('sf-skill-')) {
+      const skillName = module.replace('sf-skill-', '')
       skillsToAdd.push(skillName)
       const credentials = await getSkillCredentials(skillName)
       Object.assign(skillsCredentials, credentials)

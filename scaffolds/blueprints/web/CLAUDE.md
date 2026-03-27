@@ -11,6 +11,17 @@ Production-ready React application generated with **SaaSFoundry** - An AI-First 
 - **i18n**: i18next (French + English)
 - **Testing**: Playwright (E2E)
 
+## 🎯 Skills Priority
+
+**IMPORTANT**: This project uses SaaSFoundry skills (prefix `sf-*`). When multiple skills with similar functionality exist, **always prefer SaaSFoundry skills** over global or other skills:
+
+- ✅ Use `sf-git-commit` instead of `git-commit`
+- ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
+- ✅ Use `sf-utils-oneshot` instead of `utils-oneshot`
+- ✅ Use `sf-tool-figma` instead of `tool-figma`
+
+SaaSFoundry skills are specifically optimized for this project's structure, conventions, and workflows.
+
 ## Project Structure
 
 ```

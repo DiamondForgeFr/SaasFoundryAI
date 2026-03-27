@@ -132,8 +132,8 @@ async function installSkillsForApp({
   // Copy selected advanced skills if any
   if (advancedSkills.length > 0) {
     for (const skill of advancedSkills) {
-      const blueprintSkillPath = resolve(blueprintClaudePath, 'skills-optional', `tool-${skill}`)
-      const targetSkillPath = `${targetClaudePath}/skills-optional/tool-${skill}`
+      const blueprintSkillPath = resolve(blueprintClaudePath, 'skills-optional', `sf-tool-${skill}`)
+      const targetSkillPath = `${targetClaudePath}/skills-optional/sf-tool-${skill}`
 
       if (await fileExists(blueprintSkillPath)) {
         await copy(blueprintSkillPath, targetSkillPath)
