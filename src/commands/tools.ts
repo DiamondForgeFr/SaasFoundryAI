@@ -58,7 +58,8 @@ function showHelp() {
   console.log(chalk.gray('    use <tool> <account>     Set account for current project'))
   console.log(chalk.gray('    current                  Show project\'s account configuration'))
   console.log(chalk.white('\n  Tools:'))
-  console.log(chalk.gray('    context7, atlassian, notion, figma'))
+  console.log(chalk.gray('    atlassian, notion, figma'))
+  console.log(chalk.gray('    (context7 uses free public API - no credentials needed)'))
   console.log(chalk.white('\n  Examples:'))
   console.log(chalk.gray('    sf tools list'))
   console.log(chalk.gray('    sf tools accounts atlassian'))
@@ -71,7 +72,7 @@ function showHelp() {
  * List all tools with their account count
  */
 async function listTools() {
-  const tools = ['context7', 'atlassian', 'notion', 'figma']
+  const tools = ['atlassian', 'notion', 'figma']
 
   console.log(chalk.blue('\n  Available tools:\n'))
 
@@ -90,7 +91,7 @@ async function listTools() {
     console.log(`  ${chalk.white(toolName.padEnd(20))} ${accounts}`)
   }
 
-  console.log()
+  console.log(chalk.gray('\n  Note: sf-tool-context7 uses a free public API (no credentials needed)\n'))
 }
 
 /**
@@ -136,10 +137,11 @@ async function addAccount(tool: string, accountName: string) {
     process.exit(1)
   }
 
-  const validTools = ['context7', 'atlassian', 'notion', 'figma']
+  const validTools = ['atlassian', 'notion', 'figma']
   if (!validTools.includes(tool)) {
     console.error(chalk.red(`Error: Invalid tool "${tool}"`))
     console.log(chalk.gray(`Valid tools: ${validTools.join(', ')}`))
+    console.log(chalk.gray('Note: context7 uses a free public API (no credentials needed)'))
     process.exit(1)
   }
 
@@ -161,9 +163,6 @@ async function addAccount(tool: string, accountName: string) {
   let credentials: Record<string, string | undefined> = {}
 
   switch (tool) {
-    case 'context7':
-      credentials = await promptContext7Credentials()
-      break
     case 'atlassian':
       credentials = await promptAtlassianCredentials()
       break
