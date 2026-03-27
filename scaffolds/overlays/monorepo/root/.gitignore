@@ -71,3 +71,9 @@ apps/api/prisma/migrations
 # dist-ssr
 dist-ssr
 *.local
+
+# Claude Code - Track configuration but ignore credentials
+!.claude/
+!.claude/**
+.claude/**/.env
+.claude/**/*.env

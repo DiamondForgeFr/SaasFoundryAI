@@ -9,12 +9,14 @@ import shelljs from 'shelljs'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installEmailModule } from '../installers/email.installer'
+import { installSkills } from '../installers/skills.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
 import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
-import { getAvailableModules, getEmailModuleCredentials, getModuleSelections, getStorageModuleConfig } from '../prompts/update.prompts'
+import { getAvailableModules, getEmailModuleCredentials, getModuleSelections, getStorageModuleConfig, getSkillCredentials } from '../prompts/update.prompts'
+import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import { SaaSFoundryManifest } from '../types'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
 import { version as cliVersion } from '../../package.json'
@@ -59,7 +61,8 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       mailersendSenderEmail: manifest.modules.emailService === 'mailersend' ? 'noreply@example.com' : undefined,
       mailersendSenderName: manifest.modules.emailService === 'mailersend' ? 'App' : undefined,
       s3Setup: manifest.modules.s3Setup,
-      s3Credentials: manifest.modules.s3Setup === 'credentials' ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' } : undefined
+      s3Credentials: manifest.modules.s3Setup === 'credentials' ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' } : undefined,
+      advancedSkills: manifest.modules.advancedSkills || []
     })
 
     // Re-run dev services builder if needed
@@ -82,7 +85,8 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       frontendRepoUrl: '',
       mainBranch: 'main',
       s3Setup: manifest.modules.s3Setup,
-      includeAnalytics: manifest.modules.includeAnalytics
+      includeAnalytics: manifest.modules.includeAnalytics,
+      advancedSkills: manifest.modules.advancedSkills || []
     })
 
     // Re-run monorepo root builder if applicable
@@ -93,6 +97,18 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
         mainBranch: 'main'
       })
     }
+
+    // Re-run skills installer
+    const apiPath = manifest.structure === 'monorepo' ? 'apps/api' : `apps/${manifest.projectName}-api`
+    const webPath = manifest.structure === 'monorepo' ? 'apps/web' : `apps/${manifest.projectName}-web`
+    await installSkills({
+      isMonorepo: manifest.structure === 'monorepo',
+      apiPath,
+      webPath,
+      projectName: manifest.projectName,
+      version: cliVersion,
+      advancedSkills: manifest.modules.advancedSkills || []
+    })
 
     // Compute hashes of the regenerated project
     const hashes = await computeFileHashes('.')
@@ -349,6 +365,8 @@ export async function updateCommand() {
   // Collect credentials for selected modules
   let emailCredentials: { mailersendApiKey: string; mailersendSenderEmail: string; mailersendSenderName: string } | null = null
   let storageConfig: { s3Setup: 'docker' | 'credentials'; s3Credentials?: { endpoint: string; accessKey: string; secretKey: string; bucket: string; region: string } } | null = null
+  const skillsToAdd: string[] = []
+  const skillsCredentials: AdvancedSkillCredentials = {}
 
   if (selectedModules.includes('email')) {
     emailCredentials = await getEmailModuleCredentials(manifest.projectName)
@@ -359,6 +377,16 @@ export async function updateCommand() {
 
   if (selectedModules.includes('storage')) {
     storageConfig = await getStorageModuleConfig(manifest.projectName)
+  }
+
+  // Collect credentials for selected skills
+  for (const module of selectedModules) {
+    if (module.startsWith('sf-skill-')) {
+      const skillName = module.replace('sf-skill-', '')
+      skillsToAdd.push(skillName)
+      const credentials = await getSkillCredentials(skillName)
+      Object.assign(skillsCredentials, credentials)
+    }
   }
 
   if (selectedModules.length === 0) {
@@ -412,6 +440,21 @@ export async function updateCommand() {
       manifest.modules.includeAnalytics = true
     }
 
+    // Install selected advanced skills
+    if (skillsToAdd.length > 0) {
+      moduleSpinner.text = 'Installing advanced skills...'
+      await installSkills({
+        isMonorepo,
+        apiPath,
+        webPath,
+        projectName: manifest.projectName,
+        version: cliVersion,
+        advancedSkills: [...(manifest.modules.advancedSkills || []), ...skillsToAdd],
+        ...skillsCredentials
+      })
+      manifest.modules.advancedSkills = [...(manifest.modules.advancedSkills || []), ...skillsToAdd]
+    }
+
     // Run npm install if new dependencies were added
     if (selectedModules.includes('storage') || selectedModules.includes('email')) {
       moduleSpinner.text = 'Installing dependencies...'
@@ -441,6 +484,9 @@ export async function updateCommand() {
   if (selectedModules.includes('email')) console.log(chalk.green('    ✓ MailerSend Email Service'))
   if (selectedModules.includes('storage')) console.log(chalk.green('    ✓ S3 Object Storage'))
   if (selectedModules.includes('analytics')) console.log(chalk.green('    ✓ Umami Analytics'))
+  for (const skill of skillsToAdd) {
+    console.log(chalk.green(`    ✓ Advanced Skill: ${skill.charAt(0).toUpperCase() + skill.slice(1)}`))
+  }
   console.log(chalk.green('  ' + '═'.repeat(60)))
   console.log()
 

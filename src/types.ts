@@ -37,6 +37,15 @@ export interface Answers {
   s3Setup: 'docker' | 'credentials' | 'manual'
   s3Credentials?: S3Credentials
   includeAnalytics: boolean
+  advancedSkills?: string[]
+  context7ApiKey?: string
+  atlassianEmail?: string
+  atlassianApiToken?: string
+  atlassianSite?: string
+  atlassianCloudId?: string
+  notionApiToken?: string
+  notionApiVersion?: string
+  figmaApiToken?: string
 }
 
 export interface CreateApiAppParams {
@@ -52,6 +61,15 @@ export interface CreateApiAppParams {
   mailersendSenderName?: string
   s3Setup: 'docker' | 'credentials' | 'manual'
   s3Credentials?: S3Credentials
+  advancedSkills?: string[]
+  context7ApiKey?: string
+  atlassianEmail?: string
+  atlassianApiToken?: string
+  atlassianSite?: string
+  atlassianCloudId?: string
+  notionApiToken?: string
+  notionApiVersion?: string
+  figmaApiToken?: string
 }
 
 export interface CreateWebAppParams {
@@ -62,6 +80,15 @@ export interface CreateWebAppParams {
   mainBranch: string
   s3Setup: 'docker' | 'credentials' | 'manual'
   includeAnalytics: boolean
+  advancedSkills?: string[]
+  context7ApiKey?: string
+  atlassianEmail?: string
+  atlassianApiToken?: string
+  atlassianSite?: string
+  atlassianCloudId?: string
+  notionApiToken?: string
+  notionApiVersion?: string
+  figmaApiToken?: string
 }
 
 export interface CreateDbAppParams {
@@ -102,6 +129,7 @@ export interface SaaSFoundryManifest {
     s3Setup: 'docker' | 'credentials' | 'manual'
     dbSetup: 'docker' | 'credentials' | 'manual'
     includeAnalytics: boolean
+    advancedSkills: string[]
   }
   fileHashes?: Record<string, string>
 }

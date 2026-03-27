@@ -3,6 +3,7 @@ import inquirer from 'inquirer'
 import { exec } from 'shelljs'
 
 import { Answers } from '../types'
+import { promptAdvancedSkills, collectAdvancedSkillsCredentials } from './skills.prompts'
 
 /**
  * Get user inputs
@@ -307,5 +308,14 @@ export async function getUserStartProjectInputs() {
     }
   ])
 
-  return { ...answers, ...s3Answers, ...analyticsAnswers }
+  // Skills setup (asked after analytics)
+  const advancedSkills = await promptAdvancedSkills()
+  const skillsCredentials = await collectAdvancedSkillsCredentials(advancedSkills)
+
+  const skillsAnswers: Partial<Answers> = {
+    advancedSkills,
+    ...skillsCredentials
+  }
+
+  return { ...answers, ...s3Answers, ...analyticsAnswers, ...skillsAnswers }
 }

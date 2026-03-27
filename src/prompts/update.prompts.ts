@@ -3,6 +3,7 @@ import inquirer from 'inquirer'
 import { exec } from 'shelljs'
 
 import { Answers, SaaSFoundryManifest } from '../types'
+import { AdvancedSkillCredentials, promptContext7Credentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from './skills.prompts'
 
 interface AvailableModule {
   name: string
@@ -38,6 +39,27 @@ export function getAvailableModules(manifest: SaaSFoundryManifest): AvailableMod
       description: 'Privacy-friendly anonymous user analytics (self-hosted, production only)',
       value: 'analytics'
     })
+  }
+
+  // Detect available advanced skills
+  const installedSkills = manifest.modules.advancedSkills || []
+  const allSkills = ['context7', 'atlassian', 'notion', 'figma']
+
+  for (const skill of allSkills) {
+    if (!installedSkills.includes(skill)) {
+      const skillDescriptions = {
+        context7: 'Up-to-date library documentation (React, Vite, Prisma, etc.)',
+        atlassian: 'Jira/Confluence integration (tickets, wiki, sprints)',
+        notion: 'Notion workspace integration (pages, databases, views)',
+        figma: 'Figma design system integration (designs, components)'
+      }
+
+      available.push({
+        name: `Advanced Skill: ${skill.charAt(0).toUpperCase() + skill.slice(1)}`,
+        description: skillDescriptions[skill as keyof typeof skillDescriptions],
+        value: `sf-skill-${skill}`
+      })
+    }
   }
 
   return available
@@ -198,4 +220,22 @@ export async function getStorageModuleConfig(projectName: string): Promise<{ s3S
   }
 
   return { s3Setup }
+}
+
+/**
+ * Ask for credentials for a single advanced skill.
+ */
+export async function getSkillCredentials(skill: string): Promise<AdvancedSkillCredentials> {
+  switch (skill) {
+    case 'context7':
+      return await promptContext7Credentials()
+    case 'atlassian':
+      return await promptAtlassianCredentials()
+    case 'notion':
+      return await promptNotionCredentials()
+    case 'figma':
+      return await promptFigmaCredentials()
+    default:
+      return {}
+  }
 }
