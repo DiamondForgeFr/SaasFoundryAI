@@ -251,13 +251,10 @@ yourproject/
 │   ├── 🔵 logs/             # API logs
 │   ├── 🔵 scripts/          # db, tag manager, test init
 │   ├── 🔵 prisma/
-│   └── 🔵 docker-compose.yml
-│
-├── 📂 yourproject-db/       # PSQL database
-│   └── 🟢 docker-compose.db.yml
-│
-├── 📂 yourproject-s3/       # S3 storage (optional)
-│   └── 🟡 docker-compose.s3.yml
+│   ├── 🔵 tests/
+│   ├── 🔵 docker-compose.yml  # Production deployment
+│   ├── 🔵 docker-compose.dev-services.yml  # Local dev (DB + S3)
+│   └── .saasfoundry.json    # Manifest
 │
 └── 📂 yourproject-web/      # React Frontend
     ├── 🟠 src/
@@ -268,8 +265,9 @@ yourproject/
     │   ├── hooks            # api / ui / ...
     │   └── utils
     ├── 🟠 public/
+    ├── 🟠 scripts/          # tag manager
     ├── 🟠 tests/
-    └── .saasfoundry.json
+    └── .saasfoundry.json    # Manifest
 ```
 
 </td>
@@ -277,7 +275,7 @@ yourproject/
 </table>
 </div>
 
-> **💡 Tip**: Multi-repo allows independent deployment cycles and version control for each component.
+> **💡 Tip**: Multi-repo allows independent deployment cycles and version control. Dev services (DB, S3) are embedded in the API via `docker-compose.dev-services.yml` for easy local development.
 
 ## 🧩 Optional Modules
 
@@ -352,6 +350,129 @@ This ensures your customizations are never lost during updates.
 - **Best Practices**: Built-in industry standards and workflows
 - **Developer Experience**: Streamlined development with integrated tools
 - **Community**: Open-source collaboration and ecosystem
+
+## 🤖 AI-First Development
+
+SaaSFoundry is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects come pre-configured for both traditional team development and AI-powered coding with Claude Code.
+
+### ✨ Built for Claude Code
+
+Every SaaSFoundry project includes:
+
+#### 📝 CLAUDE.md Context Files
+- **Project-specific context** for immediate AI understanding
+- **Architecture documentation** with tech stack, conventions, and patterns
+- **Module system documentation** for dynamic feature installation
+- **Git workflow guidelines** with conventional commits and branching strategy
+
+#### 🛠️ Pre-configured Development Environment
+- **Path aliases** optimized for AI code generation
+- **Validation schemas** (Zod) for type-safe AI-generated code
+- **Modular structure** that AI can navigate and extend easily
+- **Consistent naming conventions** across backend and frontend
+
+#### 🔄 Professional Workflows + AI
+- **Git hooks** (Husky) enforce code quality on AI-generated commits
+- **Automated tests** validate AI changes (unit, E2E, integration)
+- **CI/CD pipelines** run checks on every AI-assisted PR
+- **Type safety** (TypeScript + Prisma) catches AI mistakes early
+- **ESLint + Prettier** auto-format AI-generated code
+
+### 🚀 Quick Start for AI Development
+
+#### 1. **Connect Claude Code**
+```bash
+# After generating your project
+cd your-project
+code .  # or cursor .
+
+# Claude Code will automatically load CLAUDE.md
+# You can start asking questions immediately
+```
+
+#### 2. **Common AI Development Commands**
+```bash
+# Add a new module
+"Add email service with MailerSend"
+
+# Implement features
+"Create a new user profile endpoint with avatar upload"
+
+# Fix and improve
+"Fix all TypeScript errors"
+"Add validation to the login form"
+
+# Review and test
+"Run all tests and show me the results"
+"Create a PR for this feature"
+```
+
+#### 3. **AI-Assisted Workflows**
+
+**Feature Development:**
+1. Ask Claude to implement the feature
+2. AI generates code following project conventions
+3. Git hooks validate commit message format
+4. Pre-push hooks run tests automatically
+5. CI/CD validates the changes
+6. Claude can create the PR with proper description
+
+**Code Review:**
+1. Claude reads PR comments from GitHub
+2. Implements requested changes
+3. Runs tests to validate fixes
+4. Updates PR with new commits
+
+### 🎯 Best Practices
+
+#### ✅ DO
+- **Use CLAUDE.md** - Keep it updated with project decisions
+- **Leverage skills** - Use pre-built skills for common tasks
+- **Trust the guards** - Let tests and CI/CD catch issues
+- **Iterate with AI** - Use AI for rapid prototyping, then refine
+- **Review AI code** - Especially for security-sensitive areas
+
+#### ❌ DON'T
+- **Skip tests** - AI-generated code must pass all tests
+- **Bypass hooks** - Don't use `--no-verify` on AI commits
+- **Ignore types** - TypeScript errors indicate AI misunderstandings
+- **Over-rely** - Review critical business logic carefully
+- **Forget context** - Update CLAUDE.md when architecture changes
+
+### 📚 AI + Traditional Dev Harmony
+
+SaaSFoundry ensures AI assistance **enhances** rather than replaces professional practices:
+
+| Traditional Practice | AI Enhancement |
+|---------------------|----------------|
+| Code reviews | AI implements PR feedback automatically |
+| Testing | AI generates test cases, humans verify coverage |
+| Documentation | AI drafts docs, humans ensure accuracy |
+| Refactoring | AI suggests improvements, humans approve |
+| Debugging | AI identifies patterns, humans understand root causes |
+
+### 🔐 Security & Quality
+
+All AI-generated code passes through:
+- **Zod validation** - Runtime type checking
+- **ESLint rules** - Code quality standards
+- **Unit tests** - Business logic verification
+- **E2E tests** - User flow validation
+- **TypeScript** - Compile-time type safety
+- **Git hooks** - Pre-commit and pre-push checks
+- **CI/CD** - Automated deployment validation
+
+### 📖 Learning Path
+
+1. **Start small** - Use AI for simple features first
+2. **Understand patterns** - Learn from AI-generated code
+3. **Customize CLAUDE.md** - Add project-specific context
+4. **Create skills** - Build custom AI workflows
+5. **Share learnings** - Document successful AI patterns
+
+---
+
+**Ready to build with AI?** Generated projects include everything you need to start coding with Claude immediately - no setup required.
 
 ## 🤝 Contributing
 
