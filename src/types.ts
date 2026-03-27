@@ -131,6 +131,7 @@ export interface SaaSFoundryManifest {
     includeAnalytics: boolean
     advancedSkills: string[]
   }
+  skillsAccounts?: Record<string, string>
   fileHashes?: Record<string, string>
 }
 
