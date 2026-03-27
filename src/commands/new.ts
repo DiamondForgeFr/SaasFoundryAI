@@ -8,6 +8,7 @@ import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
 import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
+import { installSkills } from '../installers/skills.installer'
 import { getUserStartProjectInputs } from '../prompts/project.prompts'
 import { initAndStartDb } from '../runners/database.runner'
 import { initAndStartS3 } from '../runners/s3.runner'
@@ -92,7 +93,16 @@ export async function newCommand() {
       mailersendSenderEmail: startProjectAnswers.mailersendSenderEmail,
       mailersendSenderName: startProjectAnswers.mailersendSenderName,
       s3Setup: startProjectAnswers.s3Setup,
-      s3Credentials: startProjectAnswers.s3Credentials
+      s3Credentials: startProjectAnswers.s3Credentials,
+      advancedSkills: startProjectAnswers.advancedSkills,
+      context7ApiKey: startProjectAnswers.context7ApiKey,
+      atlassianEmail: startProjectAnswers.atlassianEmail,
+      atlassianApiToken: startProjectAnswers.atlassianApiToken,
+      atlassianSite: startProjectAnswers.atlassianSite,
+      atlassianCloudId: startProjectAnswers.atlassianCloudId,
+      notionApiToken: startProjectAnswers.notionApiToken,
+      notionApiVersion: startProjectAnswers.notionApiVersion,
+      figmaApiToken: startProjectAnswers.figmaApiToken
     })
     updateProgress()
 
@@ -120,7 +130,16 @@ export async function newCommand() {
       frontendRepoUrl: startProjectAnswers.frontendRepoUrl || '',
       mainBranch: startProjectAnswers.mainBranch,
       s3Setup: startProjectAnswers.s3Setup,
-      includeAnalytics: startProjectAnswers.includeAnalytics
+      includeAnalytics: startProjectAnswers.includeAnalytics,
+      advancedSkills: startProjectAnswers.advancedSkills,
+      context7ApiKey: startProjectAnswers.context7ApiKey,
+      atlassianEmail: startProjectAnswers.atlassianEmail,
+      atlassianApiToken: startProjectAnswers.atlassianApiToken,
+      atlassianSite: startProjectAnswers.atlassianSite,
+      atlassianCloudId: startProjectAnswers.atlassianCloudId,
+      notionApiToken: startProjectAnswers.notionApiToken,
+      notionApiVersion: startProjectAnswers.notionApiVersion,
+      figmaApiToken: startProjectAnswers.figmaApiToken
     })
     updateProgress()
 
@@ -136,6 +155,26 @@ export async function newCommand() {
       updateProgress()
     }
 
+    // Install Claude Code skills
+    spinner.text = 'Installing Claude Code skills...'
+    const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
+    const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
+    await installSkills({
+      apiPath,
+      webPath,
+      projectName: startProjectAnswers.projectName,
+      version: cliVersion,
+      advancedSkills: startProjectAnswers.advancedSkills,
+      context7ApiKey: startProjectAnswers.context7ApiKey,
+      atlassianEmail: startProjectAnswers.atlassianEmail,
+      atlassianApiToken: startProjectAnswers.atlassianApiToken,
+      atlassianSite: startProjectAnswers.atlassianSite,
+      atlassianCloudId: startProjectAnswers.atlassianCloudId,
+      notionApiToken: startProjectAnswers.notionApiToken,
+      notionApiVersion: startProjectAnswers.notionApiVersion,
+      figmaApiToken: startProjectAnswers.figmaApiToken
+    })
+
     // Generate .saasfoundry.json manifest with file hashes
     spinner.text = 'Computing file hashes for update tracking...'
     const fileHashes = await computeFileHashes('.')
@@ -148,7 +187,8 @@ export async function newCommand() {
         emailService: startProjectAnswers.emailService,
         s3Setup: startProjectAnswers.s3Setup,
         dbSetup: startProjectAnswers.dbSetup,
-        includeAnalytics: startProjectAnswers.includeAnalytics
+        includeAnalytics: startProjectAnswers.includeAnalytics,
+        advancedSkills: startProjectAnswers.advancedSkills || []
       },
       fileHashes
     }
