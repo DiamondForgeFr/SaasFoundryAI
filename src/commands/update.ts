@@ -102,6 +102,7 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
     const apiPath = manifest.structure === 'monorepo' ? 'apps/api' : `apps/${manifest.projectName}-api`
     const webPath = manifest.structure === 'monorepo' ? 'apps/web' : `apps/${manifest.projectName}-web`
     await installSkills({
+      isMonorepo: manifest.structure === 'monorepo',
       apiPath,
       webPath,
       projectName: manifest.projectName,
@@ -443,6 +444,7 @@ export async function updateCommand() {
     if (skillsToAdd.length > 0) {
       moduleSpinner.text = 'Installing advanced skills...'
       await installSkills({
+        isMonorepo,
         apiPath,
         webPath,
         projectName: manifest.projectName,

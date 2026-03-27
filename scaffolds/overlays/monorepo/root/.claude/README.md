@@ -49,7 +49,7 @@ This directory contains Claude Code configuration and skills for AI-assisted dev
 
 These skills integrate with external services and require API tokens/credentials:
 
-- **sf-tool-context7** - Fetch up-to-date library documentation (React, Vite, Tailwind, etc.)
+- **sf-tool-context7** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
 - **sf-tool-atlassian** - Jira/Confluence integration (create tickets, update status, etc.)
 - **sf-tool-notion** - Notion workspace integration (create pages, databases, etc.)
 - **sf-tool-figma** - Figma design system integration (get designs, components, etc.)
@@ -61,7 +61,7 @@ These skills integrate with external services and require API tokens/credentials
 Skills are automatically loaded by Claude Code when you open this project. You can invoke them by:
 
 1. **Asking directly**: "fix all TypeScript errors"
-2. **Using skill name**: "use sf-git-commit to commit these changes"
+2. **Using skill name**: "use apex workflow to implement user authentication"
 3. **Auto-trigger**: Many skills auto-trigger based on keywords
 
 ## 🚀 Getting Started
@@ -74,9 +74,8 @@ Skills are automatically loaded by Claude Code when you open this project. You c
 
 - Let skills handle repetitive tasks (commits, error fixes, etc.)
 - Use APEX workflow for complex features
-- Review AI-generated code, especially for UI components
+- Review AI-generated code, especially for security-critical parts
 - Skills respect project conventions (ESLint, Prettier, TypeScript)
-- Test React components after AI generation
 
 ---
 

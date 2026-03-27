@@ -2,10 +2,11 @@ import { copy } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
-import { blueprintsPath } from '../types'
+import { blueprintsPath, overlaysPath } from '../types'
 import { fileExists } from '../utils'
 
 interface InstallSkillsParams {
+  isMonorepo: boolean
   apiPath: string
   webPath: string
   projectName: string
@@ -22,18 +23,23 @@ interface InstallSkillsParams {
 }
 
 /**
- * Install Claude Code skills on API + Web apps.
+ * Install Claude Code skills.
+ *
+ * Architecture:
+ * - Monorepo: Skills installed at root (.claude/) - centralized, no duplication
+ * - Multirepo: Skills installed in each app (api/.claude/ and web/.claude/)
  *
  * This function:
  * 1. Copies all core skills to .claude/skills/ (always installed)
  * 2. Copies selected advanced skills to .claude/skills-optional/
  * 3. Creates .env files for advanced skills with user credentials
  * 4. Updates CLAUDE.md placeholders ({{PROJECT_NAME}}, {{VERSION}})
- * 5. Copies .claude/README.md to both apps
+ * 5. Copies .claude/README.md
  *
  * Used by both `sf new` (during initial project generation) and `sf update` (when adding skills later).
  */
 export async function installSkills({
+  isMonorepo,
   apiPath,
   webPath,
   projectName,
@@ -48,38 +54,134 @@ export async function installSkills({
   notionApiVersion,
   figmaApiToken
 }: InstallSkillsParams) {
-  // Install skills for both API and Web
-  await installSkillsForApp({
-    appPath: apiPath,
-    appType: 'api',
-    projectName,
-    version,
-    advancedSkills,
-    context7ApiKey,
-    atlassianEmail,
-    atlassianApiToken,
-    atlassianSite,
-    atlassianCloudId,
-    notionApiToken,
-    notionApiVersion,
-    figmaApiToken
-  })
+  if (isMonorepo) {
+    // Monorepo: Install skills at root (centralized)
+    await installSkillsAtRoot({
+      projectName,
+      version,
+      advancedSkills,
+      context7ApiKey,
+      atlassianEmail,
+      atlassianApiToken,
+      atlassianSite,
+      atlassianCloudId,
+      notionApiToken,
+      notionApiVersion,
+      figmaApiToken
+    })
+  } else {
+    // Multirepo: Install skills in each app
+    await installSkillsForApp({
+      appPath: apiPath,
+      appType: 'api',
+      projectName,
+      version,
+      advancedSkills,
+      context7ApiKey,
+      atlassianEmail,
+      atlassianApiToken,
+      atlassianSite,
+      atlassianCloudId,
+      notionApiToken,
+      notionApiVersion,
+      figmaApiToken
+    })
 
-  await installSkillsForApp({
-    appPath: webPath,
-    appType: 'web',
-    projectName,
-    version,
-    advancedSkills,
-    context7ApiKey,
-    atlassianEmail,
-    atlassianApiToken,
-    atlassianSite,
-    atlassianCloudId,
-    notionApiToken,
-    notionApiVersion,
-    figmaApiToken
-  })
+    await installSkillsForApp({
+      appPath: webPath,
+      appType: 'web',
+      projectName,
+      version,
+      advancedSkills,
+      context7ApiKey,
+      atlassianEmail,
+      atlassianApiToken,
+      atlassianSite,
+      atlassianCloudId,
+      notionApiToken,
+      notionApiVersion,
+      figmaApiToken
+    })
+  }
+}
+
+interface InstallSkillsAtRootParams {
+  projectName: string
+  version: string
+  advancedSkills: string[]
+  context7ApiKey?: string
+  atlassianEmail?: string
+  atlassianApiToken?: string
+  atlassianSite?: string
+  atlassianCloudId?: string
+  notionApiToken?: string
+  notionApiVersion?: string
+  figmaApiToken?: string
+}
+
+/**
+ * Install skills at monorepo root (centralized)
+ */
+async function installSkillsAtRoot({
+  projectName,
+  version,
+  advancedSkills,
+  context7ApiKey,
+  atlassianEmail,
+  atlassianApiToken,
+  atlassianSite,
+  atlassianCloudId,
+  notionApiToken,
+  notionApiVersion,
+  figmaApiToken
+}: InstallSkillsAtRootParams) {
+  // Copy from monorepo overlay (already includes skills from blueprints)
+  const monorepoClaudePath = resolve(overlaysPath, 'monorepo/root/.claude')
+  const targetClaudePath = '.claude'
+
+  // Copy all core skills
+  const blueprintSkillsPath = resolve(monorepoClaudePath, 'skills')
+  const targetSkillsPath = `${targetClaudePath}/skills`
+  await copy(blueprintSkillsPath, targetSkillsPath)
+
+  // Copy .claude/README.md
+  const blueprintReadmePath = resolve(monorepoClaudePath, 'README.md')
+  const targetReadmePath = `${targetClaudePath}/README.md`
+  await copy(blueprintReadmePath, targetReadmePath)
+
+  // Copy selected advanced skills if any
+  if (advancedSkills.length > 0) {
+    for (const skill of advancedSkills) {
+      const blueprintSkillPath = resolve(monorepoClaudePath, 'skills-optional', `sf-tool-${skill}`)
+      const targetSkillPath = `${targetClaudePath}/skills-optional/sf-tool-${skill}`
+
+      if (await fileExists(blueprintSkillPath)) {
+        await copy(blueprintSkillPath, targetSkillPath)
+
+        // Create .env file with credentials for this skill
+        await createSkillEnvFile({
+          targetSkillPath,
+          skill,
+          context7ApiKey,
+          atlassianEmail,
+          atlassianApiToken,
+          atlassianSite,
+          atlassianCloudId,
+          notionApiToken,
+          notionApiVersion,
+          figmaApiToken
+        })
+      }
+    }
+  }
+
+  // Update CLAUDE.md placeholders at root
+  const claudeMdPath = 'CLAUDE.md'
+  if (await fileExists(claudeMdPath)) {
+    let claudeMdContent = await readFile(claudeMdPath, 'utf8')
+    claudeMdContent = claudeMdContent.replace(/\{\{PROJECT_NAME\}\}/g, projectName).replace(/\{\{VERSION\}\}/g, version)
+    await writeFile(claudeMdPath, claudeMdContent)
+  }
 }
 
 interface InstallSkillsForAppParams {

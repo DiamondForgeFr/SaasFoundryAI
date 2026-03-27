@@ -160,6 +160,7 @@ export async function newCommand() {
     const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
     const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
     await installSkills({
+      isMonorepo: startProjectAnswers.isMonorepo,
       apiPath,
       webPath,
       projectName: startProjectAnswers.projectName,
