@@ -4,6 +4,7 @@ export default defineConfig({
   title: 'SaaSFoundry',
   description: 'AI-First SaaS Platform Generator',
   base: '/SaaSFoundry/',
+  ignoreDeadLinks: [/^https?:\/\/localhost/],
 
   themeConfig: {
     logo: '/logo.svg',
