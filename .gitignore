@@ -43,3 +43,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # (In a team project, remove this line to track database migration
 prisma/migrationsdocs/.vitepress/dist
 docs/.vitepress/cache/
+docs/.vitepress/dist/
