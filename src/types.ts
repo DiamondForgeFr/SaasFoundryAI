@@ -152,8 +152,7 @@ export interface AIRules {
   alwaysCreateBranchFromWorking?: boolean
   alwaysCreateTicketBeforeCode?: boolean
   autoUpdateTicketStatus?: boolean
-  requireTestsBeforeCommit?: boolean
-  requireLintBeforeCommit?: boolean
+  requireHumanCheckOnPushedBranch?: boolean
 }
 
 export interface WorkflowTemplate extends WorkflowConfig {
