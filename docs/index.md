@@ -40,12 +40,22 @@ features:
 
 ## What is SaaSFoundry?
 
-SaaSFoundry is a CLI tool that scaffolds production-ready SaaS projects with:
+SaaSFoundry is an **AI-assisted collaborative development platform** that scaffolds production-ready SaaS projects optimized for Human + AI development with Claude Code.
+
+::: info Not an AI-Powered App SaaSFoundry itself doesn't embed AI. It's a **platform for collaborative development** between humans and AI assistants like Claude Code. The generated projects include
+Claude-powered skills that help with git operations, workflow management, and development tasks. :::
+
+### Tech Stack
 
 - **Backend**: NestJS 11 + Prisma 7 + PostgreSQL 16
 - **Frontend**: React 19 + React Router v7 + TailwindCSS 4
 - **Infra**: Docker multi-stage builds + Turborepo
-- **AI Skills**: Claude-powered development workflows
+- **AI Collaboration**: Claude Code skills for development workflows
 - **Modules**: Email, Storage, Analytics, and more
+
+### Development Tools
+
+- **Claude Code** (Required) - AI coding assistant in your terminal
+- **cmux** (Recommended for macOS) - Terminal multiplexer with integrated browser
 
 [Get Started →](/getting-started/installation)
