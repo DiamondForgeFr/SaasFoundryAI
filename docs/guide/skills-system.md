@@ -28,38 +28,38 @@ Skills are stored in `.claude/skills/`:
 
 ### Git Skills
 
-| Skill | Command | Description |
-|-------|---------|-------------|
-| **sf-git-commit** | `/commit` | Quick commit with minimal message |
-| **sf-git-create-pr** | `/pr` | Create PR with auto-generated description |
-| **sf-git-fix-pr-comments** | `/fix-pr` | Implement all PR review comments |
-| **sf-git-merge** | `/merge` | Context-aware conflict resolution |
+| Skill                      | Command   | Description                               |
+| -------------------------- | --------- | ----------------------------------------- |
+| **sf-git-commit**          | `/commit` | Quick commit with minimal message         |
+| **sf-git-create-pr**       | `/pr`     | Create PR with auto-generated description |
+| **sf-git-fix-pr-comments** | `/fix-pr` | Implement all PR review comments          |
+| **sf-git-merge**           | `/merge`  | Context-aware conflict resolution         |
 
 ### Utility Skills
 
-| Skill | Command | Description |
-|-------|---------|-------------|
-| **sf-utils-fix-errors** | `/fix-errors` | Fix all ESLint and TypeScript errors |
+| Skill                    | Command        | Description                                  |
+| ------------------------ | -------------- | -------------------------------------------- |
+| **sf-utils-fix-errors**  | `/fix-errors`  | Fix all ESLint and TypeScript errors         |
 | **sf-utils-fix-grammar** | `/fix-grammar` | Fix grammar/spelling while preserving format |
-| **sf-utils-oneshot** | `/oneshot` | Ultra-fast feature implementation |
+| **sf-utils-oneshot**     | `/oneshot`     | Ultra-fast feature implementation            |
 
 ### Workflow Skills
 
-| Skill | Command | Description |
-|-------|---------|-------------|
-| **sf-workflow-apex** | `/apex` | Systematic APEX methodology implementation |
-| **sf-workflow-apex-free** | `/apex-free` | APEX without adversarial review |
+| Skill                     | Command      | Description                                |
+| ------------------------- | ------------ | ------------------------------------------ |
+| **sf-workflow-apex**      | `/apex`      | Systematic APEX methodology implementation |
+| **sf-workflow-apex-free** | `/apex-free` | APEX without adversarial review            |
 
 ## Tool-Specific Skills
 
 Generated based on workflow tool selection:
 
-| Tool | Skill | Features |
-|------|-------|----------|
+| Tool            | Skill                     | Features                                  |
+| --------------- | ------------------------- | ----------------------------------------- |
 | GitHub Projects | `sf-tool-github-projects` | Issue management, sub-issues, GraphQL API |
-| Jira | `sf-tool-jira` | Tickets, sub-tasks, sprints |
-| Notion | `sf-tool-notion` | Pages, databases, properties |
-| Linear | `sf-tool-linear` | Issues, sub-issues, cycles |
+| Jira            | `sf-tool-jira`            | Tickets, sub-tasks, sprints               |
+| Notion          | `sf-tool-notion`          | Pages, databases, properties              |
+| Linear          | `sf-tool-linear`          | Issues, sub-issues, cycles                |
 
 ## Using Skills
 

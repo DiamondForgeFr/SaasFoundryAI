@@ -38,16 +38,17 @@ sf update
 
 ### Email Module
 
-**Provider:** MailerSend
-**Affects:** API only
+**Provider:** MailerSend **Affects:** API only
 
 Features:
+
 - ✅ Transactional emails (welcome, password reset, invites)
 - ✅ Template support
 - ✅ Multi-sender configuration
 - ✅ Test mode for development
 
 Setup:
+
 ```bash
 sf update
 # Select "Email (MailerSend)"
@@ -58,16 +59,17 @@ See: [Email Module Guide](/modules/email)
 
 ### Storage Module
 
-**Provider:** S3-compatible (AWS S3, MinIO, etc.)
-**Affects:** API + Web
+**Provider:** S3-compatible (AWS S3, MinIO, etc.) **Affects:** API + Web
 
 Features:
+
 - ✅ File uploads (images, documents)
 - ✅ Presigned URLs for secure access
 - ✅ Organization-scoped buckets
 - ✅ Local Docker setup for development
 
 Setup:
+
 ```bash
 sf update
 # Select "Storage (S3)"
@@ -78,16 +80,17 @@ See: [Storage Module Guide](/modules/storage)
 
 ### Analytics Module
 
-**Provider:** Umami
-**Affects:** Web only
+**Provider:** Umami **Affects:** Web only
 
 Features:
+
 - ✅ Privacy-focused analytics
 - ✅ No cookies required
 - ✅ GDPR compliant
 - ✅ Self-hostable
 
 Setup:
+
 ```bash
 sf update
 # Select "Analytics (Umami)"
@@ -108,6 +111,7 @@ SaaSFoundry uses a two-layer approach:
 Example:
 
 **Blueprint (before module):**
+
 ```typescript
 // TODO mailer-service-active: import { EmailService } from './email.service'
 
@@ -117,6 +121,7 @@ export class AuthService {
 ```
 
 **After installing Email module:**
+
 ```typescript
 import { EmailService } from './email.service'
 
@@ -167,6 +172,7 @@ The update system uses **three-way merge**:
 3. **Target** - New template code
 
 **Merge strategies:**
+
 - ✅ **Auto-update** - File untouched, template changed
 - ⚠️ **Conflict** - Both modified, saved as `.saasfoundry.new`
 - ⏭️ **Skip** - File modified, template unchanged

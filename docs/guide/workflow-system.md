@@ -87,13 +87,13 @@ Workflow configuration is stored in `.saasfoundry.json`:
 
 Configure how Claude assists with development:
 
-| Rule | Description |
-|------|-------------|
+| Rule                            | Description                                         |
+| ------------------------------- | --------------------------------------------------- |
 | `alwaysCreateBranchFromWorking` | Always branch from working branch (e.g., `develop`) |
-| `alwaysCreateTicketBeforeCode` | Create issue before starting work |
-| `autoUpdateTicketStatus` | Update issue status based on git operations |
-| `requireTestsBeforeCommit` | Run tests before allowing commits |
-| `requireLintBeforeCommit` | Run linter before allowing commits |
+| `alwaysCreateTicketBeforeCode`  | Create issue before starting work                   |
+| `autoUpdateTicketStatus`        | Update issue status based on git operations         |
+| `requireTestsBeforeCommit`      | Run tests before allowing commits                   |
+| `requireLintBeforeCommit`       | Run linter before allowing commits                  |
 
 ### Configure AI Rules
 
