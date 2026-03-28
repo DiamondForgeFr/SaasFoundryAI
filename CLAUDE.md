@@ -323,15 +323,16 @@ SaaSFoundry integrates **Claude Code skills** into generated projects. All skill
 
 ### Skill Types & Classification
 
-| Type | Location | Credentials | Multi-Account | Examples |
-|------|----------|-------------|---------------|----------|
-| **Core Skills** | `skills/` | ❌ No | ❌ No | `sf-git-commit`, `sf-utils-fix-errors`, `sf-workflow-apex` |
-| **Tool Skills (Public API)** | `skills-optional/` | ❌ No | ❌ No | `sf-tool-context7` |
-| **Tool Skills (Auth Required)** | `skills-optional/` | ✅ Yes | ✅ Yes | `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma` |
+| Type                            | Location           | Credentials | Multi-Account | Examples                                                   |
+| ------------------------------- | ------------------ | ----------- | ------------- | ---------------------------------------------------------- |
+| **Core Skills**                 | `skills/`          | ❌ No       | ❌ No         | `sf-git-commit`, `sf-utils-fix-errors`, `sf-workflow-apex` |
+| **Tool Skills (Public API)**    | `skills-optional/` | ❌ No       | ❌ No         | `sf-tool-context7`                                         |
+| **Tool Skills (Auth Required)** | `skills-optional/` | ✅ Yes      | ✅ Yes        | `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma`     |
 
 ### Architecture Patterns
 
 #### 1. Multirepo Structure
+
 ```
 scaffolds/blueprints/api/.claude/
 ├── skills/              # 9 core skills (git, utils, workflow)
@@ -343,6 +344,7 @@ scaffolds/blueprints/web/.claude/
 ```
 
 #### 2. Monorepo Structure (Centralized)
+
 ```
 scaffolds/overlays/monorepo/root/.claude/
 ├── skills/              # 9 core skills (shared by API + Web)
@@ -354,6 +356,7 @@ scaffolds/overlays/monorepo/root/.claude/
 ### Current Skills Inventory
 
 #### Core Skills (9 total)
+
 - `sf-git-commit` - Quick commit and push
 - `sf-git-create-pr` - Create pull requests
 - `sf-git-fix-pr-comments` - Implement PR feedback
@@ -365,6 +368,7 @@ scaffolds/overlays/monorepo/root/.claude/
 - `sf-workflow-apex-free` - APEX methodology (without adversarial review)
 
 #### Tool Skills (4 total)
+
 - `sf-tool-context7` - Library documentation (free public API, no credentials)
 - `sf-tool-atlassian` - Jira/Confluence integration (requires credentials)
 - `sf-tool-notion` - Notion workspace integration (requires credentials)
@@ -375,12 +379,15 @@ scaffolds/overlays/monorepo/root/.claude/
 **Only applies to Tool Skills with authentication** (atlassian, notion, figma).
 
 #### Architecture
+
 - **Centralized storage**: `~/.claude/credentials/{tool}/{account}.env`
 - **Project configuration**: `.saasfoundry.json` → `skillsAccounts: { tool: "account" }`
 - **CLI management**: `sf tools` command (list, accounts, add, use, current)
 
 #### Credential Loading (in CLI scripts)
+
 Each tool skill's CLI script (`{tool}-cli.sh`) loads credentials in this order:
+
 1. Check if in a SaaSFoundry project (`.saasfoundry.json` exists)
 2. Read configured account from manifest → `skillsAccounts.{tool}`
 3. Load from `~/.claude/credentials/{tool}/{account}.env`
@@ -389,14 +396,14 @@ Each tool skill's CLI script (`{tool}-cli.sh`) loads credentials in this order:
 
 #### Files Involved in Multi-Account System
 
-| File | Purpose | When to Modify |
-|------|---------|----------------|
-| `src/commands/tools.ts` | CLI command implementation | Adding new tool with credentials |
-| `src/prompts/skills.prompts.ts` | Credential collection prompts | Adding new tool with credentials |
-| `src/prompts/update.prompts.ts` | Update command credential flow | Adding new tool with credentials |
-| `src/types.ts` → `SaaSFoundryManifest.skillsAccounts` | Manifest type definition | Adding new tool with credentials |
+| File                                                                            | Purpose                            | When to Modify                                        |
+| ------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------- |
+| `src/commands/tools.ts`                                                         | CLI command implementation         | Adding new tool with credentials                      |
+| `src/prompts/skills.prompts.ts`                                                 | Credential collection prompts      | Adding new tool with credentials                      |
+| `src/prompts/update.prompts.ts`                                                 | Update command credential flow     | Adding new tool with credentials                      |
+| `src/types.ts` → `SaaSFoundryManifest.skillsAccounts`                           | Manifest type definition           | Adding new tool with credentials                      |
 | `scaffolds/blueprints/api/.claude/skills-optional/sf-tool-{name}/{name}-cli.sh` | CLI script with credential loading | Adding new tool OR modifying credential loading logic |
-| `scaffolds/blueprints/web/.claude/skills-optional/sf-tool-{name}/{name}-cli.sh` | Same as API (keep in sync) | Same as API |
+| `scaffolds/blueprints/web/.claude/skills-optional/sf-tool-{name}/{name}-cli.sh` | Same as API (keep in sync)         | Same as API                                           |
 
 ### Skill Installation System
 
@@ -422,6 +429,7 @@ export async function installSkills({
 ```
 
 **Key points**:
+
 - Core skills are ALWAYS installed
 - Tool skills are OPTIONAL (user selects during `sf new` or `sf update`)
 - Credentials are stored in skill's `.env` file during `sf new`
@@ -432,20 +440,25 @@ export async function installSkills({
 **Core skills** = methodology/utility skills with no external dependencies (e.g., git workflows, code quality, APEX)
 
 1. **Create skill directory** in `scaffolds/blueprints/api/.claude/skills/sf-{skill-name}/`
+
    - `SKILL.md` - Skill documentation and instructions
    - Any supporting scripts/files
 
 2. **Duplicate to Web blueprint** in `scaffolds/blueprints/web/.claude/skills/sf-{skill-name}/`
+
    - Identical structure (keep API and Web in sync)
 
 3. **Add to monorepo overlay** in `scaffolds/overlays/monorepo/root/.claude/skills/sf-{skill-name}/`
+
    - Identical structure (for centralized monorepo)
 
 4. **Update README.md**
+
    - Add skill to "Skills System" section
    - Document skill usage
 
 5. **Update blueprint CLAUDE.md files**
+
    - Add skill to "Available Skills" section in both API and Web blueprints
    - Update skills priority section if needed
 
@@ -459,6 +472,7 @@ export async function installSkills({
 **Tool skills with public API** = no credentials required (e.g., context7)
 
 1. **Create skill directory** in `scaffolds/blueprints/api/.claude/skills-optional/sf-tool-{name}/`
+
    - `SKILL.md` - Skill documentation
    - `{name}-cli.sh` - CLI script (no credential loading needed)
    - `.env.example` - Empty or info message (no credentials needed)
@@ -468,19 +482,23 @@ export async function installSkills({
 3. **Add to monorepo overlay**
 
 4. **Update skill prompts** in `src/prompts/skills.prompts.ts`
+
    - Add to `promptAdvancedSkills()` choices
    - Add label `[free, no credentials]`
    - Create `prompt{Name}Credentials()` that returns empty object with info message
 
 5. **Update update prompts** in `src/prompts/update.prompts.ts`
+
    - Add to skill descriptions in `getAvailableModules()`
    - Add label `[free, no credentials]`
    - Add case in `getSkillCredentials()` to return empty object
 
 6. **Update skills installer** in `src/installers/skills.installer.ts`
+
    - Add skill to detection/installation logic if needed
 
 7. **Update documentation**
+
    - README.md
    - Blueprint CLAUDE.md files
 
@@ -493,11 +511,13 @@ export async function installSkills({
 **Tool skills with authentication** = requires API tokens/credentials (e.g., atlassian, notion, figma)
 
 1. **Create skill directory** in `scaffolds/blueprints/api/.claude/skills-optional/sf-tool-{name}/`
+
    - `SKILL.md` - Skill documentation
    - `{name}-cli.sh` - CLI script with multi-account credential loading
    - `.env.example` - Example credentials format
 
 2. **Implement multi-account credential loading** in `{name}-cli.sh`
+
    ```bash
    load_credentials() {
      local TOOL_NAME="{name}"
@@ -533,25 +553,30 @@ export async function installSkills({
 4. **Add to monorepo overlay**
 
 5. **Add to tools command** in `src/commands/tools.ts`
+
    - Add `'{name}'` to `validTools` array in `addAccount()`
    - Add case in credential prompting switch
    - Tool will automatically appear in `sf tools list`
 
 6. **Create credential prompt** in `src/prompts/skills.prompts.ts`
+
    - Create `prompt{Name}Credentials()` function
    - Opens browser to API token page
    - Prompts for all required credentials
    - Returns credential object
 
 7. **Update skill selection prompts** in `src/prompts/skills.prompts.ts`
+
    - Add to `promptAdvancedSkills()` choices
    - Use clear description (no `[free]` label)
 
 8. **Update update prompts** in `src/prompts/update.prompts.ts`
+
    - Add to skill descriptions in `getAvailableModules()`
    - Add case in `getSkillCredentials()` to call prompt function
 
 9. **Update types** in `src/types.ts`
+
    - Add credential fields to `AdvancedSkillCredentials` interface
    - Example:
      ```typescript
@@ -563,10 +588,12 @@ export async function installSkills({
      ```
 
 10. **Update skills installer** in `src/installers/skills.installer.ts`
+
     - Add credential writing logic for the new tool
     - Update `.env` file generation
 
 11. **Update documentation**
+
     - README.md
     - Blueprint CLAUDE.md files
     - This CLAUDE.md (add to Current Skills Inventory)
@@ -582,12 +609,14 @@ export async function installSkills({
 ### Modifying Existing Skills
 
 #### When modifying a Core Skill:
+
 1. Update in `scaffolds/blueprints/api/.claude/skills/`
 2. Apply same changes to `scaffolds/blueprints/web/.claude/skills/`
 3. Apply same changes to `scaffolds/overlays/monorepo/root/.claude/skills/`
 4. Update documentation if behavior changed
 
 #### When modifying a Tool Skill:
+
 1. Update in `scaffolds/blueprints/api/.claude/skills-optional/`
 2. Apply same changes to `scaffolds/blueprints/web/.claude/skills-optional/`
 3. Apply same changes to `scaffolds/overlays/monorepo/root/.claude/skills-optional/`
@@ -598,6 +627,7 @@ export async function installSkills({
 ### Important Considerations
 
 **DO**:
+
 - ✅ Always prefix skills with `sf-` to avoid global conflicts
 - ✅ Keep API, Web, and Monorepo skills in sync
 - ✅ Test both multirepo and monorepo generation
@@ -606,6 +636,7 @@ export async function installSkills({
 - ✅ Document skill purpose and usage in SKILL.md
 
 **DON'T**:
+
 - ❌ Never create skills without `sf-` prefix
 - ❌ Don't add tools to multi-account system if they use public APIs
 - ❌ Don't modify credential loading pattern without updating all tools
@@ -621,6 +652,7 @@ Generated projects have this note in their CLAUDE.md:
 ## 🎯 Skills Priority
 
 **IMPORTANT**: Always prefer SaaSFoundry skills (prefix `sf-*`):
+
 - ✅ Use `sf-git-commit` instead of `git-commit`
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
 ```

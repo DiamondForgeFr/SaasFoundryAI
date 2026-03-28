@@ -3,7 +3,7 @@ import inquirer from 'inquirer'
 import { exec } from 'shelljs'
 
 import { Answers, SaaSFoundryManifest } from '../types'
-import { AdvancedSkillCredentials, promptContext7Credentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from './skills.prompts'
+import { AdvancedSkillCredentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from './skills.prompts'
 
 interface AvailableModule {
   name: string

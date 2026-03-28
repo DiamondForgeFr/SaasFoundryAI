@@ -29,11 +29,7 @@ export interface AdvancedSkillCredentials {
  */
 export async function promptAdvancedSkills(): Promise<string[]> {
   console.log(chalk.blue('\n📚 Advanced Skills (Optional)'))
-  console.log(
-    chalk.gray(
-      'These skills integrate with external services and require API tokens.\nYou can skip this now and configure them later when Claude prompts you.'
-    )
-  )
+  console.log(chalk.gray('These skills integrate with external services and require API tokens.\nYou can skip this now and configure them later when Claude prompts you.'))
 
   const { selectedSkills } = await inquirer.prompt<{ selectedSkills: string[] }>([
     {

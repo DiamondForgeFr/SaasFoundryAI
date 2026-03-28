@@ -119,6 +119,49 @@ export interface CreateDevServicesParams {
   s3Credentials?: S3Credentials
 }
 
+// Workflow Configuration Interfaces
+export interface WorkflowConfig {
+  tool: 'github-projects' | 'jira' | 'notion' | 'linear' | 'none'
+  projectUrl?: string
+  workingBranch?: string
+  prTargetBranch?: string
+  requireCodeReview?: boolean
+  statuses?: {
+    backlog?: string
+    ready?: string
+    inProgress?: string
+    inReview?: string
+    done?: string
+  }
+  branchNaming?: {
+    feature?: string
+    fix?: string
+    release?: string
+  }
+  commitFormat?: {
+    pattern?: string
+    requireTicket?: boolean
+    types?: string[]
+  }
+  template?: string
+  validated?: boolean
+  lastValidated?: string
+}
+
+export interface AIRules {
+  alwaysCreateBranchFromWorking?: boolean
+  alwaysCreateTicketBeforeCode?: boolean
+  autoUpdateTicketStatus?: boolean
+  requireTestsBeforeCommit?: boolean
+  requireLintBeforeCommit?: boolean
+}
+
+export interface WorkflowTemplate extends WorkflowConfig {
+  name: string
+  description?: string
+  aiRules?: AIRules
+}
+
 export interface SaaSFoundryManifest {
   version: string
   generatedAt: string
@@ -133,6 +176,8 @@ export interface SaaSFoundryManifest {
   }
   skillsAccounts?: Record<string, string>
   fileHashes?: Record<string, string>
+  workflow?: WorkflowConfig
+  aiRules?: AIRules
 }
 
 // Paths
