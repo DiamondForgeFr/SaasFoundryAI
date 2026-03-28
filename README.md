@@ -19,9 +19,9 @@
 
 # 🌟 What is SaaSFoundry?
 
-SaaSFoundry is a comprehensive, production-ready CLI for building modern SaaS applications. Far beyond a simple boilerplate, it's a complete ecosystem with modular architecture, automated
-workflows, and integrated best practices. This open-source project provides a robust foundation for startups, freelancers, and developers looking to create scalable, secure,
-and maintainable SaaS solutions with TypeScript full-stack development.
+SaaSFoundry is a comprehensive, production-ready CLI for building modern SaaS applications. Far beyond a simple boilerplate, it's a complete ecosystem with modular architecture, automated workflows,
+and integrated best practices. This open-source project provides a robust foundation for startups, freelancers, and developers looking to create scalable, secure, and maintainable SaaS solutions with
+TypeScript full-stack development.
 
 ### 🎯 Key Features
 
@@ -146,6 +146,7 @@ sf new       # or: saasfoundry new
 ```
 
 The CLI will guide you through:
+
 - **Project structure** - Monorepo (default) or Multi-repo
 - **Database setup** - Docker (recommended), Manual, or AWS RDS credentials
 - **Optional modules**:
@@ -320,6 +321,7 @@ The CLI tracks your project with a `.saasfoundry.json` manifest:
 ```
 
 When running `sf update`:
+
 1. **Detects** installed modules and CLI version
 2. **Regenerates** project structure in temp directory
 3. **Compares** three versions (base, current, target)
@@ -353,25 +355,29 @@ This ensures your customizations are never lost during updates.
 
 ## 🤖 AI-First Development
 
-SaaSFoundry is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects come pre-configured for both traditional team development and AI-powered coding with Claude Code.
+SaaSFoundry is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects come pre-configured for both traditional team
+development and AI-powered coding with Claude Code.
 
 ### ✨ Built for Claude Code
 
 Every SaaSFoundry project includes:
 
 #### 📝 CLAUDE.md Context Files
+
 - **Project-specific context** for immediate AI understanding
 - **Architecture documentation** with tech stack, conventions, and patterns
 - **Module system documentation** for dynamic feature installation
 - **Git workflow guidelines** with conventional commits and branching strategy
 
 #### 🛠️ Pre-configured Development Environment
+
 - **Path aliases** optimized for AI code generation
 - **Validation schemas** (Zod) for type-safe AI-generated code
 - **Modular structure** that AI can navigate and extend easily
 - **Consistent naming conventions** across backend and frontend
 
 #### 🔄 Professional Workflows + AI
+
 - **Git hooks** (Husky) enforce code quality on AI-generated commits
 - **Automated tests** validate AI changes (unit, E2E, integration)
 - **CI/CD pipelines** run checks on every AI-assisted PR
@@ -385,31 +391,37 @@ SaaSFoundry projects come with a comprehensive **skills library** that enhances 
 #### 📦 Core Skills (Always Installed)
 
 **Git Workflows:**
+
 - **`sf-git-commit`** - Create commits with conventional commit messages
 - **`sf-git-create-pr`** - Generate PR with auto-generated title and description
 - **`sf-git-fix-pr-comments`** - Automatically implement PR review feedback
 - **`sf-git-merge`** - Intelligent branch merging with conflict resolution
 
 **Code Quality:**
+
 - **`sf-utils-fix-errors`** - Fix all ESLint and TypeScript errors in parallel
 - **`sf-utils-fix-grammar`** - Fix grammar and spelling while preserving formatting
 
 **Development Workflows:**
+
 - **`sf-utils-oneshot`** - Ultra-fast feature implementation (Explore → Code → Test)
-- **`sf-workflow-apex`** - APEX methodology with adversarial review *(API only)*
-- **`sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate) *(API only)*
+- **`sf-workflow-apex`** - APEX methodology with adversarial review _(API only)_
+- **`sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate) _(API only)_
 
 #### 🚀 Advanced Skills (Optional - Requires Configuration)
 
 These skills integrate with external services and require API tokens:
 
 **Documentation & Research:**
+
 - **`sf-tool-context7`** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
   - Prevents hallucinated APIs and deprecated patterns
   - Real-time access to latest framework docs
 
 **Project Management:**
+
 - **`sf-tool-atlassian`** - Jira/Confluence integration
+
   - Create tickets, update status, sync documentation
   - Track AI-generated features in your workflow
 
@@ -418,6 +430,7 @@ These skills integrate with external services and require API tokens:
   - Document architecture decisions and feature specs
 
 **Design Integration:**
+
 - **`sf-tool-figma`** - Figma design system integration
   - Read designs and components
   - Generate code from Figma mockups
@@ -426,6 +439,7 @@ These skills integrate with external services and require API tokens:
 #### ⚙️ Skills Configuration
 
 **During project creation (`sf new`):**
+
 ```bash
 sf new
 # ... project setup questions ...
@@ -442,6 +456,7 @@ sf new
 ```
 
 **Adding skills later (`sf update`):**
+
 ```bash
 sf update
 
@@ -464,6 +479,7 @@ sf update
 ### 🚀 Quick Start for AI Development
 
 #### 1. **Connect Claude Code**
+
 ```bash
 # After generating your project
 cd your-project
@@ -474,6 +490,7 @@ code .  # or cursor .
 ```
 
 #### 2. **Common AI Development Commands**
+
 ```bash
 # Add a new module
 "Add email service with MailerSend"
@@ -499,6 +516,7 @@ code .  # or cursor .
 #### 3. **AI-Assisted Workflows**
 
 **Feature Development:**
+
 1. Ask Claude to implement the feature
 2. AI generates code following project conventions
 3. Git hooks validate commit message format
@@ -507,6 +525,7 @@ code .  # or cursor .
 6. Claude can create the PR with proper description
 
 **Code Review:**
+
 1. Claude reads PR comments from GitHub
 2. Implements requested changes
 3. Runs tests to validate fixes
@@ -515,6 +534,7 @@ code .  # or cursor .
 ### 🎯 Best Practices
 
 #### ✅ DO
+
 - **Use CLAUDE.md** - Keep it updated with project decisions
 - **Leverage skills** - Core skills are always available, configure advanced skills as needed
 - **Trust the guards** - Let tests and CI/CD catch issues
@@ -523,6 +543,7 @@ code .  # or cursor .
 - **Configure Context7** - Avoid hallucinated APIs with up-to-date library docs
 
 #### ❌ DON'T
+
 - **Skip tests** - AI-generated code must pass all tests
 - **Bypass hooks** - Don't use `--no-verify` on AI commits
 - **Ignore types** - TypeScript errors indicate AI misunderstandings
@@ -533,17 +554,18 @@ code .  # or cursor .
 
 SaaSFoundry ensures AI assistance **enhances** rather than replaces professional practices:
 
-| Traditional Practice | AI Enhancement |
-|---------------------|----------------|
-| Code reviews | AI implements PR feedback automatically |
-| Testing | AI generates test cases, humans verify coverage |
-| Documentation | AI drafts docs, humans ensure accuracy |
-| Refactoring | AI suggests improvements, humans approve |
-| Debugging | AI identifies patterns, humans understand root causes |
+| Traditional Practice | AI Enhancement                                        |
+| -------------------- | ----------------------------------------------------- |
+| Code reviews         | AI implements PR feedback automatically               |
+| Testing              | AI generates test cases, humans verify coverage       |
+| Documentation        | AI drafts docs, humans ensure accuracy                |
+| Refactoring          | AI suggests improvements, humans approve              |
+| Debugging            | AI identifies patterns, humans understand root causes |
 
 ### 🔐 Security & Quality
 
 All AI-generated code passes through:
+
 - **Zod validation** - Runtime type checking
 - **ESLint rules** - Code quality standards
 - **Unit tests** - Business logic verification

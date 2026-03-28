@@ -3,7 +3,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
-import { DbCredentials } from './types'
+import { DbCredentials, SaaSFoundryManifest } from './types'
 
 /**
  * Patterns to ignore when computing file hashes for the manifest.
@@ -141,4 +141,45 @@ export async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * Read the .saasfoundry.json manifest from a project directory
+ * Returns null if the file doesn't exist
+ */
+export async function readManifest(projectPath: string): Promise<SaaSFoundryManifest | null> {
+  const manifestPath = path.join(projectPath, '.saasfoundry.json')
+
+  if (!(await fileExists(manifestPath))) {
+    return null
+  }
+
+  try {
+    const content = await fs.promises.readFile(manifestPath, 'utf8')
+    return JSON.parse(content) as SaaSFoundryManifest
+  } catch (error) {
+    console.error(`Error reading manifest: ${error}`)
+    return null
+  }
+}
+
+/**
+ * Write the .saasfoundry.json manifest to a project directory
+ * Preserves all existing fields and updates only the provided ones
+ */
+export async function writeManifest(projectPath: string, updates: Partial<SaaSFoundryManifest>): Promise<void> {
+  const manifestPath = path.join(projectPath, '.saasfoundry.json')
+
+  // Read existing manifest if it exists
+  let manifest: Partial<SaaSFoundryManifest> = {}
+  if (await fileExists(manifestPath)) {
+    const content = await fs.promises.readFile(manifestPath, 'utf8')
+    manifest = JSON.parse(content) as SaaSFoundryManifest
+  }
+
+  // Merge updates into existing manifest
+  manifest = { ...manifest, ...updates }
+
+  // Write back to file
+  await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8')
 }

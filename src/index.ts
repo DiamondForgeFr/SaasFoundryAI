@@ -4,6 +4,7 @@ import { version } from '../package.json'
 import { newCommand } from './commands/new'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
+import { workflowCommand } from './commands/workflow'
 
 const program = new Command()
 
@@ -16,6 +17,12 @@ program
   .argument('[subcommand]', 'Subcommand to execute (list, accounts, add, use, current)')
   .argument('[args...]', 'Additional arguments for the subcommand')
   .action(toolsCommand)
+program
+  .command('workflow')
+  .description('Manage workflow configuration and AI rules')
+  .argument('[subcommand]', 'Subcommand to execute (list, create, show, use, set-working-branch, set-ai-rules, etc.)')
+  .argument('[args...]', 'Additional arguments for the subcommand')
+  .action(workflowCommand)
 program.parse()
 
-export { newCommand, updateCommand, toolsCommand }
+export { newCommand, updateCommand, toolsCommand, workflowCommand }

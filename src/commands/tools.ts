@@ -4,7 +4,7 @@ import { homedir } from 'os'
 import { resolve } from 'path'
 import { fileExists } from '../utils'
 import { SaaSFoundryManifest } from '../types'
-import { promptContext7Credentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from '../prompts/skills.prompts'
+import { promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from '../prompts/skills.prompts'
 
 const CREDENTIALS_DIR = resolve(homedir(), '.claude/credentials')
 
@@ -56,7 +56,7 @@ function showHelp() {
   console.log(chalk.gray('    accounts <tool>          List accounts for a tool'))
   console.log(chalk.gray('    add <tool> <account>     Add new account credentials'))
   console.log(chalk.gray('    use <tool> <account>     Set account for current project'))
-  console.log(chalk.gray('    current                  Show project\'s account configuration'))
+  console.log(chalk.gray("    current                  Show project's account configuration"))
   console.log(chalk.white('\n  Tools:'))
   console.log(chalk.gray('    atlassian, notion, figma'))
   console.log(chalk.gray('    (context7 uses free public API - no credentials needed)'))
