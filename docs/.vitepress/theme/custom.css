@@ -1,0 +1,62 @@
+/**
+ * SaaSFoundry Brand Colors
+ * Primary: Orange #FF9500
+ * Neutral: Dark Gray #2D3748
+ */
+
+:root {
+  /* Brand Colors */
+  --vp-c-brand-1: #ff9500;
+  --vp-c-brand-2: #ff9500;
+  --vp-c-brand-3: #ff9500;
+  --vp-c-brand-soft: rgba(255, 149, 0, 0.14);
+
+  /* Custom Accent */
+  --vp-c-orange: #ff9500;
+  --vp-c-gray-dark: #2d3748;
+
+  /* Home Hero */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #ff9500 30%, #2d3748);
+
+  /* Button Colors */
+  --vp-button-brand-bg: #ff9500;
+  --vp-button-brand-hover-bg: #e68600;
+  --vp-button-brand-active-bg: #cc7700;
+  --vp-button-brand-text: #ffffff;
+
+  /* Link Colors */
+  --vp-c-text-1: rgba(60, 60, 67);
+  --vp-c-text-2: rgba(60, 60, 67, 0.78);
+}
+
+.dark {
+  /* Brand Colors (Dark Mode) */
+  --vp-c-brand-1: #ffa726;
+  --vp-c-brand-2: #ff9500;
+  --vp-c-brand-3: #e68600;
+  --vp-c-brand-soft: rgba(255, 149, 0, 0.16);
+
+  /* Home Hero (Dark Mode) */
+  --vp-home-hero-name-background: linear-gradient(120deg, #ffa726 30%, #4a5568);
+
+  /* Button Colors (Dark Mode) */
+  --vp-button-brand-bg: #ff9500;
+  --vp-button-brand-hover-bg: #ffa726;
+  --vp-button-brand-active-bg: #ffb84d;
+
+  /* Text Colors (Dark Mode) */
+  --vp-c-text-1: rgba(255, 255, 245, 0.86);
+  --vp-c-text-2: rgba(235, 235, 245, 0.6);
+}
+
+/* Logo customization */
+.VPNavBarTitle .logo {
+  max-height: 32px;
+  width: auto;
+}
+
+/* Custom badge styling */
+.vp-doc a[href^='https://img.shields.io'] {
+  display: inline-block;
+}
