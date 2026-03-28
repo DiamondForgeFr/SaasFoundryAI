@@ -142,7 +142,7 @@ How to use this skill...
 Example usage...
 ```
 
-See: [Creating Skills](/skills/creating-skills) for detailed guide.
+See the SKILL.md format above for creating custom skills.
 
 ## Monorepo Skills
 
@@ -167,6 +167,6 @@ Benefits:
 
 ## Next Steps
 
-- [Core Skills Reference](/skills/core-skills) - Detailed documentation
-- [Tool Skills Reference](/skills/tool-skills) - Tool-specific skills
-- [Creating Custom Skills](/skills/creating-skills) - Build your own
+- Check `.claude/skills/` directory for all available skills
+- Use `/help` command in Claude Code to see skill documentation
+- Refer to skill SKILL.md files for detailed usage instructions

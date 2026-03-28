@@ -111,16 +111,12 @@ sf workflow set-ai-rules
 - ✅ Automatic status updates
 - ✅ PR linking
 
-See: [GitHub Projects Integration](/workflow/github-jira-notion-linear#github-projects)
-
 ### Jira
 
 - ✅ REST API integration
 - ✅ Native sub-tasks
 - ✅ Sprint management
 - ✅ Custom fields
-
-See: [Jira Integration](/workflow/github-jira-notion-linear#jira)
 
 ### Notion
 
@@ -129,16 +125,12 @@ See: [Jira Integration](/workflow/github-jira-notion-linear#jira)
 - ✅ Custom properties
 - ✅ Rich content
 
-See: [Notion Integration](/workflow/github-jira-notion-linear#notion)
-
 ### Linear
 
 - ✅ GraphQL API
 - ✅ Sub-issues
 - ✅ Cycles
 - ✅ Labels
-
-See: [Linear Integration](/workflow/github-jira-notion-linear#linear)
 
 ## Git Workflow
 
@@ -233,6 +225,6 @@ sf workflow show-template <name>  # Show template
 
 ## Next Steps
 
-- [Template Management](/workflow/templates) - Deep dive into templates
-- [AI Rules Configuration](/workflow/ai-rules) - Advanced AI rules
-- [Tool Integration](/workflow/github-jira-notion-linear) - Tool-specific guides
+- Run `sf workflow --help` to see all available commands
+- Use `sf workflow create <name>` to create workflow templates
+- Configure AI rules with `sf workflow set-ai-rules`

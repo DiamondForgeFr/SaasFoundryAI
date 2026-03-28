@@ -76,8 +76,6 @@ sf update
 # Choose: Manual, Docker, or Credentials
 ```
 
-See: [Storage Module Guide](/modules/storage)
-
 ### Analytics Module
 
 **Provider:** Umami **Affects:** Web only
@@ -96,8 +94,6 @@ sf update
 # Select "Analytics (Umami)"
 # Configure website ID and URL
 ```
-
-See: [Analytics Module Guide](/modules/analytics)
 
 ## How Modules Work
 
@@ -198,5 +194,5 @@ See: [CLAUDE.md - Adding a New Module](/contributing/development#adding-modules)
 ## Next Steps
 
 - [Email Module](/modules/email) - Detailed email setup
-- [Storage Module](/modules/storage) - S3 configuration
-- [Analytics Module](/modules/analytics) - Umami setup
+- Run `sf update` to add more modules to your project
+- Check `src/installers/` to see how modules are installed
