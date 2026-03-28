@@ -86,12 +86,12 @@ Workflow configuration is stored in `.saasfoundry.json`:
 
 Configure how Claude assists with development:
 
-| Rule                               | Description                                                                         |
-| ---------------------------------- | ----------------------------------------------------------------------------------- |
-| `alwaysCreateBranchFromWorking`    | Always branch from working branch (e.g., `develop`)                                 |
-| `alwaysCreateTicketBeforeCode`     | Create issue before starting work                                                   |
-| `autoUpdateTicketStatus`           | Update issue status based on git operations                                         |
-| `requireHumanCheckOnPushedBranch`  | Wait for human validation before creating PR (workflow: commit → push → test → PR) |
+| Rule                              | Description                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `alwaysCreateBranchFromWorking`   | Always branch from working branch (e.g., `develop`)                                |
+| `alwaysCreateTicketBeforeCode`    | Create issue before starting work                                                  |
+| `autoUpdateTicketStatus`          | Update issue status based on git operations                                        |
+| `requireHumanCheckOnPushedBranch` | Wait for human validation before creating PR (workflow: commit → push → test → PR) |
 
 **Note**: Tests and lint checks are **always** enforced by Husky pre-commit hooks, regardless of AI rules.
 
@@ -150,12 +150,13 @@ Configure which branches to use for development and PRs:
 
 ```json
 {
-  "workingBranch": "develop",      // Branch to rebase from + PR target (default)
-  "prTargetBranch": "master"       // Optional: Override PR target if different
+  "workingBranch": "develop", // Branch to rebase from + PR target (default)
+  "prTargetBranch": "master" // Optional: Override PR target if different
 }
 ```
 
 **Key points:**
+
 - `workingBranch`: The branch you work from (rebase + create feature branches)
 - `prTargetBranch`: Where PRs are merged (defaults to `workingBranch` if not specified)
 - In 95% of cases, both are the same (e.g., `develop`)
