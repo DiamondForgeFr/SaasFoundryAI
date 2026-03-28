@@ -1,6 +1,6 @@
 # sf new
 
-Create a new SaaSFoundry project.
+Create a new SaaSFoundry project with interactive prompts.
 
 ## Usage
 
@@ -8,12 +8,18 @@ Create a new SaaSFoundry project.
 sf new
 ```
 
-This command launches an interactive wizard to create a new project.
-
-## Options
-
-(Auto-generated documentation will be added here)
-
 ## Examples
 
-Coming soon.
+```bash
+# Create a new project
+sf new
+```
+
+```bash
+# Follow the interactive prompts to configure your project
+```
+
+## See Also
+
+- [CLI Commands](/cli/sf-new)
+- [Getting Started](/getting-started/quick-start)

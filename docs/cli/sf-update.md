@@ -8,10 +8,18 @@ Add modules to an existing SaaSFoundry project.
 sf update
 ```
 
-## Options
-
-(Auto-generated documentation will be added here)
-
 ## Examples
 
-Coming soon.
+```bash
+# Add modules to current project
+sf update
+```
+
+```bash
+# Select modules from the interactive menu
+```
+
+## See Also
+
+- [CLI Commands](/cli/sf-new)
+- [Getting Started](/getting-started/quick-start)
