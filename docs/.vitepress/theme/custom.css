@@ -57,6 +57,7 @@
 }
 
 /* Custom badge styling */
-.vp-doc a[href^='https://img.shields.io'] {
+.vp-doc a[href^='https://img.shields.io']
+{
   display: inline-block;
 }
