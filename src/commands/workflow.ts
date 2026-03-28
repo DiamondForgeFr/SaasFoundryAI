@@ -227,8 +227,7 @@ async function setAIRules(manifest: SaaSFoundryManifest) {
     alwaysCreateBranchFromWorking: false,
     alwaysCreateTicketBeforeCode: false,
     autoUpdateTicketStatus: false,
-    requireTestsBeforeCommit: false,
-    requireLintBeforeCommit: false
+    requireHumanCheckOnPushedBranch: false
   }
 
   const { aiRules } = await inquirer.prompt([
@@ -253,14 +252,9 @@ async function setAIRules(manifest: SaaSFoundryManifest) {
           checked: current.autoUpdateTicketStatus
         },
         {
-          name: 'Require tests before commit',
-          value: 'requireTestsBeforeCommit',
-          checked: current.requireTestsBeforeCommit
-        },
-        {
-          name: 'Require lint/format before commit',
-          value: 'requireLintBeforeCommit',
-          checked: current.requireLintBeforeCommit
+          name: 'Require human validation before creating PR',
+          value: 'requireHumanCheckOnPushedBranch',
+          checked: current.requireHumanCheckOnPushedBranch
         }
       ]
     }
@@ -270,8 +264,7 @@ async function setAIRules(manifest: SaaSFoundryManifest) {
     alwaysCreateBranchFromWorking: aiRules.includes('alwaysCreateBranchFromWorking'),
     alwaysCreateTicketBeforeCode: aiRules.includes('alwaysCreateTicketBeforeCode'),
     autoUpdateTicketStatus: aiRules.includes('autoUpdateTicketStatus'),
-    requireTestsBeforeCommit: aiRules.includes('requireTestsBeforeCommit'),
-    requireLintBeforeCommit: aiRules.includes('requireLintBeforeCommit')
+    requireHumanCheckOnPushedBranch: aiRules.includes('requireHumanCheckOnPushedBranch')
   }
 
   await writeManifest(process.cwd(), manifest)
@@ -320,8 +313,7 @@ async function saveAsTemplate(manifest: SaaSFoundryManifest, templateName?: stri
         alwaysCreateBranchFromWorking: false,
         alwaysCreateTicketBeforeCode: false,
         autoUpdateTicketStatus: false,
-        requireTestsBeforeCommit: false,
-        requireLintBeforeCommit: false
+        requireHumanCheckOnPushedBranch: false
       }
     }
 
@@ -340,8 +332,7 @@ async function saveAsTemplate(manifest: SaaSFoundryManifest, templateName?: stri
         alwaysCreateBranchFromWorking: false,
         alwaysCreateTicketBeforeCode: false,
         autoUpdateTicketStatus: false,
-        requireTestsBeforeCommit: false,
-        requireLintBeforeCommit: false
+        requireHumanCheckOnPushedBranch: false
       }
     }
 
@@ -428,8 +419,15 @@ async function createTemplate(templateName?: string) {
     templateName = name
   }
 
-  // Check if template already exists
-  const existing = await loadGlobalWorkflow(templateName!)
+  // Validate template name (even when passed as argument)
+  if (!templateName || !/^[a-z0-9-]+$/.test(templateName)) {
+    console.error(chalk.red('\n❌ Invalid template name'))
+    console.log(chalk.gray('Use lowercase letters, numbers, and hyphens only\n'))
+    process.exit(1)
+  }
+
+  // Check if template already exists (templateName is guaranteed to be string here)
+  const existing = await loadGlobalWorkflow(templateName)
   if (existing) {
     const { overwrite } = await inquirer.prompt([
       {

@@ -62,8 +62,7 @@ export const DEFAULT_AI_RULES: AIRules = {
   alwaysCreateBranchFromWorking: true,
   alwaysCreateTicketBeforeCode: true,
   autoUpdateTicketStatus: true,
-  requireTestsBeforeCommit: true,
-  requireLintBeforeCommit: true
+  requireHumanCheckOnPushedBranch: true
 }
 
 /**
@@ -238,18 +237,18 @@ export async function promptWorkflowConfiguration(): Promise<{
   }
 
   // Step 4: Git workflow configuration
-  const { workingBranch, prTargetBranch, requireCodeReview } = await inquirer.prompt([
+  const branchAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'workingBranch',
-      message: 'Branch de travail (working branch for development):',
+      message: 'Working branch (rebase from + PR target):',
       default: 'develop'
     },
     {
       type: 'input',
       name: 'prTargetBranch',
-      message: 'PR target branch (where PRs are merged):',
-      default: 'develop'
+      message: 'Override PR target? (leave empty to use working branch):',
+      default: ''
     },
     {
       type: 'confirm',
@@ -258,6 +257,10 @@ export async function promptWorkflowConfiguration(): Promise<{
       default: true
     }
   ])
+
+  const workingBranch = branchAnswers.workingBranch
+  const prTargetBranch = branchAnswers.prTargetBranch || branchAnswers.workingBranch
+  const requireCodeReview = branchAnswers.requireCodeReview
 
   // Step 5: AI Rules
   console.log(chalk.blue('\n⚙️  AI Development Rules\n'))
@@ -284,13 +287,8 @@ export async function promptWorkflowConfiguration(): Promise<{
           checked: true
         },
         {
-          name: 'Require tests before commit',
-          value: 'requireTestsBeforeCommit',
-          checked: true
-        },
-        {
-          name: 'Require lint/format before commit',
-          value: 'requireLintBeforeCommit',
+          name: 'Require human validation before creating PR (push → test → approval → PR)',
+          value: 'requireHumanCheckOnPushedBranch',
           checked: true
         }
       ]
@@ -302,8 +300,7 @@ export async function promptWorkflowConfiguration(): Promise<{
     alwaysCreateBranchFromWorking: aiRules.includes('alwaysCreateBranchFromWorking'),
     alwaysCreateTicketBeforeCode: aiRules.includes('alwaysCreateTicketBeforeCode'),
     autoUpdateTicketStatus: aiRules.includes('autoUpdateTicketStatus'),
-    requireTestsBeforeCommit: aiRules.includes('requireTestsBeforeCommit'),
-    requireLintBeforeCommit: aiRules.includes('requireLintBeforeCommit')
+    requireHumanCheckOnPushedBranch: aiRules.includes('requireHumanCheckOnPushedBranch')
   }
 
   workflowConfig = {
