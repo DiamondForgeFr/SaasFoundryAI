@@ -190,8 +190,8 @@ services:
   postgres:
     image: postgres:16
     ports:
-      - "5435:5432"
-    tmpfs:                # In-memory for speed
+      - '5435:5432'
+    tmpfs: # In-memory for speed
       - /var/lib/postgresql/data
 ```
 
