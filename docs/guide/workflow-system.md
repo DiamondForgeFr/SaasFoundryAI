@@ -77,8 +77,7 @@ Workflow configuration is stored in `.saasfoundry.json`:
     "alwaysCreateBranchFromWorking": true,
     "alwaysCreateTicketBeforeCode": true,
     "autoUpdateTicketStatus": true,
-    "requireTestsBeforeCommit": true,
-    "requireLintBeforeCommit": true
+    "requireHumanCheckOnPushedBranch": true
   }
 }
 ```
@@ -87,13 +86,14 @@ Workflow configuration is stored in `.saasfoundry.json`:
 
 Configure how Claude assists with development:
 
-| Rule                            | Description                                         |
-| ------------------------------- | --------------------------------------------------- |
-| `alwaysCreateBranchFromWorking` | Always branch from working branch (e.g., `develop`) |
-| `alwaysCreateTicketBeforeCode`  | Create issue before starting work                   |
-| `autoUpdateTicketStatus`        | Update issue status based on git operations         |
-| `requireTestsBeforeCommit`      | Run tests before allowing commits                   |
-| `requireLintBeforeCommit`       | Run linter before allowing commits                  |
+| Rule                               | Description                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `alwaysCreateBranchFromWorking`    | Always branch from working branch (e.g., `develop`)                                 |
+| `alwaysCreateTicketBeforeCode`     | Create issue before starting work                                                   |
+| `autoUpdateTicketStatus`           | Update issue status based on git operations                                         |
+| `requireHumanCheckOnPushedBranch`  | Wait for human validation before creating PR (workflow: commit → push → test → PR) |
+
+**Note**: Tests and lint checks are **always** enforced by Husky pre-commit hooks, regardless of AI rules.
 
 ### Configure AI Rules
 
@@ -143,6 +143,35 @@ See: [Linear Integration](/workflow/github-jira-notion-linear#linear)
 ## Git Workflow
 
 The workflow system enforces consistent git practices:
+
+### Branch Configuration
+
+Configure which branches to use for development and PRs:
+
+```json
+{
+  "workingBranch": "develop",      // Branch to rebase from + PR target (default)
+  "prTargetBranch": "master"       // Optional: Override PR target if different
+}
+```
+
+**Key points:**
+- `workingBranch`: The branch you work from (rebase + create feature branches)
+- `prTargetBranch`: Where PRs are merged (defaults to `workingBranch` if not specified)
+- In 95% of cases, both are the same (e.g., `develop`)
+- Override `prTargetBranch` only for special workflows (e.g., PR to `master` from `develop`)
+
+**Example workflows:**
+
+```bash
+# Standard workflow (most common)
+workingBranch: "develop"
+prTargetBranch: "develop"  # or omit (same as workingBranch)
+
+# Direct to production
+workingBranch: "develop"
+prTargetBranch: "master"   # PRs go directly to production
+```
 
 ### Branch Naming
 
