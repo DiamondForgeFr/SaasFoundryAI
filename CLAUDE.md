@@ -13,8 +13,8 @@ CLI tool that scaffolds production-ready SaaS projects (NestJS + React + Postgre
 
 ```
 src/
-├── commands/         # CLI commands (new.ts, update.ts)
-├── prompts/          # Inquirer prompt definitions (project.prompts.ts, update.prompts.ts)
+├── commands/         # CLI commands (new.ts, update.ts, workflow.ts)
+├── prompts/          # Inquirer prompt definitions (project.prompts.ts, update.prompts.ts, workflow.prompts.ts)
 ├── builders/         # Project scaffolding builders (api, web, monorepo, dev-services, db, s3)
 ├── installers/       # Reusable module installers (email, storage, analytics)
 ├── runners/          # Post-setup runners (database, s3, server, terminal)
@@ -35,6 +35,7 @@ scripts/              # Version management (tag-manager.sh)
 
 - `sf new` — Create a new SaaSFoundry project (src/commands/new.ts)
 - `sf update` — Add modules to an existing project (src/commands/update.ts)
+- `sf workflow` — Manage workflow configuration and AI rules (src/commands/workflow.ts)
 
 ### Dev Commands
 
