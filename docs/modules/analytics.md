@@ -24,23 +24,23 @@ The analytics module integrates Umami analytics into your SaaS application front
 
 ### vs Google Analytics
 
-| Feature | Umami | Google Analytics |
-|---------|-------|------------------|
-| Privacy | ✅ GDPR compliant | ❌ Requires cookie consent |
-| Data Ownership | ✅ You own the data | ❌ Google owns the data |
-| Cookies | ✅ No cookies | ❌ Uses cookies |
-| Self-Hosted | ✅ Optional | ❌ Cloud only |
-| Cost | ✅ Free | ✅ Free (with limits) |
-| Complexity | ✅ Simple | ⚠️ Complex |
+| Feature        | Umami               | Google Analytics           |
+| -------------- | ------------------- | -------------------------- |
+| Privacy        | ✅ GDPR compliant   | ❌ Requires cookie consent |
+| Data Ownership | ✅ You own the data | ❌ Google owns the data    |
+| Cookies        | ✅ No cookies       | ❌ Uses cookies            |
+| Self-Hosted    | ✅ Optional         | ❌ Cloud only              |
+| Cost           | ✅ Free             | ✅ Free (with limits)      |
+| Complexity     | ✅ Simple           | ⚠️ Complex                 |
 
 ### vs Plausible
 
-| Feature | Umami | Plausible |
-|---------|-------|-----------|
-| Self-Hosted | ✅ Open source | ✅ Open source |
-| Cloud Pricing | ✅ Free (self-host) | ❌ $9/month+ |
-| Features | ✅ Complete | ✅ Complete |
-| UI | ✅ Modern | ✅ Modern |
+| Feature       | Umami               | Plausible      |
+| ------------- | ------------------- | -------------- |
+| Self-Hosted   | ✅ Open source      | ✅ Open source |
+| Cloud Pricing | ✅ Free (self-host) | ❌ $9/month+   |
+| Features      | ✅ Complete         | ✅ Complete    |
+| UI            | ✅ Modern           | ✅ Modern      |
 
 ## Setup Options
 
@@ -49,6 +49,7 @@ The analytics module integrates Umami analytics into your SaaS application front
 **Best for**: Full control, privacy, no cost
 
 **Requirements**:
+
 - PostgreSQL or MySQL database
 - Node.js 18+ server
 - Domain name (optional)
@@ -82,6 +83,7 @@ The analytics module integrates Umami analytics into your SaaS application front
    ```
 
 3. **Create Website**:
+
    - Open http://localhost:3000
    - Login (default: admin / umami)
    - Settings → Websites → Add Website
@@ -181,8 +183,9 @@ sf update
 ```
 
 The installer will:
+
 1. Copy analytics module to `apps/web/src/lib/analytics/`
-2. Add VITE_ANALYTICS_* variables to `.env`
+2. Add VITE*ANALYTICS*\* variables to `.env`
 3. Initialize tracking in `main.tsx`
 
 ## Usage
@@ -241,6 +244,7 @@ trackEvent('event_name', {
 ```
 
 **Best practices**:
+
 - Use snake_case for event names: `signup_clicked`
 - Keep names descriptive: `invite_sent` not `action_1`
 - Include context in parameters: `{ plan: 'pro', duration: 'monthly' }`
@@ -297,17 +301,20 @@ export function trackEvent(name: string, data?: Record<string, any>) {
 ### Dashboard
 
 Access your Umami dashboard:
+
 - **Self-hosted**: http://your-domain.com
 - **Cloud**: https://cloud.umami.is
 
 ### Metrics
 
 **Real-Time**:
+
 - Current visitors
 - Page views (last 24h)
 - Popular pages
 
 **Historical**:
+
 - Total page views
 - Unique visitors
 - Bounce rate
@@ -315,6 +322,7 @@ Access your Umami dashboard:
 - Pages per visit
 
 **Breakdown**:
+
 - Pages (most visited)
 - Referrers (traffic sources)
 - Browsers
@@ -326,12 +334,14 @@ Access your Umami dashboard:
 ### Custom Events
 
 View tracked events:
+
 1. Go to your website dashboard
 2. Click "Events" tab
 3. See event names and counts
 4. Filter by date range
 
 **Example events**:
+
 - `signup_clicked` - 245 times
 - `invite_sent` - 89 times
 - `data_exported` - 34 times
@@ -341,6 +351,7 @@ View tracked events:
 ### No Cookies
 
 Umami doesn't use cookies, so:
+
 - ✅ No cookie banner needed
 - ✅ No cookie consent required
 - ✅ GDPR compliant by design
@@ -348,6 +359,7 @@ Umami doesn't use cookies, so:
 ### Data Collected
 
 **Yes**:
+
 - Page URLs
 - Referrer
 - Browser type
@@ -356,6 +368,7 @@ Umami doesn't use cookies, so:
 - Country (from IP)
 
 **No**:
+
 - Personal information
 - IP addresses (hashed and discarded)
 - User identification
@@ -384,12 +397,14 @@ stored on our own servers.] Learn more: https://umami.is/privacy
 ### Best Practices
 
 **Do**:
+
 - ✅ Load script with `async` and `defer`
 - ✅ Track meaningful events only
 - ✅ Use descriptive event names
 - ✅ Keep event data small
 
 **Don't**:
+
 - ❌ Track every user action
 - ❌ Send large data objects
 - ❌ Block rendering with analytics
@@ -420,11 +435,13 @@ server {
 To avoid ad-blockers, rename the tracker:
 
 **Umami `.env`**:
+
 ```env
 TRACKER_SCRIPT_NAME="stats.js"  # Instead of script.js
 ```
 
 **SaaSFoundry `.env`**:
+
 ```env
 VITE_ANALYTICS_URL="https://analytics.myapp.com/stats.js"
 ```
@@ -434,9 +451,7 @@ VITE_ANALYTICS_URL="https://analytics.myapp.com/stats.js"
 Track multiple environments:
 
 ```typescript
-const websiteId = import.meta.env.PROD
-  ? 'production-website-id'
-  : 'development-website-id'
+const websiteId = import.meta.env.PROD ? 'production-website-id' : 'development-website-id'
 
 script.setAttribute('data-website-id', websiteId)
 ```
@@ -459,20 +474,22 @@ export function initAnalytics() {
 ### Events Not Tracked
 
 **Check**:
+
 1. Analytics script loaded: View page source, search for "umami"
 2. Website ID correct: Check `.env` vs Umami dashboard
 3. URL accessible: Open `VITE_ANALYTICS_URL` in browser
 4. Ad-blocker disabled: Test in incognito mode
 
 **Debug**:
+
 ```typescript
 export function trackEvent(name: string, data?: Record<string, any>) {
-  console.log('Tracking event:', name, data)  // Add this
+  console.log('Tracking event:', name, data) // Add this
 
   if (typeof window.umami !== 'undefined') {
     window.umami.track(name, data)
   } else {
-    console.warn('Umami not loaded')  // Add this
+    console.warn('Umami not loaded') // Add this
   }
 }
 ```
@@ -482,6 +499,7 @@ export function trackEvent(name: string, data?: Record<string, any>) {
 **Wait**: Analytics can take 1-2 minutes to appear
 
 **Check**:
+
 - Website is not paused in Umami
 - Date range includes today
 - You're viewing the correct website
@@ -489,12 +507,14 @@ export function trackEvent(name: string, data?: Record<string, any>) {
 ### Self-Hosted Setup Issues
 
 **Database connection**:
+
 ```bash
 # Test PostgreSQL connection
 psql postgresql://user:pass@localhost:5432/umami
 ```
 
 **Build errors**:
+
 ```bash
 # Clear and rebuild
 rm -rf .next node_modules
@@ -503,6 +523,7 @@ npm run build
 ```
 
 **Port already in use**:
+
 ```bash
 # Change port in .env
 PORT=3001
@@ -527,7 +548,7 @@ services:
     image: ghcr.io/umami-software/umami:postgresql-latest
     restart: always
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       DATABASE_URL: postgresql://umami:${DB_PASSWORD}@db:5432/umami
       APP_SECRET: ${APP_SECRET}
@@ -543,7 +564,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - umami-db:/var/lib/postgresql/data
-      - ./backups:/backups  # For backups
+      - ./backups:/backups # For backups
 
 volumes:
   umami-db:

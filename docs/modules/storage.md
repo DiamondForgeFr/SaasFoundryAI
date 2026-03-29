@@ -15,6 +15,7 @@ The storage module provides a complete solution for handling file uploads in you
 ## Features
 
 ### Backend (API)
+
 - File upload endpoint with multipart/form-data
 - Automatic organization-based folder structure
 - Pre-signed URL generation for downloads
@@ -22,6 +23,7 @@ The storage module provides a complete solution for handling file uploads in you
 - Support for multiple storage providers
 
 ### Frontend (Web)
+
 - File upload UI components
 - Progress tracking
 - Drag-and-drop support (via ShadCN components)
@@ -41,12 +43,14 @@ sf new  # or sf update
 ```
 
 **What you get**:
+
 - MinIO running in Docker (S3-compatible)
 - Automatic configuration
 - No cost, runs locally
 - Console UI at http://localhost:9001
 
 **Configuration**:
+
 ```env
 S3_ENDPOINT="http://localhost:9000"
 S3_REGION="us-east-1"
@@ -67,33 +71,28 @@ sf new  # or sf update
 ```
 
 **Prerequisites**:
+
 1. AWS account
 2. S3 bucket created
 3. IAM user with S3 permissions
 
 **Permissions needed**:
+
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::your-bucket-name",
-        "arn:aws:s3:::your-bucket-name/*"
-      ]
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::your-bucket-name", "arn:aws:s3:::your-bucket-name/*"]
     }
   ]
 }
 ```
 
 **Configuration**:
+
 ```env
 S3_ENDPOINT="s3.amazonaws.com"  # or s3.us-east-1.amazonaws.com
 S3_REGION="us-east-1"           # Your bucket region
@@ -106,6 +105,7 @@ S3_PUBLIC_URL="https://your-bucket-name.s3.amazonaws.com"
 ### Option 3: Other S3-Compatible Providers
 
 **Supported**:
+
 - Backblaze B2
 - DigitalOcean Spaces
 - Cloudflare R2
@@ -113,6 +113,7 @@ S3_PUBLIC_URL="https://your-bucket-name.s3.amazonaws.com"
 - Any S3-compatible storage
 
 **Example (DigitalOcean Spaces)**:
+
 ```env
 S3_ENDPOINT="nyc3.digitaloceanspaces.com"
 S3_REGION="us-east-1"
@@ -142,6 +143,7 @@ sf update
 ```
 
 The installer will:
+
 1. Copy storage module to `apps/api/src/modules/storage/`
 2. Add S3 environment variables to `.env`
 3. Install `@aws-sdk/client-s3` dependency
@@ -165,6 +167,7 @@ file: [binary data]
 ```
 
 **Response**:
+
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -183,6 +186,7 @@ Authorization: Bearer {token}
 ```
 
 **Response**:
+
 ```json
 {
   "url": "https://myapp-uploads.s3.amazonaws.com/org-123/logo.png?X-Amz-Signature=..."
@@ -314,6 +318,7 @@ your-bucket/
 **Key Format**: `{organizationId}/{filename}`
 
 This ensures:
+
 - ✅ Isolation between organizations
 - ✅ Easy cleanup when deleting an organization
 - ✅ Clear ownership of files
@@ -329,6 +334,7 @@ This ensures:
 ### File Validation
 
 The module validates:
+
 - File size (configurable, default 10MB)
 - File type (configurable)
 - Organization ownership
@@ -358,6 +364,7 @@ async uploadFile(@CurrentUser() user: User, @UploadedFile() file: Express.Multer
 ### Environment Variables
 
 **Required**:
+
 ```env
 S3_ENDPOINT="s3.amazonaws.com"
 S3_REGION="us-east-1"
@@ -368,6 +375,7 @@ S3_PUBLIC_URL="https://your-bucket.s3.amazonaws.com"
 ```
 
 **Optional**:
+
 ```env
 S3_MAX_FILE_SIZE="10485760"  # 10MB in bytes
 S3_ALLOWED_MIME_TYPES="image/jpeg,image/png,application/pdf"
@@ -398,6 +406,7 @@ docker compose -f docker-compose.dev-services.yml up -d
 ### Create Bucket
 
 MinIO console:
+
 1. Click "Buckets" → "Create Bucket"
 2. Name: `myapp-uploads` (match S3_BUCKET in .env)
 3. Click "Create"
@@ -415,16 +424,19 @@ curl -X POST http://localhost:3000/api/storage/upload \
 ### AWS S3 Setup
 
 1. **Create Bucket**:
+
    ```bash
    aws s3 mb s3://myapp-uploads --region us-east-1
    ```
 
 2. **Create IAM User**:
+
    ```bash
    aws iam create-user --user-name myapp-s3-user
    ```
 
 3. **Attach Policy**:
+
    ```bash
    aws iam put-user-policy --user-name myapp-s3-user \
      --policy-name S3Access \
@@ -432,6 +444,7 @@ curl -X POST http://localhost:3000/api/storage/upload \
    ```
 
 4. **Create Access Keys**:
+
    ```bash
    aws iam create-access-key --user-name myapp-s3-user
    ```
@@ -462,6 +475,7 @@ For better performance, use CloudFront:
 ### Upload Fails: "Invalid Credentials"
 
 **Check**:
+
 - S3_ACCESS_KEY_ID is correct
 - S3_SECRET_ACCESS_KEY is correct
 - IAM user has correct permissions
@@ -469,17 +483,20 @@ For better performance, use CloudFront:
 ### Upload Fails: "Bucket does not exist"
 
 **Solution**:
+
 - Verify S3_BUCKET matches actual bucket name
 - For MinIO: Create bucket in console first
 
 ### Files Not Accessible
 
 **Check**:
+
 - Bucket permissions (public vs private)
 - S3_PUBLIC_URL is correct
 - CORS configuration if accessing from browser
 
 **MinIO CORS** (for local dev):
+
 ```bash
 mc alias set myminio http://localhost:9000 minioadmin minioadmin
 mc anonymous set download myminio/myapp-uploads
@@ -490,12 +507,14 @@ mc anonymous set download myminio/myapp-uploads
 **Increase limits**:
 
 API (`apps/api/src/main.ts`):
+
 ```typescript
 app.use(json({ limit: '50mb' }))
 app.use(urlencoded({ extended: true, limit: '50mb' }))
 ```
 
 Nginx (if using):
+
 ```nginx
 client_max_body_size 50M;
 ```
@@ -504,7 +523,6 @@ client_max_body_size 50M;
 
 - [Email Module](/modules/email) - Send emails with uploads
 - [Module System](/guide/module-system) - How modules work
-- [API Reference](/api/installers) - Storage installer details
 
 ## Related Commands
 

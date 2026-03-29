@@ -5,6 +5,7 @@ A comprehensive walkthrough of creating your first SaaS project with SaaSFoundry
 ## What You'll Build
 
 In this guide, you'll:
+
 1. Create a new SaaSFoundry project
 2. Understand the generated structure
 3. Run the development environment
@@ -66,6 +67,7 @@ Database credentials (use defaults):
 ```
 
 **Wait for generation** (this takes ~1-2 minutes):
+
 - Files are being created
 - Dependencies are being installed
 - Git repository is initialized
@@ -141,6 +143,7 @@ docker compose -f docker-compose.dev-services.yml up -d
 ```
 
 This starts:
+
 - PostgreSQL (port 5435)
 - MinIO S3 (port 9000, console 9001)
 
@@ -174,6 +177,7 @@ Web:  http://localhost:5173
 ```
 
 Wait for:
+
 ```
 [api] ✓ Nest application successfully started
 [web] ✓ ready in 234 ms
@@ -198,6 +202,7 @@ Wait for:
 ### Explore the Dashboard
 
 The generated app includes:
+
 - **Dashboard**: Overview page
 - **Profile**: User settings
 - **Organization**: Team management
@@ -208,6 +213,7 @@ The generated app includes:
 Open http://localhost:3000/api-docs to see Swagger documentation.
 
 Try the **Auth endpoints**:
+
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/auth/profile`
@@ -415,8 +421,8 @@ import { TasksModule } from '@modules/tasks/tasks.module'
 @Module({
   imports: [
     // ... existing modules
-    TasksModule,  // Add this
-  ],
+    TasksModule // Add this
+  ]
 })
 export class AppModule {}
 ```
@@ -488,7 +494,7 @@ export function useToggleTask() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data} = await api.patch(`/tasks/${id}/toggle`)
+      const { data } = await api.patch(`/tasks/${id}/toggle`)
       return data
     },
     onSuccess: () => {
@@ -628,11 +634,13 @@ If you have Claude Code installed:
 ```
 
 Claude will:
+
 1. Review your changes
 2. Generate a commit message following conventions
 3. Create the commit
 
 Example commit message:
+
 ```
 feat: add tasks module with API and frontend
 
@@ -654,6 +662,7 @@ git commit -m "feat: add tasks module with API and frontend"
 ## What's Next?
 
 Congratulations! 🎉 You've successfully:
+
 - ✅ Created a SaaSFoundry project
 - ✅ Added a custom API endpoint
 - ✅ Built a frontend page
@@ -677,17 +686,16 @@ Congratulations! 🎉 You've successfully:
 
 ### API Won't Start
 
-**Check database**: `docker compose -f docker-compose.dev-services.yml ps`
-**Check logs**: `docker compose -f docker-compose.dev-services.yml logs db`
+**Check database**: `docker compose -f docker-compose.dev-services.yml ps` **Check logs**: `docker compose -f docker-compose.dev-services.yml logs db`
 
 ### Frontend Won't Start
 
-**Check API is running**: curl http://localhost:3000/api/health
-**Clear cache**: `rm -rf apps/web/.vite`
+**Check API is running**: curl http://localhost:3000/api/health **Clear cache**: `rm -rf apps/web/.vite`
 
 ### Database Migration Fails
 
 **Reset database**:
+
 ```bash
 docker compose -f docker-compose.dev-services.yml down -v
 docker compose -f docker-compose.dev-services.yml up -d
@@ -697,5 +705,6 @@ npm run db:update:dev
 ### Port Already in Use
 
 Change ports in:
+
 - API: `apps/api/src/main.ts` (default 3000)
 - Web: `apps/web/vite.config.ts` (default 5173)
