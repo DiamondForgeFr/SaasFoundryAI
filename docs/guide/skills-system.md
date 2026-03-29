@@ -28,11 +28,11 @@ SaaSFoundry skills use the **`sf-*` prefix** to distinguish them from generic sk
 
 **Generic vs SaaSFoundry Skills:**
 
-| Type          | Prefix | Example            | Use Case                      |
-| ------------- | ------ | ------------------ | ----------------------------- |
-| SaaSFoundry   | `sf-*` | `sf-git-commit`    | SaaSFoundry projects          |
-| Generic       | None   | `git-commit`       | Any Claude Code project       |
-| Tool-specific | `sf-*` | `sf-tool-jira`     | Generated for workflow tools  |
+| Type          | Prefix | Example         | Use Case                     |
+| ------------- | ------ | --------------- | ---------------------------- |
+| SaaSFoundry   | `sf-*` | `sf-git-commit` | SaaSFoundry projects         |
+| Generic       | None   | `git-commit`    | Any Claude Code project      |
+| Tool-specific | `sf-*` | `sf-tool-jira`  | Generated for workflow tools |
 
 **In SaaSFoundry projects, always use `sf-*` skills** - they're configured to work with your project structure and workflow settings.
 
