@@ -11,6 +11,31 @@ Skills are specialized agents that help with:
 - 🛠️ **Utilities** - Error fixing, code formatting, grammar checks
 - 🚀 **Workflows** - Systematic implementation patterns (APEX)
 
+## Skill Naming Convention
+
+SaaSFoundry skills use the **`sf-*` prefix** to distinguish them from generic skills:
+
+- **`sf-git-commit`** - SaaSFoundry-specific commit workflow
+- **`sf-utils-fix-errors`** - SaaSFoundry-specific error fixing
+- **`sf-workflow-apex`** - SaaSFoundry-specific APEX implementation
+
+**Why the prefix?**
+
+- ✅ Clearly identifies SaaSFoundry-specific skills
+- ✅ Avoids conflicts with generic Claude Code skills
+- ✅ Integrates with SaaSFoundry workflow system (`.saasfoundry-workflow.json`)
+- ✅ Follows project conventions and structure
+
+**Generic vs SaaSFoundry Skills:**
+
+| Type          | Prefix | Example            | Use Case                      |
+| ------------- | ------ | ------------------ | ----------------------------- |
+| SaaSFoundry   | `sf-*` | `sf-git-commit`    | SaaSFoundry projects          |
+| Generic       | None   | `git-commit`       | Any Claude Code project       |
+| Tool-specific | `sf-*` | `sf-tool-jira`     | Generated for workflow tools  |
+
+**In SaaSFoundry projects, always use `sf-*` skills** - they're configured to work with your project structure and workflow settings.
+
 ## Skill Location
 
 Skills are stored in `.claude/skills/`:
