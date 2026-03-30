@@ -4,11 +4,39 @@ import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
-import type { WorkflowConfig, AIRules, WorkflowTemplate } from '../types'
+import type { WorkflowConfig, AIRules, WorkflowTemplate, WorkflowStatus, GitHubProjectColor } from '../types'
 import { fileExists } from '../utils'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
 const CREDENTIALS_DIR = path.join(os.homedir(), '.claude', 'credentials')
+
+// Workflow Presets
+const WORKFLOW_PRESETS = {
+  saasfoundry: {
+    name: 'SaaSFoundry AI Workflow',
+    description: '7-status workflow with AI and Human testing phases (recommended for AI-assisted development)',
+    statuses: [
+      { name: 'Backlog', description: 'Tasks waiting to be prioritized', color: 'GRAY' as GitHubProjectColor },
+      { name: 'Ready', description: 'Tasks ready to start development', color: 'YELLOW' as GitHubProjectColor },
+      { name: 'In Progress', description: 'Active development work', color: 'BLUE' as GitHubProjectColor },
+      { name: 'AI Testing', description: 'First validation by Claude AI (execute test plan)', color: 'PURPLE' as GitHubProjectColor },
+      { name: 'Human Testing', description: 'Second validation by human reviewer', color: 'ORANGE' as GitHubProjectColor },
+      { name: 'In Review', description: 'Code review and approval', color: 'PINK' as GitHubProjectColor },
+      { name: 'Done', description: 'Completed and merged', color: 'GREEN' as GitHubProjectColor }
+    ]
+  },
+  standard: {
+    name: 'Standard Workflow',
+    description: '5-status workflow for general development',
+    statuses: [
+      { name: 'Backlog', description: 'Tasks to be prioritized', color: 'GRAY' as GitHubProjectColor },
+      { name: 'Ready', description: 'Ready for development', color: 'YELLOW' as GitHubProjectColor },
+      { name: 'In Progress', description: 'Currently being worked on', color: 'BLUE' as GitHubProjectColor },
+      { name: 'In Review', description: 'In code review', color: 'PINK' as GitHubProjectColor },
+      { name: 'Done', description: 'Completed', color: 'GREEN' as GitHubProjectColor }
+    ]
+  }
+}
 
 /**
  * Check if GitHub CLI is authenticated
@@ -75,11 +103,12 @@ export async function detectAvailableTools(): Promise<{
 
 /**
  * Setup GitHub Project with auto-creation via GraphQL API
- * Creates a new GitHub Project using the createProjectV2 mutation
+ * Creates a new GitHub Project using the createProjectV2 mutation and configures the Status field
  * @param projectName - Name for the new project
+ * @param statuses - Workflow statuses to configure
  * @returns Project URL if successful, or null if failed
  */
-export async function setupGitHubProjectWithAutoCreation(projectName: string): Promise<string | null> {
+export async function setupGitHubProjectWithAutoCreation(projectName: string, statuses: WorkflowStatus[]): Promise<string | null> {
   try {
     // Check gh auth
     if (!checkGhAuth()) {
@@ -130,8 +159,94 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string): P
 
     const result = execSync(`gh api graphql -f query='${mutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
     const projectData = JSON.parse(result).data.createProjectV2.projectV2
+    const projectId = projectData.id
 
-    console.log(chalk.green(`✅ Project created: ${projectData.url}\n`))
+    console.log(chalk.green(`✅ Project created: ${projectData.url}`))
+
+    // Configure Status field
+    console.log(chalk.blue(`🔧 Configuring Status field with ${statuses.length} states...\n`))
+
+    // Get the Status field (GitHub Projects creates it by default)
+    const getFieldQuery = `
+      query {
+        node(id: "${projectId}") {
+          ... on ProjectV2 {
+            field(name: "Status") {
+              ... on ProjectV2SingleSelectField {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    `
+
+    const fieldResult = execSync(`gh api graphql -f query='${getFieldQuery.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
+    const statusField = JSON.parse(fieldResult).data.node.field
+
+    if (!statusField) {
+      console.log(chalk.yellow('⚠️  Status field not found, skipping configuration'))
+      return projectData.url
+    }
+
+    const statusFieldId = statusField.id
+
+    // Build options array for the mutation
+    const optionsJson = statuses
+      .map((status) => {
+        const color = status.color || 'GRAY'
+        const description = status.description ? `, description: "${status.description.replace(/"/g, '\\"')}"` : ''
+        return `{ name: "${status.name.replace(/"/g, '\\"')}", color: ${color}${description} }`
+      })
+      .join(', ')
+
+    // Update Status field with custom options
+    const updateFieldMutation = `
+      mutation {
+        updateProjectV2Field(input: {
+          projectId: "${projectId}"
+          fieldId: "${statusFieldId}"
+          name: "Status"
+          singleSelectOptions: [${optionsJson}]
+        }) {
+          projectV2Field {
+            ... on ProjectV2SingleSelectField {
+              id
+              name
+              options {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    `
+
+    execSync(`gh api graphql -f query='${updateFieldMutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
+
+    console.log(chalk.green('✅ Status field configured:'))
+    statuses.forEach((status) => {
+      const colorDot =
+        status.color === 'GREEN'
+          ? '🟢'
+          : status.color === 'YELLOW'
+            ? '🟡'
+            : status.color === 'BLUE'
+              ? '🔵'
+              : status.color === 'PURPLE'
+                ? '🟣'
+                : status.color === 'ORANGE'
+                  ? '🟠'
+                  : status.color === 'PINK'
+                    ? '🩷'
+                    : status.color === 'RED'
+                      ? '🔴'
+                      : '⚪'
+      console.log(chalk.gray(`   ${colorDot} ${status.name}${status.description ? ` - ${status.description}` : ''}`))
+    })
+    console.log()
 
     return projectData.url
   } catch (error) {
@@ -141,43 +256,19 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string): P
   }
 }
 
-// Default configurations for each tool
+// Default configurations for each tool (backward compatibility)
 export const DEFAULT_STATUSES = {
-  'github-projects': {
-    backlog: 'Backlog',
-    ready: 'Ready',
-    inProgress: 'In Progress',
-    inReview: 'In Review',
-    done: 'Done'
-  },
-  jira: {
-    backlog: 'Backlog',
-    ready: 'Ready for Dev',
-    inProgress: 'In Progress',
-    inReview: 'Code Review',
-    done: 'Done'
-  },
-  notion: {
-    backlog: 'Backlog',
-    ready: 'Ready',
-    inProgress: 'In Progress',
-    inReview: 'In Review',
-    done: 'Done'
-  },
-  linear: {
-    backlog: 'Backlog',
-    ready: 'Ready',
-    inProgress: 'In Progress',
-    inReview: 'In Review',
-    done: 'Done'
-  },
-  none: {
-    backlog: '',
-    ready: '',
-    inProgress: '',
-    inReview: '',
-    done: ''
-  }
+  'github-projects': WORKFLOW_PRESETS.standard.statuses,
+  jira: [
+    { name: 'Backlog', description: 'Tasks to be prioritized' },
+    { name: 'Ready for Dev', description: 'Ready for development' },
+    { name: 'In Progress', description: 'Currently being worked on' },
+    { name: 'Code Review', description: 'In code review' },
+    { name: 'Done', description: 'Completed' }
+  ],
+  notion: WORKFLOW_PRESETS.standard.statuses,
+  linear: WORKFLOW_PRESETS.standard.statuses,
+  none: []
 }
 
 export const DEFAULT_BRANCH_NAMING = {
@@ -200,10 +291,150 @@ export const DEFAULT_AI_RULES: AIRules = {
 }
 
 /**
+ * Prompt user to select a workflow preset or create custom
+ * @returns Selected workflow statuses
+ */
+async function promptWorkflowPreset(): Promise<WorkflowStatus[]> {
+  const { preset } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'preset',
+      message: 'Choose your workflow configuration:',
+      choices: [
+        {
+          name: `${chalk.cyan('SaaSFoundry AI Workflow')} - 7 statuses with AI/Human testing phases ${chalk.gray('(recommended for AI-assisted development)')}`,
+          value: 'saasfoundry'
+        },
+        {
+          name: `${chalk.blue('Standard Workflow')} - 5 statuses for general development`,
+          value: 'standard'
+        },
+        {
+          name: `${chalk.yellow('Custom Workflow')} - Define your own statuses`,
+          value: 'custom'
+        }
+      ],
+      default: 'saasfoundry'
+    }
+  ])
+
+  if (preset === 'custom') {
+    return await promptCustomWorkflow()
+  }
+
+  const selectedPreset = WORKFLOW_PRESETS[preset as keyof typeof WORKFLOW_PRESETS]
+
+  console.log(chalk.green(`\n✅ Using ${selectedPreset.name} with ${selectedPreset.statuses.length} statuses:`))
+  selectedPreset.statuses.forEach((status, idx) => {
+    const colorDot =
+      status.color === 'GREEN'
+        ? '🟢'
+        : status.color === 'YELLOW'
+          ? '🟡'
+          : status.color === 'BLUE'
+            ? '🔵'
+            : status.color === 'PURPLE'
+              ? '🟣'
+              : status.color === 'ORANGE'
+                ? '🟠'
+                : status.color === 'PINK'
+                  ? '🩷'
+                  : status.color === 'RED'
+                    ? '🔴'
+                    : '⚪'
+    console.log(chalk.gray(`   ${idx + 1}. ${colorDot} ${status.name}${status.description ? ` - ${status.description}` : ''}`))
+  })
+  console.log()
+
+  return selectedPreset.statuses
+}
+
+/**
+ * Prompt user to create a custom workflow with N statuses
+ * @returns Array of custom workflow statuses
+ */
+async function promptCustomWorkflow(): Promise<WorkflowStatus[]> {
+  const statuses: WorkflowStatus[] = []
+  const availableColors: GitHubProjectColor[] = ['GRAY', 'YELLOW', 'BLUE', 'PURPLE', 'ORANGE', 'PINK', 'GREEN', 'RED']
+
+  console.log(chalk.blue('\n📋 Custom Workflow Configuration'))
+  console.log(chalk.gray('Define your workflow statuses. Descriptions help Claude understand your development process.\n'))
+
+  let continueAdding = true
+  let statusNumber = 1
+
+  while (continueAdding) {
+    console.log(chalk.cyan(`\nStatus ${statusNumber}:`))
+
+    const { name, description, color } = await inquirer.prompt<{
+      name: string
+      description: string
+      color: GitHubProjectColor
+    }>([
+      {
+        type: 'input',
+        name: 'name',
+        message: 'Status name:',
+        validate: (input: string) => {
+          if (!input || input.trim().length === 0) return 'Status name is required'
+          if (statuses.some((s) => s.name.toLowerCase() === input.toLowerCase())) {
+            return 'Status name already exists'
+          }
+          return true
+        }
+      },
+      {
+        type: 'input',
+        name: 'description',
+        message: 'Description (optional):',
+        default: ''
+      },
+      {
+        type: 'list',
+        name: 'color',
+        message: 'Color:',
+        choices: availableColors.map((c) => ({
+          name: `${c === 'GRAY' ? '⚪' : c === 'YELLOW' ? '🟡' : c === 'BLUE' ? '🔵' : c === 'PURPLE' ? '🟣' : c === 'ORANGE' ? '🟠' : c === 'PINK' ? '🩷' : c === 'GREEN' ? '🟢' : '🔴'} ${c}`,
+          value: c
+        })),
+        default: statusNumber === 1 ? 'GRAY' : statusNumber === statuses.length ? 'GREEN' : 'BLUE'
+      }
+    ])
+
+    statuses.push({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      color
+    })
+
+    statusNumber++
+
+    // Ask if user wants to add another status (require at least 2 statuses)
+    if (statuses.length >= 2) {
+      const { addAnother } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'addAnother',
+          message: 'Add another status?',
+          default: statuses.length < 5
+        }
+      ])
+
+      continueAdding = addAnother
+    }
+  }
+
+  console.log(chalk.green(`\n✅ ${statuses.length} statuses configured\n`))
+
+  return statuses
+}
+
+/**
  * Main workflow configuration prompt
  * Handles template selection or new workflow creation
+ * @param projectName - Optional project name to use as default for GitHub Project creation
  */
-export async function promptWorkflowConfiguration(): Promise<{
+export async function promptWorkflowConfiguration(projectName?: string): Promise<{
   workflow: WorkflowConfig
   aiRules: AIRules
 }> {
@@ -341,6 +572,8 @@ export async function promptWorkflowConfiguration(): Promise<{
 
   // Step 4: Tool-specific configuration
   let projectUrl = ''
+  let workflowStatuses: WorkflowStatus[] = []
+
   if (tool === 'github-projects') {
     // Offer auto-creation if gh is authenticated
     if (available.includes('github-projects')) {
@@ -354,17 +587,22 @@ export async function promptWorkflowConfiguration(): Promise<{
       ])
 
       if (createNew) {
-        const { projectName } = await inquirer.prompt([
+        // Step 4a: Choose workflow preset
+        workflowStatuses = await promptWorkflowPreset()
+
+        // Step 4b: Enter project name (use passed projectName as default)
+        const { ghProjectName } = await inquirer.prompt([
           {
             type: 'input',
-            name: 'projectName',
-            message: 'Project name:',
-            default: 'Development Board',
+            name: 'ghProjectName',
+            message: 'GitHub Project name:',
+            default: projectName || 'Development Board',
             validate: (input) => input.length > 0 || 'Name is required'
           }
         ])
 
-        const createdUrl = await setupGitHubProjectWithAutoCreation(projectName)
+        // Step 4c: Create project with configured statuses
+        const createdUrl = await setupGitHubProjectWithAutoCreation(ghProjectName, workflowStatuses)
         if (createdUrl) {
           projectUrl = createdUrl
         } else {
@@ -386,7 +624,9 @@ export async function promptWorkflowConfiguration(): Promise<{
           projectUrl = url
         }
       } else {
-        // Manual URL entry
+        // Manual URL entry - still ask for workflow preset
+        workflowStatuses = await promptWorkflowPreset()
+
         const { url } = await inquirer.prompt([
           {
             type: 'input',
@@ -404,7 +644,9 @@ export async function promptWorkflowConfiguration(): Promise<{
         projectUrl = url
       }
     } else {
-      // Not authenticated - manual URL only
+      // Not authenticated - manual URL only, but still configure workflow
+      workflowStatuses = await promptWorkflowPreset()
+
       console.log(chalk.yellow('\n💡 Tip: Run "gh auth login" to enable auto-creation of GitHub Projects\n'))
       const { url } = await inquirer.prompt([
         {
@@ -538,7 +780,7 @@ export async function promptWorkflowConfiguration(): Promise<{
     workingBranch,
     prTargetBranch,
     requireCodeReview,
-    statuses: DEFAULT_STATUSES[tool as keyof typeof DEFAULT_STATUSES],
+    statuses: workflowStatuses.length > 0 ? workflowStatuses : DEFAULT_STATUSES[tool as keyof typeof DEFAULT_STATUSES],
     branchNaming: DEFAULT_BRANCH_NAMING,
     commitFormat: DEFAULT_COMMIT_FORMAT
   }

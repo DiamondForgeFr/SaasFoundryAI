@@ -328,7 +328,7 @@ export async function getUserStartProjectInputs() {
   let selectedWorkflowTool: string | undefined
 
   if (workflowPrompt.configureWorkflow) {
-    const { workflow, aiRules } = await promptWorkflowConfiguration()
+    const { workflow, aiRules } = await promptWorkflowConfiguration(answers.projectName)
     workflowAnswers = { workflow, aiRules }
     selectedWorkflowTool = workflow.tool
   } else {

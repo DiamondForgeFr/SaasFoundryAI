@@ -122,19 +122,21 @@ export interface CreateDevServicesParams {
 }
 
 // Workflow Configuration Interfaces
+export type GitHubProjectColor = 'GRAY' | 'YELLOW' | 'BLUE' | 'PURPLE' | 'ORANGE' | 'PINK' | 'GREEN' | 'RED'
+
+export interface WorkflowStatus {
+  name: string
+  description?: string
+  color?: GitHubProjectColor
+}
+
 export interface WorkflowConfig {
   tool: 'github-projects' | 'jira' | 'notion' | 'linear' | 'none'
   projectUrl?: string
   workingBranch?: string
   prTargetBranch?: string
   requireCodeReview?: boolean
-  statuses?: {
-    backlog?: string
-    ready?: string
-    inProgress?: string
-    inReview?: string
-    done?: string
-  }
+  statuses?: WorkflowStatus[]
   branchNaming?: {
     feature?: string
     fix?: string
