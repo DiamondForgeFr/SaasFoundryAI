@@ -309,16 +309,7 @@ export async function getUserStartProjectInputs() {
     }
   ])
 
-  // Skills setup (asked after analytics)
-  const advancedSkills = await promptAdvancedSkills()
-  const skillsCredentials = await collectAdvancedSkillsCredentials(advancedSkills)
-
-  const skillsAnswers: Partial<Answers> = {
-    advancedSkills,
-    ...skillsCredentials
-  }
-
-  // Workflow setup (asked after skills)
+  // Workflow setup (asked after analytics, BEFORE skills)
   console.log()
   console.log(chalk.cyan('🔧 AI Workflow Configuration (Optional)'))
   console.log(chalk.gray('Configure project management tools for AI collaboration (GitHub Projects, Jira, Notion, Linear)'))
@@ -334,12 +325,25 @@ export async function getUserStartProjectInputs() {
   ])
 
   let workflowAnswers: Partial<Answers> = {}
+  let selectedWorkflowTool: string | undefined
+
   if (workflowPrompt.configureWorkflow) {
     const { workflow, aiRules } = await promptWorkflowConfiguration()
     workflowAnswers = { workflow, aiRules }
+    selectedWorkflowTool = workflow.tool
   } else {
     console.log(chalk.gray('You can configure workflow later with: sf workflow create\n'))
+    selectedWorkflowTool = 'none'
   }
 
-  return { ...answers, ...s3Answers, ...analyticsAnswers, ...skillsAnswers, ...workflowAnswers }
+  // Skills setup (asked AFTER workflow, with pre-selection based on workflow tool)
+  const advancedSkills = await promptAdvancedSkills(selectedWorkflowTool)
+  const skillsCredentials = await collectAdvancedSkillsCredentials(advancedSkills)
+
+  const skillsAnswers: Partial<Answers> = {
+    advancedSkills,
+    ...skillsCredentials
+  }
+
+  return { ...answers, ...s3Answers, ...analyticsAnswers, ...workflowAnswers, ...skillsAnswers }
 }
