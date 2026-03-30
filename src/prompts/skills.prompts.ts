@@ -25,11 +25,21 @@ export interface AdvancedSkillCredentials {
 
 /**
  * Prompt user to select which advanced skills to install
- * All skills are unchecked by default
+ * Skills are pre-selected based on the workflow tool chosen
+ * @param workflowTool - The workflow tool selected (github-projects, jira, notion, linear, none)
  */
-export async function promptAdvancedSkills(): Promise<string[]> {
+export async function promptAdvancedSkills(workflowTool?: string): Promise<string[]> {
   console.log(chalk.blue('\n📚 Advanced Skills (Optional)'))
   console.log(chalk.gray('These skills integrate with external services and require API tokens.\nYou can skip this now and configure them later when Claude prompts you.'))
+
+  // Pre-select skills based on workflow tool
+  const preSelectAtlassian = workflowTool === 'jira'
+  const preSelectNotion = workflowTool === 'notion'
+  // Note: Linear and GitHub Projects skills will be added in future tickets
+
+  if (workflowTool && workflowTool !== 'none') {
+    console.log(chalk.gray(`💡 Pre-selected skill for your ${workflowTool} workflow (you can uncheck if not needed)\n`))
+  }
 
   const { selectedSkills } = await inquirer.prompt<{ selectedSkills: string[] }>([
     {
@@ -45,12 +55,12 @@ export async function promptAdvancedSkills(): Promise<string[]> {
         {
           name: 'Atlassian - Jira/Confluence integration (tickets, wiki, sprints)',
           value: 'atlassian',
-          checked: false
+          checked: preSelectAtlassian
         },
         {
           name: 'Notion - Notion workspace integration (pages, databases, views)',
           value: 'notion',
-          checked: false
+          checked: preSelectNotion
         },
         {
           name: 'Figma - Figma design system integration (designs, components)',
