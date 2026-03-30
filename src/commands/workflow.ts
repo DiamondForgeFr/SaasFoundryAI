@@ -3,6 +3,7 @@ import chalk from 'chalk'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
+import { execSync } from 'child_process'
 import { promptWorkflowConfiguration, listGlobalWorkflows, loadGlobalWorkflow, saveGlobalWorkflow } from '../prompts/workflow.prompts'
 import { readManifest, writeManifest } from '../utils'
 import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
@@ -49,7 +50,7 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
       await setAIRules(manifest!)
       break
     case 'validate':
-      validateWorkflowConfig(manifest!)
+      await validateWorkflowConfig(manifest!)
       break
     case 'save':
       await saveAsTemplate(manifest!, args[0])
@@ -342,34 +343,60 @@ async function saveAsTemplate(manifest: SaaSFoundryManifest, templateName?: stri
   console.log(chalk.green(`\n✅ Workflow saved as template: ${chalk.cyan(templateName!)}\n`))
 }
 
-function validateWorkflowConfig(manifest: SaaSFoundryManifest) {
-  console.log(chalk.blue('\n🔍 Validating workflow configuration...\n'))
+async function validateWorkflowConfig(manifest: SaaSFoundryManifest) {
+  // Check if workflow validator skill exists in generated project
+  const skillPath = path.join(process.cwd(), '.claude', 'skills-optional', 'sf-tool-workflow-validator', 'validate-workflow.sh')
 
-  const issues: string[] = []
+  try {
+    await fs.access(skillPath)
+  } catch {
+    console.log(chalk.yellow('\n⚠️  Workflow validator skill not found in project\n'))
+    console.log(chalk.gray('The validator skill may not have been generated with your project.'))
+    console.log(chalk.gray('It is available in newer versions of SaaSFoundry.\n'))
 
-  if (!manifest.workflow) {
-    issues.push('No workflow configuration found')
-  } else {
-    if (!manifest.workflow.tool) {
-      issues.push('Tool not specified')
+    // Fallback to basic validation
+    console.log(chalk.blue('🔍 Running basic validation...\n'))
+
+    const issues: string[] = []
+
+    if (!manifest.workflow) {
+      issues.push('No workflow configuration found')
+    } else {
+      if (!manifest.workflow.tool) {
+        issues.push('Tool not specified')
+      }
+      if (manifest.workflow.tool !== 'none' && !manifest.workflow.projectUrl) {
+        issues.push('Project URL not specified')
+      }
+      if (!manifest.workflow.workingBranch) {
+        issues.push('Working branch not specified')
+      }
+      if (!manifest.workflow.prTargetBranch) {
+        issues.push('PR target branch not specified')
+      }
     }
-    if (manifest.workflow.tool !== 'none' && !manifest.workflow.projectUrl) {
-      issues.push('Project URL not specified')
+
+    if (issues.length === 0) {
+      console.log(chalk.green('✅ Workflow configuration is valid\n'))
+    } else {
+      console.log(chalk.red('❌ Validation failed:\n'))
+      issues.forEach((issue) => console.log(`  - ${issue}`))
+      console.log()
+      process.exit(1)
     }
-    if (!manifest.workflow.workingBranch) {
-      issues.push('Working branch not specified')
-    }
-    if (!manifest.workflow.prTargetBranch) {
-      issues.push('PR target branch not specified')
-    }
+
+    return
   }
 
-  if (issues.length === 0) {
-    console.log(chalk.green('✅ Workflow configuration is valid\n'))
-  } else {
-    console.log(chalk.red('❌ Validation failed:\n'))
-    issues.forEach((issue) => console.log(`  - ${issue}`))
-    console.log()
+  // Run the workflow validator script
+  try {
+    execSync(`bash "${skillPath}"`, {
+      stdio: 'inherit',
+      cwd: process.cwd()
+    })
+  } catch {
+    // Script already outputs errors, just exit with error code
+    process.exit(1)
   }
 }
 
