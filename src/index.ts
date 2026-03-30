@@ -16,13 +16,13 @@ program
   .description('Manage multi-account credentials for advanced skills')
   .argument('[subcommand]', 'Subcommand to execute (list, accounts, add, use, current)')
   .argument('[args...]', 'Additional arguments for the subcommand')
-  .action(toolsCommand)
+  .action((subcommand, args) => toolsCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
   .command('workflow')
   .description('Manage workflow configuration and AI rules')
   .argument('[subcommand]', 'Subcommand to execute (list, create, show, use, set-working-branch, set-ai-rules, etc.)')
   .argument('[args...]', 'Additional arguments for the subcommand')
-  .action(workflowCommand)
+  .action((subcommand, args) => workflowCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program.parse()
 
 export { newCommand, updateCommand, toolsCommand, workflowCommand }
