@@ -4,6 +4,7 @@ import { exec } from 'shelljs'
 
 import { Answers } from '../types'
 import { promptAdvancedSkills, collectAdvancedSkillsCredentials } from './skills.prompts'
+import { promptWorkflowConfiguration } from './workflow.prompts'
 
 /**
  * Get user inputs
@@ -317,5 +318,28 @@ export async function getUserStartProjectInputs() {
     ...skillsCredentials
   }
 
-  return { ...answers, ...s3Answers, ...analyticsAnswers, ...skillsAnswers }
+  // Workflow setup (asked after skills)
+  console.log()
+  console.log(chalk.cyan('🔧 AI Workflow Configuration (Optional)'))
+  console.log(chalk.gray('Configure project management tools for AI collaboration (GitHub Projects, Jira, Notion, Linear)'))
+  console.log()
+
+  const workflowPrompt = await inquirer.prompt<{ configureWorkflow: boolean }>([
+    {
+      type: 'confirm',
+      name: 'configureWorkflow',
+      message: 'Do you want to configure an AI workflow tool now?',
+      default: false
+    }
+  ])
+
+  let workflowAnswers: Partial<Answers> = {}
+  if (workflowPrompt.configureWorkflow) {
+    const { workflow, aiRules } = await promptWorkflowConfiguration()
+    workflowAnswers = { workflow, aiRules }
+  } else {
+    console.log(chalk.gray('You can configure workflow later with: sf workflow create\n'))
+  }
+
+  return { ...answers, ...s3Answers, ...analyticsAnswers, ...skillsAnswers, ...workflowAnswers }
 }
