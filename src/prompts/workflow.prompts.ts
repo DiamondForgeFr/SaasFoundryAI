@@ -358,7 +358,7 @@ async function promptCustomWorkflow(): Promise<WorkflowStatus[]> {
   const availableColors: GitHubProjectColor[] = ['GRAY', 'YELLOW', 'BLUE', 'PURPLE', 'ORANGE', 'PINK', 'GREEN', 'RED']
 
   console.log(chalk.blue('\n📋 Custom Workflow Configuration'))
-  console.log(chalk.gray('Define your workflow statuses. Descriptions help Claude understand your development process.\n'))
+  console.log(chalk.gray('Define your workflow statuses. Descriptions are mandatory to help Claude understand your development process.\n'))
 
   let continueAdding = true
   let statusNumber = 1
@@ -386,8 +386,13 @@ async function promptCustomWorkflow(): Promise<WorkflowStatus[]> {
       {
         type: 'input',
         name: 'description',
-        message: 'Description (optional):',
-        default: ''
+        message: 'Description (mandatory for AI context):',
+        validate: (input: string) => {
+          if (!input || input.trim().length === 0) {
+            return 'Description is required to help Claude understand this workflow step'
+          }
+          return true
+        }
       },
       {
         type: 'list',
@@ -403,7 +408,7 @@ async function promptCustomWorkflow(): Promise<WorkflowStatus[]> {
 
     statuses.push({
       name: name.trim(),
-      description: description.trim() || undefined,
+      description: description.trim(),
       color
     })
 
