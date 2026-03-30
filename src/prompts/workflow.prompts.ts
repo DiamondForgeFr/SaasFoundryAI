@@ -16,13 +16,43 @@ const WORKFLOW_PRESETS = {
     name: 'SaaSFoundry AI Workflow',
     description: '7-status workflow with AI and Human testing phases (recommended for AI-assisted development)',
     statuses: [
-      { name: 'Backlog', description: 'Tasks waiting to be prioritized', color: 'GRAY' as GitHubProjectColor },
-      { name: 'Ready', description: 'Tasks ready to start development', color: 'YELLOW' as GitHubProjectColor },
-      { name: 'In Progress', description: 'Active development work', color: 'BLUE' as GitHubProjectColor },
-      { name: 'AI Testing', description: 'First validation by Claude AI (execute test plan)', color: 'PURPLE' as GitHubProjectColor },
-      { name: 'Human Testing', description: 'Second validation by human reviewer', color: 'ORANGE' as GitHubProjectColor },
-      { name: 'In Review', description: 'Code review and approval', color: 'PINK' as GitHubProjectColor },
-      { name: 'Done', description: 'Completed and merged', color: 'GREEN' as GitHubProjectColor }
+      {
+        name: 'Backlog',
+        description: 'Tasks waiting to be prioritized and estimated. Not yet ready to start. Requires analysis and planning before moving to Ready.',
+        color: 'GRAY' as GitHubProjectColor
+      },
+      {
+        name: 'Ready',
+        description: 'Tasks ready to be picked up by developers. Requirements are clear, acceptance criteria defined, no blockers. Can start development immediately.',
+        color: 'YELLOW' as GitHubProjectColor
+      },
+      {
+        name: 'In Progress',
+        description: 'Active development work. Writing code, implementing features, fixing bugs. When done coding, move to AI Testing for first validation.',
+        color: 'BLUE' as GitHubProjectColor
+      },
+      {
+        name: 'AI Testing',
+        description:
+          'First validation by Claude AI. Execute test plan step by step, verify implementation matches requirements, run automated tests, check for issues. If tests pass, move to Human Testing. If issues found, move back to In Progress with detailed feedback.',
+        color: 'PURPLE' as GitHubProjectColor
+      },
+      {
+        name: 'Human Testing',
+        description:
+          'Second validation by human reviewer. Manual testing of functionality, edge cases verification, UX review. Approve for code review or send back to In Progress if major issues found.',
+        color: 'ORANGE' as GitHubProjectColor
+      },
+      {
+        name: 'In Review',
+        description: 'Code review and final approval. PR created and awaiting review from team members. Address review comments or merge when approved.',
+        color: 'PINK' as GitHubProjectColor
+      },
+      {
+        name: 'Done',
+        description: 'Completed and merged to main branch. Feature is deployed or ready for deployment. Archive or close the ticket.',
+        color: 'GREEN' as GitHubProjectColor
+      }
     ]
   },
   standard: {
