@@ -18,39 +18,44 @@ const WORKFLOW_PRESETS = {
     statuses: [
       {
         name: 'Backlog',
-        description: 'Tasks waiting to be prioritized and estimated. Not yet ready to start. Requires analysis and planning before moving to Ready.',
+        description:
+          'Raw ideas and specs waiting to be challenged. AI must challenge the ticket with the developer to clarify requirements, identify edge cases, and validate approach before moving to Ready. Ask questions, suggest improvements, and ensure specs are complete.',
         color: 'GRAY' as GitHubProjectColor
       },
       {
         name: 'Ready',
-        description: 'Tasks ready to be picked up by developers. Requirements are clear, acceptance criteria defined, no blockers. Can start development immediately.',
+        description:
+          'Specs have been challenged and validated. Priority assigned, potentially with a target date. Requirements are clear and actionable. AI can pick tickets in order, or wait for developer to specify which one to work on. Ready to start development immediately.',
         color: 'YELLOW' as GitHubProjectColor
       },
       {
         name: 'In Progress',
-        description: 'Active development work. Writing code, implementing features, fixing bugs. When done coding, move to AI Testing for first validation.',
+        description:
+          'Task currently being worked on by AI. Create subtasks during implementation and link them to the main ticket. Commit after each subtask completion. When all subtasks are done: run existing tests (unit, E2E, lint, TypeScript) to ensure nothing is broken, commit and push all changes, then move to AI Testing and generate a test plan.',
         color: 'BLUE' as GitHubProjectColor
       },
       {
         name: 'AI Testing',
         description:
-          'First validation by Claude AI. Execute test plan step by step, verify implementation matches requirements, run automated tests, check for issues. If tests pass, move to Human Testing. If issues found, move back to In Progress with detailed feedback.',
+          'First validation phase. Execute the generated test plan step by step. For each test: verify functionality, check edge cases, validate against requirements. Document all findings in ticket comments. If issues found: fix them, commit changes, and re-test. When all tests pass: create test report summary and move to Human Testing for second validation.',
         color: 'PURPLE' as GitHubProjectColor
       },
       {
         name: 'Human Testing',
         description:
-          'Second validation by human reviewer. Manual testing of functionality, edge cases verification, UX review. Approve for code review or send back to In Progress if major issues found.',
+          'Second validation by human reviewer. Developer performs manual testing of functionality, validates edge cases, reviews UX/UI. If approved: AI creates pull request and moves to In Review. If major issues found: send back to In Progress with detailed feedback for fixes.',
         color: 'ORANGE' as GitHubProjectColor
       },
       {
         name: 'In Review',
-        description: 'Code review and final approval. PR created and awaiting review from team members. Address review comments or merge when approved.',
+        description:
+          'Pull request created and awaiting code review from team members. AI monitors review comments and addresses feedback if needed (make requested changes, answer questions, update documentation). When PR is approved by reviewers: merge to main branch and move to Done.',
         color: 'PINK' as GitHubProjectColor
       },
       {
         name: 'Done',
-        description: 'Completed and merged to main branch. Feature is deployed or ready for deployment. Archive or close the ticket.',
+        description:
+          'Feature completed and merged to main branch. Code is deployed or ready for deployment. Close the ticket, archive subtasks, and update any related documentation. Celebrate the win!',
         color: 'GREEN' as GitHubProjectColor
       }
     ]
