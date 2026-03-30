@@ -10,6 +10,63 @@ The workflow system provides:
 - 🤖 **AI rules** - Configure how Claude assists with development
 - 📋 **Tool integration** - Connect to your project management tool
 - 🌿 **Git automation** - Automatic branch naming and commit formats
+- 🔍 **Smart detection** - Auto-detect available tools based on credentials
+- ✅ **Validation** - Verify workflow sync with remote project boards
+
+## Smart Tool Detection
+
+During `sf new`, SaaSFoundry automatically detects which project management tools you have configured:
+
+### How it works
+
+1. **Scans credentials**: Checks `~/.claude/credentials/` for Jira, Notion, and Linear credentials
+2. **Checks GitHub CLI**: Runs `gh auth status` to detect GitHub Projects availability
+3. **Recommends tools**: Highlights available tools in the selection prompt with a ✓ icon
+
+### Benefits
+
+- ✅ **No manual searching** - See at a glance which tools are ready to use
+- ✅ **Prevents errors** - Won't offer tools that aren't configured
+- ✅ **Smart defaults** - Recommends GitHub Projects if available (no extra setup)
+- ✅ **Fast setup** - Jump straight to using your preferred tool
+
+### Example output
+
+```bash
+$ sf new
+
+🔍 Detecting available project management tools...
+
+✅ Found credentials for:
+  - github-projects (recommended)
+  - jira
+  - notion
+
+? Choose your project management tool:
+  ✓ GitHub Projects (built-in, authenticated) ← recommended
+  ✓ Jira (Atlassian, credentials found)
+  ✓ Notion (credentials found)
+  Linear
+  None (no project management integration)
+```
+
+### Setup credentials
+
+To make tools available for detection:
+
+```bash
+# GitHub Projects (recommended)
+gh auth login
+
+# Jira
+sf tools add jira my-account
+
+# Notion
+sf tools add notion my-account
+
+# Linear
+sf tools add linear my-account
+```
 
 ## Quick Start
 
@@ -110,6 +167,46 @@ sf workflow set-ai-rules
 - ✅ Sub-issues support
 - ✅ Automatic status updates
 - ✅ PR linking
+- ✅ **Auto-creation** - Create new projects automatically
+
+#### Auto-Creation Feature
+
+When you select GitHub Projects during `sf new` and are authenticated with `gh` CLI, SaaSFoundry offers to create a new project automatically:
+
+```bash
+$ sf new
+
+? Choose your project management tool: ✓ GitHub Projects (built-in, authenticated)
+? Create a new GitHub Project automatically? Yes
+? Project name: Development Board
+
+🔨 Creating GitHub Project "Development Board"...
+✅ Project created: https://github.com/orgs/myorg/projects/1
+```
+
+**How it works:**
+
+1. Detects if you're in an organization or personal repository
+2. Uses GitHub GraphQL API (`createProjectV2` mutation)
+3. Returns the project URL automatically
+4. Falls back to manual URL entry if creation fails
+
+**Requirements:**
+
+- `gh` CLI must be authenticated: `gh auth login`
+- You must have permission to create projects in the repository/org
+
+**When to use:**
+
+- ✅ Starting a new project from scratch
+- ✅ Testing SaaSFoundry quickly
+- ✅ Creating isolated project boards per repository
+
+**When to use manual URL:**
+
+- ✅ Using an existing project board
+- ✅ Sharing a project board across multiple repositories
+- ✅ When you don't have project creation permissions
 
 ### Jira
 
@@ -131,6 +228,132 @@ sf workflow set-ai-rules
 - ✅ Sub-issues
 - ✅ Cycles
 - ✅ Labels
+
+## Validation System
+
+SaaSFoundry includes a workflow validator that ensures your local configuration stays in sync with your remote project board.
+
+### Why validation matters
+
+Over time, your workflow configuration can drift from the actual project board:
+
+- 🔄 **Team renames statuses** - "In Review" becomes "Review"
+- 📊 **Board structure changes** - New statuses added, old ones removed
+- 🔧 **Configuration errors** - Typos or incorrect field mappings
+- 🚀 **Deployment issues** - Automation breaks due to config mismatch
+
+The validator detects these issues and offers automatic fixes.
+
+### What it validates
+
+#### GitHub Projects
+
+- ✅ Project URL accessibility
+- ✅ Status field existence and values
+- ✅ Repository connection
+- ✅ Project visibility
+
+#### Jira
+
+- ✅ Project key validity
+- ✅ Status workflow states
+- ✅ Required fields configuration
+- ✅ API credentials
+
+#### Notion
+
+- ✅ Database existence
+- ✅ Status property configuration
+- ✅ Required properties (Title, Status, Assignee)
+- ✅ Database sharing permissions
+
+#### Linear
+
+- ✅ Team key validity
+- ✅ Workflow states
+- ✅ Required fields
+- ✅ API token validity
+
+### How to validate
+
+```bash
+# Basic validation
+sf workflow validate
+
+# Advanced options (use skill directly)
+~/.claude/skills-optional/sf-tool-workflow-validator/validate-workflow.sh --verbose
+~/.claude/skills-optional/sf-tool-workflow-validator/validate-workflow.sh --fix
+```
+
+### Example validation output
+
+```bash
+$ sf workflow validate
+
+🔍 Validating workflow configuration...
+
+Tool: GitHub Projects
+URL: https://github.com/orgs/myorg/projects/1
+
+✅ Project accessible
+✅ Status field found
+⚠️  Status mismatch detected:
+   Local:  Backlog, Ready, In Progress, In Review, Done
+   Remote: Backlog, Todo, In Progress, Review, Complete
+
+❌ Validation failed with 1 issue(s)
+
+Run with --fix to update local config automatically.
+```
+
+### Auto-fix mode
+
+When mismatches are detected, you can auto-fix them:
+
+```bash
+~/.claude/skills-optional/sf-tool-workflow-validator/validate-workflow.sh --fix
+
+🔧 Auto-fixing workflow configuration...
+
+Updating statuses in .saasfoundry-workflow.json:
+  - Ready → Todo
+  - In Review → Review
+  - Done → Complete
+
+✅ Configuration updated and saved
+✅ Validation passed
+```
+
+**Auto-fix benefits:**
+
+- ✅ **Non-destructive** - Creates `.saasfoundry-workflow.json.backup` before changes
+- ✅ **Smart updates** - Only updates what's different
+- ✅ **Preserves settings** - Keeps all other configuration intact
+- ✅ **Audit trail** - Sets `validated: true` and `lastValidated` timestamp
+
+### When to validate
+
+- ✅ **After initial setup** - Verify everything is configured correctly
+- ✅ **Weekly** - As part of team standup or sprint planning
+- ✅ **Before deployments** - Ensure automation will work
+- ✅ **After team changes** - When someone renames statuses or fields
+- ✅ **When debugging** - If workflow automation stops working
+
+### Validation fields
+
+After successful validation, your manifest includes:
+
+```json
+{
+  "workflow": {
+    // ... other fields ...
+    "validated": true,
+    "lastValidated": "2026-03-30T14:30:00Z"
+  }
+}
+```
+
+These fields help track workflow health over time.
 
 ## Git Workflow
 

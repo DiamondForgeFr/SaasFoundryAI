@@ -3,9 +3,143 @@ import chalk from 'chalk'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
+import { execSync } from 'child_process'
 import type { WorkflowConfig, AIRules, WorkflowTemplate } from '../types'
+import { fileExists } from '../utils'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
+const CREDENTIALS_DIR = path.join(os.homedir(), '.claude', 'credentials')
+
+/**
+ * Check if GitHub CLI is authenticated
+ * @returns true if gh CLI is authenticated and ready to use
+ */
+function checkGhAuth(): boolean {
+  try {
+    execSync('gh auth status', { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Detect available workflow tools based on credentials and gh auth status
+ * Scans ~/.claude/credentials/ directories for tool credentials
+ * @returns {available: string[], recommended: string} object with tool detection results
+ */
+export async function detectAvailableTools(): Promise<{
+  available: string[]
+  recommended: string
+}> {
+  const available: string[] = []
+  const tools = ['jira', 'notion', 'linear']
+
+  // Check GitHub Projects (via gh CLI authentication)
+  if (checkGhAuth()) {
+    available.push('github-projects')
+  }
+
+  // Check credential-based tools
+  for (const tool of tools) {
+    const toolDir = path.join(CREDENTIALS_DIR, tool)
+
+    try {
+      if (await fileExists(toolDir)) {
+        const files = await fs.readdir(toolDir)
+        const hasCredentials = files.some((f) => f.endsWith('.env'))
+
+        if (hasCredentials) {
+          available.push(tool)
+        }
+      }
+    } catch {
+      // Directory doesn't exist or can't be read - skip
+    }
+  }
+
+  // Determine recommendation
+  let recommended = 'none'
+  if (available.length > 0) {
+    // Prefer GitHub Projects if available (built-in, no extra setup)
+    if (available.includes('github-projects')) {
+      recommended = 'github-projects'
+    } else {
+      // Otherwise recommend the first available tool
+      recommended = available[0]
+    }
+  }
+
+  return { available, recommended }
+}
+
+/**
+ * Setup GitHub Project with auto-creation via GraphQL API
+ * Creates a new GitHub Project using the createProjectV2 mutation
+ * @param projectName - Name for the new project
+ * @returns Project URL if successful, or null if failed
+ */
+export async function setupGitHubProjectWithAutoCreation(projectName: string): Promise<string | null> {
+  try {
+    // Check gh auth
+    if (!checkGhAuth()) {
+      console.log(chalk.yellow('\n⚠️  GitHub CLI not authenticated. Run: gh auth login\n'))
+      return null
+    }
+
+    // Get current repository info
+    let repoOwner: string
+    let isOrg = false
+
+    try {
+      const repoInfo = execSync('gh repo view --json owner,name', { encoding: 'utf-8' })
+      const repo = JSON.parse(repoInfo)
+      repoOwner = repo.owner.login
+
+      // Check if owner is an organization
+      const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8' }).trim()
+      isOrg = ownerType === 'Organization'
+    } catch {
+      console.log(chalk.yellow("\n⚠️  Could not detect repository. Make sure you're in a git repository.\n"))
+      return null
+    }
+
+    console.log(chalk.blue(`\n🔨 Creating GitHub Project "${projectName}"...\n`))
+
+    // Get owner ID (user or org)
+    const ownerIdQuery = isOrg ? `query { organization(login: "${repoOwner}") { id } }` : `query { user(login: "${repoOwner}") { id } }`
+
+    const ownerIdResult = execSync(`gh api graphql -f query='${ownerIdQuery}'`, { encoding: 'utf-8' })
+    const ownerId = JSON.parse(ownerIdResult).data[isOrg ? 'organization' : 'user'].id
+
+    // Create project
+    const mutation = `
+      mutation {
+        createProjectV2(input: {
+          ownerId: "${ownerId}"
+          title: "${projectName}"
+        }) {
+          projectV2 {
+            id
+            number
+            url
+          }
+        }
+      }
+    `
+
+    const result = execSync(`gh api graphql -f query='${mutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
+    const projectData = JSON.parse(result).data.createProjectV2.projectV2
+
+    console.log(chalk.green(`✅ Project created: ${projectData.url}\n`))
+
+    return projectData.url
+  } catch (error) {
+    const err = error as Error
+    console.log(chalk.red(`\n❌ Failed to create GitHub Project: ${err.message}\n`))
+    return null
+  }
+}
 
 // Default configurations for each tool
 export const DEFAULT_STATUSES = {
@@ -144,19 +278,49 @@ export async function promptWorkflowConfiguration(): Promise<{
     }
   }
 
-  // Step 2: Create new workflow
+  // Step 2: Detect available tools
+  console.log(chalk.blue('🔍 Detecting available project management tools...\n'))
+  const { available, recommended } = await detectAvailableTools()
+
+  if (available.length > 0) {
+    console.log(chalk.green('✅ Found credentials for:'))
+    available.forEach((t) => {
+      const badge = t === recommended ? chalk.cyan(' (recommended)') : ''
+      console.log(chalk.gray(`  - ${t}${badge}`))
+    })
+    console.log()
+  } else {
+    console.log(chalk.gray('No tools configured yet. You can set up credentials later.\n'))
+  }
+
+  // Step 3: Create new workflow - offer auto-creation for GitHub Projects
+  const choices = [
+    {
+      name: available.includes('github-projects') ? chalk.green('✓ GitHub Projects (built-in, authenticated)') : 'GitHub Projects (built-in)',
+      value: 'github-projects'
+    },
+    {
+      name: available.includes('jira') ? chalk.green('✓ Jira (Atlassian, credentials found)') : 'Jira (Atlassian)',
+      value: 'jira'
+    },
+    {
+      name: available.includes('notion') ? chalk.green('✓ Notion (credentials found)') : 'Notion',
+      value: 'notion'
+    },
+    {
+      name: available.includes('linear') ? chalk.green('✓ Linear (credentials found)') : 'Linear',
+      value: 'linear'
+    },
+    { name: 'None (no project management integration)', value: 'none' }
+  ]
+
   const { tool } = await inquirer.prompt([
     {
       type: 'list',
       name: 'tool',
       message: 'Choose your project management tool:',
-      choices: [
-        { name: 'GitHub Projects (built-in)', value: 'github-projects' },
-        { name: 'Jira (Atlassian)', value: 'jira' },
-        { name: 'Notion', value: 'notion' },
-        { name: 'Linear', value: 'linear' },
-        { name: 'None (no project management integration)', value: 'none' }
-      ]
+      choices,
+      default: recommended !== 'none' ? recommended : 'github-projects'
     }
   ])
 
@@ -175,24 +339,89 @@ export async function promptWorkflowConfiguration(): Promise<{
     }
   }
 
-  // Step 3: Tool-specific configuration
+  // Step 4: Tool-specific configuration
   let projectUrl = ''
   if (tool === 'github-projects') {
-    const { url } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'url',
-        message: 'GitHub Project URL:',
-        default: 'https://github.com/users/{username}/projects/1',
-        validate: (input) => {
-          if (input.match(/github\.com\/(orgs|users)\/[^/]+\/projects\/\d+/)) {
-            return true
-          }
-          return 'Invalid GitHub Project URL format (e.g., https://github.com/orgs/myorg/projects/1)'
+    // Offer auto-creation if gh is authenticated
+    if (available.includes('github-projects')) {
+      const { createNew } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'createNew',
+          message: 'Create a new GitHub Project automatically?',
+          default: true
         }
+      ])
+
+      if (createNew) {
+        const { projectName } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'projectName',
+            message: 'Project name:',
+            default: 'Development Board',
+            validate: (input) => input.length > 0 || 'Name is required'
+          }
+        ])
+
+        const createdUrl = await setupGitHubProjectWithAutoCreation(projectName)
+        if (createdUrl) {
+          projectUrl = createdUrl
+        } else {
+          // Fallback to manual URL entry
+          const { url } = await inquirer.prompt([
+            {
+              type: 'input',
+              name: 'url',
+              message: 'GitHub Project URL (manual entry):',
+              default: 'https://github.com/users/{username}/projects/1',
+              validate: (input) => {
+                if (input.match(/github\.com\/(orgs|users)\/[^/]+\/projects\/\d+/)) {
+                  return true
+                }
+                return 'Invalid GitHub Project URL format'
+              }
+            }
+          ])
+          projectUrl = url
+        }
+      } else {
+        // Manual URL entry
+        const { url } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'url',
+            message: 'GitHub Project URL:',
+            default: 'https://github.com/users/{username}/projects/1',
+            validate: (input) => {
+              if (input.match(/github\.com\/(orgs|users)\/[^/]+\/projects\/\d+/)) {
+                return true
+              }
+              return 'Invalid GitHub Project URL format'
+            }
+          }
+        ])
+        projectUrl = url
       }
-    ])
-    projectUrl = url
+    } else {
+      // Not authenticated - manual URL only
+      console.log(chalk.yellow('\n💡 Tip: Run "gh auth login" to enable auto-creation of GitHub Projects\n'))
+      const { url } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'url',
+          message: 'GitHub Project URL:',
+          default: 'https://github.com/users/{username}/projects/1',
+          validate: (input) => {
+            if (input.match(/github\.com\/(orgs|users)\/[^/]+\/projects\/\d+/)) {
+              return true
+            }
+            return 'Invalid GitHub Project URL format'
+          }
+        }
+      ])
+      projectUrl = url
+    }
   } else if (tool === 'jira') {
     const { domain, projectKey } = await inquirer.prompt([
       {
