@@ -46,6 +46,8 @@ export interface Answers {
   notionApiToken?: string
   notionApiVersion?: string
   figmaApiToken?: string
+  workflow?: WorkflowConfig
+  aiRules?: AIRules
 }
 
 export interface CreateApiAppParams {
