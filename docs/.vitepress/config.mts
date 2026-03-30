@@ -6,6 +6,12 @@ export default defineConfig({
   base: '/SaaSFoundry/',
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
+  vite: {
+    server: {
+      port: 5176
+    }
+  },
+
   themeConfig: {
     logo: '/icon.svg',
 
