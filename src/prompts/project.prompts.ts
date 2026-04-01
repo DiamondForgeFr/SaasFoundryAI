@@ -320,7 +320,7 @@ export async function getUserStartProjectInputs() {
       type: 'confirm',
       name: 'configureWorkflow',
       message: 'Do you want to configure an AI workflow tool now?',
-      default: false
+      default: true
     }
   ])
 
