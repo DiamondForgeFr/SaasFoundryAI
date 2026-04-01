@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 import ora from 'ora'
-import { exec } from 'shelljs'
+import { execSync } from 'child_process'
 
 /**
  * Opens a new terminal tab or window with contextual directory and optional command
@@ -28,7 +28,7 @@ export async function openTerminal(directory: string, options?: { command?: stri
         // macOS - try iTerm2 first, then fallback to Terminal.app
         try {
           // Check if iTerm2 is installed
-          await exec('osascript -e "tell application \\"iTerm\\" to version"', { silent: true })
+          execSync('osascript -e "tell application \\"iTerm\\" to version"', { stdio: 'ignore' })
 
           // iTerm2 is installed, use a more permissive approach for new tab
           const script = `
@@ -41,11 +41,11 @@ export async function openTerminal(directory: string, options?: { command?: stri
             end tell
           end tell
         `
-          await exec(`osascript -e '${script}'`)
+          execSync(`osascript -e '${script}'`)
           success = true
         } catch {
           // iTerm2 not found or error, use Terminal.app
-          await exec(
+          execSync(
             `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
           )
           success = true
@@ -54,27 +54,33 @@ export async function openTerminal(directory: string, options?: { command?: stri
       }
       case 'win32': {
         // Windows - check for Windows Terminal
-        const hasWindowsTerminal = (await exec('where wt.exe', { silent: true }).code) === 0
+        let hasWindowsTerminal = false
+        try {
+          execSync('where wt.exe', { stdio: 'ignore' })
+          hasWindowsTerminal = true
+        } catch {
+          hasWindowsTerminal = false
+        }
 
         if (hasWindowsTerminal) {
           // Windows Terminal
           if (command) {
-            await exec(`wt.exe -w 0 nt -d "${absolutePath}" cmd /k ${command}`)
+            execSync(`wt.exe -w 0 nt -d "${absolutePath}" cmd /k ${command}`)
           } else {
-            await exec(`wt.exe -w 0 nt -d "${absolutePath}"`)
+            execSync(`wt.exe -w 0 nt -d "${absolutePath}"`)
           }
           success = true
         } else {
           // Fallback to cmd
-          await exec(`start cmd.exe /K "cd ${absolutePath}${command ? ` && ${command}` : ''}"`)
+          execSync(`start cmd.exe /K "cd ${absolutePath}${command ? ` && ${command}` : ''}"`)
           success = true
         }
         break
       }
       case 'wsl': {
         // WSL - use the default shell
-        if (command) await exec(`cd ${absolutePath} && ${command}`)
-        else await exec(`cd ${absolutePath}`)
+        if (command) execSync(`cd ${absolutePath} && ${command}`)
+        else execSync(`cd ${absolutePath}`)
         success = true
         break
       }
@@ -93,9 +99,9 @@ export async function openTerminal(directory: string, options?: { command?: stri
         for (const terminal of terminals) {
           try {
             if (command) {
-              await exec(terminal.command(absolutePath, command))
+              execSync(terminal.command(absolutePath, command))
             } else {
-              await exec(terminal.command(absolutePath))
+              execSync(terminal.command(absolutePath))
             }
             success = true
             break
