@@ -602,8 +602,93 @@ export async function promptWorkflowConfiguration(
       workflowConfig = { ...template }
       aiRulesConfig = template.aiRules || {}
 
-      // Prompt for project-specific values
-      if (template.tool !== 'none') {
+      // Prompt for project-specific values (same as new workflow creation)
+      if (template.tool === 'github-projects') {
+        // Check if GitHub CLI is authenticated
+        const isGhAuthenticated = checkGhAuth()
+
+        if (isGhAuthenticated) {
+          const { autoCreate } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'autoCreate',
+              message: 'Create a new GitHub Project automatically?',
+              default: true
+            }
+          ])
+
+          if (autoCreate) {
+            const { ghProjectName } = await inquirer.prompt([
+              {
+                type: 'input',
+                name: 'ghProjectName',
+                message: 'GitHub Project name:',
+                default: projectName || 'Development Board',
+                validate: (input) => {
+                  if (!input || input.trim().length === 0) return 'Project name is required'
+                  return true
+                }
+              }
+            ])
+
+            // Create project with template statuses
+            const createdUrl = await setupGitHubProjectWithAutoCreation(ghProjectName, template.statuses || [], repositoryUrl)
+            if (createdUrl) {
+              workflowConfig.projectUrl = createdUrl
+            } else {
+              // Fallback to manual URL entry
+              const { url } = await inquirer.prompt([
+                {
+                  type: 'input',
+                  name: 'url',
+                  message: 'GitHub Project URL (manual entry):',
+                  default: 'https://github.com/users/{username}/projects/1',
+                  validate: (input) => {
+                    if (input.match(/github\.com\/(orgs|users)\/[^/]+\/projects\/\d+/)) {
+                      return true
+                    }
+                    return 'Please enter a valid GitHub Project URL'
+                  }
+                }
+              ])
+              workflowConfig.projectUrl = url
+            }
+          } else {
+            // Manual URL entry
+            const { url } = await inquirer.prompt([
+              {
+                type: 'input',
+                name: 'url',
+                message: 'GitHub Project URL:',
+                validate: (input) => {
+                  if (input.match(/github\.com\/(orgs|users)\/[^/]+\/projects\/\d+/)) {
+                    return true
+                  }
+                  return 'Please enter a valid GitHub Project URL'
+                }
+              }
+            ])
+            workflowConfig.projectUrl = url
+          }
+        } else {
+          // GitHub CLI not authenticated, ask for URL
+          const { url } = await inquirer.prompt([
+            {
+              type: 'input',
+              name: 'url',
+              message: 'GitHub Project URL:',
+              validate: (input) => {
+                if (input.match(/github\.com\/(orgs|users)\/[^/]+\/projects\/\d+/)) {
+                  return true
+                }
+                return 'Please enter a valid GitHub Project URL'
+              }
+            }
+          ])
+          workflowConfig.projectUrl = url
+        }
+      } else if (template.tool !== 'none') {
+        // For other tools (Jira, Notion, Linear), just ask for URL
         const { projectUrl } = await inquirer.prompt([
           {
             type: 'input',
