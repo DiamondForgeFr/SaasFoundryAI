@@ -2,7 +2,7 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 import { mkdir, writeFile } from 'fs/promises'
 import ora from 'ora'
-import { exec } from 'shelljs'
+import { execSync } from 'child_process'
 
 import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
@@ -314,7 +314,7 @@ export async function newCommand() {
 
             console.log(chalk.blue('Opening API documentation in browser...'))
             const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            await exec(`${openCommand} http://localhost:3500/api/docs`)
+            execSync(`${openCommand} http://localhost:3500/api/docs`)
           } catch {
             console.warn(chalk.yellow('Could not open browser automatically. Please navigate to http://localhost:3500/api/docs'))
           }
@@ -328,7 +328,7 @@ export async function newCommand() {
 
             console.log(chalk.blue('Opening frontend application in browser...'))
             const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            await exec(`${openCommand} http://localhost:5173`)
+            execSync(`${openCommand} http://localhost:5173`)
           } catch {
             console.warn(chalk.yellow('Could not open browser automatically. Please navigate to http://localhost:5173'))
           }
@@ -372,6 +372,18 @@ export async function newCommand() {
         command: getHuskySetupCommand(),
         description: 'Opening terminal for frontend...'
       })
+    }
+  }
+
+  // Open GitHub Project board if configured
+  if (startProjectAnswers.workflow?.projectUrl) {
+    try {
+      const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
+      console.log(chalk.blue('Opening GitHub Project board in browser...'))
+      const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+      execSync(`${openCommand} "${boardUrl}"`)
+    } catch {
+      console.warn(chalk.yellow(`Could not open GitHub Project automatically. Please navigate to ${startProjectAnswers.workflow.projectUrl}?layout=board`))
     }
   }
 
