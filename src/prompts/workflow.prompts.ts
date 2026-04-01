@@ -312,9 +312,7 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     const updateFieldMutation = `
       mutation {
         updateProjectV2Field(input: {
-          projectId: "${projectId}"
           fieldId: "${statusFieldId}"
-          name: "Status"
           singleSelectOptions: [${optionsJson}]
         }) {
           projectV2Field {
