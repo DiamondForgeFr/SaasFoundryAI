@@ -146,6 +146,8 @@ export async function detectAvailableTools(): Promise<{
  */
 export async function setupGitHubProjectWithAutoCreation(projectName: string, statuses: WorkflowStatus[], repositoryUrl?: string): Promise<string | null> {
   try {
+    console.log(chalk.gray(`[DEBUG] setupGitHubProjectWithAutoCreation called with repositoryUrl: ${repositoryUrl || 'undefined'}`))
+
     // Check gh auth
     if (!checkGhAuth()) {
       console.log(chalk.yellow('\n⚠️  GitHub CLI not authenticated. Run: gh auth login\n'))
@@ -179,12 +181,12 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     } else {
       // Try to detect from current git repository (for existing repos)
       try {
-        const repoInfo = execSync('gh repo view --json owner,name', { encoding: 'utf-8' })
+        const repoInfo = execSync('gh repo view --json owner,name', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
         const repo = JSON.parse(repoInfo)
         repoOwner = repo.owner.login
 
         // Check if owner is an organization
-        const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8' }).trim()
+        const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
         isOrg = ownerType === 'Organization'
       } catch {
         // Not in a git repository - ask user where to create the project
@@ -357,6 +359,7 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
   } catch (error) {
     const err = error as Error
     console.log(chalk.red(`\n❌ Failed to create GitHub Project: ${err.message}\n`))
+    console.log(chalk.gray(`[DEBUG] Full error: ${err.stack || err}\n`))
     return null
   }
 }
