@@ -198,6 +198,8 @@ export async function newCommand() {
         includeAnalytics: startProjectAnswers.includeAnalytics,
         advancedSkills: startProjectAnswers.advancedSkills || []
       },
+      workflow: startProjectAnswers.workflow,
+      aiRules: startProjectAnswers.aiRules,
       fileHashes
     }
     await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
