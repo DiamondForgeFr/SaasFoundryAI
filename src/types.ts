@@ -72,6 +72,8 @@ export interface CreateApiAppParams {
   notionApiToken?: string
   notionApiVersion?: string
   figmaApiToken?: string
+  workflow?: WorkflowConfig
+  aiRules?: AIRules
 }
 
 export interface CreateWebAppParams {
@@ -91,6 +93,8 @@ export interface CreateWebAppParams {
   notionApiToken?: string
   notionApiVersion?: string
   figmaApiToken?: string
+  workflow?: WorkflowConfig
+  aiRules?: AIRules
 }
 
 export interface CreateDbAppParams {
@@ -110,6 +114,8 @@ export interface CreateMonorepoRootParams {
   projectDescription: string
   monorepoUrl?: string
   mainBranch: string
+  workflow?: WorkflowConfig
+  aiRules?: AIRules
 }
 
 export interface CreateDevServicesParams {
