@@ -306,7 +306,22 @@ export async function newCommand() {
           }
         }
 
-        // Open browser with API docs if backend is started
+        // Open browsers in order: GitHub Board → API Docs → Frontend
+        // This ensures the frontend is the active tab at the end
+
+        // 1. Open GitHub Project board first if configured
+        if (startProjectAnswers.workflow?.projectUrl) {
+          try {
+            const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
+            console.log(chalk.blue('Opening GitHub Project board in browser...'))
+            const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+            execSync(`${openCommand} "${boardUrl}"`)
+          } catch {
+            console.warn(chalk.yellow(`Could not open GitHub Project automatically. Please navigate to ${startProjectAnswers.workflow.projectUrl}?layout=board`))
+          }
+        }
+
+        // 2. Open API docs if backend is started
         if (startApps === 'backend' || startApps === 'all') {
           try {
             console.log(chalk.blue('Waiting for backend to be ready...'))
@@ -320,7 +335,7 @@ export async function newCommand() {
           }
         }
 
-        // Open browser with frontend if frontend is started
+        // 3. Open frontend last (will be the active tab)
         if (startApps === 'frontend' || startApps === 'all') {
           try {
             console.log(chalk.blue('Waiting for frontend to be ready...'))
@@ -375,24 +390,35 @@ export async function newCommand() {
     }
   }
 
-  // Open GitHub Project board if configured
-  if (startProjectAnswers.workflow?.projectUrl) {
-    try {
-      const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
-      console.log(chalk.blue('Opening GitHub Project board in browser...'))
-      const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-      execSync(`${openCommand} "${boardUrl}"`)
-    } catch {
-      console.warn(chalk.yellow(`Could not open GitHub Project automatically. Please navigate to ${startProjectAnswers.workflow.projectUrl}?layout=board`))
-    }
-  }
-
-  // Display success message with project name
+  // Display success message with all useful URLs
   console.log('\n')
   console.log(chalk.green('='.repeat(80)))
   console.log(chalk.green.bold(`🚀 Congratulations! Your project "${startProjectAnswers.projectName}" has been successfully set up by SaaSFoundry!`))
   console.log(chalk.green.bold(`🌍 It's now ready to become the next SaaS that will conquer the world!`))
   console.log(chalk.green.bold(`🧠 "What are we going to do tonight, Brain?" "The same thing we do every night, Pinky - try to take over the world!"`))
+  console.log(chalk.green('='.repeat(80)))
+  console.log('\n')
+
+  // Display all useful URLs
+  console.log(chalk.cyan('📚 Documentation & Resources:'))
+  console.log(chalk.gray('  • SaaSFoundry Docs: ') + chalk.blue('https://docs.saasfoundry.io') + chalk.gray(' (coming soon)'))
+  console.log()
+
+  console.log(chalk.cyan('🔗 Your Project URLs:'))
+  console.log(chalk.gray('  • Frontend App:     ') + chalk.blue('http://localhost:5173'))
+  console.log(chalk.gray('  • Backend API:      ') + chalk.blue('http://localhost:3500'))
+  console.log(chalk.gray('  • API Documentation:') + chalk.blue('http://localhost:3500/api/docs'))
+
+  if (startProjectAnswers.s3Setup === 'docker') {
+    console.log(chalk.gray('  • MinIO Console:    ') + chalk.blue('http://localhost:9001'))
+  }
+
+  if (startProjectAnswers.workflow?.projectUrl) {
+    const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
+    console.log(chalk.gray('  • Project Board:    ') + chalk.blue(boardUrl))
+  }
+
+  console.log('\n')
   console.log(chalk.green('='.repeat(80)))
   console.log('\n')
 }
