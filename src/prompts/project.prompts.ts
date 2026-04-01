@@ -328,7 +328,10 @@ export async function getUserStartProjectInputs() {
   let selectedWorkflowTool: string | undefined
 
   if (workflowPrompt.configureWorkflow) {
-    const { workflow, aiRules } = await promptWorkflowConfiguration(answers.projectName)
+    // Pass repository URL if available (for GitHub Project creation)
+    const repositoryUrl = answers.monorepoUrl || answers.backendRepoUrl || answers.frontendRepoUrl
+
+    const { workflow, aiRules } = await promptWorkflowConfiguration(answers.projectName, repositoryUrl)
     workflowAnswers = { workflow, aiRules }
     selectedWorkflowTool = workflow.tool
   } else {
