@@ -103,7 +103,9 @@ export async function newCommand() {
       atlassianCloudId: startProjectAnswers.atlassianCloudId,
       notionApiToken: startProjectAnswers.notionApiToken,
       notionApiVersion: startProjectAnswers.notionApiVersion,
-      figmaApiToken: startProjectAnswers.figmaApiToken
+      figmaApiToken: startProjectAnswers.figmaApiToken,
+      workflow: startProjectAnswers.workflow,
+      aiRules: startProjectAnswers.aiRules
     })
     updateProgress()
 
@@ -140,7 +142,9 @@ export async function newCommand() {
       atlassianCloudId: startProjectAnswers.atlassianCloudId,
       notionApiToken: startProjectAnswers.notionApiToken,
       notionApiVersion: startProjectAnswers.notionApiVersion,
-      figmaApiToken: startProjectAnswers.figmaApiToken
+      figmaApiToken: startProjectAnswers.figmaApiToken,
+      workflow: startProjectAnswers.workflow,
+      aiRules: startProjectAnswers.aiRules
     })
     updateProgress()
 
@@ -151,7 +155,9 @@ export async function newCommand() {
         projectName: startProjectAnswers.projectName,
         projectDescription: startProjectAnswers.projectDescription,
         monorepoUrl: startProjectAnswers.monorepoUrl,
-        mainBranch: startProjectAnswers.mainBranch
+        mainBranch: startProjectAnswers.mainBranch,
+        workflow: startProjectAnswers.workflow,
+        aiRules: startProjectAnswers.aiRules
       })
       updateProgress()
     }
