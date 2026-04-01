@@ -22,15 +22,37 @@ export async function openTerminal(directory: string, options?: { command?: stri
     const isWsl = process.platform === 'linux' && process.env.WSL_DISTRO_NAME
     const platform = isWsl ? 'wsl' : process.platform
 
+    // Detect which terminal emulator the user is currently using
+    const currentTerminal = process.env.TERM_PROGRAM
+    const isCmux = !!process.env.CMUX_BUNDLE_ID
+
     // Use different commands based on the operating system
     switch (platform) {
       case 'darwin': {
-        // macOS - try iTerm2 first, then fallback to Terminal.app
-        try {
-          // Check if iTerm2 is installed
-          execSync('osascript -e "tell application \\"iTerm\\" to version"', { stdio: 'ignore' })
+        // macOS - check for cmux first (terminal multiplexer)
+        if (isCmux) {
+          try {
+            // Create a new terminal surface in current workspace
+            execSync('cmux new-surface --type terminal', { stdio: 'ignore' })
 
-          // iTerm2 is installed, use a more permissive approach for new tab
+            // cmux doesn't support passing commands to new surfaces yet
+            // So we'll create the tab and show the command to run
+            spinner.succeed(chalk.green('New cmux tab created'))
+            if (command) {
+              console.log(chalk.cyan(`\nPlease run in the new tab:\n  cd ${absolutePath} && ${command}\n`))
+            } else {
+              console.log(chalk.cyan(`\nPlease navigate to:\n  cd ${absolutePath}\n`))
+            }
+            success = true
+          } catch {
+            // cmux command failed, fallback to regular terminal
+            console.warn(chalk.yellow('Could not create cmux tab, falling back to system terminal'))
+          }
+        }
+
+        // If not cmux or cmux failed, use the terminal the user is currently in
+        if (!success && currentTerminal === 'iTerm.app') {
+          // User is in iTerm2
           const script = `
           tell application "iTerm"
             tell current window
@@ -43,12 +65,36 @@ export async function openTerminal(directory: string, options?: { command?: stri
         `
           execSync(`osascript -e '${script}'`)
           success = true
-        } catch {
-          // iTerm2 not found or error, use Terminal.app
+        } else if (currentTerminal === 'Apple_Terminal') {
+          // User is in Terminal.app
           execSync(
             `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
           )
           success = true
+        } else {
+          // Unknown terminal or not detected (could be cmux, Warp, Alacritty, etc.)
+          // Fallback: try iTerm2 first, then Terminal.app
+          try {
+            execSync('osascript -e "tell application \\"iTerm\\" to version"', { stdio: 'ignore' })
+            const script = `
+            tell application "iTerm"
+              tell current window
+                create tab with default profile
+                tell current session
+                  write text "cd ${absolutePath}${command ? ` && ${command}` : ''}"
+                end tell
+              end tell
+            end tell
+          `
+            execSync(`osascript -e '${script}'`)
+            success = true
+          } catch {
+            // iTerm2 not found, use Terminal.app
+            execSync(
+              `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
+            )
+            success = true
+          }
         }
         break
       }
