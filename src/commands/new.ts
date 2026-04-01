@@ -3,6 +3,7 @@ import inquirer from 'inquirer'
 import { mkdir, writeFile } from 'fs/promises'
 import ora from 'ora'
 import { execSync } from 'child_process'
+import terminalLink from 'terminal-link'
 
 import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
@@ -399,23 +400,27 @@ export async function newCommand() {
   console.log(chalk.green('='.repeat(80)))
   console.log('\n')
 
-  // Display all useful URLs
+  // Display all useful URLs (clickable if terminal supports it)
   console.log(chalk.cyan('📚 Documentation & Resources:'))
-  console.log(chalk.gray('  • SaaSFoundry Docs: ') + chalk.blue('https://docs.saasfoundry.io') + chalk.gray(' (coming soon)'))
+  console.log(
+    chalk.gray('  • SaaSFoundry Docs: ') +
+      terminalLink('https://docs.saasfoundry.io', 'https://docs.saasfoundry.io', { fallback: () => chalk.blue('https://docs.saasfoundry.io') }) +
+      chalk.gray(' (coming soon)')
+  )
   console.log()
 
   console.log(chalk.cyan('🔗 Your Project URLs:'))
-  console.log(chalk.gray('  • Frontend App:     ') + chalk.blue('http://localhost:5173'))
-  console.log(chalk.gray('  • Backend API:      ') + chalk.blue('http://localhost:3500'))
-  console.log(chalk.gray('  • API Documentation:') + chalk.blue('http://localhost:3500/api/docs'))
+  console.log(chalk.gray('  • Frontend App:     ') + terminalLink('http://localhost:5173', 'http://localhost:5173', { fallback: () => chalk.blue('http://localhost:5173') }))
+  console.log(chalk.gray('  • Backend API:      ') + terminalLink('http://localhost:3500', 'http://localhost:3500', { fallback: () => chalk.blue('http://localhost:3500') }))
+  console.log(chalk.gray('  • API Documentation:') + terminalLink('http://localhost:3500/api/docs', 'http://localhost:3500/api/docs', { fallback: () => chalk.blue('http://localhost:3500/api/docs') }))
 
   if (startProjectAnswers.s3Setup === 'docker') {
-    console.log(chalk.gray('  • MinIO Console:    ') + chalk.blue('http://localhost:9001'))
+    console.log(chalk.gray('  • MinIO Console:    ') + terminalLink('http://localhost:9001', 'http://localhost:9001', { fallback: () => chalk.blue('http://localhost:9001') }))
   }
 
   if (startProjectAnswers.workflow?.projectUrl) {
     const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
-    console.log(chalk.gray('  • Project Board:    ') + chalk.blue(boardUrl))
+    console.log(chalk.gray('  • Project Board:    ') + terminalLink(boardUrl, boardUrl, { fallback: () => chalk.blue(boardUrl) }))
   }
 
   console.log('\n')
