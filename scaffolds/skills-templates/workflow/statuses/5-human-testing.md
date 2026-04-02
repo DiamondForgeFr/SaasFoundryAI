@@ -39,8 +39,18 @@
 - Ensure they all pass ✅
 
 #### d. COMMIT AND PUSH:
+
+**Read commit format from config:**
+```bash
+COMMIT_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.commitFormat.pattern')
+```
+
+**Commit and push:**
 - `git add .`
 - `git commit -m "test(#{N}): add E2E tests for {feature}"`
+  - Follow pattern from config: `${COMMIT_PATTERN}`
+  - Replace `#N` with ticket number
+  - Use type `test` for test commits
 - `git push`
 
 #### e. TRANSPARENCY:

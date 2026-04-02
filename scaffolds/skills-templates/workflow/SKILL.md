@@ -13,6 +13,31 @@ workflow status, check workflow, what should i do, next step, workflow help, cur
 3. Follow EXACTLY the instructions from that description
 4. Never guess - if uncertain, run `/workflow status` again
 
+## Configuration (Source of Truth)
+
+**ALL workflow configuration is in `.saasfoundry.json` at the project root.**
+
+When you need workflow information (branches, naming conventions, etc.), read it from there:
+
+```bash
+# Read working branch
+cat .saasfoundry.json | jq -r '.workflow.workingBranch'
+
+# Read PR target branch
+cat .saasfoundry.json | jq -r '.workflow.prTargetBranch'
+
+# Read project URL
+cat .saasfoundry.json | jq -r '.workflow.projectUrl'
+
+# Read branch naming pattern
+cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature'
+
+# Read commit format
+cat .saasfoundry.json | jq -r '.workflow.commitFormat.pattern'
+```
+
+**NEVER hardcode branch names** (develop, master, etc.) - always read from `.saasfoundry.json`.
+
 ## Available Commands
 
 ### `/workflow status <ticket>`

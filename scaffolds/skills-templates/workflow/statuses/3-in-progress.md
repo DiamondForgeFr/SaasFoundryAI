@@ -10,9 +10,20 @@
 ## Mandatory Actions (in this order)
 
 ### 1. CREATE A BRANCH
-- Format: `feature/{N}-{description}` or `fix/{N}-{description}`
-- From the configured working branch (e.g., develop)
-- Command: `git checkout -b feature/{N}-{description}`
+
+**Read configuration from `.saasfoundry.json`:**
+```bash
+WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
+BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
+```
+
+**Create feature branch:**
+1. Ensure you're on working branch: `git checkout ${WORKING_BRANCH}`
+2. Pull latest: `git pull origin ${WORKING_BRANCH}`
+3. Create feature branch: `git checkout -b feature/{N}-{description}`
+   - Format from config: `${BRANCH_PATTERN}` (e.g., `feature/{N}-{description}`)
+   - Replace `{N}` with ticket number
+   - Replace `{description}` with kebab-case description
 
 ### 2. MOVE TICKET TO "IN PROGRESS"
 - Update status in the project management tool
@@ -24,10 +35,20 @@
 - OR list them as checklist in parent ticket
 
 ### 4. DEVELOP ITERATIVELY
+
+**Read commit format from config:**
+```bash
+COMMIT_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.commitFormat.pattern')
+COMMIT_TYPES=$(cat .saasfoundry.json | jq -r '.workflow.commitFormat.types[]')
+```
+
 For each subtask:
 - a. Move subtask to "In Progress"
 - b. Write code for this subtask
-- c. Commit with conventional message: `type(#{N}): description`
+- c. Commit with format from config: `${COMMIT_PATTERN}`
+  - Example: `type(#{N}): description`
+  - Use allowed types: `feat`, `fix`, `docs`, `refactor`, etc.
+  - Replace `#{N}` with ticket number
 - d. Mark subtask "Done"
 - e. Move to the next one
 
