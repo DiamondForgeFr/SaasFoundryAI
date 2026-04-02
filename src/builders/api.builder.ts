@@ -3,8 +3,10 @@ import { readFile, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
+import { installCoreSkills } from '../installers/core-skills.installer'
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
+import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { fileExists, generateJwtSecret, getNvmPrefix, validateProjectName } from '../utils'
@@ -129,6 +131,11 @@ export async function createApiApp({
     })
   }
 
+  // Install core skills (always installed)
+  await installCoreSkills({
+    targetPath: apiPath
+  })
+
   // Install workflow skill (if workflow is configured)
   if (workflow && workflow.tool !== 'none') {
     await installWorkflowSkill({
@@ -136,7 +143,16 @@ export async function createApiApp({
       workflow,
       projectUrl: workflow.projectUrl
     })
+
+    // Install tool-specific skill for the workflow
+    await installToolSkill({
+      targetPath: apiPath,
+      tool: workflow.tool as 'github-projects' | 'jira' | 'notion' | 'linear'
+    })
   }
+
+  // Install optional skills (if selected)
+  // TODO: Add optional skills selection to CreateApiAppParams and call installOptionalSkills
 
   // Update Docker network name in docker-compose.yml
   const dockerComposePath = `${apiPath}/docker-compose.yml`
