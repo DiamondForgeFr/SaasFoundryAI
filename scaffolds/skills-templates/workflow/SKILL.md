@@ -52,33 +52,23 @@ Checks if all conditions are met to move to the next status.
 ### `/workflow help`
 Displays the list of statuses and their role.
 
-## Helper Scripts
+## Tool-Specific Commands
 
-### Create Subtask
+Workflow commands that interact with your project management tool (GitHub Projects, Jira, Notion, Linear) are delegated to tool-specific CLIs.
 
-Create a GitHub sub-issue linked to a parent issue in one command.
+The workflow skill automatically routes commands to the appropriate tool based on your `.saasfoundry.json` configuration.
 
-**Usage:**
+**Example:** Creating a subtask
 ```bash
-.claude/skills/sf-workflow/create-subtask.sh <parent-number> <title> [body]
+# This command is automatically routed to the correct tool
+.claude/skills/sf-workflow/workflow-cli.sh create-subtask <parent> <title>
 ```
 
-**Examples:**
-```bash
-# Simple subtask
-.claude/skills/sf-workflow/create-subtask.sh 9 "Add validation logic"
-
-# With description
-.claude/skills/sf-workflow/create-subtask.sh 9 "Write unit tests" "Cover edge cases and error handling"
-```
-
-**What it does:**
-1. Prepends `[Parent #{N}]` to the title
-2. Creates the GitHub issue
-3. Links it as a sub-issue to the parent (via GraphQL API)
-4. Returns the subtask number and URL
-
-**Use this script instead of manual `gh issue create` + linking.**
+See your tool-specific skill documentation for complete command reference:
+- GitHub Projects: `.claude/skills/sf-tool-github-projects/SKILL.md`
+- Jira: `.claude/skills/sf-tool-jira/SKILL.md`
+- Notion: `.claude/skills/sf-tool-notion/SKILL.md`
+- Linear: `.claude/skills/sf-tool-linear/SKILL.md`
 
 ## Workflow Statuses
 
