@@ -13,16 +13,29 @@
 - Update status in the project management tool
 
 ### 2. LOCAL BRANCH CLEANUP
-- `git checkout {working-branch}` (e.g., develop)
-- `git pull origin {working-branch}`
-- `git branch -d {feature-branch}`
+
+**Read working branch from config:**
+```bash
+WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
+```
+
+**Cleanup:**
+1. `git checkout ${WORKING_BRANCH}`
+2. `git pull origin ${WORKING_BRANCH}`
+3. `git branch -d {feature-branch}`
 
 ### 3. IF OTHER BRANCHES ARE IN PROGRESS
-- Rebase each branch with updated working branch
-- `git checkout {other-branch}`
-- `git rebase {working-branch}`
-- Resolve conflicts if necessary
-- `git push --force-with-lease`
+
+**Rebase other branches with updated working branch:**
+```bash
+WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
+
+# For each other branch:
+git checkout {other-branch}
+git rebase ${WORKING_BRANCH}
+# Resolve conflicts if necessary
+git push --force-with-lease
+```
 
 ## Exit Conditions
 
