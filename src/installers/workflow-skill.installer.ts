@@ -49,10 +49,9 @@ export async function installWorkflowSkill({ targetPath, workflow, projectUrl }:
   // Replace placeholders in SKILL.md
   const skillMdPath = `${targetSkillPath}/SKILL.md`
   let skillMdContent = await readFile(skillMdPath, 'utf8')
-  const toolDisplayName = workflow.tool === 'github-projects' ? 'GitHub Projects' : workflow.tool === 'jira' ? 'Jira' : workflow.tool === 'notion' ? 'Notion' : workflow.tool === 'linear' ? 'Linear' : workflow.tool
-  skillMdContent = skillMdContent
-    .replace(/\{\{WORKFLOW_NAME\}\}/g, workflowName || '')
-    .replace(/\{\{TOOL\}\}/g, toolDisplayName || '')
+  const toolDisplayName =
+    workflow.tool === 'github-projects' ? 'GitHub Projects' : workflow.tool === 'jira' ? 'Jira' : workflow.tool === 'notion' ? 'Notion' : workflow.tool === 'linear' ? 'Linear' : workflow.tool
+  skillMdContent = skillMdContent.replace(/\{\{WORKFLOW_NAME\}\}/g, workflowName || '').replace(/\{\{TOOL\}\}/g, toolDisplayName || '')
   await writeFile(skillMdPath, skillMdContent)
 
   // Inject workflow section into CLAUDE.md
