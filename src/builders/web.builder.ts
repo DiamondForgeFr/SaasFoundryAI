@@ -4,6 +4,8 @@ import { resolve } from 'path'
 import { exec } from 'shelljs'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
+import { installCoreSkills } from '../installers/core-skills.installer'
+import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, validateProjectName } from '../utils'
@@ -73,12 +75,23 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     await installAnalyticsModule({ webPath })
   }
 
+  // Install core skills (always installed)
+  await installCoreSkills({
+    targetPath: webPath
+  })
+
   // Install workflow skill (if workflow is configured)
   if (workflow && workflow.tool !== 'none') {
     await installWorkflowSkill({
       targetPath: webPath,
       workflow,
       projectUrl: workflow.projectUrl
+    })
+
+    // Install tool-specific skill for the workflow
+    await installToolSkill({
+      targetPath: webPath,
+      tool: workflow.tool as 'github-projects' | 'jira' | 'notion' | 'linear'
     })
   }
 
