@@ -29,12 +29,29 @@ BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
 - Update status in the project management tool
 
 ### 3. CREATE SUBTASKS
-- Break down the ticket into atomic sub-tasks
-- **MUST be real GitHub issues** (NOT checkboxes)
-- Format: `[Parent #{N}] Subtask description`
-- Create them using `gh issue create`
-- Link to parent in issue body
-- Track status in project board (Backlog → In Progress → Done)
+
+**Break down the ticket into atomic sub-tasks.**
+
+**MUST be real GitHub issues** (NOT checkboxes) linked as sub-issues to the parent.
+
+**Use the helper script:**
+```bash
+# Create a subtask linked to parent issue
+.claude/skills/sf-workflow/create-subtask.sh <parent-number> "Subtask title" ["Optional body"]
+
+# Example:
+.claude/skills/sf-workflow/create-subtask.sh 9 "Add validation logic"
+.claude/skills/sf-workflow/create-subtask.sh 9 "Write unit tests" "Cover edge cases"
+```
+
+**The script automatically:**
+- Prepends `[Parent #{N}]` to the title
+- Creates the GitHub issue
+- Links it as a sub-issue to the parent (via GraphQL API)
+- Outputs the subtask number and URL
+
+**Track subtask status in project board:**
+- Backlog → In Progress (when you start) → Done (when complete)
 
 ### 4. DEVELOP ITERATIVELY
 
