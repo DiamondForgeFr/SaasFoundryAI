@@ -59,17 +59,6 @@ const WORKFLOW_PRESETS = {
         color: 'GREEN' as GitHubProjectColor
       }
     ]
-  },
-  standard: {
-    name: 'Standard Workflow',
-    description: '5-status workflow for general development',
-    statuses: [
-      { name: 'Backlog', description: 'Tasks to be prioritized', color: 'GRAY' as GitHubProjectColor },
-      { name: 'Ready', description: 'Ready for development', color: 'YELLOW' as GitHubProjectColor },
-      { name: 'In Progress', description: 'Currently being worked on', color: 'BLUE' as GitHubProjectColor },
-      { name: 'In Review', description: 'In code review', color: 'PINK' as GitHubProjectColor },
-      { name: 'Done', description: 'Completed', color: 'GREEN' as GitHubProjectColor }
-    ]
   }
 }
 
@@ -364,16 +353,10 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
 
 // Default configurations for each tool (backward compatibility)
 export const DEFAULT_STATUSES = {
-  'github-projects': WORKFLOW_PRESETS.standard.statuses,
-  jira: [
-    { name: 'Backlog', description: 'Tasks to be prioritized' },
-    { name: 'Ready for Dev', description: 'Ready for development' },
-    { name: 'In Progress', description: 'Currently being worked on' },
-    { name: 'Code Review', description: 'In code review' },
-    { name: 'Done', description: 'Completed' }
-  ],
-  notion: WORKFLOW_PRESETS.standard.statuses,
-  linear: WORKFLOW_PRESETS.standard.statuses,
+  'github-projects': WORKFLOW_PRESETS.saasfoundry.statuses,
+  jira: WORKFLOW_PRESETS.saasfoundry.statuses,
+  notion: WORKFLOW_PRESETS.saasfoundry.statuses,
+  linear: WORKFLOW_PRESETS.saasfoundry.statuses,
   none: []
 }
 
@@ -408,12 +391,8 @@ async function promptWorkflowPreset(): Promise<WorkflowStatus[]> {
       message: 'Choose your workflow configuration:',
       choices: [
         {
-          name: `${chalk.cyan('SaaSFoundry AI Workflow')} - 7 statuses with AI/Human testing phases ${chalk.gray('(recommended for AI-assisted development)')}`,
+          name: `${chalk.cyan('SaaSFoundry AI Workflow')} - 7 statuses with AI/Human testing phases ${chalk.gray('(recommended)')}`,
           value: 'saasfoundry'
-        },
-        {
-          name: `${chalk.blue('Standard Workflow')} - 5 statuses for general development`,
-          value: 'standard'
         },
         {
           name: `${chalk.yellow('Custom Workflow')} - Define your own statuses`,
