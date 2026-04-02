@@ -21,7 +21,7 @@ WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
 
 **Cleanup:**
 1. `git checkout ${WORKING_BRANCH}`
-2. `git pull origin ${WORKING_BRANCH}`
+2. `git pull origin ${WORKING_BRANCH} --rebase`
 3. `git branch -d {feature-branch}`
 
 ### 3. IF OTHER BRANCHES ARE IN PROGRESS
