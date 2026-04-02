@@ -46,6 +46,15 @@ export async function installWorkflowSkill({ targetPath, workflow, projectUrl }:
 
   await writeFile(envPath, envContent)
 
+  // Replace placeholders in SKILL.md
+  const skillMdPath = `${targetSkillPath}/SKILL.md`
+  let skillMdContent = await readFile(skillMdPath, 'utf8')
+  const toolDisplayName = workflow.tool === 'github-projects' ? 'GitHub Projects' : workflow.tool === 'jira' ? 'Jira' : workflow.tool === 'notion' ? 'Notion' : workflow.tool === 'linear' ? 'Linear' : workflow.tool
+  skillMdContent = skillMdContent
+    .replace(/\{\{WORKFLOW_NAME\}\}/g, workflowName || '')
+    .replace(/\{\{TOOL\}\}/g, toolDisplayName || '')
+  await writeFile(skillMdPath, skillMdContent)
+
   // Inject workflow section into CLAUDE.md
   await injectWorkflowSection({ targetPath, workflow, projectUrl })
 }
@@ -136,7 +145,7 @@ function generateWorkflowSection(workflow: WorkflowConfig, projectUrl?: string):
       sections.push('')
     }
     if (workflow.commitFormat.types && workflow.commitFormat.types.length > 0) {
-      sections.push('Allowed types: ' + workflow.commitFormat.types.map(t => `\`${t}\``).join(', '))
+      sections.push('Allowed types: ' + workflow.commitFormat.types.map((t) => `\`${t}\``).join(', '))
       sections.push('')
     }
   }
@@ -157,7 +166,9 @@ function generateWorkflowSection(workflow: WorkflowConfig, projectUrl?: string):
   sections.push('.claude/skills/sf-workflow/workflow-cli.sh help')
   sections.push('```')
   sections.push('')
-  sections.push('**IMPORTANT**: The workflow skill contains detailed status descriptions, mandatory actions, and exit conditions for each workflow phase. Always consult it before moving tickets between statuses.')
+  sections.push(
+    '**IMPORTANT**: The workflow skill contains detailed status descriptions, mandatory actions, and exit conditions for each workflow phase. Always consult it before moving tickets between statuses.'
+  )
 
   return sections.join('\n')
 }
