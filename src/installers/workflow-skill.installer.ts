@@ -16,8 +16,10 @@ interface InstallWorkflowSkillParams {
  *
  * This function:
  * 1. Copies workflow skill template from scaffolds/skills-templates/workflow/
- * 2. Replaces placeholders in .env.example → .env
+ * 2. Replaces placeholders in SKILL.md
  * 3. Injects workflow section into CLAUDE.md
+ *
+ * Configuration is read from .saasfoundry.json (no .env needed).
  *
  * Used by builders when workflow is configured during project generation.
  */
@@ -29,26 +31,10 @@ export async function installWorkflowSkill({ targetPath, workflow, projectUrl }:
   // Copy entire skill template
   await copy(templatePath, targetSkillPath)
 
-  // Replace placeholders in .env.example and save as .env
-  const envExamplePath = `${targetSkillPath}/.env.example`
-  const envPath = `${targetSkillPath}/.env`
-
-  let envContent = await readFile(envExamplePath, 'utf8')
-
-  // Replace placeholders with actual values
-  const workflowName = workflow.template || workflow.tool
-  envContent = envContent
-    .replace(/\{\{WORKFLOW_TOOL\}\}/g, workflow.tool || '')
-    .replace(/\{\{PROJECT_URL\}\}/g, projectUrl || '')
-    .replace(/\{\{WORKING_BRANCH\}\}/g, workflow.workingBranch || 'develop')
-    .replace(/\{\{PR_TARGET_BRANCH\}\}/g, workflow.prTargetBranch || workflow.workingBranch || 'develop')
-    .replace(/\{\{WORKFLOW_NAME\}\}/g, workflowName || '')
-
-  await writeFile(envPath, envContent)
-
   // Replace placeholders in SKILL.md
   const skillMdPath = `${targetSkillPath}/SKILL.md`
   let skillMdContent = await readFile(skillMdPath, 'utf8')
+  const workflowName = workflow.template || workflow.tool
   const toolDisplayName =
     workflow.tool === 'github-projects' ? 'GitHub Projects' : workflow.tool === 'jira' ? 'Jira' : workflow.tool === 'notion' ? 'Notion' : workflow.tool === 'linear' ? 'Linear' : workflow.tool
   skillMdContent = skillMdContent.replace(/\{\{WORKFLOW_NAME\}\}/g, workflowName || '').replace(/\{\{TOOL\}\}/g, toolDisplayName || '')

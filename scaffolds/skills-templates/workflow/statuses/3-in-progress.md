@@ -19,7 +19,7 @@ BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
 
 **Create feature branch:**
 1. Ensure you're on working branch: `git checkout ${WORKING_BRANCH}`
-2. Pull latest: `git pull origin ${WORKING_BRANCH}`
+2. Pull latest with rebase: `git pull origin ${WORKING_BRANCH} --rebase`
 3. Create feature branch: `git checkout -b feature/{N}-{description}`
    - Format from config: `${BRANCH_PATTERN}` (e.g., `feature/{N}-{description}`)
    - Replace `{N}` with ticket number
@@ -30,9 +30,11 @@ BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
 
 ### 3. CREATE SUBTASKS
 - Break down the ticket into atomic sub-tasks
+- **MUST be real GitHub issues** (NOT checkboxes)
 - Format: `[Parent #{N}] Subtask description`
-- Create them as GitHub issues and link to parent
-- OR list them as checklist in parent ticket
+- Create them using `gh issue create`
+- Link to parent in issue body
+- Track status in project board (Backlog → In Progress → Done)
 
 ### 4. DEVELOP ITERATIVELY
 
