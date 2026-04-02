@@ -2,41 +2,95 @@
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load configuration
-if [[ -f "$SKILL_DIR/.env" ]]; then
-  source "$SKILL_DIR/.env"
-else
-  echo "Error: .env file not found. Please configure your workflow settings." >&2
-  exit 1
-fi
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Load configuration from .saasfoundry.json (single source of truth)
+load_config() {
+  if [[ ! -f ".saasfoundry.json" ]]; then
+    echo -e "${RED}Error: .saasfoundry.json not found${NC}" >&2
+    echo "This command must be run from the project root." >&2
+    exit 1
+  fi
+
+  WORKFLOW_TOOL=$(jq -r '.workflow.tool // empty' .saasfoundry.json)
+  WORKING_BRANCH=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
+
+  if [[ -z "$WORKFLOW_TOOL" ]]; then
+    echo -e "${RED}Error: No workflow tool configured in .saasfoundry.json${NC}" >&2
+    exit 1
+  fi
+}
+
+# Get tool skill CLI path
+get_tool_cli() {
+  local tool=$1
+  local project_root="."
+
+  # Determine if monorepo or multirepo
+  if [[ -d "apps" ]]; then
+    # Monorepo - skills at root
+    echo "${project_root}/.claude/skills/sf-tool-${tool}/${tool}-cli.sh"
+  else
+    # Multirepo - skills in current app directory
+    echo "${project_root}/.claude/skills/sf-tool-${tool}/${tool}-cli.sh"
+  fi
+}
+
+# Route command to appropriate tool CLI
+route_to_tool() {
+  local tool=$1
+  shift
+
+  local tool_cli=$(get_tool_cli "$tool")
+
+  if [[ ! -f "$tool_cli" ]]; then
+    # Fallback to installed tool skill
+    tool_cli="$HOME/.claude/skills/tool-${tool}/${tool}-cli.sh"
+    if [[ ! -f "$tool_cli" ]]; then
+      echo -e "${RED}Error: Tool skill for '${tool}' not found${NC}" >&2
+      echo "Expected: $(get_tool_cli $tool)" >&2
+      exit 1
+    fi
+  fi
+
+  # Make tool CLI executable
+  chmod +x "$tool_cli" 2>/dev/null || true
+
+  # Execute tool CLI
+  "$tool_cli" "$@"
+}
 
 # Function to get current status of a ticket
 get_current_status() {
   local ticket=$1
   local status=""
 
+  load_config
+
   case "$WORKFLOW_TOOL" in
     github-projects)
-      # Query GitHub Projects API to get ticket status
-      status=$(gh issue view "$ticket" --json projectItems --jq '.projectItems[0].status.name' 2>/dev/null)
+      # Delegate to GitHub Projects tool CLI
+      status=$(route_to_tool github-projects status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
       ;;
     jira)
-      # Query Jira API (requires jira CLI or API calls)
-      echo "Jira integration not yet implemented" >&2
-      return 1
+      # Delegate to Jira tool CLI
+      status=$(route_to_tool jira status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
       ;;
     notion)
-      # Query Notion API
-      echo "Notion integration not yet implemented" >&2
-      return 1
+      # Delegate to Notion tool CLI
+      status=$(route_to_tool notion status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
       ;;
     linear)
-      # Query Linear API
-      echo "Linear integration not yet implemented" >&2
-      return 1
+      # Delegate to Linear tool CLI
+      status=$(route_to_tool linear status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
       ;;
     *)
-      echo "Unknown workflow tool: $WORKFLOW_TOOL" >&2
+      echo -e "${RED}Unknown workflow tool: $WORKFLOW_TOOL${NC}" >&2
       return 1
       ;;
   esac
@@ -91,9 +145,13 @@ show_next_status() {
 }
 
 # Main command dispatcher
-case "$1" in
+COMMAND=$1
+shift || true
+
+case "$COMMAND" in
+  # Workflow status commands
   status)
-    TICKET=$2
+    TICKET=$1
     if [[ -z "$TICKET" ]]; then
       echo "Usage: workflow-cli.sh status <ticket-number>" >&2
       exit 1
@@ -112,7 +170,7 @@ case "$1" in
     ;;
 
   next)
-    TICKET=$2
+    TICKET=$1
     if [[ -z "$TICKET" ]]; then
       echo "Usage: workflow-cli.sh next <ticket-number>" >&2
       exit 1
@@ -128,7 +186,7 @@ case "$1" in
     ;;
 
   validate)
-    TICKET=$2
+    TICKET=$1
     if [[ -z "$TICKET" ]]; then
       echo "Usage: workflow-cli.sh validate <ticket-number>" >&2
       exit 1
@@ -142,14 +200,36 @@ case "$1" in
     cat "$SKILL_DIR/SKILL.md"
     ;;
 
-  *)
-    echo "Usage: workflow-cli.sh {status|next|validate|help} [ticket-number]" >&2
+  # Tool delegation commands - route to appropriate tool CLI
+  create-subtask|update-status|create-pr|list)
+    load_config
+    route_to_tool "$WORKFLOW_TOOL" "$COMMAND" "$@"
+    ;;
+
+  "")
+    echo -e "${RED}Error: No command specified${NC}"
     echo ""
-    echo "Commands:"
-    echo "  status <ticket>    Display current status and its description"
-    echo "  next <ticket>      Show next status"
-    echo "  validate <ticket>  Validate exit conditions (not yet implemented)"
-    echo "  help               Display skill documentation"
+    echo "Usage: workflow-cli.sh <command> [args...]"
+    echo ""
+    echo "Workflow status commands:"
+    echo "  status <ticket>        Display current status and its description"
+    echo "  next <ticket>          Show next status"
+    echo "  validate <ticket>      Validate exit conditions"
+    echo "  help                   Display skill documentation"
+    echo ""
+    echo "Tool commands (delegated to tool-specific CLI):"
+    echo "  create-subtask ...     Create a sub-issue/task"
+    echo "  update-status ...      Update ticket status"
+    echo "  create-pr ...          Create pull request"
+    echo "  list ...               List tickets"
+    exit 1
+    ;;
+
+  *)
+    echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
+    echo ""
+    echo "Available commands: status, next, validate, help, create-subtask, update-status, create-pr, list"
+    echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;
 esac
