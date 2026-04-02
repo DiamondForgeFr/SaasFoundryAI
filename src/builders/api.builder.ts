@@ -5,6 +5,7 @@ import { exec } from 'shelljs'
 
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
+import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { fileExists, generateJwtSecret, getNvmPrefix, validateProjectName } from '../utils'
 
@@ -20,7 +21,8 @@ export async function createApiApp({
   mailersendSenderEmail,
   mailersendSenderName,
   s3Setup,
-  s3Credentials
+  s3Credentials,
+  workflow
 }: CreateApiAppParams) {
   validateProjectName(projectName)
 
@@ -124,6 +126,15 @@ export async function createApiApp({
       projectName,
       s3Setup,
       s3Credentials
+    })
+  }
+
+  // Install workflow skill (if workflow is configured)
+  if (workflow && workflow.tool !== 'none') {
+    await installWorkflowSkill({
+      targetPath: apiPath,
+      workflow,
+      projectUrl: workflow.projectUrl
     })
   }
 

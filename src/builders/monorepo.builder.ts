@@ -3,10 +3,11 @@ import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
+import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, validateProjectName } from '../utils'
 
-export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch }: CreateMonorepoRootParams) {
+export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch, workflow }: CreateMonorepoRootParams) {
   validateProjectName(projectName)
 
   // Copy monorepo root overlay to project root (current directory)
@@ -48,6 +49,15 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
 
   // Generate Prisma client from the API workspace
   await exec(`${nvm}cd apps/api && npx prisma generate > /dev/null 2>&1`)
+
+  // Install workflow skill at root (if workflow is configured)
+  if (workflow && workflow.tool !== 'none') {
+    await installWorkflowSkill({
+      targetPath: '.',
+      workflow,
+      projectUrl: workflow.projectUrl
+    })
+  }
 
   // Initialize Git repository at root level
   await exec(`git init > /dev/null 2>&1`)

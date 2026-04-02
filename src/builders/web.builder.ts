@@ -4,10 +4,11 @@ import { resolve } from 'path'
 import { exec } from 'shelljs'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
+import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, validateProjectName } from '../utils'
 
-export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics }: CreateWebAppParams) {
+export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, workflow }: CreateWebAppParams) {
   validateProjectName(projectName)
 
   // Create the WEB app directory
@@ -70,6 +71,15 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   // Install Umami analytics module (if selected)
   if (includeAnalytics) {
     await installAnalyticsModule({ webPath })
+  }
+
+  // Install workflow skill (if workflow is configured)
+  if (workflow && workflow.tool !== 'none') {
+    await installWorkflowSkill({
+      targetPath: webPath,
+      workflow,
+      projectUrl: workflow.projectUrl
+    })
   }
 
   // Initialize Git repository
