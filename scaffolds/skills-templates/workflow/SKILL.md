@@ -52,6 +52,34 @@ Checks if all conditions are met to move to the next status.
 ### `/workflow help`
 Displays the list of statuses and their role.
 
+## Helper Scripts
+
+### Create Subtask
+
+Create a GitHub sub-issue linked to a parent issue in one command.
+
+**Usage:**
+```bash
+.claude/skills/sf-workflow/create-subtask.sh <parent-number> <title> [body]
+```
+
+**Examples:**
+```bash
+# Simple subtask
+.claude/skills/sf-workflow/create-subtask.sh 9 "Add validation logic"
+
+# With description
+.claude/skills/sf-workflow/create-subtask.sh 9 "Write unit tests" "Cover edge cases and error handling"
+```
+
+**What it does:**
+1. Prepends `[Parent #{N}]` to the title
+2. Creates the GitHub issue
+3. Links it as a sub-issue to the parent (via GraphQL API)
+4. Returns the subtask number and URL
+
+**Use this script instead of manual `gh issue create` + linking.**
+
 ## Workflow Statuses
 
 {{STATUSES_LIST}}
