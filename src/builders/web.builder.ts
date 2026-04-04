@@ -4,7 +4,6 @@ import { resolve } from 'path'
 import { exec } from 'shelljs'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
-import { installCoreSkills } from '../installers/core-skills.installer'
 import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
@@ -74,11 +73,6 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   if (includeAnalytics) {
     await installAnalyticsModule({ webPath })
   }
-
-  // Install core skills (always installed)
-  await installCoreSkills({
-    targetPath: webPath
-  })
 
   // Install workflow skill (if workflow is configured)
   if (workflow && workflow.tool !== 'none') {
