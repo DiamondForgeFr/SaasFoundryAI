@@ -320,27 +320,8 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
 
     execSync(`gh api graphql -f query='${updateFieldMutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
 
-    console.log(chalk.green('✅ Status field configured:'))
-    statuses.forEach((status) => {
-      const colorDot =
-        status.color === 'GREEN'
-          ? '🟢'
-          : status.color === 'YELLOW'
-            ? '🟡'
-            : status.color === 'BLUE'
-              ? '🔵'
-              : status.color === 'PURPLE'
-                ? '🟣'
-                : status.color === 'ORANGE'
-                  ? '🟠'
-                  : status.color === 'PINK'
-                    ? '🩷'
-                    : status.color === 'RED'
-                      ? '🔴'
-                      : '⚪'
-      console.log(chalk.gray(`   ${colorDot} ${status.name}${status.description ? ` - ${status.description}` : ''}`))
-    })
-    console.log()
+    // Display concise confirmation (full descriptions already shown when selecting the workflow)
+    console.log(chalk.green(`✅ Status field configured with ${statuses.length} states`))
 
     return projectData.url
   } catch (error) {
@@ -383,7 +364,7 @@ export const DEFAULT_AI_RULES: AIRules = {
  * Prompt user to select a workflow preset or create custom
  * @returns Selected workflow statuses
  */
-async function promptWorkflowPreset(): Promise<WorkflowStatus[]> {
+async function promptWorkflowPreset(): Promise<{ statuses: WorkflowStatus[]; isPreconfigured: boolean }> {
   const { preset } = await inquirer.prompt([
     {
       type: 'list',
@@ -404,7 +385,10 @@ async function promptWorkflowPreset(): Promise<WorkflowStatus[]> {
   ])
 
   if (preset === 'custom') {
-    return await promptCustomWorkflow()
+    return {
+      statuses: await promptCustomWorkflow(),
+      isPreconfigured: false
+    }
   }
 
   const selectedPreset = WORKFLOW_PRESETS[preset as keyof typeof WORKFLOW_PRESETS]
@@ -431,7 +415,10 @@ async function promptWorkflowPreset(): Promise<WorkflowStatus[]> {
   })
   console.log()
 
-  return selectedPreset.statuses
+  return {
+    statuses: selectedPreset.statuses,
+    isPreconfigured: true
+  }
 }
 
 /**
@@ -752,6 +739,7 @@ export async function promptWorkflowConfiguration(
   // Step 4: Tool-specific configuration
   let projectUrl = ''
   let workflowStatuses: WorkflowStatus[] = []
+  let isPreconfiguredWorkflow = false
 
   if (tool === 'github-projects') {
     // Offer auto-creation if gh is authenticated
@@ -767,7 +755,9 @@ export async function promptWorkflowConfiguration(
 
       if (createNew) {
         // Step 4a: Choose workflow preset
-        workflowStatuses = await promptWorkflowPreset()
+        const presetResult = await promptWorkflowPreset()
+        workflowStatuses = presetResult.statuses
+        isPreconfiguredWorkflow = presetResult.isPreconfigured
 
         // Step 4b: Enter project name (use passed projectName as default)
         const { ghProjectName } = await inquirer.prompt([
@@ -804,7 +794,9 @@ export async function promptWorkflowConfiguration(
         }
       } else {
         // Manual URL entry - still ask for workflow preset
-        workflowStatuses = await promptWorkflowPreset()
+        const presetResult = await promptWorkflowPreset()
+        workflowStatuses = presetResult.statuses
+        isPreconfiguredWorkflow = presetResult.isPreconfigured
 
         const { url } = await inquirer.prompt([
           {
@@ -824,7 +816,9 @@ export async function promptWorkflowConfiguration(
       }
     } else {
       // Not authenticated - manual URL only, but still configure workflow
-      workflowStatuses = await promptWorkflowPreset()
+      const presetResult = await promptWorkflowPreset()
+      workflowStatuses = presetResult.statuses
+      isPreconfiguredWorkflow = presetResult.isPreconfigured
 
       console.log(chalk.yellow('\n💡 Tip: Run "gh auth login" to enable auto-creation of GitHub Projects\n'))
       const { url } = await inquirer.prompt([
@@ -899,58 +893,78 @@ export async function promptWorkflowConfiguration(
       name: 'prTargetBranch',
       message: 'Override PR target? (leave empty to use working branch):',
       default: ''
-    },
-    {
-      type: 'confirm',
-      name: 'requireCodeReview',
-      message: 'Require code review before merging?',
-      default: true
     }
   ])
 
   const workingBranch = branchAnswers.workingBranch
   const prTargetBranch = branchAnswers.prTargetBranch || branchAnswers.workingBranch
-  const requireCodeReview = branchAnswers.requireCodeReview
+
+  // For preconfigured workflows (SaaSFoundry AI), code review is implicit in the workflow (In Review status)
+  // For custom workflows, ask explicitly
+  let requireCodeReview = true
+  if (!isPreconfiguredWorkflow) {
+    const { requireCodeReview: codeReview } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'requireCodeReview',
+        message: 'Require code review before merging?',
+        default: true
+      }
+    ])
+    requireCodeReview = codeReview
+  }
 
   // Step 5: AI Rules
-  console.log(chalk.blue('\n⚙️  AI Development Rules\n'))
-
-  const { aiRules } = await inquirer.prompt([
-    {
-      type: 'checkbox',
-      name: 'aiRules',
-      message: 'Select development rules for AI to follow:',
-      choices: [
-        {
-          name: 'Always create branch from working branch',
-          value: 'alwaysCreateBranchFromWorking',
-          checked: true
-        },
-        {
-          name: 'Always create ticket before writing code',
-          value: 'alwaysCreateTicketBeforeCode',
-          checked: true
-        },
-        {
-          name: 'Auto-update ticket status when creating branches/PRs',
-          value: 'autoUpdateTicketStatus',
-          checked: true
-        },
-        {
-          name: 'Require human validation before creating PR (push → test → approval → PR)',
-          value: 'requireHumanCheckOnPushedBranch',
-          checked: true
-        }
-      ]
+  // For preconfigured workflows (SaaSFoundry AI), rules are implicit
+  // For custom workflows, let user configure them
+  if (isPreconfiguredWorkflow) {
+    // Use default AI rules for preconfigured workflow
+    aiRulesConfig = {
+      alwaysCreateBranchFromWorking: true,
+      alwaysCreateTicketBeforeCode: true,
+      autoUpdateTicketStatus: true,
+      requireHumanCheckOnPushedBranch: true
     }
-  ])
+  } else {
+    console.log(chalk.blue('\n⚙️  AI Development Rules\n'))
 
-  // Convert array to object
-  aiRulesConfig = {
-    alwaysCreateBranchFromWorking: aiRules.includes('alwaysCreateBranchFromWorking'),
-    alwaysCreateTicketBeforeCode: aiRules.includes('alwaysCreateTicketBeforeCode'),
-    autoUpdateTicketStatus: aiRules.includes('autoUpdateTicketStatus'),
-    requireHumanCheckOnPushedBranch: aiRules.includes('requireHumanCheckOnPushedBranch')
+    const { aiRules } = await inquirer.prompt([
+      {
+        type: 'checkbox',
+        name: 'aiRules',
+        message: 'Select development rules for AI to follow:',
+        choices: [
+          {
+            name: 'Always create branch from working branch',
+            value: 'alwaysCreateBranchFromWorking',
+            checked: true
+          },
+          {
+            name: 'Always create ticket before writing code',
+            value: 'alwaysCreateTicketBeforeCode',
+            checked: true
+          },
+          {
+            name: 'Auto-update ticket status when creating branches/PRs',
+            value: 'autoUpdateTicketStatus',
+            checked: true
+          },
+          {
+            name: 'Require human validation before creating PR (push → test → approval → PR)',
+            value: 'requireHumanCheckOnPushedBranch',
+            checked: true
+          }
+        ]
+      }
+    ])
+
+    // Convert array to object
+    aiRulesConfig = {
+      alwaysCreateBranchFromWorking: aiRules.includes('alwaysCreateBranchFromWorking'),
+      alwaysCreateTicketBeforeCode: aiRules.includes('alwaysCreateTicketBeforeCode'),
+      autoUpdateTicketStatus: aiRules.includes('autoUpdateTicketStatus'),
+      requireHumanCheckOnPushedBranch: aiRules.includes('requireHumanCheckOnPushedBranch')
+    }
   }
 
   workflowConfig = {
@@ -965,50 +979,54 @@ export async function promptWorkflowConfiguration(
   }
 
   // Step 6: Save as template?
-  const { saveAsTemplate, templateName, templateDescription } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'saveAsTemplate',
-      message: 'Save this workflow as a reusable template?',
-      default: true
-    },
-    {
-      type: 'input',
-      name: 'templateName',
-      message: 'Template name (e.g., "client-a-jira", "standard-github"):',
-      validate: (input) => {
-        if (!input || input.length === 0) return 'Name is required'
-        if (!/^[a-z0-9-]+$/.test(input)) {
-          return 'Use lowercase letters, numbers, and hyphens only'
-        }
-        return true
+  // For preconfigured workflows, saving as template is not needed (already available globally)
+  // For custom workflows, offer to save as reusable template
+  if (!isPreconfiguredWorkflow) {
+    const { saveAsTemplate, templateName, templateDescription } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'saveAsTemplate',
+        message: 'Save this workflow as a reusable template?',
+        default: true
       },
-      when: (answers) => answers.saveAsTemplate
-    },
-    {
-      type: 'input',
-      name: 'templateDescription',
-      message: 'Template description (optional):',
-      when: (answers) => answers.saveAsTemplate
+      {
+        type: 'input',
+        name: 'templateName',
+        message: 'Template name (e.g., "client-a-jira", "standard-github"):',
+        validate: (input) => {
+          if (!input || input.length === 0) return 'Name is required'
+          if (!/^[a-z0-9-]+$/.test(input)) {
+            return 'Use lowercase letters, numbers, and hyphens only'
+          }
+          return true
+        },
+        when: (answers) => answers.saveAsTemplate
+      },
+      {
+        type: 'input',
+        name: 'templateDescription',
+        message: 'Template description (optional):',
+        when: (answers) => answers.saveAsTemplate
+      }
+    ])
+
+    if (saveAsTemplate) {
+      await saveGlobalWorkflow(templateName, {
+        name: templateName,
+        description: templateDescription,
+        tool: workflowConfig.tool!,
+        workingBranch: workflowConfig.workingBranch!,
+        prTargetBranch: workflowConfig.prTargetBranch!,
+        requireCodeReview: workflowConfig.requireCodeReview!,
+        statuses: workflowConfig.statuses!,
+        branchNaming: workflowConfig.branchNaming!,
+        commitFormat: workflowConfig.commitFormat!,
+        aiRules: aiRulesConfig
+      })
+
+      console.log(chalk.green(`\n✅ Workflow template "${templateName}" saved\n`))
+      workflowConfig.template = templateName
     }
-  ])
-
-  if (saveAsTemplate) {
-    await saveGlobalWorkflow(templateName, {
-      name: templateName,
-      description: templateDescription,
-      tool: workflowConfig.tool!,
-      workingBranch: workflowConfig.workingBranch!,
-      prTargetBranch: workflowConfig.prTargetBranch!,
-      requireCodeReview: workflowConfig.requireCodeReview!,
-      statuses: workflowConfig.statuses!,
-      branchNaming: workflowConfig.branchNaming!,
-      commitFormat: workflowConfig.commitFormat!,
-      aiRules: aiRulesConfig
-    })
-
-    console.log(chalk.green(`\n✅ Workflow template "${templateName}" saved\n`))
-    workflowConfig.template = templateName
   }
 
   return {
