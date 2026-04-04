@@ -41,8 +41,10 @@ export async function installOptionalSkills({ targetPath, selectedSkills }: Inst
 
   // Copy each selected skill
   for (const skill of selectedSkills) {
-    const skillTemplatePath = join(optionalTemplatesPath, skill)
-    const skillTargetPath = join(targetOptionalPath, skill)
+    // Map skill names to folder names (all optional skills are prefixed with sf-tool-)
+    const skillFolderName = `sf-tool-${skill}`
+    const skillTemplatePath = join(optionalTemplatesPath, skillFolderName)
+    const skillTargetPath = join(targetOptionalPath, skillFolderName)
     await copy(skillTemplatePath, skillTargetPath)
   }
 }
