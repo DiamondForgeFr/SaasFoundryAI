@@ -3,7 +3,6 @@ import { readFile, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
-import { installCoreSkills } from '../installers/core-skills.installer'
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { installToolSkill } from '../installers/tool-skill.installer'
@@ -130,11 +129,6 @@ export async function createApiApp({
       s3Credentials
     })
   }
-
-  // Install core skills (always installed)
-  await installCoreSkills({
-    targetPath: apiPath
-  })
 
   // Install workflow skill (if workflow is configured)
   if (workflow && workflow.tool !== 'none') {

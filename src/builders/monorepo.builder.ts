@@ -3,7 +3,6 @@ import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
-import { installCoreSkills } from '../installers/core-skills.installer'
 import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
@@ -51,11 +50,6 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
 
   // Generate Prisma client from the API workspace
   await exec(`${nvm}cd apps/api && npx prisma generate > /dev/null 2>&1`)
-
-  // Install core skills at root (centralized for monorepo)
-  await installCoreSkills({
-    targetPath: '.'
-  })
 
   // Install workflow skill at root (if workflow is configured)
   if (workflow && workflow.tool !== 'none') {
