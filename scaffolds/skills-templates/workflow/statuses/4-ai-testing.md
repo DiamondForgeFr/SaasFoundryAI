@@ -41,15 +41,45 @@
 - d. Push
 - e. RESTART from step 3 (automated tests)
 
-### 6. IF ALL TESTS PASS:
+### 6. ADVERSARIAL REVIEW (if complexity = complex)
+
+**Only for 🔴 complex tickets:**
+
+```bash
+.claude/skills/sf-workflow/scripts/examine.sh {ticket-number}
+```
+
+**Run adversarial code review:**
+- Launch 3 parallel review agents
+- Security analysis (OWASP top 10)
+- Logic flaws detection
+- Performance issues identification
+- Classify findings by severity
+- Fix Critical/High findings immediately
+
+**If findings found:**
+- Fix Real issues
+- Commit corrections
+- Push
+- RESTART from step 3 (automated tests)
+- Re-run examine if needed
+
+**Follow the guidance from examine.sh.**
+
+### 7. IF ALL TESTS PASS (and examine complete if complex):
 - a. Create test report summary as comment
-- b. Automatically move to Human Testing
+- b. If examine was run: include findings summary
+- c. Commit and push final corrections (if any)
+- d. Automatically move to Human Testing
 
 ## Exit Conditions
 
 - All automated tests pass ✅
 - Entire test plan executed and validated ✅
+- Adversarial review complete (if complex) ✅
+- All Critical/High findings fixed ✅
 - No problems detected
+- Code is pushed
 
 ## Next Status
 
@@ -61,3 +91,5 @@
 ❌ NEVER skip test plan steps
 ❌ NEVER say "it should work" - RUN the tests
 ❌ If a test fails, do NOT move to Human Testing, FIX it first
+❌ NEVER skip examine phase for complex tickets
+❌ NEVER ignore Critical/High security findings

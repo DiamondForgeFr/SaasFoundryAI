@@ -200,6 +200,70 @@ case "$COMMAND" in
     cat "$SKILL_DIR/SKILL.md"
     ;;
 
+  # Complexity commands
+  detect-complexity)
+    TICKET=$1
+    if [[ -z "$TICKET" ]]; then
+      echo "Usage: workflow-cli.sh detect-complexity <ticket-number>" >&2
+      exit 1
+    fi
+    "$SKILL_DIR/scripts/detect-complexity.sh" "$TICKET"
+    ;;
+
+  retag)
+    TICKET=$1
+    NEW_COMPLEXITY=$2
+    if [[ -z "$TICKET" ]] || [[ -z "$NEW_COMPLEXITY" ]]; then
+      echo "Usage: workflow-cli.sh retag <ticket-number> <new-complexity>" >&2
+      echo "Complexity: bug | low | medium | complex" >&2
+      exit 1
+    fi
+    echo -e "${YELLOW}Retagging ticket #${TICKET} to complexity: ${NEW_COMPLEXITY}${NC}"
+    echo ""
+    echo "This will adjust remaining workflow steps to match the new complexity level."
+    echo ""
+    # Note: Actual retagging logic depends on the tool (GitHub/Jira/Notion/Linear)
+    # This command updates the complexity metadata on the ticket
+    load_config
+    route_to_tool "$WORKFLOW_TOOL" "set-complexity" "$TICKET" "$NEW_COMPLEXITY"
+    ;;
+
+  # Workflow phase commands (adaptive based on complexity)
+  prepare)
+    TICKET=$1
+    COMPLEXITY=$2
+    if [[ -z "$TICKET" ]] || [[ -z "$COMPLEXITY" ]]; then
+      echo "Usage: workflow-cli.sh prepare <ticket-number> <complexity>" >&2
+      echo "Complexity: bug | low | medium | complex" >&2
+      exit 1
+    fi
+    echo -e "${BLUE}PREPARE PHASE: Backlog → Ready${NC}"
+    echo ""
+    echo "Running adaptive analyze + plan for complexity: ${COMPLEXITY}"
+    echo ""
+    "$SKILL_DIR/scripts/analyze.sh" "$TICKET" "$COMPLEXITY"
+    echo ""
+    "$SKILL_DIR/scripts/plan.sh" "$TICKET" "$COMPLEXITY"
+    ;;
+
+  test)
+    TICKET=$1
+    COMPLEXITY=$2
+    if [[ -z "$TICKET" ]]; then
+      echo "Usage: workflow-cli.sh test <ticket-number> [complexity]" >&2
+      exit 1
+    fi
+    echo -e "${BLUE}AI TESTING PHASE: In Progress → AI Testing → Human Testing${NC}"
+    echo ""
+    if [[ "$COMPLEXITY" == "complex" ]]; then
+      echo "Running adversarial review (complex ticket)..."
+      echo ""
+      "$SKILL_DIR/scripts/examine.sh" "$TICKET"
+    else
+      echo "Skipping adversarial review (not complex)"
+    fi
+    ;;
+
   # Tool delegation commands - route to appropriate tool CLI
   create-subtask|update-status|create-pr|list)
     load_config
@@ -212,23 +276,31 @@ case "$COMMAND" in
     echo "Usage: workflow-cli.sh <command> [args...]"
     echo ""
     echo "Workflow status commands:"
-    echo "  status <ticket>        Display current status and its description"
-    echo "  next <ticket>          Show next status"
-    echo "  validate <ticket>      Validate exit conditions"
-    echo "  help                   Display skill documentation"
+    echo "  status <ticket>              Display current status and its description"
+    echo "  next <ticket>                Show next status"
+    echo "  validate <ticket>            Validate exit conditions"
+    echo "  help                         Display skill documentation"
+    echo ""
+    echo "Complexity commands:"
+    echo "  detect-complexity <ticket>   Auto-suggest complexity level"
+    echo "  retag <ticket> <complexity>  Change ticket complexity"
+    echo ""
+    echo "Workflow phase commands (complexity-adaptive):"
+    echo "  prepare <ticket> <complexity>    Run analyze + plan (Backlog → Ready)"
+    echo "  test <ticket> [complexity]       Run validation + examine (→ AI Testing)"
     echo ""
     echo "Tool commands (delegated to tool-specific CLI):"
-    echo "  create-subtask ...     Create a sub-issue/task"
-    echo "  update-status ...      Update ticket status"
-    echo "  create-pr ...          Create pull request"
-    echo "  list ...               List tickets"
+    echo "  create-subtask ...           Create a sub-issue/task"
+    echo "  update-status ...            Update ticket status"
+    echo "  create-pr ...                Create pull request"
+    echo "  list ...                     List tickets"
     exit 1
     ;;
 
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
     echo ""
-    echo "Available commands: status, next, validate, help, create-subtask, update-status, create-pr, list"
+    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, update-status, create-pr, list"
     echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;
