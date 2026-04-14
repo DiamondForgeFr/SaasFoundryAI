@@ -12,16 +12,13 @@ interface InstallCoreSkillsParams {
  * Install core skills from centralized template.
  *
  * Core skills are ALWAYS installed (not optional).
- * These are the 9 essential skills:
+ * These are the 6 essential skills:
  * - sf-git-commit
  * - sf-git-create-pr
  * - sf-git-fix-pr-comments
  * - sf-git-merge
  * - sf-utils-fix-errors
  * - sf-utils-fix-grammar
- * - sf-utils-oneshot
- * - sf-workflow-apex
- * - sf-workflow-apex-free
  *
  * For monorepo: Installed once at root/.claude/skills/
  * For multirepo: Installed separately in api/.claude/skills/ and web/.claude/skills/
@@ -36,18 +33,8 @@ export async function installCoreSkills({ targetPath }: InstallCoreSkillsParams)
   // Ensure skills directory exists
   await mkdir(targetSkillsPath, { recursive: true })
 
-  // List of core skills to install
-  const coreSkills = [
-    'sf-git-commit',
-    'sf-git-create-pr',
-    'sf-git-fix-pr-comments',
-    'sf-git-merge',
-    'sf-utils-fix-errors',
-    'sf-utils-fix-grammar',
-    'sf-utils-oneshot',
-    'sf-workflow-apex',
-    'sf-workflow-apex-free'
-  ]
+  // List of core skills to install (must match scaffolds/skills-templates/core/)
+  const coreSkills = ['sf-git-commit', 'sf-git-create-pr', 'sf-git-fix-pr-comments', 'sf-git-merge', 'sf-utils-fix-errors', 'sf-utils-fix-grammar']
 
   // Copy each core skill
   for (const skill of coreSkills) {
