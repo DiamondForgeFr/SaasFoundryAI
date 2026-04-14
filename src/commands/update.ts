@@ -21,7 +21,7 @@ import { SaaSFoundryManifest } from '../types'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
 import { version as cliVersion } from '../../package.json'
 
-interface FileUpdate {
+export interface FileUpdate {
   path: string
   action: 'update' | 'add' | 'conflict' | 'remove'
 }
@@ -129,7 +129,7 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
  * - current: hash of user's current file
  * - target: hash from regenerated project (what new CLI version produces)
  */
-function computeFileUpdates(baseHashes: Record<string, string>, currentHashes: Record<string, string>, targetHashes: Record<string, string>): FileUpdate[] {
+export function computeFileUpdates(baseHashes: Record<string, string>, currentHashes: Record<string, string>, targetHashes: Record<string, string>): FileUpdate[] {
   const updates: FileUpdate[] = []
   const allPaths = new Set([...Object.keys(baseHashes), ...Object.keys(targetHashes)])
 
