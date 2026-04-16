@@ -3,15 +3,16 @@
 Integration with GitHub Projects V2 for ticket management, status transitions, and complexity labeling.
 
 ## Auto-trigger keywords
+
 github project, create subtask, update ticket status, github issue, project board, set complexity
 
 ## Data model
 
 Two orthogonal axes on every ticket:
 
-| Axis | Where it lives | What it controls |
-|------|----------------|------------------|
-| **Status** | Projects V2 board (Single select field "Status") | Workflow phase (Backlog → … → Done) |
+| Axis           | Where it lives                                         | What it controls                                           |
+| -------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| **Status**     | Projects V2 board (Single select field "Status")       | Workflow phase (Backlog → … → Done)                        |
 | **Complexity** | GitHub label (`complexity: bug\|low\|medium\|complex`) | Rigor level applied in each phase (agents, tests, reviews) |
 
 Never encode status in a label. Never encode complexity on the board. Keep them independent.
@@ -26,6 +27,7 @@ jq -r '.workflow.workingBranch' .saasfoundry.json
 ```
 
 Supported `projectUrl` formats:
+
 - `https://github.com/orgs/<owner>/projects/<number>`
 - `https://github.com/users/<owner>/projects/<number>`
 
@@ -35,16 +37,16 @@ Requires `gh auth login` with `project` + `repo` scopes.
 
 All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [args]`.
 
-| Command | Purpose |
-|---------|---------|
-| `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue` |
-| `status <ticket>` | Read status from Projects V2 board |
-| `update-status <ticket> <status-name>` | Write status on Projects V2 board (`gh project item-edit`) |
-| `set-complexity <ticket> <level>` | Set label `complexity: <bug\|low\|medium\|complex>` (removes any existing complexity label first) |
-| `get-complexity <ticket>` | Read current complexity label |
-| `get-ticket <ticket>` | Print title + body (used by `detect-complexity.sh`) |
-| `create-pr <ticket>` | Push branch + open PR against `workingBranch` |
-| `list [status]` | List project items, optionally filtered by status |
+| Command                                  | Purpose                                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue`                              |
+| `status <ticket>`                        | Read status from Projects V2 board                                                                |
+| `update-status <ticket> <status-name>`   | Write status on Projects V2 board (`gh project item-edit`)                                        |
+| `set-complexity <ticket> <level>`        | Set label `complexity: <bug\|low\|medium\|complex>` (removes any existing complexity label first) |
+| `get-complexity <ticket>`                | Read current complexity label                                                                     |
+| `get-ticket <ticket>`                    | Print title + body (used by `detect-complexity.sh`)                                               |
+| `create-pr <ticket>`                     | Push branch + open PR against `workingBranch`                                                     |
+| `list [status]`                          | List project items, optionally filtered by status                                                 |
 
 Status names are case-insensitive — the CLI matches against the options defined on the board.
 
@@ -64,14 +66,15 @@ Status names are case-insensitive — the CLI matches against the options define
 
 The following labels must exist in the repo (create them once):
 
-| Label | Color | Use case |
-|-------|-------|----------|
-| `complexity: bug` | `#FF5555` | Bug fix — direct fix + regression test |
-| `complexity: low` | `#7CFC00` | Oneshot-style, minimal ceremony |
-| `complexity: medium` | `#FFD700` | Structured plan + validation |
+| Label                 | Color     | Use case                                        |
+| --------------------- | --------- | ----------------------------------------------- |
+| `complexity: bug`     | `#FF5555` | Bug fix — direct fix + regression test          |
+| `complexity: low`     | `#7CFC00` | Oneshot-style, minimal ceremony                 |
+| `complexity: medium`  | `#FFD700` | Structured plan + validation                    |
 | `complexity: complex` | `#FF1493` | Full adversarial review (security, logic, perf) |
 
 Create them with:
+
 ```bash
 gh label create "complexity: bug"     --color FF5555 --description "🐛 Bug fix"
 gh label create "complexity: low"     --color 7CFC00 --description "🟢 Low complexity"
@@ -111,11 +114,8 @@ $CLI update-status 42 "Done"
 
 ## Troubleshooting
 
-**`Could not load project <N> for owner <X>`**
-Check `.saasfoundry.json` → `workflow.projectUrl` matches a real project. Run `gh project list --owner <owner>` to see what you have access to.
+**`Could not load project <N> for owner <X>`** Check `.saasfoundry.json` → `workflow.projectUrl` matches a real project. Run `gh project list --owner <owner>` to see what you have access to.
 
-**`Ticket #N is not on project board`**
-The issue exists but hasn't been added to the project. Add it via the board UI or `gh project item-add`.
+**`Ticket #N is not on project board`** The issue exists but hasn't been added to the project. Add it via the board UI or `gh project item-add`.
 
-**`Unknown status '<name>'`**
-Status must exactly match an option on the board (case is ignored). The CLI prints the available options on error.
+**`Unknown status '<name>'`** Status must exactly match an option on the board (case is ignored). The CLI prints the available options on error.
