@@ -1,0 +1,31 @@
+{
+  "version": "1.0.0-beta",
+  "projectName": "saasfoundry-cli",
+  "structure": "cli",
+  "workflow": {
+    "tool": "github-projects",
+    "template": "SaaSFoundry AI",
+    "projectUrl": "https://github.com/orgs/DiamondForgeFr/projects/3",
+    "workingBranch": "master",
+    "prTargetBranch": "master",
+    "branchNaming": {
+      "feature": "feature/{N}-{description}",
+      "fix": "fix/{N}-{description}",
+      "release": "rc-{version}"
+    },
+    "commitFormat": {
+      "pattern": "<type>(#<ticket>): <description>",
+      "requireTicket": true,
+      "types": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore", "ci", "build", "revert"]
+    },
+    "statuses": [
+      { "name": "Backlog", "color": "GRAY" },
+      { "name": "Ready", "color": "YELLOW" },
+      { "name": "In progress", "color": "BLUE" },
+      { "name": "AI testing", "color": "PURPLE" },
+      { "name": "Human testing", "color": "ORANGE" },
+      { "name": "In review", "color": "PINK" },
+      { "name": "Done", "color": "GREEN" }
+    ]
+  }
+}
