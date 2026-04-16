@@ -6,8 +6,9 @@
     "tool": "github-projects",
     "template": "SaaSFoundry AI",
     "projectUrl": "https://github.com/orgs/DiamondForgeFr/projects/1",
-    "workingBranch": "master",
-    "prTargetBranch": "master",
+    "workingBranch": "develop",
+    "prTargetBranch": "develop",
+    "releaseBranch": "master",
     "branchNaming": {
       "feature": "feature/{N}-{description}",
       "fix": "fix/{N}-{description}",
