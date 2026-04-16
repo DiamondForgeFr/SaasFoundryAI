@@ -185,12 +185,8 @@ describe('updateCommand (integration)', () => {
 
       await updateCommand()
 
-      expect(mockedInstallStorage).toHaveBeenCalledWith(
-        expect.objectContaining({ s3Setup: 'docker', isMonorepo: true, skipNpmInstall: true })
-      )
-      expect(mockedCreateDevServices).toHaveBeenCalledWith(
-        expect.objectContaining({ s3Setup: 'docker' })
-      )
+      expect(mockedInstallStorage).toHaveBeenCalledWith(expect.objectContaining({ s3Setup: 'docker', isMonorepo: true, skipNpmInstall: true }))
+      expect(mockedCreateDevServices).toHaveBeenCalledWith(expect.objectContaining({ s3Setup: 'docker' }))
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
       expect(saved.modules.s3Setup).toBe('docker')
@@ -214,9 +210,7 @@ describe('updateCommand (integration)', () => {
 
       await updateCommand()
 
-      expect(mockedInstallStorage).toHaveBeenCalledWith(
-        expect.objectContaining({ s3Setup: 'credentials' })
-      )
+      expect(mockedInstallStorage).toHaveBeenCalledWith(expect.objectContaining({ s3Setup: 'credentials' }))
       expect(mockedCreateDevServices).not.toHaveBeenCalled()
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
@@ -281,9 +275,7 @@ describe('updateCommand (integration)', () => {
 
       expect(mockedInstallEmail).toHaveBeenCalled()
       expect(mockedInstallAnalytics).toHaveBeenCalled()
-      expect(mockedInstallSkills).toHaveBeenCalledWith(
-        expect.objectContaining({ advancedSkills: ['context7'] })
-      )
+      expect(mockedInstallSkills).toHaveBeenCalledWith(expect.objectContaining({ advancedSkills: ['context7'] }))
     })
 
     it('resolves app paths correctly for multirepo projects', async () => {
