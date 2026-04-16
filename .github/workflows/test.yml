@@ -56,6 +56,24 @@ jobs:
       - run: npm run build
       - run: npm run lint
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx jest --coverage --coverageReporters=lcov --coverageReporters=text-summary
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   # PR → master: all 18 scenarios
   docker-build-tests-full:
     name: Docker Build (${{ matrix.scenario }})
