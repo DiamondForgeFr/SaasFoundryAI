@@ -18,16 +18,20 @@ import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
 import { SaaSFoundryManifest } from '../types'
 import { checkNodeVersion, computeFileHashes, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
+import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 
 /**
  * Main function
  */
-export async function newCommand() {
+export async function newCommand(opts: NewCommandOptions = {}) {
   // Verify Node.js version before proceeding
   checkNodeVersion()
 
+  const prefill = buildPrefillFromOptions(opts)
+  const nonInteractive = opts.nonInteractive === true
+
   // Chat with user
-  const startProjectAnswers = await getUserStartProjectInputs()
+  const startProjectAnswers = await getUserStartProjectInputs({ prefill, nonInteractive })
 
   // Set default values for database credentials
   if (startProjectAnswers.dbCredentials) startProjectAnswers.dbCredentials = setDefaultDbCredentials(startProjectAnswers.dbCredentials)
@@ -232,14 +236,21 @@ export async function newCommand() {
       initMessage = 'Do you want to initialize the database now?'
     }
 
-    const { startServices } = await inquirer.prompt<{ startServices: boolean }>([
-      {
-        type: 'confirm',
-        name: 'startServices',
-        message: initMessage,
-        default: true
-      }
-    ])
+    let startServices: boolean
+    if (opts.startServices !== undefined) {
+      startServices = opts.startServices
+    } else if (nonInteractive) {
+      startServices = false
+    } else {
+      ;({ startServices } = await inquirer.prompt<{ startServices: boolean }>([
+        {
+          type: 'confirm',
+          name: 'startServices',
+          message: initMessage,
+          default: true
+        }
+      ]))
+    }
 
     if (startServices) {
       let servicesOk = true
@@ -273,22 +284,29 @@ export async function newCommand() {
 
       // Propose to start apps
       if (servicesOk) {
-        const { startApps } = await inquirer.prompt<{
-          startApps: 'backend' | 'frontend' | 'all' | 'none'
-        }>([
-          {
-            type: 'list',
-            name: 'startApps',
-            message: 'Do you want to start apps?',
-            choices: [
-              { name: 'Yes, start all', value: 'all' },
-              { name: 'Yes, only backend', value: 'backend' },
-              { name: 'Yes, only frontend', value: 'frontend' },
-              { name: "No, I'll do it myself", value: 'none' }
-            ],
-            default: 'backend'
-          }
-        ])
+        let startApps: 'backend' | 'frontend' | 'all' | 'none'
+        if (opts.startApps !== undefined) {
+          startApps = opts.startApps
+        } else if (nonInteractive) {
+          startApps = 'none'
+        } else {
+          ;({ startApps } = await inquirer.prompt<{
+            startApps: 'backend' | 'frontend' | 'all' | 'none'
+          }>([
+            {
+              type: 'list',
+              name: 'startApps',
+              message: 'Do you want to start apps?',
+              choices: [
+                { name: 'Yes, start all', value: 'all' },
+                { name: 'Yes, only backend', value: 'backend' },
+                { name: 'Yes, only frontend', value: 'frontend' },
+                { name: "No, I'll do it myself", value: 'none' }
+              ],
+              default: 'backend'
+            }
+          ]))
+        }
 
         if (startProjectAnswers.isMonorepo) {
           if (startApps !== 'none') await startMonorepoApps(startApps)
@@ -297,7 +315,7 @@ export async function newCommand() {
           if (startApps === 'frontend' || startApps === 'all') await startFrontend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
 
           // If user didn't choose to start the backend, open a contextualized terminal for it
-          if (startApps !== 'backend' && startApps !== 'all') {
+          if (!nonInteractive && startApps !== 'backend' && startApps !== 'all') {
             const apiPath = `apps/${startProjectAnswers.projectName}-api`
             await openTerminal(apiPath, {
               command: getHuskySetupCommand(),
@@ -306,7 +324,7 @@ export async function newCommand() {
           }
 
           // If user didn't choose to start the frontend, open a contextualized terminal for it
-          if (startApps !== 'frontend' && startApps !== 'all') {
+          if (!nonInteractive && startApps !== 'frontend' && startApps !== 'all') {
             const webPath = `apps/${startProjectAnswers.projectName}-web`
             await openTerminal(webPath, {
               command: getHuskySetupCommand(),
@@ -319,7 +337,7 @@ export async function newCommand() {
         // This ensures the frontend is the active tab at the end
 
         // 1. Open GitHub Project board first if configured
-        if (startProjectAnswers.workflow?.projectUrl) {
+        if (!nonInteractive && startProjectAnswers.workflow?.projectUrl) {
           try {
             const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
             console.log(chalk.blue('Opening GitHub Project board in browser...'))
@@ -331,7 +349,7 @@ export async function newCommand() {
         }
 
         // 2. Open API docs if backend is started
-        if (startApps === 'backend' || startApps === 'all') {
+        if (!nonInteractive && (startApps === 'backend' || startApps === 'all')) {
           try {
             console.log(chalk.blue('Waiting for backend to be ready...'))
             await waitForServer('http://localhost:3500/api/health')
@@ -345,7 +363,7 @@ export async function newCommand() {
         }
 
         // 3. Open frontend last (will be the active tab)
-        if (startApps === 'frontend' || startApps === 'all') {
+        if (!nonInteractive && (startApps === 'frontend' || startApps === 'all')) {
           try {
             console.log(chalk.blue('Waiting for frontend to be ready...'))
             await waitForServer('http://localhost:5173')
@@ -358,7 +376,7 @@ export async function newCommand() {
           }
         }
       }
-    } else {
+    } else if (!nonInteractive) {
       // User doesn't want to start services, open terminals
       console.log(chalk.blue('Opening terminals for your project...'))
 
@@ -378,7 +396,7 @@ export async function newCommand() {
         })
       }
     }
-  } else {
+  } else if (!nonInteractive) {
     // Nothing to start (DB=manual, S3=manual/credentials), open terminals
     console.log(chalk.blue('Opening terminals for your project...'))
 
