@@ -9,7 +9,61 @@ import { workflowCommand } from './commands/workflow'
 const program = new Command()
 
 program.name('sf').description('SaaSFoundry CLI - Create and manage your SaaS projects').version(version)
-program.command('new').description('Create a new SaaSFoundry project').action(newCommand)
+program
+  .command('new')
+  .description('Create a new SaaSFoundry project')
+  .option('--non-interactive', 'Fail if any required value is missing instead of prompting')
+  // Project basics
+  .option('--project-name <name>', 'Project name (kebab-case)')
+  .option('--project-description <description>', 'Project description')
+  .option('--structure <structure>', 'Project structure: monorepo or multirepo')
+  .option('--main-branch <branch>', 'Main branch name: main or master')
+  // Repository
+  .option('--setup-repo <setup>', 'Repository setup: local or existing')
+  .option('--monorepo-url <url>', 'Monorepo remote URL (when --structure monorepo and --setup-repo existing)')
+  .option('--backend-repo-url <url>', 'Backend repository URL (when --structure multirepo and --setup-repo existing)')
+  .option('--frontend-repo-url <url>', 'Frontend repository URL (when --structure multirepo and --setup-repo existing)')
+  // Database
+  .option('--db-setup <setup>', 'Database setup: docker, credentials, or manual')
+  .option('--db-type <type>', 'Database type: postgresql or sql')
+  .option('--db-host <host>', 'Database host')
+  .option('--db-port <port>', 'Database port')
+  .option('--db-user <user>', 'Database user')
+  .option('--db-password <password>', 'Database password')
+  .option('--db-name <name>', 'Database name')
+  // Email
+  .option('--email-service <service>', 'Email service: none or mailersend')
+  .option('--mailersend-api-key <key>', 'MailerSend API key')
+  .option('--mailersend-sender-email <email>', 'MailerSend sender email')
+  .option('--mailersend-sender-name <name>', 'MailerSend sender name')
+  // Storage
+  .option('--s3-setup <setup>', 'S3 storage setup: docker, credentials, or manual')
+  .option('--s3-endpoint <endpoint>', 'S3 endpoint URL')
+  .option('--s3-access-key <key>', 'S3 access key')
+  .option('--s3-secret-key <key>', 'S3 secret key')
+  .option('--s3-bucket <bucket>', 'S3 bucket name')
+  .option('--s3-region <region>', 'S3 region')
+  // Analytics
+  .option('--analytics', 'Include analytics module')
+  .option('--no-analytics', 'Skip analytics module')
+  // Advanced skills
+  .option('--advanced-skills <skills>', 'Comma-separated list of advanced skills (context7,atlassian,notion,figma)')
+  .option('--context7-api-key <key>', 'Context7 API key (unused — free public API)')
+  .option('--atlassian-email <email>', 'Atlassian account email')
+  .option('--atlassian-api-token <token>', 'Atlassian API token')
+  .option('--atlassian-site <site>', 'Atlassian site name (e.g. "mycompany")')
+  .option('--atlassian-cloud-id <id>', 'Atlassian Cloud ID')
+  .option('--notion-api-token <token>', 'Notion API token')
+  .option('--notion-api-version <version>', 'Notion API version (default: 2022-06-28)')
+  .option('--figma-api-token <token>', 'Figma API token')
+  // Workflow
+  .option('--workflow <config>', 'Workflow preset or "none" to skip')
+  .option('--no-workflow', 'Skip workflow configuration entirely')
+  // Post-setup behavior
+  .option('--start-services', 'Start dev services automatically (DB + MinIO)')
+  .option('--no-start-services', 'Do not start dev services after setup')
+  .option('--start-apps <mode>', 'Apps to start after setup: all, backend, frontend, none')
+  .action((opts) => newCommand(opts))
 program.command('update').description('Add modules to an existing SaaSFoundry project').action(updateCommand)
 program
   .command('tools')
