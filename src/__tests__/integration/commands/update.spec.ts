@@ -6,6 +6,11 @@ import shelljs from 'shelljs'
 import { SaaSFoundryManifest } from '../../../types'
 import { version as cliVersion } from '../../../../package.json'
 
+jest.mock('../../../utils', () => ({
+  ...jest.requireActual('../../../utils'),
+  checkNodeVersion: jest.fn()
+}))
+
 jest.mock('../../../prompts/update.prompts', () => ({
   ...jest.requireActual('../../../prompts/update.prompts'),
   getModuleSelections: jest.fn(),
