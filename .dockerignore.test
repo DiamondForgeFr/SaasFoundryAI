@@ -1,0 +1,10 @@
+# Docker build context filter for Dockerfile.test
+node_modules/
+dist/
+.git/
+.turbo/
+coverage/
+docs/
+.vitepress/
+*.log
+.DS_Store

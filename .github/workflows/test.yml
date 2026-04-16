@@ -55,3 +55,73 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run lint
+
+  # PR → master: all 18 scenarios
+  docker-build-tests-full:
+    name: Docker Build (${{ matrix.scenario }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.base_ref == 'master'
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - multirepo-minimal
+          - monorepo-minimal
+          - multirepo-full
+          - monorepo-full
+          - update-add-all-modules
+          - update-add-email
+          - ai-multirepo-skills
+          - ai-monorepo-skills
+          - ai-workflow-config
+          - multirepo-email-only
+          - multirepo-storage-only
+          - multirepo-analytics-only
+          - multirepo-email-storage
+          - monorepo-email-analytics
+          - monorepo-storage-analytics
+          - update-add-email-monorepo
+          - update-add-storage
+          - update-add-analytics
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.test
+          load: true
+          tags: sf-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run scenario
+        run: docker run --rm -e TEST_SCENARIO=${{ matrix.scenario }} sf-test:latest
+
+  # PR → develop: top 2 scenarios only (minimal builds)
+  docker-build-tests-quick:
+    name: Docker Build (${{ matrix.scenario }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop'
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - multirepo-minimal
+          - monorepo-minimal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.test
+          load: true
+          tags: sf-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run scenario
+        run: docker run --rm -e TEST_SCENARIO=${{ matrix.scenario }} sf-test:latest

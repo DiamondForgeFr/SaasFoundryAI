@@ -46,8 +46,10 @@ export async function installSkills({ isMonorepo, apiPath, webPath, projectName,
       })
     }
 
-    // Update CLAUDE.md placeholders at root
+    // Update CLAUDE.md placeholders at root + per-app (blueprints copy CLAUDE.md with placeholders)
     await updateClaudeMdPlaceholders({ targetPath: '.', projectName, version })
+    await updateClaudeMdPlaceholders({ targetPath: apiPath, projectName, version })
+    await updateClaudeMdPlaceholders({ targetPath: webPath, projectName, version })
 
     // Copy README.md to .claude/
     await copyClaudeReadme({ targetPath: '.' })

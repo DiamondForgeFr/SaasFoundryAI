@@ -1,0 +1,45 @@
+# ── Stage 1: Build the SaaSFoundry CLI ──────────────────────────
+FROM node:20.19-alpine AS cli-builder
+
+WORKDIR /cli
+
+# Install dependencies first (cache layer)
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+
+# Copy source and build
+COPY tsconfig.json ./
+COPY src/ ./src/
+COPY scaffolds/ ./scaffolds/
+RUN npm run build
+
+# ── Stage 2: Test Runner ────────────────────────────────────────
+FROM node:20.19-alpine AS test-runner
+
+# bcrypt needs python3/make/g++, prisma needs openssl
+RUN apk add --no-cache python3 make g++ openssl bash git
+
+WORKDIR /workspace
+
+# Disable git hooks and interactive prompts in generated projects
+ENV HUSKY=0
+ENV CI=true
+ENV npm_config_loglevel=error
+
+# Prisma generate needs a DATABASE_URL (just for schema parsing, no connection)
+ENV DATABASE_URL="postgresql://test:test@localhost:5432/test"
+
+# Paths for the test harness
+ENV CLI_PATH=/cli
+ENV WORKSPACE_DIR=/workspace/projects
+
+# Copy built CLI (source + dist + node_modules + scaffolds)
+COPY --from=cli-builder /cli /cli
+
+# Copy test harness
+COPY tests/docker/ /workspace/
+
+# Install tsx for running TypeScript directly
+RUN npm install --no-save tsx
+
+ENTRYPOINT ["node", "--import", "tsx", "/workspace/generate-and-build.ts"]
