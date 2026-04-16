@@ -25,10 +25,9 @@ function getByPath(obj: Record<string, unknown>, path: string): unknown {
  * Evaluate a question's `when` condition against the accumulated answers.
  * Returns true if the question would be asked.
  *
- * Note: async `when` functions are treated as applicable — the Inquirer runtime
- * will re-evaluate them properly at prompt time. This helper only uses the result
- * to report missing answers in non-interactive mode, so erring on the side of
- * "would be asked" is safer than silently skipping.
+ * Matches Inquirer's truthy/falsy semantics for sync callbacks. Async callbacks
+ * (which return a Promise) are treated as applicable — we can't await here, and
+ * erring on "would be asked" keeps the non-interactive error list complete.
  */
 function isQuestionApplicable<T extends InquirerAnswers>(q: DistinctQuestion<T>, accumulated: T): boolean {
   if (q.when === undefined) return true
@@ -36,8 +35,10 @@ function isQuestionApplicable<T extends InquirerAnswers>(q: DistinctQuestion<T>,
   if (typeof q.when === 'function') {
     try {
       const result = q.when(accumulated)
-      if (typeof result === 'boolean') return result
-      return true
+      if (result !== null && typeof result === 'object' && typeof (result as { then?: unknown }).then === 'function') {
+        return true
+      }
+      return Boolean(result)
     } catch {
       return true
     }
@@ -57,19 +58,19 @@ export async function promptWithPrefill<T extends InquirerAnswers>(questions: Re
   const { prefill = {}, nonInteractive = false } = options
 
   if (nonInteractive) {
-    const missing: string[] = []
+    const missing = new Set<string>()
     const accumulated = { ...prefill } as unknown as T
 
     for (const q of questions) {
       if (!isQuestionApplicable(q, accumulated)) continue
       const name = q.name as string
       if (getByPath(accumulated as Record<string, unknown>, name) === undefined) {
-        missing.push(name)
+        missing.add(name)
       }
     }
 
-    if (missing.length > 0) {
-      throw new Error(`Missing required values in --non-interactive mode: ${missing.join(', ')}\n` + `Run \`sf new --help\` for the full flag list.`)
+    if (missing.size > 0) {
+      throw new Error(`Missing required values in --non-interactive mode: ${Array.from(missing).join(', ')}\n` + `Run \`sf new --help\` for the full flag list.`)
     }
   }
 
