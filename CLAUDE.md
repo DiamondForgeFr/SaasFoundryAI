@@ -65,7 +65,9 @@ scripts/              # Version management (tag-manager.sh)
 - `npm run dev` — Watch mode for CLI development
 - `npm run format` — Prettier
 - `npm run lint` — ESLint
-- `npm run test:full` — Format + Lint + Type-check + Tests + top 2 Docker scenarios (runs on pre-commit)
+- `npm run test:pre-commit` — Format + Lint + Type-check + Jest tests (runs on pre-commit, ~15s)
+- `npm run test:pre-push` — Top 2 Docker scenarios (runs on pre-push for non-RC branches, ~2-3 min)
+- `npm run test:full` — Alias: `test:pre-commit` + `test:pre-push` (full local validation)
 - `npm run test:docker` — All 18 Docker scenarios (~65 min)
 - `npm run test:docker -- --count N` — Top N priority scenarios
 - `npm run test:docker -- --scenario <name>` — Single scenario
@@ -73,7 +75,7 @@ scripts/              # Version management (tag-manager.sh)
 
 ## Git Workflow
 
-- Main branch: `master` (see `.saasfoundry.json` → `workflow.workingBranch`)
+- Working branch: `develop`, release branch: `master` (see `.saasfoundry.json` → `workflow.workingBranch` / `releaseBranch`)
 - **ALWAYS** use conventional commits: `<type>(#<ticket>): <description>`
 - Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert
 - Scope (ticket number) is required by commitlint

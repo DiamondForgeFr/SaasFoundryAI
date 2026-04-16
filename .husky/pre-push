@@ -37,6 +37,14 @@ else
       exit 1
     fi
   fi
+
+  # Run heavy tests (Docker build scenarios) before pushing
+  echo "Running pre-push tests (Docker build scenarios)..."
+  npm run test:pre-push
+  if [ $? -ne 0 ]; then
+    echo "❌ Pre-push tests failed. Push aborted."
+    exit 1
+  fi
 fi
 
 # All checks passed
