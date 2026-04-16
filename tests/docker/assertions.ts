@@ -1,0 +1,235 @@
+// ── Build Verification & Assertion Functions ───────────────────
+// Used by the test harness to validate generated projects.
+
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+import { join } from 'path'
+
+// ── Types ──────────────────────────────────────────────────────
+
+export interface AssertionResult {
+  passed: boolean
+  message: string
+}
+
+// ── Core Assertions ────────────────────────────────────────────
+
+export function assertFileExists(filePath: string): AssertionResult {
+  const exists = existsSync(filePath)
+  return {
+    passed: exists,
+    message: exists ? `OK: ${filePath} exists` : `FAIL: ${filePath} does not exist`
+  }
+}
+
+export function assertDirExists(dirPath: string): AssertionResult {
+  const exists = existsSync(dirPath) && statSync(dirPath).isDirectory()
+  return {
+    passed: exists,
+    message: exists ? `OK: ${dirPath}/ exists` : `FAIL: ${dirPath}/ does not exist`
+  }
+}
+
+export function assertFileContains(filePath: string, substring: string): AssertionResult {
+  if (!existsSync(filePath)) {
+    return { passed: false, message: `FAIL: ${filePath} does not exist` }
+  }
+  const content = readFileSync(filePath, 'utf8')
+  const contains = content.includes(substring)
+  return {
+    passed: contains,
+    message: contains ? `OK: ${filePath} contains "${substring.slice(0, 50)}"` : `FAIL: ${filePath} does not contain "${substring.slice(0, 50)}"`
+  }
+}
+
+export function assertFileNotContains(filePath: string, substring: string): AssertionResult {
+  if (!existsSync(filePath)) {
+    return { passed: true, message: `OK: ${filePath} does not exist (skip content check)` }
+  }
+  const content = readFileSync(filePath, 'utf8')
+  const contains = content.includes(substring)
+  return {
+    passed: !contains,
+    message: !contains ? `OK: ${filePath} does not contain "${substring.slice(0, 50)}"` : `FAIL: ${filePath} contains unwanted "${substring.slice(0, 50)}"`
+  }
+}
+
+// ── Placeholder Scanner ────────────────────────────────────────
+
+const PLACEHOLDER_PATTERN = /\{\{[A-Z_]+\}\}/g
+
+/**
+ * Scan a directory recursively for unreplaced {{PLACEHOLDER}} patterns.
+ * @param excludePatterns - file path substrings to exclude from scanning
+ *   (e.g., in monorepo, per-app CLAUDE.md files are not processed by the skills installer)
+ */
+export function scanForUnreplacedPlaceholders(dirPath: string, excludePatterns: string[] = []): AssertionResult {
+  const violations: string[] = []
+
+  function scan(dir: string) {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name)
+
+      // Skip irrelevant directories
+      if (entry.isDirectory()) {
+        if (['node_modules', '.git', 'dist', 'build', 'coverage'].includes(entry.name)) continue
+        scan(fullPath)
+        continue
+      }
+
+      // Only check text-like files
+      if (!isTextFile(entry.name)) continue
+
+      // Skip excluded paths
+      if (excludePatterns.some((p) => fullPath.includes(p))) continue
+
+      const content = readFileSync(fullPath, 'utf8')
+      const matches = content.match(PLACEHOLDER_PATTERN)
+      if (matches) {
+        const unique = [...new Set(matches)]
+        violations.push(`${fullPath}: ${unique.join(', ')}`)
+      }
+    }
+  }
+
+  scan(dirPath)
+
+  return {
+    passed: violations.length === 0,
+    message: violations.length === 0 ? `OK: No unreplaced placeholders in ${dirPath}` : `FAIL: Unreplaced placeholders found:\n${violations.map((v) => `  - ${v}`).join('\n')}`
+  }
+}
+
+// ── Build Output Assertions ────────────────────────────────────
+
+/** Verify API build output (NestJS dist/) — output is at dist/src/main.js because tsconfig has no rootDir */
+export function assertApiBuildOutput(apiPath: string): AssertionResult[] {
+  return [assertFileExists(join(apiPath, 'dist', 'src', 'main.js')), assertDirExists(join(apiPath, 'dist'))]
+}
+
+/** Verify Web build output (Vite dist/) */
+export function assertWebBuildOutput(webPath: string): AssertionResult[] {
+  return [assertFileExists(join(webPath, 'dist', 'index.html')), assertDirExists(join(webPath, 'dist'))]
+}
+
+/** Verify monorepo build output (both API and Web) */
+export function assertMonorepoBuildOutput(projectPath: string): AssertionResult[] {
+  return [...assertApiBuildOutput(join(projectPath, 'apps', 'api')), ...assertWebBuildOutput(join(projectPath, 'apps', 'web'))]
+}
+
+// ── Skills Assertions ──────────────────────────────────────────
+
+const CORE_SKILLS = ['sf-git-commit', 'sf-git-create-pr', 'sf-git-fix-pr-comments', 'sf-git-merge', 'sf-utils-fix-errors', 'sf-utils-fix-grammar']
+
+/** Verify skills are installed in a multirepo app */
+export function assertMultirepoSkills(apiPath: string, webPath: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+
+  // Each app should have skills
+  for (const appPath of [apiPath, webPath]) {
+    results.push(assertDirExists(join(appPath, '.claude', 'skills')))
+    for (const skill of CORE_SKILLS) {
+      results.push(assertDirExists(join(appPath, '.claude', 'skills', skill)))
+    }
+  }
+
+  return results
+}
+
+/** Verify skills are installed at monorepo root only */
+export function assertMonorepoSkills(projectPath: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+
+  // Root should have skills
+  results.push(assertDirExists(join(projectPath, '.claude', 'skills')))
+  for (const skill of CORE_SKILLS) {
+    results.push(assertDirExists(join(projectPath, '.claude', 'skills', skill)))
+  }
+
+  // Individual apps should NOT have skills
+  for (const app of ['apps/api', 'apps/web']) {
+    const appSkillsDir = join(projectPath, app, '.claude', 'skills')
+    if (existsSync(appSkillsDir)) {
+      results.push({
+        passed: false,
+        message: `FAIL: Skills should not be in ${appSkillsDir} (monorepo centralizes at root)`
+      })
+    }
+  }
+
+  return results
+}
+
+// ── CLAUDE.md Assertions ───────────────────────────────────────
+
+/** Verify CLAUDE.md has been properly configured */
+export function assertClaudeMdConfigured(claudeMdPath: string, projectName: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+
+  results.push(assertFileExists(claudeMdPath))
+
+  if (existsSync(claudeMdPath)) {
+    // Should contain project name (not placeholder)
+    results.push(assertFileContains(claudeMdPath, projectName))
+    results.push(assertFileNotContains(claudeMdPath, '{{PROJECT_NAME}}'))
+    results.push(assertFileNotContains(claudeMdPath, '{{VERSION}}'))
+  }
+
+  return results
+}
+
+// ── Workflow Assertions ────────────────────────────────────────
+
+/** Verify workflow skill is installed with proper structure */
+export function assertWorkflowSkill(skillPath: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+
+  results.push(assertDirExists(skillPath))
+  results.push(assertFileExists(join(skillPath, 'SKILL.md')))
+
+  // Check for status files
+  const statusesDir = join(skillPath, 'statuses')
+  if (existsSync(statusesDir)) {
+    results.push(assertDirExists(statusesDir))
+    const statusFiles = readdirSync(statusesDir).filter((f) => f.endsWith('.md'))
+    results.push({
+      passed: statusFiles.length > 0,
+      message: statusFiles.length > 0 ? `OK: ${statusFiles.length} status files in ${statusesDir}` : `FAIL: No status files in ${statusesDir}`
+    })
+  }
+
+  return results
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+
+function isTextFile(filename: string): boolean {
+  const textExtensions = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.yml', '.yaml', '.env', '.html', '.css', '.prisma', '.toml', '.sh']
+  return textExtensions.some((ext) => filename.endsWith(ext))
+}
+
+// ── Reporter ───────────────────────────────────────────────────
+
+export function reportResults(scenarioName: string, results: AssertionResult[]): boolean {
+  const passed = results.filter((r) => r.passed).length
+  const failed = results.filter((r) => !r.passed).length
+
+  console.log(`\n${'='.repeat(60)}`)
+  console.log(`Scenario: ${scenarioName}`)
+  console.log(`${'='.repeat(60)}`)
+
+  for (const result of results) {
+    if (!result.passed) {
+      console.log(`  ${result.message}`)
+    }
+  }
+
+  if (failed === 0) {
+    console.log(`  All ${passed} assertions passed`)
+  } else {
+    console.log(`  ---`)
+    console.log(`  ${passed} passed, ${failed} FAILED`)
+  }
+
+  return failed === 0
+}

@@ -37,7 +37,17 @@ export async function installWorkflowSkill({ targetPath, workflow, projectUrl }:
   const workflowName = workflow.template || workflow.tool
   const toolDisplayName =
     workflow.tool === 'github-projects' ? 'GitHub Projects' : workflow.tool === 'jira' ? 'Jira' : workflow.tool === 'notion' ? 'Notion' : workflow.tool === 'linear' ? 'Linear' : workflow.tool
-  skillMdContent = skillMdContent.replace(/\{\{WORKFLOW_NAME\}\}/g, workflowName || '').replace(/\{\{TOOL\}\}/g, toolDisplayName || '')
+  const statusesList = (workflow.statuses || [])
+    .map((s, i) => {
+      const slug = s.name.toLowerCase().replace(/\s+/g, '-')
+      return `${i + 1}. **${s.name}**${s.color ? ` (${s.color})` : ''} — Read \`statuses/${i + 1}-${slug}.md\` for full description`
+    })
+    .join('\n')
+
+  skillMdContent = skillMdContent
+    .replace(/\{\{WORKFLOW_NAME\}\}/g, workflowName || '')
+    .replace(/\{\{TOOL\}\}/g, toolDisplayName || '')
+    .replace(/\{\{STATUSES_LIST\}\}/g, statusesList || 'No statuses configured.')
   await writeFile(skillMdPath, skillMdContent)
 
   // Inject workflow section into CLAUDE.md
