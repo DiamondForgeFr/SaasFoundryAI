@@ -3,6 +3,8 @@ import chalk from 'chalk'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 
+import { PromptOptions, promptWithPrefill } from './helpers'
+
 const execAsync = promisify(exec)
 
 export interface AdvancedSkillCredentials {
@@ -27,8 +29,24 @@ export interface AdvancedSkillCredentials {
  * Prompt user to select which advanced skills to install
  * Skills are pre-selected based on the workflow tool chosen
  * @param workflowTool - The workflow tool selected (github-projects, jira, notion, linear, none)
+ * @param options - Prefill + non-interactive mode
  */
-export async function promptAdvancedSkills(workflowTool?: string): Promise<string[]> {
+export async function promptAdvancedSkills(workflowTool?: string, options: PromptOptions = {}): Promise<string[]> {
+  const { prefill = {}, nonInteractive = false } = options
+
+  // If advancedSkills is already provided via prefill, use it directly
+  if (Array.isArray(prefill.advancedSkills)) {
+    return prefill.advancedSkills as string[]
+  }
+
+  // Non-interactive without prefill: default to empty list (or workflow-driven pre-selection)
+  if (nonInteractive) {
+    const preSelected: string[] = []
+    if (workflowTool === 'jira') preSelected.push('atlassian')
+    if (workflowTool === 'notion') preSelected.push('notion')
+    return preSelected
+  }
+
   console.log(chalk.blue('\n📚 Advanced Skills (Optional)'))
   console.log(chalk.gray('These skills integrate with external services and require API tokens.\nYou can skip this now and configure them later when Claude prompts you.'))
 
@@ -86,40 +104,49 @@ async function openBrowser(url: string): Promise<void> {
  * Context7 uses a free public API - no credentials needed
  * This function is kept for compatibility but doesn't collect any credentials
  */
-export async function promptContext7Credentials(): Promise<Partial<AdvancedSkillCredentials>> {
-  console.log(chalk.blue('\n📚 Context7 - Free Public API'))
-  console.log(chalk.gray('Context7 provides up-to-date library documentation without requiring API keys.'))
-  console.log(chalk.gray('No configuration needed!\n'))
+export async function promptContext7Credentials(options: PromptOptions = {}): Promise<Partial<AdvancedSkillCredentials>> {
+  const { nonInteractive = false } = options
+  if (!nonInteractive) {
+    console.log(chalk.blue('\n📚 Context7 - Free Public API'))
+    console.log(chalk.gray('Context7 provides up-to-date library documentation without requiring API keys.'))
+    console.log(chalk.gray('No configuration needed!\n'))
+  }
   return {}
 }
 
 /**
  * Prompt for Atlassian credentials (Jira/Confluence)
  */
-export async function promptAtlassianCredentials(): Promise<Partial<AdvancedSkillCredentials>> {
-  console.log(chalk.yellow('\n🔑 Atlassian Configuration'))
-  console.log(chalk.yellow('You need an Atlassian API token to integrate with Jira and Confluence.'))
-  console.log(chalk.yellow('Opening https://id.atlassian.com/manage-profile/security/api-tokens in your browser in few seconds...'))
+export async function promptAtlassianCredentials(options: PromptOptions = {}): Promise<Partial<AdvancedSkillCredentials>> {
+  const { prefill = {}, nonInteractive = false } = options
+  const allCredsProvided = prefill.atlassianEmail !== undefined && prefill.atlassianApiToken !== undefined && prefill.atlassianSite !== undefined && prefill.atlassianCloudId !== undefined
 
-  await new Promise((resolve) => setTimeout(resolve, 3000))
-  await openBrowser('https://id.atlassian.com/manage-profile/security/api-tokens')
+  if (!allCredsProvided && !nonInteractive) {
+    console.log(chalk.yellow('\n🔑 Atlassian Configuration'))
+    console.log(chalk.yellow('You need an Atlassian API token to integrate with Jira and Confluence.'))
+    console.log(chalk.yellow('Opening https://id.atlassian.com/manage-profile/security/api-tokens in your browser in few seconds...'))
 
-  const { ready } = await inquirer.prompt<{ ready: boolean }>([
-    {
-      type: 'confirm',
-      name: 'ready',
-      message: 'Are you ready to configure your Atlassian credentials?',
-      default: true
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await openBrowser('https://id.atlassian.com/manage-profile/security/api-tokens')
+
+    const { ready } = await inquirer.prompt<{ ready: boolean }>([
+      {
+        type: 'confirm',
+        name: 'ready',
+        message: 'Are you ready to configure your Atlassian credentials?',
+        default: true
+      }
+    ])
+
+    if (!ready) {
+      console.log(chalk.yellow('Atlassian skill will be set up but disabled until you configure it.'))
+      console.log(chalk.gray('Claude will prompt you to configure it when you try to use it.\n'))
+      return {}
     }
-  ])
+  }
 
-  if (ready) {
-    const answers = await inquirer.prompt<{
-      atlassianEmail: string
-      atlassianApiToken: string
-      atlassianSite: string
-      atlassianCloudId: string
-    }>([
+  return await promptWithPrefill<Partial<AdvancedSkillCredentials>>(
+    [
       {
         type: 'input',
         name: 'atlassianEmail',
@@ -157,41 +184,44 @@ export async function promptAtlassianCredentials(): Promise<Partial<AdvancedSkil
           return true
         }
       }
-    ])
-
-    return answers
-  } else {
-    console.log(chalk.yellow('Atlassian skill will be set up but disabled until you configure it.'))
-    console.log(chalk.gray('Claude will prompt you to configure it when you try to use it.\n'))
-    return {}
-  }
+    ],
+    { prefill, nonInteractive }
+  )
 }
 
 /**
  * Prompt for Notion API token
  */
-export async function promptNotionCredentials(): Promise<Partial<AdvancedSkillCredentials>> {
-  console.log(chalk.yellow('\n🔑 Notion Configuration'))
-  console.log(chalk.yellow('You need a Notion API token to integrate with your Notion workspace.'))
-  console.log(chalk.yellow('Opening https://www.notion.so/my-integrations in your browser in few seconds...'))
+export async function promptNotionCredentials(options: PromptOptions = {}): Promise<Partial<AdvancedSkillCredentials>> {
+  const { prefill = {}, nonInteractive = false } = options
+  const allCredsProvided = prefill.notionApiToken !== undefined && prefill.notionApiVersion !== undefined
 
-  await new Promise((resolve) => setTimeout(resolve, 3000))
-  await openBrowser('https://www.notion.so/my-integrations')
+  if (!allCredsProvided && !nonInteractive) {
+    console.log(chalk.yellow('\n🔑 Notion Configuration'))
+    console.log(chalk.yellow('You need a Notion API token to integrate with your Notion workspace.'))
+    console.log(chalk.yellow('Opening https://www.notion.so/my-integrations in your browser in few seconds...'))
 
-  const { ready } = await inquirer.prompt<{ ready: boolean }>([
-    {
-      type: 'confirm',
-      name: 'ready',
-      message: 'Are you ready to configure your Notion credentials?',
-      default: true
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await openBrowser('https://www.notion.so/my-integrations')
+
+    const { ready } = await inquirer.prompt<{ ready: boolean }>([
+      {
+        type: 'confirm',
+        name: 'ready',
+        message: 'Are you ready to configure your Notion credentials?',
+        default: true
+      }
+    ])
+
+    if (!ready) {
+      console.log(chalk.yellow('Notion skill will be set up but disabled until you configure it.'))
+      console.log(chalk.gray('Claude will prompt you to configure it when you try to use it.\n'))
+      return {}
     }
-  ])
+  }
 
-  if (ready) {
-    const answers = await inquirer.prompt<{
-      notionApiToken: string
-      notionApiVersion: string
-    }>([
+  return await promptWithPrefill<Partial<AdvancedSkillCredentials>>(
+    [
       {
         type: 'input',
         name: 'notionApiToken',
@@ -211,38 +241,44 @@ export async function promptNotionCredentials(): Promise<Partial<AdvancedSkillCr
           return true
         }
       }
-    ])
-
-    return answers
-  } else {
-    console.log(chalk.yellow('Notion skill will be set up but disabled until you configure it.'))
-    console.log(chalk.gray('Claude will prompt you to configure it when you try to use it.\n'))
-    return {}
-  }
+    ],
+    { prefill, nonInteractive }
+  )
 }
 
 /**
  * Prompt for Figma API token
  */
-export async function promptFigmaCredentials(): Promise<Partial<AdvancedSkillCredentials>> {
-  console.log(chalk.yellow('\n🔑 Figma Configuration'))
-  console.log(chalk.yellow('You need a Figma API token to integrate with Figma designs.'))
-  console.log(chalk.yellow('Opening https://www.figma.com/developers/api#access-tokens in your browser in few seconds...'))
+export async function promptFigmaCredentials(options: PromptOptions = {}): Promise<Partial<AdvancedSkillCredentials>> {
+  const { prefill = {}, nonInteractive = false } = options
+  const allCredsProvided = prefill.figmaApiToken !== undefined
 
-  await new Promise((resolve) => setTimeout(resolve, 3000))
-  await openBrowser('https://www.figma.com/developers/api#access-tokens')
+  if (!allCredsProvided && !nonInteractive) {
+    console.log(chalk.yellow('\n🔑 Figma Configuration'))
+    console.log(chalk.yellow('You need a Figma API token to integrate with Figma designs.'))
+    console.log(chalk.yellow('Opening https://www.figma.com/developers/api#access-tokens in your browser in few seconds...'))
 
-  const { ready } = await inquirer.prompt<{ ready: boolean }>([
-    {
-      type: 'confirm',
-      name: 'ready',
-      message: 'Are you ready to configure your Figma credentials?',
-      default: true
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await openBrowser('https://www.figma.com/developers/api#access-tokens')
+
+    const { ready } = await inquirer.prompt<{ ready: boolean }>([
+      {
+        type: 'confirm',
+        name: 'ready',
+        message: 'Are you ready to configure your Figma credentials?',
+        default: true
+      }
+    ])
+
+    if (!ready) {
+      console.log(chalk.yellow('Figma skill will be set up but disabled until you configure it.'))
+      console.log(chalk.gray('Claude will prompt you to configure it when you try to use it.\n'))
+      return {}
     }
-  ])
+  }
 
-  if (ready) {
-    const { figmaApiToken } = await inquirer.prompt<{ figmaApiToken: string }>([
+  return await promptWithPrefill<Partial<AdvancedSkillCredentials>>(
+    [
       {
         type: 'input',
         name: 'figmaApiToken',
@@ -252,35 +288,30 @@ export async function promptFigmaCredentials(): Promise<Partial<AdvancedSkillCre
           return true
         }
       }
-    ])
-
-    return { figmaApiToken }
-  } else {
-    console.log(chalk.yellow('Figma skill will be set up but disabled until you configure it.'))
-    console.log(chalk.gray('Claude will prompt you to configure it when you try to use it.\n'))
-    return {}
-  }
+    ],
+    { prefill, nonInteractive }
+  )
 }
 
 /**
  * Orchestrate credential collection for selected advanced skills
  */
-export async function collectAdvancedSkillsCredentials(selectedSkills: string[]): Promise<AdvancedSkillCredentials> {
+export async function collectAdvancedSkillsCredentials(selectedSkills: string[], options: PromptOptions = {}): Promise<AdvancedSkillCredentials> {
   const credentials: AdvancedSkillCredentials = {}
 
   for (const skill of selectedSkills) {
     switch (skill) {
       case 'context7':
-        Object.assign(credentials, await promptContext7Credentials())
+        Object.assign(credentials, await promptContext7Credentials(options))
         break
       case 'atlassian':
-        Object.assign(credentials, await promptAtlassianCredentials())
+        Object.assign(credentials, await promptAtlassianCredentials(options))
         break
       case 'notion':
-        Object.assign(credentials, await promptNotionCredentials())
+        Object.assign(credentials, await promptNotionCredentials(options))
         break
       case 'figma':
-        Object.assign(credentials, await promptFigmaCredentials())
+        Object.assign(credentials, await promptFigmaCredentials(options))
         break
     }
   }
