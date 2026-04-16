@@ -11,19 +11,22 @@
 ## Mandatory Actions
 
 ### 1. CREATE THE PULL REQUEST
+
 - Title: Repeat the ticket title
 - Description:
-  * Link to the ticket
-  * Summary of changes
-  * Test plan (copy from ticket)
-  * List of created tests (unit + E2E)
+  - Link to the ticket
+  - Summary of changes
+  - Test plan (copy from ticket)
+  - List of created tests (unit + E2E)
 - Assign configured reviewers
 - Link PR to ticket
 
 ### 2. MOVE TICKET TO "IN REVIEW"
+
 - Update status in the project management tool
 
 ### 3. MONITOR CI
+
 - CI will run the full test suite (unit + E2E)
 - If CI is red 🔴:
   - a. Analyze error logs
@@ -32,11 +35,13 @@
   - d. Wait for CI to turn green ✅
 
 ### 4. MONITOR REVIEW COMMENTS
+
 - Read all reviewer comments
 - Answer questions
 - Implement requested changes
 
 ### 5. IF REVIEWER REQUESTS ADDITIONAL TESTS:
+
 - a. Create requested tests (unit or E2E)
 - b. Run tests locally to verify
 - c. Commit and push tests
@@ -44,6 +49,7 @@
 - e. Resolve conversation when done
 
 ### 6. WAIT FOR APPROVAL AND GREEN CI
+
 - ⚠️ MANDATORY CONDITION: CI must be green ✅
 - Developer will merge ONLY if CI is green
 - Do nothing until merged
@@ -60,6 +66,4 @@
 
 ## Errors to Avoid
 
-❌ NEVER ask developer to merge with red CI
-❌ NEVER ignore test failures in CI
-❌ NEVER merge yourself (unless explicit instruction)
+❌ NEVER ask developer to merge with red CI ❌ NEVER ignore test failures in CI ❌ NEVER merge yourself (unless explicit instruction)

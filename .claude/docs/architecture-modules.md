@@ -211,4 +211,3 @@ When adding a new optional module to SaaSFoundry, follow these steps:
 10. **Update this CLAUDE.md**
     - Add module to "Current Modules" table
     - Add "Files Affected" section for the new module
-

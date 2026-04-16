@@ -1,221 +1,121 @@
 # GitHub Projects Tool
 
-Integration with GitHub Projects for ticket management, status updates, and workflow automation.
+Integration with GitHub Projects V2 for ticket management, status transitions, and complexity labeling.
 
 ## Auto-trigger keywords
-github project, create subtask, update ticket status, github issue, project board
+github project, create subtask, update ticket status, github issue, project board, set complexity
+
+## Data model
+
+Two orthogonal axes on every ticket:
+
+| Axis | Where it lives | What it controls |
+|------|----------------|------------------|
+| **Status** | Projects V2 board (Single select field "Status") | Workflow phase (Backlog → … → Done) |
+| **Complexity** | GitHub label (`complexity: bug\|low\|medium\|complex`) | Rigor level applied in each phase (agents, tests, reviews) |
+
+Never encode status in a label. Never encode complexity on the board. Keep them independent.
 
 ## Configuration
 
-This skill reads all configuration from `.saasfoundry.json` at the project root:
+This skill reads everything from `.saasfoundry.json`:
 
 ```bash
-# Project URL
 jq -r '.workflow.projectUrl' .saasfoundry.json
-
-# Working branch
 jq -r '.workflow.workingBranch' .saasfoundry.json
-
-# Workflow statuses
-jq -r '.workflow.statuses' .saasfoundry.json
 ```
 
-**No credentials needed** - Uses `gh` CLI authentication (requires `gh auth login`).
+Supported `projectUrl` formats:
+- `https://github.com/orgs/<owner>/projects/<number>`
+- `https://github.com/users/<owner>/projects/<number>`
 
-## Available Commands
+Requires `gh auth login` with `project` + `repo` scopes.
 
-### Create Subtask
+## Commands
 
-Create a GitHub sub-issue linked to a parent issue.
+All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [args]`.
 
-**Usage:**
-```bash
-.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask <parent-number> <title> [body]
-```
+| Command | Purpose |
+|---------|---------|
+| `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue` |
+| `status <ticket>` | Read status from Projects V2 board |
+| `update-status <ticket> <status-name>` | Write status on Projects V2 board (`gh project item-edit`) |
+| `set-complexity <ticket> <level>` | Set label `complexity: <bug\|low\|medium\|complex>` (removes any existing complexity label first) |
+| `get-complexity <ticket>` | Read current complexity label |
+| `get-ticket <ticket>` | Print title + body (used by `detect-complexity.sh`) |
+| `create-pr <ticket>` | Push branch + open PR against `workingBranch` |
+| `list [status]` | List project items, optionally filtered by status |
 
-**Examples:**
-```bash
-# Simple subtask
-github-projects-cli.sh create-subtask 9 "Add validation logic"
+Status names are case-insensitive — the CLI matches against the options defined on the board.
 
-# With description
-github-projects-cli.sh create-subtask 9 "Write unit tests" "Cover edge cases and error handling"
-```
+## How the orchestration skill uses this CLI
 
-**What it does:**
-1. Prepends `[Parent #{N}]` to the title
-2. Creates the GitHub issue
-3. Links it as a sub-issue to the parent via GraphQL API
-4. Returns the subtask number and URL
-
-### Update Status
-
-Update the status of a ticket in GitHub Projects.
-
-**Usage:**
-```bash
-github-projects-cli.sh update-status <ticket-number> <status-name>
-```
-
-**Examples:**
-```bash
-# Move to In Progress
-github-projects-cli.sh update-status 42 "In Progress"
-
-# Move to AI Testing
-github-projects-cli.sh update-status 42 "AI Testing"
-
-# Move to Done
-github-projects-cli.sh update-status 42 "Done"
-```
-
-**Note:** Status names must match exactly the statuses defined in your GitHub Project board.
-
-### Get Current Status
-
-Get the current status of a ticket.
-
-**Usage:**
-```bash
-github-projects-cli.sh status <ticket-number>
-```
-
-**Returns:** The current status name (e.g., "In Progress", "AI Testing", "Done")
-
-### Create Pull Request
-
-Create a pull request for a ticket.
-
-**Usage:**
-```bash
-github-projects-cli.sh create-pr <ticket-number>
-```
-
-**What it does:**
-1. Verifies the current branch matches the ticket
-2. Pushes the branch to remote
-3. Creates a PR with title and description based on commits
-4. Links the PR to the ticket
-5. Returns the PR URL
-
-### List Tickets
-
-List tickets in the project board filtered by status.
-
-**Usage:**
-```bash
-# List all tickets
-github-projects-cli.sh list
-
-# List tickets in specific status
-github-projects-cli.sh list "In Progress"
-github-projects-cli.sh list "AI Testing"
-```
-
-## GraphQL API
-
-This skill uses GitHub's GraphQL API with the `sub_issues` feature flag for sub-issue management.
-
-**Headers required:**
-```
--H "GraphQL-Features: sub_issues"
-```
-
-**Key mutations:**
-- `addSubIssue` - Link a sub-issue to a parent
-- `updateProjectV2ItemFieldValue` - Update ticket status
-
-**Key queries:**
-- `projectV2` - Get project board data
-- `issue` - Get issue details and node ID
-
-## Integration with Workflow Skill
-
-The workflow skill (`sf-workflow`) delegates to this tool skill when the project uses GitHub Projects:
+`sf-workflow/workflow-cli.sh` routes every tool-specific call through this CLI:
 
 ```bash
-# workflow-cli.sh reads .saasfoundry.json
-TOOL=$(jq -r '.workflow.tool' .saasfoundry.json)
+# e.g. sf-workflow/workflow-cli.sh retag 42 complex
+#   → github-projects-cli.sh set-complexity 42 complex
 
-# If tool is "github-projects", delegate to this CLI
-case "$TOOL" in
-  github-projects)
-    sf-tool-github-projects/github-projects-cli.sh "$@"
-    ;;
-esac
+# e.g. sf-workflow/workflow-cli.sh status 42
+#   → github-projects-cli.sh status 42
+```
+
+## Complexity labels
+
+The following labels must exist in the repo (create them once):
+
+| Label | Color | Use case |
+|-------|-------|----------|
+| `complexity: bug` | `#FF5555` | Bug fix — direct fix + regression test |
+| `complexity: low` | `#7CFC00` | Oneshot-style, minimal ceremony |
+| `complexity: medium` | `#FFD700` | Structured plan + validation |
+| `complexity: complex` | `#FF1493` | Full adversarial review (security, logic, perf) |
+
+Create them with:
+```bash
+gh label create "complexity: bug"     --color FF5555 --description "🐛 Bug fix"
+gh label create "complexity: low"     --color 7CFC00 --description "🟢 Low complexity"
+gh label create "complexity: medium"  --color FFD700 --description "🟡 Medium complexity"
+gh label create "complexity: complex" --color FF1493 --description "🔴 Complex / critical"
+```
+
+## Example — full ticket lifecycle
+
+```bash
+CLI=.claude/skills/sf-tool-github-projects/github-projects-cli.sh
+
+# 1. Tag complexity (AI suggests, developer confirms)
+$CLI set-complexity 42 medium
+
+# 2. Subtasks
+$CLI create-subtask 42 "Backend API"
+$CLI create-subtask 42 "Frontend UI"
+
+# 3. Status transitions (from the board, not labels)
+$CLI update-status 42 "In progress"
+$CLI update-status 42 "AI testing"
+$CLI update-status 42 "Human testing"
+
+# 4. PR + review + done
+$CLI create-pr 42
+$CLI update-status 42 "In review"
+# (after merge)
+$CLI update-status 42 "Done"
 ```
 
 ## Requirements
 
-- **GitHub CLI** (`gh`) installed and authenticated
-- **jq** for JSON parsing
-- **GraphQL sub_issues** feature enabled (automatic with `gh api graphql`)
-- **Project write permissions** for the authenticated user
-
-## Error Handling
-
-The CLI validates:
-- ✅ Arguments are provided
-- ✅ Parent issue exists (for create-subtask)
-- ✅ Ticket number is valid
-- ✅ Status name exists in project
-- ✅ Current branch matches ticket (for create-pr)
-
-All errors are displayed with clear messages and exit codes.
-
-## Examples
-
-### Complete workflow for a ticket
-
-```bash
-# 1. Create main ticket (manually via gh issue create or web UI)
-# Ticket #42 created
-
-# 2. Create subtasks
-github-projects-cli.sh create-subtask 42 "Backend API"
-github-projects-cli.sh create-subtask 42 "Frontend UI"
-github-projects-cli.sh create-subtask 42 "Documentation"
-
-# 3. Start work (create branch, update status)
-git checkout -b feature/42-user-authentication
-github-projects-cli.sh update-status 42 "In Progress"
-
-# 4. Work on subtasks
-github-projects-cli.sh update-status 43 "In Progress"
-# ... code ...
-github-projects-cli.sh update-status 43 "Done"
-
-# 5. When all subtasks done
-github-projects-cli.sh update-status 42 "AI Testing"
-
-# 6. After testing passes
-github-projects-cli.sh update-status 42 "Human Testing"
-
-# 7. Create PR after validation
-github-projects-cli.sh create-pr 42
-
-# 8. Update to In Review
-github-projects-cli.sh update-status 42 "In Review"
-
-# 9. After merge
-github-projects-cli.sh update-status 42 "Done"
-```
+- `gh` CLI authenticated (`gh auth status` must show `project` + `repo` scopes)
+- `jq` for JSON parsing
+- Project exists with a single-select "Status" field whose options match `.saasfoundry.json` → `workflow.statuses`
 
 ## Troubleshooting
 
-**Issue: "gh: command not found"**
-- Install GitHub CLI: `brew install gh` (macOS) or follow [gh docs](https://cli.github.com/)
+**`Could not load project <N> for owner <X>`**
+Check `.saasfoundry.json` → `workflow.projectUrl` matches a real project. Run `gh project list --owner <owner>` to see what you have access to.
 
-**Issue: "Could not find parent issue"**
-- Verify the parent issue number exists: `gh issue view <number>`
-- Check you're in the correct repository
+**`Ticket #N is not on project board`**
+The issue exists but hasn't been added to the project. Add it via the board UI or `gh project item-add`.
 
-**Issue: "Failed to update status"**
-- Verify the status name matches exactly (case-sensitive)
-- Check you have write permissions to the project board
-- Run `gh project list` to see available projects
-
-**Issue: "GraphQL mutation failed"**
-- Ensure you're authenticated: `gh auth status`
-- Verify the project URL in `.saasfoundry.json` is correct
-- Check the project board has the status field configured
+**`Unknown status '<name>'`**
+Status must exactly match an option on the board (case is ignored). The CLI prints the available options on error.
