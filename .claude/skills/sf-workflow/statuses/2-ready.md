@@ -26,5 +26,4 @@
 
 ## Errors to Avoid
 
-❌ NEVER take a Ready ticket without confirmation
-❌ NEVER skip higher priority tickets
+❌ NEVER take a Ready ticket without confirmation ❌ NEVER skip higher priority tickets

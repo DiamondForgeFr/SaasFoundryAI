@@ -14,17 +14,20 @@
 ### 2. DETECT COMPLEXITY
 
 **Run complexity detection:**
+
 ```bash
 .claude/skills/sf-workflow/scripts/detect-complexity.sh {ticket-number}
 ```
 
 **AI will suggest complexity based on:**
+
 - Number of files potentially impacted
 - Keywords (auth, payment, security → complex)
 - Risk assessment
 - Similar historical tickets
 
 **Complexity levels:**
+
 - 🐛 **bug** - Quick fix, minimal ceremony
 - 🟢 **low** - Simple task (oneshot-style)
 - 🟡 **medium** - Standard feature (apex-free-style)
@@ -35,16 +38,15 @@
 ### 3. ANALYZE (adaptive based on complexity)
 
 **Check if analysis required:**
+
 ```bash
 .claude/skills/sf-workflow/scripts/analyze.sh {ticket-number} {complexity}
 ```
 
-**Skipped for:** 🐛 bug
-**Minimal for:** 🟢 low (2-3 files, no agents)
-**Standard for:** 🟡 medium (2-4 parallel agents)
-**Deep for:** 🔴 complex (6-10 parallel agents)
+**Skipped for:** 🐛 bug **Minimal for:** 🟢 low (2-3 files, no agents) **Standard for:** 🟡 medium (2-4 parallel agents) **Deep for:** 🔴 complex (6-10 parallel agents)
 
 **Purpose:**
+
 - Gather context about what currently exists
 - Find patterns, files, utilities
 - Identify dependencies and risks
@@ -55,22 +57,22 @@
 ### 4. PLAN (adaptive based on complexity)
 
 **Check if planning required:**
+
 ```bash
 .claude/skills/sf-workflow/scripts/plan.sh {ticket-number} {complexity}
 ```
 
-**Skipped for:** 🐛 bug
-**Minimal for:** 🟢 low (mental plan)
-**Detailed for:** 🟡 medium (file-by-file, requires approval)
-**Comprehensive for:** 🔴 complex (with dependencies, requires approval)
+**Skipped for:** 🐛 bug **Minimal for:** 🟢 low (mental plan) **Detailed for:** 🟡 medium (file-by-file, requires approval) **Comprehensive for:** 🔴 complex (with dependencies, requires approval)
 
 **Purpose:**
+
 - Create implementation strategy
 - Map acceptance criteria to file changes
 - Identify execution order
 - Plan edge cases and error handling
 
 **If approval required:**
+
 - Post plan as ticket comment
 - Wait for explicit approval before proceeding
 
@@ -93,6 +95,7 @@
 ### 7. WAIT FOR VALIDATION
 
 **Two approvals needed:**
+
 1. **Specs complete** → can move to Ready
 2. **Prioritization** (from Ready) → can move to In Progress
 
@@ -111,8 +114,5 @@
 
 ## Errors to Avoid
 
-❌ NEVER create a branch from Backlog
-❌ NEVER start coding before Ready
-❌ NEVER skip complexity detection
-❌ NEVER skip analysis/planning if required by complexity
-❌ NEVER move to Ready without developer validation
+❌ NEVER create a branch from Backlog ❌ NEVER start coding before Ready ❌ NEVER skip complexity detection ❌ NEVER skip analysis/planning if required by complexity ❌ NEVER move to Ready without
+developer validation

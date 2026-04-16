@@ -2,6 +2,9 @@
 
 # GitHub Projects CLI - Single CLI with subcommands
 # Usage: ./github-projects-cli.sh <command> [args...]
+#
+# Backend: GitHub Projects V2 (via `gh project` CLI). Status lives on the board,
+# complexity lives as a label on the issue (convention: `complexity: <level>`).
 
 set -e
 
@@ -12,78 +15,118 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Get command
 COMMAND=$1
-shift || true  # Remove command from args (don't fail if no args)
+shift || true
 
-# Load configuration from .saasfoundry.json
+# ───────────────────────────────────────────────────────────────────────────
+# Configuration
+# ───────────────────────────────────────────────────────────────────────────
+
 load_config() {
   if [ ! -f ".saasfoundry.json" ]; then
-    echo -e "${RED}Error: .saasfoundry.json not found${NC}"
-    echo "This command must be run from the project root."
+    echo -e "${RED}Error: .saasfoundry.json not found${NC}" >&2
+    echo "This command must be run from the project root." >&2
     exit 1
   fi
 
   PROJECT_URL=$(jq -r '.workflow.projectUrl // empty' .saasfoundry.json)
   WORKING_BRANCH=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
 
-  if [ -z "$PROJECT_URL" ]; then
-    echo -e "${YELLOW}Warning: No project URL configured in .saasfoundry.json${NC}"
+  # Parse owner and project number from URL
+  # Formats supported:
+  #   https://github.com/orgs/{owner}/projects/{number}
+  #   https://github.com/users/{owner}/projects/{number}
+  PROJECT_OWNER=""
+  PROJECT_NUMBER=""
+  if [ -n "$PROJECT_URL" ]; then
+    PROJECT_OWNER=$(echo "$PROJECT_URL" | sed -nE 's#https?://github.com/(orgs|users)/([^/]+)/projects/[0-9]+.*#\2#p')
+    PROJECT_NUMBER=$(echo "$PROJECT_URL" | sed -nE 's#.*/projects/([0-9]+).*#\1#p')
   fi
 }
 
+require_project() {
+  load_config
+  if [ -z "$PROJECT_OWNER" ] || [ -z "$PROJECT_NUMBER" ]; then
+    echo -e "${RED}Error: workflow.projectUrl is missing or malformed in .saasfoundry.json${NC}" >&2
+    echo "Expected: https://github.com/orgs/<owner>/projects/<number>" >&2
+    exit 1
+  fi
+  PROJECT_ID=$(gh project view "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json 2>/dev/null | jq -r '.id')
+  if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
+    echo -e "${RED}Error: Could not load project $PROJECT_NUMBER for owner $PROJECT_OWNER${NC}" >&2
+    echo "Check that 'gh auth status' shows the 'project' scope." >&2
+    exit 1
+  fi
+}
+
+# Fetch the Status field metadata (id + all option ids/names) once.
+# Populates STATUS_FIELD_ID and STATUS_OPTIONS_JSON.
+load_status_field() {
+  local payload
+  payload=$(gh project field-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json 2>/dev/null)
+  STATUS_FIELD_ID=$(echo "$payload" | jq -r '.fields[] | select(.name == "Status") | .id')
+  STATUS_OPTIONS_JSON=$(echo "$payload" | jq -c '.fields[] | select(.name == "Status") | .options')
+  if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ]; then
+    echo -e "${RED}Error: Project has no 'Status' field${NC}" >&2
+    exit 1
+  fi
+}
+
+# Return option id for a status name (case-insensitive).
+# Usage: find_status_option_id "In progress"
+find_status_option_id() {
+  local name=$1
+  echo "$STATUS_OPTIONS_JSON" | jq -r --arg s "$name" '
+    .[] | select((.name | ascii_downcase) == ($s | ascii_downcase)) | .id
+  ' | head -n1
+}
+
+# Return the Projects V2 item id for a ticket number, empty if not in project.
+get_project_item_id() {
+  local ticket=$1
+  gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 500 2>/dev/null \
+    | jq -r --arg n "$ticket" '.items[] | select(.content.number == ($n | tonumber)) | .id' | head -n1
+}
+
+# Return the Status text for a ticket number, empty if not on the board.
+get_ticket_status() {
+  local ticket=$1
+  gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 500 2>/dev/null \
+    | jq -r --arg n "$ticket" '.items[] | select(.content.number == ($n | tonumber)) | .status // empty' | head -n1
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Command: create-subtask
-# Create a GitHub sub-issue linked to a parent issue
+# ───────────────────────────────────────────────────────────────────────────
+
 cmd_create_subtask() {
   if [ "$#" -lt 2 ]; then
     echo -e "${RED}Error: Missing arguments${NC}"
     echo "Usage: $0 create-subtask <parent-number> <title> [body]"
-    echo ""
-    echo "Example:"
-    echo "  $0 create-subtask 9 \"Add validation logic\""
-    echo "  $0 create-subtask 9 \"Add validation logic\" \"Implement validation for user input\""
     exit 1
   fi
 
   PARENT_NUMBER=$1
   TITLE=$2
   BODY=${3:-""}
-
-  # Prepend parent reference to title
   FULL_TITLE="[Parent #${PARENT_NUMBER}] ${TITLE}"
 
   echo -e "${YELLOW}Creating subtask for parent issue #${PARENT_NUMBER}...${NC}"
 
-  # Step 1: Get parent node ID
-  echo "→ Fetching parent issue node ID..."
   PARENT_NODE_ID=$(gh issue view "$PARENT_NUMBER" --json id --jq ".id" 2>/dev/null)
-
   if [ -z "$PARENT_NODE_ID" ]; then
     echo -e "${RED}Error: Could not find parent issue #${PARENT_NUMBER}${NC}"
     exit 1
   fi
 
-  echo "  Parent node ID: $PARENT_NODE_ID"
-
-  # Step 2: Create the subtask issue
-  echo "→ Creating subtask issue..."
   if [ -n "$BODY" ]; then
     ISSUE_URL=$(gh issue create --title "$FULL_TITLE" --body "$BODY")
   else
     ISSUE_URL=$(gh issue create --title "$FULL_TITLE")
   fi
-
-  # Extract issue number from URL
   CHILD_NUMBER=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
-
-  # Get the node ID of the created issue
   CHILD_NODE_ID=$(gh issue view "$CHILD_NUMBER" --json id --jq ".id")
 
-  echo "  Created issue #$CHILD_NUMBER"
-  echo "  Child node ID: $CHILD_NODE_ID"
-
-  # Step 3: Link as sub-issue via GraphQL
-  echo "→ Linking subtask to parent..."
   RESULT=$(gh api graphql -H "GraphQL-Features: sub_issues" \
     -f query="mutation {
       addSubIssue(input: {
@@ -95,10 +138,8 @@ cmd_create_subtask() {
       }
     }" 2>&1)
 
-  # Check if the mutation succeeded
   if echo "$RESULT" | jq -e '.data.addSubIssue' > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ Subtask #${CHILD_NUMBER} successfully linked to parent #${PARENT_NUMBER}${NC}"
-    echo ""
+    echo -e "${GREEN}✓ Subtask #${CHILD_NUMBER} linked to parent #${PARENT_NUMBER}${NC}"
     echo "Issue URL: $(gh issue view "$CHILD_NUMBER" --json url --jq ".url")"
   else
     echo -e "${RED}Error: Failed to link subtask${NC}"
@@ -107,128 +148,177 @@ cmd_create_subtask() {
   fi
 }
 
-# Command: update-status
-# Update the status of a ticket in GitHub Projects
-cmd_update_status() {
-  if [ "$#" -lt 2 ]; then
-    echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 update-status <ticket-number> <status-name>"
-    echo ""
-    echo "Example:"
-    echo "  $0 update-status 42 \"In Progress\""
-    echo "  $0 update-status 42 \"AI Testing\""
-    exit 1
-  fi
+# ───────────────────────────────────────────────────────────────────────────
+# Command: status — read status from Projects V2 board
+# ───────────────────────────────────────────────────────────────────────────
 
-  TICKET_NUMBER=$1
-  STATUS_NAME=$2
-
-  load_config
-
-  echo -e "${YELLOW}Updating ticket #${TICKET_NUMBER} to status '${STATUS_NAME}'...${NC}"
-
-  # Step 1: Get issue node ID
-  ISSUE_NODE_ID=$(gh issue view "$TICKET_NUMBER" --json id --jq ".id" 2>/dev/null)
-
-  if [ -z "$ISSUE_NODE_ID" ]; then
-    echo -e "${RED}Error: Could not find issue #${TICKET_NUMBER}${NC}"
-    exit 1
-  fi
-
-  # Step 2: Get project data (assumes first project, can be enhanced)
-  # This is a simplified version - in production, you'd parse PROJECT_URL to get the exact project
-  OWNER=$(gh repo view --json owner --jq ".owner.login")
-  REPO=$(gh repo view --json name --jq ".name")
-
-  # Get project field ID and option ID for the status
-  # This requires knowing the project number - for now, we'll use a simpler approach
-  # Note: This would need to be enhanced to properly query the project by URL
-
-  echo -e "${BLUE}Note: Status update via GraphQL requires project-specific field IDs${NC}"
-  echo -e "${BLUE}For now, update the status manually in the GitHub Projects board${NC}"
-  echo -e "${BLUE}Or use: gh issue edit ${TICKET_NUMBER} --add-label \"Status: ${STATUS_NAME}\"${NC}"
-
-  # Alternative: Use labels as a simple status tracker
-  gh issue edit "$TICKET_NUMBER" --add-label "Status: ${STATUS_NAME}" 2>/dev/null || true
-
-  echo -e "${GREEN}✓ Updated ticket #${TICKET_NUMBER}${NC}"
-}
-
-# Command: status
-# Get the current status of a ticket
 cmd_status() {
   if [ "$#" -lt 1 ]; then
-    echo -e "${RED}Error: Missing ticket number${NC}"
-    echo "Usage: $0 status <ticket-number>"
+    echo "Usage: $0 status <ticket-number>" >&2
     exit 1
   fi
+  local ticket=$1
+  require_project
 
-  TICKET_NUMBER=$1
-
-  # Get issue data
-  ISSUE_DATA=$(gh issue view "$TICKET_NUMBER" --json state,labels,title 2>/dev/null)
-
-  if [ -z "$ISSUE_DATA" ]; then
-    echo -e "${RED}Error: Could not find issue #${TICKET_NUMBER}${NC}"
+  local title state status
+  title=$(gh issue view "$ticket" --json title --jq '.title' 2>/dev/null)
+  state=$(gh issue view "$ticket" --json state --jq '.state' 2>/dev/null)
+  if [ -z "$title" ]; then
+    echo -e "${RED}Error: Could not find issue #${ticket}${NC}" >&2
     exit 1
   fi
+  status=$(get_ticket_status "$ticket")
 
-  TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
-  STATE=$(echo "$ISSUE_DATA" | jq -r '.state')
-
-  # Try to extract status from labels
-  STATUS=$(echo "$ISSUE_DATA" | jq -r '.labels[] | select(.name | startswith("Status: ")) | .name' | head -n1 | sed 's/Status: //')
-
-  echo -e "${BLUE}Issue #${TICKET_NUMBER}: ${TITLE}${NC}"
-  echo "State: $STATE"
-
-  if [ -n "$STATUS" ]; then
-    echo "Status: $STATUS"
+  echo -e "${BLUE}Issue #${ticket}: ${title}${NC}"
+  echo "State: $state"
+  if [ -n "$status" ]; then
+    echo "Status: $status"
   else
-    echo "Status: (no status label found)"
+    echo "Status: (not in project board)"
   fi
 }
 
-# Command: create-pr
-# Create a pull request for a ticket
-cmd_create_pr() {
-  if [ "$#" -lt 1 ]; then
-    echo -e "${RED}Error: Missing ticket number${NC}"
-    echo "Usage: $0 create-pr <ticket-number>"
+# ───────────────────────────────────────────────────────────────────────────
+# Command: update-status — write status on Projects V2 board
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_update_status() {
+  if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 update-status <ticket-number> <status-name>" >&2
+    exit 1
+  fi
+  local ticket=$1
+  local status_name=$2
+  require_project
+  load_status_field
+
+  local item_id option_id
+  item_id=$(get_project_item_id "$ticket")
+  if [ -z "$item_id" ]; then
+    echo -e "${RED}Error: Ticket #${ticket} is not on project board ${PROJECT_NUMBER}${NC}" >&2
     exit 1
   fi
 
+  option_id=$(find_status_option_id "$status_name")
+  if [ -z "$option_id" ]; then
+    echo -e "${RED}Error: Unknown status '${status_name}'${NC}" >&2
+    echo "Available statuses:" >&2
+    echo "$STATUS_OPTIONS_JSON" | jq -r '.[].name' | sed 's/^/  - /' >&2
+    exit 1
+  fi
+
+  gh project item-edit \
+    --id "$item_id" \
+    --project-id "$PROJECT_ID" \
+    --field-id "$STATUS_FIELD_ID" \
+    --single-select-option-id "$option_id" >/dev/null
+
+  echo -e "${GREEN}✓ Ticket #${ticket} → ${status_name}${NC}"
+}
+
+# ───────────────────────────────────────────────────────────────────────────
+# Command: set-complexity — bug | low | medium | complex (via label)
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_set_complexity() {
+  if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 set-complexity <ticket-number> <bug|low|medium|complex>" >&2
+    exit 1
+  fi
+  local ticket=$1
+  local level=$2
+
+  case "$level" in
+    bug|low|medium|complex) ;;
+    *)
+      echo -e "${RED}Error: complexity must be one of: bug, low, medium, complex${NC}" >&2
+      exit 1
+      ;;
+  esac
+
+  # Remove any existing complexity label
+  local existing
+  existing=$(gh issue view "$ticket" --json labels --jq '.labels[].name' 2>/dev/null | grep -E '^complexity: ' || true)
+  if [ -n "$existing" ]; then
+    while IFS= read -r lbl; do
+      [ -n "$lbl" ] && gh issue edit "$ticket" --remove-label "$lbl" >/dev/null 2>&1 || true
+    done <<< "$existing"
+  fi
+
+  gh issue edit "$ticket" --add-label "complexity: ${level}" >/dev/null
+  echo -e "${GREEN}✓ Ticket #${ticket} complexity → ${level}${NC}"
+}
+
+# ───────────────────────────────────────────────────────────────────────────
+# Command: get-complexity — read current complexity label
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_get_complexity() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 get-complexity <ticket-number>" >&2
+    exit 1
+  fi
+  local ticket=$1
+  local lbl
+  lbl=$(gh issue view "$ticket" --json labels --jq '.labels[].name' 2>/dev/null | grep -E '^complexity: ' | head -n1 | sed 's/^complexity: //')
+  if [ -n "$lbl" ]; then
+    echo "$lbl"
+  else
+    echo "(none)"
+  fi
+}
+
+# ───────────────────────────────────────────────────────────────────────────
+# Command: get-ticket — used by detect-complexity.sh
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_get_ticket() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 get-ticket <ticket-number>" >&2
+    exit 1
+  fi
+  local ticket=$1
+  local data
+  data=$(gh issue view "$ticket" --json title,body 2>/dev/null)
+  if [ -z "$data" ]; then
+    echo -e "${RED}Error: Could not find issue #${ticket}${NC}" >&2
+    exit 1
+  fi
+  echo "Title: $(echo "$data" | jq -r '.title')"
+  echo "Description:"
+  echo "$data" | jq -r '.body'
+}
+
+# ───────────────────────────────────────────────────────────────────────────
+# Command: create-pr
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_create_pr() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 create-pr <ticket-number>" >&2
+    exit 1
+  fi
   TICKET_NUMBER=$1
   load_config
 
   echo -e "${YELLOW}Creating pull request for ticket #${TICKET_NUMBER}...${NC}"
 
-  # Get current branch
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-
-  # Verify we're not on the working branch
   if [ "$CURRENT_BRANCH" = "$WORKING_BRANCH" ]; then
     echo -e "${RED}Error: Cannot create PR from working branch ${WORKING_BRANCH}${NC}"
-    echo "Please create a feature branch first"
     exit 1
   fi
 
-  # Get issue title
   ISSUE_TITLE=$(gh issue view "$TICKET_NUMBER" --json title --jq ".title" 2>/dev/null)
-
   if [ -z "$ISSUE_TITLE" ]; then
     echo -e "${RED}Error: Could not find issue #${TICKET_NUMBER}${NC}"
     exit 1
   fi
 
-  # Push current branch
-  echo "→ Pushing branch to remote..."
   git push -u origin "$CURRENT_BRANCH"
 
-  # Create PR
-  echo "→ Creating pull request..."
   PR_URL=$(gh pr create \
-    --title "[$TICKET_NUMBER] $ISSUE_TITLE" \
+    --title "[#${TICKET_NUMBER}] $ISSUE_TITLE" \
     --body "Resolves #${TICKET_NUMBER}" \
     --base "$WORKING_BRANCH" 2>&1)
 
@@ -242,63 +332,57 @@ cmd_create_pr() {
   fi
 }
 
-# Command: list
-# List tickets in the project
+# ───────────────────────────────────────────────────────────────────────────
+# Command: list — list items on the project board, optionally filtered by status
+# ───────────────────────────────────────────────────────────────────────────
+
 cmd_list() {
-  STATUS_FILTER=${1:-""}
-
-  echo -e "${YELLOW}Listing issues...${NC}"
-
-  if [ -n "$STATUS_FILTER" ]; then
-    echo "Filtering by status: $STATUS_FILTER"
-    gh issue list --label "Status: $STATUS_FILTER" --limit 50
+  require_project
+  local status_filter=${1:-""}
+  if [ -n "$status_filter" ]; then
+    gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 200 \
+      | jq -r --arg s "$status_filter" '
+        .items[] | select((.status // "") | ascii_downcase == ($s | ascii_downcase))
+        | "#\(.content.number // "?") [\(.status // "?")] \(.content.title // "?")"
+      '
   else
-    gh issue list --limit 50
+    gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 200 \
+      | jq -r '.items[] | "#\(.content.number // "?") [\(.status // "no status")] \(.content.title // "?")"'
   fi
 }
 
-# Main command router
+# ───────────────────────────────────────────────────────────────────────────
+# Router
+# ───────────────────────────────────────────────────────────────────────────
+
 case "$COMMAND" in
-  create-subtask)
-    cmd_create_subtask "$@"
-    ;;
-  update-status)
-    cmd_update_status "$@"
-    ;;
-  status)
-    cmd_status "$@"
-    ;;
-  create-pr)
-    cmd_create_pr "$@"
-    ;;
-  list)
-    cmd_list "$@"
-    ;;
+  create-subtask)  cmd_create_subtask "$@" ;;
+  update-status)   cmd_update_status "$@" ;;
+  status)          cmd_status "$@" ;;
+  set-complexity)  cmd_set_complexity "$@" ;;
+  get-complexity)  cmd_get_complexity "$@" ;;
+  get-ticket)      cmd_get_ticket "$@" ;;
+  create-pr)       cmd_create_pr "$@" ;;
+  list)            cmd_list "$@" ;;
   "")
     echo -e "${RED}Error: No command specified${NC}"
     echo ""
     echo "Usage: $0 <command> [args...]"
     echo ""
     echo "Available commands:"
-    echo "  create-subtask <parent> <title> [body]  - Create a sub-issue linked to parent"
-    echo "  update-status <ticket> <status>         - Update ticket status"
-    echo "  status <ticket>                         - Get current ticket status"
-    echo "  create-pr <ticket>                      - Create pull request for ticket"
-    echo "  list [status]                           - List tickets (optionally filtered by status)"
-    echo ""
-    echo "Examples:"
-    echo "  $0 create-subtask 9 \"Add validation\""
-    echo "  $0 update-status 42 \"In Progress\""
-    echo "  $0 status 42"
-    echo "  $0 create-pr 42"
-    echo "  $0 list \"In Progress\""
+    echo "  create-subtask <parent> <title> [body]   Create a sub-issue linked to parent"
+    echo "  status <ticket>                          Read status from the project board"
+    echo "  update-status <ticket> <status-name>     Write status on the project board"
+    echo "  set-complexity <ticket> <level>          bug | low | medium | complex"
+    echo "  get-complexity <ticket>                  Read current complexity label"
+    echo "  get-ticket <ticket>                      Print title + body (for scripting)"
+    echo "  create-pr <ticket>                       Open PR for current branch"
+    echo "  list [status]                            List project items (optionally filtered)"
     exit 1
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo ""
-    echo "Available commands: create-subtask, update-status, status, create-pr, list"
-    echo "Run '$0' without arguments for usage help"
+    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-ticket, create-pr, list"
     exit 1
     ;;
 esac

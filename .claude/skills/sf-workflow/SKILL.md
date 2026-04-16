@@ -3,29 +3,32 @@
 Complexity-adaptive development workflow with GitHub Projects (GitHub Projects, Jira, Notion, Linear, etc.)
 
 ## Auto-trigger keywords
+
 workflow status, check workflow, what should i do, next step, workflow help, current status, complexity, detect complexity
 
 ## 🎯 Complexity-Based Adaptive Workflow
 
 This workflow adapts its rigor based on ticket complexity:
 
-| Level | Label | Process | Use Case |
-|-------|-------|---------|----------|
-| **bug** | 🐛 Bug Fix | Direct fix, regression test | Quick bug fixes |
-| **low** | 🟢 Low | Oneshot-style (minimal ceremony) | Simple tasks |
-| **medium** | 🟡 Medium | Apex-free-style (structured) | Standard features |
-| **complex** | 🔴 Complex | Full Apex (adversarial review) | Critical features |
+| Level       | Label      | Process                          | Use Case          |
+| ----------- | ---------- | -------------------------------- | ----------------- |
+| **bug**     | 🐛 Bug Fix | Direct fix, regression test      | Quick bug fixes   |
+| **low**     | 🟢 Low     | Oneshot-style (minimal ceremony) | Simple tasks      |
+| **medium**  | 🟡 Medium  | Apex-free-style (structured)     | Standard features |
+| **complex** | 🔴 Complex | Full Apex (adversarial review)   | Critical features |
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 
 ## How to use this skill
 
 **FIRST TIME on a ticket:**
+
 1. **Detect complexity:** `/workflow detect-complexity <ticket-number>`
 2. **Confirm with developer:** AI suggests, developer decides
 3. **Follow adaptive process:** Each status adapts to complexity level
 
 **BEFORE EVERY ACTION:**
+
 1. Invoke this skill with `/workflow status <ticket-number>`
 2. Read the COMPLETE description of the current status
 3. Follow EXACTLY the instructions from that description
@@ -60,22 +63,18 @@ cat .saasfoundry.json | jq -r '.workflow.commitFormat.pattern'
 
 ### Workflow Status Commands
 
-**`/workflow status <ticket>`**
-Displays the current status of the ticket and loads the complete description of that status.
+**`/workflow status <ticket>`** Displays the current status of the ticket and loads the complete description of that status.
 
-**`/workflow next <ticket>`**
-Indicates the next status and what needs to be done to get there.
+**`/workflow next <ticket>`** Indicates the next status and what needs to be done to get there.
 
-**`/workflow validate <ticket>`**
-Checks if all conditions are met to move to the next status.
+**`/workflow validate <ticket>`** Checks if all conditions are met to move to the next status.
 
-**`/workflow help`**
-Displays the list of statuses and their role.
+**`/workflow help`** Displays the list of statuses and their role.
 
 ### Complexity Commands (NEW)
 
-**`/workflow detect-complexity <ticket>`**
-Auto-suggests complexity level based on:
+**`/workflow detect-complexity <ticket>`** Auto-suggests complexity level based on:
+
 - Number of files potentially impacted
 - Keywords (auth, payment, security → complex)
 - Risk assessment
@@ -83,21 +82,19 @@ Auto-suggests complexity level based on:
 
 Developer always has final say.
 
-**`/workflow retag <ticket> <new-complexity>`**
-Changes ticket complexity level (bug | low | medium | complex).
-Adjusts remaining workflow steps to match new complexity.
+**`/workflow retag <ticket> <new-complexity>`** Changes ticket complexity level (bug | low | medium | complex). Adjusts remaining workflow steps to match new complexity.
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 
-**`/workflow prepare <ticket> <complexity>`**
-Runs adaptive analyze + plan phase (Backlog → Ready).
+**`/workflow prepare <ticket> <complexity>`** Runs adaptive analyze + plan phase (Backlog → Ready).
+
 - **bug**: Skip (direct to implementation)
 - **low**: Minimal (2-3 files, mental plan)
 - **medium**: Standard (2-4 agents, detailed plan + approval)
 - **complex**: Deep (6-10 agents, comprehensive plan + approval)
 
-**`/workflow test <ticket> [complexity]`**
-Runs validation + optional adversarial review (→ AI Testing).
+**`/workflow test <ticket> [complexity]`** Runs validation + optional adversarial review (→ AI Testing).
+
 - **bug/low/medium**: Validation only (build, lint, typecheck, unit tests)
 - **complex**: + Adversarial review (security, logic, performance)
 
@@ -108,12 +105,14 @@ Workflow commands that interact with your project management tool (GitHub Projec
 The workflow skill automatically routes commands to the appropriate tool based on your `.saasfoundry.json` configuration.
 
 **Example:** Creating a subtask
+
 ```bash
 # This command is automatically routed to the correct tool
 .claude/skills/sf-workflow/workflow-cli.sh create-subtask <parent> <title>
 ```
 
 See your tool-specific skill documentation for complete command reference:
+
 - GitHub Projects: `.claude/skills/sf-tool-github-projects/SKILL.md`
 - Jira: `.claude/skills/sf-tool-jira/SKILL.md`
 - Notion: `.claude/skills/sf-tool-notion/SKILL.md`
@@ -141,6 +140,7 @@ See your tool-specific skill documentation for complete command reference:
 ## Implementation
 
 The status descriptions are in the `statuses/` directory:
+
 - Each status has its own markdown file
 - Descriptions include: when to enter, mandatory actions, exit conditions, next status
 - The CLI script (`workflow-cli.sh`) queries the project management tool and displays the appropriate description

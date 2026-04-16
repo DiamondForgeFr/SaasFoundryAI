@@ -5,7 +5,7 @@
   "workflow": {
     "tool": "github-projects",
     "template": "SaaSFoundry AI",
-    "projectUrl": "https://github.com/orgs/DiamondForgeFr/projects/3",
+    "projectUrl": "https://github.com/orgs/DiamondForgeFr/projects/1",
     "workingBranch": "master",
     "prTargetBranch": "master",
     "branchNaming": {

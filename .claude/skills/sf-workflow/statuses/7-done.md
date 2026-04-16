@@ -10,16 +10,19 @@
 ## Mandatory Actions
 
 ### 1. MOVE TICKET TO "DONE"
+
 - Update status in the project management tool
 
 ### 2. LOCAL BRANCH CLEANUP
 
 **Read working branch from config:**
+
 ```bash
 WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
 ```
 
 **Cleanup:**
+
 1. `git checkout ${WORKING_BRANCH}`
 2. `git pull origin ${WORKING_BRANCH} --rebase`
 3. `git branch -d {feature-branch}`
@@ -27,6 +30,7 @@ WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
 ### 3. IF OTHER BRANCHES ARE IN PROGRESS
 
 **Rebase other branches with updated working branch:**
+
 ```bash
 WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
 
@@ -49,5 +53,4 @@ N/A (end of cycle)
 
 ## Errors to Avoid
 
-❌ NEVER move to Done before actual merge
-❌ NEVER forget to rebase other in-progress branches
+❌ NEVER move to Done before actual merge ❌ NEVER forget to rebase other in-progress branches

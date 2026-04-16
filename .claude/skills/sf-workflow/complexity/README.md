@@ -4,18 +4,19 @@ This directory contains complexity configurations that adapt the workflow proces
 
 ## Complexity Levels
 
-| Level | Label | Style | Use Case |
-|-------|-------|-------|----------|
-| **bug** | 🐛 Bug Fix | Direct fix | Quick bug fixes, minimal ceremony |
-| **low** | 🟢 Low | Oneshot | Simple tasks, fast iteration |
-| **medium** | 🟡 Medium | Apex-free | Standard features, structured approach |
-| **complex** | 🔴 Complex | Full Apex | Critical features, adversarial review |
+| Level       | Label      | Style      | Use Case                               |
+| ----------- | ---------- | ---------- | -------------------------------------- |
+| **bug**     | 🐛 Bug Fix | Direct fix | Quick bug fixes, minimal ceremony      |
+| **low**     | 🟢 Low     | Oneshot    | Simple tasks, fast iteration           |
+| **medium**  | 🟡 Medium  | Apex-free  | Standard features, structured approach |
+| **complex** | 🔴 Complex | Full Apex  | Critical features, adversarial review  |
 
 ## How It Works
 
 ### 1. Complexity Detection
 
 When a ticket enters Backlog, the AI suggests a complexity level based on:
+
 - Number of files potentially impacted
 - Keywords in description (auth, payment, security → complex)
 - Risk assessment
@@ -28,6 +29,7 @@ When a ticket enters Backlog, the AI suggests a complexity level based on:
 Each complexity level enables/disables workflow steps:
 
 #### Bug (🐛)
+
 - Skip: Backlog (direct to In Progress)
 - Skip: Analyze, Plan
 - Execute: Direct fix
@@ -36,6 +38,7 @@ Each complexity level enables/disables workflow steps:
 - Tests: Regression test only
 
 #### Low (🟢)
+
 - Analyze: Minimal (2-3 files, no agents)
 - Plan: Mental plan only
 - Execute: Direct implementation
@@ -44,6 +47,7 @@ Each complexity level enables/disables workflow steps:
 - Tests: Optional
 
 #### Medium (🟡)
+
 - Analyze: Standard (2-4 agents)
 - Plan: Detailed file-by-file (requires approval)
 - Execute: Subtasks mandatory
@@ -52,6 +56,7 @@ Each complexity level enables/disables workflow steps:
 - Tests: Unit + E2E recommended
 
 #### Complex (🔴)
+
 - Analyze: Deep (6-10 agents)
 - Plan: Comprehensive with dependencies (requires approval)
 - Execute: Granular subtasks mandatory
