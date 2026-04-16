@@ -1,12 +1,7 @@
 import inquirer from 'inquirer'
 import shelljs from 'shelljs'
 
-import {
-  getModuleSelections,
-  getEmailModuleCredentials,
-  getStorageModuleConfig,
-  getSkillCredentials
-} from '../../../prompts/update.prompts'
+import { getModuleSelections, getEmailModuleCredentials, getStorageModuleConfig, getSkillCredentials } from '../../../prompts/update.prompts'
 
 jest.mock('../../../prompts/skills.prompts', () => ({
   promptAtlassianCredentials: jest.fn(),
@@ -72,13 +67,11 @@ describe('update.prompts — interactive helpers', () => {
     })
 
     it('returns credentials after user confirms and opens browser', async () => {
-      promptSpy
-        .mockResolvedValueOnce({ ready: true } as never)
-        .mockResolvedValueOnce({
-          mailersendApiKey: 'ms-key-123',
-          mailersendSenderEmail: 'noreply@demo.com',
-          mailersendSenderName: 'Demo'
-        } as never)
+      promptSpy.mockResolvedValueOnce({ ready: true } as never).mockResolvedValueOnce({
+        mailersendApiKey: 'ms-key-123',
+        mailersendSenderEmail: 'noreply@demo.com',
+        mailersendSenderName: 'Demo'
+      } as never)
 
       const promise = getEmailModuleCredentials('demo')
       jest.advanceTimersByTime(4000)
@@ -95,13 +88,11 @@ describe('update.prompts — interactive helpers', () => {
     })
 
     it('validates API key, email, and sender name via inquirer', async () => {
-      promptSpy
-        .mockResolvedValueOnce({ ready: true } as never)
-        .mockResolvedValueOnce({
-          mailersendApiKey: 'k',
-          mailersendSenderEmail: 'a@b.c',
-          mailersendSenderName: 'Name'
-        } as never)
+      promptSpy.mockResolvedValueOnce({ ready: true } as never).mockResolvedValueOnce({
+        mailersendApiKey: 'k',
+        mailersendSenderEmail: 'a@b.c',
+        mailersendSenderName: 'Name'
+      } as never)
 
       const promise = getEmailModuleCredentials('myproj')
       jest.advanceTimersByTime(4000)
@@ -141,15 +132,13 @@ describe('update.prompts — interactive helpers', () => {
     })
 
     it('collects full credentials when user picks credentials', async () => {
-      promptSpy
-        .mockResolvedValueOnce({ s3Setup: 'credentials' } as never)
-        .mockResolvedValueOnce({
-          endpoint: 'https://s3.example.com',
-          accessKey: 'AK',
-          secretKey: 'SK',
-          bucket: 'my-bucket',
-          region: 'eu-west-1'
-        } as never)
+      promptSpy.mockResolvedValueOnce({ s3Setup: 'credentials' } as never).mockResolvedValueOnce({
+        endpoint: 'https://s3.example.com',
+        accessKey: 'AK',
+        secretKey: 'SK',
+        bucket: 'my-bucket',
+        region: 'eu-west-1'
+      } as never)
 
       const result = await getStorageModuleConfig('myproj')
 
@@ -164,15 +153,13 @@ describe('update.prompts — interactive helpers', () => {
     })
 
     it('validates required S3 credential fields', async () => {
-      promptSpy
-        .mockResolvedValueOnce({ s3Setup: 'credentials' } as never)
-        .mockResolvedValueOnce({
-          endpoint: 'https://s3.example.com',
-          accessKey: 'AK',
-          secretKey: 'SK',
-          bucket: 'my-bucket',
-          region: 'eu-west-1'
-        } as never)
+      promptSpy.mockResolvedValueOnce({ s3Setup: 'credentials' } as never).mockResolvedValueOnce({
+        endpoint: 'https://s3.example.com',
+        accessKey: 'AK',
+        secretKey: 'SK',
+        bucket: 'my-bucket',
+        region: 'eu-west-1'
+      } as never)
 
       await getStorageModuleConfig('demo')
 
