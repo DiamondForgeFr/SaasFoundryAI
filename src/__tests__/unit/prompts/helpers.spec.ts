@@ -121,6 +121,30 @@ describe('promptWithPrefill', () => {
       await expect(promptWithPrefill([{ type: 'input', name: 'dbCredentials.host', message: '?' }], { nonInteractive: true, prefill: { dbCredentials: { host: 'localhost' } } })).resolves.toBeDefined()
     })
 
+    it('treats `when` callbacks returning undefined as falsy (matches Inquirer)', async () => {
+      mockedPrompt.mockResolvedValue({})
+
+      const questions: DistinctQuestion[] = [
+        {
+          type: 'input',
+          name: 'nested',
+          message: '?',
+          when: (answers) => answers.parent
+        }
+      ]
+
+      await expect(promptWithPrefill(questions, { nonInteractive: true })).resolves.toBeDefined()
+    })
+
+    it('deduplicates missing names when multiple questions share the same name', async () => {
+      const questions: DistinctQuestion[] = [
+        { type: 'list', name: 'setupRepo', message: 'Monorepo repo?', when: (a) => a.isMonorepo === true },
+        { type: 'list', name: 'setupRepo', message: 'Multirepo repo?', when: (a) => a.isMonorepo === false }
+      ]
+
+      await expect(promptWithPrefill(questions, { nonInteractive: true, prefill: { isMonorepo: true } })).rejects.toThrow(/setupRepo(?!.*setupRepo)/s)
+    })
+
     it('treats async `when` callbacks as applicable (safer to ask)', async () => {
       const questions: DistinctQuestion[] = [
         {
