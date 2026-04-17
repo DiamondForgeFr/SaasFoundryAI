@@ -3,7 +3,7 @@ import 'module-alias/register'
 import { version } from '../package.json'
 import { modulesCommand } from './commands/modules'
 import { newCommand } from './commands/new'
-import { skillCommand } from './commands/skill'
+import { skillCommand, runFullUninstall } from './commands/skill'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
 import { workflowCommand } from './commands/workflow'
@@ -118,6 +118,18 @@ program
   .argument('[args...]', 'Additional arguments for the subcommand (--project, --force, --yes)')
   .allowUnknownOption()
   .action((subcommand, args) => skillCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
+program
+  .command('uninstall')
+  .description('Fully remove the SaaSFoundry skill and preferences (--all flag required)')
+  .option('--all', 'Remove the skill (user + project scope) and wipe ~/.saasfoundry/')
+  .option('-y, --yes', 'Skip the confirmation prompt')
+  .action(async (opts) => {
+    if (!opts.all) {
+      console.error("Error: 'sf uninstall' requires --all. Use 'sf skill uninstall' for per-scope removal.")
+      process.exit(1)
+    }
+    await runFullUninstall({ yes: Boolean(opts.yes) })
+  })
 program.parse()
 
 export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand }
