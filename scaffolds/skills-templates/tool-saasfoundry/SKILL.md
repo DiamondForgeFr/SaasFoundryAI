@@ -127,6 +127,57 @@ The full rationale for each recommendation is in the `recommendations` block of 
 - **Don't re-serialize the plan by hand.** Always round-trip through `plan-new.sh` so the command stays consistent with the manifest.
 - **Don't stash secrets in the intent you echo back.** Collect them, pass them through to `plan-new.sh`, but redact in any user-facing summary.
 
+## Discovery: `sf update`
+
+When the user wants to evolve an existing SaaSFoundry project (add a module, apply template updates), the skill replaces the CLI's Inquirer prompts with the same conversational flow pattern as `sf new`. The intent is produced as a JSON object, materialized into a single `sf update --non-interactive …` command via `plan-update.sh`. The intent schema is documented in `reference/update-flags.json`.
+
+> **Scope note** — `sf update` is **add-only** today. Module removal is not yet supported by the CLI; if the user asks to remove a module, point them at `sf feedback request` to track the request and keep the conversation unblocked.
+
+### Three discovery modes
+
+Same triage as `sf new`:
+
+| Mode | When it fits | Flow |
+| --- | --- | --- |
+| **Guided** *(default)* | User says "I want to add email" or "what's missing from my project?" | Read `.saasfoundry.json` + catalogue, recommend 1–2 modules with rationale, ask one question at a time |
+| **Express** | User says exactly what they want: "add email and analytics" | Build intent, echo back as a plan, single-shot confirmation |
+| **Expert** | User pastes a full or partial `sf update --non-interactive …` command | Pass through after sanity-checking flag names + module values against the manifest |
+
+### Discovery workflow
+
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token. Cache for the rest of the turn.
+2. **Read project state** — parse `.saasfoundry.json` to know what modules are already installed. Pass that list in the intent as `alreadyInstalled` so `plan-update.sh` can reject silent no-ops.
+3. **Consult the catalogue** — `sf modules list --json` for the full list, `sf modules info <slug> --json` for drill-down. Never invent module names.
+4. **Gather intent** — build a JSON object matching `fields` in `reference/update-flags.json`. Only include fields the user has confirmed.
+5. **Dry-run first** — set `dryRun: true` in the intent and show the output to the user. Only rebuild the intent with `dryRun: false` after explicit approval.
+6. **Materialize the plan** — pipe the intent JSON into `scripts/plan-update.sh`. It emits the command on stdout or exits non-zero with a validation message on stderr.
+7. **Present and confirm** — show the command + a human summary of what will be added + which credentials were captured (redact secret values). Wait for approval before running.
+
+### Intent schema (summary)
+
+Full specification: `reference/update-flags.json`. Essentials:
+
+- **`addModules`** (CSV) — values must match `sf modules list --json`; collision with `alreadyInstalled` is an error, not a warning
+- **`dryRun`** (boolean) — recommend `true` for the first round; flip to `false` only after user approves the plan
+- **`conflictStrategy`** (enum: `keep` | `replace` | `save-new`) — default `save-new`; only change if the user has strong preferences about their local edits
+- **Credential pass-throughs** — only collect the ones required by the modules being added (`mailersend*` when adding email, `s3*` when adding storage, `*ApiToken` when adding advanced skills). All `secret: true` fields must be redacted in any echo-back
+
+### Recommendation rules
+
+| Dimension | Default | Condition to override |
+| --- | --- | --- |
+| `dryRun` | `true` on first run | Skip only when the user explicitly says "just do it" and the change is small |
+| `conflictStrategy` | `save-new` | Recommend `keep` when the user has significant local edits they don't want touched; `replace` only when they ask for "latest upstream, overwrite mine" |
+| Which modules to propose | None unless user asks | If the user asks "what should I add next?", consult `recommendations.modules` in the manifest for guidance anchored to product needs |
+
+### Never do these
+
+- **Don't propose a module already in `.saasfoundry.json`.** Check `alreadyInstalled` before building the intent; suggesting a silent no-op erodes user trust.
+- **Don't skip the dry-run round** unless the user explicitly waives it.
+- **Don't suggest module removal as if it were supported.** Redirect to `sf feedback request` and note the limitation.
+- **Don't fabricate module names.** Every value in `addModules` must exist in `sf modules list --json`.
+- **Don't echo credentials.** Collect them, pass to `plan-update.sh`, redact in any user-facing summary.
+
 ## Interaction principles
 
 1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
@@ -139,7 +190,6 @@ The full rationale for each recommendation is in the `recommendations` block of 
 
 This SKILL.md is the foundation (Phase 2A, ticket #102). The following capabilities will be layered on in subsequent tickets:
 
-- **Phase 2D — Discovery for `sf update`** (#105): same treatment for module add/remove, catalogue-aware.
 - **Phase 2E — Project Awareness** (#106): read-only conversational queries over `.saasfoundry.json` and the module catalogue.
 
 Phases 3+ (Anti-reinvention guardrail, Community voting polish, Event handling) are tracked under epic #18.
