@@ -1,19 +1,78 @@
-# SaaSFoundry Tool Skill (placeholder)
+---
+name: tool-saasfoundry
+description: >-
+  Use when the user wants to scaffold a new SaaSFoundry project, add or remove
+  modules in an existing SaaSFoundry project, check project state or installed
+  modules, file a module request, report a CLI or scaffold bug, or vote on
+  community proposals. Triggers on keywords and phrases like "saasfoundry",
+  "sf new", "sf update", "scaffold a SaaS", "add a module", "update my
+  SaaSFoundry project", ".saasfoundry.json", "file a SaaSFoundry bug", or
+  "vote on SaaSFoundry modules". Always orchestrates the `sf` CLI in
+  non-interactive mode — never runs the interactive Inquirer prompts itself.
+---
 
-This is a placeholder bundle for the `tool-saasfoundry` Claude Code skill. The real payload ships in Phase 2 of epic #18.
+# tool-saasfoundry
 
-The CLI commands `sf skill install | update | uninstall` manage this bundle's lifecycle — copying it to either `~/.claude/skills/tool-saasfoundry/` (user scope) or `.claude/skills/tool-saasfoundry/` (project scope) and maintaining a `.version` manifest alongside it.
+Help the user scaffold, evolve, and give feedback on SaaSFoundry projects by orchestrating the `sf` CLI. Never bypass the CLI with direct file generation — it is the source of truth for blueprints, overlays, modules, and workflow configuration.
 
-## Why this exists now
+## When to activate
 
-Phase 1D (ticket #61) wires up the lifecycle commands before the skill content exists. Having a copyable placeholder lets us:
+Activate on explicit SaaSFoundry intent:
 
-- Exercise the install / update / uninstall code paths in real tests (no mocks required)
-- Ship the bundle in the npm package so `npx saasfoundry-cli sf skill install` works out of the box
-- Validate the `.version` manifest flow against a concrete directory
+- "scaffold a SaaS / SaaS project / Node+React stack with postgres"
+- "I want to start a new SaaSFoundry project"
+- "add the email / storage / analytics module"
+- "update my SaaSFoundry project"
+- "what modules do I have?" / "am I up to date?" / "what's in `.saasfoundry.json`?"
+- "file a module request" / "report a SaaSFoundry bug" / "vote on roadmap"
 
-## What will replace this
+Do NOT activate on:
 
-In Phase 2 this file — and the rest of the bundle directory — is replaced by the real skill: `SKILL.md`, helper scripts, catalogue-aware prompts, and documentation for AI agents assisting developers on their SaaSFoundry projects.
+- Generic Node.js / React / NestJS questions unrelated to SaaSFoundry
+- Unrelated scaffolding tools (`create-next-app`, `degit`, `nx`, …)
+- Questions about someone else's generated project where no `.saasfoundry.json` can be found
 
-Until then, treat this file as a marker that the skill *can* be installed. No behavior depends on its contents.
+## CLI contract
+
+The skill invokes the `sf` CLI exclusively in **non-interactive mode**:
+
+- Scaffolding: `sf new --non-interactive --name <name> --structure <mono|multi> --apps <all|backend|frontend> [flags…]`
+- Module updates: `sf update --non-interactive --add <m1,m2> --remove <m3> [--dry-run]`
+- Catalogue lookups: `sf modules list --json` / `sf modules info <slug> --json` / `sf modules match <query> --json`
+- Skill lifecycle: `sf skill install [--project]` / `sf skill update` / `sf skill uninstall`
+- Feedback loop: `sf feedback request <name>` / `sf feedback bug --source cli|scaffold` / `sf feedback list` / `sf feedback vote --list` / `sf feedback vote <n> up|down|comment`
+
+Before mutating, always prefer `--dry-run` where available (notably `sf update --dry-run`) to preview the plan for the user.
+
+## Available commands
+
+| User intent | CLI command | Notes |
+| --- | --- | --- |
+| Start a new project | `sf new --non-interactive …` | Gather intent via conversation (Phase 2C) |
+| Add / remove modules | `sf update --non-interactive --add … --remove …` | Consult `sf modules list --json` first (Phase 2D) |
+| Inspect project state | Read `.saasfoundry.json` + `sf modules list --json` | Pure read, no mutation (Phase 2E) |
+| File a module request | `sf feedback request "<slug>" --description "…"` | Checks dedup automatically |
+| Report a bug | `sf feedback bug --source cli\|scaffold --title "…" --description "…" [--auto-repro]` | `--auto-repro` embeds `.saasfoundry.json` |
+| List open feedback | `sf feedback list [--status open\|closed\|all] [--mine] [--json]` | 3-label fan-out: module-request, cli-bug, scaffold-bug |
+| Rank module requests | `sf feedback vote --list [--limit N] [--stack-filter <term>]` | Ranked by 👍 |
+| Cast a vote | `sf feedback vote <n> up\|down` | Recorded in `~/.saasfoundry/preferences.json` |
+| Comment on a request | `sf feedback vote <n> comment --comment "<body>"` | No vote recorded, just a comment |
+
+## Interaction principles
+
+1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
+2. **Always verify prerequisites first.** Before any GitHub-dependent command, check `gh auth status`. Before any project-scoped command, check that `.saasfoundry.json` exists and can be read (detailed in Phase 2B).
+3. **Use `AskUserQuestion` for multi-choice.** Do not emulate Inquirer with plain prose questions — use the structured tool when presenting enumerated options (fleshed out in Phase 2C/2D).
+4. **Prefer `--dry-run` before mutations.** Especially for `sf update`, always show the user what would change before doing it.
+5. **Respect user preferences.** `~/.saasfoundry/preferences.json` tracks opt-out choices (skill prompts, voting surveys) — honor them across sessions.
+
+## Future capabilities
+
+This SKILL.md is the foundation (Phase 2A, ticket #102). The following capabilities will be layered on in subsequent tickets:
+
+- **Phase 2B — Bootstrap helpers** (#103): environment detection scripts (`gh` auth, CLI presence, IDE, OS) and guided login flow.
+- **Phase 2C — Discovery for `sf new`** (#104): replaces Inquirer with a Guided / Express / Expert conversational flow.
+- **Phase 2D — Discovery for `sf update`** (#105): same treatment for module add/remove, catalogue-aware.
+- **Phase 2E — Project Awareness** (#106): read-only conversational queries over `.saasfoundry.json` and the module catalogue.
+
+Phases 3+ (Anti-reinvention guardrail, Community voting polish, Event handling) are tracked under epic #18.
