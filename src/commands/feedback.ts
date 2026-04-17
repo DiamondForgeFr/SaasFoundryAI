@@ -3,6 +3,7 @@ import inquirer from 'inquirer'
 
 import { version as cliVersion } from '../../package.json'
 import { fileBug, searchExistingBugs, type BugSource } from '../feedback/bug'
+import { classifyIssue, listFeedback, type ListStatus } from '../feedback/list'
 import { fileRequest, searchExistingRequests } from '../feedback/request'
 import type { GhIssue } from '../feedback/gh'
 
@@ -13,6 +14,10 @@ interface ParsedArgs {
   description?: string
   title?: string
   source?: string
+  status?: string
+  limit?: number
+  mine: boolean
+  json: boolean
   autoRepro: boolean
   force: boolean
   yes: boolean
@@ -24,6 +29,10 @@ function parseArgs(args: string[]): ParsedArgs {
   let description: string | undefined
   let title: string | undefined
   let source: string | undefined
+  let status: string | undefined
+  let limit: number | undefined
+  let mine = false
+  let json = false
   let autoRepro = false
   let force = false
   let yes = false
@@ -36,13 +45,25 @@ function parseArgs(args: string[]): ParsedArgs {
     else if (arg?.startsWith('--title=')) title = arg.slice('--title='.length)
     else if (arg === '--source') source = args[++i]
     else if (arg?.startsWith('--source=')) source = arg.slice('--source='.length)
+    else if (arg === '--status') status = args[++i]
+    else if (arg?.startsWith('--status=')) status = arg.slice('--status='.length)
+    else if (arg === '--limit') limit = parseLimit(args[++i])
+    else if (arg?.startsWith('--limit=')) limit = parseLimit(arg.slice('--limit='.length))
+    else if (arg === '--mine') mine = true
+    else if (arg === '--json') json = true
     else if (arg === '--auto-repro') autoRepro = true
     else if (arg === '--force') force = true
     else if (arg === '--yes' || arg === '-y') yes = true
     else if (arg === '--non-interactive') nonInteractive = true
     else if (arg !== undefined && arg !== null && arg !== '') positional.push(arg)
   }
-  return { positional, description, title, source, autoRepro, force, yes, nonInteractive }
+  return { positional, description, title, source, status, limit, mine, json, autoRepro, force, yes, nonInteractive }
+}
+
+function parseLimit(raw: string | undefined): number | undefined {
+  if (!raw) return undefined
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : undefined
 }
 
 export async function feedbackCommand(subcommand?: string, ...args: string[]) {
@@ -59,6 +80,9 @@ export async function feedbackCommand(subcommand?: string, ...args: string[]) {
       break
     case 'bug':
       await runBug(parsed)
+      break
+    case 'list':
+      await runList(parsed)
       break
     default:
       console.error(chalk.red(`Unknown subcommand: ${subcommand}`))
@@ -77,6 +101,8 @@ function showHelp() {
   console.log(chalk.gray('    bug             [--source cli|scaffold] [--title <t>] [--description <d>]'))
   console.log(chalk.gray('                    [--auto-repro] [--force]'))
   console.log(chalk.gray('                    Open a bug report against the CLI or generated scaffolds.'))
+  console.log(chalk.gray('    list            [--status open|closed|all] [--mine] [--json] [--limit <n>]'))
+  console.log(chalk.gray('                    List feedback issues (module-request + cli-bug + scaffold-bug).'))
   console.log()
 }
 
@@ -262,4 +288,49 @@ function printBugMatches(matches: GhIssue[]): void {
     console.log(chalk.gray(`    ${state}  #${issue.number}  ${issue.title}`))
     console.log(chalk.gray(`            ${issue.url}`))
   }
+}
+
+async function runList(opts: ParsedArgs) {
+  const status = resolveListStatus(opts.status)
+  const { repo, issues } = await listFeedback({ status, mine: opts.mine, limit: opts.limit })
+
+  if (opts.json) {
+    const payload = issues.map((i) => ({
+      number: i.number,
+      title: i.title,
+      state: i.state,
+      url: i.url,
+      kind: classifyIssue(i),
+      labels: i.labels.map((l) => l.name),
+      author: i.author.login
+    }))
+    process.stdout.write(JSON.stringify(payload, null, 2) + '\n')
+    return
+  }
+
+  if (issues.length === 0) {
+    console.log(chalk.yellow(`\n  No feedback issues found in ${repo.slug} (status=${status}${opts.mine ? ', mine' : ''}).`))
+    console.log()
+    return
+  }
+
+  console.log(chalk.blue(`\n  ${issues.length} feedback issue${issues.length === 1 ? '' : 's'} in ${repo.slug}  (status=${status}${opts.mine ? ', mine' : ''})`))
+  console.log(chalk.blue('  ' + '─'.repeat(72)))
+  for (const issue of issues) {
+    const state = issue.state === 'OPEN' ? chalk.green('OPEN  ') : chalk.gray('CLOSED')
+    const kind = classifyIssue(issue)
+    const kindTag = kind === 'module-request' ? chalk.cyan('[request] ') : kind === 'cli-bug' ? chalk.red('[cli-bug]  ') : kind === 'scaffold-bug' ? chalk.magenta('[scaf-bug] ') : chalk.gray('[other]   ')
+    console.log(`  ${state}  ${kindTag}#${issue.number}  ${issue.title}`)
+    console.log(chalk.gray(`                      ${issue.url}`))
+  }
+  console.log()
+}
+
+function resolveListStatus(raw: string | undefined): ListStatus {
+  if (raw === 'open' || raw === 'closed' || raw === 'all') return raw
+  if (raw !== undefined) {
+    console.error(chalk.red(`Error: --status must be 'open', 'closed', or 'all' (got: ${raw})`))
+    process.exit(1)
+  }
+  return 'open'
 }
