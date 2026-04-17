@@ -79,7 +79,10 @@ describe('skill/preferences', () => {
       prefsPath,
       JSON.stringify({
         filedRequests: [{ issueNumber: 1, repoUrl: 'u', title: 't', openedAt: 'ts' }, { garbage: true }, 'not-an-object'],
-        votesCast: [{ issueNumber: 9, direction: 'up', castAt: 'ts' }, { issueNumber: 10, direction: 'sideways', castAt: 'ts' }]
+        votesCast: [
+          { issueNumber: 9, direction: 'up', castAt: 'ts' },
+          { issueNumber: 10, direction: 'sideways', castAt: 'ts' }
+        ]
       }),
       'utf8'
     )
