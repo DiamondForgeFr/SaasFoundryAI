@@ -90,9 +90,7 @@ describe('skill/plan-update', () => {
         conflictStrategy: 'overwrite-everything'
       })
       expect(code).toBe(2)
-      expect(stderr).toMatch(
-        /invalid value "overwrite-everything" for conflictStrategy; expected one of keep, replace, save-new/
-      )
+      expect(stderr).toMatch(/invalid value "overwrite-everything" for conflictStrategy; expected one of keep, replace, save-new/)
     })
   })
 
