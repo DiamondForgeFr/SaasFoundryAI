@@ -7,6 +7,9 @@ import { skillCommand, runFullUninstall } from './commands/skill'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
 import { workflowCommand } from './commands/workflow'
+import { maybeEmitStaleSkillWarning } from './skill/warn'
+
+void maybeEmitStaleSkillWarning(process.argv, version)
 
 const program = new Command()
 

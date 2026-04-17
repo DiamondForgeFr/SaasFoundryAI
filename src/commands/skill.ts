@@ -186,7 +186,8 @@ export async function runFullUninstall(opts: { yes?: boolean; cwd?: string } = {
       {
         type: 'confirm',
         name: 'confirm',
-        message: 'This will remove the user-scope skill, wipe ~/.saasfoundry/ preferences, and remove the project-scope skill in the current directory (if any). Generated projects are NOT touched. Continue?',
+        message:
+          'This will remove the user-scope skill, wipe ~/.saasfoundry/ preferences, and remove the project-scope skill in the current directory (if any). Generated projects are NOT touched. Continue?',
         default: false
       }
     ])
