@@ -58,10 +58,26 @@ Before mutating, always prefer `--dry-run` where available (notably `sf update -
 | Cast a vote | `sf feedback vote <n> up\|down` | Recorded in `~/.saasfoundry/preferences.json` |
 | Comment on a request | `sf feedback vote <n> comment --comment "<body>"` | No vote recorded, just a comment |
 
+## Bootstrap
+
+Before running user-facing SaaSFoundry commands, the skill verifies the environment using bundled helper scripts under `~/.claude/skills/tool-saasfoundry/scripts/`:
+
+| Script | When to invoke | Contract |
+| --- | --- | --- |
+| `detect-env.sh` | Once per session, or whenever the skill needs to choose between `sf` and `npx saasfoundry-cli` | Prints a JSON snapshot on stdout (`os`, `nodeVersion`, `ghInstalled`, `ghAuthed`, `sfGlobalInstalled`). Always exits 0. |
+| `bootstrap-gh.sh` | Before any GitHub-dependent command (`sf feedback …`, voting, issue listing) | Exits 0 silently when `gh` is installed and authenticated. Exits 1 with guided install/login instructions on stderr otherwise. |
+| `bootstrap-cli.sh` | Before any `sf` invocation | Prints the exact command token to use (`sf`, `saasfoundry-cli`, or `npx saasfoundry-cli`) on stdout. Always exits 0. |
+
+Guidelines:
+
+- **Run `detect-env.sh` first** when the conversation starts to cache environment facts (OS, node version, CLI presence) for the rest of the turn
+- **Always gate `gh`-backed flows behind `bootstrap-gh.sh`** — on failure, surface its stderr verbatim to the user and stop rather than retrying blindly
+- **Resolve the CLI invocation via `bootstrap-cli.sh`** — never hardcode `sf` in examples if the user might be running via `npx`
+
 ## Interaction principles
 
 1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
-2. **Always verify prerequisites first.** Before any GitHub-dependent command, check `gh auth status`. Before any project-scoped command, check that `.saasfoundry.json` exists and can be read (detailed in Phase 2B).
+2. **Always verify prerequisites first.** Run `bootstrap-gh.sh` before GitHub calls and `bootstrap-cli.sh` before any `sf` command. Project-scoped awareness (reading `.saasfoundry.json`) lands in Phase 2E.
 3. **Use `AskUserQuestion` for multi-choice.** Do not emulate Inquirer with plain prose questions — use the structured tool when presenting enumerated options (fleshed out in Phase 2C/2D).
 4. **Prefer `--dry-run` before mutations.** Especially for `sf update`, always show the user what would change before doing it.
 5. **Respect user preferences.** `~/.saasfoundry/preferences.json` tracks opt-out choices (skill prompts, voting surveys) — honor them across sessions.
@@ -70,7 +86,6 @@ Before mutating, always prefer `--dry-run` where available (notably `sf update -
 
 This SKILL.md is the foundation (Phase 2A, ticket #102). The following capabilities will be layered on in subsequent tickets:
 
-- **Phase 2B — Bootstrap helpers** (#103): environment detection scripts (`gh` auth, CLI presence, IDE, OS) and guided login flow.
 - **Phase 2C — Discovery for `sf new`** (#104): replaces Inquirer with a Guided / Express / Expert conversational flow.
 - **Phase 2D — Discovery for `sf update`** (#105): same treatment for module add/remove, catalogue-aware.
 - **Phase 2E — Project Awareness** (#106): read-only conversational queries over `.saasfoundry.json` and the module catalogue.
