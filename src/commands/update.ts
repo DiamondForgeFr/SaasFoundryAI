@@ -356,9 +356,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
           const autoAccept = acceptTemplateUpdates || nonInteractive || dryRun
           let proceed = autoAccept
           if (!autoAccept) {
-            const { confirm } = await promptWithPrefill<{ confirm: boolean }>([
-              { type: 'confirm', name: 'confirm', message: 'Apply these template updates now?', default: true }
-            ])
+            const { confirm } = await promptWithPrefill<{ confirm: boolean }>([{ type: 'confirm', name: 'confirm', message: 'Apply these template updates now?', default: true }])
             proceed = confirm
           }
 
