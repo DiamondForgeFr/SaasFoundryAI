@@ -20,6 +20,7 @@ import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import { SaaSFoundryManifest } from '../types'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
 import { version as cliVersion } from '../../package.json'
+import { UpdateCommandOptions, parseConflictStrategy } from './update.options'
 
 export interface FileUpdate {
   path: string
@@ -234,8 +235,10 @@ async function applyFileUpdates(
  *    and apply changes to files the user hasn't modified (three-way merge).
  * 2. Module addition: Detect available but uninstalled modules and let users add them.
  */
-export async function updateCommand() {
+export async function updateCommand(opts: UpdateCommandOptions = {}) {
   checkNodeVersion()
+  // Validate --conflict-strategy early so a bad value fails before any work.
+  parseConflictStrategy(opts.conflictStrategy)
 
   // Read manifest
   const manifestPath = '.saasfoundry.json'
