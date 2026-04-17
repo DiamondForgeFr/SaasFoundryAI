@@ -16,11 +16,12 @@ import { createDevServicesCompose } from '../builders/dev-services.builder'
 import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
 import { getAvailableModules, getEmailModuleCredentials, getModuleSelections, getStorageModuleConfig, getSkillCredentials } from '../prompts/update.prompts'
+import { promptWithPrefill } from '../prompts/helpers'
 import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import { SaaSFoundryManifest } from '../types'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
 import { version as cliVersion } from '../../package.json'
-import { UpdateCommandOptions, parseConflictStrategy } from './update.options'
+import { buildUpdatePrefillFromOptions, ConflictStrategy, parseConflictStrategy, UpdateCommandOptions, UpdateDryRunReport } from './update.options'
 
 export interface FileUpdate {
   path: string
@@ -180,11 +181,18 @@ export function computeFileUpdates(baseHashes: Record<string, string>, currentHa
 
 /**
  * Apply file updates from the regenerated project to the user's project.
+ *
+ * The `strategy` controls how three-way conflicts are resolved:
+ * - `save-new` (default): writes the template version to `<path>.saasfoundry.new`
+ *   so the user can merge manually. This preserves the pre-#59 behavior.
+ * - `keep`: leaves the user's file untouched and writes no sidecar.
+ * - `replace`: overwrites the user's file with the template version (destructive).
  */
 async function applyFileUpdates(
   updates: FileUpdate[],
   tempProjectDir: string,
-  spinner: ReturnType<typeof ora>
+  spinner: ReturnType<typeof ora>,
+  strategy: ConflictStrategy
 ): Promise<{ applied: FileUpdate[]; conflicts: FileUpdate[]; added: FileUpdate[]; removed: FileUpdate[] }> {
   const applied: FileUpdate[] = []
   const conflicts: FileUpdate[] = []
@@ -210,10 +218,19 @@ async function applyFileUpdates(
         break
       }
       case 'conflict': {
-        // Save the new version alongside the original with .saasfoundry.new extension
-        const newContent = await readFile(sourcePath, 'utf8')
-        await writeFile(`${destPath}.saasfoundry.new`, newContent)
-        conflicts.push(update)
+        if (strategy === 'keep') {
+          conflicts.push(update)
+        } else if (strategy === 'replace') {
+          spinner.text = `Overwriting ${update.path}...`
+          const newContent = await readFile(sourcePath, 'utf8')
+          await writeFile(destPath, newContent)
+          conflicts.push(update)
+        } else {
+          // save-new: write the template version alongside the original.
+          const newContent = await readFile(sourcePath, 'utf8')
+          await writeFile(`${destPath}.saasfoundry.new`, newContent)
+          conflicts.push(update)
+        }
         break
       }
       case 'remove': {
@@ -237,8 +254,13 @@ async function applyFileUpdates(
  */
 export async function updateCommand(opts: UpdateCommandOptions = {}) {
   checkNodeVersion()
-  // Validate --conflict-strategy early so a bad value fails before any work.
-  parseConflictStrategy(opts.conflictStrategy)
+
+  // Parse + validate CLI flags up-front so bad values fail before any work.
+  const conflictStrategy: ConflictStrategy = parseConflictStrategy(opts.conflictStrategy)
+  const prefill = buildUpdatePrefillFromOptions(opts)
+  const nonInteractive = opts.nonInteractive === true
+  const dryRun = opts.dryRun === true
+  const acceptTemplateUpdates = opts.acceptTemplateUpdates === true
 
   // Read manifest
   const manifestPath = '.saasfoundry.json'
@@ -251,6 +273,18 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
   const manifest: SaaSFoundryManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
 
+  // Initialise the dry-run report. We populate it as we walk the two flows and
+  // emit it on stdout at the end of the command when `--dry-run` is set.
+  const dryRunReport: UpdateDryRunReport | null = dryRun
+    ? {
+        cliVersion,
+        projectVersion: manifest.version,
+        conflictStrategy,
+        templateUpdate: { status: 'up-to-date' },
+        moduleAddition: { available: [], selected: [], skills: [], wouldRunNpmInstall: false }
+      }
+    : null
+
   // Display project info
   console.log(chalk.blue('\n  SaaSFoundry Project Update'))
   console.log(chalk.blue('  ' + '─'.repeat(40)))
@@ -258,6 +292,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   console.log(chalk.white(`  Structure:       ${manifest.structure}`))
   console.log(chalk.white(`  Project version: ${manifest.version}`))
   console.log(chalk.white(`  CLI version:     ${cliVersion}`))
+  if (dryRun) console.log(chalk.gray('  (dry-run — no files will be written)'))
   console.log()
 
   // ─── FLOW 1: Template updates (version differs) ───
@@ -266,6 +301,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       console.log(chalk.yellow(`  Your project was generated with SaaSFoundry v${manifest.version} (before hash tracking).`))
       console.log(chalk.yellow('  Template updates require file hashes. Skipping template update.\n'))
       console.log(chalk.yellow('  To enable template updates, regenerate your project or manually add fileHashes to .saasfoundry.json.\n'))
+      if (dryRunReport) dryRunReport.templateUpdate = { status: 'skipped-no-hashes' }
     } else {
       console.log(chalk.yellow(`  Version change detected: v${manifest.version} → v${cliVersion}`))
       console.log(chalk.blue('  Analyzing template changes...\n'))
@@ -290,41 +326,91 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
         if (updates.length === 0) {
           spinner.succeed(chalk.green('No template changes to apply.'))
+          if (dryRunReport) dryRunReport.templateUpdate = { status: 'no-changes' }
         } else {
-          spinner.text = 'Applying updates...'
-          const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner)
+          // Preview counts so the user can make an informed decision.
+          const updateCount = updates.filter((u) => u.action === 'update').length
+          const addCount = updates.filter((u) => u.action === 'add').length
+          const conflictCount = updates.filter((u) => u.action === 'conflict').length
+          const removeCount = updates.filter((u) => u.action === 'remove').length
 
-          spinner.succeed(chalk.green('Template update complete.'))
+          spinner.stop()
+          console.log(chalk.blue(`  ${updates.length} template change(s) detected:`))
+          if (updateCount) console.log(chalk.green(`    ${updateCount} file(s) to auto-update`))
+          if (addCount) console.log(chalk.green(`    ${addCount} new file(s) to add`))
+          if (conflictCount) console.log(chalk.yellow(`    ${conflictCount} conflict(s) — strategy: ${conflictStrategy}`))
+          if (removeCount) console.log(chalk.yellow(`    ${removeCount} file(s) removed in new CLI`))
+          console.log()
 
-          // Summary
-          if (applied.length > 0) {
-            console.log(chalk.green(`\n  ${applied.length} file(s) auto-updated:`))
-            for (const f of applied) console.log(chalk.green(`    ✓ ${f.path}`))
+          if (dryRunReport) {
+            dryRunReport.templateUpdate = {
+              status: 'would-apply',
+              update: updates.filter((u) => u.action === 'update').map((u) => u.path),
+              add: updates.filter((u) => u.action === 'add').map((u) => u.path),
+              conflict: updates.filter((u) => u.action === 'conflict').map((u) => u.path),
+              remove: updates.filter((u) => u.action === 'remove').map((u) => u.path)
+            }
           }
 
-          if (added.length > 0) {
-            console.log(chalk.green(`\n  ${added.length} new file(s) added:`))
-            for (const f of added) console.log(chalk.green(`    + ${f.path}`))
+          // Confirmation gate — bypassed by --accept-template-updates, --non-interactive, or --dry-run.
+          const autoAccept = acceptTemplateUpdates || nonInteractive || dryRun
+          let proceed = autoAccept
+          if (!autoAccept) {
+            const { confirm } = await promptWithPrefill<{ confirm: boolean }>([
+              { type: 'confirm', name: 'confirm', message: 'Apply these template updates now?', default: true }
+            ])
+            proceed = confirm
           }
 
-          if (removed.length > 0) {
-            console.log(chalk.yellow(`\n  ${removed.length} file(s) removed in new version (not auto-deleted):`))
-            for (const f of removed) console.log(chalk.yellow(`    - ${f.path}`))
-          }
+          if (!proceed) {
+            console.log(chalk.yellow('  Template update skipped. You can re-run `sf update` when ready.\n'))
+          } else if (dryRun) {
+            // In dry-run we report but never mutate.
+          } else {
+            spinner.start('Applying updates...')
+            const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy)
 
-          if (conflicts.length > 0) {
-            console.log(chalk.red(`\n  ${conflicts.length} conflict(s) — both you and SaaSFoundry modified these files:`))
-            for (const f of conflicts) {
-              console.log(chalk.red(`    ! ${f.path}`))
-              console.log(chalk.yellow(`      → Review ${f.path}.saasfoundry.new and merge manually`))
+            spinner.succeed(chalk.green('Template update complete.'))
+
+            // Summary
+            if (applied.length > 0) {
+              console.log(chalk.green(`\n  ${applied.length} file(s) auto-updated:`))
+              for (const f of applied) console.log(chalk.green(`    ✓ ${f.path}`))
+            }
+
+            if (added.length > 0) {
+              console.log(chalk.green(`\n  ${added.length} new file(s) added:`))
+              for (const f of added) console.log(chalk.green(`    + ${f.path}`))
+            }
+
+            if (removed.length > 0) {
+              console.log(chalk.yellow(`\n  ${removed.length} file(s) removed in new version (not auto-deleted):`))
+              for (const f of removed) console.log(chalk.yellow(`    - ${f.path}`))
+            }
+
+            if (conflicts.length > 0) {
+              const header = `  ${conflicts.length} conflict(s) — both you and SaaSFoundry modified these files:`
+              console.log(chalk.red(`\n${header}`))
+              for (const f of conflicts) {
+                console.log(chalk.red(`    ! ${f.path}`))
+                if (conflictStrategy === 'save-new') {
+                  console.log(chalk.yellow(`      → Review ${f.path}.saasfoundry.new and merge manually`))
+                } else if (conflictStrategy === 'replace') {
+                  console.log(chalk.yellow(`      → Overwritten with template version (strategy: replace)`))
+                } else {
+                  console.log(chalk.yellow(`      → Kept your version (strategy: keep)`))
+                }
+              }
             }
           }
         }
 
-        // Update manifest version and recompute hashes
-        manifest.version = cliVersion
-        manifest.fileHashes = await computeFileHashes('.')
-        await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+        if (!dryRun) {
+          // Update manifest version and recompute hashes
+          manifest.version = cliVersion
+          manifest.fileHashes = await computeFileHashes('.')
+          await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+        }
       } catch (error) {
         spinner.fail(chalk.red('Failed to update templates'))
         console.error(error)
@@ -343,20 +429,26 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
   // ─── FLOW 2: Module addition ───
   const availableModules = getAvailableModules(manifest)
+  if (dryRunReport) dryRunReport.moduleAddition.available = availableModules.map((m) => m.value)
 
   if (availableModules.length === 0) {
     if (manifest.version === cliVersion) {
       console.log(chalk.green('  All available modules are already installed. Nothing to update.'))
     }
+    if (dryRunReport) emitDryRunReport(dryRunReport)
     return
   }
 
   console.log(chalk.blue(`  ${availableModules.length} module(s) available to add:\n`))
 
-  const selectedModules = await getModuleSelections(availableModules)
+  const selectedModules = await getModuleSelections(availableModules, {
+    prefill: prefill.selectedModules !== undefined ? { selectedModules: prefill.selectedModules } : {},
+    nonInteractive
+  })
 
   if (selectedModules.length === 0) {
     console.log(chalk.yellow('\nNo modules selected. Nothing to do.'))
+    if (dryRunReport) emitDryRunReport(dryRunReport)
     return
   }
 
@@ -372,14 +464,14 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   const skillsCredentials: AdvancedSkillCredentials = {}
 
   if (selectedModules.includes('email')) {
-    emailCredentials = await getEmailModuleCredentials(manifest.projectName)
+    emailCredentials = await getEmailModuleCredentials(manifest.projectName, { prefill: prefill.email, nonInteractive })
     if (!emailCredentials) {
       selectedModules.splice(selectedModules.indexOf('email'), 1)
     }
   }
 
   if (selectedModules.includes('storage')) {
-    storageConfig = await getStorageModuleConfig(manifest.projectName)
+    storageConfig = await getStorageModuleConfig(manifest.projectName, { prefill: prefill.storage, nonInteractive })
   }
 
   // Collect credentials for selected skills
@@ -387,13 +479,31 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     if (module.startsWith('sf-skill-')) {
       const skillName = module.replace('sf-skill-', '')
       skillsToAdd.push(skillName)
-      const credentials = await getSkillCredentials(skillName)
+      const credentials = await getSkillCredentials(skillName, { prefill: prefill.skills as unknown as Record<string, unknown>, nonInteractive })
       Object.assign(skillsCredentials, credentials)
     }
   }
 
   if (selectedModules.length === 0) {
     console.log(chalk.yellow('\nNo modules to install. Nothing to do.'))
+    if (dryRunReport) emitDryRunReport(dryRunReport)
+    return
+  }
+
+  if (dryRunReport) {
+    dryRunReport.moduleAddition.selected = [...selectedModules]
+    if (selectedModules.includes('email')) {
+      dryRunReport.moduleAddition.email = { configured: emailCredentials !== null }
+    }
+    if (selectedModules.includes('storage') && storageConfig) {
+      dryRunReport.moduleAddition.storage = {
+        s3Setup: storageConfig.s3Setup,
+        credentialsProvided: storageConfig.s3Credentials !== undefined
+      }
+    }
+    dryRunReport.moduleAddition.skills = [...skillsToAdd]
+    dryRunReport.moduleAddition.wouldRunNpmInstall = selectedModules.includes('storage') || selectedModules.includes('email')
+    emitDryRunReport(dryRunReport)
     return
   }
 
@@ -505,4 +615,15 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     console.log(chalk.blue('  MinIO Console: http://localhost:9001'))
     console.log()
   }
+}
+
+/**
+ * Emit the dry-run report as pretty-printed JSON on stdout. Prefixed with a
+ * marker so callers parsing the output can locate the report regardless of
+ * surrounding status log lines.
+ */
+function emitDryRunReport(report: UpdateDryRunReport): void {
+  console.log('\n<sf-update-dry-run-report>')
+  console.log(JSON.stringify(report, null, 2))
+  console.log('</sf-update-dry-run-report>')
 }
