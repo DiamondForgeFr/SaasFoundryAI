@@ -95,7 +95,7 @@ for (const [key, spec] of Object.entries(manifest.fields)) {
 }
 
 function quote(s) {
-  if (/^[A-Za-z0-9_./@:-]+$/.test(s)) return s
+  if (/^[A-Za-z0-9_./@:,=-]+$/.test(s)) return s
   return "'" + s.replace(/'/g, "'\\''") + "'"
 }
 
