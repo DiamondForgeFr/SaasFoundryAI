@@ -5,8 +5,9 @@ import { version as cliVersion } from '../../package.json'
 import { isRunningViaNpx, performSkillInstall, skillIsInstalled } from '../skill/install'
 import { resolveSkillInstallDir, SKILL_NAME, SkillScope } from '../skill/paths'
 import { updatePreferences } from '../skill/preferences'
+import { checkSkillStatus } from '../skill/update'
 
-type SkillSubcommand = 'install'
+type SkillSubcommand = 'install' | 'update'
 
 interface ParsedArgs {
   project: boolean
@@ -41,6 +42,9 @@ export async function skillCommand(subcommand?: string, ...args: string[]) {
     case 'install':
       await runInstall(parsed)
       break
+    case 'update':
+      await runUpdate(parsed)
+      break
     default:
       console.error(chalk.red(`Unknown subcommand: ${subcommand}`))
       showHelp()
@@ -54,6 +58,7 @@ function showHelp() {
   console.log(chalk.white('\n  Usage: sf skill <subcommand> [options]\n'))
   console.log(chalk.white('  Subcommands:'))
   console.log(chalk.gray('    install [--project] [--force]   Install the skill (user scope by default)'))
+  console.log(chalk.gray('    update  [--project]             Re-copy the skill if the bundled version is newer'))
   console.log(chalk.white('\n  Scope:'))
   console.log(chalk.gray('    (default)    ~/.claude/skills/tool-saasfoundry/   (user)'))
   console.log(chalk.gray('    --project    .claude/skills/tool-saasfoundry/    (team-scoped, commit to git)'))
@@ -101,6 +106,28 @@ async function runInstall(opts: ParsedArgs) {
   }
 
   console.log()
+}
+
+async function runUpdate(opts: ParsedArgs) {
+  const scope: SkillScope = opts.project ? 'project' : 'user'
+  const status = await checkSkillStatus(scope, cliVersion)
+
+  if (!status.installed) {
+    console.error(chalk.red(`No ${SKILL_NAME} install found at ${status.targetDir}.`))
+    console.error(chalk.gray(`Run: sf skill install${scope === 'project' ? ' --project' : ''}`))
+    process.exit(1)
+    return
+  }
+
+  if (!status.stale) {
+    console.log(chalk.green(`\n  ✓ ${SKILL_NAME} already up to date (v${status.installedVersion})`))
+    console.log(chalk.gray(`    Target: ${status.targetDir}\n`))
+    return
+  }
+
+  const result = await performSkillInstall({ scope, cliVersion })
+  console.log(chalk.green(`\n  ✓ Updated ${SKILL_NAME}: ${status.installedVersion} → ${cliVersion}`))
+  console.log(chalk.gray(`    Target: ${result.targetDir}\n`))
 }
 
 async function maybeOfferGlobalCliInstall(opts: ParsedArgs) {
