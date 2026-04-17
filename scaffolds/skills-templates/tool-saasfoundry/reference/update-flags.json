@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "Source of truth for the sf update command surface used by the tool-saasfoundry skill. Each entry maps an intent JSON field to its corresponding --flag on `sf update`. Both plan-update.sh and the skill's discovery conversation read this file — keep them in sync by editing here, never by hardcoding flag names elsewhere. sf update is ADD-ONLY today; module removal is not yet supported by the CLI.",
+  "command": "sf update",
+  "alwaysAppend": ["--non-interactive"],
+  "fields": {
+    "addModules": {
+      "flag": "--add-modules",
+      "type": "csv",
+      "values": [
+        "email",
+        "storage",
+        "analytics",
+        "sf-skill-context7",
+        "sf-skill-atlassian",
+        "sf-skill-notion",
+        "sf-skill-figma"
+      ],
+      "required": false,
+      "description": "Comma-separated list of modules to add. Values must come from `sf modules list --json` and must not already appear in .saasfoundry.json."
+    },
+    "dryRun": {
+      "flag": "--dry-run",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Emit a JSON plan on stdout without mutating files. Always recommend this first."
+    },
+    "acceptTemplateUpdates": {
+      "flag": "--accept-template-updates",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Auto-apply non-conflicting template updates without prompting."
+    },
+    "conflictStrategy": {
+      "flag": "--conflict-strategy",
+      "type": "enum",
+      "values": ["keep", "replace", "save-new"],
+      "required": false,
+      "default": "save-new",
+      "description": "How three-way merge conflicts are handled. save-new preserves both sides, keep ignores upstream changes, replace overwrites local edits."
+    },
+    "mailersendApiKey": {
+      "flag": "--mailersend-api-key",
+      "type": "string",
+      "required": false,
+      "secret": true,
+      "requiresWhen": "addModules includes email"
+    },
+    "mailersendSenderEmail": {
+      "flag": "--mailersend-sender-email",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "addModules includes email"
+    },
+    "mailersendSenderName": {
+      "flag": "--mailersend-sender-name",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "addModules includes email"
+    },
+    "s3Setup": {
+      "flag": "--s3-setup",
+      "type": "enum",
+      "values": ["docker", "credentials"],
+      "required": false,
+      "requiresWhen": "addModules includes storage"
+    },
+    "s3Endpoint": { "flag": "--s3-endpoint", "type": "string", "required": false },
+    "s3AccessKey": { "flag": "--s3-access-key", "type": "string", "required": false, "secret": true },
+    "s3SecretKey": { "flag": "--s3-secret-key", "type": "string", "required": false, "secret": true },
+    "s3Bucket": { "flag": "--s3-bucket", "type": "string", "required": false },
+    "s3Region": { "flag": "--s3-region", "type": "string", "required": false },
+    "context7ApiKey": { "flag": "--context7-api-key", "type": "string", "required": false, "secret": true },
+    "atlassianEmail": { "flag": "--atlassian-email", "type": "string", "required": false },
+    "atlassianApiToken": { "flag": "--atlassian-api-token", "type": "string", "required": false, "secret": true },
+    "atlassianSite": { "flag": "--atlassian-site", "type": "string", "required": false },
+    "atlassianCloudId": { "flag": "--atlassian-cloud-id", "type": "string", "required": false },
+    "notionApiToken": { "flag": "--notion-api-token", "type": "string", "required": false, "secret": true },
+    "notionApiVersion": { "flag": "--notion-api-version", "type": "string", "required": false },
+    "figmaApiToken": { "flag": "--figma-api-token", "type": "string", "required": false, "secret": true }
+  },
+  "recommendations": {
+    "dryRun": {
+      "true": "Always recommend `--dry-run` first so the user sees the template-merge plan before files are mutated. Run the real command only after explicit approval.",
+      "false": "Only skip dry-run if the user explicitly says 'just do it' and the addition is one small module with no template merge risk."
+    },
+    "conflictStrategy": {
+      "save-new": "Default — the safest option: conflicting files are written as `.saasfoundry.new` next to the originals so the user can diff and reconcile.",
+      "keep": "Choose when the user has significant local edits they do not want touched by a template update.",
+      "replace": "Choose only when the user wants the latest upstream version and is okay losing local edits to conflicting files."
+    },
+    "modules": {
+      "email": "Recommend adding when the app now needs transactional email (password reset, invites, receipts). Requires a mailersend API key.",
+      "storage": "Recommend adding when the app needs file uploads (logos, user docs). Docker setup for local dev, credentials for staging/prod.",
+      "analytics": "Recommend adding when tracking user activity or business metrics becomes relevant. Self-hosted Umami, production-only.",
+      "sf-skill-context7": "Recommend adding when the project relies on third-party libs and needs up-to-date doc retrieval for the AI agent.",
+      "sf-skill-atlassian": "Recommend adding when issues/pages live in Jira or Confluence and the AI agent should read/write them.",
+      "sf-skill-notion": "Recommend adding when product specs or knowledge base live in Notion.",
+      "sf-skill-figma": "Recommend adding when design hand-off goes through Figma files."
+    }
+  }
+}
