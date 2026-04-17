@@ -178,6 +178,49 @@ Full specification: `reference/update-flags.json`. Essentials:
 - **Don't fabricate module names.** Every value in `addModules` must exist in `sf modules list --json`.
 - **Don't echo credentials.** Collect them, pass to `plan-update.sh`, redact in any user-facing summary.
 
+## Project Awareness
+
+Project Awareness is the read-only surface of the skill. When the user asks a question about the *current* state of their SaaSFoundry project, the skill answers from a consolidated snapshot — it never writes, never installs, never mutates anything.
+
+### Supported questions
+
+| User asks | How the skill answers |
+| --- | --- |
+| "What's my SaaSFoundry version? Am I up to date?" | `report.project.cliVersion` + `report.upToDate`. If `false`, list `report.modules.obsolete` with their `minCliVersion` and recommend `sf skill update` + `sf update`. |
+| "What modules do I have?" | `report.modules.installed` — read verbatim. If the user wants details on a specific one, run `sf modules info <slug> --json`. |
+| "What would `sf update` do right now?" | Do **not** answer from the snapshot alone. Run `sf update --dry-run --non-interactive` and show the plan (this is a CLI call, not a mutation). |
+| "Are there new modules since my install?" | `report.modules.newlyAvailable` — list with one-line descriptions from the catalogue (`sf modules info <name> --json` for the `description` field). |
+| "Where was this project generated / when?" | `report.project.generatedAt` + `report.project.structure` + `report.project.name`. |
+
+### Workflow
+
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundry-cli`).
+2. **Gather snapshot** — run `scripts/read-project.sh` from the project root. It reads `.saasfoundry.json`, calls `sf modules list --json`, and emits a consolidated JSON report on stdout.
+3. **Answer from the report** — never invent facts about the project; if a field is missing in the report, tell the user you don't know rather than guessing.
+4. **Stay read-only** — if the user's follow-up becomes "add X", "remove Y", "upgrade Z", route through Phase 2D's `plan-update.sh`. Never let a "tell me about…" thread slip into a mutation without explicit intent.
+
+### Report shape (from `read-project.sh`)
+
+```json
+{
+  "project": { "name": "…", "structure": "monorepo", "cliVersion": "1.0.0-beta", "generatedAt": "…" },
+  "modules": {
+    "installed": ["email", "storage", "sf-skill-context7"],
+    "available": ["email", "storage", "analytics", …],
+    "newlyAvailable": ["analytics"],
+    "obsolete": [{ "name": "email", "minCliVersion": "1.1.0" }]
+  },
+  "upToDate": true
+}
+```
+
+### Never do these
+
+- **Don't write anything.** Project Awareness is read-only by design; mutations live in Phase 2C (`sf new`) and Phase 2D (`sf update`).
+- **Don't trust a stale snapshot across turns.** Re-run `read-project.sh` when the user signals they've made changes (commits, CLI runs, etc.).
+- **Don't fabricate module descriptions.** If the user wants "what does module X do?", call `sf modules info X --json` and read from the catalogue.
+- **Don't answer "am I up to date?" from cached intuition.** Always use `report.upToDate` — it's the only field that cross-checks installed modules against `catalogue.minCliVersion`.
+
 ## Interaction principles
 
 1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
