@@ -42,6 +42,36 @@ export interface UpdatePrefill {
   skills: AdvancedSkillCredentials
 }
 
+/**
+ * Machine-readable preview emitted on stdout when `sf update --dry-run` runs.
+ * Contains no side effects — callers can parse it to verify what the command
+ * would do without actually mutating the project.
+ */
+export interface UpdateDryRunReport {
+  cliVersion: string
+  projectVersion: string
+  conflictStrategy: ConflictStrategy
+  templateUpdate:
+    | { status: 'skipped-no-hashes' }
+    | { status: 'up-to-date' }
+    | { status: 'no-changes' }
+    | {
+        status: 'would-apply'
+        update: string[]
+        add: string[]
+        conflict: string[]
+        remove: string[]
+      }
+  moduleAddition: {
+    available: string[]
+    selected: string[]
+    email?: { configured: boolean }
+    storage?: { s3Setup: 'docker' | 'credentials'; credentialsProvided: boolean }
+    skills: string[]
+    wouldRunNpmInstall: boolean
+  }
+}
+
 const VALID_STRATEGIES: ReadonlyArray<ConflictStrategy> = ['keep', 'replace', 'save-new']
 
 /**
