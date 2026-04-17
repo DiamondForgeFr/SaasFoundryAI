@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "Source of truth for the sf new command surface used by the tool-saasfoundry skill. Each entry maps an intent JSON field to its corresponding --flag on `sf new`. Both plan-new.sh and the skill's discovery conversation read this file — keep them in sync by editing here, never by hardcoding flag names elsewhere.",
+  "command": "sf new",
+  "alwaysAppend": ["--non-interactive"],
+  "fields": {
+    "projectName": {
+      "flag": "--project-name",
+      "type": "string",
+      "required": true,
+      "description": "Project name in kebab-case"
+    },
+    "projectDescription": {
+      "flag": "--project-description",
+      "type": "string",
+      "required": false,
+      "description": "Free-text project description"
+    },
+    "structure": {
+      "flag": "--structure",
+      "type": "enum",
+      "values": ["monorepo", "multirepo"],
+      "required": true,
+      "description": "Monorepo (single repo) vs multirepo (backend + frontend split)"
+    },
+    "mainBranch": {
+      "flag": "--main-branch",
+      "type": "enum",
+      "values": ["main", "master"],
+      "required": false,
+      "default": "main"
+    },
+    "setupRepo": {
+      "flag": "--setup-repo",
+      "type": "enum",
+      "values": ["local", "existing"],
+      "required": false,
+      "default": "local"
+    },
+    "monorepoUrl": {
+      "flag": "--monorepo-url",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "structure=monorepo AND setupRepo=existing"
+    },
+    "backendRepoUrl": {
+      "flag": "--backend-repo-url",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "structure=multirepo AND setupRepo=existing"
+    },
+    "frontendRepoUrl": {
+      "flag": "--frontend-repo-url",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "structure=multirepo AND setupRepo=existing"
+    },
+    "dbSetup": {
+      "flag": "--db-setup",
+      "type": "enum",
+      "values": ["docker", "credentials", "manual"],
+      "required": false,
+      "default": "docker"
+    },
+    "dbType": {
+      "flag": "--db-type",
+      "type": "enum",
+      "values": ["postgresql", "sql"],
+      "required": false,
+      "default": "postgresql"
+    },
+    "dbHost": { "flag": "--db-host", "type": "string", "required": false },
+    "dbPort": { "flag": "--db-port", "type": "string", "required": false },
+    "dbUser": { "flag": "--db-user", "type": "string", "required": false },
+    "dbPassword": { "flag": "--db-password", "type": "string", "required": false, "secret": true },
+    "dbName": { "flag": "--db-name", "type": "string", "required": false },
+    "emailService": {
+      "flag": "--email-service",
+      "type": "enum",
+      "values": ["none", "mailersend"],
+      "required": false,
+      "default": "none"
+    },
+    "mailersendApiKey": { "flag": "--mailersend-api-key", "type": "string", "required": false, "secret": true },
+    "mailersendSenderEmail": { "flag": "--mailersend-sender-email", "type": "string", "required": false },
+    "mailersendSenderName": { "flag": "--mailersend-sender-name", "type": "string", "required": false },
+    "s3Setup": {
+      "flag": "--s3-setup",
+      "type": "enum",
+      "values": ["docker", "credentials", "manual"],
+      "required": false
+    },
+    "s3Endpoint": { "flag": "--s3-endpoint", "type": "string", "required": false },
+    "s3AccessKey": { "flag": "--s3-access-key", "type": "string", "required": false, "secret": true },
+    "s3SecretKey": { "flag": "--s3-secret-key", "type": "string", "required": false, "secret": true },
+    "s3Bucket": { "flag": "--s3-bucket", "type": "string", "required": false },
+    "s3Region": { "flag": "--s3-region", "type": "string", "required": false },
+    "analytics": {
+      "flag": "--analytics",
+      "negationFlag": "--no-analytics",
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "advancedSkills": {
+      "flag": "--advanced-skills",
+      "type": "csv",
+      "values": ["context7", "atlassian", "notion", "figma"],
+      "required": false,
+      "description": "Comma-separated list of advanced skills to install"
+    },
+    "context7ApiKey": { "flag": "--context7-api-key", "type": "string", "required": false, "secret": true },
+    "atlassianEmail": { "flag": "--atlassian-email", "type": "string", "required": false },
+    "atlassianApiToken": { "flag": "--atlassian-api-token", "type": "string", "required": false, "secret": true },
+    "atlassianSite": { "flag": "--atlassian-site", "type": "string", "required": false },
+    "atlassianCloudId": { "flag": "--atlassian-cloud-id", "type": "string", "required": false },
+    "notionApiToken": { "flag": "--notion-api-token", "type": "string", "required": false, "secret": true },
+    "notionApiVersion": { "flag": "--notion-api-version", "type": "string", "required": false },
+    "figmaApiToken": { "flag": "--figma-api-token", "type": "string", "required": false, "secret": true },
+    "workflow": {
+      "flag": "--workflow",
+      "negationFlag": "--no-workflow",
+      "type": "string",
+      "required": false,
+      "description": "Workflow preset name, or 'none' / --no-workflow to skip"
+    },
+    "startServices": {
+      "flag": "--start-services",
+      "negationFlag": "--no-start-services",
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "startApps": {
+      "flag": "--start-apps",
+      "type": "enum",
+      "values": ["all", "backend", "frontend", "none"],
+      "required": false,
+      "default": "none"
+    }
+  },
+  "recommendations": {
+    "structure": {
+      "monorepo": "Default for solo devs, small teams, and projects where backend+frontend ship together. Single repo simplifies CI, versioning, and PR scope.",
+      "multirepo": "Choose when backend and frontend are owned by different teams, deploy on independent schedules, or need per-side access controls."
+    },
+    "emailService": {
+      "mailersend": "Recommend when the project needs transactional email (password reset, invites, receipts). The module ships ready-to-use templates.",
+      "none": "Default for prototypes, internal tools, or when email is already handled upstream."
+    },
+    "s3Setup": {
+      "docker": "Default for local development — spins up MinIO via docker-compose.",
+      "credentials": "Choose for staging/prod against AWS S3 or an S3-compatible provider (R2, Backblaze, DigitalOcean Spaces).",
+      "manual": "Choose when infra is provisioned outside SaaSFoundry and credentials come from an external secret manager."
+    },
+    "analytics": {
+      "true": "Recommend when tracking user activity or business metrics matters early. Installs a privacy-respecting analytics module.",
+      "false": "Default for MVPs — adding analytics later via `sf update --add-modules analytics` is a one-liner."
+    }
+  }
+}
