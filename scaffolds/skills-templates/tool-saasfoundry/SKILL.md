@@ -74,6 +74,59 @@ Guidelines:
 - **Always gate `gh`-backed flows behind `bootstrap-gh.sh`** — on failure, surface its stderr verbatim to the user and stop rather than retrying blindly
 - **Resolve the CLI invocation via `bootstrap-cli.sh`** — never hardcode `sf` in examples if the user might be running via `npx`
 
+## Discovery: `sf new`
+
+When the user wants to start a new SaaSFoundry project, the skill replaces the CLI's Inquirer prompts with a conversational discovery flow. The goal is to produce a complete **intent** object that `plan-new.sh` can translate into a single `sf new --non-interactive …` command. The intent schema and flag mapping are documented in `reference/new-flags.json` — consult it before inventing field names.
+
+### Three discovery modes
+
+Pick the mode from the user's first message, not from a menu:
+
+| Mode | When it fits | Flow |
+| --- | --- | --- |
+| **Guided** *(default)* | User says "I want a new SaaS project" with little detail, or explicitly asks for help choosing | Ask one question at a time, explain each choice briefly, recommend based on the table below, allow bail-out |
+| **Express** | User gives enough signal upfront ("scaffold a monorepo with mailersend and analytics") | Infer the intent, echo it back as a plan, ask for single-shot validation |
+| **Expert** | User pastes a full or partial `sf new --non-interactive …` command | Pass it through verbatim after sanity-checking flag names against the manifest |
+
+### Discovery workflow
+
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundry-cli`). Cache for the rest of the turn.
+2. **Gather intent** — build a JSON object matching the `fields` in `reference/new-flags.json`. Only include fields the user has either stated or confirmed via a recommendation.
+3. **Materialize the plan** — pipe the intent JSON into `scripts/plan-new.sh`. It returns the full command on stdout or exits non-zero with a validation message on stderr.
+4. **Present the plan** — show the command *and* a short human summary built from the intent (structure, database, modules, post-setup apps). Never run the command yet.
+5. **Confirm and execute** — wait for explicit user approval before running. If the user tweaks a field, rebuild the intent and re-run `plan-new.sh` rather than editing the command string by hand.
+
+### Intent schema (summary)
+
+Full specification: `reference/new-flags.json`. Essentials:
+
+- **Always required:** `projectName` (kebab-case), `structure` (`monorepo` | `multirepo`)
+- **Recommended to set explicitly:** `mainBranch`, `dbSetup`, `emailService`, `analytics`
+- **Only set when user opts in:** `advancedSkills` (CSV of `context7`, `atlassian`, `notion`, `figma`) and their credential fields
+- **Secrets** (marked `"secret": true` in the manifest): never echo them back, never log them
+
+### Recommendation rules
+
+Use these defaults when the user has no strong opinion:
+
+| Dimension | Default | Condition to override |
+| --- | --- | --- |
+| `structure` | `monorepo` | Recommend `multirepo` only when backend/frontend are owned by separate teams or deploy on separate schedules |
+| `mainBranch` | `main` | Only `master` when the user's org standard says so |
+| `dbSetup` | `docker` | Recommend `credentials` for staging/prod stacks, `manual` when DB is provisioned elsewhere |
+| `emailService` | `none` | Recommend `mailersend` as soon as the product needs transactional email (password reset, invites, receipts) |
+| `analytics` | `false` | Recommend `true` only when metrics are on the roadmap from day one — otherwise `sf update --add-modules analytics` later is a one-liner |
+| `startApps` / `startServices` | `none` / `false` | Offer to start services when the user says they want to "try it immediately" |
+
+The full rationale for each recommendation is in the `recommendations` block of `reference/new-flags.json` — lean on it when the user asks "why?".
+
+### Never do these
+
+- **Don't fabricate flags.** Every flag you pass must exist in the manifest's `fields` section.
+- **Don't ask for every field in Guided mode.** Skip fields whose defaults are obvious for the user's context (e.g. don't ask about `mainBranch` for a hobby project).
+- **Don't re-serialize the plan by hand.** Always round-trip through `plan-new.sh` so the command stays consistent with the manifest.
+- **Don't stash secrets in the intent you echo back.** Collect them, pass them through to `plan-new.sh`, but redact in any user-facing summary.
+
 ## Interaction principles
 
 1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
@@ -86,7 +139,6 @@ Guidelines:
 
 This SKILL.md is the foundation (Phase 2A, ticket #102). The following capabilities will be layered on in subsequent tickets:
 
-- **Phase 2C — Discovery for `sf new`** (#104): replaces Inquirer with a Guided / Express / Expert conversational flow.
 - **Phase 2D — Discovery for `sf update`** (#105): same treatment for module add/remove, catalogue-aware.
 - **Phase 2E — Project Awareness** (#106): read-only conversational queries over `.saasfoundry.json` and the module catalogue.
 
