@@ -70,7 +70,7 @@ export async function promptWithPrefill<T extends InquirerAnswers>(questions: Re
     }
 
     if (missing.size > 0) {
-      throw new Error(`Missing required values in --non-interactive mode: ${Array.from(missing).join(', ')}\n` + `Run \`sf new --help\` for the full flag list.`)
+      throw new Error(`Missing required values in --non-interactive mode: ${Array.from(missing).join(', ')}\n` + `Run the command with \`--help\` for the full flag list.`)
     }
   }
 
