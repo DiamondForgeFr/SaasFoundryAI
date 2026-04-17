@@ -1,4 +1,8 @@
-import { computeFileUpdates, FileUpdate } from '../../../commands/update'
+import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+
+import { applyFileUpdates, computeFileUpdates, FileUpdate } from '../../../commands/update'
 
 describe('computeFileUpdates (three-way merge)', () => {
   // Helper to find update for a specific path
@@ -155,5 +159,67 @@ describe('computeFileUpdates (three-way merge)', () => {
       expect(findUpdate(updates, 'new-file.ts')?.action).toBe('add')
       expect(findUpdate(updates, 'to-remove.ts')?.action).toBe('remove')
     })
+  })
+})
+
+describe('applyFileUpdates (conflict strategies)', () => {
+  // Minimal spinner stub — applyFileUpdates only reads/writes `spinner.text`.
+  const stubSpinner = () => ({ text: '' }) as unknown as Parameters<typeof applyFileUpdates>[2]
+
+  let tempDir: string
+  let originalCwd: string
+  let tempProjectDir: string
+
+  beforeEach(async () => {
+    tempDir = join(tmpdir(), `sf-unit-apply-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    tempProjectDir = join(tempDir, 'src')
+    await mkdir(tempProjectDir, { recursive: true })
+    // The "current" project lives at tempDir/project. applyFileUpdates uses relative destPaths.
+    const projectDir = join(tempDir, 'project')
+    await mkdir(projectDir, { recursive: true })
+    originalCwd = process.cwd()
+    process.chdir(projectDir)
+  })
+
+  afterEach(async () => {
+    process.chdir(originalCwd)
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  })
+
+  const setupConflictCase = async () => {
+    // User's version of the file (current working dir).
+    await writeFile('conflict.ts', 'user-modified-content')
+    // Template version lives in the temp "regenerated" project dir.
+    await writeFile(join(tempProjectDir, 'conflict.ts'), 'template-version-content')
+  }
+
+  it('keep: leaves the user file untouched and writes no sidecar', async () => {
+    await setupConflictCase()
+
+    const { conflicts } = await applyFileUpdates([{ path: 'conflict.ts', action: 'conflict' }], tempProjectDir, stubSpinner(), 'keep')
+
+    expect(conflicts).toHaveLength(1)
+    expect(await readFile('conflict.ts', 'utf8')).toBe('user-modified-content')
+    await expect(readFile('conflict.ts.saasfoundry.new', 'utf8')).rejects.toThrow()
+  })
+
+  it('replace: overwrites the user file with the template version', async () => {
+    await setupConflictCase()
+
+    const { conflicts } = await applyFileUpdates([{ path: 'conflict.ts', action: 'conflict' }], tempProjectDir, stubSpinner(), 'replace')
+
+    expect(conflicts).toHaveLength(1)
+    expect(await readFile('conflict.ts', 'utf8')).toBe('template-version-content')
+    await expect(readFile('conflict.ts.saasfoundry.new', 'utf8')).rejects.toThrow()
+  })
+
+  it('save-new: writes the template version as a .saasfoundry.new sidecar and preserves the original', async () => {
+    await setupConflictCase()
+
+    const { conflicts } = await applyFileUpdates([{ path: 'conflict.ts', action: 'conflict' }], tempProjectDir, stubSpinner(), 'save-new')
+
+    expect(conflicts).toHaveLength(1)
+    expect(await readFile('conflict.ts', 'utf8')).toBe('user-modified-content')
+    expect(await readFile('conflict.ts.saasfoundry.new', 'utf8')).toBe('template-version-content')
   })
 })

@@ -188,7 +188,7 @@ export function computeFileUpdates(baseHashes: Record<string, string>, currentHa
  * - `keep`: leaves the user's file untouched and writes no sidecar.
  * - `replace`: overwrites the user's file with the template version (destructive).
  */
-async function applyFileUpdates(
+export async function applyFileUpdates(
   updates: FileUpdate[],
   tempProjectDir: string,
   spinner: ReturnType<typeof ora>,
