@@ -18,7 +18,8 @@ Before doing anything else, verify the parent has no open children:
 gh issue list --state open --search "parent #{N}"
 ```
 
-Must return `[]`. If any children are still open, **go back to In Progress**, close them (`workflow-cli.sh update-status <sub> Done`), and only then proceed to step 1. This gate exists because merged-code-with-open-issues creates an inconsistent board state.
+Must return `[]`. If any children are still open, **go back to In Progress**, close them (`workflow-cli.sh update-status <sub> Done`), and only then proceed to step 1. This gate exists because
+merged-code-with-open-issues creates an inconsistent board state.
 
 ### 1. GENERATE THE TEST PLAN
 

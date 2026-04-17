@@ -103,4 +103,6 @@ For each subtask:
 
 ## Errors to Avoid
 
-❌ NEVER code without creating a branch first ❌ NEVER mix multiple tickets in the same branch ❌ NEVER move to AI Testing with lint errors ❌ NEVER forget to push before moving to AI Testing ❌ NEVER batch subtask closures at the end of the parent — close each one right after its commit lands ❌ NEVER start another ticket while this one is still In Progress / AI Testing / Human Testing / In Review (unless the developer explicitly asks you to pause)
+❌ NEVER code without creating a branch first ❌ NEVER mix multiple tickets in the same branch ❌ NEVER move to AI Testing with lint errors ❌ NEVER forget to push before moving to AI Testing ❌ NEVER
+batch subtask closures at the end of the parent — close each one right after its commit lands ❌ NEVER start another ticket while this one is still In Progress / AI Testing / Human Testing / In Review
+(unless the developer explicitly asks you to pause)
