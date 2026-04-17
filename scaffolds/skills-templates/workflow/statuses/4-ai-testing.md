@@ -5,9 +5,20 @@
 ## When to Enter This Status
 
 - After completing all subtasks in In Progress
+- **All subtasks are CLOSED on GitHub** (not just merged — the issues themselves must be closed)
 - Code is pushed and ready to be tested
 
 ## Mandatory Actions (in this order)
+
+### 0. GATE CHECK — ZERO OPEN CHILDREN
+
+Before doing anything else, verify the parent has no open children:
+
+```bash
+gh issue list --state open --search "parent #{N}"
+```
+
+Must return `[]`. If any children are still open, **go back to In Progress**, close them (`workflow-cli.sh update-status <sub> Done`), and only then proceed to step 1. This gate exists because merged-code-with-open-issues creates an inconsistent board state.
 
 ### 1. GENERATE THE TEST PLAN
 - Analyze all changes (git diff, commits)
@@ -93,3 +104,4 @@
 ❌ If a test fails, do NOT move to Human Testing, FIX it first
 ❌ NEVER skip examine phase for complex tickets
 ❌ NEVER ignore Critical/High security findings
+❌ NEVER enter AI Testing while subtasks are still OPEN on GitHub — close them first (step 0 gate)

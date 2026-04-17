@@ -68,16 +68,17 @@ For each subtask:
   - Example: `type(#{N}): description`
   - Use allowed types: `feat`, `fix`, `docs`, `refactor`, etc.
   - Replace `#{N}` with ticket number
-- d. Mark subtask "Done"
+- d. **Close the subtask immediately** — run `workflow-cli.sh update-status <sub> Done` and **verify** with `gh issue view <sub> --json state` that it prints `CLOSED`. Never batch closures.
 - e. Move to the next one
 
 ### 5. WHEN ALL SUBTASKS ARE DONE
-- a. Run: `npm run build && npm run lint`
-- b. Fix all lint/build errors
-- c. Run existing tests (unit tests)
-- d. Ensure nothing is broken
-- e. Final commit if corrections needed
-- f. Push the branch: `git push -u origin {branch-name}`
+- a. **Verify zero open children** — `gh issue list --state open --search "parent #{N}"` must return an empty array before going further. If not, close the remaining children first.
+- b. Run: `npm run build && npm run lint`
+- c. Fix all lint/build errors
+- d. Run existing tests (unit tests)
+- e. Ensure nothing is broken
+- f. Final commit if corrections needed
+- g. Push the branch: `git push -u origin {branch-name}`
 
 ## Exit Conditions
 
@@ -97,3 +98,5 @@ For each subtask:
 ❌ NEVER mix multiple tickets in the same branch
 ❌ NEVER move to AI Testing with lint errors
 ❌ NEVER forget to push before moving to AI Testing
+❌ NEVER batch subtask closures at the end of the parent — close each one right after its commit lands
+❌ NEVER start another ticket while this one is still In Progress / AI Testing / Human Testing / In Review (unless the developer explicitly asks you to pause)

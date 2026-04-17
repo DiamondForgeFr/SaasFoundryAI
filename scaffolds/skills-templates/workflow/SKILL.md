@@ -131,6 +131,9 @@ See your tool-specific skill documentation for complete command reference:
 2. **NEVER skip steps** described in a status
 3. **NEVER move to the next status** without meeting all exit conditions
 4. **ASK if uncertain** - don't assume or guess
+5. **CLOSE SUBTASKS AS YOU GO** — after a subtask's commit lands, immediately run `workflow-cli.sh update-status <sub> Done` and verify `gh issue view <sub> --json state` prints `CLOSED` before starting the next one. Never batch closures at the end of the parent ticket.
+6. **GATE PARENT TRANSITIONS ON OPEN CHILDREN** — before any parent transition (`AI Testing` → `Human Testing` → `In Review` → `Done`), run `gh issue list --state open --search "parent #<N>"` and ensure it returns empty. If not, go back and close the children first.
+7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket is `In Progress` / `AI Testing` / `Human Testing` / `In Review`, drive it to `Done` before claiming or starting another. The only override is an explicit developer request to pause.
 
 ## Implementation
 
