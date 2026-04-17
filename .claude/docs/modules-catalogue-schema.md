@@ -72,28 +72,29 @@ Scoring algorithm:
 - Per module, match tokens against `keywords` (exact set match, weight 3), `alternatives` (substring match, weight 2), `description` (substring match, weight 1).
 - Return modules with `score > 0`, sorted descending.
 
-The score is **relative**, not calibrated — consumers should use it for ranking, not for absolute thresholds. Claude is expected to do the final semantic matching client-side using `keywords`, `provides`, `alternatives`, and `description` from the top candidates.
+The score is **relative**, not calibrated — consumers should use it for ranking, not for absolute thresholds. Claude is expected to do the final semantic matching client-side using `keywords`,
+`provides`, `alternatives`, and `description` from the top candidates.
 
 ## `ModuleDefinition` — field reference
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `name` | string | Stable machine id. Used by `--add-modules`, `sf modules info`, installed-state lookups. Never renamed. |
-| `displayName` | string | Human-readable label for tables and prompts. May change for clarity. |
-| `description` | string | One-sentence summary. Used in `sf modules list`, `sf update` prompts, and match scoring. |
-| `category` | `'module' \| 'skill' \| 'structural'` | `module` = addable via `sf update`. `skill` = advanced Claude Code skill. `structural` = baked into `sf new`, not addable later. |
-| `keywords` | string[] | Curated lowercase single-word tags for intent matching. Highest match weight. |
-| `provides` | string[] | What the module adds to the generated project (services, UI, tables, env vars). |
-| `alternatives` | string[] | What users might otherwise custom-build. Feeds the anti-reinvention guardrail — Claude should cite these when proposing a SaaSFoundry module over a hand-rolled solution. |
-| `introducedInVersion` | string | First CLI version that shipped this module (semver). |
-| `minCliVersion` | string | Minimum CLI version required to install (semver). |
-| `filesAffected` | string[] | Paths touched when installing. Used by `sf update --dry-run` previews. |
-| `dependencies` | string[] | npm package names added to the generated project. |
-| `installOnly` | `'scaffold' \| undefined` | Present and equal to `'scaffold'` iff the module can only be chosen at `sf new` time. Absent on post-install modules. |
+| Field                 | Type                                  | Meaning                                                                                                                                                                   |
+| --------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                | string                                | Stable machine id. Used by `--add-modules`, `sf modules info`, installed-state lookups. Never renamed.                                                                    |
+| `displayName`         | string                                | Human-readable label for tables and prompts. May change for clarity.                                                                                                      |
+| `description`         | string                                | One-sentence summary. Used in `sf modules list`, `sf update` prompts, and match scoring.                                                                                  |
+| `category`            | `'module' \| 'skill' \| 'structural'` | `module` = addable via `sf update`. `skill` = advanced Claude Code skill. `structural` = baked into `sf new`, not addable later.                                          |
+| `keywords`            | string[]                              | Curated lowercase single-word tags for intent matching. Highest match weight.                                                                                             |
+| `provides`            | string[]                              | What the module adds to the generated project (services, UI, tables, env vars).                                                                                           |
+| `alternatives`        | string[]                              | What users might otherwise custom-build. Feeds the anti-reinvention guardrail — Claude should cite these when proposing a SaaSFoundry module over a hand-rolled solution. |
+| `introducedInVersion` | string                                | First CLI version that shipped this module (semver).                                                                                                                      |
+| `minCliVersion`       | string                                | Minimum CLI version required to install (semver).                                                                                                                         |
+| `filesAffected`       | string[]                              | Paths touched when installing. Used by `sf update --dry-run` previews.                                                                                                    |
+| `dependencies`        | string[]                              | npm package names added to the generated project.                                                                                                                         |
+| `installOnly`         | `'scaffold' \| undefined`             | Present and equal to `'scaffold'` iff the module can only be chosen at `sf new` time. Absent on post-install modules.                                                     |
 
 ## Consumer contract (for `tool-saasfoundry` and similar)
 
-Recommended skill flow when a user asks *"how do I add X?"*:
+Recommended skill flow when a user asks _"how do I add X?"_:
 
 1. `sf modules match "<user intent>" --json` → shortlist candidates.
 2. `sf modules info <candidate> --json` → read `provides`, `alternatives`, `filesAffected`.
