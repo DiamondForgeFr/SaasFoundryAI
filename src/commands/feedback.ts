@@ -5,6 +5,7 @@ import { version as cliVersion } from '../../package.json'
 import { fileBug, searchExistingBugs, type BugSource } from '../feedback/bug'
 import { classifyIssue, listFeedback, type ListStatus } from '../feedback/list'
 import { fileRequest, searchExistingRequests } from '../feedback/request'
+import { castVote, listVotable, type VoteAction } from '../feedback/vote'
 import type { GhIssue } from '../feedback/gh'
 
 type FeedbackSubcommand = 'request' | 'bug' | 'list' | 'vote'
@@ -16,6 +17,9 @@ interface ParsedArgs {
   source?: string
   status?: string
   limit?: number
+  stackFilter?: string
+  comment?: string
+  list: boolean
   mine: boolean
   json: boolean
   autoRepro: boolean
@@ -31,6 +35,9 @@ function parseArgs(args: string[]): ParsedArgs {
   let source: string | undefined
   let status: string | undefined
   let limit: number | undefined
+  let stackFilter: string | undefined
+  let comment: string | undefined
+  let list = false
   let mine = false
   let json = false
   let autoRepro = false
@@ -49,6 +56,11 @@ function parseArgs(args: string[]): ParsedArgs {
     else if (arg?.startsWith('--status=')) status = arg.slice('--status='.length)
     else if (arg === '--limit') limit = parseLimit(args[++i])
     else if (arg?.startsWith('--limit=')) limit = parseLimit(arg.slice('--limit='.length))
+    else if (arg === '--stack-filter') stackFilter = args[++i]
+    else if (arg?.startsWith('--stack-filter=')) stackFilter = arg.slice('--stack-filter='.length)
+    else if (arg === '--comment') comment = args[++i]
+    else if (arg?.startsWith('--comment=')) comment = arg.slice('--comment='.length)
+    else if (arg === '--list') list = true
     else if (arg === '--mine') mine = true
     else if (arg === '--json') json = true
     else if (arg === '--auto-repro') autoRepro = true
@@ -57,7 +69,7 @@ function parseArgs(args: string[]): ParsedArgs {
     else if (arg === '--non-interactive') nonInteractive = true
     else if (arg !== undefined && arg !== null && arg !== '') positional.push(arg)
   }
-  return { positional, description, title, source, status, limit, mine, json, autoRepro, force, yes, nonInteractive }
+  return { positional, description, title, source, status, limit, stackFilter, comment, list, mine, json, autoRepro, force, yes, nonInteractive }
 }
 
 function parseLimit(raw: string | undefined): number | undefined {
@@ -84,6 +96,9 @@ export async function feedbackCommand(subcommand?: string, ...args: string[]) {
     case 'list':
       await runList(parsed)
       break
+    case 'vote':
+      await runVote(parsed)
+      break
     default:
       console.error(chalk.red(`Unknown subcommand: ${subcommand}`))
       showHelp()
@@ -103,6 +118,10 @@ function showHelp() {
   console.log(chalk.gray('                    Open a bug report against the CLI or generated scaffolds.'))
   console.log(chalk.gray('    list            [--status open|closed|all] [--mine] [--json] [--limit <n>]'))
   console.log(chalk.gray('                    List feedback issues (module-request + cli-bug + scaffold-bug).'))
+  console.log(chalk.gray('    vote --list     [--stack-filter <term>] [--limit <n>] [--json]'))
+  console.log(chalk.gray('                    Top module requests ranked by 👍 reaction count.'))
+  console.log(chalk.gray('    vote <n> up|down|comment [--comment <body>]'))
+  console.log(chalk.gray('                    Cast a 👍/👎 reaction or post a comment on request #n.'))
   console.log()
 }
 
@@ -334,4 +353,90 @@ function resolveListStatus(raw: string | undefined): ListStatus {
     process.exit(1)
   }
   return 'open'
+}
+
+async function runVote(opts: ParsedArgs) {
+  if (opts.list) {
+    await runVoteList(opts)
+    return
+  }
+  await runVoteCast(opts)
+}
+
+async function runVoteList(opts: ParsedArgs) {
+  const { repo, issues } = await listVotable({ stackFilter: opts.stackFilter, limit: opts.limit })
+
+  if (opts.json) {
+    const payload = issues.map((r) => ({
+      number: r.issue.number,
+      title: r.issue.title,
+      url: r.issue.url,
+      thumbsUp: r.thumbsUp,
+      thumbsDown: r.thumbsDown
+    }))
+    process.stdout.write(JSON.stringify(payload, null, 2) + '\n')
+    return
+  }
+
+  if (issues.length === 0) {
+    console.log(chalk.yellow(`\n  No module requests found in ${repo.slug}${opts.stackFilter ? ` matching "${opts.stackFilter}"` : ''}.\n`))
+    return
+  }
+
+  console.log(chalk.blue(`\n  Top ${issues.length} module request${issues.length === 1 ? '' : 's'} in ${repo.slug}${opts.stackFilter ? ` (filter: "${opts.stackFilter}")` : ''}`))
+  console.log(chalk.blue('  ' + '─'.repeat(72)))
+  for (const { issue, thumbsUp, thumbsDown } of issues) {
+    const score = `${chalk.green('👍 ' + String(thumbsUp).padStart(3))}  ${chalk.red('👎 ' + String(thumbsDown).padStart(2))}`
+    console.log(`  ${score}  #${issue.number}  ${issue.title}`)
+    console.log(chalk.gray(`                 ${issue.url}`))
+  }
+  console.log(chalk.gray('\n  Cast a vote with: sf feedback vote <number> up|down|comment\n'))
+}
+
+async function runVoteCast(opts: ParsedArgs) {
+  const issueNumber = parseIssueNumber(opts.positional[0])
+  const action = parseVoteAction(opts.positional[1])
+
+  let comment = opts.comment
+  if (action === 'comment' && !comment?.trim()) {
+    if (opts.nonInteractive) {
+      console.error(chalk.red('Error: --comment is required with action=comment in --non-interactive mode.'))
+      process.exit(1)
+    }
+    if (!process.stdin.isTTY) {
+      console.error(chalk.red('Error: --comment is required with action=comment when stdin is not a TTY.'))
+      process.exit(1)
+    }
+    const answer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'comment',
+        message: `Comment to post on #${issueNumber}:`,
+        validate: (v: string) => v.trim().length > 0 || 'Comment cannot be empty.'
+      }
+    ])
+    comment = answer.comment
+  }
+
+  const result = await castVote({ issueNumber, action, comment })
+
+  if (action === 'up') console.log(chalk.green(`\n  ✓ 👍 on #${result.issueNumber} in ${result.repo.slug}`))
+  else if (action === 'down') console.log(chalk.red(`\n  ✓ 👎 on #${result.issueNumber} in ${result.repo.slug}`))
+  else console.log(chalk.green(`\n  ✓ Comment posted on #${result.issueNumber} in ${result.repo.slug}`))
+  console.log()
+}
+
+function parseIssueNumber(raw: string | undefined): number {
+  const n = raw === undefined ? NaN : Number(raw)
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+    console.error(chalk.red('Error: expected a positive issue number. Usage: sf feedback vote <n> up|down|comment'))
+    process.exit(1)
+  }
+  return n
+}
+
+function parseVoteAction(raw: string | undefined): VoteAction {
+  if (raw === 'up' || raw === 'down' || raw === 'comment') return raw
+  console.error(chalk.red(`Error: action must be 'up', 'down', or 'comment' (got: ${raw ?? '<missing>'})`))
+  process.exit(1)
 }
