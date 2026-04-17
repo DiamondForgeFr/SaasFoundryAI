@@ -176,10 +176,7 @@ export async function getEmailModuleCredentials(
 /**
  * Ask for S3 storage setup preferences when adding the storage module.
  */
-export async function getStorageModuleConfig(
-  projectName: string,
-  options: PromptOptions = {}
-): Promise<{ s3Setup: 'docker' | 'credentials'; s3Credentials?: Answers['s3Credentials'] }> {
+export async function getStorageModuleConfig(projectName: string, options: PromptOptions = {}): Promise<{ s3Setup: 'docker' | 'credentials'; s3Credentials?: Answers['s3Credentials'] }> {
   const prefill = options.prefill ?? {}
   const nonInteractive = options.nonInteractive === true
 
