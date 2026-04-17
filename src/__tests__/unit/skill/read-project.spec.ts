@@ -1,10 +1,7 @@
 import { execFile } from 'child_process'
 import path from 'path'
 
-const SCRIPT = path.resolve(
-  __dirname,
-  '../../../../scaffolds/skills-templates/tool-saasfoundry/scripts/read-project.js'
-)
+const SCRIPT = path.resolve(__dirname, '../../../../scaffolds/skills-templates/tool-saasfoundry/scripts/read-project.js')
 const NODE = process.execPath
 
 interface ExecResult {
@@ -78,12 +75,7 @@ describe('skill/read-project', () => {
         generatedAt: '2026-04-01T10:00:00Z'
       })
       expect(report.modules.installed).toEqual(['email'])
-      expect(report.modules.newlyAvailable).toEqual([
-        'storage',
-        'analytics',
-        'sf-skill-context7',
-        'sf-skill-notion'
-      ])
+      expect(report.modules.newlyAvailable).toEqual(['storage', 'analytics', 'sf-skill-context7', 'sf-skill-notion'])
       expect(report.modules.obsolete).toEqual([])
       expect(report.upToDate).toBe(true)
     })
@@ -105,13 +97,7 @@ describe('skill/read-project', () => {
         },
         catalogue: fullCatalogue
       })
-      expect(report.modules.installed).toEqual([
-        'email',
-        'storage',
-        'analytics',
-        'sf-skill-context7',
-        'sf-skill-notion'
-      ])
+      expect(report.modules.installed).toEqual(['email', 'storage', 'analytics', 'sf-skill-context7', 'sf-skill-notion'])
       expect(report.modules.newlyAvailable).toEqual([])
       expect(report.upToDate).toBe(true)
     })
