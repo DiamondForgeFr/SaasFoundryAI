@@ -202,6 +202,10 @@ export async function getStorageModuleConfig(projectName: string, options: Promp
   )
 
   if (s3Setup === 'credentials') {
+    // Drop `s3Setup` from the prefill — Inquirer would otherwise merge it into
+    // the credentials answer object and leak it into the installer payload.
+    const credentialsPrefill: Record<string, unknown> = { ...prefill }
+    delete credentialsPrefill.s3Setup
     const s3Credentials = await promptWithPrefill<NonNullable<Answers['s3Credentials']>>(
       [
         {
@@ -244,7 +248,7 @@ export async function getStorageModuleConfig(projectName: string, options: Promp
           default: 'us-east-1'
         }
       ],
-      { prefill, nonInteractive }
+      { prefill: credentialsPrefill, nonInteractive }
     )
 
     return { s3Setup, s3Credentials }
