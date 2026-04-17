@@ -319,7 +319,8 @@ async function runList(opts: ParsedArgs) {
   for (const issue of issues) {
     const state = issue.state === 'OPEN' ? chalk.green('OPEN  ') : chalk.gray('CLOSED')
     const kind = classifyIssue(issue)
-    const kindTag = kind === 'module-request' ? chalk.cyan('[request] ') : kind === 'cli-bug' ? chalk.red('[cli-bug]  ') : kind === 'scaffold-bug' ? chalk.magenta('[scaf-bug] ') : chalk.gray('[other]   ')
+    const kindTag =
+      kind === 'module-request' ? chalk.cyan('[request] ') : kind === 'cli-bug' ? chalk.red('[cli-bug]  ') : kind === 'scaffold-bug' ? chalk.magenta('[scaf-bug] ') : chalk.gray('[other]   ')
     console.log(`  ${state}  ${kindTag}#${issue.number}  ${issue.title}`)
     console.log(chalk.gray(`                      ${issue.url}`))
   }
