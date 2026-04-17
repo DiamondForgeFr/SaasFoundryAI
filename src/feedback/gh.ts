@@ -41,7 +41,7 @@ export async function execGh(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile('gh', args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
-        const stderrText = typeof stderr === 'string' ? stderr : (stderr as Buffer | undefined)?.toString() ?? ''
+        const stderrText = typeof stderr === 'string' ? stderr : ((stderr as Buffer | undefined)?.toString() ?? '')
         reject(new Error(`gh ${args.join(' ')} failed: ${stderrText.trim() || err.message}`))
         return
       }

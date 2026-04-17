@@ -32,7 +32,10 @@ export async function readFeedbackRepo(): Promise<FeedbackRepo> {
 }
 
 export function parseGitHubUrl(url: string): FeedbackRepo | null {
-  const cleaned = url.replace(/^git\+/, '').replace(/\.git$/, '').trim()
+  const cleaned = url
+    .replace(/^git\+/, '')
+    .replace(/\.git$/, '')
+    .trim()
   const patterns = [/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/?$/i, /^git@github\.com:([^/]+)\/([^/]+)\/?$/i, /^([^/\s]+)\/([^/\s]+)$/]
   for (const pattern of patterns) {
     const match = cleaned.match(pattern)

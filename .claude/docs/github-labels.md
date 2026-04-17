@@ -1,14 +1,15 @@
 # GitHub Labels — Feedback Loop
 
-The `sf feedback` command family expects these labels to exist on the SaaSFoundry upstream repository (`DiamondForgeFr/SaaSFoundry`). They're used for issue classification, dedup search, and voting filters.
+The `sf feedback` command family expects these labels to exist on the SaaSFoundry upstream repository (`DiamondForgeFr/SaaSFoundry`). They're used for issue classification, dedup search, and voting
+filters.
 
 ## Labels used by `sf feedback`
 
-| Label            | Color     | Purpose                                                                 |
-| ---------------- | --------- | ----------------------------------------------------------------------- |
+| Label            | Color     | Purpose                                                                                                |
+| ---------------- | --------- | ------------------------------------------------------------------------------------------------------ |
 | `module-request` | `#0e8a16` | A user-filed request for a new module or optional skill. Sortable by 👍 for `sf feedback vote --list`. |
-| `cli-bug`        | `#b60205` | A bug in the `sf` CLI itself (commands, prompts, non-interactive flags, etc.). |
-| `scaffold-bug`   | `#d93f0b` | A bug in generated project code (scaffolds/blueprints/overlays/modules). |
+| `cli-bug`        | `#b60205` | A bug in the `sf` CLI itself (commands, prompts, non-interactive flags, etc.).                         |
+| `scaffold-bug`   | `#d93f0b` | A bug in generated project code (scaffolds/blueprints/overlays/modules).                               |
 
 ## One-time setup on a fresh fork or repo
 
