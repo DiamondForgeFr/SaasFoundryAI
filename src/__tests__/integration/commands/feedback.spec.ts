@@ -134,9 +134,7 @@ describe('feedbackCommand (integration)', () => {
     })
 
     it('skips creation when dedup matches exist (non-interactive)', async () => {
-      mockGhIssueSearch.mockResolvedValue([
-        { number: 5, title: 'Add Stripe', state: 'OPEN', url: 'https://x/5', labels: [{ name: 'module-request' }], author: { login: 'a' } }
-      ])
+      mockGhIssueSearch.mockResolvedValue([{ number: 5, title: 'Add Stripe', state: 'OPEN', url: 'https://x/5', labels: [{ name: 'module-request' }], author: { login: 'a' } }])
       await feedbackCommand('request', 'Stripe', '--description', 'd', '--non-interactive')
       expect(mockGhIssueCreate).not.toHaveBeenCalled()
       expect(allLog()).toContain('Similar requests found')
