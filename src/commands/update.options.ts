@@ -102,4 +102,3 @@ export function buildUpdatePrefillFromOptions(opts: UpdateCommandOptions): Updat
 
   return prefill
 }
-
