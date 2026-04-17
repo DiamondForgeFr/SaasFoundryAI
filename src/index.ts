@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import 'module-alias/register'
 import { version } from '../package.json'
+import { feedbackCommand } from './commands/feedback'
 import { modulesCommand } from './commands/modules'
 import { newCommand } from './commands/new'
 import { skillCommand, runFullUninstall } from './commands/skill'
@@ -122,6 +123,13 @@ program
   .allowUnknownOption()
   .action((subcommand, args) => skillCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
+  .command('feedback')
+  .description('File requests, bugs, and vote on SaaSFoundry proposals')
+  .argument('[subcommand]', 'Subcommand to execute (request, bug, list, vote)')
+  .argument('[args...]', 'Additional arguments for the subcommand')
+  .allowUnknownOption()
+  .action((subcommand, args) => feedbackCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
+program
   .command('uninstall')
   .description('Fully remove the SaaSFoundry skill and preferences (--all flag required)')
   .option('--all', 'Remove the skill (user + project scope) and wipe ~/.saasfoundry/')
@@ -135,4 +143,4 @@ program
   })
 program.parse()
 
-export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand }
+export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, feedbackCommand }
