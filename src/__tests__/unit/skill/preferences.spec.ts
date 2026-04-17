@@ -35,7 +35,9 @@ describe('skill/preferences', () => {
       skillInstallOptIn: true,
       cliGlobalInstalled: true,
       votingOptIn: 'never' as const,
-      lastVoteSurveyAt: '2026-04-17T00:00:00.000Z'
+      lastVoteSurveyAt: '2026-04-17T00:00:00.000Z',
+      filedRequests: [{ issueNumber: 42, repoUrl: 'https://github.com/DiamondForgeFr/SaaSFoundry/issues/42', title: 'Add Stripe', openedAt: '2026-04-17T10:00:00.000Z' }],
+      votesCast: [{ issueNumber: 99, direction: 'up' as const, castAt: '2026-04-17T11:00:00.000Z' }]
     }
     await writePreferences(input)
     const read = await readPreferences()
@@ -68,6 +70,22 @@ describe('skill/preferences', () => {
     await writeFile(filePath, 'not-json', 'utf8')
     const prefs = await readPreferences()
     expect(prefs).toEqual(DEFAULT_PREFERENCES)
+  })
+
+  it('drops invalid entries in filedRequests / votesCast', async () => {
+    const prefsPath = path.join(tempHome, '.saasfoundry', 'preferences.json')
+    await writePreferences(DEFAULT_PREFERENCES)
+    await writeFile(
+      prefsPath,
+      JSON.stringify({
+        filedRequests: [{ issueNumber: 1, repoUrl: 'u', title: 't', openedAt: 'ts' }, { garbage: true }, 'not-an-object'],
+        votesCast: [{ issueNumber: 9, direction: 'up', castAt: 'ts' }, { issueNumber: 10, direction: 'sideways', castAt: 'ts' }]
+      }),
+      'utf8'
+    )
+    const prefs = await readPreferences()
+    expect(prefs.filedRequests).toEqual([{ issueNumber: 1, repoUrl: 'u', title: 't', openedAt: 'ts' }])
+    expect(prefs.votesCast).toEqual([{ issueNumber: 9, direction: 'up', castAt: 'ts' }])
   })
 
   it('updatePreferences merges a patch into existing prefs', async () => {
