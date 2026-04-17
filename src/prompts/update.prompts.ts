@@ -1,6 +1,7 @@
 import chalk from 'chalk'
 import { exec } from 'shelljs'
 
+import { CATALOGUE } from '../catalogue/modules'
 import { Answers, SaaSFoundryManifest } from '../types'
 import { PromptOptions, promptWithPrefill } from './helpers'
 import { AdvancedSkillCredentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from './skills.prompts'
@@ -12,57 +13,39 @@ interface AvailableModule {
 }
 
 /**
+ * Decide whether a catalogue entry is still addable given the project manifest.
+ *
+ * Structural modules (flagged `installOnly: 'scaffold'`) are never returned —
+ * they ship with `sf new` and cannot be added post-generation.
+ */
+function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): boolean {
+  switch (moduleName) {
+    case 'email':
+      return manifest.modules.emailService === 'none'
+    case 'storage':
+      return manifest.modules.s3Setup === 'manual'
+    case 'analytics':
+      return !manifest.modules.includeAnalytics
+    case 'sf-skill-context7':
+    case 'sf-skill-atlassian':
+    case 'sf-skill-notion':
+    case 'sf-skill-figma': {
+      const skillName = moduleName.replace(/^sf-skill-/, '')
+      const installed = manifest.modules.advancedSkills || []
+      return !installed.includes(skillName)
+    }
+    default:
+      return false
+  }
+}
+
+/**
  * Detect which modules are available but not installed based on the manifest.
  */
 export function getAvailableModules(manifest: SaaSFoundryManifest): AvailableModule[] {
-  const available: AvailableModule[] = []
-
-  if (manifest.modules.emailService === 'none') {
-    available.push({
-      name: 'MailerSend Email Service',
-      description: 'Transactional emails (account creation, password reset, invitations) via MailerSend [free, 3000 emails/month]',
-      value: 'email'
-    })
-  }
-
-  if (manifest.modules.s3Setup === 'manual') {
-    available.push({
-      name: 'S3 Object Storage',
-      description: 'File uploads (logos, documents) with S3-compatible storage (MinIO via Docker or existing server)',
-      value: 'storage'
-    })
-  }
-
-  if (!manifest.modules.includeAnalytics) {
-    available.push({
-      name: 'Umami Analytics',
-      description: 'Privacy-friendly anonymous user analytics (self-hosted, production only)',
-      value: 'analytics'
-    })
-  }
-
-  // Detect available advanced skills
-  const installedSkills = manifest.modules.advancedSkills || []
-  const allSkills = ['context7', 'atlassian', 'notion', 'figma']
-
-  for (const skill of allSkills) {
-    if (!installedSkills.includes(skill)) {
-      const skillDescriptions = {
-        context7: 'Up-to-date library documentation (React, Vite, Prisma, etc.) [free, no credentials]',
-        atlassian: 'Jira/Confluence integration (tickets, wiki, sprints)',
-        notion: 'Notion workspace integration (pages, databases, views)',
-        figma: 'Figma design system integration (designs, components)'
-      }
-
-      available.push({
-        name: `Advanced Skill: ${skill.charAt(0).toUpperCase() + skill.slice(1)}`,
-        description: skillDescriptions[skill as keyof typeof skillDescriptions],
-        value: `sf-skill-${skill}`
-      })
-    }
-  }
-
-  return available
+  return CATALOGUE.filter((m) => m.installOnly !== 'scaffold')
+    .filter((m) => isModuleAvailable(m.name, manifest))
+    .map((m) => ({ name: m.displayName, description: m.description, value: m.name }))
 }
 
 /**
