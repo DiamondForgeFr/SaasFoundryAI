@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import 'module-alias/register'
 import { version } from '../package.json'
+import { modulesCommand } from './commands/modules'
 import { newCommand } from './commands/new'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
@@ -91,6 +92,13 @@ program
   .option('--figma-api-token <token>', 'Figma API token')
   .action((opts) => updateCommand(opts))
 program
+  .command('modules')
+  .description('Browse the SaaSFoundry module catalogue')
+  .argument('[subcommand]', 'Subcommand to execute (list, info, match)')
+  .argument('[args...]', 'Additional arguments for the subcommand (use --json for machine-readable output)')
+  .allowUnknownOption()
+  .action((subcommand, args) => modulesCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
+program
   .command('tools')
   .description('Manage multi-account credentials for advanced skills')
   .argument('[subcommand]', 'Subcommand to execute (list, accounts, add, use, current)')
@@ -104,4 +112,4 @@ program
   .action((subcommand, args) => workflowCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program.parse()
 
-export { newCommand, updateCommand, toolsCommand, workflowCommand }
+export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand }
