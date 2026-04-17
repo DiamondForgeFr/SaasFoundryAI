@@ -3,6 +3,7 @@ import 'module-alias/register'
 import { version } from '../package.json'
 import { modulesCommand } from './commands/modules'
 import { newCommand } from './commands/new'
+import { skillCommand } from './commands/skill'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
 import { workflowCommand } from './commands/workflow'
@@ -110,6 +111,13 @@ program
   .argument('[subcommand]', 'Subcommand to execute (list, create, show, use, set-working-branch, set-ai-rules, etc.)')
   .argument('[args...]', 'Additional arguments for the subcommand')
   .action((subcommand, args) => workflowCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
+program
+  .command('skill')
+  .description('Manage the tool-saasfoundry Claude Code skill (install, update, uninstall)')
+  .argument('[subcommand]', 'Subcommand to execute (install)')
+  .argument('[args...]', 'Additional arguments for the subcommand (--project, --force, --yes)')
+  .allowUnknownOption()
+  .action((subcommand, args) => skillCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program.parse()
 
-export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand }
+export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand }
