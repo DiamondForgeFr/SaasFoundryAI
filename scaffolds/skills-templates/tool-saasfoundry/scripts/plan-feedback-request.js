@@ -164,17 +164,19 @@ if (redFlags.length > 0) {
   }
 }
 
+const reportedDuplicate = decision === 'route-to-existing' && duplicate ? duplicate : null
+
 const output = {
   intent: input.intent,
   name: input.name,
   decision,
   redFlags,
-  duplicate: duplicate
+  duplicate: reportedDuplicate
     ? {
-        number: duplicate.number,
-        title: duplicate.title,
-        url: typeof duplicate.url === 'string' ? duplicate.url : null,
-        state: typeof duplicate.state === 'string' ? duplicate.state : null
+        number: reportedDuplicate.number,
+        title: reportedDuplicate.title,
+        url: typeof reportedDuplicate.url === 'string' ? reportedDuplicate.url : null,
+        state: typeof reportedDuplicate.state === 'string' ? reportedDuplicate.state : null
       }
     : null,
   recommendation
