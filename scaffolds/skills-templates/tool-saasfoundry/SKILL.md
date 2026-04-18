@@ -25,6 +25,7 @@ Activate on explicit SaaSFoundry intent:
 - "update my SaaSFoundry project"
 - "what modules do I have?" / "am I up to date?" / "what's in `.saasfoundry.json`?"
 - "file a module request" / "report a SaaSFoundry bug" / "vote on roadmap"
+- **Add/build/implement verbs inside a SaaSFoundry project** — "I want to add file uploads", "let's build an email flow", "I need to track usage" → the skill runs the anti-reinvention guardrail (see below) *before* letting the user custom-code.
 
 Do NOT activate on:
 
@@ -221,6 +222,48 @@ Project Awareness is the read-only surface of the skill. When the user asks a qu
 - **Don't fabricate module descriptions.** If the user wants "what does module X do?", call `sf modules info X --json` and read from the catalogue.
 - **Don't answer "am I up to date?" from cached intuition.** Always use `report.upToDate` — it's the only field that cross-checks installed modules against `catalogue.minCliVersion`.
 
+## Anti-Reinvention Guardrail
+
+When the user expresses intent to build, add, or implement a capability **inside a SaaSFoundry project**, the skill MUST check the catalogue first. The guardrail exists because users often reach for custom code out of reflex when an opinionated SaaSFoundry module would ship faster, stay maintained upstream, and keep the generated project on the paved path.
+
+### When the guardrail triggers
+
+- Verbs: "add", "build", "implement", "setup", "integrate", "plug in", "need to" + any feature.
+- Nouns that commonly map to catalogue modules: email, transactional mail, file upload, object storage, S3, analytics, usage tracking, telemetry, plus every `sf-skill-*` tool integration.
+- Triggers only when a `.saasfoundry.json` is present (i.e. the user is inside a SaaSFoundry project). Outside a project, treat the intent normally.
+
+### Workflow
+
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token.
+2. **Classify the intent** — run `scripts/check-catalogue.sh "<user intent>"`. The script wraps `sf modules match <intent> --json`, normalizes the top result, and emits a tiered recommendation.
+3. **Read the `tier` field** and act accordingly:
+   - `HIGH` (score ≥ 6) → Propose `sf update --add-modules <name>` **before** writing a single line of custom code. Present the tradeoff: what the module ships (routes, adapters, docs, tests, CI) vs what a hand-rolled impl costs the user (maintenance, drift from blueprint, no upstream updates).
+   - `MEDIUM` (score 3–5) → Surface the candidate, ask the user to confirm it matches their intent (use `AskUserQuestion`), and only then propose `sf update`.
+   - `LOW` (score 1–2) or `NONE` (no results) → Route to Phase 3B: offer `sf feedback request` so the user can push for catalogue inclusion, then fall back to custom dev with eyes open.
+4. **Stay honest** — if the user insists on custom code even with a HIGH match, do it. But log the decision explicitly ("we're building X custom despite a HIGH catalogue match for module Y"), so future-you doesn't re-propose it every turn.
+
+### Recommendation shape (from `check-catalogue.sh`)
+
+```json
+{
+  "intent": "send transactional emails",
+  "tier": "HIGH",
+  "topMatch": { "name": "email", "displayName": "Email Service", "category": "…", "score": 15, "reasons": ["keywords: …"] },
+  "recommendation": {
+    "action": "propose-update",
+    "command": "sf update --add-modules email",
+    "message": "Strong match: \"Email Service\" (score 15). Propose `sf update` before letting the user custom-code this."
+  }
+}
+```
+
+### Never do these
+
+- **Don't skip the guardrail on `add / build / implement` verbs.** Custom-coding first and offering the module second is the anti-pattern the guardrail exists to prevent.
+- **Don't invent scores.** Always consult `check-catalogue.sh`; never eyeball the match yourself. The skill should not outsmart the CLI's scoring.
+- **Don't force a HIGH-tier proposal.** If the user confirms they want custom dev, move on. The guardrail informs, it doesn't block.
+- **Don't conflate `LOW` with `NONE`.** A LOW-tier match is still a signal — surface it as "closest neighbor" when routing to `sf feedback request`, so the user's request can reference existing work.
+
 ## Interaction principles
 
 1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
@@ -233,6 +276,9 @@ Project Awareness is the read-only surface of the skill. When the user asks a qu
 
 This SKILL.md is the foundation (Phase 2A, ticket #102). The following capabilities will be layered on in subsequent tickets:
 
-- **Phase 2E — Project Awareness** (#106): read-only conversational queries over `.saasfoundry.json` and the module catalogue.
+- **Phase 3B — Feedback Request flow** (#124): scorecard-gated module request orchestration on top of `sf feedback request`.
+- **Phase 3C — Feedback Bug Report flow** (#125): passive detection + auto-repro on top of `sf feedback bug`.
+- **Phase 4 — Community voting polish** (Pillar 6): skill-side UX for ranking and voting on open module requests.
+- **Phase 5 — Event handling** (Pillar 7): cmux/IDE/terminal adaptation for browser flows and multi-server launches.
 
-Phases 3+ (Anti-reinvention guardrail, Community voting polish, Event handling) are tracked under epic #18.
+All tracked under epic #18.
