@@ -325,6 +325,25 @@ export async function installSkills({
 - ❌ Don't hardcode credentials in skill files
 - ❌ Don't ask for credentials for public/free APIs (like context7)
 
+### Tool Skills — Query Strategy Against GitHub Projects V2
+
+The `sf-tool-github-projects` CLI talks to GitHub Projects V2 via the `gh` CLI (GraphQL under the hood). Board-wide scans are forbidden — they scale linearly with team size and exhaust the 5000-point/hour GraphQL budget on active projects. Follow these rules when editing the CLI or adding similar tool skills:
+
+**Targeted queries, never scans**
+
+- Resolve a ticket's project item id + status via `repository.issue(number).projectItems` and filter client-side on `project.number`. O(1) in board size.
+- Never use `gh project item-list --limit N` to find a single issue — that's what the #135 refactor killed. It's fine for the `list` subcommand (where a scan IS the user intent) but never inside transition commands.
+
+**Schema cache, never state cache**
+
+- Project id, Status field id, and Status option ids change only when the board owner edits them — safe to persist to `/tmp/sf-workflow-cache-$USER/project-<owner>-<number>.json` with a ~1h TTL.
+- Item state (Status value, labels, assignees) is modified by every teammate's CLI run — caching it leads to stale reads and silent write conflicts. **Always refetch.**
+- Expose a `cache-clear` escape hatch for when the owner renames options mid-hour.
+
+**Dogfood + scaffold parity**
+
+- The in-repo copy at `.claude/skills/sf-tool-github-projects/` and the scaffold template at `scaffolds/skills-templates/tools/github-projects/` must stay byte-identical. A jest drift guard enforces this at pre-commit; if you edit one, copy to the other in the same commit.
+
 ### Skills Priority in Generated Projects
 
 Generated projects have this note in their CLAUDE.md:
