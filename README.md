@@ -387,55 +387,52 @@ Every SaaSFoundry project includes:
 
 ### 🎯 Claude Code Skills System
 
-SaaSFoundry projects come with a comprehensive **skills library** that enhances AI capabilities with specialized workflows and integrations.
+SaaSFoundry projects come with a **skills library** that teaches Claude Code the project's conventions, workflows, and integrations. Skills are plain files shipped under `.claude/skills/` — no MCP
+server required.
 
 #### 📦 Core Skills (Always Installed)
 
 **Git Workflows:**
 
-- **`sf-git-commit`** - Create commits with conventional commit messages
-- **`sf-git-create-pr`** - Generate PR with auto-generated title and description
-- **`sf-git-fix-pr-comments`** - Automatically implement PR review feedback
-- **`sf-git-merge`** - Intelligent branch merging with conflict resolution
+- **`sf-git-commit`** — Quick commit and push with conventional commit format
+- **`sf-git-create-pr`** — Create a PR with auto-generated title and description
+- **`sf-git-fix-pr-comments`** — Fetch PR review comments and implement all requested changes
+- **`sf-git-merge`** — Merge branches with context-aware conflict resolution
 
 **Code Quality:**
 
-- **`sf-utils-fix-errors`** - Fix all ESLint and TypeScript errors in parallel
-- **`sf-utils-fix-grammar`** - Fix grammar and spelling while preserving formatting
+- **`sf-utils-fix-errors`** — Fix ESLint and TypeScript errors in parallel via sub-agents
+- **`sf-utils-fix-grammar`** — Fix grammar and spelling in one or many files while preserving formatting
 
-**Development Workflows:**
+#### 🎛️ Workflow Skill (Installed When a Workflow Is Configured)
 
-- **`sf-utils-oneshot`** - Ultra-fast feature implementation (Explore → Code → Test)
-- **`sf-workflow-apex`** - APEX methodology with adversarial review _(API only)_
-- **`sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate) _(API only)_
+- **`sf-workflow`** — Complexity-adaptive development workflow (`Backlog → Ready → In progress → AI testing → Human testing → In review → Done`). Adapts rigor by ticket complexity (Quick / Feature /
+  Epic) and works against GitHub Projects, Jira, Notion, or Linear. Configuration lives in `.saasfoundry.json` — never hardcoded in the skill.
 
-#### 🚀 Advanced Skills (Optional - Requires Configuration)
+#### 🔧 Tool Skills (Paired With Your Issue Tracker)
 
-These skills integrate with external services and require API tokens:
+Each tool skill gives Claude a first-class shell CLI (no MCP) for reading and writing tickets in your chosen tracker:
 
-**Documentation & Research:**
+- **`sf-tool-github-projects`** — GitHub Projects V2 (issues, subtasks, status, complexity labels)
+- **`sf-tool-jira`** — Jira tickets, sprints, boards
+- **`sf-tool-notion`** — Notion database tasks and properties
+- **`sf-tool-linear`** — Linear issues and cycles
 
-- **`sf-tool-context7`** - Fetch up-to-date library documentation (React, Vite, Prisma, etc.)
-  - Prevents hallucinated APIs and deprecated patterns
-  - Real-time access to latest framework docs
+Credentials live in each tool's `.env` file — or under `~/.claude/credentials/<tool>/<account>.env` when you run multiple accounts — and are never committed.
 
-**Project Management:**
+#### 🚀 Optional Advanced Skills
 
-- **`sf-tool-atlassian`** - Jira/Confluence integration
+Added during `sf new` or later with `sf update`:
 
-  - Create tickets, update status, sync documentation
-  - Track AI-generated features in your workflow
+- **`sf-tool-context7`** — Real-time, version-specific documentation from 1000+ libraries (free public API, prevents hallucinated or deprecated APIs)
+- **`sf-tool-atlassian`** — Broader Jira + Confluence access (wiki pages, boards, sprints) beyond just tickets
+- **`sf-tool-notion`** (advanced) — Notion pages, databases, views, comments across a full workspace, beyond ticketing
+- **`sf-tool-figma`** — Figma files, components, FigJam boards, design-to-code
 
-- **`sf-tool-notion`** - Notion workspace integration
-  - Create pages, databases, and views
-  - Document architecture decisions and feature specs
+#### 🧰 SaaSFoundry Meta-Skill
 
-**Design Integration:**
-
-- **`sf-tool-figma`** - Figma design system integration
-  - Read designs and components
-  - Generate code from Figma mockups
-  - Maintain design-code consistency
+- **`tool-saasfoundry`** — Teaches Claude to drive the `sf` CLI itself: scaffold new projects, add or remove modules, read project state from `.saasfoundry.json`, file module requests, report CLI or
+  scaffold bugs, and vote on community proposals. Install with `sf skill install` (project or user scope).
 
 #### ⚙️ Skills Configuration
 
@@ -447,13 +444,10 @@ sf new
 
 📚 Advanced Skills (Optional)
 ? Select advanced skills to install
-  ◯ Context7 - Up-to-date library documentation
+  ◯ Context7  - Up-to-date library documentation
   ◯ Atlassian - Jira/Confluence integration
-  ◯ Notion - Notion workspace integration
-  ◯ Figma - Figma design system integration
-
-# For each selected skill, browser opens to generate API token
-# You can skip and configure later when Claude prompts you
+  ◯ Notion    - Notion workspace integration
+  ◯ Figma     - Figma design system integration
 ```
 
 **Adding skills later (`sf update`):**
@@ -466,15 +460,13 @@ sf update
   ◯ Advanced Skill: Context7
   ◉ Advanced Skill: Notion
   ◯ Advanced Skill: Figma
-
-# Prompts for credentials only for newly selected skills
 ```
 
 #### 🔐 Credential Management
 
-- Each skill stores credentials in its own `.env` file (`.claude/skills-optional/tool-{name}/.env`)
+- Each skill stores credentials in its own `.env` file (project-scoped)
+- Multi-account setups keep tokens under `~/.claude/credentials/<tool>/<account>.env`
 - Credentials are **never** committed to git (`.gitignore` protected)
-- No global config - skills are project-scoped
 - When Claude needs a skill without credentials, it prompts you to configure it
 
 ### 🚀 Quick Start for AI Development
@@ -498,7 +490,7 @@ code .  # or cursor .
 
 # Implement features
 "Create a new user profile endpoint with avatar upload"
-"Use oneshot to implement dark mode toggle"
+"Add a dark mode toggle to the settings page"
 
 # Fix and improve
 "Fix all TypeScript errors"  # Triggers utils-fix-errors skill
