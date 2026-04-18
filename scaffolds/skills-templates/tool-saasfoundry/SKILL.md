@@ -331,6 +331,75 @@ If any criterion is `no` or `unclear`, the skill **refuses** the filing and expl
 - **Don't skip dedup.** Always let `plan-feedback-request.sh` enrich the payload with `sf feedback list` — catching a duplicate before filing is the entire point of the orchestration.
 - **Don't file without `bootstrap-gh.sh`.** A filing attempt against an unauthenticated `gh` produces a confusing failure; surface the install/login guidance from `bootstrap-gh.sh` first.
 
+## Feedback — Bug Report
+
+When something goes wrong — a `sf` command exits non-zero, a generated project fails to build, a three-way merge produces something weird — the skill **passively notices** and offers to file a bug. The skill must never file silently: detection is a proposal, the user is the gate. Orchestration runs through `scripts/plan-feedback-bug.sh`, which classifies the label (`cli-bug` vs `scaffold-bug`), scrubs credentials from any captured stderr, and emits the exact `sf feedback bug` command to run.
+
+### When this flow triggers
+
+- **Passive signals** — the skill saw one of these and should propose filing:
+  - `sf` command exited non-zero under `--non-interactive` (a flow the skill is driving). Source = `cli-invocation`.
+  - Generated project failed a post-setup check (`npm install`, `tsc`, `nest build`, `vite build`, Docker compose up). Source = `scaffold-build`.
+  - Three-way merge inside `sf update` produced a `.saasfoundry.new` conflict file or a schema-validation error on `.saasfoundry.json`. Source = `scaffold-build` with a one-line description of the anomaly.
+- **User-initiated** — the user says "file a bug", "report this", "sf crashed". Source = `manual`. Use the `context` field (`cli` / `scaffold`) when the user identifies the surface; otherwise default to `cli-bug`.
+- **Does NOT trigger** on module requests (that's `Feedback — Module Request`) or on voting workflows.
+
+### Label routing: `cli-bug` vs `scaffold-bug`
+
+- **`cli-bug`** — defects in the `sf` CLI itself: argument parsing, prompt flows, orchestration of external tools, generator logic that throws *before* writing files.
+- **`scaffold-bug`** — defects visible in the generated project: incorrect template content, dependency resolution failures, broken post-setup steps, merge artifacts from `sf update`.
+- **When in doubt** — if the command exited inside `sf` but the error points at the freshly-written project (e.g. "cannot find module in the generated api"), prefer `scaffold-bug`; the user's repro lives in the project tree.
+
+### Auto-repro payload
+
+`sf feedback bug --auto-repro` collects a repro envelope for free: CLI version, Node version, platform, `.saasfoundry.json` contents. The skill's job is to **supplement** that envelope with the captured failure evidence:
+
+- The exact command that was run (or the trigger action, for user-initiated reports)
+- The exit code when available
+- A **redacted** excerpt of the stderr (handled by `plan-feedback-bug.js` — never paste raw stderr yourself)
+
+Redaction covers GitHub/OpenAI/Stripe/Slack tokens, Bearer/Basic headers, JWTs, `--token=` / `--password=` / `--secret=` CLI args, environment variables ending in `_TOKEN` / `_SECRET` / `_PASSWORD` / `API_KEY`, query-string credentials, home-directory paths (`/Users/<user>`, `/home/<user>`, `C:\Users\<user>`), and email addresses. The classifier applies this scrub even when the decision is `refuse`, so nothing sensitive leaks via the refusal message either.
+
+### Workflow
+
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the `sf` invocation token and `bootstrap-gh.sh` to confirm GitHub auth (filing requires it).
+2. **Compose the detection event** — build a JSON object the classifier understands:
+   - `source` (required) — one of `cli-invocation` / `scaffold-build` / `manual`
+   - `title` (required) — short human-readable, e.g. "sf new crashes on empty project name"
+   - `command`, `exitCode`, `stderr`, `description` — best-effort, as much as the skill captured
+   - `context` — `cli` or `scaffold`, only meaningful for `manual` reports when the user identifies the surface
+   - `userConfirmed` — `true` ONLY after the user explicitly approved filing. Any other value forces a refusal.
+3. **Classify** — pipe the detection event JSON into `scripts/plan-feedback-bug.sh`. The script redacts the stderr, picks the label, and emits the `sf feedback bug …` command with the envelope pre-wired.
+4. **Act on the `decision` field**:
+   - `file-bug` → Present the emitted `sf feedback bug …` command along with the redacted stderr excerpt so the user sees what will be posted. On explicit go-ahead, run it.
+   - `refuse` → Explain why (almost always: `userConfirmed !== true`). Do not "try again silently" — ask the user directly and re-classify only after they confirm.
+
+### Recommendation shape (from `plan-feedback-bug.sh`)
+
+```json
+{
+  "source": "cli-invocation",
+  "label": "cli-bug",
+  "title": "sf new crashes on empty project name",
+  "description": "Reproducing failure for triage.\n\n**Command:** `sf new --non-interactive --name=\"\"`\n\n**Exit code:** 1\n\n**Stderr (credentials redacted):**\n\n```\nError: required name\nat /Users/<user>/Projects/app/src/index.js:12\n```",
+  "redactedStderr": "Error: required name\nat /Users/<user>/Projects/app/src/index.js:12",
+  "decision": "file-bug",
+  "recommendation": {
+    "action": "run-command",
+    "command": "sf feedback bug --source cli --title 'sf new crashes on empty project name' --description '…' --auto-repro --yes",
+    "message": "Confirmed. File the cli-bug with: sf feedback bug --source cli --title '…' --description '…' --auto-repro --yes"
+  }
+}
+```
+
+### Never do these
+
+- **Don't file without `userConfirmed: true`.** Detection is a proposal, never an action. The classifier will refuse automatically, but the skill must also surface the user's go-ahead in the conversation before passing `userConfirmed: true` to the script.
+- **Don't paste raw stderr** anywhere the user sees it before it has been through `plan-feedback-bug.sh`. Redaction is the script's job — do not duplicate or shortcut it.
+- **Don't guess the label.** If the source is `manual` and you can't tell whether it's `cli` or `scaffold`, ask the user. Wrong routing means the wrong reviewers see the issue.
+- **Don't file a bug when the user wanted to request a module.** Scope keywords: "crashed", "broken", "error", "fails" → bug. "I wish", "we should have", "add a module" → request. Re-route rather than file the wrong kind.
+- **Don't swallow the failure after filing.** The original error the skill detected is usually still blocking the user's real task. After the bug is filed, offer workarounds or next steps — filing does not resolve the underlying failure.
+
 ## Interaction principles
 
 1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
@@ -343,7 +412,6 @@ If any criterion is `no` or `unclear`, the skill **refuses** the filing and expl
 
 This SKILL.md is the foundation (Phase 2A, ticket #102). The following capabilities will be layered on in subsequent tickets:
 
-- **Phase 3C — Feedback Bug Report flow** (#125): passive detection + auto-repro on top of `sf feedback bug`.
 - **Phase 4 — Community voting polish** (Pillar 6): skill-side UX for ranking and voting on open module requests.
 - **Phase 5 — Event handling** (Pillar 7): cmux/IDE/terminal adaptation for browser flows and multi-server launches.
 
