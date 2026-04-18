@@ -1,10 +1,7 @@
 import { execFile } from 'child_process'
 import path from 'path'
 
-const SCRIPT = path.resolve(
-  __dirname,
-  '../../../../scaffolds/skills-templates/tool-saasfoundry/scripts/check-catalogue.js'
-)
+const SCRIPT = path.resolve(__dirname, '../../../../scaffolds/skills-templates/tool-saasfoundry/scripts/check-catalogue.js')
 const NODE = process.execPath
 
 interface ExecResult {
@@ -104,11 +101,7 @@ describe('skill/check-catalogue', () => {
 
   describe('MEDIUM tier — needs confirmation', () => {
     it('emits confirm-with-user at score 3–5', async () => {
-      const out = await runAndParse(
-        match('track usage', [
-          { name: 'analytics', displayName: 'Analytics', score: 4, reasons: ['description: track'] }
-        ])
-      )
+      const out = await runAndParse(match('track usage', [{ name: 'analytics', displayName: 'Analytics', score: 4, reasons: ['description: track'] }]))
       expect(out.tier).toBe('MEDIUM')
       expect(out.recommendation.action).toBe('confirm-with-user')
       expect(out.recommendation.command).toBe('sf update --add-modules analytics')
