@@ -26,6 +26,7 @@ Activate on explicit SaaSFoundry intent:
 - "what modules do I have?" / "am I up to date?" / "what's in `.saasfoundry.json`?"
 - "file a module request" / "report a SaaSFoundry bug" / "vote on roadmap"
 - **Add/build/implement verbs inside a SaaSFoundry project** — "I want to add file uploads", "let's build an email flow", "I need to track usage" → the skill runs the anti-reinvention guardrail (see below) *before* letting the user custom-code.
+- **Explicit feedback intent** — "file a module request for X", "I want to request Y", "this should be a first-party module" → the skill runs the Feedback — Module Request scorecard (see below) *before* calling `sf feedback request`.
 
 Do NOT activate on:
 
@@ -239,7 +240,7 @@ When the user expresses intent to build, add, or implement a capability **inside
 3. **Read the `tier` field** and act accordingly:
    - `HIGH` (score ≥ 6) → Propose `sf update --add-modules <name>` **before** writing a single line of custom code. Present the tradeoff: what the module ships (routes, adapters, docs, tests, CI) vs what a hand-rolled impl costs the user (maintenance, drift from blueprint, no upstream updates).
    - `MEDIUM` (score 3–5) → Surface the candidate, ask the user to confirm it matches their intent (use `AskUserQuestion`), and only then propose `sf update`.
-   - `LOW` (score 1–2) or `NONE` (no results) → Route to Phase 3B: offer `sf feedback request` so the user can push for catalogue inclusion, then fall back to custom dev with eyes open.
+   - `LOW` (score 1–2) or `NONE` (no results) → Route to **Feedback — Module Request** below: run the scorecard before offering `sf feedback request`, then fall back to custom dev with eyes open.
 4. **Stay honest** — if the user insists on custom code even with a HIGH match, do it. But log the decision explicitly ("we're building X custom despite a HIGH catalogue match for module Y"), so future-you doesn't re-propose it every turn.
 
 ### Recommendation shape (from `check-catalogue.sh`)
@@ -264,6 +265,72 @@ When the user expresses intent to build, add, or implement a capability **inside
 - **Don't force a HIGH-tier proposal.** If the user confirms they want custom dev, move on. The guardrail informs, it doesn't block.
 - **Don't conflate `LOW` with `NONE`.** A LOW-tier match is still a signal — surface it as "closest neighbor" when routing to `sf feedback request`, so the user's request can reference existing work.
 
+## Feedback — Module Request
+
+When the user wants to file a module request — either because the anti-reinvention guardrail routed them here (LOW/NONE tier), or because they explicitly asked to — the skill MUST run a 5-criterion scorecard **before** calling `sf feedback request`. The scorecard exists because a catalogue slot is a long-term maintenance commitment: the skill can and should **refuse** requests that don't fit, with clear reasoning, rather than filing noise.
+
+### When this flow triggers
+
+- Anti-reinvention guardrail returned `LOW` or `NONE` tier and the user wants to push for catalogue inclusion.
+- User says explicitly: "file a module request", "request this as a module", "submit this to SaaSFoundry", etc.
+- **Does NOT trigger** on bug reports (that's Phase 3C) or voting (Pillar 6 — `sf feedback vote --list`).
+
+### The 5-criterion scorecard
+
+Ask each criterion as a natural question during the conversation — don't hand the user a dry form. Each criterion answers `yes` / `no` / `unclear`. **One `no` or one `unclear` refuses the filing.**
+
+| Criterion | The question behind it | What `yes` looks like |
+| --- | --- | --- |
+| `scopeFit` | "Is this something every SaaS eventually wants?" | The feature belongs to the SaaS baseline (auth, billing, email, storage, observability, comms, admin tooling). |
+| `reusability` | "Would 3+ unrelated projects plausibly want this?" | Broad SaaS relevance, not specific to one product or industry. |
+| `notAlreadySolvable` | "Can't this already be done cleanly with existing modules or a small custom impl?" | Existing modules don't cover it, and a hand-rolled version would be non-trivial (>2 days work). |
+| `opinionOwnership` | "Is there a clear opinionated 'right way' to do this in SaaSFoundry?" | You can name the stack, the vendor(s), the integration surface without hedging. |
+| `maintenanceRealism` | "Can this be maintained long-term?" | Stable deps, non-fragile upstream, vendor is unlikely to pivot/shutter within 2 years. |
+
+If any criterion is `no` or `unclear`, the skill **refuses** the filing and explains which criteria blocked it. The refusal is not a snub — it's the skill protecting the catalogue from scope creep. Explain the red flag, and suggest alternatives (custom code, existing module, wait-and-see).
+
+### Workflow
+
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token and `bootstrap-gh.sh` to confirm GitHub auth (filing requires it).
+2. **Gather the scorecard** — walk through the 5 criteria conversationally. Ask each one in plain language; translate the answer into `yes` / `no` / `unclear` yourself. Use `AskUserQuestion` for the user-facing choices when possible.
+3. **Propose a module name** — infer a kebab-case slug from the intent (e.g. "real-time chat" → `chat`). Confirm with the user before finalizing.
+4. **Classify** — pipe the intent + name + scorecard + optional description into `scripts/plan-feedback-request.sh`. The script fetches open module-request issues via `sf feedback list --status open --json`, detects duplicates, and emits a decision.
+5. **Act on the `decision` field**:
+   - `file-request` → Present the emitted `sf feedback request …` command, get explicit approval, then run it. Quote the scorecard answers in the issue description so future reviewers can see the rationale.
+   - `route-to-existing` → Point the user at the duplicate issue (number + title + url). Offer `sf feedback vote <n> up` or `sf feedback vote <n> comment --comment "…"` so the existing issue gathers traction instead of a parallel noise thread.
+   - `refuse` → List the `redFlags` array verbatim. Don't soft-pedal — the criteria are in place for a reason. If the user pushes back with new info, rebuild the scorecard (they may have just unblocked a criterion) and re-classify.
+
+### Recommendation shape (from `plan-feedback-request.sh`)
+
+```json
+{
+  "intent": "real-time chat between project members",
+  "name": "chat",
+  "decision": "refuse",
+  "redFlags": [
+    {
+      "criterion": "reusability",
+      "answer": "no",
+      "reason": "Low reusability — at least 3 unrelated projects should plausibly want this before it earns a slot in the catalogue."
+    }
+  ],
+  "duplicate": null,
+  "recommendation": {
+    "action": "refuse",
+    "command": null,
+    "message": "Refused: the scorecard has 1 red flag (reusability=no). Explain the red flags to the user before filing anything."
+  }
+}
+```
+
+### Never do these
+
+- **Don't skip the scorecard.** Even when routed here from anti-reinvention, run all 5 criteria — the guardrail's LOW tier is not a green light to file, it's a "worth evaluating" signal.
+- **Don't soft-pass an `unclear` answer.** `unclear` is a refusal, just like `no`. Treat it as "come back when you know" rather than "probably fine".
+- **Don't echo the scorecard without the decision.** The user should always hear the outcome (file / route / refuse) plus the reasoning, never a raw JSON dump.
+- **Don't skip dedup.** Always let `plan-feedback-request.sh` enrich the payload with `sf feedback list` — catching a duplicate before filing is the entire point of the orchestration.
+- **Don't file without `bootstrap-gh.sh`.** A filing attempt against an unauthenticated `gh` produces a confusing failure; surface the install/login guidance from `bootstrap-gh.sh` first.
+
 ## Interaction principles
 
 1. **Never bypass the CLI.** If the user asks for a file or layout that the CLI can generate, generate it via `sf`. Do not hand-write blueprints.
@@ -276,7 +343,6 @@ When the user expresses intent to build, add, or implement a capability **inside
 
 This SKILL.md is the foundation (Phase 2A, ticket #102). The following capabilities will be layered on in subsequent tickets:
 
-- **Phase 3B — Feedback Request flow** (#124): scorecard-gated module request orchestration on top of `sf feedback request`.
 - **Phase 3C — Feedback Bug Report flow** (#125): passive detection + auto-repro on top of `sf feedback bug`.
 - **Phase 4 — Community voting polish** (Pillar 6): skill-side UX for ranking and voting on open module requests.
 - **Phase 5 — Event handling** (Pillar 7): cmux/IDE/terminal adaptation for browser flows and multi-server launches.
