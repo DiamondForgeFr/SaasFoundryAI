@@ -81,18 +81,86 @@ find_status_option_id() {
   ' | head -n1
 }
 
+# Resolve the current repo as "owner/name". Cached in-process to avoid repeat
+# `gh repo view` calls within a single script invocation.
+_GH_REPO_CACHE=""
+get_repo_owner_name() {
+  if [ -z "$_GH_REPO_CACHE" ]; then
+    _GH_REPO_CACHE=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
+  fi
+  echo "$_GH_REPO_CACHE"
+}
+
+# Single targeted GraphQL query that returns everything the skill needs about a
+# ticket's relationship with the current project board. O(1) in board size — it
+# traverses from the issue down to its projectItems rather than scanning the
+# whole board. Emits a compact JSON object on stdout:
+#   { "title": "...", "state": "OPEN"|"CLOSED", "itemId": "..." | null, "status": "In progress" | null }
+# The itemId and status are null if the issue is not on the configured project
+# board (identified by PROJECT_NUMBER).
+query_project_item() {
+  local ticket=$1
+  local repo owner name
+  repo=$(get_repo_owner_name)
+  if [ -z "$repo" ]; then
+    echo '{"title":"","state":"","itemId":null,"status":null}'
+    return 1
+  fi
+  owner="${repo%/*}"
+  name="${repo#*/}"
+
+  local resp
+  resp=$(gh api graphql \
+    -f query='query($o:String!,$r:String!,$n:Int!){
+      repository(owner:$o,name:$r){
+        issue(number:$n){
+          title
+          state
+          projectItems(first:10){
+            nodes{
+              id
+              project{number}
+              fieldValueByName(name:"Status"){
+                ... on ProjectV2ItemFieldSingleSelectValue{ name }
+              }
+            }
+          }
+        }
+      }
+    }' \
+    -F o="$owner" -F r="$name" -F "n=${ticket}" 2>/dev/null)
+
+  if [ -z "$resp" ]; then
+    echo '{"title":"","state":"","itemId":null,"status":null}'
+    return 1
+  fi
+
+  echo "$resp" | jq -c --arg p "$PROJECT_NUMBER" '
+    (.data.repository.issue // null) as $issue
+    | if $issue == null then
+        {title:"", state:"", itemId:null, status:null}
+      else
+        ([$issue.projectItems.nodes[]? | select(.project.number == ($p | tonumber))] | .[0] // null) as $pi
+        | {
+            title: ($issue.title // ""),
+            state: ($issue.state // ""),
+            itemId: ($pi.id // null),
+            status: ($pi.fieldValueByName.name // null)
+          }
+      end
+  '
+}
+
 # Return the Projects V2 item id for a ticket number, empty if not in project.
 get_project_item_id() {
   local ticket=$1
-  gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 500 2>/dev/null \
-    | jq -r --arg n "$ticket" '.items[] | select(.content.number == ($n | tonumber)) | .id' | head -n1
+  query_project_item "$ticket" | jq -r '.itemId // ""'
 }
 
 # Return the Status text for a ticket number, empty if not on the board.
 get_ticket_status() {
   local ticket=$1
-  gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 500 2>/dev/null \
-    | jq -r --arg n "$ticket" '.items[] | select(.content.number == ($n | tonumber)) | .status // empty' | head -n1
+  query_project_item "$ticket" | jq -r '.status // ""'
 }
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -158,16 +226,23 @@ cmd_status() {
     exit 1
   fi
   local ticket=$1
-  require_project
+  load_config
+  if [ -z "$PROJECT_OWNER" ] || [ -z "$PROJECT_NUMBER" ]; then
+    echo -e "${RED}Error: workflow.projectUrl is missing or malformed in .saasfoundry.json${NC}" >&2
+    echo "Expected: https://github.com/orgs/<owner>/projects/<number>" >&2
+    exit 1
+  fi
 
-  local title state status
-  title=$(gh issue view "$ticket" --json title --jq '.title' 2>/dev/null)
-  state=$(gh issue view "$ticket" --json state --jq '.state' 2>/dev/null)
+  local info title state status
+  info=$(query_project_item "$ticket")
+  title=$(echo "$info" | jq -r '.title // ""')
+  state=$(echo "$info" | jq -r '.state // ""')
+  status=$(echo "$info" | jq -r '.status // ""')
+
   if [ -z "$title" ]; then
     echo -e "${RED}Error: Could not find issue #${ticket}${NC}" >&2
     exit 1
   fi
-  status=$(get_ticket_status "$ticket")
 
   echo -e "${BLUE}Issue #${ticket}: ${title}${NC}"
   echo "State: $state"
