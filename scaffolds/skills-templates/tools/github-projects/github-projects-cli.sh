@@ -44,24 +44,59 @@ load_config() {
   fi
 }
 
-require_project() {
+# Schema cache — project id, status field id, and option ids rarely change
+# (board-owner edits only) so they're safe to persist across script runs. Item
+# states mutate constantly in a multi-dev board and MUST NEVER be cached here.
+# On-disk shape:
+#   { "projectId":"...", "statusFieldId":"...", "statusOptions":[{id,name},...] }
+_SF_CACHE_DIR="${SF_CACHE_DIR:-/tmp/sf-workflow-cache-${USER:-anon}}"
+_SF_CACHE_TTL="${SF_CACHE_TTL:-3600}"
+
+_cache_path() {
+  mkdir -p "$_SF_CACHE_DIR" 2>/dev/null || true
+  echo "$_SF_CACHE_DIR/project-${PROJECT_OWNER}-${PROJECT_NUMBER}.json"
+}
+
+_cache_fresh() {
+  local path=$1
+  [ -f "$path" ] || return 1
+  local mtime now
+  mtime=$(stat -f %m "$path" 2>/dev/null || stat -c %Y "$path" 2>/dev/null || echo "")
+  [ -z "$mtime" ] && return 1
+  now=$(date +%s)
+  [ "$((now - mtime))" -lt "$_SF_CACHE_TTL" ]
+}
+
+# Populate PROJECT_ID, STATUS_FIELD_ID, STATUS_OPTIONS_JSON. Hits the cache
+# when fresh (~0 API calls), otherwise refetches from the board and persists.
+# Callers who previously used require_project + load_status_field should call
+# this single entry point instead — it covers both.
+load_project_schema() {
   load_config
   if [ -z "$PROJECT_OWNER" ] || [ -z "$PROJECT_NUMBER" ]; then
     echo -e "${RED}Error: workflow.projectUrl is missing or malformed in .saasfoundry.json${NC}" >&2
     echo "Expected: https://github.com/orgs/<owner>/projects/<number>" >&2
     exit 1
   fi
-  PROJECT_ID=$(gh project view "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json 2>/dev/null | jq -r '.id')
-  if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
+
+  local path
+  path=$(_cache_path)
+  if [ -z "${SF_CACHE_BUST:-}" ] && _cache_fresh "$path"; then
+    PROJECT_ID=$(jq -r '.projectId // empty' "$path" 2>/dev/null)
+    STATUS_FIELD_ID=$(jq -r '.statusFieldId // empty' "$path" 2>/dev/null)
+    STATUS_OPTIONS_JSON=$(jq -c '.statusOptions // empty' "$path" 2>/dev/null)
+    if [ -n "$PROJECT_ID" ] && [ -n "$STATUS_FIELD_ID" ] && [ -n "$STATUS_OPTIONS_JSON" ] && [ "$STATUS_OPTIONS_JSON" != "null" ]; then
+      return 0
+    fi
+  fi
+
+  PROJECT_ID=$(gh project view "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json 2>/dev/null | jq -r '.id // empty')
+  if [ -z "$PROJECT_ID" ]; then
     echo -e "${RED}Error: Could not load project $PROJECT_NUMBER for owner $PROJECT_OWNER${NC}" >&2
     echo "Check that 'gh auth status' shows the 'project' scope." >&2
     exit 1
   fi
-}
 
-# Fetch the Status field metadata (id + all option ids/names) once.
-# Populates STATUS_FIELD_ID and STATUS_OPTIONS_JSON.
-load_status_field() {
   local payload
   payload=$(gh project field-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json 2>/dev/null)
   STATUS_FIELD_ID=$(echo "$payload" | jq -r '.fields[] | select(.name == "Status") | .id')
@@ -70,7 +105,18 @@ load_status_field() {
     echo -e "${RED}Error: Project has no 'Status' field${NC}" >&2
     exit 1
   fi
+
+  jq -n \
+    --arg pid "$PROJECT_ID" \
+    --arg fid "$STATUS_FIELD_ID" \
+    --argjson opts "$STATUS_OPTIONS_JSON" \
+    '{projectId:$pid, statusFieldId:$fid, statusOptions:$opts}' > "$path" 2>/dev/null || true
 }
+
+# Back-compat aliases so callers (and tests) don't have to rename everything.
+# Both resolve through the cached schema loader.
+require_project() { load_project_schema; }
+load_status_field() { load_project_schema; }
 
 # Return option id for a status name (case-insensitive).
 # Usage: find_status_option_id "In progress"
@@ -81,18 +127,86 @@ find_status_option_id() {
   ' | head -n1
 }
 
+# Resolve the current repo as "owner/name". Cached in-process to avoid repeat
+# `gh repo view` calls within a single script invocation.
+_GH_REPO_CACHE=""
+get_repo_owner_name() {
+  if [ -z "$_GH_REPO_CACHE" ]; then
+    _GH_REPO_CACHE=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
+  fi
+  echo "$_GH_REPO_CACHE"
+}
+
+# Single targeted GraphQL query that returns everything the skill needs about a
+# ticket's relationship with the current project board. O(1) in board size — it
+# traverses from the issue down to its projectItems rather than scanning the
+# whole board. Emits a compact JSON object on stdout:
+#   { "title": "...", "state": "OPEN"|"CLOSED", "itemId": "..." | null, "status": "In progress" | null }
+# The itemId and status are null if the issue is not on the configured project
+# board (identified by PROJECT_NUMBER).
+query_project_item() {
+  local ticket=$1
+  local repo owner name
+  repo=$(get_repo_owner_name)
+  if [ -z "$repo" ]; then
+    echo '{"title":"","state":"","itemId":null,"status":null}'
+    return 1
+  fi
+  owner="${repo%/*}"
+  name="${repo#*/}"
+
+  local resp
+  resp=$(gh api graphql \
+    -f query='query($o:String!,$r:String!,$n:Int!){
+      repository(owner:$o,name:$r){
+        issue(number:$n){
+          title
+          state
+          projectItems(first:10){
+            nodes{
+              id
+              project{number}
+              fieldValueByName(name:"Status"){
+                ... on ProjectV2ItemFieldSingleSelectValue{ name }
+              }
+            }
+          }
+        }
+      }
+    }' \
+    -F o="$owner" -F r="$name" -F "n=${ticket}" 2>/dev/null)
+
+  if [ -z "$resp" ]; then
+    echo '{"title":"","state":"","itemId":null,"status":null}'
+    return 1
+  fi
+
+  echo "$resp" | jq -c --arg p "$PROJECT_NUMBER" '
+    (.data.repository.issue // null) as $issue
+    | if $issue == null then
+        {title:"", state:"", itemId:null, status:null}
+      else
+        ([$issue.projectItems.nodes[]? | select(.project.number == ($p | tonumber))] | .[0] // null) as $pi
+        | {
+            title: ($issue.title // ""),
+            state: ($issue.state // ""),
+            itemId: ($pi.id // null),
+            status: ($pi.fieldValueByName.name // null)
+          }
+      end
+  '
+}
+
 # Return the Projects V2 item id for a ticket number, empty if not in project.
 get_project_item_id() {
   local ticket=$1
-  gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 500 2>/dev/null \
-    | jq -r --arg n "$ticket" '.items[] | select(.content.number == ($n | tonumber)) | .id' | head -n1
+  query_project_item "$ticket" | jq -r '.itemId // ""'
 }
 
 # Return the Status text for a ticket number, empty if not on the board.
 get_ticket_status() {
   local ticket=$1
-  gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 500 2>/dev/null \
-    | jq -r --arg n "$ticket" '.items[] | select(.content.number == ($n | tonumber)) | .status // empty' | head -n1
+  query_project_item "$ticket" | jq -r '.status // ""'
 }
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -158,16 +272,23 @@ cmd_status() {
     exit 1
   fi
   local ticket=$1
-  require_project
+  load_config
+  if [ -z "$PROJECT_OWNER" ] || [ -z "$PROJECT_NUMBER" ]; then
+    echo -e "${RED}Error: workflow.projectUrl is missing or malformed in .saasfoundry.json${NC}" >&2
+    echo "Expected: https://github.com/orgs/<owner>/projects/<number>" >&2
+    exit 1
+  fi
 
-  local title state status
-  title=$(gh issue view "$ticket" --json title --jq '.title' 2>/dev/null)
-  state=$(gh issue view "$ticket" --json state --jq '.state' 2>/dev/null)
+  local info title state status
+  info=$(query_project_item "$ticket")
+  title=$(echo "$info" | jq -r '.title // ""')
+  state=$(echo "$info" | jq -r '.state // ""')
+  status=$(echo "$info" | jq -r '.status // ""')
+
   if [ -z "$title" ]; then
     echo -e "${RED}Error: Could not find issue #${ticket}${NC}" >&2
     exit 1
   fi
-  status=$(get_ticket_status "$ticket")
 
   echo -e "${BLUE}Issue #${ticket}: ${title}${NC}"
   echo "State: $state"
@@ -189,8 +310,7 @@ cmd_update_status() {
   fi
   local ticket=$1
   local status_name=$2
-  require_project
-  load_status_field
+  load_project_schema
 
   local item_id option_id
   item_id=$(get_project_item_id "$ticket")
@@ -352,6 +472,20 @@ cmd_list() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# Command: cache-clear — wipe the on-disk schema cache (escape hatch for when
+# the board owner renames Status options mid-hour)
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_cache_clear() {
+  if [ -d "$_SF_CACHE_DIR" ]; then
+    rm -rf "$_SF_CACHE_DIR"
+    echo -e "${GREEN}✓ Cache cleared: ${_SF_CACHE_DIR}${NC}"
+  else
+    echo "(no cache dir at ${_SF_CACHE_DIR})"
+  fi
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Router
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -364,6 +498,7 @@ case "$COMMAND" in
   get-ticket)      cmd_get_ticket "$@" ;;
   create-pr)       cmd_create_pr "$@" ;;
   list)            cmd_list "$@" ;;
+  cache-clear)     cmd_cache_clear "$@" ;;
   "")
     echo -e "${RED}Error: No command specified${NC}"
     echo ""
@@ -378,11 +513,12 @@ case "$COMMAND" in
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
     echo "  create-pr <ticket>                       Open PR for current branch"
     echo "  list [status]                            List project items (optionally filtered)"
+    echo "  cache-clear                              Drop the on-disk schema cache"
     exit 1
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-ticket, create-pr, list"
+    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-ticket, create-pr, list, cache-clear"
     exit 1
     ;;
 esac
