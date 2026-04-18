@@ -61,8 +61,15 @@ _cache_fresh() {
   local path=$1
   [ -f "$path" ] || return 1
   local mtime now
-  mtime=$(stat -f %m "$path" 2>/dev/null || stat -c %Y "$path" 2>/dev/null || echo "")
-  [ -z "$mtime" ] && return 1
+  # `stat -f %m` is BSD/macOS; on GNU/Linux `-f` formats the filesystem and
+  # returns the mountpoint, which would crash the arithmetic below under set -e.
+  # Branch on OSTYPE so each platform gets the right flag.
+  if [[ "$OSTYPE" == "darwin"* ]] || [[ "$OSTYPE" == "freebsd"* ]] || [[ "$OSTYPE" == "openbsd"* ]]; then
+    mtime=$(stat -f %m "$path" 2>/dev/null)
+  else
+    mtime=$(stat -c %Y "$path" 2>/dev/null)
+  fi
+  [[ "$mtime" =~ ^[0-9]+$ ]] || return 1
   now=$(date +%s)
   [ "$((now - mtime))" -lt "$_SF_CACHE_TTL" ]
 }
