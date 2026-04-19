@@ -1,7 +1,7 @@
 import type { Client } from '@notionhq/client'
 
-import { createNotionSrsAdapterFromEnv, NotionSrsAdapter } from '../../../../builders/srs/notion.adapter'
 import { EpicSpec, FrSpec } from '../../../../builders/srs/types'
+import { createNotionSrsAdapterFromEnv, NotionSrsAdapter } from '../../../../tools/notion/srs.adapter'
 
 interface MockCalls {
   meCalls: unknown[]

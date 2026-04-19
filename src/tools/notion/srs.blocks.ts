@@ -1,6 +1,6 @@
 import type { BlockObjectRequest } from '@notionhq/client'
 
-import { EpicSpec, FrItem, FrSpec, UrItem } from './types'
+import { EpicSpec, FrItem, FrSpec, UrItem } from '../../builders/srs/types'
 
 type ParagraphBlock = Extract<BlockObjectRequest, { paragraph: { rich_text: unknown } }>
 type TableBlock = Extract<BlockObjectRequest, { table: { table_width: unknown } }>
