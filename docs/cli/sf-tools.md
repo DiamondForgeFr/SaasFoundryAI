@@ -1,6 +1,6 @@
 # sf tools
 
-Manage multi-account credentials for various services (Atlassian, Notion, Figma).
+Manage multi-account credentials for external services (Atlassian, Notion, Figma) used by advanced Claude Code skills.
 
 ## Usage
 
@@ -10,13 +10,13 @@ sf tools [subcommand] [options]
 
 ## Options
 
-| Flag                   | Description                                  | Default |
-| ---------------------- | -------------------------------------------- | ------- |
-| `list`                 | Show all tools and their account count       | -       |
-| `accounts <tool>`      | List accounts for a specific tool            | -       |
-| `add <tool> <account>` | Add a new account for a tool                 | -       |
-| `use <tool> <account>` | Set which account to use for current project | -       |
-| `current`              | Show accounts used by current project        | -       |
+| Flag | Description | Default |
+|------|-------------|----------|
+| `list` | Show all tools and their account count | - |
+| `accounts <tool>` | List accounts for a specific tool | - |
+| `add <tool> <account>` | Add a new account for a tool | - |
+| `use <tool> <account>` | Set which account to use for current project | - |
+| `current` | Show accounts used by current project | - |
 
 ## Examples
 
