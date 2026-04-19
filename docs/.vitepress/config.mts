@@ -68,7 +68,8 @@ export default defineConfig({
             { text: 'Workflow System', link: '/guide/workflow-system' },
             { text: 'Skills System', link: '/guide/skills-system' },
             { text: 'Module System', link: '/guide/module-system' },
-            { text: 'Updating Projects', link: '/guide/updating-projects' }
+            { text: 'Updating Projects', link: '/guide/updating-projects' },
+            { text: 'Testing', link: '/guide/testing' }
           ]
         }
       ],
