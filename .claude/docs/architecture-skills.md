@@ -55,6 +55,17 @@ scaffolds/overlays/monorepo/root/.claude/
 - `sf-tool-notion` - Notion workspace integration (requires credentials)
 - `sf-tool-figma` - Figma design system integration (requires credentials)
 
+#### SRS Host Skill (agnostic, backend-dispatched)
+
+- `sf-srs` — Software Requirements Specifications host. Reads `.saasfoundry.json → tools.srs.backend` and routes drafting / spawning / evaluation through the matching `SrsAdapter` implementation in
+  `src/srs/`.
+  - Bundle: `.claude/skills/sf-srs/` (SKILL.md + `scripts/srs-cli.sh` + `scripts/drafters/` + `templates/`)
+  - Scaffold source of truth: `scaffolds/skills-templates/sf-srs/` (drift-guarded in `tool-skill-drift.spec.ts`)
+  - Installer: `src/installers/srs-skill.installer.ts` copies the bundle and preserves the `srs-cli.sh` executable bit
+  - Backend registry: `src/srs/registry.ts` + `src/srs/factory.ts` (`createSrsAdapter`, `SrsConfigError`)
+  - Current backends: `notion` (ships); `confluence`, `local-markdown` are future additions that register via `src/srs/<name>-backend.ts` without touching the agnostic surface.
+  - Notion-import guard: `src/__tests__/unit/srs/no-notion-leak.spec.ts` — only `src/srs/notion-backend.ts` may import `@notionhq/client` or `../tools/notion`.
+
 ### Multi-Account Credential System
 
 **Only applies to Tool Skills with authentication** (atlassian, notion, figma).
