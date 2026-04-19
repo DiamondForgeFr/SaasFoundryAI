@@ -10,7 +10,7 @@ They live in `src/runners/` and are called from `src/commands/new.ts` and `src/c
 ### `initAndStartDb`
 
 ```typescript
-async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner?: Ora): Promise<boolean>
+async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner: ReturnType<typeof ora>): Promise<boolean>
 ```
 
 Starts PostgreSQL (in Docker) and initialises the schema.
@@ -28,7 +28,7 @@ Only runs when `dbSetup === 'docker'`. For `'credentials'` or `'manual'`, the CL
 ### `initAndStartS3`
 
 ```typescript
-async function initAndStartS3(projectName: string, isMonorepo: boolean, spinner?: Ora): Promise<boolean>
+async function initAndStartS3(projectName: string, isMonorepo: boolean, spinner: ReturnType<typeof ora>): Promise<boolean>
 ```
 
 Starts MinIO + runs the bucket initialiser.
@@ -62,7 +62,7 @@ Opens one terminal window with the chosen command via [`openTerminal`](#openterm
 ### `startBackend`
 
 ```typescript
-async function startBackend(projectName: string, isMonorepo: boolean, newTerminal: boolean): Promise<void>
+async function startBackend(projectName: string, isMonorepo: boolean, newTerminal?: boolean): Promise<void>
 ```
 
 Starts the API app.
@@ -75,7 +75,7 @@ Multirepo flow: this is the function `new.ts` calls when the user picks "start a
 ### `startFrontend`
 
 ```typescript
-async function startFrontend(projectName: string, isMonorepo: boolean, newTerminal: boolean): Promise<void>
+async function startFrontend(projectName: string, isMonorepo: boolean, newTerminal?: boolean): Promise<void>
 ```
 
 Same shape as `startBackend`, for the Web app.
@@ -87,7 +87,7 @@ Cross-platform terminal-opening + health-check helpers that the other runners de
 ### `openTerminal`
 
 ```typescript
-async function openTerminal(directory: string, options: { command?: string }): Promise<boolean>
+async function openTerminal(directory: string, options?: { command?: string; description?: string }): Promise<boolean>
 ```
 
 Opens a new terminal tab (or window) in `directory` with an optional command.
