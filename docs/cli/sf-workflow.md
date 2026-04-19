@@ -10,18 +10,18 @@ sf workflow [subcommand] [args...]
 
 ## Options
 
-| Flag | Description | Default |
-|------|-------------|----------|
-| `show` | Show current workflow configuration | - |
-| `use <template>` | Apply a workflow template | - |
-| `set-working-branch <branch>` | Set the working branch for git workflow | - |
-| `set-ai-rules` | Configure AI development rules | - |
-| `validate` | Validate workflow configuration | - |
-| `save <template>` | Save current config as template | - |
-| `list` | List available workflow templates | - |
-| `create <template>` | Create a new workflow template | - |
-| `delete <template>` | Delete a workflow template | - |
-| `show-template <template>` | Show a specific template | - |
+| Flag                          | Description                             | Default |
+| ----------------------------- | --------------------------------------- | ------- |
+| `show`                        | Show current workflow configuration     | -       |
+| `use <template>`              | Apply a workflow template               | -       |
+| `set-working-branch <branch>` | Set the working branch for git workflow | -       |
+| `set-ai-rules`                | Configure AI development rules          | -       |
+| `validate`                    | Validate workflow configuration         | -       |
+| `save <template>`             | Save current config as template         | -       |
+| `list`                        | List available workflow templates       | -       |
+| `create <template>`           | Create a new workflow template          | -       |
+| `delete <template>`           | Delete a workflow template              | -       |
+| `show-template <template>`    | Show a specific template                | -       |
 
 ## Examples
 
@@ -57,7 +57,8 @@ sf workflow save my-template
 
 ## Notes
 
-The workflow system is complexity-adaptive: each ticket is tagged `bug | low | medium | complex`, which scales the ceremony (analyze depth, plan approval gates, adversarial review). See [Workflow System](/workflow/introduction) for the full lifecycle.
+The workflow system is complexity-adaptive: each ticket is tagged `bug | low | medium | complex`, which scales the ceremony (analyze depth, plan approval gates, adversarial review). See
+[Workflow System](/workflow/introduction) for the full lifecycle.
 
 ## See Also
 
