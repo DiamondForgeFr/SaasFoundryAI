@@ -1,6 +1,7 @@
 # Runners
 
-**Runners** are the post-scaffold orchestration layer. Where [builders](/api/builders) produce files and [installers](/api/installers) patch files, runners **spawn external processes** — Docker containers, `npm run dev`, a new terminal window, a health-check poll.
+**Runners** are the post-scaffold orchestration layer. Where [builders](/api/builders) produce files and [installers](/api/installers) patch files, runners **spawn external processes** — Docker
+containers, `npm run dev`, a new terminal window, a health-check poll.
 
 They live in `src/runners/` and are called from `src/commands/new.ts` and `src/commands/update.ts` after all files are in place.
 
@@ -9,12 +10,7 @@ They live in `src/runners/` and are called from `src/commands/new.ts` and `src/c
 ### `initAndStartDb`
 
 ```typescript
-async function initAndStartDb(
-  projectName: string,
-  dbSetup: 'docker' | 'credentials' | 'manual',
-  isMonorepo: boolean,
-  spinner?: Ora
-): Promise<boolean>
+async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner?: Ora): Promise<boolean>
 ```
 
 Starts PostgreSQL (in Docker) and initialises the schema.
@@ -110,7 +106,8 @@ Returns `true` when the spawn succeeds, `false` when every fallback failed. On f
 async function waitForServer(url: string, timeout?: number): Promise<void>
 ```
 
-Polls `url` every second until the response is `ok` or `timeout` (default 30 000 ms) elapses. Connection errors during polling are silently retried; a timeout throws a descriptive error so the caller can surface the right guidance ("check Docker is running", etc.).
+Polls `url` every second until the response is `ok` or `timeout` (default 30 000 ms) elapses. Connection errors during polling are silently retried; a timeout throws a descriptive error so the caller
+can surface the right guidance ("check Docker is running", etc.).
 
 Primary use: `waitForServer('http://localhost:3000/api/health')` before the CLI prints "Your backend is up".
 
@@ -126,19 +123,21 @@ Returns the setup one-liner the `startBackend` / `startFrontend` functions prepe
 npx husky install; chmod -R +x .husky; chmod -R +x ./scripts/*.sh; <extraCommand>
 ```
 
-Uses `;` instead of `&&` for AppleScript compatibility (some osascript chains drop `&&`). Chmod failures are tolerated (`|| true`) because they only matter if Husky hooks exist; the dev command always runs last.
+Uses `;` instead of `&&` for AppleScript compatibility (some osascript chains drop `&&`). Chmod failures are tolerated (`|| true`) because they only matter if Husky hooks exist; the dev command always
+runs last.
 
 ---
 
 ## Runners vs installers
 
-| Category       | Changes files? | Spawns processes? | Example                |
-| -------------- | -------------- | ----------------- | ---------------------- |
-| **Builder**    | Yes            | No                | Copy `blueprints/api/` |
-| **Installer**  | Yes            | No (mostly)       | Uncomment markers      |
-| **Runner**     | No             | Yes               | `docker compose up -d` |
+| Category      | Changes files? | Spawns processes? | Example                |
+| ------------- | -------------- | ----------------- | ---------------------- |
+| **Builder**   | Yes            | No                | Copy `blueprints/api/` |
+| **Installer** | Yes            | No (mostly)       | Uncomment markers      |
+| **Runner**    | No             | Yes               | `docker compose up -d` |
 
-Installers sometimes shell out (e.g. `npm install` for storage) but they do so to finish modifying the project state. Runners shell out to **start** something that stays running (a container, a dev server, an interactive terminal).
+Installers sometimes shell out (e.g. `npm install` for storage) but they do so to finish modifying the project state. Runners shell out to **start** something that stays running (a container, a dev
+server, an interactive terminal).
 
 Keep the boundary clean when you add new code. A one-off `gh auth status` probe belongs in a runner. A `sed`-like file rewrite belongs in an installer.
 

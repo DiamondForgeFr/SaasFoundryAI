@@ -63,7 +63,8 @@ scripts/              # tag-manager.sh (RC branch version management)
 docs/                 # VitePress source for saasfoundry.dev
 ```
 
-See [Project Structure](/guide/project-structure) for the same layout from a **user's** perspective — and [Types](/api/types), [Builders](/api/builders), [Installers](/api/installers), [Runners](/api/runners) for the API-level references.
+See [Project Structure](/guide/project-structure) for the same layout from a **user's** perspective — and [Types](/api/types), [Builders](/api/builders), [Installers](/api/installers),
+[Runners](/api/runners) for the API-level references.
 
 ## Daily development commands
 
@@ -87,7 +88,8 @@ See [Testing](/guide/testing) for the full test strategy.
 
 ## The dogfooded workflow
 
-**SaaSFoundry uses its own generated workflow to ship itself.** The `.claude/skills/sf-workflow/`, `.claude/skills/sf-tool-github-projects/` and `.saasfoundry.json` files in this repo are the same files that land in every project created via `sf new`.
+**SaaSFoundry uses its own generated workflow to ship itself.** The `.claude/skills/sf-workflow/`, `.claude/skills/sf-tool-github-projects/` and `.saasfoundry.json` files in this repo are the same
+files that land in every project created via `sf new`.
 
 That means every change here goes through the 7-status lifecycle:
 
@@ -138,7 +140,8 @@ The generated scaffolds allow an additional `update` type that SaaSFoundry itsel
 Modules (email, storage, analytics, …) have a consistent shape. To add a new one, say `search`:
 
 1. **Overlay** — drop the source into `scaffolds/overlays/modules/search/`, mirroring the target structure (`services/`, `config/`, etc.).
-2. **Blueprint markers** — add `// TODO search-active:` markers in the scaffold code that should stay dormant until the module is installed. See `scaffolds/blueprints/api/src/modules/email/services/email.service.ts` for a reference of the marker pattern.
+2. **Blueprint markers** — add `// TODO search-active:` markers in the scaffold code that should stay dormant until the module is installed. See
+   `scaffolds/blueprints/api/src/modules/email/services/email.service.ts` for a reference of the marker pattern.
 3. **Installer** — create `src/installers/search.installer.ts`. Follow the shape of `email.installer.ts`:
    - Copy the overlay into the target
    - Uncomment the `TODO search-active:` markers
@@ -188,7 +191,8 @@ npm install
 npm run dev
 ```
 
-Because `npm link` makes `sf` point at your source, you do not need to re-link after each rebuild. Just `npm run build && sf new`. For faster inner loops on a module installer, use the matching integration spec — they run in ~5 seconds and give you the same assertions minus `npm install`.
+Because `npm link` makes `sf` point at your source, you do not need to re-link after each rebuild. Just `npm run build && sf new`. For faster inner loops on a module installer, use the matching
+integration spec — they run in ~5 seconds and give you the same assertions minus `npm install`.
 
 ## Documentation
 

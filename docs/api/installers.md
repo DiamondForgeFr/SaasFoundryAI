@@ -1,14 +1,17 @@
 # Installers
 
-**Installers** are the optional module wiring. Where a [builder](/api/builders) copies a blueprint, an installer reaches into the already-copied files and flips a feature from `dormant` to `active` — uncommenting markers, patching imports, writing credentials, registering providers.
+**Installers** are the optional module wiring. Where a [builder](/api/builders) copies a blueprint, an installer reaches into the already-copied files and flips a feature from `dormant` to `active` —
+uncommenting markers, patching imports, writing credentials, registering providers.
 
 All installers live in `src/installers/`. They are called from `src/commands/new.ts` (fresh projects) and `src/commands/update.ts` (existing projects gaining a new module).
 
 ## Why the marker pattern
 
-Every optional module lands in the blueprint in a "dormant" state: the code that would call `MailerSendService.sendEmail()`, `S3Client.putObject()`, or `Umami.track()` is present but commented out with a well-known marker like `// TODO mailer-service-active:`.
+Every optional module lands in the blueprint in a "dormant" state: the code that would call `MailerSendService.sendEmail()`, `S3Client.putObject()`, or `Umami.track()` is present but commented out
+with a well-known marker like `// TODO mailer-service-active:`.
 
-The installer's job is to **remove the markers**. That makes installation idempotent, greppable, and trivially reversible — anyone can see at a glance which optional features a generated project has enabled by grepping for live code paths vs marker comments.
+The installer's job is to **remove the markers**. That makes installation idempotent, greppable, and trivially reversible — anyone can see at a glance which optional features a generated project has
+enabled by grepping for live code paths vs marker comments.
 
 ---
 
@@ -107,7 +110,8 @@ Skips silently when the list is empty. Placement is the same as `installCoreSkil
 async function installToolSkill(params: InstallToolSkillParams): Promise<void>
 ```
 
-Used for **workflow-tool** skills — the skill `sf-workflow` uses to talk to your board. Copies the template from `scaffolds/skills-templates/tools/<tool>/` to `.claude/skills/sf-tool-<tool>/` and, if credentials are provided, writes them to `~/.claude/credentials/<tool>/<account>.env` (not to the skill directory itself — see [Tool Skills](/skills/tool-skills) for the multi-account model).
+Used for **workflow-tool** skills — the skill `sf-workflow` uses to talk to your board. Copies the template from `scaffolds/skills-templates/tools/<tool>/` to `.claude/skills/sf-tool-<tool>/` and, if
+credentials are provided, writes them to `~/.claude/credentials/<tool>/<account>.env` (not to the skill directory itself — see [Tool Skills](/skills/tool-skills) for the multi-account model).
 
 Only `tool: 'github-projects'` ships today. The Jira, Notion, Linear and ClickUp adapters follow the same shape; see the [roadmap](https://github.com/AGachet/SaaSFoundry/issues).
 
@@ -131,7 +135,8 @@ Installs the orchestration `sf-workflow` skill.
 async function installSkills(params: InstallSkillsParams): Promise<void>
 ```
 
-Convenience orchestrator: calls `installCoreSkills` + `installOptionalSkills`, then substitutes `{{PROJECT_NAME}}` and `{{VERSION}}` inside each `CLAUDE.md`. Used by `new.ts` so the two skill installers run in a known order with consistent post-processing.
+Convenience orchestrator: calls `installCoreSkills` + `installOptionalSkills`, then substitutes `{{PROJECT_NAME}}` and `{{VERSION}}` inside each `CLAUDE.md`. Used by `new.ts` so the two skill
+installers run in a known order with consistent post-processing.
 
 ---
 
@@ -139,9 +144,11 @@ Convenience orchestrator: calls `installCoreSkills` + `installOptionalSkills`, t
 
 Match these patterns if you add a new installer:
 
-- **Idempotency**: re-running an installer must be safe. The regex-based uncomment pattern (`replace(/^\/\/ TODO marker: /gm, '')`) is idempotent because already-uncommented lines don't match the regex.
+- **Idempotency**: re-running an installer must be safe. The regex-based uncomment pattern (`replace(/^\/\/ TODO marker: /gm, '')`) is idempotent because already-uncommented lines don't match the
+  regex.
 - **Marker naming**: `// TODO <short-feature>-active:` — one marker prefix per module. Makes the blueprint greppable.
-- **`.env` writes**: always write to all three files — `.env`, `.env.test` (with a deterministic fake key so tests stay offline), and `.github/workflows/deployment.yml` (as a GitHub Actions secret reference). Missing one breaks CI or E2E later.
+- **`.env` writes**: always write to all three files — `.env`, `.env.test` (with a deterministic fake key so tests stay offline), and `.github/workflows/deployment.yml` (as a GitHub Actions secret
+  reference). Missing one breaks CI or E2E later.
 - **Monorepo awareness**: read `params.isMonorepo` to decide whether to operate per-app or at the root. Most installers flip just one path; skill installers flip placement.
 - **No npm install in monorepo mode**: if the root workspace is going to `npm install` at the end, adding a dep from a sub-package is enough. Only multirepo installers run `npm install` themselves.
 
