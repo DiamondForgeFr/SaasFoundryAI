@@ -16,10 +16,10 @@ globally installed `git-commit` might do the wrong thing for this repo — the `
 
 ## Three categories
 
-| Category          | Installed when                                            | Credentials                       | Examples                                                                      |
-| ----------------- | --------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
-| **Core**          | Always — every generated project                          | None                              | `sf-git-commit`, `sf-utils-fix-errors`, `sf-workflow`                         |
-| **Tool**          | Opt-in during `sf new` or via `sf update --add-modules`   | Sometimes                         | `sf-tool-context7`, `sf-tool-atlassian`, `sf-tool-notion`                     |
+| Category          | Installed when                                            | Credentials                       | Examples                                                                                                              |
+| ----------------- | --------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Core**          | Always — every generated project                          | None                              | `sf-git-commit`, `sf-utils-fix-errors`, `sf-workflow`                                                                 |
+| **Tool**          | Opt-in during `sf new` or via `sf update --add-modules`   | Sometimes                         | `sf-tool-context7`, `sf-tool-atlassian`, `sf-tool-notion`                                                             |
 | **Workflow tool** | One installed per project, matches your chosen board tool | None (uses `gh` / project tokens) | `sf-tool-github-projects` today; `sf-tool-jira`, `sf-tool-linear`, `sf-tool-notion`, `sf-tool-clickup` on the roadmap |
 
 See [Core Skills](/skills/core-skills) for the always-installed set, [Tool Skills](/skills/tool-skills) for the opt-ins, and [Creating Skills](/skills/creating-skills) for writing your own.
