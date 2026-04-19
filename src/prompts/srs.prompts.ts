@@ -53,9 +53,10 @@ export async function promptSrsConfiguration(currentAnswers: Partial<Answers>, o
     ? []
     : [
         {
-          type: 'input' as const,
+          type: 'password' as const,
           name: 'notionApiToken',
           message: 'Paste your Notion integration token (create one at https://www.notion.so/profile/integrations):',
+          mask: '*',
           validate: (input: string) => (input && input.length > 0 ? true : 'Notion integration token is required')
         }
       ]
