@@ -136,7 +136,7 @@ brew install anthropic/tap/claude-code
 brew install cmux
 
 # 3. Install SaaSFoundry
-npm install -g saasfoundry
+npm install -g saasfoundry-cli
 
 # 4. Create project
 sf new
@@ -160,7 +160,7 @@ cmux
 npm install -g @anthropic-ai/claude-code
 
 # 2. Install SaaSFoundry
-npm install -g saasfoundry
+npm install -g saasfoundry-cli
 
 # 3. Create project
 sf new
@@ -189,14 +189,13 @@ Generated projects include Claude-powered skills in `.claude/skills/`:
 
 ### Workflow Skills
 
-- `/apex` - Systematic implementation methodology
-- Project management integration (GitHub, Jira, Notion, Linear)
+- `sf-workflow` - Complexity-adaptive workflow (bug / low / medium / complex), auto-triggered on workflow keywords
+- Project management integration (GitHub Projects, Jira, Notion, Linear) via `sf-tool-*` skills
 
 ### Utility Skills
 
 - `/fix-errors` - Fix all ESLint and TypeScript errors
 - `/fix-grammar` - Fix grammar while preserving formatting
-- `/oneshot` - Ultra-fast feature implementation
 
 See: [Skills System Guide](/guide/skills-system)
 

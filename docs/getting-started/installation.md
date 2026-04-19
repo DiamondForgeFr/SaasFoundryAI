@@ -75,15 +75,15 @@ Install SaaSFoundry globally using your preferred package manager:
 ::: code-group
 
 ```bash [npm]
-npm install -g saasfoundry
+npm install -g saasfoundry-cli
 ```
 
 ```bash [yarn]
-yarn global add saasfoundry
+yarn global add saasfoundry-cli
 ```
 
 ```bash [pnpm]
-pnpm add -g saasfoundry
+pnpm add -g saasfoundry-cli
 ```
 
 :::
