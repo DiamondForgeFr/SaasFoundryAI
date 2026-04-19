@@ -1,9 +1,9 @@
 # Shipping Your First Ticket
 
-A hands-on walkthrough of the SaaSFoundry workflow, from an idea in your backlog to code merged on `master`. You will drive one real ticket through the full 7-status lifecycle — the same lifecycle every contributor on your project uses, human or AI.
+A hands-on walkthrough of the SaaSFoundry workflow, from an idea in your backlog to code merged on `master`. You will drive one real ticket through the full 7-status lifecycle — the same lifecycle
+every contributor on your project uses, human or AI.
 
-**Time required**: ~20 minutes
-**Prerequisites**: a project generated with `sf new` and a GitHub Project board wired to it (or Jira / Notion / Linear — the flow is identical).
+**Time required**: ~20 minutes **Prerequisites**: a project generated with `sf new` and a GitHub Project board wired to it (or Jira / Notion / Linear — the flow is identical).
 
 ## The example feature
 
@@ -12,7 +12,8 @@ We will ship a tiny endpoint: **`GET /api/version`** returning `{ version: "1.0.
 - Complexity: 🟢 **low** — no schema changes, no new dependencies, no security surface. Single new endpoint, under 20 lines of code.
 - Target branch: `master` (or whatever your `workflow.releaseBranch` points at).
 
-This is intentionally trivial. The point is not to build something impressive — it is to see **every status** of the workflow in action, so you trust the process when you come back with a harder feature tomorrow.
+This is intentionally trivial. The point is not to build something impressive — it is to see **every status** of the workflow in action, so you trust the process when you come back with a harder
+feature tomorrow.
 
 ## The seven statuses at a glance
 
@@ -20,7 +21,8 @@ This is intentionally trivial. The point is not to build something impressive �
 Backlog → Ready → In progress → AI testing → Human testing → In review → Done
 ```
 
-Each transition has a mandatory action. Skipping a status is the fastest way to ship broken code. The `sf-workflow` skill (installed with every generated project) enforces the transitions, so both you and your AI agent play by the same rules.
+Each transition has a mandatory action. Skipping a status is the fastest way to ship broken code. The `sf-workflow` skill (installed with every generated project) enforces the transitions, so both you
+and your AI agent play by the same rules.
 
 ## Step 1 — Backlog: create the ticket
 
@@ -30,13 +32,11 @@ Open your GitHub Project board and create a new issue:
 - **Body**: `Expose the current package.json version at GET /api/version. Returns { version: string }. No auth required, public endpoint.`
 - **Status column**: `Backlog`
 
-::: tip Let your AI agent do this
-If Claude Code is set up with the `sf-workflow` skill, you can simply say:
+::: tip Let your AI agent do this If Claude Code is set up with the `sf-workflow` skill, you can simply say:
 
 > "Create a backlog ticket: add a /api/version endpoint that returns the package.json version. Low complexity."
 
-The agent will create the issue, tag complexity, and place it on the board via the same CLI you would run manually.
-:::
+The agent will create the issue, tag complexity, and place it on the board via the same CLI you would run manually. :::
 
 ### Tag complexity
 
@@ -202,7 +202,8 @@ Check:
 
 ### If you find a bug
 
-Do **not** open the PR yet. Document the bug on the issue, fix it on the feature branch, commit, push, and **restart from AI testing**. Human testing is the last checkpoint before the PR — once you pass it, the code must be shippable.
+Do **not** open the PR yet. Document the bug on the issue, fix it on the feature branch, commit, push, and **restart from AI testing**. Human testing is the last checkpoint before the PR — once you
+pass it, the code must be shippable.
 
 ## Step 8 — Human testing → In review
 
@@ -232,17 +233,18 @@ The ticket is closed, the branch is cleaned up, the feature is live.
 
 Even for a trivial endpoint, you touched every guardrail the workflow provides:
 
-| Status             | What happened                                   | Guardrail                                  |
-| ------------------ | ----------------------------------------------- | ------------------------------------------ |
-| Backlog            | Created ticket, tagged complexity               | Spec lives on the issue, not a chat log    |
-| Ready              | Confirmed acceptance criteria                   | No ambiguous tickets reach implementation  |
-| In progress        | Branch + decomposition                          | No work outside the status system          |
-| AI testing         | Automated test plan + execution                 | Tests written and run before humans review |
-| Human testing      | Manual validation in a real runtime             | Automation blind spots caught in person    |
-| In review          | PR with CI + reviewer approval                  | External validation before code ships      |
-| Done               | Cleanup + confirmation                          | No half-closed work leaking into the board |
+| Status        | What happened                       | Guardrail                                  |
+| ------------- | ----------------------------------- | ------------------------------------------ |
+| Backlog       | Created ticket, tagged complexity   | Spec lives on the issue, not a chat log    |
+| Ready         | Confirmed acceptance criteria       | No ambiguous tickets reach implementation  |
+| In progress   | Branch + decomposition              | No work outside the status system          |
+| AI testing    | Automated test plan + execution     | Tests written and run before humans review |
+| Human testing | Manual validation in a real runtime | Automation blind spots caught in person    |
+| In review     | PR with CI + reviewer approval      | External validation before code ships      |
+| Done          | Cleanup + confirmation              | No half-closed work leaking into the board |
 
-The next ticket — even if it is 10× larger — uses **the exact same flow**. The complexity tag (`medium` / `complex`) just scales the rigor at each step. And because your AI agent reads the same `.saasfoundry.json` and the same `sf-workflow` skill files as you do, it will apply the same discipline.
+The next ticket — even if it is 10× larger — uses **the exact same flow**. The complexity tag (`medium` / `complex`) just scales the rigor at each step. And because your AI agent reads the same
+`.saasfoundry.json` and the same `sf-workflow` skill files as you do, it will apply the same discipline.
 
 ## Next steps
 
