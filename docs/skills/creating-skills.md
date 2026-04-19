@@ -124,11 +124,13 @@ A few patterns from the SaaSFoundry-shipped skills that make them work reliably:
 The `description` field is what the AI reads to decide whether to load the skill. Vague descriptions mean wrong loads (or worse, missed loads):
 
 **Not great**:
+
 ```yaml
 description: Helps with deployments
 ```
 
 **Better**:
+
 ```yaml
 description: Deploy a preview environment for the current feature branch. Auto-triggers on "deploy preview", "spin up preview", "ephemeral env". Use after Human testing, before opening the PR.
 ```
@@ -151,8 +153,8 @@ The SaaSFoundry 7-status workflow is enforced exactly this way.
 
 ### Body: explicit `## Workflow` steps
 
-Numbered steps, not prose. Each step should be one CLI invocation or one decision. If a step has substeps, extract it into its own section. This makes the skill debuggable — when something goes
-wrong, you know which step broke.
+Numbered steps, not prose. Each step should be one CLI invocation or one decision. If a step has substeps, extract it into its own section. This makes the skill debuggable — when something goes wrong,
+you know which step broke.
 
 ### Body: `## Rules` or `## Gotchas` at the end
 
