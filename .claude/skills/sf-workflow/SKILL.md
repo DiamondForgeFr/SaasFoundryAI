@@ -118,6 +118,16 @@ See your tool-specific skill documentation for complete command reference:
 - Notion: `.claude/skills/sf-tool-notion/SKILL.md`
 - Linear: `.claude/skills/sf-tool-linear/SKILL.md`
 
+## SRS Handoff (drafting / spawning tickets)
+
+When a ticket crosses into **Ready** and requires Software Requirements Specifications (US / UR / FR / DS / TC), stop and hand off to the agnostic SRS skill:
+
+- `.claude/skills/sf-srs/SKILL.md` — selects the configured SRS backend from `.saasfoundry.json → tools.srs.backend`
+- `.claude/skills/sf-srs/scripts/srs-cli.sh validate` — smoke-tests the backend adapter (init OK, exit 0)
+- `.claude/skills/sf-srs/scripts/srs-cli.sh draft|spawn|eval` — backend-neutral actions (sibling SUBs under #174 fill the body)
+
+Never bypass the skill to write SRS by hand — the backend dispatch is how new projects get to swap Notion for Confluence / local markdown without touching the workflow logic.
+
 ## Workflow Statuses
 
 1. **Backlog** (GRAY) — Read `statuses/1-backlog.md` for full description

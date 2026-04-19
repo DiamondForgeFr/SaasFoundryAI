@@ -11,6 +11,16 @@ const PAIRS = [
     name: 'sf-tool-github-projects CLI',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-tool-github-projects/github-projects-cli.sh'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/tools/github-projects/github-projects-cli.sh')
+  },
+  {
+    name: 'sf-srs SKILL.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/SKILL.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/SKILL.md')
+  },
+  {
+    name: 'sf-srs srs-cli.sh',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/scripts/srs-cli.sh'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/scripts/srs-cli.sh')
   }
 ]
 
