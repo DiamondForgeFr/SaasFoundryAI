@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, SrsAdapter } from '../../../builders/srs/types'
+import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../builders/srs/types'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../srs'
 import { runValidate } from '../../../srs/bin/validate'
 
@@ -12,6 +12,13 @@ class RecordingAdapter implements SrsAdapter {
   async init(): Promise<void> {
     this.initCount += 1
     await this.onInit()
+  }
+  async resolveParent(input: string): Promise<ResolvedParent> {
+    return { id: input, name: input }
+  }
+  async createPage(parentPageId: string, title: string): Promise<PageRef> {
+    void parentPageId
+    return { id: 'page', url: '', title }
   }
   async createEpicPage(spec: EpicSpec): Promise<PageRef> {
     return { id: 'e', url: '', title: spec.title }

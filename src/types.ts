@@ -46,6 +46,13 @@ export interface Answers {
   notionApiToken?: string
   notionApiVersion?: string
   figmaApiToken?: string
+  srsEnable?: boolean
+  srsBackend?: 'notion'
+  srsParentPageInput?: string
+  srsBootstrap?: {
+    rootPage: SrsPageRef
+    categoryPage: SrsPageRef
+  }
   workflow?: WorkflowConfig
   aiRules?: AIRules
 }
@@ -171,14 +178,19 @@ export interface WorkflowTemplate extends WorkflowConfig {
   aiRules?: AIRules
 }
 
+export interface SrsPageRef {
+  id: string
+  url: string
+  name: string
+}
+
 export interface SrsToolConfig {
   enabled: boolean
   backend: 'notion'
-  rootPage?: {
-    id: string
-    url: string
+  rootPage?: SrsPageRef
+  categories?: {
+    userFlowsAndSpecifications?: SrsPageRef
   }
-  categories?: string[]
 }
 
 export interface ToolsConfig {

@@ -1,7 +1,7 @@
 import type { Client } from '@notionhq/client'
 
 import { EpicSpec, FrSpec } from '../../../../builders/srs/types'
-import { createNotionSrsAdapterFromEnv, NotionSrsAdapter } from '../../../../tools/notion/srs.adapter'
+import { createNotionSrsAdapterFromEnv, extractNotionPageId, NotionSrsAdapter } from '../../../../tools/notion/srs.adapter'
 
 interface MockCalls {
   meCalls: unknown[]
@@ -118,6 +118,111 @@ describe('NotionSrsAdapter', () => {
       })
       const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
       await expect(adapter.init()).rejects.toThrow(/token validation failed — unauthorized/)
+    })
+  })
+
+  describe('resolveParent', () => {
+    it('resolves a Notion page URL to an id + name', async () => {
+      const { client, calls } = buildMockClient({
+        pagesRetrieveImpl: async () => ({
+          id: 'abc12345-abc1-2345-abc1-2345abc12345',
+          url: 'https://www.notion.so/My-parent-abc12345abc12345abc12345abc12345',
+          object: 'page',
+          properties: {
+            title: { type: 'title', title: [{ type: 'text', text: { content: 'My parent' }, plain_text: 'My parent' }] }
+          }
+        })
+      })
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      const parent = await adapter.resolveParent('https://www.notion.so/My-parent-abc12345abc12345abc12345abc12345')
+
+      expect(parent.id).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+      expect(parent.name).toBe('My parent')
+      expect(parent.url).toBe('https://www.notion.so/My-parent-abc12345abc12345abc12345abc12345')
+      expect(calls.pagesRetrieveCalls).toHaveLength(1)
+      expect(calls.pagesRetrieveCalls[0]).toEqual({ page_id: 'abc12345-abc1-2345-abc1-2345abc12345' })
+    })
+
+    it('resolves a raw 32-char hex id', async () => {
+      const { client } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      const parent = await adapter.resolveParent('abc12345abc12345abc12345abc12345')
+
+      expect(parent.id).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+    })
+
+    it('falls back to the page id as the name when no title is present', async () => {
+      const { client } = buildMockClient({
+        pagesRetrieveImpl: async () => ({
+          id: 'page_x',
+          url: 'https://notion.so/page_x',
+          object: 'page',
+          properties: {}
+        })
+      })
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      const parent = await adapter.resolveParent('abc12345abc12345abc12345abc12345')
+
+      expect(parent.name).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+    })
+
+    it('throws a helpful error on empty input', async () => {
+      const { client } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await expect(adapter.resolveParent('   ')).rejects.toThrow(/input is empty/)
+    })
+
+    it('throws a helpful error when no Notion id can be extracted', async () => {
+      const { client } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await expect(adapter.resolveParent('not-a-valid-page-ref')).rejects.toThrow(/could not extract a Notion page ID/)
+    })
+
+    it('wraps retrieve errors with a helpful "share with integration" hint', async () => {
+      const { client } = buildMockClient({
+        pagesRetrieveImpl: async () => {
+          throw new Error('object_not_found')
+        }
+      })
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await expect(adapter.resolveParent('abc12345abc12345abc12345abc12345')).rejects.toThrow(/could not access page.*object_not_found.*integration/s)
+    })
+  })
+
+  describe('createPage (agnostic helper)', () => {
+    it('creates an empty page when no content is provided', async () => {
+      const { client, calls } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      const result = await adapter.createPage('parent_1', 'My Root')
+
+      expect(result).toEqual({ id: 'page_new', url: 'https://notion.so/page_new', title: 'My Root' })
+      expect(calls.pagesCreateCalls).toHaveLength(1)
+      const call = calls.pagesCreateCalls[0] as { parent: { page_id: string }; properties: { title: { title: Array<{ text: { content: string } }> } }; children: unknown[] }
+      expect(call.parent).toEqual({ page_id: 'parent_1' })
+      expect(call.properties.title.title[0].text.content).toBe('My Root')
+      expect(call.children).toEqual([])
+    })
+
+    it('renders PageContent blocks when content is provided', async () => {
+      const { client, calls } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await adapter.createPage('parent_1', 'With body', {
+        blocks: [
+          { kind: 'heading', level: 2, text: 'Section' },
+          { kind: 'paragraph', text: 'Body' }
+        ]
+      })
+
+      const call = calls.pagesCreateCalls[0] as { children: Array<{ type: string }> }
+      expect(call.children.map((c) => c.type)).toEqual(['heading_2', 'paragraph'])
     })
   })
 
@@ -350,5 +455,32 @@ describe('createNotionSrsAdapterFromEnv', () => {
   it('constructs an adapter when NOTION_API_TOKEN is set', () => {
     process.env.NOTION_API_TOKEN = 'secret'
     expect(createNotionSrsAdapterFromEnv()).toBeInstanceOf(NotionSrsAdapter)
+  })
+})
+
+describe('extractNotionPageId', () => {
+  it('returns a dashed UUID when given a 32-char hex id', () => {
+    expect(extractNotionPageId('abc12345abc12345abc12345abc12345')).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+  })
+
+  it('returns a dashed UUID when given an already-dashed UUID', () => {
+    expect(extractNotionPageId('ABC12345-ABC1-2345-ABC1-2345ABC12345')).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+  })
+
+  it('extracts the id from a Notion URL with a slug', () => {
+    expect(extractNotionPageId('https://www.notion.so/My-Page-abc12345abc12345abc12345abc12345')).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+  })
+
+  it('extracts the id from a Notion URL with query params', () => {
+    expect(extractNotionPageId('https://www.notion.so/ws/abc12345abc12345abc12345abc12345?v=1')).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+  })
+
+  it('returns null when no 32-char hex id can be found', () => {
+    expect(extractNotionPageId('not a page ref')).toBeNull()
+    expect(extractNotionPageId('')).toBeNull()
+  })
+
+  it('trims surrounding angle brackets (markdown autolinks)', () => {
+    expect(extractNotionPageId('<https://www.notion.so/abc12345abc12345abc12345abc12345>')).toBe('abc12345-abc1-2345-abc1-2345abc12345')
   })
 })

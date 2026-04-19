@@ -34,7 +34,7 @@ describe('parseConflictStrategy', () => {
 
 describe('buildUpdatePrefillFromOptions', () => {
   it('returns empty prefill branches when no options are provided', () => {
-    expect(buildUpdatePrefillFromOptions({})).toEqual({ email: {}, storage: {}, skills: {} })
+    expect(buildUpdatePrefillFromOptions({})).toEqual({ email: {}, storage: {}, skills: {}, srs: {} })
   })
 
   it('parses --add-modules into selectedModules', () => {
@@ -116,5 +116,21 @@ describe('buildUpdatePrefillFromOptions', () => {
     expect(prefill.storage).toEqual({ bucket: 'only-bucket' })
     expect(prefill.email).toEqual({})
     expect(prefill.skills).toEqual({})
+    expect(prefill.srs).toEqual({})
+  })
+
+  it('maps srs flags into prefill.srs', () => {
+    const prefill = buildUpdatePrefillFromOptions({
+      srsBackend: 'notion',
+      srsParentPageInput: 'https://notion.so/parent',
+      notionApiToken: 'n-tok',
+      notionApiVersion: '2022-06-28'
+    })
+    expect(prefill.srs).toEqual({
+      srsBackend: 'notion',
+      srsParentPageInput: 'https://notion.so/parent',
+      notionApiToken: 'n-tok',
+      notionApiVersion: '2022-06-28'
+    })
   })
 })

@@ -33,6 +33,10 @@ export interface UpdateCommandOptions {
   notionApiToken?: string
   notionApiVersion?: string
   figmaApiToken?: string
+
+  // SRS bootstrap
+  srsBackend?: 'notion'
+  srsParentPageInput?: string
 }
 
 export interface UpdatePrefill {
@@ -40,6 +44,7 @@ export interface UpdatePrefill {
   email: { ready?: boolean; mailersendApiKey?: string; mailersendSenderEmail?: string; mailersendSenderName?: string }
   storage: { s3Setup?: 'docker' | 'credentials'; endpoint?: string; accessKey?: string; secretKey?: string; bucket?: string; region?: string }
   skills: AdvancedSkillCredentials
+  srs: { srsBackend?: 'notion'; srsParentPageInput?: string; notionApiToken?: string; notionApiVersion?: string }
 }
 
 /**
@@ -104,7 +109,7 @@ export function parseAddModules(value: string | undefined): string[] | undefined
  * interactive-only).
  */
 export function buildUpdatePrefillFromOptions(opts: UpdateCommandOptions): UpdatePrefill {
-  const prefill: UpdatePrefill = { email: {}, storage: {}, skills: {} }
+  const prefill: UpdatePrefill = { email: {}, storage: {}, skills: {}, srs: {} }
 
   const modules = parseAddModules(opts.addModules)
   if (modules !== undefined) prefill.selectedModules = modules
@@ -129,6 +134,11 @@ export function buildUpdatePrefillFromOptions(opts: UpdateCommandOptions): Updat
   if (opts.notionApiToken !== undefined) prefill.skills.notionApiToken = opts.notionApiToken
   if (opts.notionApiVersion !== undefined) prefill.skills.notionApiVersion = opts.notionApiVersion
   if (opts.figmaApiToken !== undefined) prefill.skills.figmaApiToken = opts.figmaApiToken
+
+  if (opts.srsBackend !== undefined) prefill.srs.srsBackend = opts.srsBackend
+  if (opts.srsParentPageInput !== undefined) prefill.srs.srsParentPageInput = opts.srsParentPageInput
+  if (opts.notionApiToken !== undefined) prefill.srs.notionApiToken = opts.notionApiToken
+  if (opts.notionApiVersion !== undefined) prefill.srs.notionApiVersion = opts.notionApiVersion
 
   return prefill
 }

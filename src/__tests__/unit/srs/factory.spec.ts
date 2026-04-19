@@ -1,4 +1,4 @@
-import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, SrsAdapter } from '../../../builders/srs/types'
+import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../builders/srs/types'
 import { createSrsAdapter, listSrsBackends, registerSrsBackend, SrsConfigError, unregisterSrsBackend } from '../../../srs'
 
 class StubSrsAdapter implements SrsAdapter {
@@ -6,6 +6,14 @@ class StubSrsAdapter implements SrsAdapter {
 
   async init(): Promise<void> {
     this.calls.push('init')
+  }
+  async resolveParent(input: string): Promise<ResolvedParent> {
+    this.calls.push(`resolveParent:${input}`)
+    return { id: 'parent-stub', name: 'Stub Parent' }
+  }
+  async createPage(parentPageId: string, title: string): Promise<PageRef> {
+    this.calls.push(`createPage:${parentPageId}:${title}`)
+    return { id: 'page-stub', url: '', title }
   }
   async createEpicPage(spec: EpicSpec): Promise<PageRef> {
     this.calls.push('createEpicPage')

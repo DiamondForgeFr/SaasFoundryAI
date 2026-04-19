@@ -2,7 +2,7 @@ import { Client, isFullPage } from '@notionhq/client'
 
 import { renderEpicPage } from '../../builders/srs/templates/pages/epic.tpl'
 import { renderFrPage } from '../../builders/srs/templates/pages/fr.tpl'
-import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, SrsAdapter } from '../../builders/srs/types'
+import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../builders/srs/types'
 import { renderPageContentToNotionBlocks } from './page-content.renderer'
 
 export interface NotionSrsAdapterOptions {
@@ -40,6 +40,33 @@ export class NotionSrsAdapter implements SrsAdapter {
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`NotionSrsAdapter: token validation failed — ${message}`)
     }
+  }
+
+  async resolveParent(input: string): Promise<ResolvedParent> {
+    const trimmed = input.trim()
+    if (!trimmed) {
+      throw new Error('NotionSrsAdapter.resolveParent: input is empty — paste the Notion page URL or page ID.')
+    }
+
+    const pageId = extractNotionPageId(trimmed)
+    if (!pageId) {
+      throw new Error(`NotionSrsAdapter.resolveParent: could not extract a Notion page ID from "${trimmed}". Paste the full URL (e.g. https://www.notion.so/My-page-<id>) or the 32-character ID.`)
+    }
+
+    try {
+      const page = await this.client.pages.retrieve({ page_id: pageId })
+      const title = extractPageTitle(page)
+      const url = isFullPage(page) ? page.url : undefined
+      return { id: pageId, name: title || pageId, url }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`NotionSrsAdapter.resolveParent: could not access page "${pageId}" — ${message}. Make sure the page is shared with your Notion integration.`)
+    }
+  }
+
+  async createPage(parentPageId: string, title: string, content?: PageContent): Promise<PageRef> {
+    const blocks = content ? renderPageContentToNotionBlocks({ blocks: content.blocks }) : []
+    return this.createPageWithChildren({ page_id: parentPageId }, title, blocks)
   }
 
   async createEpicPage(spec: EpicSpec): Promise<PageRef> {
@@ -140,6 +167,25 @@ export function createNotionSrsAdapterFromEnv(): NotionSrsAdapter {
     apiToken,
     notionVersion: process.env.NOTION_API_VERSION
   })
+}
+
+const NOTION_ID_LENGTH = 32
+const NOTION_ID_REGEX = /[0-9a-f]{32}/i
+
+export function extractNotionPageId(input: string): string | null {
+  const clean = input.trim().replace(/^<|>$/g, '')
+  const direct = clean.replace(/-/g, '')
+  if (direct.length === NOTION_ID_LENGTH && NOTION_ID_REGEX.test(direct)) {
+    return formatNotionId(direct)
+  }
+  const match = clean.match(NOTION_ID_REGEX)
+  if (match) return formatNotionId(match[0])
+  return null
+}
+
+function formatNotionId(raw: string): string {
+  const normalized = raw.toLowerCase()
+  return `${normalized.slice(0, 8)}-${normalized.slice(8, 12)}-${normalized.slice(12, 16)}-${normalized.slice(16, 20)}-${normalized.slice(20)}`
 }
 
 function extractPageTitle(page: Awaited<ReturnType<Client['pages']['retrieve']>>): string {

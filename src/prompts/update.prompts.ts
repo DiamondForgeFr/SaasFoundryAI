@@ -26,6 +26,8 @@ function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): b
       return manifest.modules.s3Setup === 'manual'
     case 'analytics':
       return !manifest.modules.includeAnalytics
+    case 'srs':
+      return !(manifest.tools?.srs?.enabled === true)
     case 'sf-skill-context7':
     case 'sf-skill-atlassian':
     case 'sf-skill-notion':

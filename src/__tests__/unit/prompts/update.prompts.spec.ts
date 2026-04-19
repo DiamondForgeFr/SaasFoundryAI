@@ -15,9 +15,9 @@ describe('getAvailableModules', () => {
 
     const available = getAvailableModules(manifest)
 
-    // 3 modules + 4 skills = 7 total
-    expect(available).toHaveLength(7)
-    expect(available.map((m) => m.value)).toEqual(expect.arrayContaining(['email', 'storage', 'analytics', 'sf-skill-context7', 'sf-skill-atlassian', 'sf-skill-notion', 'sf-skill-figma']))
+    // 4 modules (email, storage, analytics, srs) + 4 skills = 8 total
+    expect(available).toHaveLength(8)
+    expect(available.map((m) => m.value)).toEqual(expect.arrayContaining(['email', 'storage', 'analytics', 'srs', 'sf-skill-context7', 'sf-skill-atlassian', 'sf-skill-notion', 'sf-skill-figma']))
   })
 
   it('should exclude email when mailersend is already installed', () => {
@@ -103,6 +103,23 @@ describe('getAvailableModules', () => {
     expect(available.find((m) => m.value === 'sf-skill-notion')).toBeDefined()
   })
 
+  it('should exclude srs when already enabled in the manifest', () => {
+    const manifest = manifestFixture({
+      modules: {
+        emailService: 'none',
+        s3Setup: 'manual',
+        dbSetup: 'docker',
+        includeAnalytics: false,
+        advancedSkills: []
+      },
+      tools: { srs: { enabled: true, backend: 'notion' } }
+    })
+
+    const available = getAvailableModules(manifest)
+
+    expect(available.find((m) => m.value === 'srs')).toBeUndefined()
+  })
+
   it('should return empty array when everything is installed', () => {
     const manifest = manifestFixture({
       modules: {
@@ -111,7 +128,8 @@ describe('getAvailableModules', () => {
         dbSetup: 'docker',
         includeAnalytics: true,
         advancedSkills: ['context7', 'atlassian', 'notion', 'figma']
-      }
+      },
+      tools: { srs: { enabled: true, backend: 'notion' } }
     })
 
     const available = getAvailableModules(manifest)
