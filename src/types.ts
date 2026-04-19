@@ -171,6 +171,20 @@ export interface WorkflowTemplate extends WorkflowConfig {
   aiRules?: AIRules
 }
 
+export interface SrsToolConfig {
+  enabled: boolean
+  backend: 'notion'
+  rootPage?: {
+    id: string
+    url: string
+  }
+  categories?: string[]
+}
+
+export interface ToolsConfig {
+  srs?: SrsToolConfig
+}
+
 export interface SaaSFoundryManifest {
   version: string
   generatedAt: string
@@ -187,6 +201,7 @@ export interface SaaSFoundryManifest {
   fileHashes?: Record<string, string>
   workflow?: WorkflowConfig
   aiRules?: AIRules
+  tools?: ToolsConfig
 }
 
 // Paths
