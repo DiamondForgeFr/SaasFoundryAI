@@ -483,4 +483,19 @@ describe('extractNotionPageId', () => {
   it('trims surrounding angle brackets (markdown autolinks)', () => {
     expect(extractNotionPageId('<https://www.notion.so/abc12345abc12345abc12345abc12345>')).toBe('abc12345-abc1-2345-abc1-2345abc12345')
   })
+
+  it('ignores a hex blob sitting inside a query-param value', () => {
+    // The real page id is in the path; a second hex blob buried in ?ref= must not be considered a candidate.
+    expect(extractNotionPageId('https://www.notion.so/page-abc12345abc12345abc12345abc12345?ref=def67890def67890def67890def67890')).toBe('abc12345-abc1-2345-abc1-2345abc12345')
+  })
+
+  it('returns null when multiple hex candidates sit at path boundaries (ambiguous)', () => {
+    // Both hex blobs sit at natural URL boundaries — we refuse to guess.
+    expect(extractNotionPageId('https://www.notion.so/foo-abc12345abc12345abc12345abc12345/bar-def67890def67890def67890def67890')).toBeNull()
+  })
+
+  it('rejects a hex run longer than 32 chars (no arbitrary truncation)', () => {
+    // A 40-char hex run must not have its first 32 chars silently extracted.
+    expect(extractNotionPageId('abc12345abc12345abc12345abc12345abcdef01')).toBeNull()
+  })
 })

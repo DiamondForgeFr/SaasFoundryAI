@@ -49,10 +49,6 @@ export interface Answers {
   srsEnable?: boolean
   srsBackend?: 'notion'
   srsParentPageInput?: string
-  srsBootstrap?: {
-    rootPage: SrsPageRef
-    categoryPage: SrsPageRef
-  }
   workflow?: WorkflowConfig
   aiRules?: AIRules
 }

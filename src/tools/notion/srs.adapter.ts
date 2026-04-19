@@ -171,6 +171,11 @@ export function createNotionSrsAdapterFromEnv(): NotionSrsAdapter {
 
 const NOTION_ID_LENGTH = 32
 const NOTION_ID_REGEX = /[0-9a-f]{32}/i
+// Only match a 32-hex id sitting at a natural URL boundary: preceded by
+// start-of-string, `/`, or `-` (standard Notion slug-id pattern) and followed
+// by end-of-string, `?`, `#`, or `/`. Rejects stray hex blobs buried in query
+// strings or other URL positions to avoid resolving to the wrong page.
+const ANCHORED_NOTION_ID_REGEX = /(?:^|[-/])([0-9a-f]{32})(?=$|[?#/])/gi
 
 export function extractNotionPageId(input: string): string | null {
   const clean = input.trim().replace(/^<|>$/g, '')
@@ -178,8 +183,9 @@ export function extractNotionPageId(input: string): string | null {
   if (direct.length === NOTION_ID_LENGTH && NOTION_ID_REGEX.test(direct)) {
     return formatNotionId(direct)
   }
-  const match = clean.match(NOTION_ID_REGEX)
-  if (match) return formatNotionId(match[0])
+  const matches = Array.from(clean.matchAll(ANCHORED_NOTION_ID_REGEX))
+  if (matches.length === 1) return formatNotionId(matches[0][1])
+  // Ambiguous (multiple candidates) or none — refuse to guess.
   return null
 }
 

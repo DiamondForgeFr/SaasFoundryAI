@@ -488,23 +488,29 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   }
 
   if (selectedModules.includes('srs')) {
-    const srsPrefill = (prefill.srs as Record<string, unknown> | undefined) ?? {}
+    const srsPrefill = (prefill.srs as { srsBackend?: 'notion'; srsParentPageInput?: string; notionApiToken?: string; notionApiVersion?: string } | undefined) ?? {}
     const srsAnswers = await promptSrsConfiguration(
-      {},
+      { notionApiToken: srsPrefill.notionApiToken, notionApiVersion: srsPrefill.notionApiVersion },
       {
         prefill: { srsEnable: true, ...srsPrefill },
         nonInteractive
       }
     )
-    if (srsAnswers.srsEnable && srsAnswers.srsBackend === 'notion' && srsAnswers.notionApiToken && srsAnswers.srsParentPageInput) {
+    if (!srsAnswers.srsEnable) {
+      selectedModules.splice(selectedModules.indexOf('srs'), 1)
+    } else if (srsAnswers.srsBackend === 'notion' && srsAnswers.notionApiToken && srsAnswers.srsParentPageInput) {
       srsBootstrap = {
         backend: 'notion',
         notionApiToken: srsAnswers.notionApiToken,
-        notionApiVersion: srsAnswers.notionApiVersion,
+        notionApiVersion: srsAnswers.notionApiVersion ?? srsPrefill.notionApiVersion,
         parentInput: srsAnswers.srsParentPageInput
       }
     } else {
-      selectedModules.splice(selectedModules.indexOf('srs'), 1)
+      const missing: string[] = []
+      if (srsAnswers.srsBackend !== 'notion') missing.push('srsBackend (--srs-backend notion)')
+      if (!srsAnswers.notionApiToken) missing.push('notionApiToken (--notion-api-token)')
+      if (!srsAnswers.srsParentPageInput) missing.push('srsParentPageInput (--srs-parent-page-input)')
+      throw new Error(`Cannot add "srs": required values missing — ${missing.join(', ')}.`)
     }
   }
 

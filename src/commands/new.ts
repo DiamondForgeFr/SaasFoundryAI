@@ -192,21 +192,28 @@ export async function newCommand(opts: NewCommandOptions = {}) {
 
     // SRS bootstrap (skill install + Notion pages creation) — opt-in
     let srsTools: SrsToolConfig | undefined
-    if (startProjectAnswers.srsEnable && startProjectAnswers.srsBackend && startProjectAnswers.srsParentPageInput && startProjectAnswers.notionApiToken) {
+    if (startProjectAnswers.srsEnable) {
+      const missing: string[] = []
+      if (!startProjectAnswers.srsBackend) missing.push('srsBackend (--srs-backend)')
+      if (!startProjectAnswers.srsParentPageInput) missing.push('srsParentPageInput (--srs-parent-page-input)')
+      if (!startProjectAnswers.notionApiToken) missing.push('notionApiToken (--notion-api-token)')
+      if (missing.length > 0) {
+        throw new Error(`SRS bootstrap was enabled but the following values are missing: ${missing.join(', ')}. Either provide them or pass --no-srs-enable.`)
+      }
       spinner.text = 'Bootstrapping SRS workspace...'
       await installSrsSkill({ targetPath: '.' })
       const adapter = new NotionSrsAdapter({
-        apiToken: startProjectAnswers.notionApiToken,
+        apiToken: startProjectAnswers.notionApiToken!,
         notionVersion: startProjectAnswers.notionApiVersion
       })
       const result = await bootstrapSrs({
         projectName: startProjectAnswers.projectName,
-        parentInput: startProjectAnswers.srsParentPageInput,
+        parentInput: startProjectAnswers.srsParentPageInput!,
         adapter
       })
       srsTools = {
         enabled: true,
-        backend: startProjectAnswers.srsBackend,
+        backend: startProjectAnswers.srsBackend!,
         rootPage: result.rootPage,
         categories: { userFlowsAndSpecifications: result.categoryPage }
       }
@@ -237,7 +244,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     spinner.succeed(chalk.green('Project setup completed successfully'))
   } catch (error) {
     spinner.fail(chalk.red('Failed to setup project'))
-    console.error(error)
+    console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
   } finally {
     console.log = originalConsoleLog
