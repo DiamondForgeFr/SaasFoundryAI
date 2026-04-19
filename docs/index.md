@@ -80,15 +80,26 @@ Result: trivial work stays lightweight, critical work gets the rigor it deserves
 
 Your AI agent does not invent its own task tracker. It uses the tool **you** already use:
 
-| Tool            | When to pick it                                         |
-| --------------- | ------------------------------------------------------- |
-| GitHub Projects | Default. Native to the repo, free, sub-issues built in. |
-| Jira            | Mature PM surface, sprints, custom fields.              |
-| Notion          | Doc-adjacent, great for product + engineering orgs.     |
-| Linear          | Fast, opinionated cycles for startups.                  |
+| Tool            | When to pick it                                         | Availability    |
+| --------------- | ------------------------------------------------------- | --------------- |
+| GitHub Projects | Default. Native to the repo, free, sub-issues built in. | Available today |
+| Jira            | Mature PM surface, sprints, custom fields.              | On the roadmap  |
+| Notion          | Doc-adjacent, great for product + engineering orgs.     | On the roadmap  |
+| Linear          | Fast, opinionated cycles for startups.                  | On the roadmap  |
+| ClickUp         | All-in-one PM for ops-heavy teams.                      | On the roadmap  |
+
+::: info Tool support today
+The AI workflow currently ships against **GitHub Projects**. Jira, Notion, Linear and ClickUp adapters are next on the roadmap — the workflow engine is already tool-agnostic, only the per-board glue
+needs to land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundry/issues).
+:::
 
 You get human-readable tickets, standard board columns, and a paper trail a non-technical stakeholder can follow. **Your AI agent creates sub-issues, moves statuses, opens PRs and leaves comments —
 exactly like a developer would.** Human checkpoints sit at the natural transitions (Ready, Human testing, In review), so a person always confirms before code leaves the team's hands.
+
+::: tip Customizable in upcoming versions
+Today the 7-status lifecycle is fixed because it encodes the patterns we have most battle-tested. Upcoming versions will let you **customize the flow itself** — rename statuses, drop optional
+checkpoints, or add team-specific stages — so the workflow matches how your team actually works, not the other way around.
+:::
 
 ## How it works
 
