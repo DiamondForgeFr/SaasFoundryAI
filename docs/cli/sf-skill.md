@@ -10,15 +10,15 @@ sf skill <subcommand> [options]
 
 ## Options
 
-| Flag | Description | Default |
-|------|-------------|----------|
-| `install` | Install the skill (user scope by default) | - |
-| `update` | Re-copy the skill if the bundled version is newer than the installed one | - |
-| `uninstall` | Remove the skill from the chosen scope | - |
-| `--project` | Operate on `.claude/skills/tool-saasfoundry/` (commit to git) instead of `~/.claude/skills/` | - |
-| `--force` | Overwrite an existing installation without prompting | - |
-| `--yes, -y` | Skip confirmation prompts (useful for CI) | - |
-| `--purge` | When uninstalling, also delete preferences in `~/.saasfoundry/` | - |
+| Flag        | Description                                                                                  | Default |
+| ----------- | -------------------------------------------------------------------------------------------- | ------- |
+| `install`   | Install the skill (user scope by default)                                                    | -       |
+| `update`    | Re-copy the skill if the bundled version is newer than the installed one                     | -       |
+| `uninstall` | Remove the skill from the chosen scope                                                       | -       |
+| `--project` | Operate on `.claude/skills/tool-saasfoundry/` (commit to git) instead of `~/.claude/skills/` | -       |
+| `--force`   | Overwrite an existing installation without prompting                                         | -       |
+| `--yes, -y` | Skip confirmation prompts (useful for CI)                                                    | -       |
+| `--purge`   | When uninstalling, also delete preferences in `~/.saasfoundry/`                              | -       |
 
 ## Examples
 

@@ -10,26 +10,26 @@ sf feedback <subcommand> [options]
 
 ## Options
 
-| Flag | Description | Default |
-|------|-------------|----------|
-| `request <name>` | Open a new module-request issue on the SaaSFoundry repo | - |
-| `bug` | Open a bug report against the CLI or generated scaffolds | - |
-| `list` | List feedback issues (module-requests + cli-bugs + scaffold-bugs) | - |
-| `vote --list` | Show top module requests ranked by 👍 reactions | - |
-| `vote <n> up\|down\|comment` | Cast a reaction or post a comment on request #n | - |
-| `--description <text>` | Issue description (request + bug) | - |
-| `--title <text>` | Bug title | - |
-| `--source <cli\|scaffold>` | Which surface the bug affects (bug) | - |
-| `--auto-repro` | Attach automatically captured reproduction context (bug) | - |
-| `--status <open\|closed\|all>` | Filter issues by status (list) | - |
-| `--mine` | Limit list to issues you opened | - |
-| `--limit <n>` | Cap the number of returned results | - |
-| `--stack-filter <term>` | Narrow vote --list results by stack keyword | - |
-| `--comment <body>` | Comment body when voting with `comment` | - |
-| `--json` | Emit machine-readable JSON output | - |
-| `--force` | Skip duplicate-detection prompts when filing | - |
-| `--yes, -y` | Skip interactive confirmations | - |
-| `--non-interactive` | Fail instead of prompting (CI mode) | - |
+| Flag                           | Description                                                       | Default |
+| ------------------------------ | ----------------------------------------------------------------- | ------- |
+| `request <name>`               | Open a new module-request issue on the SaaSFoundry repo           | -       |
+| `bug`                          | Open a bug report against the CLI or generated scaffolds          | -       |
+| `list`                         | List feedback issues (module-requests + cli-bugs + scaffold-bugs) | -       |
+| `vote --list`                  | Show top module requests ranked by 👍 reactions                   | -       |
+| `vote <n> up\|down\|comment`   | Cast a reaction or post a comment on request #n                   | -       |
+| `--description <text>`         | Issue description (request + bug)                                 | -       |
+| `--title <text>`               | Bug title                                                         | -       |
+| `--source <cli\|scaffold>`     | Which surface the bug affects (bug)                               | -       |
+| `--auto-repro`                 | Attach automatically captured reproduction context (bug)          | -       |
+| `--status <open\|closed\|all>` | Filter issues by status (list)                                    | -       |
+| `--mine`                       | Limit list to issues you opened                                   | -       |
+| `--limit <n>`                  | Cap the number of returned results                                | -       |
+| `--stack-filter <term>`        | Narrow vote --list results by stack keyword                       | -       |
+| `--comment <body>`             | Comment body when voting with `comment`                           | -       |
+| `--json`                       | Emit machine-readable JSON output                                 | -       |
+| `--force`                      | Skip duplicate-detection prompts when filing                      | -       |
+| `--yes, -y`                    | Skip interactive confirmations                                    | -       |
+| `--non-interactive`            | Fail instead of prompting (CI mode)                               | -       |
 
 ## Examples
 

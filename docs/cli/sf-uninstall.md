@@ -10,10 +10,10 @@ sf uninstall --all [--yes]
 
 ## Options
 
-| Flag | Description | Default |
-|------|-------------|----------|
-| `--all` | Required: remove skill (user + project scope) and wipe `~/.saasfoundry/` | - |
-| `--yes, -y` | Skip the confirmation prompt | - |
+| Flag        | Description                                                              | Default |
+| ----------- | ------------------------------------------------------------------------ | ------- |
+| `--all`     | Required: remove skill (user + project scope) and wipe `~/.saasfoundry/` | -       |
+| `--yes, -y` | Skip the confirmation prompt                                             | -       |
 
 ## Examples
 

@@ -10,18 +10,18 @@ sf update [options]
 
 ## Options
 
-| Flag | Description | Default |
-|------|-------------|----------|
-| `--non-interactive` | Fail if any required value is missing instead of prompting | - |
-| `--dry-run` | Preview changes as JSON without writing files or running installers | - |
-| `--accept-template-updates` | Auto-apply non-conflicting template updates without prompting | - |
-| `--conflict-strategy <strategy>` | Three-way merge conflict handling: `keep` (yours), `replace` (theirs), or `save-new` | `save-new` |
-| `--add-modules <modules>` | Comma-separated list of modules to add: `email, storage, analytics, sf-skill-context7, sf-skill-atlassian, sf-skill-notion, sf-skill-figma` | - |
-| `--mailersend-api-key <key>` | MailerSend API key (when adding `email`) | - |
-| `--s3-setup <setup>` | S3 storage: `docker` or `credentials` (when adding `storage`) | - |
-| `--atlassian-email <email>` | Atlassian account email (when adding `sf-skill-atlassian`) | - |
-| `--notion-api-token <token>` | Notion API token (when adding `sf-skill-notion`) | - |
-| `--figma-api-token <token>` | Figma API token (when adding `sf-skill-figma`) | - |
+| Flag                             | Description                                                                                                                                 | Default    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `--non-interactive`              | Fail if any required value is missing instead of prompting                                                                                  | -          |
+| `--dry-run`                      | Preview changes as JSON without writing files or running installers                                                                         | -          |
+| `--accept-template-updates`      | Auto-apply non-conflicting template updates without prompting                                                                               | -          |
+| `--conflict-strategy <strategy>` | Three-way merge conflict handling: `keep` (yours), `replace` (theirs), or `save-new`                                                        | `save-new` |
+| `--add-modules <modules>`        | Comma-separated list of modules to add: `email, storage, analytics, sf-skill-context7, sf-skill-atlassian, sf-skill-notion, sf-skill-figma` | -          |
+| `--mailersend-api-key <key>`     | MailerSend API key (when adding `email`)                                                                                                    | -          |
+| `--s3-setup <setup>`             | S3 storage: `docker` or `credentials` (when adding `storage`)                                                                               | -          |
+| `--atlassian-email <email>`      | Atlassian account email (when adding `sf-skill-atlassian`)                                                                                  | -          |
+| `--notion-api-token <token>`     | Notion API token (when adding `sf-skill-notion`)                                                                                            | -          |
+| `--figma-api-token <token>`      | Figma API token (when adding `sf-skill-figma`)                                                                                              | -          |
 
 ## Examples
 
@@ -45,7 +45,8 @@ sf update --non-interactive \
 
 ## Notes
 
-`sf update` is the mechanism for propagating upstream SaaSFoundry evolutions to projects you have already scaffolded — re-run it after upgrading the CLI to pull newer templates, scripts, and skill bundles.
+`sf update` is the mechanism for propagating upstream SaaSFoundry evolutions to projects you have already scaffolded — re-run it after upgrading the CLI to pull newer templates, scripts, and skill
+bundles.
 
 ## See Also
 

@@ -10,12 +10,12 @@ sf modules <subcommand> [options]
 
 ## Options
 
-| Flag | Description | Default |
-|------|-------------|----------|
-| `list` | List all modules with their installed state | - |
-| `info <name>` | Show detailed metadata for a single module | - |
-| `match "<intent>"` | Rank modules by how well they match a natural-language description | - |
-| `--json` | Emit machine-readable JSON (available on all subcommands) | - |
+| Flag               | Description                                                        | Default |
+| ------------------ | ------------------------------------------------------------------ | ------- |
+| `list`             | List all modules with their installed state                        | -       |
+| `info <name>`      | Show detailed metadata for a single module                         | -       |
+| `match "<intent>"` | Rank modules by how well they match a natural-language description | -       |
+| `--json`           | Emit machine-readable JSON (available on all subcommands)          | -       |
 
 ## Examples
 
