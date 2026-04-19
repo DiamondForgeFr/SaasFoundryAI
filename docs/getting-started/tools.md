@@ -190,7 +190,7 @@ Generated projects include Claude-powered skills in `.claude/skills/`:
 ### Workflow Skills
 
 - `sf-workflow` - Complexity-adaptive workflow (bug / low / medium / complex), auto-triggered on workflow keywords
-- Project management integration (GitHub Projects, Jira, Notion, Linear) via `sf-tool-*` skills
+- Project management integration via `sf-tool-*` skills — **GitHub Projects is the adapter shipping today**; Jira, Notion, Linear and ClickUp adapters are on the roadmap
 
 ### Utility Skills
 

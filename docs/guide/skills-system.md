@@ -80,12 +80,16 @@ The unified `sf-workflow` skill replaces the separate APEX skills. Ceremony (ana
 
 Generated based on workflow tool selection:
 
-| Tool            | Skill                     | Features                                  |
-| --------------- | ------------------------- | ----------------------------------------- |
-| GitHub Projects | `sf-tool-github-projects` | Issue management, sub-issues, GraphQL API |
-| Jira            | `sf-tool-jira`            | Tickets, sub-tasks, sprints               |
-| Notion          | `sf-tool-notion`          | Pages, databases, properties              |
-| Linear          | `sf-tool-linear`          | Issues, sub-issues, cycles                |
+| Tool            | Skill                     | Features                                  | Availability    |
+| --------------- | ------------------------- | ----------------------------------------- | --------------- |
+| GitHub Projects | `sf-tool-github-projects` | Issue management, sub-issues, GraphQL API | Available today |
+| Jira            | `sf-tool-jira`            | Tickets, sub-tasks, sprints               | On the roadmap  |
+| Notion          | `sf-tool-notion`          | Pages, databases, properties              | On the roadmap  |
+| Linear          | `sf-tool-linear`          | Issues, sub-issues, cycles                | On the roadmap  |
+| ClickUp         | `sf-tool-clickup`         | Tasks, sub-tasks, spaces                  | On the roadmap  |
+
+Only `sf-tool-github-projects` is wired up in the current release. The other adapters are scheduled next — they drop in behind the same `sf-workflow` skill, so no change to your workflow commands
+when they land.
 
 ## Using Skills
 
