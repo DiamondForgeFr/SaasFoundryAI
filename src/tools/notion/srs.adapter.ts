@@ -1,7 +1,7 @@
 import { Client, isFullPage } from '@notionhq/client'
 
-import { buildEpicPageBlocks, buildFrPageBlocks } from './notion.blocks'
-import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, SrsAdapter } from './types'
+import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, SrsAdapter } from '../../builders/srs/types'
+import { buildEpicPageBlocks, buildFrPageBlocks } from './srs.blocks'
 
 export interface NotionSrsAdapterOptions {
   apiToken: string
