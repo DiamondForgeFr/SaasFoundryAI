@@ -87,7 +87,10 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
 
     await adapter.updatePage(epic.id, {
       title: 'Integration test update',
-      sections: [{ heading: 'Run log', body: 'Adapter ran successfully.' }]
+      blocks: [
+        { kind: 'heading', level: 2, text: 'Run log' },
+        { kind: 'paragraph', text: 'Adapter ran successfully.' }
+      ]
     })
 
     const updated = await adapter.fetchPage(epic.id)

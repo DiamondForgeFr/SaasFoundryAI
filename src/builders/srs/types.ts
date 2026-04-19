@@ -54,14 +54,48 @@ export interface FrSpec {
   tcItems?: TcItem[]
 }
 
-export interface PageSection {
-  heading?: string
-  body: string
+export interface HeadingBlock {
+  kind: 'heading'
+  level: 1 | 2 | 3
+  text: string
 }
+
+export interface ParagraphBlock {
+  kind: 'paragraph'
+  text: string
+}
+
+export interface BulletedListBlock {
+  kind: 'bulleted_list'
+  items: string[]
+}
+
+export interface NumberedListBlock {
+  kind: 'numbered_list'
+  items: string[]
+}
+
+export interface TableBlock {
+  kind: 'table'
+  header: string[]
+  rows: string[][]
+}
+
+export interface CodeBlock {
+  kind: 'code'
+  language?: string
+  text: string
+}
+
+export interface DividerBlock {
+  kind: 'divider'
+}
+
+export type PageBlock = HeadingBlock | ParagraphBlock | BulletedListBlock | NumberedListBlock | TableBlock | CodeBlock | DividerBlock
 
 export interface PageContent {
   title?: string
-  sections?: PageSection[]
+  blocks: PageBlock[]
 }
 
 export interface RawContent {
