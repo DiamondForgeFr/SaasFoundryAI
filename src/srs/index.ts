@@ -22,5 +22,10 @@ export type {
   UrItem,
   FrItem,
   DsItem,
-  TcItem
+  TcItem,
+  EpicTicketBodySpec,
+  StoryTicketBodySpec,
+  FrPageLink,
+  AcceptanceCriterion,
+  DsRef
 } from '../builders/srs/types'

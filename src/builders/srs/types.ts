@@ -98,6 +98,47 @@ export interface PageContent {
   blocks: PageBlock[]
 }
 
+export interface FrPageLink {
+  frId: string
+  frTitle: string
+  pageUrl?: string
+}
+
+export interface EpicTicketBodySpec {
+  epic: EpicSpec
+  epicPageUrl?: string
+  frPages?: FrPageLink[]
+  scopeIncluded?: string[]
+  scopeExcluded?: string[]
+  dependencies?: string[]
+  constraints?: string[]
+  assumptions?: string[]
+  definitionOfDone?: string[]
+}
+
+export interface AcceptanceCriterion {
+  id: string
+  text: string
+  sourceFr?: string
+}
+
+export interface DsRef {
+  id: string
+  title?: string
+}
+
+export interface StoryTicketBodySpec {
+  fr: FrItem
+  frPageUrl?: string
+  mainSpecUrl?: string
+  urRefs?: UrItem[]
+  frRefs?: Array<{ id: string; title?: string }>
+  acceptanceCriteria?: AcceptanceCriterion[]
+  dsRefs?: DsRef[]
+  dependencies?: string[]
+  constraints?: string[]
+}
+
 export interface RawContent {
   pageId: string
   title: string

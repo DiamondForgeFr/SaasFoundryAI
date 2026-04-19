@@ -26,6 +26,11 @@ const PAIRS = [
     name: 'sf-srs templates/pages/README.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/pages/README.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/pages/README.md')
+  },
+  {
+    name: 'sf-srs templates/tickets/README.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/tickets/README.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/tickets/README.md')
   }
 ]
 
