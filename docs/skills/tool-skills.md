@@ -11,8 +11,8 @@ command.
 | **Public API**    | None (anonymous tier)       | N/A                         | `sf-tool-context7`                                     |
 | **Authenticated** | Per-service token / API key | Yes, via `sf tools use`     | `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma` |
 
-Workflow tool skills (`sf-tool-github-projects`, `sf-tool-jira`, `sf-tool-linear`, `sf-tool-notion` workflow variant) are a third bucket — installed **once per project**, chosen at `sf new` time,
-driven by your board tool's own auth (`gh auth` for GitHub, API token for others). See [Workflow System](/workflow/introduction) for their role.
+Workflow tool skills (`sf-tool-github-projects` today; `sf-tool-jira`, `sf-tool-linear`, `sf-tool-notion` workflow variant, and `sf-tool-clickup` on the roadmap) are a third bucket — installed **once
+per project**, chosen at `sf new` time, driven by your board tool's own auth (`gh auth` for GitHub, API token for the others). See [Workflow System](/workflow/introduction) for their role.
 
 ## Available tool skills
 
@@ -191,12 +191,18 @@ Generate the personal access token under Figma → Settings → Personal access 
 
 One workflow tool skill is installed per project, chosen at `sf new` time:
 
-| Board tool      | Skill                               | Authentication                                          |
-| --------------- | ----------------------------------- | ------------------------------------------------------- |
-| GitHub Projects | `sf-tool-github-projects`           | `gh auth login` (already present)                       |
-| Jira            | `sf-tool-jira`                      | Atlassian API token (shared with `sf-tool-atlassian`)   |
-| Notion          | `sf-tool-notion` (workflow variant) | Notion integration token (shared with `sf-tool-notion`) |
-| Linear          | `sf-tool-linear`                    | Linear API key                                          |
+| Board tool      | Skill                               | Authentication                                          | Availability    |
+| --------------- | ----------------------------------- | ------------------------------------------------------- | --------------- |
+| GitHub Projects | `sf-tool-github-projects`           | `gh auth login` (already present)                       | Available today |
+| Jira            | `sf-tool-jira`                      | Atlassian API token (shared with `sf-tool-atlassian`)   | On the roadmap  |
+| Notion          | `sf-tool-notion` (workflow variant) | Notion integration token (shared with `sf-tool-notion`) | On the roadmap  |
+| Linear          | `sf-tool-linear`                    | Linear API key                                          | On the roadmap  |
+| ClickUp         | `sf-tool-clickup`                   | ClickUp API token                                       | On the roadmap  |
+
+::: info What ships today
+Only `sf-tool-github-projects` is in the current release. The Jira, Notion, Linear and ClickUp adapters are scheduled next — they plug in behind the same `sf-workflow` skill, so the commands you
+learn today do not change when they land.
+:::
 
 These skills are **not opt-in** in the same way as `sf-tool-context7` — they are the plumbing `sf-workflow` relies on to move tickets across statuses, create sub-issues, post test-plan comments, and
 open PRs from the CLI. You do not call them directly; `sf-workflow` calls them for you.

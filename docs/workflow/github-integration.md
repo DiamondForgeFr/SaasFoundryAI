@@ -174,11 +174,17 @@ Without `addSubIssue`, the zero-open-children gate (AI Rules, rule 7) would fail
 
 ## Swapping tools
 
-If you later migrate to Jira, Notion, or Linear, the checklist is:
+::: warning Jira / Notion / Linear / ClickUp adapters — on the roadmap
+The `sf-workflow` orchestration layer is already tool-agnostic, but the only adapter that ships today is `sf-tool-github-projects`. The checklist below describes the target behaviour for when the
+other adapters land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundry/issues).
+:::
+
+If you later migrate to Jira, Notion, Linear, or ClickUp, the checklist will be:
 
 1. Regenerate the skill: `sf skill install --force` (after running `sf new` with the new workflow tool, or via `sf update`).
 2. Update `.saasfoundry.json` → `workflow.projectUrl` to point at the new tool's board.
 3. Recreate the 7 statuses and the 4 complexity labels/tags in the new tool.
 4. The orchestration skill (`sf-workflow`) auto-routes to the new tool-specific CLI — no change to your workflow commands.
 
-See `.claude/skills/sf-tool-jira/SKILL.md`, `.claude/skills/sf-tool-notion/SKILL.md`, or `.claude/skills/sf-tool-linear/SKILL.md` for the equivalent command reference.
+Once they ship, `.claude/skills/sf-tool-jira/SKILL.md`, `.claude/skills/sf-tool-notion/SKILL.md`, `.claude/skills/sf-tool-linear/SKILL.md` and `.claude/skills/sf-tool-clickup/SKILL.md` will mirror the
+GitHub Projects command reference.

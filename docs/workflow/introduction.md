@@ -61,16 +61,28 @@ The AI agent never hardcodes branch names, status names, or commit formats — i
 
 ## When to use which tool
 
-SaaSFoundry supports four project management tools out of the box:
+The workflow engine is tool-agnostic — it delegates to a per-board adapter for the "move the ticket, create the sub-issue, post the comment" plumbing. The table below captures the adapters we plan
+to support and their current availability:
 
-| Tool            | Strength                                         | Use case                                     |
-| --------------- | ------------------------------------------------ | -------------------------------------------- |
-| GitHub Projects | Native to the repo, free, sub-issues via GraphQL | Default for open-source + small teams        |
-| Jira            | Mature PM surface, sprints, custom fields        | Medium/large teams with existing Jira usage  |
-| Notion          | Flexible, doc-adjacent, great for product teams  | Hybrid product/engineering orgs              |
-| Linear          | Fast, opinionated, cycles                        | Startups optimising for engineering velocity |
+| Tool            | Strength                                         | Use case                                     | Availability    |
+| --------------- | ------------------------------------------------ | -------------------------------------------- | --------------- |
+| GitHub Projects | Native to the repo, free, sub-issues via GraphQL | Default for open-source + small teams        | Available today |
+| Jira            | Mature PM surface, sprints, custom fields        | Medium/large teams with existing Jira usage  | On the roadmap  |
+| Notion          | Flexible, doc-adjacent, great for product teams  | Hybrid product/engineering orgs              | On the roadmap  |
+| Linear          | Fast, opinionated, cycles                        | Startups optimising for engineering velocity | On the roadmap  |
+| ClickUp         | All-in-one PM, lightweight PM surface            | Ops-heavy teams outgrowing Trello            | On the roadmap  |
 
-The `sf-workflow` skill automatically routes commands to the right tool based on `workflow.projectUrl`. You write workflow commands once — they run against whichever tool you picked.
+::: info Today vs. roadmap
+The only adapter that ships today is `sf-tool-github-projects`. Jira, Notion, Linear and ClickUp adapters are scheduled next — the `sf-workflow` skill already reads `workflow.projectUrl` and routes
+commands through the configured adapter, so the day they land you flip one config entry and you are in.
+:::
+
+::: tip Customizable workflow coming in future versions
+The 7-status lifecycle is currently fixed because it encodes the patterns we have most battle-tested. Upcoming versions will expose it as configuration — rename statuses, drop optional checkpoints,
+or add team-specific stages from `.saasfoundry.json`. The generated skills and CLI already read their transitions from config, so opening up the shape is mostly a matter of surfacing the right knobs.
+:::
+
+The `sf-workflow` skill automatically routes commands to the right tool based on `workflow.projectUrl`. You write workflow commands once — they run against whichever adapter is wired up.
 
 See [GitHub Integration](/workflow/github-integration) for the reference implementation.
 
