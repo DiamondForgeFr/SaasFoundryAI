@@ -1,6 +1,7 @@
 # Builders
 
-**Builders** scaffold a single piece of the generated project — the API app, the Web app, a standalone DB service, a standalone S3 service, the monorepo root, or the unified dev-services Docker Compose file. Each one takes a narrow parameter object (see [Types](/api/types)) and copies the relevant blueprint + overlay onto disk.
+**Builders** scaffold a single piece of the generated project — the API app, the Web app, a standalone DB service, a standalone S3 service, the monorepo root, or the unified dev-services Docker
+Compose file. Each one takes a narrow parameter object (see [Types](/api/types)) and copies the relevant blueprint + overlay onto disk.
 
 Every builder is called from `src/commands/new.ts`. The ones that need infra (`DB`, `S3`, `dev-services`) are also reachable independently when the user chooses a stand-alone layout.
 
@@ -10,14 +11,16 @@ Every builder is called from `src/commands/new.ts`. The ones that need infra (`D
 async function createApiApp(params: CreateApiAppParams): Promise<boolean>
 ```
 
-Scaffolds the NestJS backend. Copies `blueprints/api/` into the target directory (`apps/{projectName}-api` in multirepo, `apps/api` in monorepo), applies the matching overlay under `overlays/{monorepo|multirepo}/api/`, and customises the scaffolded files.
+Scaffolds the NestJS backend. Copies `blueprints/api/` into the target directory (`apps/{projectName}-api` in multirepo, `apps/api` in monorepo), applies the matching overlay under
+`overlays/{monorepo|multirepo}/api/`, and customises the scaffolded files.
 
 **What it does:**
 
 - Copies the blueprint + topology overlay (the overlay flips ESLint paths, imports, and Docker references to match mono vs multi)
 - Generates five unique JWT secrets and writes them into `.env`
 - Substitutes the project name into `package.json`, the database URL, and the email locale files
-- Delegates optional module install to [`installEmailModule`](/api/installers#installemailmodule), [`installStorageModule`](/api/installers#installstoragemodule), [`installWorkflowSkill`](/api/installers#installworkflowskill), [`installToolSkill`](/api/installers#installtoolskill)
+- Delegates optional module install to [`installEmailModule`](/api/installers#installemailmodule), [`installStorageModule`](/api/installers#installstoragemodule),
+  [`installWorkflowSkill`](/api/installers#installworkflowskill), [`installToolSkill`](/api/installers#installtoolskill)
 - Initialises a fresh Git repo in the API directory (multirepo only — monorepo waits for `createMonorepoRoot`)
 
 **Called by:** `new.ts`, first in the sequence after the target directory exists.
@@ -46,7 +49,8 @@ Scaffolds the React + Vite frontend. Mirrors the API builder's shape: `blueprint
 async function createDbApp(params: CreateDbAppParams): Promise<boolean>
 ```
 
-Scaffolds a **stand-alone** PostgreSQL service backed by Docker Compose. Only used when the user picks a DB-only workspace (rare); the normal flow produces a unified dev-services file instead — see `createDevServicesCompose`.
+Scaffolds a **stand-alone** PostgreSQL service backed by Docker Compose. Only used when the user picks a DB-only workspace (rare); the normal flow produces a unified dev-services file instead — see
+`createDevServicesCompose`.
 
 **What it does:**
 
@@ -78,7 +82,8 @@ Same pattern as `createDbApp`, for a MinIO S3 service.
 async function createDevServicesCompose(params: CreateDevServicesParams): Promise<boolean>
 ```
 
-Assembles a single `docker-compose.dev-services.yml` at `params.apiPath` containing **only** the services the user asked for. This is the builder that replaces the DB-only / S3-only builders for the common "I want both DB and S3 in one file" flow.
+Assembles a single `docker-compose.dev-services.yml` at `params.apiPath` containing **only** the services the user asked for. This is the builder that replaces the DB-only / S3-only builders for the
+common "I want both DB and S3 in one file" flow.
 
 **What it does:**
 
@@ -125,7 +130,8 @@ DB and S3 builders (`createDbApp`, `createS3App`) are **not** called from `new.t
 Patterns every builder honours — match them if you add a new one:
 
 - **Path derivation**: `resolve(blueprintsPath, '<app>')` for templates; `resolve(overlaysPath, '<topology>/<app>')` for overlays. Never join paths by hand.
-- **Copy then customise**: use `fs-extra.copy()` for the bulk copy, then `fs/promises` read/write for per-file substitutions. No templating engine — plain `String.prototype.replace` with well-known placeholder tokens.
+- **Copy then customise**: use `fs-extra.copy()` for the bulk copy, then `fs/promises` read/write for per-file substitutions. No templating engine — plain `String.prototype.replace` with well-known
+  placeholder tokens.
 - **Name validation**: every builder begins with `validateProjectName(params.projectName)` — the same regex that `new.ts` uses.
 - **Shell execution**: `shelljs.exec()` wrapped with `getNvmPrefix()` for `nvm`-installed Node hosts. Avoid raw `child_process` so the `nvm` handling stays centralised.
 - **No try/catch**: builders let errors propagate. `new.ts` catches them, stops the spinner, and prints a clean message. Don't swallow errors inside a builder.

@@ -81,7 +81,8 @@ interface Answers {
 }
 ```
 
-Anything marked optional can be omitted when the user chooses not to configure that area. Builders guard on the flag (e.g. `emailService === 'mailersend'` before reading `mailersendApiKey`), never on the presence of the credential alone.
+Anything marked optional can be omitted when the user chooses not to configure that area. Builders guard on the flag (e.g. `emailService === 'mailersend'` before reading `mailersendApiKey`), never on
+the presence of the credential alone.
 
 ## Builder parameter types
 
@@ -173,10 +174,8 @@ interface WorkflowTemplate extends WorkflowConfig {
 }
 ```
 
-::: info Adapter availability
-Only `tool: 'github-projects'` has a shipped adapter today. The other values in the union are present for forward-compatibility — they will light up as the Jira / Notion / Linear adapters land. See
-[GitHub Integration](/workflow/github-integration) for the reference implementation.
-:::
+::: info Adapter availability Only `tool: 'github-projects'` has a shipped adapter today. The other values in the union are present for forward-compatibility — they will light up as the Jira / Notion
+/ Linear adapters land. See [GitHub Integration](/workflow/github-integration) for the reference implementation. :::
 
 ## Project manifest
 
@@ -202,7 +201,8 @@ interface SaaSFoundryManifest {
 }
 ```
 
-`fileHashes` is the key to `sf update`'s safe propagation — if a file's current hash matches its previous scaffold hash, the file is user-untouched and safe to overwrite. If it has diverged, `sf update` treats it as a merge conflict.
+`fileHashes` is the key to `sf update`'s safe propagation — if a file's current hash matches its previous scaffold hash, the file is user-untouched and safe to overwrite. If it has diverged,
+`sf update` treats it as a merge conflict.
 
 ## Path constants
 
