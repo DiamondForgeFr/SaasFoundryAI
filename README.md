@@ -117,20 +117,6 @@ add-zsh-hook chpwd load-nvmrc
 load-nvmrcexport PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 🌈 Peacock (Optional)
-
-Peacock is a Visual Studio Code extension that helps identify and distinguish projects by colorizing your workspace:
-
-```bash
-# For VS Code
-# Install from VS Code marketplace: "johnpapa.vscode-peacock"
-
-# For other compatible IDEs (like Cursor)
-# Check the respective marketplace for Peacock or similar workspace colorizing extensions
-```
-
-This extension is particularly useful when working with multiple repositories simultaneously, offering visual differentiation between frontend and backend workspaces.
-
 After installing these tools, you'll be ready to fully utilize all SaaSFoundry features, including containerized development environments and proper Node.js version management across projects.
 
 ## 🚀 Quick Start
