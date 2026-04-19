@@ -219,18 +219,18 @@ Resend, …). When you add one, follow this pattern so every capability looks th
 
 **Three layers, one name per layer:**
 
-| Layer               | Shape                                                         | Example (SRS capability, Notion tool)                                |
-| ------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Config key          | `tools.<capability>.backend: "<tool>"` in `.saasfoundry.json` | `tools.srs.backend: "notion"`                                        |
-| TypeScript contract | `<Capability>Adapter` interface                               | `SrsAdapter` in `src/builders/srs/types.ts`                          |
-| Implementation      | `<Tool><Capability>Adapter` class                             | `NotionSrsAdapter` in `src/tools/notion/srs.adapter.ts`              |
+| Layer               | Shape                                                         | Example (SRS capability, Notion tool)                   |
+| ------------------- | ------------------------------------------------------------- | ------------------------------------------------------- |
+| Config key          | `tools.<capability>.backend: "<tool>"` in `.saasfoundry.json` | `tools.srs.backend: "notion"`                           |
+| TypeScript contract | `<Capability>Adapter` interface                               | `SrsAdapter` in `src/builders/srs/types.ts`             |
+| Implementation      | `<Tool><Capability>Adapter` class                             | `NotionSrsAdapter` in `src/tools/notion/srs.adapter.ts` |
 
 **Why the `Adapter` suffix**: the pattern is literally the Adapter pattern — we expose a tool-agnostic contract (`SrsAdapter`) and plug concrete tool bindings (`NotionSrsAdapter`,
 `ConfluenceSrsAdapter`, …) behind it. The name should tell the reader that immediately.
 
 **File layout**: contracts live under `src/builders/<capability>/`; tool bindings live under `src/tools/<tool>/<capability>.adapter.ts`. This mirrors the skill architecture
-(`.claude/skills/sf-tool-<tool>/` ↔ `src/tools/<tool>/`) so every "how to talk to tool X" concern stays in one folder. Swapping backends = adding a new folder under `src/tools/`, never
-touching `src/builders/<capability>/`.
+(`.claude/skills/sf-tool-<tool>/` ↔ `src/tools/<tool>/`) so every "how to talk to tool X" concern stays in one folder. Swapping backends = adding a new folder under `src/tools/`, never touching
+`src/builders/<capability>/`.
 
 **Anticipated capabilities** (apply the same naming when they land):
 
