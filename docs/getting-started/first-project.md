@@ -138,11 +138,13 @@ web/
 
 ### Start Docker Services
 
+From the monorepo root:
+
 ```bash
-docker compose -f docker-compose.dev-services.yml up -d
+npm run services:up
 ```
 
-This starts:
+This delegates to `apps/api/docker-compose.dev-services.yml` and starts:
 
 - PostgreSQL (port 5435)
 - MinIO S3 (port 9000, console 9001)
@@ -150,8 +152,10 @@ This starts:
 Verify services are running:
 
 ```bash
-docker compose -f docker-compose.dev-services.yml ps
+docker ps
 ```
+
+You should see `saasfoundry-db-dev` and `saasfoundry-s3-dev` (plus `saasfoundry-s3-init` on first boot).
 
 ### Initialize Database
 
@@ -163,248 +167,216 @@ This runs Prisma migrations to create database tables.
 
 ### Start Dev Servers
 
-From the project root:
+From the monorepo root:
 
 ```bash
 npm run dev
 ```
 
-This starts **both** API and Web in parallel:
+Turborepo starts **both** API and Web in parallel:
 
 ```
-API:  http://localhost:3000
+API:  http://localhost:3500
 Web:  http://localhost:5173
 ```
 
-Wait for:
-
-```
-[api] ✓ Nest application successfully started
-[web] ✓ ready in 234 ms
-```
+Wait for the `[api]` line reporting the application is running and the `[web]` line reporting Vite is ready.
 
 ## Step 4: Test the Generated App
 
 ### Register an Account
 
-1. Open http://localhost:5173
-2. Click **"Sign Up"**
-3. Fill the registration form:
+1. Open http://localhost:5173 — you'll be redirected to `/signin`.
+2. Click **"Sign Up"**.
+3. Fill the registration form (the scaffold collects only what the SignUp DTO enforces):
    - Email: `test@example.com`
-   - Password: `Test123!`
-   - First Name: `John`
-   - Last Name: `Doe`
-   - Organization: `My Company`
-4. Click **"Create Account"**
+   - Password: `Test123!` (min 8 chars, at least one lower + one upper + one digit)
+4. Click **"Create Account"**.
 
-✅ You should be redirected to the dashboard!
+A confirmation email is dispatched via the email module if it's configured. In dev mode without a real SMTP provider, inspect the API logs — the scaffold logs the confirmation token so you can validate the account manually.
 
-### Explore the Dashboard
+Once validated, sign in and you'll land on `/dashboard`.
 
-The generated app includes:
+### Explore the App
 
-- **Dashboard**: Overview page
-- **Profile**: User settings
-- **Organization**: Team management
-- **Members**: Invite team members
+The scaffold ships two authenticated routes:
+
+- **`/dashboard`** — a placeholder "work in progress" landing page, ready for you to extend.
+- **`/account`** — the account management surface (profile, organization settings, members, invitations).
+
+All the people/organization/entity data lives under `/account`. There is no separate "Profile" or "Organization" top-level route — the scaffold deliberately keeps a single admin surface so you decide how to split it as your product grows.
 
 ### API Documentation
 
-Open http://localhost:3000/api-docs to see Swagger documentation.
+Open http://localhost:3500/api/docs to see the auto-generated Swagger UI.
 
-Try the **Auth endpoints**:
+Try the **Auth endpoints** exposed by `apps/api/src/modules/auth/controllers/auth.controller.ts`:
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/profile`
+- `POST /api/auth/signup` — create an account
+- `POST /api/auth/signin` — authenticate (sets HTTP-only cookies)
+- `POST /api/auth/signout` — invalidate the session
+- `GET  /api/auth/me` — fetch the authenticated user's profile
+- `POST /api/auth/request-password-reset` — request a reset email
+- `POST /api/auth/reset-password` — reset with a token
+
+Because auth cookies are HTTP-only, signing in from the Swagger UI won't carry the session across requests. Use the web app for the login flow, then re-open Swagger in the same browser session if you need to hit authenticated endpoints interactively.
 
 ## Step 5: Create Your First API Endpoint
 
-Let's add a simple "tasks" feature.
+Let's add a user-scoped **tasks** feature — each user sees only their own tasks. For tenant-isolated features you would scope by `accountId` instead (see [Module System](/guide/module-system) for how Accounts, Entities, and Organizations relate in the scaffold).
 
-### Create Task Module
+Working from the monorepo root:
 
 ```bash
 cd apps/api
+mkdir -p src/modules/tasks/{controllers,services,dto/requests}
 ```
 
-Create the module structure:
+### Define the Prisma model
 
-```bash
-mkdir -p src/modules/tasks
-touch src/modules/tasks/tasks.module.ts
-touch src/modules/tasks/tasks.controller.ts
-touch src/modules/tasks/tasks.service.ts
-touch src/modules/tasks/dto/create-task.dto.ts
-```
-
-### Define Task Model
-
-Edit `apps/api/prisma/schema/tasks.prisma`:
+Create `apps/api/prisma/schema/tasks.prisma`:
 
 ```prisma
 model Task {
-  id             String   @id @default(uuid())
-  title          String
-  description    String?
-  completed      Boolean  @default(false)
-  userId         String
-  organizationId String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id          String   @id @default(cuid())
+  title       String   @db.VarChar(140)
+  completed   Boolean  @default(false)
+  userId      String                       @map("user_id")
+  createdAt   DateTime @default(now())     @map("created_at")
+  updatedAt   DateTime @updatedAt          @map("updated_at")
 
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("tasks")
 }
 ```
 
-Update `apps/api/prisma/schema/user.prisma` to add the relation:
+Add the back-relation on `User` in `apps/api/prisma/schema/users.prisma`:
 
 ```prisma
 model User {
   // ... existing fields
-  tasks Task[]  // Add this line
+  tasks Task[]
 }
 ```
 
-Update `apps/api/prisma/schema/organization.prisma`:
-
-```prisma
-model Organization {
-  // ... existing fields
-  tasks Task[]  // Add this line
-}
-```
-
-Run migration:
+Apply the migration:
 
 ```bash
 npm run db:update:dev
 ```
 
-### Implement Task Controller
+This regenerates the Prisma client at `apps/api/src/generated/prisma/` — the scaffold reads Prisma types from there, not from `@prisma/client`.
 
-Edit `apps/api/src/modules/tasks/tasks.controller.ts`:
+### Implement the service
+
+Create `apps/api/src/modules/tasks/services/tasks.service.ts`:
 
 ```typescript
-import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
-import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard'
-import { CurrentUser } from '@common/decorators/current-user.decorator'
-import { User } from '@prisma/client'
-import { TasksService } from './tasks.service'
-import { CreateTaskDto } from './dto/create-task.dto'
+import { Injectable, NotFoundException } from '@nestjs/common'
 
-@ApiTags('tasks')
-@ApiBearerAuth()
+import { PrismaService } from '@configs/prisma/services/prisma.service'
+
+import type { CreateTaskDto } from '@modules/tasks/dto/requests/create-task.dto'
+
+@Injectable()
+export class TasksService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  create(userId: string, dto: CreateTaskDto) {
+    return this.prisma.task.create({ data: { ...dto, userId } })
+  }
+
+  findAllForUser(userId: string) {
+    return this.prisma.task.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    })
+  }
+
+  async toggle(userId: string, id: string) {
+    const task = await this.prisma.task.findFirst({ where: { id, userId } })
+    if (!task) throw new NotFoundException('Task not found')
+    return this.prisma.task.update({ where: { id }, data: { completed: !task.completed } })
+  }
+
+  async remove(userId: string, id: string) {
+    await this.prisma.task.deleteMany({ where: { id, userId } })
+  }
+}
+```
+
+### Create the DTO
+
+Create `apps/api/src/modules/tasks/dto/requests/create-task.dto.ts`:
+
+```typescript
+import { ApiProperty } from '@nestjs/swagger'
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator'
+
+export class CreateTaskDto {
+  @ApiProperty({ example: 'Finish the getting started guide' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(140)
+  title: string
+}
+```
+
+### Implement the controller
+
+Create `apps/api/src/modules/tasks/controllers/tasks.controller.ts`. The scaffold's `JwtAuthGuard` attaches the authenticated user on `request.user`:
+
+```typescript
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common'
+import { ApiOperation, ApiTags } from '@nestjs/swagger'
+
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard'
+import { CreateTaskDto } from '@modules/tasks/dto/requests/create-task.dto'
+import { TasksService } from '@modules/tasks/services/tasks.service'
+
+import type { AuthenticatedRequest } from '@common/types/authenticated-request.type'
+
+@ApiTags('Tasks')
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Post()
-  create(@CurrentUser() user: User, @Body() createTaskDto: CreateTaskDto) {
-    return this.tasksService.create(user, createTaskDto)
+  @ApiOperation({ summary: 'Create a task for the current user' })
+  create(@Req() req: AuthenticatedRequest, @Body() dto: CreateTaskDto) {
+    return this.tasksService.create(req.user.id, dto)
   }
 
   @Get()
-  findAll(@CurrentUser() user: User) {
-    return this.tasksService.findAll(user)
+  @ApiOperation({ summary: 'List the current user tasks' })
+  findAll(@Req() req: AuthenticatedRequest) {
+    return this.tasksService.findAllForUser(req.user.id)
   }
 
   @Patch(':id/toggle')
-  toggle(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.tasksService.toggle(user, id)
+  toggle(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.tasksService.toggle(req.user.id, id)
   }
 
   @Delete(':id')
-  remove(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.tasksService.remove(user, id)
+  remove(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.tasksService.remove(req.user.id, id)
   }
 }
 ```
 
-### Implement Task Service
+### Wire the module
 
-Edit `apps/api/src/modules/tasks/tasks.service.ts`:
-
-```typescript
-import { Injectable } from '@nestjs/common'
-import { PrismaService } from '@configs/database/prisma.service'
-import { User } from '@prisma/client'
-import { CreateTaskDto } from './dto/create-task.dto'
-
-@Injectable()
-export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async create(user: User, dto: CreateTaskDto) {
-    return this.prisma.task.create({
-      data: {
-        ...dto,
-        userId: user.id,
-        organizationId: user.organizationId
-      }
-    })
-  }
-
-  async findAll(user: User) {
-    return this.prisma.task.findMany({
-      where: { organizationId: user.organizationId },
-      orderBy: { createdAt: 'desc' }
-    })
-  }
-
-  async toggle(user: User, id: string) {
-    const task = await this.prisma.task.findFirst({
-      where: { id, organizationId: user.organizationId }
-    })
-
-    return this.prisma.task.update({
-      where: { id },
-      data: { completed: !task.completed }
-    })
-  }
-
-  async remove(user: User, id: string) {
-    await this.prisma.task.deleteMany({
-      where: { id, organizationId: user.organizationId }
-    })
-  }
-}
-```
-
-### Create DTO
-
-Edit `apps/api/src/modules/tasks/dto/create-task.dto.ts`:
-
-```typescript
-import { IsString, IsOptional, IsNotEmpty } from 'class-validator'
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-
-export class CreateTaskDto {
-  @ApiProperty({ example: 'Finish documentation' })
-  @IsString()
-  @IsNotEmpty()
-  title: string
-
-  @ApiPropertyOptional({ example: 'Complete the getting started guide' })
-  @IsString()
-  @IsOptional()
-  description?: string
-}
-```
-
-### Register Module
-
-Edit `apps/api/src/modules/tasks/tasks.module.ts`:
+Create `apps/api/src/modules/tasks/tasks.module.ts`:
 
 ```typescript
 import { Module } from '@nestjs/common'
-import { TasksController } from './tasks.controller'
-import { TasksService } from './tasks.service'
+
+import { TasksController } from '@modules/tasks/controllers/tasks.controller'
+import { TasksService } from '@modules/tasks/services/tasks.service'
 
 @Module({
   controllers: [TasksController],
@@ -413,7 +385,7 @@ import { TasksService } from './tasks.service'
 export class TasksModule {}
 ```
 
-Import in `apps/api/src/app.module.ts`:
+Register it in `apps/api/src/app.module.ts`:
 
 ```typescript
 import { TasksModule } from '@modules/tasks/tasks.module'
@@ -421,165 +393,125 @@ import { TasksModule } from '@modules/tasks/tasks.module'
 @Module({
   imports: [
     // ... existing modules
-    TasksModule // Add this
+    TasksModule
   ]
 })
 export class AppModule {}
 ```
 
-### Test Your Endpoint
+### Test your endpoint
 
-Restart the API server (Ctrl+C then `npm run dev`).
+Restart the API (`npm run dev` picks up the schema change; a hard restart can help after Prisma regeneration).
 
-Test with Swagger at http://localhost:3000/api-docs:
+Open http://localhost:3500/api/docs. Because the scaffold uses HTTP-only auth cookies, you need to sign in from the web app first (http://localhost:5173), then keep the same browser tab open for the Swagger call. `POST /api/tasks`:
 
-1. Authorize with your JWT token (login first)
-2. Try `POST /api/tasks`:
-   ```json
-   {
-     "title": "My first task",
-     "description": "Created via API"
-   }
-   ```
-3. Try `GET /api/tasks` to see your tasks
+```json
+{ "title": "My first task" }
+```
+
+Then `GET /api/tasks` to see the list.
 
 ✅ **Your API endpoint works!**
 
 ## Step 6: Create Your First Frontend Page
 
-Let's create a Tasks page to display and manage tasks.
+Let's create a Tasks page that talks to the endpoint you just built.
 
-### Create API Hook
+### Create the API hooks
 
-Create `apps/web/src/hooks/api/useTasks.ts`:
+Create `apps/web/src/hooks/api/tasks/index.ts`:
 
 ```typescript
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-interface Task {
+import apiClient from '@/lib/api/client'
+
+export type Task = {
   id: string
   title: string
-  description: string | null
   completed: boolean
   createdAt: string
 }
 
-export function useTasks() {
-  return useQuery({
+export const useTasks = () =>
+  useQuery({
     queryKey: ['tasks'],
-    queryFn: async () => {
-      const { data } = await api.get<Task[]>('/tasks')
-      return data
-    }
+    queryFn: () => apiClient.get<Task[]>('/tasks')
+  })
+
+export const useCreateTask = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: { title: string }) => apiClient.post<Task>('/tasks', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] })
   })
 }
 
-export function useCreateTask() {
+export const useToggleTask = () => {
   const queryClient = useQueryClient()
-
   return useMutation({
-    mutationFn: async (task: { title: string; description?: string }) => {
-      const { data } = await api.post('/tasks', task)
-      return data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    }
+    mutationFn: (id: string) => apiClient.patch<Task>(`/tasks/${id}/toggle`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] })
   })
 }
 
-export function useToggleTask() {
+export const useDeleteTask = () => {
   const queryClient = useQueryClient()
-
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { data } = await api.patch(`/tasks/${id}/toggle`)
-      return data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    }
-  })
-}
-
-export function useDeleteTask() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete(`/tasks/${id}`)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    }
+    mutationFn: (id: string) => apiClient.delete<void>(`/tasks/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] })
   })
 }
 ```
 
-### Create Tasks Page
+> The scaffold's `apiClient` uses the native Fetch API and returns the JSON body directly — there is no `.data` wrapper. Auth cookies are sent automatically thanks to `credentials: 'include'`.
 
-Create `apps/web/src/pages/private/Tasks.tsx`:
+### Create the page
 
-```typescript
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
-import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/api/useTasks'
+Create `apps/web/src/pages/private/tasks.tsx` (the scaffold follows kebab-case filenames + PascalCase exports):
 
-export function Tasks() {
+```tsx
+import { useState, type FormEvent } from 'react'
+
+import { Button } from '@/components/ui/shadcn/button'
+import { Checkbox } from '@/components/ui/shadcn/checkbox'
+import { Input } from '@/components/ui/shadcn/input'
+
+import { useCreateTask, useDeleteTask, useTasks, useToggleTask } from '@/hooks/api/tasks'
+
+export const Tasks = () => {
   const [title, setTitle] = useState('')
-  const { data: tasks, isLoading } = useTasks()
+  const { data: tasks = [], isLoading } = useTasks()
   const createTask = useCreateTask()
   const toggleTask = useToggleTask()
   const deleteTask = useDeleteTask()
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCreate = (event: FormEvent) => {
+    event.preventDefault()
     if (!title.trim()) return
-
     createTask.mutate({ title })
     setTitle('')
   }
 
-  if (isLoading) return <div>Loading...</div>
+  if (isLoading) return <p className="p-8 text-sm text-muted-foreground">Loading...</p>
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6">Tasks</h1>
+    <div className="container mx-auto p-8">
+      <h1 className="mb-6 text-3xl font-bold">Tasks</h1>
 
       <form onSubmit={handleCreate} className="mb-8 flex gap-2">
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Add a new task..."
-          className="flex-1"
-        />
+        <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Add a new task..." className="flex-1" />
         <Button type="submit" disabled={createTask.isPending}>
           Add Task
         </Button>
       </form>
 
       <div className="space-y-2">
-        {tasks?.map((task) => (
-          <div
-            key={task.id}
-            className="flex items-center gap-3 p-4 border rounded-lg"
-          >
-            <Checkbox
-              checked={task.completed}
-              onCheckedChange={() => toggleTask.mutate(task.id)}
-            />
-            <span className={task.completed ? 'line-through text-gray-500' : ''}>
-              {task.title}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => deleteTask.mutate(task.id)}
-              className="ml-auto"
-            >
+        {tasks.map((task) => (
+          <div key={task.id} className="flex items-center gap-3 rounded-lg border p-4">
+            <Checkbox checked={task.completed} onCheckedChange={() => toggleTask.mutate(task.id)} />
+            <span className={task.completed ? 'text-muted-foreground line-through' : ''}>{task.title}</span>
+            <Button variant="ghost" size="sm" onClick={() => deleteTask.mutate(task.id)} className="ml-auto">
               Delete
             </Button>
           </div>
@@ -590,74 +522,91 @@ export function Tasks() {
 }
 ```
 
-### Add Route
+### Register the route
 
-Edit `apps/web/src/router/routes.tsx`:
+The scaffold declares routes as `RouteObject[]` with lazy-loaded pages — not JSX `<Route>` elements.
+
+Add the lazy import to `apps/web/src/router/lazy-pages.tsx`:
 
 ```typescript
-import { Tasks } from '@/pages/private/Tasks'
-
-// Inside ProtectedLayout routes:
-<Route path="/tasks" element={<Tasks />} />
+// --- tasks ---
+export const Tasks = lazy(() => import('@/pages/private/tasks').then((module) => ({ default: module.Tasks })))
 ```
 
-### Add Navigation Link
-
-Edit `apps/web/src/components/nav/Sidebar.tsx`:
+Add the route entry to `apps/web/src/router/private-routes.tsx` inside the `LayoutLogged` children list:
 
 ```typescript
-// Add to navigation links:
+import { AccountManagement, Dashboard, LayoutLogged, Tasks } from '@/router/lazy-pages'
+
+// ...
+
 {
-  title: 'Tasks',
-  url: '/tasks',
-  icon: CheckSquare  // Import from lucide-react
+  path: 'tasks',
+  element: LazyRouteElement(Tasks)
 }
 ```
 
+### Add a sidebar entry
+
+The main sidebar lives at `apps/web/src/components/layout/layout-sidebar.tsx`. Its `data.navigation` array drives the nav groups. Add a new item to one of the groups — for example:
+
+```tsx
+import { CheckSquare } from 'lucide-react'
+
+// inside data.navigation[0].items
+{
+  title: 'Tasks',
+  url: '/tasks',
+  icon: CheckSquare,
+  isActive: true
+}
+```
+
+> The existing entries use i18n keys (`main-navigation.tk_feature-1_`) because the scaffold renders them via `useTranslation('nav')`. For a tutorial shortcut, a plain string works; for a production build, add the translation keys in `apps/web/src/locales/{en,fr}/nav.yml`.
+
 ### Test Your Page
 
-1. Refresh http://localhost:5173
-2. Click **"Tasks"** in the sidebar
-3. Add a task
-4. Check/uncheck to mark complete
-5. Delete a task
+1. Open http://localhost:5173/tasks (sign in first if needed).
+2. Add a task via the form.
+3. Check/uncheck to toggle completion.
+4. Delete a task.
 
-✅ **Your frontend page works!**
+✅ **Your frontend page works end-to-end against the new API.**
 
 ## Step 7: Make Your First Commit
 
-If you have Claude Code installed:
+The monorepo enforces [conventional commits with a mandatory ticket scope](https://commitlint.js.org/) via Husky + commitlint:
+
+```
+<type>(#<ticket>): <description>
+```
+
+### With Claude Code
+
+If Claude Code is available in your terminal, simply ask:
+
+```
+Commit these changes using the sf-git-commit skill
+```
+
+The `sf-git-commit` skill (shipped in `.claude/skills/`) reads the commit pattern from `.saasfoundry.json`, groups related changes, and writes a conventional commit with the `Co-Authored-By: Claude …` trailer.
+
+### Manually
 
 ```bash
-# In Claude Code terminal
-/commit
+git add apps/api/src/modules/tasks \
+        apps/api/prisma/schema/tasks.prisma \
+        apps/api/prisma/schema/users.prisma \
+        apps/web/src/hooks/api/tasks \
+        apps/web/src/pages/private/tasks.tsx \
+        apps/web/src/router/lazy-pages.tsx \
+        apps/web/src/router/private-routes.tsx \
+        apps/web/src/components/layout/layout-sidebar.tsx
+
+git commit -m "feat(#1): add tasks module with API, hooks and UI"
 ```
 
-Claude will:
-
-1. Review your changes
-2. Generate a commit message following conventions
-3. Create the commit
-
-Example commit message:
-
-```
-feat: add tasks module with API and frontend
-
-- Add Task model to Prisma schema
-- Create tasks module with CRUD operations
-- Add tasks page in frontend with React Query hooks
-- Support create, toggle, and delete tasks
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-```
-
-Or manually:
-
-```bash
-git add .
-git commit -m "feat: add tasks module with API and frontend"
-```
+Replace `#1` with the ticket number from your issue tracker. Husky's `commit-msg` hook will reject commits that don't match the scoped pattern.
 
 ## What's Next?
 
@@ -686,25 +635,29 @@ Congratulations! 🎉 You've successfully:
 
 ### API Won't Start
 
-**Check database**: `docker compose -f docker-compose.dev-services.yml ps` **Check logs**: `docker compose -f docker-compose.dev-services.yml logs db`
+- **Check services are up**: `docker ps` should list `saasfoundry-db-dev` (and `saasfoundry-s3-dev` if you chose MinIO).
+- **Check database logs**: `docker logs saasfoundry-db-dev`
+- **Restart from scratch**: `npm run services:reset` (down + up), then `npm run db:update:dev`.
 
 ### Frontend Won't Start
 
-**Check API is running**: curl http://localhost:3000/api/health **Clear cache**: `rm -rf apps/web/.vite`
+- **Check API is running**: `curl http://localhost:3500/api/health` should return a 200.
+- **Clear Vite cache**: `rm -rf apps/web/node_modules/.vite`.
 
 ### Database Migration Fails
 
-**Reset database**:
+**Reset database** (tmpfs is wiped on stop, so a full down/up recreates an empty DB):
 
 ```bash
-docker compose -f docker-compose.dev-services.yml down -v
-docker compose -f docker-compose.dev-services.yml up -d
+npm run services:reset
 npm run db:update:dev
 ```
 
 ### Port Already in Use
 
-Change ports in:
+The scaffold reads ports from environment files — edit those, not the source code:
 
-- API: `apps/api/src/main.ts` (default 3000)
-- Web: `apps/web/vite.config.ts` (default 5173)
+- API: `apps/api/.env` → `PORT` (default `3500`)
+- Web: `apps/web/.env` → `FRONTEND_PORT` (default `5173`)
+
+If you change the API port, also update `apps/web/.env` → `VITE_BASE_API_URL` so the frontend still reaches the backend.
