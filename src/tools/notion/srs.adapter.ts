@@ -1,7 +1,9 @@
 import { Client, isFullPage } from '@notionhq/client'
 
+import { renderEpicPage } from '../../builders/srs/templates/pages/epic.tpl'
+import { renderFrPage } from '../../builders/srs/templates/pages/fr.tpl'
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, SrsAdapter } from '../../builders/srs/types'
-import { buildEpicPageBlocks, buildFrPageBlocks } from './srs.blocks'
+import { renderPageContentToNotionBlocks } from './page-content.renderer'
 
 export interface NotionSrsAdapterOptions {
   apiToken: string
@@ -41,16 +43,20 @@ export class NotionSrsAdapter implements SrsAdapter {
   }
 
   async createEpicPage(spec: EpicSpec): Promise<PageRef> {
-    return this.createPageWithChildren({ page_id: spec.parentPageId }, spec.title, buildEpicPageBlocks(spec))
+    const pageContent = renderEpicPage(spec)
+    const children = renderPageContentToNotionBlocks({ blocks: pageContent.blocks })
+    return this.createPageWithChildren({ page_id: spec.parentPageId }, spec.title, children)
   }
 
   async createFrPage(spec: FrSpec): Promise<PageRef> {
-    const title = `${spec.fr.id} — ${spec.fr.title}`
-    return this.createPageWithChildren({ page_id: spec.parentEpicPageId }, title, buildFrPageBlocks(spec))
+    const pageContent = renderFrPage(spec)
+    const title = pageContent.title ?? `${spec.fr.id} — ${spec.fr.title}`
+    const children = renderPageContentToNotionBlocks({ blocks: pageContent.blocks })
+    return this.createPageWithChildren({ page_id: spec.parentEpicPageId }, title, children)
   }
 
   async updatePage(pageId: string, content: PageContent): Promise<void> {
-    const blocks = renderPageContent(content)
+    const blocks = renderPageContentToNotionBlocks(content)
     if (blocks.length === 0) return
     await this.appendChildrenInChunks(pageId, blocks)
   }
@@ -134,22 +140,6 @@ export function createNotionSrsAdapterFromEnv(): NotionSrsAdapter {
     apiToken,
     notionVersion: process.env.NOTION_API_VERSION
   })
-}
-
-function renderPageContent(content: PageContent): AnyBlockRequest[] {
-  const blocks: AnyBlockRequest[] = []
-  if (content.title) {
-    blocks.push({ type: 'heading_1', heading_1: { rich_text: [{ type: 'text', text: { content: content.title } }] } })
-  }
-  for (const section of content.sections ?? []) {
-    if (section.heading) {
-      blocks.push({ type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: section.heading } }] } })
-    }
-    if (section.body) {
-      blocks.push({ type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: section.body } }] } })
-    }
-  }
-  return blocks
 }
 
 function extractPageTitle(page: Awaited<ReturnType<Client['pages']['retrieve']>>): string {

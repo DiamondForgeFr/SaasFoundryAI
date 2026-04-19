@@ -302,13 +302,16 @@ describe('NotionSrsAdapter', () => {
   })
 
   describe('updatePage', () => {
-    it('appends rendered blocks for title + sections', async () => {
+    it('appends rendered blocks for title + blocks', async () => {
       const { client, calls } = buildMockClient()
       const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
 
       await adapter.updatePage('page_x', {
         title: 'New Title',
-        sections: [{ heading: 'Section A', body: 'Body A' }]
+        blocks: [
+          { kind: 'heading', level: 2, text: 'Section A' },
+          { kind: 'paragraph', text: 'Body A' }
+        ]
       })
 
       expect(calls.blocksAppendCalls).toHaveLength(1)
@@ -321,7 +324,7 @@ describe('NotionSrsAdapter', () => {
       const { client, calls } = buildMockClient()
       const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
 
-      await adapter.updatePage('page_x', {})
+      await adapter.updatePage('page_x', { blocks: [] })
 
       expect(calls.blocksAppendCalls).toHaveLength(0)
     })
