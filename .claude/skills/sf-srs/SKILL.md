@@ -17,13 +17,13 @@ create SRS, draft SRS, draft FR, audit codebase for SRS, SRS status, evaluate SR
 
 ## Cross-references
 
-| Concern                 | Lives in                             | Owned by        |
-| ----------------------- | ------------------------------------ | --------------- |
-| `SrsAdapter` interface  | `src/builders/srs/types.ts`          | SUB-1           |
-| Backend implementations | `src/tools/<backend>/srs.adapter.ts` | `sf-tool-<backend>` skills |
-| Dispatch / factory      | `src/srs/`                           | SUB-14.2        |
-| Workflow integration    | `sf-workflow` drafting lifecycle     | SUB-8           |
-| Architecture doc        | `.claude/docs/architecture-skills.md` | —              |
+| Concern                 | Lives in                              | Owned by                   |
+| ----------------------- | ------------------------------------- | -------------------------- |
+| `SrsAdapter` interface  | `src/builders/srs/types.ts`           | SUB-1                      |
+| Backend implementations | `src/tools/<backend>/srs.adapter.ts`  | `sf-tool-<backend>` skills |
+| Dispatch / factory      | `src/srs/`                            | SUB-14.2                   |
+| Workflow integration    | `sf-workflow` drafting lifecycle      | SUB-8                      |
+| Architecture doc        | `.claude/docs/architecture-skills.md` | —                          |
 
 ## Directory map
 
@@ -58,13 +58,13 @@ Dispatch resolution happens inside `src/srs/` (SUB-14.2) — never directly in t
 
 All via `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]`.
 
-| Action     | Purpose                                                                   | Populated by |
-| ---------- | ------------------------------------------------------------------------- | ------------ |
-| `help`     | Print available actions                                                    | SUB-14.3     |
-| `validate` | Smoke-test the configured backend via `createSrsAdapter().init()`           | SUB-14.3     |
-| `draft`    | Run the drafter matching the configured backend / input mode                | SUB-6, 13    |
-| `spawn`    | Spawn GitHub tickets from a published SRS                                   | SUB-9        |
-| `eval`     | Compute freshness score comparing the SRS to the codebase                   | SUB-10       |
+| Action     | Purpose                                                           | Populated by |
+| ---------- | ----------------------------------------------------------------- | ------------ |
+| `help`     | Print available actions                                           | SUB-14.3     |
+| `validate` | Smoke-test the configured backend via `createSrsAdapter().init()` | SUB-14.3     |
+| `draft`    | Run the drafter matching the configured backend / input mode      | SUB-6, 13    |
+| `spawn`    | Spawn GitHub tickets from a published SRS                         | SUB-9        |
+| `eval`     | Compute freshness score comparing the SRS to the codebase         | SUB-10       |
 
 The wrapper is intentionally thin — real logic lives in `src/srs/` and consumes only the `SrsAdapter` interface.
 
