@@ -82,6 +82,7 @@
     "loglevel": "error"
   },
   "dependencies": {
+    "@notionhq/client": "5.19.0",
     "@types/fs-extra": "11.0.4",
     "chalk": "4.1.2",
     "commander": "12.0.0",
