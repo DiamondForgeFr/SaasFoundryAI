@@ -88,8 +88,8 @@ Generated based on workflow tool selection:
 | Linear          | `sf-tool-linear`          | Issues, sub-issues, cycles                | On the roadmap  |
 | ClickUp         | `sf-tool-clickup`         | Tasks, sub-tasks, spaces                  | On the roadmap  |
 
-Only `sf-tool-github-projects` is wired up in the current release. The other adapters are scheduled next — they drop in behind the same `sf-workflow` skill, so no change to your workflow commands
-when they land.
+Only `sf-tool-github-projects` is wired up in the current release. The other adapters are scheduled next — they drop in behind the same `sf-workflow` skill, so no change to your workflow commands when
+they land.
 
 ## Using Skills
 
