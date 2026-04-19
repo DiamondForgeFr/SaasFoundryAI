@@ -1,27 +1,27 @@
 # Tool Skills
 
 **Tool skills** connect your project's AI agent to external services — library docs, ticket systems, design files, workspaces. They are installed on demand (`sf new` or
-`sf update --add-modules <skill>`), and the ones that require authentication use SaaSFoundry's **multi-account credentials system** so you can flip between personal / client / work identities with
-one command.
+`sf update --add-modules <skill>`), and the ones that require authentication use SaaSFoundry's **multi-account credentials system** so you can flip between personal / client / work identities with one
+command.
 
 ## Two flavours of tool skill
 
-| Flavour              | Credentials                  | Switchable between accounts | Examples                                              |
-| -------------------- | ---------------------------- | --------------------------- | ----------------------------------------------------- |
-| **Public API**       | None (anonymous tier)        | N/A                         | `sf-tool-context7`                                    |
-| **Authenticated**    | Per-service token / API key  | Yes, via `sf tools use`     | `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma`|
+| Flavour           | Credentials                 | Switchable between accounts | Examples                                               |
+| ----------------- | --------------------------- | --------------------------- | ------------------------------------------------------ |
+| **Public API**    | None (anonymous tier)       | N/A                         | `sf-tool-context7`                                     |
+| **Authenticated** | Per-service token / API key | Yes, via `sf tools use`     | `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma` |
 
 Workflow tool skills (`sf-tool-github-projects`, `sf-tool-jira`, `sf-tool-linear`, `sf-tool-notion` workflow variant) are a third bucket — installed **once per project**, chosen at `sf new` time,
 driven by your board tool's own auth (`gh auth` for GitHub, API token for others). See [Workflow System](/workflow/introduction) for their role.
 
 ## Available tool skills
 
-| Skill                                                            | Use case                                                     | Credentials                                   |
-| ---------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------- |
-| [`sf-tool-context7`](#sf-tool-context7)                          | Fresh library docs (React, NestJS, Prisma, …)                | None — free public API                        |
-| [`sf-tool-atlassian`](#sf-tool-atlassian)                        | Jira issues + Confluence wiki                                | Atlassian email + API token                   |
-| [`sf-tool-notion`](#sf-tool-notion)                              | Notion workspace pages / databases                           | Notion integration token                      |
-| [`sf-tool-figma`](#sf-tool-figma)                                | Figma design files + metadata                                | Figma personal access token                   |
+| Skill                                     | Use case                                      | Credentials                 |
+| ----------------------------------------- | --------------------------------------------- | --------------------------- |
+| [`sf-tool-context7`](#sf-tool-context7)   | Fresh library docs (React, NestJS, Prisma, …) | None — free public API      |
+| [`sf-tool-atlassian`](#sf-tool-atlassian) | Jira issues + Confluence wiki                 | Atlassian email + API token |
+| [`sf-tool-notion`](#sf-tool-notion)       | Notion workspace pages / databases            | Notion integration token    |
+| [`sf-tool-figma`](#sf-tool-figma)         | Figma design files + metadata                 | Figma personal access token |
 
 ## Installing a tool skill
 
@@ -143,8 +143,8 @@ ATLASSIAN_DOMAIN="yourcompany.atlassian.net"
 
 Generate the API token at https://id.atlassian.com/manage-profile/security/api-tokens.
 
-**Where it shines**: multi-project consultancies where you context-switch between client Jiras several times a day. `sf tools use atlassian <client>` flips the skill's identity in a single command,
-no browser sign-in ritual.
+**Where it shines**: multi-project consultancies where you context-switch between client Jiras several times a day. `sf tools use atlassian <client>` flips the skill's identity in a single command, no
+browser sign-in ritual.
 
 ## `sf-tool-notion`
 
@@ -191,12 +191,12 @@ Generate the personal access token under Figma → Settings → Personal access 
 
 One workflow tool skill is installed per project, chosen at `sf new` time:
 
-| Board tool        | Skill                     | Authentication                       |
-| ----------------- | ------------------------- | ------------------------------------ |
-| GitHub Projects   | `sf-tool-github-projects` | `gh auth login` (already present)    |
-| Jira              | `sf-tool-jira`            | Atlassian API token (shared with `sf-tool-atlassian`) |
-| Notion            | `sf-tool-notion` (workflow variant) | Notion integration token (shared with `sf-tool-notion`) |
-| Linear            | `sf-tool-linear`          | Linear API key                       |
+| Board tool      | Skill                               | Authentication                                          |
+| --------------- | ----------------------------------- | ------------------------------------------------------- |
+| GitHub Projects | `sf-tool-github-projects`           | `gh auth login` (already present)                       |
+| Jira            | `sf-tool-jira`                      | Atlassian API token (shared with `sf-tool-atlassian`)   |
+| Notion          | `sf-tool-notion` (workflow variant) | Notion integration token (shared with `sf-tool-notion`) |
+| Linear          | `sf-tool-linear`                    | Linear API key                                          |
 
 These skills are **not opt-in** in the same way as `sf-tool-context7` — they are the plumbing `sf-workflow` relies on to move tickets across statuses, create sub-issues, post test-plan comments, and
 open PRs from the CLI. You do not call them directly; `sf-workflow` calls them for you.
@@ -208,9 +208,9 @@ See [GitHub Integration](/workflow/github-integration) for how the skill talks t
 
 ## Upgrading tool skills
 
-Tool skills participate in the three-way merge handled by `sf update` (see [Updating Projects](/guide/updating-projects)). If the upstream skill evolves (new subcommand, new auth flow) but you have not
-customised the CLI script, `sf update` auto-applies the upgrade. If you customised it (e.g. added a company-specific `jira-epic` shortcut), the upgrade lands as a `.saasfoundry.new` sidecar you review
-and merge by hand.
+Tool skills participate in the three-way merge handled by `sf update` (see [Updating Projects](/guide/updating-projects)). If the upstream skill evolves (new subcommand, new auth flow) but you have
+not customised the CLI script, `sf update` auto-applies the upgrade. If you customised it (e.g. added a company-specific `jira-epic` shortcut), the upgrade lands as a `.saasfoundry.new` sidecar you
+review and merge by hand.
 
 **What `sf update` never touches**:
 

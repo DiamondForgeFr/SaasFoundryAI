@@ -1,21 +1,21 @@
 # Core Skills
 
-**Core skills** ship in every generated project. They have no external dependencies, need no credentials, and cover the day-to-day developer loop: commits, pull requests, merges, error fixing, and
-the workflow that ties them together.
+**Core skills** ship in every generated project. They have no external dependencies, need no credentials, and cover the day-to-day developer loop: commits, pull requests, merges, error fixing, and the
+workflow that ties them together.
 
 There are seven of them.
 
 ## The catalogue
 
-| Skill                                                | Auto-trigger keywords                                          | What it does                                                                     |
-| ---------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [`sf-git-commit`](#sf-git-commit)                    | "commit", "save changes"                                       | Generates a conventional commit message and pushes                               |
-| [`sf-git-create-pr`](#sf-git-create-pr)              | "open a PR", "create a pull request"                           | Opens a PR targeting your release branch with an auto-written body               |
-| [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments)  | "implement the review comments", "address the PR feedback"     | Fetches PR comments, applies each change, commits                                |
-| [`sf-git-merge`](#sf-git-merge)                      | "merge the branches", "resolve conflicts"                      | Context-aware conflict resolution                                                |
-| [`sf-utils-fix-errors`](#sf-utils-fix-errors)        | "fix errors", "fix typescript", "fix eslint"                   | Fans out across the codebase to resolve ESLint + TS errors                       |
-| [`sf-utils-fix-grammar`](#sf-utils-fix-grammar)      | "fix grammar", "spellcheck the docs"                           | Grammar / spelling pass on markdown and comments (preserves formatting)          |
-| [`sf-workflow`](#sf-workflow)                        | "workflow status", "next step", "complexity", "detect complexity" | The 7-status lifecycle engine — every ticket flows through this skill        |
+| Skill                                               | Auto-trigger keywords                                             | What it does                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`sf-git-commit`](#sf-git-commit)                   | "commit", "save changes"                                          | Generates a conventional commit message and pushes                      |
+| [`sf-git-create-pr`](#sf-git-create-pr)             | "open a PR", "create a pull request"                              | Opens a PR targeting your release branch with an auto-written body      |
+| [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments) | "implement the review comments", "address the PR feedback"        | Fetches PR comments, applies each change, commits                       |
+| [`sf-git-merge`](#sf-git-merge)                     | "merge the branches", "resolve conflicts"                         | Context-aware conflict resolution                                       |
+| [`sf-utils-fix-errors`](#sf-utils-fix-errors)       | "fix errors", "fix typescript", "fix eslint"                      | Fans out across the codebase to resolve ESLint + TS errors              |
+| [`sf-utils-fix-grammar`](#sf-utils-fix-grammar)     | "fix grammar", "spellcheck the docs"                              | Grammar / spelling pass on markdown and comments (preserves formatting) |
+| [`sf-workflow`](#sf-workflow)                       | "workflow status", "next step", "complexity", "detect complexity" | The 7-status lifecycle engine — every ticket flows through this skill   |
 
 ## `sf-git-commit`
 
@@ -75,8 +75,8 @@ abc1234").
 A slim, context-aware conflict resolver for the rare cases where `git merge` bails out. It reads the conflict hunks, consults `.saasfoundry.json` for branch semantics (working vs release), and
 proposes resolutions — the user approves before anything is written.
 
-Not intended as a magic merge button. Most merges in a SaaSFoundry project never produce conflicts because the team rebases rather than merges day-to-day. Reach for this skill when rebasing a long-lived
-feature branch onto a fast-moving `develop`.
+Not intended as a magic merge button. Most merges in a SaaSFoundry project never produce conflicts because the team rebases rather than merges day-to-day. Reach for this skill when rebasing a
+long-lived feature branch onto a fast-moving `develop`.
 
 ## `sf-utils-fix-errors`
 
