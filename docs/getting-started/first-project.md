@@ -193,7 +193,8 @@ Wait for the `[api]` line reporting the application is running and the `[web]` l
    - Password: `Test123!` (min 8 chars, at least one lower + one upper + one digit)
 4. Click **"Create Account"**.
 
-A confirmation email is dispatched via the email module if it's configured. In dev mode without a real SMTP provider, inspect the API logs — the scaffold logs the confirmation token so you can validate the account manually.
+A confirmation email is dispatched via the email module if it's configured. In dev mode without a real SMTP provider, inspect the API logs — the scaffold logs the confirmation token so you can
+validate the account manually.
 
 Once validated, sign in and you'll land on `/dashboard`.
 
@@ -204,7 +205,8 @@ The scaffold ships two authenticated routes:
 - **`/dashboard`** — a placeholder "work in progress" landing page, ready for you to extend.
 - **`/account`** — the account management surface (profile, organization settings, members, invitations).
 
-All the people/organization/entity data lives under `/account`. There is no separate "Profile" or "Organization" top-level route — the scaffold deliberately keeps a single admin surface so you decide how to split it as your product grows.
+All the people/organization/entity data lives under `/account`. There is no separate "Profile" or "Organization" top-level route — the scaffold deliberately keeps a single admin surface so you decide
+how to split it as your product grows.
 
 ### API Documentation
 
@@ -219,11 +221,13 @@ Try the **Auth endpoints** exposed by `apps/api/src/modules/auth/controllers/aut
 - `POST /api/auth/request-password-reset` — request a reset email
 - `POST /api/auth/reset-password` — reset with a token
 
-Because auth cookies are HTTP-only, signing in from the Swagger UI won't carry the session across requests. Use the web app for the login flow, then re-open Swagger in the same browser session if you need to hit authenticated endpoints interactively.
+Because auth cookies are HTTP-only, signing in from the Swagger UI won't carry the session across requests. Use the web app for the login flow, then re-open Swagger in the same browser session if you
+need to hit authenticated endpoints interactively.
 
 ## Step 5: Create Your First API Endpoint
 
-Let's add a user-scoped **tasks** feature — each user sees only their own tasks. For tenant-isolated features you would scope by `accountId` instead (see [Module System](/guide/module-system) for how Accounts, Entities, and Organizations relate in the scaffold).
+Let's add a user-scoped **tasks** feature — each user sees only their own tasks. For tenant-isolated features you would scope by `accountId` instead (see [Module System](/guide/module-system) for how
+Accounts, Entities, and Organizations relate in the scaffold).
 
 Working from the monorepo root:
 
@@ -403,7 +407,8 @@ export class AppModule {}
 
 Restart the API (`npm run dev` picks up the schema change; a hard restart can help after Prisma regeneration).
 
-Open http://localhost:3500/api/docs. Because the scaffold uses HTTP-only auth cookies, you need to sign in from the web app first (http://localhost:5173), then keep the same browser tab open for the Swagger call. `POST /api/tasks`:
+Open http://localhost:3500/api/docs. Because the scaffold uses HTTP-only auth cookies, you need to sign in from the web app first (http://localhost:5173), then keep the same browser tab open for the
+Swagger call. `POST /api/tasks`:
 
 ```json
 { "title": "My first task" }
@@ -562,7 +567,8 @@ import { CheckSquare } from 'lucide-react'
 }
 ```
 
-> The existing entries use i18n keys (`main-navigation.tk_feature-1_`) because the scaffold renders them via `useTranslation('nav')`. For a tutorial shortcut, a plain string works; for a production build, add the translation keys in `apps/web/src/locales/{en,fr}/nav.yml`.
+> The existing entries use i18n keys (`main-navigation.tk_feature-1_`) because the scaffold renders them via `useTranslation('nav')`. For a tutorial shortcut, a plain string works; for a production
+> build, add the translation keys in `apps/web/src/locales/{en,fr}/nav.yml`.
 
 ### Test Your Page
 
@@ -589,7 +595,8 @@ If Claude Code is available in your terminal, simply ask:
 Commit these changes using the sf-git-commit skill
 ```
 
-The `sf-git-commit` skill (shipped in `.claude/skills/`) reads the commit pattern from `.saasfoundry.json`, groups related changes, and writes a conventional commit with the `Co-Authored-By: Claude …` trailer.
+The `sf-git-commit` skill (shipped in `.claude/skills/`) reads the commit pattern from `.saasfoundry.json`, groups related changes, and writes a conventional commit with the `Co-Authored-By: Claude …`
+trailer.
 
 ### Manually
 
