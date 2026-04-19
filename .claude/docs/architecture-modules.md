@@ -211,3 +211,28 @@ When adding a new optional module to SaaSFoundry, follow these steps:
 10. **Update this CLAUDE.md**
     - Add module to "Current Modules" table
     - Add "Files Affected" section for the new module
+
+## Naming Convention — Tool-Agnostic Capabilities
+
+Some SaaSFoundry capabilities are **tool-agnostic by design**: the capability is the contract, and the tool behind it is swappable (Notion vs. Confluence, GitHub Projects vs. Linear, MailerSend vs.
+Resend, …). When you add one, follow this pattern so every capability looks the same from the outside.
+
+**Three layers, one name per layer:**
+
+| Layer              | Shape                                                        | Example (SRS capability, Notion tool)                                |
+| ------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Config key         | `tools.<capability>.backend: "<tool>"` in `.saasfoundry.json` | `tools.srs.backend: "notion"`                                        |
+| TypeScript contract | `<Capability>Adapter` interface                              | `SrsAdapter` in `src/builders/srs/types.ts`                          |
+| Implementation     | `<Tool><Capability>Adapter` class                            | `NotionSrsAdapter` (binds the adapter to the `sf-tool-notion` skill) |
+
+**Why the `Adapter` suffix**: the pattern is literally the Adapter pattern — we expose a tool-agnostic contract (`SrsAdapter`) and plug concrete tool bindings (`NotionSrsAdapter`,
+`ConfluenceSrsAdapter`, …) behind it. The name should tell the reader that immediately.
+
+**Anticipated capabilities** (apply the same naming when they land):
+
+- **Ticketing**: `tools.ticketing.backend: "github-projects"` → `TicketingAdapter` / `GithubProjectsTicketingAdapter`
+- **Email**: `tools.email.backend: "mailersend"` → `EmailAdapter` / `MailersendEmailAdapter`
+- **Analytics**: `tools.analytics.backend: "umami"` → `AnalyticsAdapter` / `UmamiAnalyticsAdapter`
+
+**Skill pairing**: each tool-agnostic capability has an agnostic skill (e.g. `sf-srs`) that orchestrates the flow and dispatches tool-specific work to a tool skill (`sf-tool-notion`). Keep the split —
+the agnostic skill never knows which backend it's talking to.
