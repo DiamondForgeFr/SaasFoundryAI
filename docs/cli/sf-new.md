@@ -1,157 +1,61 @@
 # sf new
 
-Create a new SaaSFoundry project with interactive prompts.
+Create a new SaaSFoundry project with interactive prompts, or scripted scaffolding via flags.
 
 ## Usage
 
 ```bash
-sf new
+sf new [options]
 ```
 
-## What It Does
+## Options
 
-The `sf new` command scaffolds a production-ready SaaS project with:
-
-- **Full-stack setup**: NestJS API + React frontend
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: JWT + Passport
-- **Modern tooling**: TypeScript, TailwindCSS, Vite
-- **Project structure**: Monorepo or multirepo
-- **Optional modules**: Email, storage, analytics
-- **Workflow integration**: GitHub Projects, Jira, Notion, or Linear
-
-## Interactive Prompts
-
-### Basic Configuration
-
-- Project name
-- Project structure (monorepo/multirepo)
-- Git repository initialization
-
-### Optional Modules
-
-- Email service (MailerSend)
-- S3 storage (AWS/Minio/Wasabi)
-- Analytics (Umami)
-
-### Workflow & Project Management
-
-During setup, SaaSFoundry **automatically detects available project management tools** based on:
-
-1. **Credentials**: Scans `~/.claude/credentials/` for Jira, Notion, Linear
-2. **GitHub CLI**: Checks `gh auth status` for GitHub Projects availability
-
-**Auto-detected tools appear with a ✓ icon:**
-
-```bash
-🔍 Detecting available project management tools...
-
-✅ Found credentials for:
-  - github-projects (recommended)
-  - jira
-  - notion
-
-? Choose your project management tool:
-  ✓ GitHub Projects (built-in, authenticated) ← recommended
-  ✓ Jira (Atlassian, credentials found)
-  ✓ Notion (credentials found)
-  Linear
-  None (no project management integration)
-```
-
-#### GitHub Projects Auto-Creation
-
-When you select GitHub Projects and `gh` is authenticated, you can create a new project automatically:
-
-```bash
-? Create a new GitHub Project automatically? Yes
-? Project name: Development Board
-
-🔨 Creating GitHub Project "Development Board"...
-✅ Project created: https://github.com/orgs/myorg/projects/1
-```
-
-**Requirements:**
-
-- `gh` CLI authenticated (`gh auth login`)
-- Permission to create projects in your repository/org
-
-**Benefits:**
-
-- ✅ No manual project board setup
-- ✅ Instant integration with your repository
-- ✅ Automatic URL configuration
-
-#### Other Tools Setup
-
-For Jira, Notion, and Linear:
-
-1. Configure credentials first: `sf tools add {tool} {account}`
-2. Run `sf new` to see them in the auto-detection
-3. Enter your project URL when prompted
-
-**Learn more:**
-
-- [Workflow System Guide](/guide/workflow-system)
-- [sf workflow command](/cli/sf-workflow)
-
-### Database Setup
-
-- Docker (recommended for development)
-- Manual (existing PostgreSQL instance)
+| Flag | Description | Default |
+|------|-------------|----------|
+| `--non-interactive` | Fail if any required value is missing instead of prompting | - |
+| `--project-name <name>` | Project name (kebab-case) | - |
+| `--project-description <description>` | Project description | - |
+| `--structure <structure>` | Project structure: `monorepo` or `multirepo` | - |
+| `--main-branch <branch>` | Main branch name: `main` or `master` | - |
+| `--setup-repo <setup>` | Repository setup: `local` or `existing` | - |
+| `--monorepo-url <url>` | Monorepo remote URL (monorepo + existing) | - |
+| `--backend-repo-url <url>` | Backend repo URL (multirepo + existing) | - |
+| `--frontend-repo-url <url>` | Frontend repo URL (multirepo + existing) | - |
+| `--db-setup <setup>` | Database: `docker`, `credentials`, or `manual` | - |
+| `--db-type <type>` | Database type: `postgresql` or `sql` | - |
+| `--email-service <service>` | Email service: `none` or `mailersend` | - |
+| `--s3-setup <setup>` | S3 storage: `docker`, `credentials`, or `manual` | - |
+| `--analytics / --no-analytics` | Include (or skip) the analytics module | - |
+| `--advanced-skills <skills>` | Comma-separated: `context7,atlassian,notion,figma` | - |
+| `--workflow <config> / --no-workflow` | Workflow preset, `none`, or skip workflow entirely | - |
+| `--start-services / --no-start-services` | Auto-start dev services (DB + MinIO) after setup | - |
+| `--start-apps <mode>` | Apps to start after setup: `all`, `backend`, `frontend`, `none` | - |
 
 ## Examples
 
 ```bash
-# Create a new project
+# Interactive wizard
 sf new
 ```
 
 ```bash
-# Follow the interactive prompts to configure your project
+# Scripted scaffold (monorepo, postgres via docker, no analytics)
+sf new --non-interactive \
+  --project-name my-saas \
+  --structure monorepo \
+  --setup-repo local \
+  --db-setup docker \
+  --db-type postgresql \
+  --email-service none \
+  --no-analytics \
+  --start-services --start-apps all
 ```
 
-```bash
-# Setup GitHub Projects with auto-creation
-sf new
-# Select: ✓ GitHub Projects (built-in, authenticated)
-# Choose: Create a new GitHub Project automatically? Yes
-```
+## Notes
 
-```bash
-# Use existing Jira project
-sf new
-# Select: ✓ Jira (Atlassian, credentials found)
-# Enter: Jira project URL
-```
-
-## Post-Setup
-
-After running `sf new`, your project includes:
-
-- ✅ Configured workflow in `.saasfoundry-workflow.json`
-- ✅ AI development rules in `.saasfoundry.json`
-- ✅ Skills in `.claude/skills/` for git operations
-- ✅ Pre-configured git hooks (Husky + Commitlint)
-- ✅ Ready-to-use development environment
-
-**Next steps:**
-
-```bash
-# Install dependencies
-npm install
-
-# Start development
-npm run dev
-
-# Validate workflow setup
-sf workflow validate
-```
+See `sf new --help` for the full flag surface (database credentials, MailerSend keys, S3 credentials, Atlassian/Notion/Figma tokens). Most flags are only validated when the relevant module is enabled.
 
 ## See Also
 
+- [CLI Commands](/cli/sf-new)
 - [Getting Started](/getting-started/quick-start)
-- [Workflow System](/guide/workflow-system)
-- [sf workflow](/cli/sf-workflow)
-- [sf update](/cli/sf-update)
-- [Skills System](/guide/skills-system)

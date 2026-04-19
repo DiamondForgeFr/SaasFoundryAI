@@ -48,8 +48,12 @@ export default defineConfig({
           items: [
             { text: 'sf new', link: '/cli/sf-new' },
             { text: 'sf update', link: '/cli/sf-update' },
+            { text: 'sf modules', link: '/cli/sf-modules' },
+            { text: 'sf skill', link: '/cli/sf-skill' },
+            { text: 'sf feedback', link: '/cli/sf-feedback' },
             { text: 'sf tools', link: '/cli/sf-tools' },
-            { text: 'sf workflow', link: '/cli/sf-workflow' }
+            { text: 'sf workflow', link: '/cli/sf-workflow' },
+            { text: 'sf uninstall', link: '/cli/sf-uninstall' }
           ]
         }
       ],
