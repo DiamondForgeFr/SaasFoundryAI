@@ -9,10 +9,10 @@ If you pick GitHub as your workflow tool during `sf new`, this is the integratio
 
 Two orthogonal axes on every ticket:
 
-| Axis           | Where it lives                                             | What it controls                                                |
-| -------------- | ---------------------------------------------------------- | --------------------------------------------------------------- |
-| **Status**     | Projects V2 board (single-select field "Status")           | Workflow phase (Backlog → ... → Done)                           |
-| **Complexity** | GitHub label (`complexity: bug \| low \| medium \| complex`) | Rigor level applied at each phase (agents, tests, reviews)      |
+| Axis           | Where it lives                                               | What it controls                                           |
+| -------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| **Status**     | Projects V2 board (single-select field "Status")             | Workflow phase (Backlog → ... → Done)                      |
+| **Complexity** | GitHub label (`complexity: bug \| low \| medium \| complex`) | Rigor level applied at each phase (agents, tests, reviews) |
 
 **Never encode status in a label. Never encode complexity on the board.** Keeping them independent is what makes retagging cheap and keeps the board free of phase-specific label noise.
 
@@ -52,16 +52,16 @@ Colours are suggestions — the workflow reads the labels by name, not by colour
 
 All interactions go through `.claude/skills/sf-tool-github-projects/github-projects-cli.sh`:
 
-| Command                                  | Purpose                                                                                         |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via the GraphQL `addSubIssue` mutation               |
-| `status <ticket>`                        | Read the current status from the Projects V2 board                                              |
-| `update-status <ticket> <status-name>`   | Write status on the board via `gh project item-edit`                                            |
-| `set-complexity <ticket> <level>`        | Set `complexity: <level>` label (removes any existing complexity label first)                   |
-| `get-complexity <ticket>`                | Read the current complexity label                                                               |
-| `get-ticket <ticket>`                    | Print title + body (used by `detect-complexity.sh`)                                             |
-| `create-pr <ticket>`                     | Push the branch and open a PR against `prTargetBranch`                                          |
-| `list [status]`                          | List project items, optionally filtered by status                                               |
+| Command                                  | Purpose                                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via the GraphQL `addSubIssue` mutation |
+| `status <ticket>`                        | Read the current status from the Projects V2 board                                |
+| `update-status <ticket> <status-name>`   | Write status on the board via `gh project item-edit`                              |
+| `set-complexity <ticket> <level>`        | Set `complexity: <level>` label (removes any existing complexity label first)     |
+| `get-complexity <ticket>`                | Read the current complexity label                                                 |
+| `get-ticket <ticket>`                    | Print title + body (used by `detect-complexity.sh`)                               |
+| `create-pr <ticket>`                     | Push the branch and open a PR against `prTargetBranch`                            |
+| `list [status]`                          | List project items, optionally filtered by status                                 |
 
 Status names are case-insensitive — the CLI matches against the options configured on the board.
 
@@ -156,8 +156,8 @@ git branch -d feature/42-add-billing
 The `create-subtask` command performs two operations atomically:
 
 1. `gh issue create` — creates the sub-issue with title `[Parent #{N}] <title>` and prepends a "Parent: #{N}" reference to the body.
-2. `gh api graphql -f query='mutation { addSubIssue(input: {issueId: $parent, subIssueId: $sub}) { ... } }'` — establishes the GraphQL sub-issue relationship, which is what powers the
-   `parent #{N}` search operator.
+2. `gh api graphql -f query='mutation { addSubIssue(input: {issueId: $parent, subIssueId: $sub}) { ... } }'` — establishes the GraphQL sub-issue relationship, which is what powers the `parent #{N}`
+   search operator.
 
 This is why `gh issue list --state open --search "parent #42"` works reliably: the relationship is indexed by GitHub's search service via the GraphQL mutation, not by scraping body text.
 
@@ -168,8 +168,8 @@ Without `addSubIssue`, the zero-open-children gate (AI Rules, rule 7) would fail
 - **Status transitions fail** → check that the board's "Status" field has all 7 options spelled exactly as the workflow expects (case-insensitive, but every option must exist).
 - **`parent #{N}` search returns `[]` but you know there are open children** → the GraphQL `addSubIssue` call likely failed. Re-create the sub-issue via `create-subtask` instead of raw
   `gh issue create`.
-- **Complexity label not changing** → `set-complexity` removes existing complexity labels before adding the new one. If you applied labels manually, there may be a stale complexity label it
-  didn't know about. `get-complexity` reports what it sees.
+- **Complexity label not changing** → `set-complexity` removes existing complexity labels before adding the new one. If you applied labels manually, there may be a stale complexity label it didn't
+  know about. `get-complexity` reports what it sees.
 - **PR creation fails** → verify `.saasfoundry.json` has `workflow.prTargetBranch` set and the branch is pushed. `create-pr` does not push for you — push first.
 
 ## Swapping tools
