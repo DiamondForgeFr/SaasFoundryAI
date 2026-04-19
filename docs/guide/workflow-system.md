@@ -6,12 +6,45 @@ SaaSFoundry includes a powerful workflow system that integrates with GitHub Proj
 
 The workflow system provides:
 
-- 🔧 **Template management** - Save and reuse workflow configurations
-- 🤖 **AI rules** - Configure how Claude assists with development
-- 📋 **Tool integration** - Connect to your project management tool
-- 🌿 **Git automation** - Automatic branch naming and commit formats
+- 🎯 **Complexity-adaptive ceremony** - Scale rigor to risk (bug / low / medium / complex)
+- 🔁 **7-status lifecycle** - Backlog → Ready → In progress → AI testing → Human testing → In review → Done
+- 🛡️ **Non-negotiable AI rules** - Dogfooded rules that prevent half-done work and status-skipping
+- 📋 **Tool integration** - Connect to GitHub Projects, Jira, Notion, or Linear
+- 🌿 **Git automation** - Configured branch naming, commit format, and subtask linking
+- 🔧 **Template management** - Save and reuse workflow configurations (`SaaSFoundry AI` preset shipped)
 - 🔍 **Smart detection** - Auto-detect available tools based on credentials
 - ✅ **Validation** - Verify workflow sync with remote project boards
+
+## Complexity-Adaptive Workflow
+
+Each ticket carries a complexity tag that drives how much ceremony the workflow enforces:
+
+| Level          | Tag                   | Process                          | Use case                  |
+| -------------- | --------------------- | -------------------------------- | ------------------------- |
+| 🐛 **bug**     | `complexity: bug`     | Direct fix + regression test     | Quick bug fixes           |
+| 🟢 **low**     | `complexity: low`     | Oneshot-style (minimal ceremony) | Simple tasks (~1-2 files) |
+| 🟡 **medium**  | `complexity: medium`  | Structured plan + validation     | Standard features         |
+| 🔴 **complex** | `complexity: complex` | Full adversarial review          | Critical / risky features |
+
+Complexity dictates whether analyze/plan phases run, how many parallel agents spawn, whether plan approval is required, and whether an adversarial `examine` phase gates AI testing.
+
+Deep dive: [Complexity System](/workflow/complexity-system).
+
+## 7-Status Lifecycle
+
+Every ticket traverses seven statuses in order — no skipping.
+
+| Order | Status        | Role                                                                   |
+| ----- | ------------- | ---------------------------------------------------------------------- |
+| 1     | Backlog       | Preparation: detect complexity, analyze context, plan, challenge specs |
+| 2     | Ready         | Queue of validated tickets awaiting assignment                         |
+| 3     | In progress   | Active development: branch, subtasks, iterative commits                |
+| 4     | AI testing    | AI runs build/lint/unit tests + (for complex) adversarial review       |
+| 5     | Human testing | Developer validates the feature behaves correctly                      |
+| 6     | In review     | Pull request open; code review in progress                             |
+| 7     | Done          | PR merged, subtasks closed, parent closed                              |
+
+Deep dive: [7-Status System](/workflow/7-status-system).
 
 ## Smart Tool Detection
 
@@ -112,52 +145,60 @@ sf workflow list
 
 ## Configuration
 
-Workflow configuration is stored in `.saasfoundry.json`:
+All workflow configuration lives in **`.saasfoundry.json`** at the project root. This file is the single source of truth — never hardcode branches, status names, or commit patterns anywhere else.
 
 ```json
 {
+  "version": "1.0.0-beta",
+  "projectName": "my-saas",
+  "structure": "monorepo",
   "workflow": {
     "tool": "github-projects",
+    "template": "SaaSFoundry AI",
     "projectUrl": "https://github.com/orgs/MyOrg/projects/1",
     "workingBranch": "develop",
-    "prTargetBranch": "master",
-    "requireCodeReview": true,
-    "statuses": {
-      "backlog": "Backlog",
-      "ready": "Ready",
-      "inProgress": "In Progress",
-      "inReview": "In Review",
-      "done": "Done"
-    }
-  },
-  "aiRules": {
-    "alwaysCreateBranchFromWorking": true,
-    "alwaysCreateTicketBeforeCode": true,
-    "autoUpdateTicketStatus": true,
-    "requireHumanCheckOnPushedBranch": true
+    "prTargetBranch": "develop",
+    "releaseBranch": "master",
+    "branchNaming": {
+      "feature": "feature/{N}-{description}",
+      "fix": "fix/{N}-{description}",
+      "release": "rc-{version}"
+    },
+    "commitFormat": {
+      "pattern": "<type>(#<ticket>): <description>",
+      "requireTicket": true,
+      "types": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore", "ci", "build", "revert"]
+    },
+    "statuses": [
+      { "name": "Backlog", "color": "GRAY" },
+      { "name": "Ready", "color": "YELLOW" },
+      { "name": "In progress", "color": "BLUE" },
+      { "name": "AI testing", "color": "PURPLE" },
+      { "name": "Human testing", "color": "ORANGE" },
+      { "name": "In review", "color": "PINK" },
+      { "name": "Done", "color": "GREEN" }
+    ]
   }
 }
 ```
 
 ## AI Rules
 
-Configure how Claude assists with development:
+SaaSFoundry ships with non-negotiable rules baked into the generated `CLAUDE.md` and the `sf-workflow` skill. These rules keep the Human + AI loop predictable.
 
-| Rule                              | Description                                                                        |
-| --------------------------------- | ---------------------------------------------------------------------------------- |
-| `alwaysCreateBranchFromWorking`   | Always branch from working branch (e.g., `develop`)                                |
-| `alwaysCreateTicketBeforeCode`    | Create issue before starting work                                                  |
-| `autoUpdateTicketStatus`          | Update issue status based on git operations                                        |
-| `requireHumanCheckOnPushedBranch` | Wait for human validation before creating PR (workflow: commit → push → test → PR) |
+| Rule                                 | What it means                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **Never skip a status**              | Backlog → Ready → In progress → AI testing → Human testing → In review → Done. No shortcuts.   |
+| **Commit + push before AI testing**  | Code must exist on the remote before any testing phase runs.                                   |
+| **PR only after Human testing**      | AI testing validates the build; Human testing validates the feature. PR comes after both pass. |
+| **Close subtasks as you go**         | Each subtask closes immediately after its commit lands — never batched.                        |
+| **Gate parent transitions**          | A parent ticket cannot move forward while any subtask is still open.                           |
+| **Finish one ticket before another** | No half-done work — the current in-flight ticket gets driven to Done first.                    |
+| **Subtasks must be real issues**     | Use `github-projects-cli.sh create-subtask` — never GitHub checkboxes as a substitute.         |
 
-**Note**: Tests and lint checks are **always** enforced by Husky pre-commit hooks, regardless of AI rules.
+**Note**: Tests and lint checks are **always** enforced by Husky pre-commit / pre-push hooks, regardless of workflow state.
 
-### Configure AI Rules
-
-```bash
-sf workflow set-ai-rules
-# Interactive prompts for each rule
-```
+Deep dive: [AI Rules](/workflow/ai-rules) for the rationale behind each rule and the failure modes they prevent.
 
 ## Supported Tools
 
@@ -315,7 +356,7 @@ When mismatches are detected, you can auto-fix them:
 
 🔧 Auto-fixing workflow configuration...
 
-Updating statuses in .saasfoundry-workflow.json:
+Updating statuses in .saasfoundry.json:
   - Ready → Todo
   - In Review → Review
   - Done → Complete
@@ -326,7 +367,7 @@ Updating statuses in .saasfoundry-workflow.json:
 
 **Auto-fix benefits:**
 
-- ✅ **Non-destructive** - Creates `.saasfoundry-workflow.json.backup` before changes
+- ✅ **Non-destructive** - Creates `.saasfoundry.json.backup` before changes
 - ✅ **Smart updates** - Only updates what's different
 - ✅ **Preserves settings** - Keeps all other configuration intact
 - ✅ **Audit trail** - Sets `validated: true` and `lastValidated` timestamp

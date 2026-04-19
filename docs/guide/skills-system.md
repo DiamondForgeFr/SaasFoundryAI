@@ -17,13 +17,13 @@ SaaSFoundry skills use the **`sf-*` prefix** to distinguish them from generic sk
 
 - **`sf-git-commit`** - SaaSFoundry-specific commit workflow
 - **`sf-utils-fix-errors`** - SaaSFoundry-specific error fixing
-- **`sf-workflow-apex`** - SaaSFoundry-specific APEX implementation
+- **`sf-workflow`** - Complexity-adaptive development workflow (unified successor of the former `sf-workflow-apex` / `sf-workflow-apex-free`)
 
 **Why the prefix?**
 
 - ✅ Clearly identifies SaaSFoundry-specific skills
 - ✅ Avoids conflicts with generic Claude Code skills
-- ✅ Integrates with SaaSFoundry workflow system (`.saasfoundry-workflow.json`)
+- ✅ Integrates with SaaSFoundry workflow system (`.saasfoundry.json`)
 - ✅ Follows project conventions and structure
 
 **Generic vs SaaSFoundry Skills:**
@@ -46,7 +46,7 @@ Skills are stored in `.claude/skills/`:
     ├── sf-git-commit/
     ├── sf-git-create-pr/
     ├── sf-utils-fix-errors/
-    └── sf-workflow-apex/
+    └── sf-workflow/
 ```
 
 ## Core Skills
@@ -66,14 +66,15 @@ Skills are stored in `.claude/skills/`:
 | ------------------------ | -------------- | -------------------------------------------- |
 | **sf-utils-fix-errors**  | `/fix-errors`  | Fix all ESLint and TypeScript errors         |
 | **sf-utils-fix-grammar** | `/fix-grammar` | Fix grammar/spelling while preserving format |
-| **sf-utils-oneshot**     | `/oneshot`     | Ultra-fast feature implementation            |
 
-### Workflow Skills
+### Workflow Skill
 
-| Skill                     | Command      | Description                                |
-| ------------------------- | ------------ | ------------------------------------------ |
-| **sf-workflow-apex**      | `/apex`      | Systematic APEX methodology implementation |
-| **sf-workflow-apex-free** | `/apex-free` | APEX without adversarial review            |
+| Skill           | Auto-trigger                                    | Description                                                                                            |
+| --------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **sf-workflow** | workflow keywords / `/workflow status <ticket>` | Complexity-adaptive workflow (bug / low / medium / complex) with 7-status lifecycle and subtask gating |
+
+The unified `sf-workflow` skill replaces the separate APEX skills. Ceremony (analyze depth, plan approval, adversarial review) adapts to the ticket's complexity tag — see
+[Complexity System](/workflow/complexity-system).
 
 ## Tool-Specific Skills
 
