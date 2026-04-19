@@ -5,11 +5,11 @@ each step scales with the ticket's complexity tag.
 
 ## Philosophy
 
-Traditional Git flows put all the guardrails at the PR stage. That works for small teams where a reviewer can mentally simulate what the author intended. It breaks down when part of the work is
-done by an AI agent that has no memory of prior decisions.
+Traditional Git flows put all the guardrails at the PR stage. That works for small teams where a reviewer can mentally simulate what the author intended. It breaks down when part of the work is done
+by an AI agent that has no memory of prior decisions.
 
-SaaSFoundry inverts the model: **the guardrails live in the workflow itself**. By the time a pull request exists, the code has already been planned, reviewed, tested, and validated by a human.
-The PR becomes a final sanity check, not the first line of defence.
+SaaSFoundry inverts the model: **the guardrails live in the workflow itself**. By the time a pull request exists, the code has already been planned, reviewed, tested, and validated by a human. The PR
+becomes a final sanity check, not the first line of defence.
 
 ```text
 ┌────────┐   ┌──────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────────────┐   ┌──────────────┐   ┌──────┐
@@ -24,19 +24,19 @@ The PR becomes a final sanity check, not the first line of defence.
 
 Every ticket is tagged with one of four complexity levels. The tag controls how much process the AI agent applies:
 
-| Level          | Style                | Ceremony                                                     |
-| -------------- | -------------------- | ------------------------------------------------------------ |
-| 🐛 **bug**     | Direct fix           | Skip analyze/plan. Regression test mandatory.                |
-| 🟢 **low**     | Oneshot              | Minimal analyze (2–3 files), mental plan, no approval.       |
-| 🟡 **medium**  | Structured           | 2–4 exploration agents, detailed plan, approval required.    |
-| 🔴 **complex** | Full adversarial     | 6–10 agents, comprehensive plan, adversarial review (OWASP). |
+| Level          | Style            | Ceremony                                                     |
+| -------------- | ---------------- | ------------------------------------------------------------ |
+| 🐛 **bug**     | Direct fix       | Skip analyze/plan. Regression test mandatory.                |
+| 🟢 **low**     | Oneshot          | Minimal analyze (2–3 files), mental plan, no approval.       |
+| 🟡 **medium**  | Structured       | 2–4 exploration agents, detailed plan, approval required.    |
+| 🔴 **complex** | Full adversarial | 6–10 agents, comprehensive plan, adversarial review (OWASP). |
 
 The complexity tag lives on the ticket itself (as a GitHub label or equivalent), independent of status. See [Complexity System](/workflow/complexity-system) for the full mapping.
 
 ## Dogfooding
 
-SaaSFoundry uses its own workflow to build itself. The `.saasfoundry.json`, `.claude/skills/sf-workflow/`, and `.claude/skills/sf-tool-github-projects/` directories in this repository are the
-exact same files that get scaffolded into projects created with `sf new`.
+SaaSFoundry uses its own workflow to build itself. The `.saasfoundry.json`, `.claude/skills/sf-workflow/`, and `.claude/skills/sf-tool-github-projects/` directories in this repository are the exact
+same files that get scaffolded into projects created with `sf new`.
 
 This matters because:
 
@@ -63,12 +63,12 @@ The AI agent never hardcodes branch names, status names, or commit formats — i
 
 SaaSFoundry supports four project management tools out of the box:
 
-| Tool            | Strength                                          | Use case                                     |
-| --------------- | ------------------------------------------------- | -------------------------------------------- |
-| GitHub Projects | Native to the repo, free, sub-issues via GraphQL  | Default for open-source + small teams        |
-| Jira            | Mature PM surface, sprints, custom fields         | Medium/large teams with existing Jira usage  |
-| Notion          | Flexible, doc-adjacent, great for product teams   | Hybrid product/engineering orgs              |
-| Linear          | Fast, opinionated, cycles                         | Startups optimising for engineering velocity |
+| Tool            | Strength                                         | Use case                                     |
+| --------------- | ------------------------------------------------ | -------------------------------------------- |
+| GitHub Projects | Native to the repo, free, sub-issues via GraphQL | Default for open-source + small teams        |
+| Jira            | Mature PM surface, sprints, custom fields        | Medium/large teams with existing Jira usage  |
+| Notion          | Flexible, doc-adjacent, great for product teams  | Hybrid product/engineering orgs              |
+| Linear          | Fast, opinionated, cycles                        | Startups optimising for engineering velocity |
 
 The `sf-workflow` skill automatically routes commands to the right tool based on `workflow.projectUrl`. You write workflow commands once — they run against whichever tool you picked.
 
@@ -78,5 +78,5 @@ See [GitHub Integration](/workflow/github-integration) for the reference impleme
 
 - [7-Status System](/workflow/7-status-system) — mandatory actions and exit conditions per status
 - [Complexity System](/workflow/complexity-system) — how ceremony scales with complexity
-- [AI Rules](/workflow/ai-rules) — the seven non-negotiable rules the AI agent must follow
+- [AI Rules](/workflow/ai-rules) — the eight non-negotiable rules the AI agent must follow
 - [GitHub Integration](/workflow/github-integration) — how the GitHub Projects adapter works

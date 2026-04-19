@@ -1,19 +1,19 @@
 # 7-Status System
 
-Every SaaSFoundry ticket moves through seven statuses. Each status has **mandatory actions** that must be completed before the ticket can transition to the next status, and **exit conditions**
-that gate the transition. The AI agent reads the status description file (`.claude/skills/sf-workflow/statuses/<N>-<name>.md`) before taking any action.
+Every SaaSFoundry ticket moves through seven statuses. Each status has **mandatory actions** that must be completed before the ticket can transition to the next status, and **exit conditions** that
+gate the transition. The AI agent reads the status description file (`.claude/skills/sf-workflow/statuses/<N>-<name>.md`) before taking any action.
 
 ## Overview
 
-| #   | Status              | Role                                                       |
-| --- | ------------------- | ---------------------------------------------------------- |
-| 1   | **Backlog**         | Preparation — detect complexity, analyse, plan, validate   |
-| 2   | **Ready**           | Queue of validated tickets awaiting pickup                 |
-| 3   | **In progress**     | Active development with subtask creation + commits         |
-| 4   | **AI testing**      | Automated validation + test plan execution                 |
-| 5   | **Human testing**   | Manual validation by the human developer                   |
-| 6   | **In review**       | PR creation + green CI + reviewer approval                 |
-| 7   | **Done**            | Merge finalisation + branch cleanup                        |
+| #   | Status            | Role                                                     |
+| --- | ----------------- | -------------------------------------------------------- |
+| 1   | **Backlog**       | Preparation — detect complexity, analyse, plan, validate |
+| 2   | **Ready**         | Queue of validated tickets awaiting pickup               |
+| 3   | **In progress**   | Active development with subtask creation + commits       |
+| 4   | **AI testing**    | Automated validation + test plan execution               |
+| 5   | **Human testing** | Manual validation by the human developer                 |
+| 6   | **In review**     | PR creation + green CI + reviewer approval               |
+| 7   | **Done**          | Merge finalisation + branch cleanup                      |
 
 ## 1. Backlog
 
