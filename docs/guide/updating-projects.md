@@ -1,6 +1,7 @@
 # Updating Projects
 
-`sf update` is how a project you generated weeks or months ago stays in sync with SaaSFoundry as the platform evolves. It propagates new templates, scripts, and skill bundles — without overwriting the changes you have made to your code.
+`sf update` is how a project you generated weeks or months ago stays in sync with SaaSFoundry as the platform evolves. It propagates new templates, scripts, and skill bundles — without overwriting the
+changes you have made to your code.
 
 This page explains **what `sf update` does, what it does not touch, and how to resolve conflicts when they occur**.
 
@@ -8,7 +9,8 @@ This page explains **what `sf update` does, what it does not touch, and how to r
 
 `sf update` runs two independent flows in one command:
 
-1. **Template update** — detects that the CLI has a newer version than your project's manifest (`.saasfoundry.json`) and propagates scaffold evolutions (e.g. a new skill file, an improved NestJS config, a security fix in a generated middleware).
+1. **Template update** — detects that the CLI has a newer version than your project's manifest (`.saasfoundry.json`) and propagates scaffold evolutions (e.g. a new skill file, an improved NestJS
+   config, a security fix in a generated middleware).
 2. **Module addition** — lets you add modules that weren't installed at generation time (email, storage, analytics, optional skills). This flow is independent of the version check and runs every time.
 
 Both flows are driven by the manifest, never by guessing. If `.saasfoundry.json` does not exist, `sf update` refuses to run.
@@ -17,21 +19,21 @@ Both flows are driven by the manifest, never by guessing. If `.saasfoundry.json`
 
 The template update is the non-trivial part. SaaSFoundry treats your project as a three-way merge:
 
-| Input       | What it is                                                                  | Where it comes from                        |
-| ----------- | --------------------------------------------------------------------------- | ------------------------------------------ |
-| **base**    | The hash of each file **as originally generated** by the old CLI version    | `.saasfoundry.json` → `fileHashes`         |
-| **current** | The hash of the file **right now** in your project                          | Computed on the fly when `sf update` runs  |
-| **target** | The hash of the file **as the new CLI would generate it** for your manifest | Regenerated into a temp directory          |
+| Input       | What it is                                                                  | Where it comes from                       |
+| ----------- | --------------------------------------------------------------------------- | ----------------------------------------- |
+| **base**    | The hash of each file **as originally generated** by the old CLI version    | `.saasfoundry.json` → `fileHashes`        |
+| **current** | The hash of the file **right now** in your project                          | Computed on the fly when `sf update` runs |
+| **target**  | The hash of the file **as the new CLI would generate it** for your manifest | Regenerated into a temp directory         |
 
 For each file, the comparison produces one of four actions:
 
-| Condition                                       | Action       | What happens                                                    |
-| ----------------------------------------------- | ------------ | --------------------------------------------------------------- |
-| `base == target`                                | **noop**     | Template hasn't changed. Nothing to do.                         |
-| `base != target` AND `current == base`          | **update**   | Template evolved, you never touched the file → auto-apply.      |
+| Condition                                      | Action       | What happens                                                    |
+| ---------------------------------------------- | ------------ | --------------------------------------------------------------- |
+| `base == target`                               | **noop**     | Template hasn't changed. Nothing to do.                         |
+| `base != target` AND `current == base`         | **update**   | Template evolved, you never touched the file → auto-apply.      |
 | `base != target` AND `current != base, target` | **conflict** | Template evolved AND you modified the file → conflict strategy. |
-| `!base` AND `target`                            | **add**      | New file in the template, you don't have it → copy in.          |
-| `base` AND `!target` AND `current == base`     | **remove**   | Template removed the file, you didn't touch it → flag only.    |
+| `!base` AND `target`                           | **add**      | New file in the template, you don't have it → copy in.          |
+| `base` AND `!target` AND `current == base`     | **remove**   | Template removed the file, you didn't touch it → flag only.     |
 
 ### Why this matters
 
@@ -45,15 +47,14 @@ The merge is conservative by design:
 
 When a conflict is detected (both you and the template modified the same file), `sf update` follows the `--conflict-strategy` flag. There are three options:
 
-| Strategy    | Behavior                                                                                  | When to use                                                             |
-| ----------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `save-new` (default) | Writes the new template version to `<file>.saasfoundry.new`. Your file is untouched.      | Safe default. You review the sidecar and merge manually.                |
-| `keep`      | Leaves your file as-is. No sidecar, no diff.                                              | When you're confident your local edits are the source of truth.         |
-| `replace`   | Overwrites your file with the template version. **Destructive.**                           | Only when you deliberately want to reset a file to the template.        |
+| Strategy             | Behavior                                                                             | When to use                                                      |
+| -------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `save-new` (default) | Writes the new template version to `<file>.saasfoundry.new`. Your file is untouched. | Safe default. You review the sidecar and merge manually.         |
+| `keep`               | Leaves your file as-is. No sidecar, no diff.                                         | When you're confident your local edits are the source of truth.  |
+| `replace`            | Overwrites your file with the template version. **Destructive.**                     | Only when you deliberately want to reset a file to the template. |
 
-::: warning `replace` is destructive
-The `replace` strategy writes the template version directly over your file. There is no `.bak` and no undo — your changes are lost. Use it only in scripted contexts where you have just committed.
-:::
+::: warning `replace` is destructive The `replace` strategy writes the template version directly over your file. There is no `.bak` and no undo — your changes are lost. Use it only in scripted
+contexts where you have just committed. :::
 
 ## Dry-run before you apply
 
@@ -150,13 +151,15 @@ Be clear about the boundaries:
 - **It does not run `npm install` or `prisma generate` for you.** Module addition flows may install dependencies; straight template updates do not. Run them yourself after reviewing the diff.
 - **It does not migrate your database.** Prisma schema changes in the template are propagated as files only. You run `npm run db:update:dev` (or your migration of choice) separately.
 - **It does not touch your git history.** No commits are created. The tree is left dirty for you to review and commit.
-- **It does not upgrade your installed npm packages.** `package.json` is three-way merged like any other file; `package-lock.json` is usually excluded. If the template bumps a dependency, you'll see it as an `update` or `conflict` on `package.json`.
+- **It does not upgrade your installed npm packages.** `package.json` is three-way merged like any other file; `package-lock.json` is usually excluded. If the template bumps a dependency, you'll see
+  it as an `update` or `conflict` on `package.json`.
 
 ## Troubleshooting
 
 ### "Your project was generated with SaaSFoundry v{X} (before hash tracking)"
 
-Projects generated with early SaaSFoundry versions don't have `fileHashes` in their manifest. Template updates are skipped — only the module addition flow runs. To opt back in, regenerate `fileHashes` by running `sf new` into a temp directory with the same options, copying the `fileHashes` block over, and committing.
+Projects generated with early SaaSFoundry versions don't have `fileHashes` in their manifest. Template updates are skipped — only the module addition flow runs. To opt back in, regenerate `fileHashes`
+by running `sf new` into a temp directory with the same options, copying the `fileHashes` block over, and committing.
 
 ### All my files show up as conflicts
 
