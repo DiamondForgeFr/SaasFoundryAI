@@ -39,6 +39,18 @@ NOTION_API_VERSION="2022-06-28"
 sf tools add notion <account-name>
 ```
 
+### Integration-test env vars
+
+Used by `src/__tests__/integration/tools/notion/srs.adapter.spec.ts` and any local contract check against a real workspace:
+
+| Variable                         | Purpose                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| `NOTION_INTEGRATION_TOKEN`       | API token of a sandbox integration (separate from the account used in production) |
+| `NOTION_SANDBOX_PARENT_PAGE_ID`  | Page ID of a disposable parent page shared with the sandbox integration           |
+| `NOTION_API_VERSION` (optional)  | Override the Notion API version (defaults to `2022-06-28`)                        |
+
+When either `NOTION_INTEGRATION_TOKEN` or `NOTION_SANDBOX_PARENT_PAGE_ID` is unset, the integration suite is skipped via `describe.skip` — the rest of the test run is unaffected.
+
 ## Commands
 
 All via `.claude/skills/sf-tool-notion/notion-cli.sh <cmd> [args]`.
