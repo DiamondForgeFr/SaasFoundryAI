@@ -219,11 +219,11 @@ Resend, …). When you add one, follow this pattern so every capability looks th
 
 **Three layers, one name per layer:**
 
-| Layer              | Shape                                                        | Example (SRS capability, Notion tool)                                |
-| ------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Config key         | `tools.<capability>.backend: "<tool>"` in `.saasfoundry.json` | `tools.srs.backend: "notion"`                                        |
-| TypeScript contract | `<Capability>Adapter` interface                              | `SrsAdapter` in `src/builders/srs/types.ts`                          |
-| Implementation     | `<Tool><Capability>Adapter` class                            | `NotionSrsAdapter` (binds the adapter to the `sf-tool-notion` skill) |
+| Layer               | Shape                                                         | Example (SRS capability, Notion tool)                                |
+| ------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Config key          | `tools.<capability>.backend: "<tool>"` in `.saasfoundry.json` | `tools.srs.backend: "notion"`                                        |
+| TypeScript contract | `<Capability>Adapter` interface                               | `SrsAdapter` in `src/builders/srs/types.ts`                          |
+| Implementation      | `<Tool><Capability>Adapter` class                             | `NotionSrsAdapter` (binds the adapter to the `sf-tool-notion` skill) |
 
 **Why the `Adapter` suffix**: the pattern is literally the Adapter pattern — we expose a tool-agnostic contract (`SrsAdapter`) and plug concrete tool bindings (`NotionSrsAdapter`,
 `ConfluenceSrsAdapter`, …) behind it. The name should tell the reader that immediately.
