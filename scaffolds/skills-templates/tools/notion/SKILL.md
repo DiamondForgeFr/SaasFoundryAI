@@ -1,27 +1,27 @@
 # Notion Tool
 
-Integration with Notion for page management, database updates, and workflow automation.
+Direct REST-API integration with Notion for pages, databases, comments, and users. Drives SRS specifications, note ingestion, and general Notion workspace automation.
 
 ## Auto-trigger keywords
-notion page, create notion task, update notion property, notion database, notion workspace
+
+notion, notion.so, notion.site, @notion, notion page, notion database, notion workspace, notion comments, notes database, srs page, functional requirement page
 
 ## Configuration
 
 This skill reads configuration from:
-1. **Project config**: `.saasfoundry.json` at the project root
+
+1. **Project config**: `.saasfoundry.json` at the project root (`.skillsAccounts.notion`, `.tools.srs.backend`)
 2. **Credentials**: `~/.claude/credentials/notion/{account}.env`
+3. **Fallback**: `.env` inside the skill folder (dev-only)
 
 ### Project Configuration
 
 ```bash
-# Project URL (Notion database URL)
-jq -r '.workflow.projectUrl' .saasfoundry.json
-
-# Working branch
-jq -r '.workflow.workingBranch' .saasfoundry.json
-
-# Notion account to use
+# Notion account to use (set during `sf tools add notion <account>`)
 jq -r '.skillsAccounts.notion' .saasfoundry.json
+
+# SRS backend (if "notion", this skill is the SRS adapter's tool skill)
+jq -r '.tools.srs.backend' .saasfoundry.json
 ```
 
 ### Credentials Format
@@ -30,203 +30,148 @@ Located at `~/.claude/credentials/notion/{account}.env`:
 
 ```bash
 NOTION_API_TOKEN="secret_your_integration_token"
-NOTION_DATABASE_ID="abc123..."
+NOTION_API_VERSION="2022-06-28"
 ```
 
 **To add credentials:**
+
 ```bash
 sf tools add notion <account-name>
 ```
 
-## Available Commands
+## Commands
 
-### Create Page
+All via `.claude/skills/sf-tool-notion/notion-cli.sh <cmd> [args]`.
 
-Create a new page in a Notion database.
+### Pages & Blocks
 
-**Usage:**
-```bash
-.claude/skills/sf-tool-notion/notion-cli.sh create-page <title> [properties-json]
-```
+| Command                                              | Purpose                                            |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| `search "<QUERY>"`                                   | Search pages and databases the integration sees    |
+| `page <PAGE_ID>`                                     | Get page properties (raw JSON)                     |
+| `page-content <PAGE_ID>`                             | Get page block children (content) — used for notes ingestion |
+| `create-page <PARENT_ID> "<TITLE>" ["<CONTENT_MD>"]` | Create a page under a parent (page or database)    |
+| `update-page <PAGE_ID> '<PROPERTIES_JSON>'`          | Update page properties                             |
+| `archive-page <PAGE_ID>`                             | Archive (soft-delete) a page                       |
 
-**Examples:**
-```bash
-# Simple page
-notion-cli.sh create-page "Add validation logic"
+### Databases
 
-# With properties
-notion-cli.sh create-page "Add validation" '{"Status": {"status": {"name": "In Progress"}}}'
-```
+| Command                                                 | Purpose                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------- |
+| `database <DB_ID>`                                      | Get database schema                                     |
+| `query-database <DB_ID> ['<FILTER_JSON>']`              | Query a database (optional Notion filter JSON)          |
+| `create-database <PARENT_ID> "<TITLE>" '<SCHEMA_JSON>'` | Create a database                                       |
 
-**What it does:**
-1. Creates a page in the configured database
-2. Sets title and optional properties
-3. Returns the page ID and URL
+### Comments & Users
 
-### Update Property
+| Command                            | Purpose                                    |
+| ---------------------------------- | ------------------------------------------ |
+| `comments <PAGE_ID>`               | Get comments on a page                     |
+| `add-comment <PAGE_ID> "<TEXT>"`   | Add a comment to a page                    |
+| `users`                            | List all users visible to the integration  |
+| `me`                               | Get bot user info (used for token check)   |
 
-Update a property of a Notion page.
+## URL parsing
 
-**Usage:**
-```bash
-notion-cli.sh update-property <page-id> <property-name> <value>
-```
-
-**Examples:**
-```bash
-# Update status
-notion-cli.sh update-property abc123 "Status" "Done"
-
-# Update assignee
-notion-cli.sh update-property abc123 "Assignee" "John Doe"
-```
-
-### Link Page
-
-Link a page to another page (create relation).
-
-**Usage:**
-```bash
-notion-cli.sh link-page <parent-id> <child-id>
-```
-
-**Example:**
-```bash
-notion-cli.sh link-page abc123 def456
-```
-
-### Get Page Status
-
-Get the current status and properties of a page.
-
-**Usage:**
-```bash
-notion-cli.sh status <page-id>
-```
-
-**Returns:** Page title, status, and other properties.
-
-### List Pages
-
-List pages in the database filtered by property values.
-
-**Usage:**
-```bash
-# List all pages
-notion-cli.sh list
-
-# List pages with specific status
-notion-cli.sh list "In Progress"
-```
-
-## Notion API
-
-This skill uses Notion's API v1.
-
-**Authentication:**
-- Bearer token (integration token)
-- Create integration at: https://www.notion.so/my-integrations
-
-**Key endpoints:**
-- `POST /v1/pages` - Create page
-- `GET /v1/pages/{page_id}` - Get page
-- `PATCH /v1/pages/{page_id}` - Update page properties
-- `POST /v1/databases/{database_id}/query` - Query database
-
-## Integration with Workflow Skill
-
-The workflow skill (`sf-workflow`) delegates to this tool skill when the project uses Notion:
+All `<PAGE_ID>` / `<DB_ID>` arguments accept either a raw ID or a full Notion URL:
 
 ```bash
-# workflow-cli.sh reads .saasfoundry.json
-TOOL=$(jq -r '.workflow.tool' .saasfoundry.json)
-
-# If tool is "notion", delegate to this CLI
-case "$TOOL" in
-  notion)
-    sf-tool-notion/notion-cli.sh "$@"
-    ;;
-esac
+notion-cli.sh page "https://www.notion.so/workspace/My-Page-abc123def456..."
 ```
+
+The CLI extracts the 32-char hex ID and formats it as UUID automatically. Works for both `notion.so` and `notion.site` URLs.
+
+## Integration with SRS
+
+The agnostic `sf-srs` skill delegates every Notion-backed SRS operation to this CLI (or to the `NotionSrsAdapter` in `src/tools/notion/srs.adapter.ts` when the operation is driven from TypeScript).
+
+Page creation shape used by SRS:
+
+- **Project root page** → parent is a user-owned workspace page
+- **Epic page** → parent is the project root, title = Epic title
+- **FR page** → parent is the Epic page, title = `FR-<n> — <title>`
+
+The adapter uses the same Notion API surface exposed here, so anything you test with `notion-cli.sh` behaves identically when driven from the TypeScript builder.
+
+## Important: page sharing
+
+Notion internal integrations only see pages explicitly shared with them.
+
+1. Open the root page in Notion
+2. Click "..." menu → "Connections"
+3. Add your integration (e.g. `saasfoundry-srs`)
+4. Children pages inherit access automatically
+
+If `notion-cli.sh me` succeeds but `page <PAGE_ID>` returns `object_not_found`, the page isn't shared with the integration.
 
 ## Requirements
 
-- **jq** for JSON parsing
-- **curl** for API requests
-- **Notion credentials** configured via `sf tools add notion`
-- **Database must be shared** with your Notion integration
+- `curl` for API requests
+- `python3` for JSON assembly (already required by the workflow skill)
+- `jq` for reading `.saasfoundry.json`
+- Notion credentials via `sf tools add notion <account>` (or a local `.env` fallback)
+- Each target page must be shared with the integration
 
 ## Multi-Account Support
 
 You can configure multiple Notion workspaces:
 
 ```bash
-# Add accounts
 sf tools add notion personal
 sf tools add notion work
 
-# Use specific account in project
-sf tools use notion work
-
-# Check current account
-sf tools current notion
+sf tools use notion work        # per-project switch
+sf tools current notion         # show the active account
 ```
 
-The CLI automatically loads credentials from the account specified in `.saasfoundry.json`.
+The CLI loads credentials from the account listed in `.saasfoundry.json → skillsAccounts.notion`.
 
 ## Error Handling
 
 The CLI validates:
-- ✅ Credentials are configured
-- ✅ Database ID is valid
-- ✅ Page ID exists
-- ✅ Properties match database schema
-- ✅ API responses are successful
 
-All errors are displayed with clear messages and exit codes.
+- Credentials exist (either centralized or local `.env`)
+- API token is accepted (via `me`)
+- Page / database IDs exist and are shared with the integration
+- Notion responses are JSON-decodable
+
+Errors are printed to stderr with a non-zero exit code. Use `me` as a quick connectivity smoke test.
 
 ## Examples
 
-### Complete workflow for a task
+### Ingest an existing notes page into SRS
 
 ```bash
-# 1. Create main task
-notion-cli.sh create-page "User Authentication Feature"
-# Returns: abc123
+CLI=.claude/skills/sf-tool-notion/notion-cli.sh
 
-# 2. Create subtasks (as linked pages)
-notion-cli.sh create-page "Backend API" '{"Parent": {"relation": [{"id": "abc123"}]}}'
-notion-cli.sh create-page "Frontend UI" '{"Parent": {"relation": [{"id": "abc123"}]}}'
+# 1. Find the page
+$CLI search "Authentication spec"
 
-# 3. Update status
-notion-cli.sh update-property abc123 "Status" "In Progress"
+# 2. Read its content (blocks + properties)
+$CLI page-content <page-id>
 
-# 4. Work on subtasks
-notion-cli.sh update-property def456 "Status" "In Progress"
-# ... code ...
-notion-cli.sh update-property def456 "Status" "Done"
+# 3. Archive when done
+$CLI archive-page <page-id>
+```
 
-# 5. Mark main task done
-notion-cli.sh update-property abc123 "Status" "Done"
+### Create a new SRS Epic page
+
+```bash
+CLI=.claude/skills/sf-tool-notion/notion-cli.sh
+
+# 1. Create the Epic under the project root
+$CLI create-page <root-page-id> "User authentication"
+
+# 2. Add a comment for traceability
+$CLI add-comment <epic-id> "Generated from ticket #57"
 ```
 
 ## Troubleshooting
 
-**Issue: "Credentials not found"**
-- Run: `sf tools add notion <account-name>`
-- Or check: `~/.claude/credentials/notion/{account}.env` exists
+**`object_not_found`** — The page/DB isn't shared with the integration. Share the root page from Notion UI and retry.
 
-**Issue: "Database not found"**
-- Verify database ID in credentials
-- Ensure database is shared with your integration
-- Check: https://www.notion.so/my-integrations
+**`unauthorized`** — Token invalid or revoked. Run `sf tools add notion <account>` to refresh.
 
-**Issue: "Property not found"**
-- Property names are case-sensitive
-- Check database schema in Notion
-- Property types must match (status, text, relation, etc.)
+**`invalid_json`** — Filter/properties/schema JSON malformed. Validate with `jq .` before passing.
 
-**Issue: "Unauthorized"**
-- Verify API token is valid
-- Ensure integration has access to the database
-- Re-share database with integration if needed
+**`rate_limited`** — Notion enforces ~3 req/s per integration; retry with backoff if automating bulk operations.
