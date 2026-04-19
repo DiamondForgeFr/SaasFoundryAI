@@ -54,9 +54,52 @@ load_credentials
 : "${NOTION_API_VERSION:=2022-06-28}"
 BASE="https://api.notion.com/v1"
 
-notion_get()   { curl -s -H "Authorization: Bearer $NOTION_API_TOKEN" -H "Notion-Version: $NOTION_API_VERSION" "$BASE$1"; }
-notion_post()  { curl -s -H "Authorization: Bearer $NOTION_API_TOKEN" -H "Notion-Version: $NOTION_API_VERSION" -H "Content-Type: application/json" -X POST  -d "$2" "$BASE$1"; }
-notion_patch() { curl -s -H "Authorization: Bearer $NOTION_API_TOKEN" -H "Notion-Version: $NOTION_API_VERSION" -H "Content-Type: application/json" -X PATCH -d "$2" "$BASE$1"; }
+notion_get()   { curl -sS -H "Authorization: Bearer $NOTION_API_TOKEN" -H "Notion-Version: $NOTION_API_VERSION" "$BASE$1"; }
+notion_post()  { curl -sS -H "Authorization: Bearer $NOTION_API_TOKEN" -H "Notion-Version: $NOTION_API_VERSION" -H "Content-Type: application/json" -X POST  -d "$2" "$BASE$1"; }
+notion_patch() { curl -sS -H "Authorization: Bearer $NOTION_API_TOKEN" -H "Notion-Version: $NOTION_API_VERSION" -H "Content-Type: application/json" -X PATCH -d "$2" "$BASE$1"; }
+
+# Build a JSON payload from env-var inputs. Never string-interpolate user data
+# into heredocs — single quotes / newlines break out of string literals and
+# allow arbitrary code to execute with the NOTION_API_TOKEN in scope.
+build_json() {
+  python3 - <<'PY'
+import json, os, sys
+mode = os.environ['JSON_MODE']
+if mode == 'search':
+    print(json.dumps({'query': os.environ['QUERY'], 'page_size': 20}))
+elif mode == 'create-page':
+    payload = {
+        'parent': {'page_id': os.environ['PARENT_ID']},
+        'properties': {'title': [{'text': {'content': os.environ['TITLE']}}]}
+    }
+    content = os.environ.get('CONTENT', '')
+    if content:
+        payload['children'] = [{
+            'object': 'block',
+            'type': 'paragraph',
+            'paragraph': {'rich_text': [{'type': 'text', 'text': {'content': content}}]}
+        }]
+    print(json.dumps(payload))
+elif mode == 'update-page':
+    props = json.loads(os.environ['PROPERTIES_JSON'])
+    print(json.dumps({'properties': props}))
+elif mode == 'create-database':
+    schema = json.loads(os.environ['SCHEMA_JSON'])
+    print(json.dumps({
+        'parent': {'page_id': os.environ['PARENT_ID']},
+        'title': [{'text': {'content': os.environ['TITLE']}}],
+        'properties': schema
+    }))
+elif mode == 'add-comment':
+    print(json.dumps({
+        'parent': {'page_id': os.environ['PAGE_ID']},
+        'rich_text': [{'text': {'content': os.environ['TEXT']}}]
+    }))
+else:
+    print(f'Unknown JSON_MODE: {mode}', file=sys.stderr)
+    sys.exit(2)
+PY
+}
 
 usage() {
   cat <<'EOF'
@@ -111,7 +154,8 @@ ACTION="$1"; shift
 case "$ACTION" in
   search)
     [[ $# -lt 1 ]] && echo "Usage: notion-cli.sh search \"<QUERY>\"" && exit 1
-    notion_post "/search" "{\"query\":\"$1\",\"page_size\":20}" | python3 -c "
+    PAYLOAD=$(JSON_MODE=search QUERY="$1" build_json)
+    notion_post "/search" "$PAYLOAD" | python3 -c "
 import json,sys; d=json.load(sys.stdin)
 for r in d.get('results',[]):
     obj_type = r.get('object','')
@@ -147,33 +191,16 @@ for r in d.get('results',[]):
 
   create-page)
     [[ $# -lt 2 ]] && echo "Usage: notion-cli.sh create-page <PARENT_ID> \"<TITLE>\" [\"<CONTENT>\"]" && exit 1
-    PARENT_ID=$(parse_id "$1"); TITLE="$2"; CONTENT="${3:-}"
-    PAYLOAD=$(python3 -c "
-import json
-payload = {
-    'parent': {'page_id': '$PARENT_ID'},
-    'properties': {
-        'title': [{'text': {'content': '$TITLE'}}]
-    }
-}
-content = '''$CONTENT'''
-if content:
-    payload['children'] = [{
-        'object': 'block',
-        'type': 'paragraph',
-        'paragraph': {
-            'rich_text': [{'type': 'text', 'text': {'content': content}}]
-        }
-    }]
-print(json.dumps(payload))
-")
+    PARENT_ID=$(parse_id "$1")
+    PAYLOAD=$(JSON_MODE=create-page PARENT_ID="$PARENT_ID" TITLE="$2" CONTENT="${3:-}" build_json)
     notion_post "/pages" "$PAYLOAD"
     ;;
 
   update-page)
     [[ $# -lt 2 ]] && echo "Usage: notion-cli.sh update-page <PAGE_ID> '<PROPERTIES_JSON>'" && exit 1
     PAGE_ID=$(parse_id "$1")
-    notion_patch "/pages/$PAGE_ID" "{\"properties\":$2}"
+    PAYLOAD=$(JSON_MODE=update-page PROPERTIES_JSON="$2" build_json)
+    notion_patch "/pages/$PAGE_ID" "$PAYLOAD"
     ;;
 
   archive-page)
@@ -197,16 +224,7 @@ print(json.dumps(payload))
   create-database)
     [[ $# -lt 3 ]] && echo "Usage: notion-cli.sh create-database <PARENT_ID> \"<TITLE>\" '<SCHEMA_JSON>'" && exit 1
     PARENT_ID=$(parse_id "$1")
-    PAYLOAD=$(python3 -c "
-import json
-schema = json.loads('$3')
-payload = {
-    'parent': {'page_id': '$PARENT_ID'},
-    'title': [{'text': {'content': '$2'}}],
-    'properties': schema
-}
-print(json.dumps(payload))
-")
+    PAYLOAD=$(JSON_MODE=create-database PARENT_ID="$PARENT_ID" TITLE="$2" SCHEMA_JSON="$3" build_json)
     notion_post "/databases" "$PAYLOAD"
     ;;
 
@@ -219,7 +237,8 @@ print(json.dumps(payload))
   add-comment)
     [[ $# -lt 2 ]] && echo "Usage: notion-cli.sh add-comment <PAGE_ID> \"<TEXT>\"" && exit 1
     PAGE_ID=$(parse_id "$1")
-    notion_post "/comments" "{\"parent\":{\"page_id\":\"$PAGE_ID\"},\"rich_text\":[{\"text\":{\"content\":\"$2\"}}]}"
+    PAYLOAD=$(JSON_MODE=add-comment PAGE_ID="$PAGE_ID" TEXT="$2" build_json)
+    notion_post "/comments" "$PAYLOAD"
     ;;
 
   users)
