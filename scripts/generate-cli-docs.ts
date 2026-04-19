@@ -110,8 +110,7 @@ const commands: CommandDoc[] = [
       },
       {
         flags: '--add-modules <modules>',
-        description:
-          'Comma-separated list of modules to add: `email, storage, analytics, sf-skill-context7, sf-skill-atlassian, sf-skill-notion, sf-skill-figma`'
+        description: 'Comma-separated list of modules to add: `email, storage, analytics, sf-skill-context7, sf-skill-atlassian, sf-skill-notion, sf-skill-figma`'
       },
       { flags: '--mailersend-api-key <key>', description: 'MailerSend API key (when adding `email`)' },
       { flags: '--s3-setup <setup>', description: 'S3 storage: `docker` or `credentials` (when adding `storage`)' },
@@ -142,8 +141,7 @@ const commands: CommandDoc[] = [
       '# Inspect the email module in JSON\nsf modules info email --json',
       '# Find modules relevant to "send transactional emails"\nsf modules match "send transactional emails"'
     ],
-    notes:
-      'The catalogue drives anti-reinvention guardrails: the `sf-tool-saasfoundry` skill calls `sf modules match` before the AI agent considers building a new module from scratch.'
+    notes: 'The catalogue drives anti-reinvention guardrails: the `sf-tool-saasfoundry` skill calls `sf modules match` before the AI agent considers building a new module from scratch.'
   },
   {
     name: 'sf skill',
@@ -164,8 +162,7 @@ const commands: CommandDoc[] = [
       '# Refresh the installed skill to the current CLI version\nsf skill update',
       '# Remove skill + preferences\nsf skill uninstall --purge'
     ],
-    notes:
-      'For a full wipe (both scopes + `~/.saasfoundry/`), use `sf uninstall --all` — the top-level convenience command.'
+    notes: 'For a full wipe (both scopes + `~/.saasfoundry/`), use `sf uninstall --all` — the top-level convenience command.'
   },
   {
     name: 'sf feedback',
@@ -197,8 +194,7 @@ const commands: CommandDoc[] = [
       '# List top-voted module requests\nsf feedback vote --list --limit 10',
       '# Upvote request #62\nsf feedback vote 62 up'
     ],
-    notes:
-      'Requests and bugs are deduplicated against the live GitHub issue list — the CLI surfaces similar existing issues before opening a new one. Pass `--force` to override.'
+    notes: 'Requests and bugs are deduplicated against the live GitHub issue list — the CLI surfaces similar existing issues before opening a new one. Pass `--force` to override.'
   },
   {
     name: 'sf tools',
@@ -253,12 +249,8 @@ const commands: CommandDoc[] = [
       { flags: '--all', description: 'Required: remove skill (user + project scope) and wipe `~/.saasfoundry/`' },
       { flags: '--yes, -y', description: 'Skip the confirmation prompt' }
     ],
-    examples: [
-      '# Fully uninstall SaaSFoundry artefacts\nsf uninstall --all',
-      '# CI-mode (no prompt)\nsf uninstall --all --yes'
-    ],
-    notes:
-      'For per-scope removal, use `sf skill uninstall` instead. `sf uninstall` leaves the npm package itself installed — remove it with `npm uninstall -g saasfoundry-cli`.'
+    examples: ['# Fully uninstall SaaSFoundry artefacts\nsf uninstall --all', '# CI-mode (no prompt)\nsf uninstall --all --yes'],
+    notes: 'For per-scope removal, use `sf skill uninstall` instead. `sf uninstall` leaves the npm package itself installed — remove it with `npm uninstall -g saasfoundry-cli`.'
   }
 ]
 
