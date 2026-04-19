@@ -11,6 +11,7 @@
         "email",
         "storage",
         "analytics",
+        "srs",
         "sf-skill-context7",
         "sf-skill-atlassian",
         "sf-skill-notion",
@@ -79,7 +80,22 @@
     "atlassianCloudId": { "flag": "--atlassian-cloud-id", "type": "string", "required": false },
     "notionApiToken": { "flag": "--notion-api-token", "type": "string", "required": false, "secret": true },
     "notionApiVersion": { "flag": "--notion-api-version", "type": "string", "required": false },
-    "figmaApiToken": { "flag": "--figma-api-token", "type": "string", "required": false, "secret": true }
+    "figmaApiToken": { "flag": "--figma-api-token", "type": "string", "required": false, "secret": true },
+    "srsBackend": {
+      "flag": "--srs-backend",
+      "type": "enum",
+      "values": ["notion"],
+      "required": false,
+      "requiresWhen": "addModules includes srs",
+      "description": "Backend hosting the SRS workspace. V1 supports Notion only."
+    },
+    "srsParentPageInput": {
+      "flag": "--srs-parent-page-input",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "addModules includes srs",
+      "description": "URL or ID of the parent page (Notion) that will host the SRS root page. The page must be shared with the Notion integration."
+    }
   },
   "recommendations": {
     "dryRun": {
@@ -95,6 +111,7 @@
       "email": "Recommend adding when the app now needs transactional email (password reset, invites, receipts). Requires a mailersend API key.",
       "storage": "Recommend adding when the app needs file uploads (logos, user docs). Docker setup for local dev, credentials for staging/prod.",
       "analytics": "Recommend adding when tracking user activity or business metrics becomes relevant. Self-hosted Umami, production-only.",
+      "srs": "Recommend adding when product requirements should be centralised for AI agents (User flows, Functional Requirements). V1 bootstraps a Notion workspace under a parent page shared with the Notion integration.",
       "sf-skill-context7": "Recommend adding when the project relies on third-party libs and needs up-to-date doc retrieval for the AI agent.",
       "sf-skill-atlassian": "Recommend adding when issues/pages live in Jira or Confluence and the AI agent should read/write them.",
       "sf-skill-notion": "Recommend adding when product specs or knowledge base live in Notion.",

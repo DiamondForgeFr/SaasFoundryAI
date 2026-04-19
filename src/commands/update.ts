@@ -10,6 +10,7 @@ import shelljs from 'shelljs'
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installEmailModule } from '../installers/email.installer'
 import { installSkills } from '../installers/skills.installer'
+import { installSrsSkill } from '../installers/srs-skill.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
@@ -18,7 +19,10 @@ import { createWebApp } from '../builders/web.builder'
 import { getAvailableModules, getEmailModuleCredentials, getModuleSelections, getStorageModuleConfig, getSkillCredentials } from '../prompts/update.prompts'
 import { promptWithPrefill } from '../prompts/helpers'
 import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
-import { SaaSFoundryManifest } from '../types'
+import { promptSrsConfiguration } from '../prompts/srs.prompts'
+import { bootstrapSrs } from '../runners/srs.runner'
+import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
+import { SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { buildUpdatePrefillFromOptions, ConflictStrategy, parseConflictStrategy, UpdateCommandOptions, UpdateDryRunReport } from './update.options'
@@ -458,6 +462,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   // Collect credentials for selected modules
   let emailCredentials: { mailersendApiKey: string; mailersendSenderEmail: string; mailersendSenderName: string } | null = null
   let storageConfig: { s3Setup: 'docker' | 'credentials'; s3Credentials?: { endpoint: string; accessKey: string; secretKey: string; bucket: string; region: string } } | null = null
+  let srsBootstrap: { backend: 'notion'; notionApiToken: string; notionApiVersion?: string; parentInput: string } | null = null
   const skillsToAdd: string[] = []
   const skillsCredentials: AdvancedSkillCredentials = {}
 
@@ -479,6 +484,27 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       skillsToAdd.push(skillName)
       const credentials = await getSkillCredentials(skillName, { prefill: prefill.skills as unknown as Record<string, unknown>, nonInteractive })
       Object.assign(skillsCredentials, credentials)
+    }
+  }
+
+  if (selectedModules.includes('srs')) {
+    const srsPrefill = (prefill.srs as Record<string, unknown> | undefined) ?? {}
+    const srsAnswers = await promptSrsConfiguration(
+      {},
+      {
+        prefill: { srsEnable: true, ...srsPrefill },
+        nonInteractive
+      }
+    )
+    if (srsAnswers.srsEnable && srsAnswers.srsBackend === 'notion' && srsAnswers.notionApiToken && srsAnswers.srsParentPageInput) {
+      srsBootstrap = {
+        backend: 'notion',
+        notionApiToken: srsAnswers.notionApiToken,
+        notionApiVersion: srsAnswers.notionApiVersion,
+        parentInput: srsAnswers.srsParentPageInput
+      }
+    } else {
+      selectedModules.splice(selectedModules.indexOf('srs'), 1)
     }
   }
 
@@ -549,6 +575,27 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       moduleSpinner.text = 'Installing Umami analytics module...'
       await installAnalyticsModule({ webPath })
       manifest.modules.includeAnalytics = true
+    }
+
+    if (selectedModules.includes('srs') && srsBootstrap) {
+      moduleSpinner.text = 'Bootstrapping SRS workspace...'
+      await installSrsSkill({ targetPath: '.' })
+      const adapter = new NotionSrsAdapter({
+        apiToken: srsBootstrap.notionApiToken,
+        notionVersion: srsBootstrap.notionApiVersion
+      })
+      const result = await bootstrapSrs({
+        projectName: manifest.projectName,
+        parentInput: srsBootstrap.parentInput,
+        adapter
+      })
+      const srsTools: SrsToolConfig = {
+        enabled: true,
+        backend: srsBootstrap.backend,
+        rootPage: result.rootPage,
+        categories: { userFlowsAndSpecifications: result.categoryPage }
+      }
+      manifest.tools = { ...(manifest.tools ?? {}), srs: srsTools }
     }
 
     // Install selected advanced skills

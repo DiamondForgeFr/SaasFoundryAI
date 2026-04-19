@@ -52,6 +52,11 @@ export interface NewCommandOptions {
   notionApiVersion?: string
   figmaApiToken?: string
 
+  // SRS bootstrap (opt-in)
+  srsEnable?: boolean
+  srsBackend?: 'notion'
+  srsParentPageInput?: string
+
   // Workflow (flag allows skipping; full config still goes through `sf workflow` or interactive)
   workflow?: string | boolean
 
@@ -123,6 +128,14 @@ export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answer
   if (opts.notionApiToken !== undefined) prefill.notionApiToken = opts.notionApiToken
   if (opts.notionApiVersion !== undefined) prefill.notionApiVersion = opts.notionApiVersion
   if (opts.figmaApiToken !== undefined) prefill.figmaApiToken = opts.figmaApiToken
+
+  // SRS bootstrap is opt-in. In --non-interactive mode, default to `false` so the
+  // command never blocks on the srsEnable confirm prompt unless the user explicitly
+  // passes --srs-enable (matches the email.ready pattern in `sf update`).
+  if (opts.srsEnable !== undefined) prefill.srsEnable = opts.srsEnable
+  else if (opts.nonInteractive === true) prefill.srsEnable = false
+  if (opts.srsBackend !== undefined) prefill.srsBackend = opts.srsBackend
+  if (opts.srsParentPageInput !== undefined) prefill.srsParentPageInput = opts.srsParentPageInput
 
   return prefill
 }

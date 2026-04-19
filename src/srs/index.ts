@@ -27,5 +27,6 @@ export type {
   StoryTicketBodySpec,
   FrPageLink,
   AcceptanceCriterion,
-  DsRef
+  DsRef,
+  ResolvedParent
 } from '../builders/srs/types'

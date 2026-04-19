@@ -368,9 +368,16 @@ describe('utils', () => {
             backend: 'notion',
             rootPage: {
               id: 'abc-123',
-              url: 'https://www.notion.so/SaaSFoundry-abc123'
+              url: 'https://www.notion.so/SaaSFoundry-abc123',
+              name: 'SaaSFoundry — Project Overview'
             },
-            categories: ['User flows & Specifications']
+            categories: {
+              userFlowsAndSpecifications: {
+                id: 'def-456',
+                url: 'https://www.notion.so/User-flows-def456',
+                name: 'User flows & Specifications'
+              }
+            }
           }
         }
       }
@@ -381,7 +388,7 @@ describe('utils', () => {
       expect(result?.tools?.srs?.enabled).toBe(true)
       expect(result?.tools?.srs?.backend).toBe('notion')
       expect(result?.tools?.srs?.rootPage?.id).toBe('abc-123')
-      expect(result?.tools?.srs?.categories).toEqual(['User flows & Specifications'])
+      expect(result?.tools?.srs?.categories?.userFlowsAndSpecifications?.id).toBe('def-456')
     })
 
     it('should preserve manifests without tools field (backward compat)', async () => {

@@ -147,6 +147,19 @@ export const CATALOGUE: ModuleDefinition[] = [
     dependencies: []
   },
   {
+    name: 'srs',
+    displayName: 'SRS Centralisation (Notion)',
+    description: 'Centralise Software Requirements Specifications in Notion — bootstraps a project root + "User flows & Specifications" sub-page (V1: Notion only)',
+    category: 'module',
+    keywords: ['srs', 'specifications', 'requirements', 'notion', 'docs', 'spec', 'user-flows', 'product'],
+    provides: ['sf-srs Claude Code skill', 'Notion root page + "User flows & Specifications" category', '.saasfoundry.json → tools.srs config'],
+    alternatives: ['manual Notion workspace curation', 'Confluence', 'local markdown under docs/'],
+    introducedInVersion: '1.0.0-beta',
+    minCliVersion: '1.0.0-beta',
+    filesAffected: ['.claude/skills/sf-srs/', '.saasfoundry.json'],
+    dependencies: []
+  },
+  {
     name: 'auth',
     displayName: 'Authentication & Authorization',
     description: 'JWT auth with email/password, roles, permissions, sessions, and invitation flow (shipped with sf new)',

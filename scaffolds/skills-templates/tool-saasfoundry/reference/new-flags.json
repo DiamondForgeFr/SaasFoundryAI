@@ -117,6 +117,29 @@
     "notionApiToken": { "flag": "--notion-api-token", "type": "string", "required": false, "secret": true },
     "notionApiVersion": { "flag": "--notion-api-version", "type": "string", "required": false },
     "figmaApiToken": { "flag": "--figma-api-token", "type": "string", "required": false, "secret": true },
+    "srsEnable": {
+      "flag": "--srs-enable",
+      "negationFlag": "--no-srs-enable",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Opt-in SRS bootstrap. When true, requires srsBackend, srsParentPageInput, and a Notion token."
+    },
+    "srsBackend": {
+      "flag": "--srs-backend",
+      "type": "enum",
+      "values": ["notion"],
+      "required": false,
+      "requiresWhen": "srsEnable=true",
+      "description": "Backend hosting the SRS workspace. V1 supports Notion only."
+    },
+    "srsParentPageInput": {
+      "flag": "--srs-parent-page-input",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "srsEnable=true",
+      "description": "URL or ID of the Notion parent page that will host the SRS root page. Must be shared with the Notion integration."
+    },
     "workflow": {
       "flag": "--workflow",
       "negationFlag": "--no-workflow",
@@ -156,6 +179,10 @@
     "analytics": {
       "true": "Recommend when tracking user activity or business metrics matters early. Installs a privacy-respecting analytics module.",
       "false": "Default for MVPs — adding analytics later via `sf update --add-modules analytics` is a one-liner."
+    },
+    "srsEnable": {
+      "true": "Recommend when product requirements should be centralised for AI agents (User flows & Specifications). Creates a Notion workspace under a parent page shared with the integration.",
+      "false": "Default — opt-in later via `sf update --add-modules srs --srs-backend notion --srs-parent-page-input <urlOrId>`."
     }
   }
 }

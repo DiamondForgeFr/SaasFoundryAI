@@ -10,12 +10,15 @@ import { createDevServicesCompose } from '../builders/dev-services.builder'
 import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
 import { installSkills } from '../installers/skills.installer'
+import { installSrsSkill } from '../installers/srs-skill.installer'
 import { getUserStartProjectInputs } from '../prompts/project.prompts'
 import { initAndStartDb } from '../runners/database.runner'
 import { initAndStartS3 } from '../runners/s3.runner'
 import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '../runners/server.runner'
+import { bootstrapSrs } from '../runners/srs.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
-import { SaaSFoundryManifest } from '../types'
+import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
+import { SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { checkNodeVersion, computeFileHashes, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
@@ -187,6 +190,28 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       figmaApiToken: startProjectAnswers.figmaApiToken
     })
 
+    // SRS bootstrap (skill install + Notion pages creation) — opt-in
+    let srsTools: SrsToolConfig | undefined
+    if (startProjectAnswers.srsEnable && startProjectAnswers.srsBackend && startProjectAnswers.srsParentPageInput && startProjectAnswers.notionApiToken) {
+      spinner.text = 'Bootstrapping SRS workspace...'
+      await installSrsSkill({ targetPath: '.' })
+      const adapter = new NotionSrsAdapter({
+        apiToken: startProjectAnswers.notionApiToken,
+        notionVersion: startProjectAnswers.notionApiVersion
+      })
+      const result = await bootstrapSrs({
+        projectName: startProjectAnswers.projectName,
+        parentInput: startProjectAnswers.srsParentPageInput,
+        adapter
+      })
+      srsTools = {
+        enabled: true,
+        backend: startProjectAnswers.srsBackend,
+        rootPage: result.rootPage,
+        categories: { userFlowsAndSpecifications: result.categoryPage }
+      }
+    }
+
     // Generate .saasfoundry.json manifest with file hashes
     spinner.text = 'Computing file hashes for update tracking...'
     const fileHashes = await computeFileHashes('.')
@@ -204,7 +229,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       },
       workflow: startProjectAnswers.workflow,
       aiRules: startProjectAnswers.aiRules,
-      fileHashes
+      fileHashes,
+      tools: srsTools ? { srs: srsTools } : undefined
     }
     await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
 

@@ -114,7 +114,8 @@ describe('updateCommand (integration)', () => {
           dbSetup: 'docker',
           includeAnalytics: true,
           advancedSkills: ['context7', 'atlassian', 'notion', 'figma']
-        }
+        },
+        tools: { srs: { enabled: true, backend: 'notion' } }
       })
       await writeFile('.saasfoundry.json', JSON.stringify(manifest))
 

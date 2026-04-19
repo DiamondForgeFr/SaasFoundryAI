@@ -139,6 +139,12 @@ export interface StoryTicketBodySpec {
   constraints?: string[]
 }
 
+export interface ResolvedParent {
+  id: string
+  name: string
+  url?: string
+}
+
 export interface RawContent {
   pageId: string
   title: string
@@ -152,6 +158,10 @@ export interface RawContent {
 
 export interface SrsAdapter {
   init(): Promise<void>
+
+  resolveParent(input: string): Promise<ResolvedParent>
+
+  createPage(parentPageId: string, title: string, content?: PageContent): Promise<PageRef>
 
   createEpicPage(spec: EpicSpec): Promise<PageRef>
 
