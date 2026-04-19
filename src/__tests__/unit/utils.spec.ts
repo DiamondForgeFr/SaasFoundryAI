@@ -348,5 +348,83 @@ describe('utils', () => {
       expect(result?.version).toBe('1.1.0')
       expect(result?.projectName).toBe('test')
     })
+
+    it('should round-trip a manifest with tools.srs populated', async () => {
+      const manifest: Partial<SaaSFoundryManifest> = {
+        version: '1.0.0-beta',
+        generatedAt: '2026-04-19T10:00:00.000Z',
+        structure: 'monorepo',
+        projectName: 'srs-enabled',
+        modules: {
+          emailService: 'none',
+          s3Setup: 'manual',
+          dbSetup: 'docker',
+          includeAnalytics: false,
+          advancedSkills: []
+        },
+        tools: {
+          srs: {
+            enabled: true,
+            backend: 'notion',
+            rootPage: {
+              id: 'abc-123',
+              url: 'https://www.notion.so/SaaSFoundry-abc123'
+            },
+            categories: ['User flows & Specifications']
+          }
+        }
+      }
+
+      await writeManifest(tempDir, manifest)
+      const result = await readManifest(tempDir)
+
+      expect(result?.tools?.srs?.enabled).toBe(true)
+      expect(result?.tools?.srs?.backend).toBe('notion')
+      expect(result?.tools?.srs?.rootPage?.id).toBe('abc-123')
+      expect(result?.tools?.srs?.categories).toEqual(['User flows & Specifications'])
+    })
+
+    it('should preserve manifests without tools field (backward compat)', async () => {
+      const legacyManifest: Partial<SaaSFoundryManifest> = {
+        version: '1.0.0-beta',
+        generatedAt: '2026-01-01T00:00:00.000Z',
+        structure: 'multirepo',
+        projectName: 'legacy',
+        modules: {
+          emailService: 'mailersend',
+          s3Setup: 'manual',
+          dbSetup: 'docker',
+          includeAnalytics: true,
+          advancedSkills: ['sf-tool-notion']
+        }
+      }
+
+      await writeManifest(tempDir, legacyManifest)
+      const result = await readManifest(tempDir)
+
+      expect(result).toEqual(legacyManifest)
+      expect(result?.tools).toBeUndefined()
+    })
+
+    it('should merge tools.srs into an existing tool-less manifest', async () => {
+      await writeManifest(tempDir, {
+        version: '1.0.0-beta',
+        projectName: 'add-srs'
+      } as Partial<SaaSFoundryManifest>)
+
+      await writeManifest(tempDir, {
+        tools: {
+          srs: {
+            enabled: true,
+            backend: 'notion'
+          }
+        }
+      } as Partial<SaaSFoundryManifest>)
+
+      const result = await readManifest(tempDir)
+      expect(result?.projectName).toBe('add-srs')
+      expect(result?.tools?.srs?.enabled).toBe(true)
+      expect(result?.tools?.srs?.backend).toBe('notion')
+    })
   })
 })
