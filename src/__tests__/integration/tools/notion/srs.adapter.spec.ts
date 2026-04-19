@@ -52,7 +52,7 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
   })
 
   afterAll(async () => {
-    for (const pageId of createdPageIds.reverse()) {
+    for (const pageId of [...createdPageIds].reverse()) {
       try {
         await cleanupClient.pages.update({ page_id: pageId, archived: true })
       } catch {

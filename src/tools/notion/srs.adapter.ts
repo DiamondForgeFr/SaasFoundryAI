@@ -12,6 +12,9 @@ export interface NotionSrsAdapterOptions {
 type BlocksChildrenListResponse = Awaited<ReturnType<Client['blocks']['children']['list']>>
 type BlockResult = BlocksChildrenListResponse['results'][number]
 type RawBlock = RawContent['blocks'][number]
+type AnyBlockRequest = Parameters<Client['blocks']['children']['append']>[0]['children'][number]
+
+const NOTION_MAX_CHILDREN_PER_REQUEST = 100
 
 export class NotionSrsAdapter implements SrsAdapter {
   private readonly client: Client
@@ -38,45 +41,87 @@ export class NotionSrsAdapter implements SrsAdapter {
   }
 
   async createEpicPage(spec: EpicSpec): Promise<PageRef> {
-    const response = await this.client.pages.create({
-      parent: { page_id: spec.parentPageId },
-      properties: { title: { title: [{ type: 'text', text: { content: spec.title } }] } },
-      children: buildEpicPageBlocks(spec)
-    })
-    return { id: response.id, url: isFullPage(response) ? response.url : '', title: spec.title }
+    return this.createPageWithChildren({ page_id: spec.parentPageId }, spec.title, buildEpicPageBlocks(spec))
   }
 
   async createFrPage(spec: FrSpec): Promise<PageRef> {
     const title = `${spec.fr.id} — ${spec.fr.title}`
-    const response = await this.client.pages.create({
-      parent: { page_id: spec.parentEpicPageId },
-      properties: { title: { title: [{ type: 'text', text: { content: title } }] } },
-      children: buildFrPageBlocks(spec)
-    })
-    return { id: response.id, url: isFullPage(response) ? response.url : '', title }
+    return this.createPageWithChildren({ page_id: spec.parentEpicPageId }, title, buildFrPageBlocks(spec))
   }
 
   async updatePage(pageId: string, content: PageContent): Promise<void> {
     const blocks = renderPageContent(content)
     if (blocks.length === 0) return
-    await this.client.blocks.children.append({ block_id: pageId, children: blocks })
+    await this.appendChildrenInChunks(pageId, blocks)
   }
 
   async fetchPage(pageId: string): Promise<RawContent> {
-    const [page, blocks] = await Promise.all([this.client.pages.retrieve({ page_id: pageId }), this.client.blocks.children.list({ block_id: pageId, page_size: 100 })])
+    const [page, allBlocks] = await Promise.all([this.client.pages.retrieve({ page_id: pageId }), this.listAllChildren(pageId)])
     const url = isFullPage(page) ? page.url : ''
     const title = extractPageTitle(page)
-    return { pageId, title, url, blocks: blocks.results.map(mapBlockToRaw) }
+    return { pageId, title, url, blocks: allBlocks.map(mapBlockToRaw) }
   }
 
   async listChildren(parentPageId: string): Promise<PageRef[]> {
-    const blocks = await this.client.blocks.children.list({ block_id: parentPageId, page_size: 100 })
+    const allBlocks = await this.listAllChildren(parentPageId)
     const refs: PageRef[] = []
-    for (const block of blocks.results) {
+    for (const block of allBlocks) {
       if (!isChildPageBlock(block)) continue
       refs.push({ id: block.id, url: '', title: block.child_page.title })
     }
     return refs
+  }
+
+  private async createPageWithChildren(parent: { page_id: string }, titleContent: string, children: AnyBlockRequest[]): Promise<PageRef> {
+    const firstChunk = children.slice(0, NOTION_MAX_CHILDREN_PER_REQUEST)
+    const rest = children.slice(NOTION_MAX_CHILDREN_PER_REQUEST)
+
+    const response = await this.client.pages.create({
+      parent,
+      properties: { title: { title: [{ type: 'text', text: { content: titleContent } }] } },
+      children: firstChunk
+    })
+
+    const pageId = response.id
+    const url = isFullPage(response) ? response.url : ''
+
+    if (rest.length > 0) {
+      try {
+        await this.appendChildrenInChunks(pageId, rest)
+      } catch (error) {
+        // Rollback: archive the partially-created page so we do not leave orphans.
+        try {
+          await this.client.pages.update({ page_id: pageId, archived: true })
+        } catch {
+          // best-effort; surface the original error
+        }
+        throw error
+      }
+    }
+
+    return { id: pageId, url, title: titleContent }
+  }
+
+  private async appendChildrenInChunks(pageId: string, children: AnyBlockRequest[]): Promise<void> {
+    for (let i = 0; i < children.length; i += NOTION_MAX_CHILDREN_PER_REQUEST) {
+      const chunk = children.slice(i, i + NOTION_MAX_CHILDREN_PER_REQUEST)
+      await this.client.blocks.children.append({ block_id: pageId, children: chunk })
+    }
+  }
+
+  private async listAllChildren(pageId: string): Promise<BlockResult[]> {
+    const all: BlockResult[] = []
+    let cursor: string | undefined = undefined
+    do {
+      const response: BlocksChildrenListResponse = await this.client.blocks.children.list({
+        block_id: pageId,
+        page_size: NOTION_MAX_CHILDREN_PER_REQUEST,
+        start_cursor: cursor
+      })
+      all.push(...response.results)
+      cursor = response.has_more ? (response.next_cursor ?? undefined) : undefined
+    } while (cursor)
+    return all
   }
 }
 
@@ -90,8 +135,6 @@ export function createNotionSrsAdapterFromEnv(): NotionSrsAdapter {
     notionVersion: process.env.NOTION_API_VERSION
   })
 }
-
-type AnyBlockRequest = Parameters<Client['blocks']['children']['append']>[0]['children'][number]
 
 function renderPageContent(content: PageContent): AnyBlockRequest[] {
   const blocks: AnyBlockRequest[] = []

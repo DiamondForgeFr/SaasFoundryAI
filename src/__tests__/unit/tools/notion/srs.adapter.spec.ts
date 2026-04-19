@@ -140,6 +140,58 @@ describe('NotionSrsAdapter', () => {
       expect(call.properties.title.title[0].text.content).toBe('User authentication')
       expect(call.children.length).toBeGreaterThan(0)
     })
+
+    it('splits >100 children across one create + N appends (Notion caps at 100 per request)', async () => {
+      const urs = Array.from({ length: 40 }, (_, i) => ({ id: `UR-${i + 1}`, narrative: `narrative ${i + 1}` }))
+      const frs = Array.from({ length: 40 }, (_, i) => ({
+        id: `FR-${i + 1}`,
+        title: `fr ${i + 1}`,
+        description: `desc ${i + 1}`,
+        acceptanceCriteria: ['ac-1', 'ac-2'],
+        urRefs: [`UR-${i + 1}`]
+      }))
+      const bigEpic: EpicSpec = { ...sampleEpic, urs, frs }
+      const { client, calls } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await adapter.createEpicPage(bigEpic)
+
+      expect(calls.pagesCreateCalls).toHaveLength(1)
+      const create = calls.pagesCreateCalls[0] as { children: unknown[] }
+      expect(create.children.length).toBe(100)
+      expect(calls.blocksAppendCalls.length).toBeGreaterThanOrEqual(1)
+      for (const append of calls.blocksAppendCalls as Array<{ children: unknown[] }>) {
+        expect(append.children.length).toBeLessThanOrEqual(100)
+      }
+    })
+
+    it('rolls back (archives) the created page when a follow-up append fails', async () => {
+      const urs = Array.from({ length: 40 }, (_, i) => ({ id: `UR-${i + 1}`, narrative: `narrative ${i + 1}` }))
+      const frs = Array.from({ length: 40 }, (_, i) => ({
+        id: `FR-${i + 1}`,
+        title: `fr ${i + 1}`,
+        description: `desc ${i + 1}`,
+        acceptanceCriteria: ['ac-1'],
+        urRefs: [`UR-${i + 1}`]
+      }))
+      const bigEpic: EpicSpec = { ...sampleEpic, urs, frs }
+      const pagesUpdateCalls: unknown[] = []
+      const { client } = buildMockClient({
+        blocksAppendImpl: async () => {
+          throw new Error('append failed')
+        }
+      })
+      const patchedClient = client as unknown as { pages: { update: (args: unknown) => Promise<unknown> } }
+      patchedClient.pages.update = async (args: unknown) => {
+        pagesUpdateCalls.push(args)
+        return {}
+      }
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await expect(adapter.createEpicPage(bigEpic)).rejects.toThrow(/append failed/)
+      expect(pagesUpdateCalls).toHaveLength(1)
+      expect(pagesUpdateCalls[0]).toMatchObject({ page_id: 'page_new', archived: true })
+    })
   })
 
   describe('createFrPage', () => {
@@ -214,6 +266,38 @@ describe('NotionSrsAdapter', () => {
         { id: 'p1', url: '', title: 'Epic 1' },
         { id: 'p3', url: '', title: 'Epic 2' }
       ])
+    })
+
+    it('walks the has_more/next_cursor chain to read all children', async () => {
+      let page = 0
+      const { client, calls } = buildMockClient({
+        blocksListImpl: async () => {
+          page += 1
+          if (page === 1) {
+            return {
+              has_more: true,
+              next_cursor: 'cursor-2',
+              results: [{ id: 'p1', type: 'child_page', child_page: { title: 'A' } }]
+            }
+          }
+          if (page === 2) {
+            return {
+              has_more: true,
+              next_cursor: 'cursor-3',
+              results: [{ id: 'p2', type: 'child_page', child_page: { title: 'B' } }]
+            }
+          }
+          return { has_more: false, next_cursor: null, results: [{ id: 'p3', type: 'child_page', child_page: { title: 'C' } }] }
+        }
+      })
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      const refs = await adapter.listChildren('root')
+
+      expect(refs.map((r) => r.id)).toEqual(['p1', 'p2', 'p3'])
+      expect(calls.blocksListCalls).toHaveLength(3)
+      const cursors = (calls.blocksListCalls as Array<{ start_cursor?: string }>).map((c) => c.start_cursor)
+      expect(cursors).toEqual([undefined, 'cursor-2', 'cursor-3'])
     })
   })
 
