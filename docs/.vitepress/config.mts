@@ -99,9 +99,10 @@ export default defineConfig({
           text: 'Workflow System',
           items: [
             { text: 'Introduction', link: '/workflow/introduction' },
-            { text: 'Templates', link: '/workflow/templates' },
+            { text: '7-Status System', link: '/workflow/7-status-system' },
+            { text: 'Complexity System', link: '/workflow/complexity-system' },
             { text: 'AI Rules', link: '/workflow/ai-rules' },
-            { text: 'Tool Integration', link: '/workflow/github-jira-notion-linear' }
+            { text: 'GitHub Integration', link: '/workflow/github-integration' }
           ]
         }
       ],
