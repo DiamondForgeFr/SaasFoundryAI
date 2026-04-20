@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # sf-srs orchestrator — single entrypoint for every skill that hands off to SRS work.
 # Body grows as sibling SUBs under #174 land ; this revision implements
-# `help`, `validate`, `browse`, `draft`, `write`.
+# `help`, `validate`, `browse`, `draft`, `write`, `spawn`.
 
 set -euo pipefail
 
@@ -23,10 +23,15 @@ Actions:
                                     Apply a DraftCandidate[] spec file : creates Epic /
                                     FR pages through the adapter and clears the
                                     `tools.srs.pendingIngestion` flag on success.
+  spawn  --ticket <n> --epic <page-url-or-id> [--dry-run] [--manifest] [--bypass-reason <text>]
+                                    Enumerate FR page children of a drafted Epic and
+                                    create a Story sub-ticket per FR under the parent
+                                    ticket. Each child lands in Backlog with the
+                                    `srs:new` label. `--dry-run` previews without
+                                    writing.
 
 Actions populated by sibling SUBs under #174 :
   draft --from codebase             Codebase audit drafter                       (SUB-13)
-  spawn                             Spawn GitHub tickets from a published SRS   (SUB-9)
   eval                              Score SRS freshness against the codebase    (SUB-10)
 
 Common options :
@@ -92,6 +97,8 @@ run_browse() { run_bin browse-tree "$@"; }
 
 run_write() { run_bin write-srs "$@"; }
 
+run_spawn() { run_bin spawn "$@"; }
+
 run_draft() {
   # `--from <source>` selects which drafter to invoke ; default = notion-pages.
   local source="notion-pages"
@@ -125,7 +132,8 @@ case "$ACTION" in
   browse) run_browse "$@" ;;
   draft) run_draft "$@" ;;
   write) run_write "$@" ;;
-  spawn|eval)
+  spawn) run_spawn "$@" ;;
+  eval)
     echo "sf-srs: action '$ACTION' not implemented yet — owned by a sibling SUB under #174." >&2
     exit 2
     ;;

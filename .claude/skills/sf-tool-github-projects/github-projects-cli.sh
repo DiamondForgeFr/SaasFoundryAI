@@ -223,16 +223,69 @@ get_ticket_status() {
 cmd_create_subtask() {
   if [ "$#" -lt 2 ]; then
     echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 create-subtask <parent-number> <title> [body]"
+    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--bypass-srs <reason>]"
     exit 1
   fi
 
-  PARENT_NUMBER=$1
-  TITLE=$2
-  BODY=${3:-""}
+  # Separate positional args from the --bypass-srs flag. The flag can appear
+  # anywhere on the command line, carries a mandatory reason, and trips rule 8
+  # off. We accept up to three positional args (parent, title, body).
+  local -a POSITIONAL=()
+  local BYPASS_SRS_REASON=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --bypass-srs)
+        if [ -z "${2:-}" ] || [[ "${2}" == --* ]]; then
+          echo -e "${RED}Error: --bypass-srs requires a reason (e.g. --bypass-srs \"emergency hotfix\")${NC}" >&2
+          exit 1
+        fi
+        BYPASS_SRS_REASON=$2
+        shift 2
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [ "${#POSITIONAL[@]}" -lt 2 ]; then
+    echo -e "${RED}Error: Missing arguments${NC}"
+    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--bypass-srs <reason>]"
+    exit 1
+  fi
+
+  PARENT_NUMBER="${POSITIONAL[0]}"
+  TITLE="${POSITIONAL[1]}"
+  BODY="${POSITIONAL[2]:-}"
   FULL_TITLE="[Parent #${PARENT_NUMBER}] ${TITLE}"
 
+  # Rule 8 (sf-workflow SKILL.md) — on SRS-enabled projects, subtask creation
+  # is supposed to flow through `srs-cli.sh spawn` so tickets inherit an SRS
+  # page. Any ad-hoc call must opt out explicitly with --bypass-srs <reason>.
+  # The reason is not interpreted — it's an audit-trail hint echoed after the
+  # success line so the intent is visible in shell history / PR review.
+  if [ -f ".saasfoundry.json" ]; then
+    local srs_backend
+    srs_backend=$(jq -r '.tools.srs.backend // empty' .saasfoundry.json 2>/dev/null)
+    if [ -n "$srs_backend" ] && [ -z "$BYPASS_SRS_REASON" ]; then
+      echo -e "${RED}✗ Rule 8: this project has SRS enabled (tools.srs.backend=${srs_backend}).${NC}" >&2
+      echo "  Feature subtasks must be spawned from a drafted SRS page via:" >&2
+      echo "    .claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url>" >&2
+      echo "" >&2
+      echo "  If this subtask is genuinely off-spec (emergency, infra work, meta-ticket, …)," >&2
+      echo "  re-run with an explicit bypass + reason:" >&2
+      echo "    $0 create-subtask ${PARENT_NUMBER} \"${TITLE}\" --bypass-srs \"<reason>\"" >&2
+      echo "" >&2
+      echo "  See .claude/skills/sf-workflow/SKILL.md → Critical rule 8." >&2
+      exit 2
+    fi
+  fi
+
   echo -e "${YELLOW}Creating subtask for parent issue #${PARENT_NUMBER}...${NC}"
+  if [ -n "$BYPASS_SRS_REASON" ]; then
+    echo -e "${BLUE}  (bypassing rule 8 — reason: ${BYPASS_SRS_REASON})${NC}"
+  fi
 
   PARENT_NODE_ID=$(gh issue view "$PARENT_NUMBER" --json id --jq ".id" 2>/dev/null)
   if [ -z "$PARENT_NODE_ID" ]; then
