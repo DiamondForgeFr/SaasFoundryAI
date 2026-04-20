@@ -2,6 +2,10 @@
 
 **ROLE**: Active development with subtasks creation and regular commits
 
+> **⚠️ SRS drafting tickets** (labelled `srs:drafting | srs:update | srs:new`) do **NOT** follow the steps below. They stay in the `In progress` board column but flow through a separate lifecycle —
+> stop here and read `statuses/3a-ai-drafting.md`. Drive the ticket with `.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> <phase>`
+> (`ai-draft | human-review | spawning | done`), never with `update-status` — the SRS guard blocks code-path transitions for those tickets.
+
 ## When to Enter This Status
 
 - After receiving assignment or confirmation from developer in Ready

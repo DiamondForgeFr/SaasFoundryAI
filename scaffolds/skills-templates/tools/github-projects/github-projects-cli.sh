@@ -406,7 +406,10 @@ cmd_get_labels() {
     exit 1
   fi
   local ticket=$1
-  gh issue view "$ticket" --json labels --jq '.labels[].name' 2>/dev/null || true
+  # Propagate gh's exit code so callers can distinguish "no labels" (exit 0, empty
+  # stdout) from "fetch failed" (non-zero) — the SRS guard relies on this to decide
+  # whether to fail-open. Do NOT swallow the exit code with `|| true`.
+  gh issue view "$ticket" --json labels --jq '.labels[].name' 2>/dev/null
 }
 
 # ───────────────────────────────────────────────────────────────────────────

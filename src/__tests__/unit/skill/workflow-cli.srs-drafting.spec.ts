@@ -45,13 +45,20 @@ async function buildSandbox(): Promise<{
   )
 
   // Fake github-projects CLI. `get-labels` emits $FAKE_LABELS (newline-
-  // separated) verbatim. `status` emits "Status: $FAKE_BOARD_STATUS".
-  // `update-status` echoes the canonical success line the real CLI prints.
-  // Every invocation is appended to $toolLogPath for assertions.
+  // separated) verbatim, or exits 1 when $FAKE_LABELS_ERROR=1 (simulates
+  // offline / auth failure so we can assert the SRS guard fails open on
+  // non-zero exit from the label-fetch path). `status` emits
+  // "Status: $FAKE_BOARD_STATUS". `update-status` echoes the canonical
+  // success line the real CLI prints. Every invocation is appended to
+  // $toolLogPath for assertions.
   const toolShim = `#!/bin/bash
 printf '%s\\n' "$*" >> '${toolLogPath}'
 case "$1" in
   get-labels)
+    if [ "\${FAKE_LABELS_ERROR:-}" = "1" ]; then
+      echo "fake-tool-cli: simulated get-labels failure" >&2
+      exit 1
+    fi
     if [ -n "\${FAKE_LABELS:-}" ]; then
       printf '%s\\n' "\${FAKE_LABELS}"
     fi
@@ -182,6 +189,24 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       const res = await runCli(['update-status', '42', 'ai testing'], sandbox, { FAKE_LABELS: 'srs:drafting' })
       expect(res.code).toBe(2)
     })
+
+    it('trims leading/trailing whitespace on the target status', async () => {
+      // Copy-paste from boards often sneaks in padding — the guard must still trip.
+      const res = await runCli(['update-status', '42', '  AI testing  '], sandbox, { FAKE_LABELS: 'srs:drafting' })
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain("'srs:drafting'")
+    })
+
+    it('fails open when the tool CLI errors on get-labels (offline / auth issue)', async () => {
+      // Honoured contract: a broken label-fetch must not block normal teams. The
+      // guard passes through and the update-status dispatch succeeds.
+      const res = await runCli(['update-status', '42', 'AI testing'], sandbox, {
+        FAKE_LABELS_ERROR: '1'
+      })
+      expect(res.code).toBe(0)
+      const toolCalls = readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))
+      expect(toolCalls).toHaveLength(1)
+    })
   })
 
   describe('transition-drafting', () => {
@@ -247,12 +272,38 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       expect(res.stderr).toContain("must be in 'In progress'")
     })
 
-    it('accepts done regardless of current board status', async () => {
+    it('accepts done when board is already Done (idempotent re-run)', async () => {
+      const res = await runCli(['transition-drafting', '42', 'done'], sandbox, {
+        FAKE_LABELS: 'srs:drafting',
+        FAKE_BOARD_STATUS: 'Done'
+      })
+      expect(res.code).toBe(0)
+    })
+
+    it('rejects done when board is not In progress / Done (e.g. Backlog)', async () => {
+      // Previously accepted — now rejected so operator mistakes (wrong phase,
+      // forgot to move to In progress) surface loudly instead of short-circuiting
+      // the drafting arc.
       const res = await runCli(['transition-drafting', '42', 'done'], sandbox, {
         FAKE_LABELS: 'srs:drafting',
         FAKE_BOARD_STATUS: 'Backlog'
       })
-      expect(res.code).toBe(0)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain("must be in 'In progress'")
+    })
+
+    it('reports a friendly error when srs-cli.sh is missing', async () => {
+      // Simulate an install gap by removing the fake srs-cli shim — the
+      // workflow CLI should refuse to dispatch instead of crashing with
+      // "No such file or directory".
+      chmodSync(path.join(sandbox.dir, '.claude/skills/sf-srs/scripts/srs-cli.sh'), 0o644)
+      const res = await runCli(['transition-drafting', '42', 'ai-draft'], sandbox, {
+        FAKE_LABELS: 'srs:drafting',
+        FAKE_BOARD_STATUS: 'In progress'
+      })
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('srs-cli.sh')
+      expect(res.stderr).toContain('executable')
     })
   })
 })
