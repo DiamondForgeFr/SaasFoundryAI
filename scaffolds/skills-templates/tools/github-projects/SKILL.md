@@ -82,6 +82,27 @@ gh label create "complexity: medium"  --color FFD700 --description "🟡 Medium 
 gh label create "complexity: complex" --color FF1493 --description "🔴 Complex / critical"
 ```
 
+## SRS workflow labels
+
+Applied on backlog / ready tickets so the `sf-srs` skill picks the right drafter when a ticket becomes active. A ticket carries at most one SRS label at a time ; absence of an SRS label means `sf-srs`
+leaves the ticket alone.
+
+| Label          | Color     | Applied when…                                                                  |
+| -------------- | --------- | ------------------------------------------------------------------------------ |
+| `srs:drafting` | `#8B5CF6` | Spec needs to be drafted / refined before the team can commit.                 |
+| `srs:update`   | `#F97316` | Existing SRS page must be updated to match code drift.                         |
+| `srs:new`      | `#3B82F6` | New Epic / FR spec to be created from scratch.                                 |
+
+Create them with (idempotent — `|| true` swallows the exit code when the label already exists) :
+
+```bash
+gh label create "srs:drafting" --color 8B5CF6 --description "sf-srs: ticket needs spec drafting / refinement" || true
+gh label create "srs:update"   --color F97316 --description "sf-srs: existing SRS page must be updated"        || true
+gh label create "srs:new"      --color 3B82F6 --description "sf-srs: create a new Epic / FR spec from scratch" || true
+```
+
+See `.claude/skills/sf-srs/SKILL.md` for the end-to-end contract and `.claude/docs/github-labels.md` for the full label catalogue.
+
 ## Example — full ticket lifecycle
 
 ```bash
