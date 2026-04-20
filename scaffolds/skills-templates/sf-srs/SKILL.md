@@ -112,6 +112,20 @@ The flag is ephemeral — it signals "the user asked us to ingest existing notes
 On partial failure during `write`, `write-srs.ts` emits a JSON report with a `rollbackHint` listing the pages it already created — Notion has no transactional rollback, so the skill surfaces this list
 to the user and suggests either archiving manually or retrying from where it failed.
 
+### Exit codes
+
+Every TS entrypoint under `src/srs/bin/` honours the same contract. The skill must branch on these codes rather than parsing stderr :
+
+| Code | Meaning                                                                              |
+| ---- | ------------------------------------------------------------------------------------ |
+| 0    | Success                                                                              |
+| 2    | Bad input — missing / malformed flag, zero candidates, empty `--ids`, bad spec shape |
+| 3    | SRS backend missing from the manifest (`tools.srs` absent)                           |
+| 4    | Unknown / invalid backend name declared in the manifest                              |
+| 5    | Backend runtime error (network, adapter `init()` failure, fetch failure)             |
+| 6    | `write` only — partial failure, JSON payload carries `rollbackHint`                  |
+| 7    | `write` only — pages created successfully but clearing `pendingIngestion` failed     |
+
 ## How other skills hand off to `sf-srs`
 
 - **`sf-workflow`** — when a ticket enters `Backlog` with the `srs:drafting` label, the workflow skill calls `srs-cli.sh draft` (or the appropriate action) and stays out of the way otherwise

@@ -47,13 +47,21 @@ function normalizeCandidates(input: unknown): DraftCandidate[] {
   throw new Error('write-srs: spec file must be a JSON array of DraftCandidate or an object with a `candidates` array.')
 }
 
-async function applyCandidate(adapter: SrsAdapter, candidate: DraftCandidate): Promise<PageRef> {
+function assertCandidateShape(candidate: DraftCandidate, index: number): void {
   if (candidate.kind === 'epic') {
-    if (!candidate.epic) throw new Error('candidate.kind === "epic" but `epic` spec is missing.')
-    return adapter.createEpicPage(candidate.epic)
+    if (!candidate.epic) throw new Error(`write-srs: candidate #${index} has kind="epic" but the "epic" spec is missing.`)
+    return
   }
-  if (!candidate.fr) throw new Error('candidate.kind === "fr" but `fr` spec is missing.')
-  return adapter.createFrPage(candidate.fr)
+  if (candidate.kind === 'fr') {
+    if (!candidate.fr) throw new Error(`write-srs: candidate #${index} has kind="fr" but the "fr" spec is missing.`)
+    return
+  }
+  throw new Error(`write-srs: candidate #${index} has an unknown kind="${String((candidate as { kind?: unknown }).kind)}" (expected "epic" or "fr").`)
+}
+
+async function applyCandidate(adapter: SrsAdapter, candidate: DraftCandidate): Promise<PageRef> {
+  if (candidate.kind === 'epic') return adapter.createEpicPage(candidate.epic!)
+  return adapter.createFrPage(candidate.fr!)
 }
 
 function clearPendingIngestion(manifestPath: string): boolean {
@@ -86,6 +94,13 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
 
   if (candidates.length === 0) {
     process.stderr.write('write-srs: spec file contains zero candidates — nothing to write.\n')
+    return 2
+  }
+
+  try {
+    candidates.forEach((candidate, index) => assertCandidateShape(candidate, index))
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
   }
 
