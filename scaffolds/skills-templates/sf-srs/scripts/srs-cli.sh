@@ -29,6 +29,13 @@ Actions populated by sibling SUBs under #174 :
   spawn                             Spawn GitHub tickets from a published SRS   (SUB-9)
   eval                              Score SRS freshness against the codebase    (SUB-10)
 
+Common options :
+  --manifest <path>                 Manifest file to read (default: .saasfoundry.json)
+
+Exit codes (shared contract) :
+  0 success · 2 bad input · 3 missing backend · 4 unknown backend · 5 runtime ·
+  6 write partial (rollbackHint) · 7 write ok but pendingIngestion clear failed
+
 Dispatch reads `tools.srs.backend` from `.saasfoundry.json` and routes through
 the matching SrsAdapter. See .claude/skills/sf-srs/SKILL.md for the contract.
 EOF
@@ -67,6 +74,10 @@ run_bin() {
       echo "sf-srs $bin: `node` / `npx` must be on PATH to run the TS entrypoint." >&2
       exit 1
     fi
+    if ! (cd "$project_root" && npx --no-install tsx --version >/dev/null 2>&1); then
+      echo "sf-srs $bin: tsx is not installed in $project_root — run 'npm install' there or 'npm run build' to use the dist/ entrypoint." >&2
+      exit 1
+    fi
     (cd "$project_root" && npx --no-install tsx "src/srs/bin/$bin.ts" "$@")
   else
     echo "sf-srs $bin: neither dist/srs/bin/$bin.js nor src/srs/bin/$bin.ts found under $project_root." >&2
@@ -93,7 +104,7 @@ run_draft() {
     esac
   done
   case "$source" in
-    notion-pages) run_bin draft-from-notion-pages "${forwarded[@]}" ;;
+    notion-pages) run_bin draft-from-notion-pages ${forwarded[@]+"${forwarded[@]}"} ;;
     codebase)
       echo "sf-srs draft --from codebase: not implemented yet — owned by SUB-13." >&2
       exit 2

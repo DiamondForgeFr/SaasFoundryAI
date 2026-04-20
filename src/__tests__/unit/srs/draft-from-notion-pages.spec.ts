@@ -99,6 +99,16 @@ describe('runDraftFromNotionPages', () => {
     expect(code).toBe(2)
   })
 
+  it('returns 2 when every pageId is blank / whitespace', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('draft-stub', () => adapter)
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'draft-stub' } } })
+    const code = await runDraftFromNotionPages({ pageIds: ['', '   ', '\t'], manifestPath })
+    expect(code).toBe(2)
+    expect(adapter.fetched).toEqual([])
+  })
+
   it('returns 3 when backend is missing', async () => {
     jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const manifestPath = writeManifest({ tools: {} })

@@ -197,6 +197,9 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       if (!startProjectAnswers.srsBackend) missing.push('srsBackend (--srs-backend)')
       if (!startProjectAnswers.srsParentPageInput) missing.push('srsParentPageInput (--srs-parent-page-input)')
       if (!startProjectAnswers.notionApiToken) missing.push('notionApiToken (--notion-api-token)')
+      if (startProjectAnswers.srsIngestEnable && !startProjectAnswers.srsIngestParentInput) {
+        missing.push('srsIngestParentInput (--srs-ingest-parent-input)')
+      }
       if (missing.length > 0) {
         throw new Error(`SRS bootstrap was enabled but the following values are missing: ${missing.join(', ')}. Either provide them or pass --no-srs-enable.`)
       }
@@ -220,11 +223,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
 
       // Optional ingestion flag — resolve the source parent and record pendingIngestion.
       if (startProjectAnswers.srsIngestEnable) {
-        if (!startProjectAnswers.srsIngestParentInput) {
-          throw new Error('SRS ingestion was enabled but srsIngestParentInput (--srs-ingest-parent-input) is missing. Either provide it or pass --no-srs-ingest-enable.')
-        }
         spinner.text = 'Resolving SRS ingestion source page...'
-        const sourceParent = await adapter.resolveParent(startProjectAnswers.srsIngestParentInput)
+        const sourceParent = await adapter.resolveParent(startProjectAnswers.srsIngestParentInput!)
         srsTools.pendingIngestion = {
           sourceBackend: 'notion',
           sourceParent: { id: sourceParent.id, url: sourceParent.url ?? '', name: sourceParent.name },

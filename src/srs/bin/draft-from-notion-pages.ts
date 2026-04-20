@@ -40,14 +40,15 @@ export async function runDraftFromNotionPages(options: DraftFromNotionPagesOptio
   }
 
   try {
+    const trimmedIds = options.pageIds.map((id) => id.trim()).filter(Boolean)
+    if (trimmedIds.length === 0) {
+      process.stderr.write('draft-from-notion-pages: --ids contained only empty values — nothing to fetch.\n')
+      return 2
+    }
     const adapter = await createSrsAdapter(manifest)
     await adapter.init()
     const pages: RawContent[] = []
-    for (const id of options.pageIds) {
-      const trimmed = id.trim()
-      if (!trimmed) continue
-      pages.push(await adapter.fetchPage(trimmed))
-    }
+    for (const id of trimmedIds) pages.push(await adapter.fetchPage(id))
     const output: DraftFromNotionPagesOutput = { source: 'notion-pages', pages }
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
     return 0

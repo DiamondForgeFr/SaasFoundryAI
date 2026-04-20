@@ -210,13 +210,23 @@ describe('runWriteSrs', () => {
     expect(updatedManifest.tools.srs.pendingIngestion).toBeDefined()
   })
 
-  it('rejects an epic candidate missing its epic spec', async () => {
+  it('rejects an epic candidate missing its epic spec with exit 2 (bad input)', async () => {
     registerSrsBackend('write-stub', () => new StubAdapter())
-    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
     const bogus: DraftCandidate = { kind: 'epic', confidence: 'low', source: { kind: 'notion-pages' } }
     const specPath = writeSpec([bogus])
     const code = await runWriteSrs({ specPath, manifestPath })
-    expect(code).toBe(6)
+    expect(code).toBe(2)
+  })
+
+  it('rejects a candidate with unknown kind upfront with exit 2', async () => {
+    registerSrsBackend('write-stub', () => new StubAdapter())
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const bogus = { kind: 'rogue', confidence: 'low', source: { kind: 'notion-pages' } } as unknown as DraftCandidate
+    const specPath = writeSpec([bogus])
+    const code = await runWriteSrs({ specPath, manifestPath })
+    expect(code).toBe(2)
   })
 })
