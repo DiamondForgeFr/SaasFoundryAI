@@ -67,6 +67,9 @@ program
   .option('--no-srs-enable', 'Skip SRS bootstrap')
   .option('--srs-backend <backend>', 'SRS backend (V1: notion)')
   .option('--srs-parent-page-input <urlOrId>', 'URL or ID of the Notion parent page that will host the SRS workspace')
+  .option('--srs-ingest-enable', 'Enable ingestion of existing notes into the SRS after bootstrap')
+  .option('--no-srs-ingest-enable', 'Skip existing-notes ingestion')
+  .option('--srs-ingest-parent-input <urlOrId>', 'URL or ID of the Notion parent page that contains the existing notes to ingest')
   // Workflow
   .option('--workflow <config>', 'Workflow preset or "none" to skip')
   .option('--no-workflow', 'Skip workflow configuration entirely')

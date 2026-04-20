@@ -57,6 +57,10 @@ export interface NewCommandOptions {
   srsBackend?: 'notion'
   srsParentPageInput?: string
 
+  // SRS existing-notes ingestion (opt-in, requires srsEnable)
+  srsIngestEnable?: boolean
+  srsIngestParentInput?: string
+
   // Workflow (flag allows skipping; full config still goes through `sf workflow` or interactive)
   workflow?: string | boolean
 
@@ -136,6 +140,11 @@ export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answer
   else if (opts.nonInteractive === true) prefill.srsEnable = false
   if (opts.srsBackend !== undefined) prefill.srsBackend = opts.srsBackend
   if (opts.srsParentPageInput !== undefined) prefill.srsParentPageInput = opts.srsParentPageInput
+
+  // Ingestion is also opt-in; same non-interactive safety as srsEnable.
+  if (opts.srsIngestEnable !== undefined) prefill.srsIngestEnable = opts.srsIngestEnable
+  else if (opts.nonInteractive === true) prefill.srsIngestEnable = false
+  if (opts.srsIngestParentInput !== undefined) prefill.srsIngestParentInput = opts.srsIngestParentInput
 
   return prefill
 }

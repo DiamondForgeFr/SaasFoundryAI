@@ -49,6 +49,8 @@ export interface Answers {
   srsEnable?: boolean
   srsBackend?: 'notion'
   srsParentPageInput?: string
+  srsIngestEnable?: boolean
+  srsIngestParentInput?: string
   workflow?: WorkflowConfig
   aiRules?: AIRules
 }
@@ -180,6 +182,12 @@ export interface SrsPageRef {
   name: string
 }
 
+export interface PendingIngestion {
+  sourceBackend: 'notion'
+  sourceParent: SrsPageRef
+  createdAt: string
+}
+
 export interface SrsToolConfig {
   enabled: boolean
   backend: 'notion'
@@ -187,6 +195,7 @@ export interface SrsToolConfig {
   categories?: {
     userFlowsAndSpecifications?: SrsPageRef
   }
+  pendingIngestion?: PendingIngestion
 }
 
 export interface ToolsConfig {

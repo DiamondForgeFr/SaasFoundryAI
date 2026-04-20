@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # sf-srs orchestrator — single entrypoint for every skill that hands off to SRS work.
-# Body grows as sibling SUBs under #174 land ; this revision implements `help` + `validate`.
+# Body grows as sibling SUBs under #174 land ; this revision implements
+# `help`, `validate`, `browse`, `draft`, `write`.
 
 set -euo pipefail
 
@@ -11,14 +12,22 @@ usage() {
 Usage: srs-cli.sh <action> [args...]
 
 Actions:
-  help                 Print this message
-  validate [manifest]  Run createSrsAdapter(manifest).init() to smoke-test the backend.
-                       Manifest path defaults to ./.saasfoundry.json.
+  help                              Print this message
+  validate [manifest]               Smoke-test the configured backend via adapter.init()
+  browse --parent <id> [--manifest] List direct children of a parent page (JSON)
+  draft --from notion-pages --ids <id1,id2,...> [--manifest]
+                                    Fetch pages from the backend as RawContent (JSON).
+                                    The skill then drafts Epic/FR specs conversationally
+                                    and hands them back via `write`.
+  write  --spec <path> [--manifest] [--no-clear-pending]
+                                    Apply a DraftCandidate[] spec file : creates Epic /
+                                    FR pages through the adapter and clears the
+                                    `tools.srs.pendingIngestion` flag on success.
 
 Actions populated by sibling SUBs under #174 :
-  draft                Run a drafter matching the configured backend              (SUB-6, 13)
-  spawn                Spawn GitHub tickets from a published SRS                   (SUB-9)
-  eval                 Score SRS freshness against the codebase                    (SUB-10)
+  draft --from codebase             Codebase audit drafter                       (SUB-13)
+  spawn                             Spawn GitHub tickets from a published SRS   (SUB-9)
+  eval                              Score SRS freshness against the codebase    (SUB-10)
 
 Dispatch reads `tools.srs.backend` from `.saasfoundry.json` and routes through
 the matching SrsAdapter. See .claude/skills/sf-srs/SKILL.md for the contract.
@@ -43,24 +52,57 @@ find_project_root() {
   echo "$PWD"
 }
 
-run_validate() {
-  local manifest="${1:-.saasfoundry.json}"
+# Run a TS entrypoint via the dist / src fallback pattern.
+# $1 = bin script basename (without extension), $2+ = args forwarded.
+run_bin() {
+  local bin="$1"
+  shift
   local project_root
   project_root="$(find_project_root)"
 
-  if [[ -f "$project_root/dist/srs/bin/validate.js" ]]; then
-    node "$project_root/dist/srs/bin/validate.js" "$manifest"
-  elif [[ -f "$project_root/src/srs/bin/validate.ts" ]]; then
+  if [[ -f "$project_root/dist/srs/bin/$bin.js" ]]; then
+    node "$project_root/dist/srs/bin/$bin.js" "$@"
+  elif [[ -f "$project_root/src/srs/bin/$bin.ts" ]]; then
     if ! command -v npx >/dev/null 2>&1; then
-      echo "sf-srs validate: `node` / `npx` must be on PATH to run the TS entrypoint." >&2
+      echo "sf-srs $bin: `node` / `npx` must be on PATH to run the TS entrypoint." >&2
       exit 1
     fi
-    (cd "$project_root" && npx --no-install tsx src/srs/bin/validate.ts "$manifest")
+    (cd "$project_root" && npx --no-install tsx "src/srs/bin/$bin.ts" "$@")
   else
-    echo "sf-srs validate: neither dist/srs/bin/validate.js nor src/srs/bin/validate.ts found under $project_root." >&2
+    echo "sf-srs $bin: neither dist/srs/bin/$bin.js nor src/srs/bin/$bin.ts found under $project_root." >&2
     echo "Run `npm run build` in the SaaSFoundry checkout, or install sf-srs via `sf skill install sf-srs` (SUB-14.4)." >&2
     exit 1
   fi
+}
+
+run_validate() { run_bin validate "${1:-.saasfoundry.json}"; }
+
+run_browse() { run_bin browse-tree "$@"; }
+
+run_write() { run_bin write-srs "$@"; }
+
+run_draft() {
+  # `--from <source>` selects which drafter to invoke ; default = notion-pages.
+  local source="notion-pages"
+  local forwarded=()
+  while (( "$#" )); do
+    case "$1" in
+      --from) source="${2:?--from requires a value}"; shift 2 ;;
+      --from=*) source="${1#--from=}"; shift ;;
+      *) forwarded+=("$1"); shift ;;
+    esac
+  done
+  case "$source" in
+    notion-pages) run_bin draft-from-notion-pages "${forwarded[@]}" ;;
+    codebase)
+      echo "sf-srs draft --from codebase: not implemented yet — owned by SUB-13." >&2
+      exit 2
+      ;;
+    *)
+      echo "sf-srs draft: unknown --from value '$source' (expected: notion-pages | codebase)." >&2
+      exit 1
+      ;;
+  esac
 }
 
 ACTION="${1:-help}"
@@ -69,7 +111,10 @@ shift || true
 case "$ACTION" in
   help|-h|--help) usage ;;
   validate) run_validate "$@" ;;
-  draft|spawn|eval)
+  browse) run_browse "$@" ;;
+  draft) run_draft "$@" ;;
+  write) run_write "$@" ;;
+  spawn|eval)
     echo "sf-srs: action '$ACTION' not implemented yet — owned by a sibling SUB under #174." >&2
     exit 2
     ;;

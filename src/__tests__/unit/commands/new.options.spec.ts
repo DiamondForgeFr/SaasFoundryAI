@@ -133,6 +133,55 @@ describe('buildPrefillFromOptions', () => {
       frontendRepoUrl: 'git@github.com:acme/web.git'
     })
   })
+
+  describe('SRS + ingestion flags', () => {
+    it('maps --srs-enable / --srs-backend / --srs-parent-page-input to prefill', () => {
+      const prefill = buildPrefillFromOptions({
+        srsEnable: true,
+        srsBackend: 'notion',
+        srsParentPageInput: 'https://www.notion.so/Parent-abc123'
+      })
+
+      expect(prefill).toMatchObject({
+        srsEnable: true,
+        srsBackend: 'notion',
+        srsParentPageInput: 'https://www.notion.so/Parent-abc123'
+      })
+    })
+
+    it('maps --srs-ingest-enable / --srs-ingest-parent-input to prefill', () => {
+      const prefill = buildPrefillFromOptions({
+        srsIngestEnable: true,
+        srsIngestParentInput: 'https://www.notion.so/Notes-parent'
+      })
+
+      expect(prefill).toMatchObject({
+        srsIngestEnable: true,
+        srsIngestParentInput: 'https://www.notion.so/Notes-parent'
+      })
+    })
+
+    it('defaults srsEnable and srsIngestEnable to false in --non-interactive mode when not explicitly set', () => {
+      const prefill = buildPrefillFromOptions({ nonInteractive: true })
+
+      expect(prefill.srsEnable).toBe(false)
+      expect(prefill.srsIngestEnable).toBe(false)
+    })
+
+    it('respects explicit --no-srs-enable / --no-srs-ingest-enable even outside non-interactive mode', () => {
+      const prefill = buildPrefillFromOptions({ srsEnable: false, srsIngestEnable: false })
+
+      expect(prefill.srsEnable).toBe(false)
+      expect(prefill.srsIngestEnable).toBe(false)
+    })
+
+    it('leaves srsEnable / srsIngestEnable undefined when neither flag nor --non-interactive is set (interactive defaults preserved)', () => {
+      const prefill = buildPrefillFromOptions({})
+
+      expect(prefill.srsEnable).toBeUndefined()
+      expect(prefill.srsIngestEnable).toBeUndefined()
+    })
+  })
 })
 
 describe('shouldSkipWorkflow', () => {

@@ -16,6 +16,11 @@ export interface SrsPromptsAnswers {
   notionApiVersion?: string
 }
 
+export interface SrsIngestionPromptsAnswers {
+  srsIngestEnable: boolean
+  srsIngestParentInput?: string
+}
+
 export async function promptSrsConfiguration(currentAnswers: Partial<Answers>, options: SrsPromptsOptions = {}): Promise<SrsPromptsAnswers> {
   const { prefill = {}, nonInteractive = false } = options
 
@@ -82,5 +87,46 @@ export async function promptSrsConfiguration(currentAnswers: Partial<Answers>, o
     srsBackend: backendAnswer.srsBackend ?? 'notion',
     srsParentPageInput: credsAndParent.srsParentPageInput,
     notionApiToken: credsAndParent.notionApiToken ?? currentAnswers.notionApiToken
+  }
+}
+
+export async function promptSrsIngestion(options: PromptOptions = {}): Promise<SrsIngestionPromptsAnswers> {
+  const { prefill = {}, nonInteractive = false } = options
+
+  const enableAnswer = await promptWithPrefill<Pick<Answers, 'srsIngestEnable'>>(
+    [
+      {
+        type: 'confirm',
+        name: 'srsIngestEnable',
+        message: 'Do you have existing notes or specs you would like to ingest into the SRS?',
+        default: false
+      }
+    ],
+    { prefill, nonInteractive }
+  )
+
+  if (!enableAnswer.srsIngestEnable) {
+    return { srsIngestEnable: false }
+  }
+
+  const parentAnswer = await promptWithPrefill<Pick<Answers, 'srsIngestParentInput'>>(
+    [
+      {
+        type: 'input',
+        name: 'srsIngestParentInput',
+        message: 'Paste the URL or ID of the Notion page that contains the existing notes to ingest (share it with your integration first):',
+        validate: (input: string) => (input && input.trim().length > 0 ? true : 'Parent page URL or ID is required')
+      }
+    ],
+    { prefill, nonInteractive }
+  )
+
+  if (!nonInteractive) {
+    console.log(chalk.gray('  The ingestion workflow will run next time you open this project in Claude Code — the sf-srs skill will guide you through it.'))
+  }
+
+  return {
+    srsIngestEnable: true,
+    srsIngestParentInput: parentAnswer.srsIngestParentInput
   }
 }

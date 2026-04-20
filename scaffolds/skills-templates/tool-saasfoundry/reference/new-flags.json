@@ -140,6 +140,22 @@
       "requiresWhen": "srsEnable=true",
       "description": "URL or ID of the Notion parent page that will host the SRS root page. Must be shared with the Notion integration."
     },
+    "srsIngestEnable": {
+      "flag": "--srs-ingest-enable",
+      "negationFlag": "--no-srs-ingest-enable",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "requiresWhen": "srsEnable=true",
+      "description": "Opt-in to ingest existing notes / specs into the SRS after bootstrap. Stamps `tools.srs.pendingIngestion` in the manifest ; the sf-srs skill runs the ingestion conversation next time you open the project in Claude Code."
+    },
+    "srsIngestParentInput": {
+      "flag": "--srs-ingest-parent-input",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "srsIngestEnable=true",
+      "description": "URL or ID of the Notion parent page that contains the existing notes to ingest. Must be shared with the Notion integration."
+    },
     "workflow": {
       "flag": "--workflow",
       "negationFlag": "--no-workflow",
@@ -183,6 +199,10 @@
     "srsEnable": {
       "true": "Recommend when product requirements should be centralised for AI agents (User flows & Specifications). Creates a Notion workspace under a parent page shared with the integration.",
       "false": "Default — opt-in later via `sf update --add-modules srs --srs-backend notion --srs-parent-page-input <urlOrId>`."
+    },
+    "srsIngestEnable": {
+      "true": "Recommend when the user already has legacy notes / specs in Notion they want imported as Epics / FRs. The CLI only records the intent ; the sf-srs skill drives the actual ingestion conversationally on next Claude Code open.",
+      "false": "Default — the user can always ingest notes later by setting `tools.srs.pendingIngestion` manually or re-running `sf new`."
     }
   }
 }

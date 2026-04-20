@@ -1,0 +1,222 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { DraftCandidate, EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../builders/srs/types'
+import { registerSrsBackend, unregisterSrsBackend } from '../../../srs'
+import { runWriteSrs } from '../../../srs/bin/write-srs'
+
+class StubAdapter implements SrsAdapter {
+  createdEpics: EpicSpec[] = []
+  createdFrs: FrSpec[] = []
+  constructor(private readonly failOnIndex?: number) {}
+  private calls = 0
+  async init(): Promise<void> {}
+  async resolveParent(input: string): Promise<ResolvedParent> {
+    return { id: input, name: input }
+  }
+  async createPage(parentPageId: string, title: string): Promise<PageRef> {
+    void parentPageId
+    return { id: 'p', url: '', title }
+  }
+  async createEpicPage(spec: EpicSpec): Promise<PageRef> {
+    if (this.failOnIndex !== undefined && this.calls === this.failOnIndex) {
+      this.calls++
+      throw new Error('notion rate limited')
+    }
+    this.calls++
+    this.createdEpics.push(spec)
+    return { id: `epic-${this.createdEpics.length}`, url: `https://notion.so/epic-${this.createdEpics.length}`, title: spec.title }
+  }
+  async createFrPage(spec: FrSpec): Promise<PageRef> {
+    if (this.failOnIndex !== undefined && this.calls === this.failOnIndex) {
+      this.calls++
+      throw new Error('notion rate limited')
+    }
+    this.calls++
+    this.createdFrs.push(spec)
+    return { id: `fr-${this.createdFrs.length}`, url: `https://notion.so/fr-${this.createdFrs.length}`, title: spec.fr.title }
+  }
+  async updatePage(pageId: string, content: PageContent): Promise<void> {
+    void pageId
+    void content
+  }
+  async fetchPage(pageId: string): Promise<RawContent> {
+    return { pageId, title: '', url: '', blocks: [] }
+  }
+  async listChildren(): Promise<PageRef[]> {
+    return []
+  }
+}
+
+function makeEpic(title: string): DraftCandidate {
+  const epic: EpicSpec = { title, parentPageId: 'root', urs: [], frs: [] }
+  return { kind: 'epic', confidence: 'medium', epic, source: { kind: 'notion-pages' } }
+}
+
+function makeFr(title: string): DraftCandidate {
+  const fr: FrSpec = { parentEpicPageId: 'epic-1', fr: { id: 'FR-1', title } }
+  return { kind: 'fr', confidence: 'medium', fr, source: { kind: 'notion-pages' } }
+}
+
+describe('runWriteSrs', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'sf-srs-write-'))
+  })
+
+  afterEach(() => {
+    unregisterSrsBackend('write-stub')
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  const writeManifest = (body: unknown): string => {
+    const p = join(tmp, '.saasfoundry.json')
+    writeFileSync(p, JSON.stringify(body, null, 2))
+    return p
+  }
+
+  const writeSpec = (candidates: unknown): string => {
+    const p = join(tmp, 'spec.json')
+    writeFileSync(p, JSON.stringify(candidates))
+    return p
+  }
+
+  it('creates epic + fr pages and clears pendingIngestion on full success', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    const stdout: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+
+    const manifestPath = writeManifest({
+      tools: {
+        srs: {
+          backend: 'write-stub',
+          pendingIngestion: { sourceBackend: 'notion', sourceParent: { id: 'p', url: '', name: 'n' }, createdAt: 'x' }
+        }
+      }
+    })
+    const specPath = writeSpec([makeEpic('Auth'), makeFr('Login endpoint')])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(0)
+    expect(adapter.createdEpics).toHaveLength(1)
+    expect(adapter.createdFrs).toHaveLength(1)
+    const body = JSON.parse(stdout.join(''))
+    expect(body.created).toHaveLength(2)
+    expect(body.failed).toHaveLength(0)
+    expect(body.pendingIngestionCleared).toBe(true)
+    const updatedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    expect(updatedManifest.tools.srs.pendingIngestion).toBeUndefined()
+    expect(updatedManifest.tools.srs.backend).toBe('write-stub')
+  })
+
+  it('surfaces a rollbackHint listing previously created pages on partial failure', async () => {
+    const adapter = new StubAdapter(1)
+    registerSrsBackend('write-stub', () => adapter)
+    const stdout: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const specPath = writeSpec([makeEpic('Auth'), makeEpic('Billing'), makeEpic('Inbox')])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(6)
+    const body = JSON.parse(stdout.join(''))
+    expect(body.created).toHaveLength(1)
+    expect(body.failed).toHaveLength(1)
+    expect(body.failed[0].index).toBe(1)
+    expect(body.pendingIngestionCleared).toBe(false)
+    expect(body.rollbackHint).toMatch(/1 page\(s\) were created/)
+    expect(body.rollbackHint).toMatch(/https:\/\/notion\.so\/epic-1/)
+  })
+
+  it('reports a first-candidate failure with a no-rollback hint', async () => {
+    const adapter = new StubAdapter(0)
+    registerSrsBackend('write-stub', () => adapter)
+    const stdout: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const specPath = writeSpec([makeEpic('Auth'), makeEpic('Billing')])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(6)
+    const body = JSON.parse(stdout.join(''))
+    expect(body.created).toHaveLength(0)
+    expect(body.rollbackHint).toMatch(/Nothing to roll back/)
+  })
+
+  it('returns 2 when spec is empty', async () => {
+    registerSrsBackend('write-stub', () => new StubAdapter())
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const specPath = writeSpec([])
+    const code = await runWriteSrs({ specPath, manifestPath })
+    expect(code).toBe(2)
+  })
+
+  it('returns 2 when spec has invalid shape (not an array or candidates wrapper)', async () => {
+    registerSrsBackend('write-stub', () => new StubAdapter())
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const specPath = writeSpec({ rogue: 'shape' })
+    const code = await runWriteSrs({ specPath, manifestPath })
+    expect(code).toBe(2)
+  })
+
+  it('accepts { candidates: [...] } wrapper shape', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const specPath = writeSpec({ candidates: [makeEpic('Auth')] })
+    const code = await runWriteSrs({ specPath, manifestPath })
+    expect(code).toBe(0)
+    expect(adapter.createdEpics).toHaveLength(1)
+  })
+
+  it('skips pendingIngestion clearing when --no-clear-pending is set', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    const manifestPath = writeManifest({
+      tools: {
+        srs: {
+          backend: 'write-stub',
+          pendingIngestion: { sourceBackend: 'notion', sourceParent: { id: 'p', url: '', name: 'n' }, createdAt: 'x' }
+        }
+      }
+    })
+    const specPath = writeSpec([makeEpic('Auth')])
+
+    const code = await runWriteSrs({ specPath, manifestPath, clearPendingIngestion: false })
+    expect(code).toBe(0)
+    const updatedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    expect(updatedManifest.tools.srs.pendingIngestion).toBeDefined()
+  })
+
+  it('rejects an epic candidate missing its epic spec', async () => {
+    registerSrsBackend('write-stub', () => new StubAdapter())
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const bogus: DraftCandidate = { kind: 'epic', confidence: 'low', source: { kind: 'notion-pages' } }
+    const specPath = writeSpec([bogus])
+    const code = await runWriteSrs({ specPath, manifestPath })
+    expect(code).toBe(6)
+  })
+})
