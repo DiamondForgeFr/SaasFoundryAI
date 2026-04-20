@@ -15,11 +15,11 @@ and to let `sf-srs` detect drafting / update / creation events on the board.
 
 The SRS workflow relies on three labels applied by maintainers on backlog / ready tickets. `sf-srs` reads them to decide which drafter (or spawner) to engage :
 
-| Label          | Color     | Applied when…                                                                                    | `sf-srs` reaction                                                                                 |
-| -------------- | --------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `srs:drafting` | `#8B5CF6` | A ticket needs its FR / Epic specification drafted or refined before the team can commit to it.  | The skill enters drafting mode : browse → draft → write (see `sf-srs/SKILL.md`).                  |
-| `srs:update`   | `#F97316` | An existing SRS page must be updated to match code that has drifted from its documented spec.    | The skill audits the linked page, proposes a diff, and updates in place (owned by SUB-8).         |
-| `srs:new`      | `#3B82F6` | A new Epic / FR page must be created from scratch (no existing notes, purely forward-looking).   | The skill runs the new-spec drafter (interactive — owned by SUB-8) and writes via `write-srs`.    |
+| Label          | Color     | Applied when…                                                                                   | `sf-srs` reaction                                                                              |
+| -------------- | --------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `srs:drafting` | `#8B5CF6` | A ticket needs its FR / Epic specification drafted or refined before the team can commit to it. | The skill enters drafting mode : browse → draft → write (see `sf-srs/SKILL.md`).               |
+| `srs:update`   | `#F97316` | An existing SRS page must be updated to match code that has drifted from its documented spec.   | The skill audits the linked page, proposes a diff, and updates in place (owned by SUB-8).      |
+| `srs:new`      | `#3B82F6` | A new Epic / FR page must be created from scratch (no existing notes, purely forward-looking).  | The skill runs the new-spec drafter (interactive — owned by SUB-8) and writes via `write-srs`. |
 
 A ticket carries at most one SRS label at a time. `sf-srs` treats "no SRS label" as "this ticket does not need SRS involvement".
 
