@@ -26,9 +26,10 @@ Actions:
   spawn  --ticket <n> --epic <page-url-or-id> [--dry-run] [--manifest] [--bypass-reason <text>]
                                     Enumerate FR page children of a drafted Epic and
                                     create a Story sub-ticket per FR under the parent
-                                    ticket. Each child lands in Backlog with the
-                                    `srs:new` label. `--dry-run` previews without
-                                    writing.
+                                    ticket. Each child is created as a GitHub
+                                    sub-issue tagged `srs:new`; board placement
+                                    follows the project's default automation.
+                                    `--dry-run` previews without writing.
 
 Actions populated by sibling SUBs under #174 :
   draft --from codebase             Codebase audit drafter                       (SUB-13)

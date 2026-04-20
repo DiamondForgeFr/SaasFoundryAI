@@ -25,18 +25,35 @@ export interface SpawnIO {
   stdout: (chunk: string) => void
   stderr: (chunk: string) => void
   createSubtask: (parent: string, title: string, body: string, bypassReason: string) => { childNumber: string }
-  applyLabel: (issueNumber: string, label: string) => void
 }
 
-function parseArgs(argv: string[]): SpawnOptions {
+function takeValue(argv: string[], i: number, flag: string): string {
+  const next = argv[i + 1]
+  if (next === undefined || next.startsWith('--')) {
+    throw new Error(`spawn: ${flag} requires a value`)
+  }
+  return next
+}
+
+export function parseArgs(argv: string[]): SpawnOptions {
   const opts: SpawnOptions = { ticket: '', epic: '', dryRun: false, manifestPath: '.saasfoundry.json', bypassReason: 'spawned-from-srs' }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    if (a === '--ticket') opts.ticket = argv[++i] ?? ''
-    else if (a === '--epic') opts.epic = argv[++i] ?? ''
-    else if (a === '--dry-run') opts.dryRun = true
-    else if (a === '--manifest') opts.manifestPath = argv[++i] ?? '.saasfoundry.json'
-    else if (a === '--bypass-reason') opts.bypassReason = argv[++i] ?? opts.bypassReason
+    if (a === '--ticket') {
+      opts.ticket = takeValue(argv, i, '--ticket')
+      i++
+    } else if (a === '--epic') {
+      opts.epic = takeValue(argv, i, '--epic')
+      i++
+    } else if (a === '--dry-run') {
+      opts.dryRun = true
+    } else if (a === '--manifest') {
+      opts.manifestPath = takeValue(argv, i, '--manifest')
+      i++
+    } else if (a === '--bypass-reason') {
+      opts.bypassReason = takeValue(argv, i, '--bypass-reason')
+      i++
+    }
   }
   if (!opts.ticket) throw new Error('spawn: missing --ticket <ticket-number>')
   if (!opts.epic) throw new Error('spawn: missing --epic <page-url-or-id>')
@@ -53,17 +70,22 @@ function parseManifest(path: string): SrsManifestSubset {
   }
 }
 
-// Best-effort FR id extraction from the child page title. Convention (SUB-3
-// page template): "FR-001 — Login flow" / "FR-001: Login flow". Falls back
-// to the full title when no id pattern is present.
+// Parse the SUB-3 page template convention ("FR-001 — Login flow" / "FR-001: Login flow").
+// When the title doesn't match, hasFrId=false and the id/title are identical (the raw title);
+// callers are expected to surface a warning and avoid rendering "title: title" duplicates.
+export function parseFrTitle(pageTitle: string): { id: string; title: string; hasFrId: boolean } {
+  const match = pageTitle.match(/^\s*(FR-\d+)\s*[—:\-]\s*(.+)$/i)
+  if (match) return { id: match[1].toUpperCase(), title: match[2].trim(), hasFrId: true }
+  const trimmed = pageTitle.trim()
+  return { id: trimmed, title: trimmed, hasFrId: false }
+}
+
 export function extractFrId(title: string): string {
-  const match = title.match(/^\s*(FR-\d+)/i)
-  return match ? match[1].toUpperCase() : title.trim()
+  return parseFrTitle(title).id
 }
 
 export function extractFrTitle(title: string): string {
-  const match = title.match(/^\s*FR-\d+\s*[—:\-]\s*(.+)$/i)
-  return match ? match[1].trim() : title.trim()
+  return parseFrTitle(title).title
 }
 
 function defaultIO(): SpawnIO {
@@ -77,9 +99,6 @@ function defaultIO(): SpawnIO {
       })
       const match = output.match(/#(\d+)\s+linked/)
       return { childNumber: match ? match[1] : '' }
-    },
-    applyLabel: (issueNumber, label) => {
-      execFileSync('gh', ['issue', 'edit', issueNumber, '--add-label', label], { stdio: ['ignore', 'pipe', 'pipe'] })
     }
   }
 }
@@ -135,9 +154,14 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   const planned: PlannedCreation[] = children.map((child) => {
-    const fr: FrItem = { id: extractFrId(child.title), title: extractFrTitle(child.title) }
+    const parsed = parseFrTitle(child.title)
+    if (!parsed.hasFrId) {
+      io.stderr(`  ⚠ spawn: child page "${child.title}" does not match the "FR-### — Title" convention; using raw title as the ticket name.\n`)
+    }
+    const fr: FrItem = { id: parsed.id, title: parsed.title }
     const spec: StoryTicketBodySpec = { fr, frPageUrl: child.url, mainSpecUrl }
-    return { frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec) }
+    const ticketTitle = parsed.hasFrId ? `${fr.id}: ${fr.title}` : fr.title
+    return { frId: fr.id, title: ticketTitle, frPageUrl: child.url, body: renderStoryTicketBody(spec) }
   })
 
   io.stdout(`spawn: found ${planned.length} FR page(s) under the epic — planning Story tickets under parent #${options.ticket}\n`)
@@ -160,12 +184,6 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       }
       io.stdout(`  ✓ ${p.frId} → #${childNumber}\n`)
       created.push(childNumber)
-      try {
-        io.applyLabel(childNumber, 'srs:new')
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        io.stderr(`    (warning: could not add srs:new label to #${childNumber}: ${message})\n`)
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       io.stderr(`  ✗ failed to create ${p.frId}: ${message}\n`)

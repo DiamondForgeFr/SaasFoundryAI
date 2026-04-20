@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../../builders/srs/types'
-import { extractFrId, extractFrTitle, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
+import { extractFrId, extractFrTitle, parseArgs, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../../srs'
 
 class StubAdapter implements SrsAdapter {
@@ -47,7 +47,6 @@ interface TestIO extends SpawnIO {
   stdout: jest.Mock
   stderr: jest.Mock
   createSubtask: jest.Mock
-  applyLabel: jest.Mock
   stdoutBuffer: string[]
   stderrBuffer: string[]
 }
@@ -69,9 +68,54 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
     void reason
     return { childNumber: String(nextNumber++) }
   })
-  const applyLabel = jest.fn(() => undefined)
-  return Object.assign({ stdout, stderr, createSubtask, applyLabel, stdoutBuffer, stderrBuffer }, overrides)
+  return Object.assign({ stdout, stderr, createSubtask, stdoutBuffer, stderrBuffer }, overrides)
 }
+
+describe('parseArgs', () => {
+  it('parses the minimal happy path', () => {
+    const opts = parseArgs(['--ticket', '42', '--epic', 'epic-url'])
+    expect(opts.ticket).toBe('42')
+    expect(opts.epic).toBe('epic-url')
+    expect(opts.dryRun).toBe(false)
+    expect(opts.manifestPath).toBe('.saasfoundry.json')
+    expect(opts.bypassReason).toBe('spawned-from-srs')
+  })
+
+  it('accepts --dry-run and custom --manifest / --bypass-reason', () => {
+    const opts = parseArgs(['--ticket', '1', '--epic', 'e', '--dry-run', '--manifest', '/tmp/m.json', '--bypass-reason', 'bootstrap'])
+    expect(opts.dryRun).toBe(true)
+    expect(opts.manifestPath).toBe('/tmp/m.json')
+    expect(opts.bypassReason).toBe('bootstrap')
+  })
+
+  it('throws when --ticket has no value', () => {
+    expect(() => parseArgs(['--ticket'])).toThrow(/--ticket requires a value/)
+  })
+
+  it('throws when --ticket is followed by another flag', () => {
+    expect(() => parseArgs(['--ticket', '--epic', 'e'])).toThrow(/--ticket requires a value/)
+  })
+
+  it('throws when --epic is followed by another flag', () => {
+    expect(() => parseArgs(['--ticket', '42', '--epic', '--dry-run'])).toThrow(/--epic requires a value/)
+  })
+
+  it('throws when --manifest has no value', () => {
+    expect(() => parseArgs(['--ticket', '42', '--epic', 'e', '--manifest'])).toThrow(/--manifest requires a value/)
+  })
+
+  it('throws when --bypass-reason is followed by another flag', () => {
+    expect(() => parseArgs(['--ticket', '42', '--epic', 'e', '--bypass-reason', '--dry-run'])).toThrow(/--bypass-reason requires a value/)
+  })
+
+  it('throws when --ticket is missing altogether', () => {
+    expect(() => parseArgs(['--epic', 'e'])).toThrow(/missing --ticket/)
+  })
+
+  it('throws when --epic is missing altogether', () => {
+    expect(() => parseArgs(['--ticket', '42'])).toThrow(/missing --epic/)
+  })
+})
 
 describe('extractFrId / extractFrTitle', () => {
   it('parses "FR-001 — Login flow"', () => {
@@ -222,7 +266,6 @@ describe('runSpawn', () => {
     const code = await runSpawn(baseOptions({ dryRun: true }), io)
     expect(code).toBe(0)
     expect(io.createSubtask).not.toHaveBeenCalled()
-    expect(io.applyLabel).not.toHaveBeenCalled()
     const out = io.stdoutBuffer.join('')
     expect(out).toMatch(/found 2 FR page\(s\)/)
     expect(out).toMatch(/FR-001 → FR-001: Login flow/)
@@ -230,7 +273,7 @@ describe('runSpawn', () => {
     expect(out).toMatch(/dry-run/)
   })
 
-  it('creates one Story per FR page and labels each with srs:new', async () => {
+  it('creates one Story sub-issue per FR page under the parent', async () => {
     const children: PageRef[] = [
       { id: 'p1', url: 'https://example.test/fr1', title: 'FR-001 — Login flow' },
       { id: 'p2', url: 'https://example.test/fr2', title: 'FR-002 — Password reset' }
@@ -247,8 +290,18 @@ describe('runSpawn', () => {
     expect(firstBody).toMatch(/## Objective/)
     expect(firstBody).toMatch(/FR-001 — Login flow/)
     expect(firstBody).toMatch(/https:\/\/example\.test\/fr1/)
-    expect(io.applyLabel).toHaveBeenCalledTimes(2)
-    expect(io.applyLabel.mock.calls[0][1]).toBe('srs:new')
+  })
+
+  it('warns and uses the raw title (no "X: X" duplication) when a child page is missing the FR-### prefix', async () => {
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/ad-hoc', title: 'Ad hoc page' }]
+    registerSrsBackend('stub', () => new StubAdapter(children))
+    writeManifest({ tools: { srs: { backend: 'stub' } } })
+    const io = makeIO()
+    const code = await runSpawn(baseOptions(), io)
+    expect(code).toBe(0)
+    expect(io.createSubtask).toHaveBeenCalledTimes(1)
+    expect(io.createSubtask.mock.calls[0][1]).toBe('Ad hoc page')
+    expect(io.stderrBuffer.join('')).toMatch(/does not match the "FR-### — Title" convention/)
   })
 
   it('propagates a custom --bypass-reason to createSubtask', async () => {
@@ -283,23 +336,5 @@ describe('runSpawn', () => {
     const code = await runSpawn(baseOptions(), io)
     expect(code).toBe(8)
     expect(io.stderrBuffer.join('')).toMatch(/gh failed/)
-  })
-
-  it('still succeeds when applyLabel throws — surfaces a warning but does not abort', async () => {
-    const children: PageRef[] = [
-      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-001 — A' },
-      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-002 — B' }
-    ]
-    registerSrsBackend('stub', () => new StubAdapter(children))
-    writeManifest({ tools: { srs: { backend: 'stub' } } })
-    const io = makeIO({
-      applyLabel: jest.fn(() => {
-        throw new Error('no label perms')
-      })
-    })
-    const code = await runSpawn(baseOptions(), io)
-    expect(code).toBe(0)
-    expect(io.createSubtask).toHaveBeenCalledTimes(2)
-    expect(io.stderrBuffer.join('')).toMatch(/could not add srs:new label/)
   })
 })

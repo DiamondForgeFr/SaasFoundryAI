@@ -120,6 +120,26 @@ describe('sf-tool-github-projects — create-subtask Rule 8 guard', () => {
       expect(res.code).toBe(1)
       expect(res.stderr).toMatch(/--bypass-srs requires a reason/)
     })
+
+    it('accepts the --bypass-srs=<reason> attached-value syntax', async () => {
+      const res = await runCli(['create-subtask', '42', 'Meta tooling', '--bypass-srs=meta-srs-tooling'], sandbox)
+      expect(res.code).toBe(0)
+      expect(res.stdout).toMatch(/bypassing rule 8/)
+      expect(res.stdout).toMatch(/meta-srs-tooling/)
+    })
+
+    it('rejects --bypass-srs= with an empty attached value (exit 1)', async () => {
+      const res = await runCli(['create-subtask', '42', 'Thing', '--bypass-srs='], sandbox)
+      expect(res.code).toBe(1)
+      expect(res.stderr).toMatch(/--bypass-srs=? requires a reason/)
+    })
+
+    it('echoes the bypass reason verbatim without interpreting escape sequences', async () => {
+      const res = await runCli(['create-subtask', '42', 'Thing', '--bypass-srs', 'audit\\ttrail\\n'], sandbox)
+      expect(res.code).toBe(0)
+      expect(res.stdout).toContain('audit\\ttrail\\n')
+      expect(res.stdout).not.toContain('audit\ttrail\n')
+    })
   })
 
   describe('non-SRS project (tools.srs.backend absent)', () => {
@@ -166,6 +186,32 @@ describe('sf-tool-github-projects — create-subtask Rule 8 guard', () => {
       const sandbox = await buildSandbox({
         workflow: { projectUrl: 'https://github.com/orgs/FakeOrg/projects/42', workingBranch: 'develop' },
         tools: { srs: { backend: null } }
+      })
+      try {
+        const res = await runCli(['create-subtask', '42', 'Thing'], sandbox)
+        expect(res.code).toBe(0)
+      } finally {
+        await sandbox.cleanup()
+      }
+    })
+
+    it('treats a non-string tools.srs.backend (e.g. number) as "not set" (Rule 8 dormant)', async () => {
+      const sandbox = await buildSandbox({
+        workflow: { projectUrl: 'https://github.com/orgs/FakeOrg/projects/42', workingBranch: 'develop' },
+        tools: { srs: { backend: 42 } }
+      })
+      try {
+        const res = await runCli(['create-subtask', '42', 'Thing'], sandbox)
+        expect(res.code).toBe(0)
+      } finally {
+        await sandbox.cleanup()
+      }
+    })
+
+    it('treats a boolean tools.srs.backend as "not set" (Rule 8 dormant)', async () => {
+      const sandbox = await buildSandbox({
+        workflow: { projectUrl: 'https://github.com/orgs/FakeOrg/projects/42', workingBranch: 'develop' },
+        tools: { srs: { backend: true } }
       })
       try {
         const res = await runCli(['create-subtask', '42', 'Thing'], sandbox)
