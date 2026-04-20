@@ -34,15 +34,23 @@ sf-srs/
 │   ├── pages/                       # Epic + FR page templates → PageContent   (SUB-3)
 │   └── tickets/                     # GitHub ticket templates (srs-epic, srs-story)   (SUB-4)
 └── scripts/
-    ├── srs-cli.sh                   # single orchestrator entrypoint           (SUB-14.3)
-    └── drafters/
-        ├── from-notion-pages.ts     # Notion pages → SRS spec                   (SUB-6)
-        └── from-codebase.ts         # audit codebase → SRS spec                 (SUB-13)
-    # spawn-tickets-from-srs.ts      # SRS → GitHub tickets                      (SUB-9)
-    # eval-hook.ts                   # continuous freshness scoring              (SUB-10)
+    └── srs-cli.sh                   # single orchestrator entrypoint           (SUB-14.3)
 ```
 
-Placeholders are kept with `.gitkeep` until their owning SUB populates them.
+TS entrypoints dispatched by `srs-cli.sh` live alongside the CLI source under `src/srs/bin/` (dogfood) or `node_modules/saasfoundry-cli/dist/srs/bin/` (shipped). They are **not** duplicated inside the
+skill folder — the skill is a thin orchestrator.
+
+| Action                      | Bin entrypoint (`src/srs/bin/`) | Owner    |
+| --------------------------- | ------------------------------- | -------- |
+| `validate`                  | `validate.ts`                   | SUB-14.3 |
+| `browse`                    | `browse-tree.ts`                | SUB-6    |
+| `draft --from notion-pages` | `draft-from-notion-pages.ts`    | SUB-6    |
+| `draft --from codebase`     | `draft-from-codebase.ts`        | SUB-13   |
+| `write`                     | `write-srs.ts`                  | SUB-6    |
+| `spawn`                     | `spawn-tickets.ts`              | SUB-9    |
+| `eval`                      | `eval-srs.ts`                   | SUB-10   |
+
+Placeholder subfolders under `templates/` are kept with `.gitkeep` until their owning SUB populates them.
 
 ## Configuration
 
@@ -58,15 +66,51 @@ Dispatch resolution happens inside `src/srs/` (SUB-14.2) — never directly in t
 
 All via `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]`.
 
-| Action     | Purpose                                                           | Populated by |
-| ---------- | ----------------------------------------------------------------- | ------------ |
-| `help`     | Print available actions                                           | SUB-14.3     |
-| `validate` | Smoke-test the configured backend via `createSrsAdapter().init()` | SUB-14.3     |
-| `draft`    | Run the drafter matching the configured backend / input mode      | SUB-6, 13    |
-| `spawn`    | Spawn GitHub tickets from a published SRS                         | SUB-9        |
-| `eval`     | Compute freshness score comparing the SRS to the codebase         | SUB-10       |
+| Action     | Purpose                                                               | Populated by |
+| ---------- | --------------------------------------------------------------------- | ------------ |
+| `help`     | Print available actions                                               | SUB-14.3     |
+| `validate` | Smoke-test the configured backend via `createSrsAdapter().init()`     | SUB-14.3     |
+| `browse`   | List direct children of a backend page (tree navigation helper)       | SUB-6        |
+| `draft`    | Run the drafter matching `--from <source>` (notion-pages \| codebase) | SUB-6, 13    |
+| `write`    | Apply a `DraftCandidate[]` spec to the backend + clear pending flag   | SUB-6        |
+| `spawn`    | Spawn GitHub tickets from a published SRS                             | SUB-9        |
+| `eval`     | Compute freshness score comparing the SRS to the codebase             | SUB-10       |
 
 The wrapper is intentionally thin — real logic lives in `src/srs/` and consumes only the `SrsAdapter` interface.
+
+## Ingestion workflow (SUB-6)
+
+When `sf new --srs-enable --srs-ingest-enable` is used (or the equivalent is picked interactively), the CLI bootstraps the SRS workspace and then stamps `tools.srs.pendingIngestion` into
+`.saasfoundry.json` :
+
+```jsonc
+{
+  "tools": {
+    "srs": {
+      "enabled": true,
+      "backend": "notion",
+      "rootPage": { "id": "...", "url": "...", "name": "Project" },
+      "pendingIngestion": {
+        "sourceBackend": "notion",
+        "sourceParent": { "id": "...", "url": "...", "name": "Existing notes" },
+        "createdAt": "2026-04-20T12:00:00.000Z"
+      }
+    }
+  }
+}
+```
+
+The flag is ephemeral — it signals "the user asked us to ingest existing notes next time they open the project in Claude Code". When the sf-srs skill sees it, it drives a conversational loop :
+
+1. **Browse** — `srs-cli.sh browse --parent <sourceParent.id>` lists direct children. Claude and the user pick which ones are worth ingesting (rejecting TOC / index pages, drilling into sub-pages
+   recursively via repeat browse calls).
+2. **Draft** — `srs-cli.sh draft --from notion-pages --ids id1,id2,...` fetches the selected pages as `RawContent`. Claude then drafts one or more `DraftCandidate` entries (Epic or FR specs) in
+   conversation with the user. No LLM call happens inside the CLI — the skill owns that step.
+3. **Write** — once the user approves the drafted candidates, the skill serialises them to a temp JSON file and runs `srs-cli.sh write --spec <tmp.json>`. On success, `pendingIngestion` is cleared
+   from the manifest.
+
+On partial failure during `write`, `write-srs.ts` emits a JSON report with a `rollbackHint` listing the pages it already created — Notion has no transactional rollback, so the skill surfaces this list
+to the user and suggests either archiving manually or retrying from where it failed.
 
 ## How other skills hand off to `sf-srs`
 

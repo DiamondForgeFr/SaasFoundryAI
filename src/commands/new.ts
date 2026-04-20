@@ -217,6 +217,20 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         rootPage: result.rootPage,
         categories: { userFlowsAndSpecifications: result.categoryPage }
       }
+
+      // Optional ingestion flag — resolve the source parent and record pendingIngestion.
+      if (startProjectAnswers.srsIngestEnable) {
+        if (!startProjectAnswers.srsIngestParentInput) {
+          throw new Error('SRS ingestion was enabled but srsIngestParentInput (--srs-ingest-parent-input) is missing. Either provide it or pass --no-srs-ingest-enable.')
+        }
+        spinner.text = 'Resolving SRS ingestion source page...'
+        const sourceParent = await adapter.resolveParent(startProjectAnswers.srsIngestParentInput)
+        srsTools.pendingIngestion = {
+          sourceBackend: 'notion',
+          sourceParent: { id: sourceParent.id, url: sourceParent.url ?? '', name: sourceParent.name },
+          createdAt: new Date().toISOString()
+        }
+      }
     }
 
     // Generate .saasfoundry.json manifest with file hashes

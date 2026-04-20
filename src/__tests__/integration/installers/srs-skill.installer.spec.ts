@@ -21,7 +21,6 @@ describe('installSrsSkill', () => {
     const root = join(tmp, '.claude', 'skills', 'sf-srs')
     expect(statSync(join(root, 'SKILL.md')).isFile()).toBe(true)
     expect(statSync(join(root, 'scripts', 'srs-cli.sh')).isFile()).toBe(true)
-    expect(statSync(join(root, 'scripts', 'drafters')).isDirectory()).toBe(true)
     expect(statSync(join(root, 'templates', 'pages')).isDirectory()).toBe(true)
     expect(statSync(join(root, 'templates', 'tickets')).isDirectory()).toBe(true)
   })

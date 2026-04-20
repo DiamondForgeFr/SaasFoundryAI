@@ -5,7 +5,7 @@ import { exec } from 'shelljs'
 import { Answers } from '../types'
 import { promptWithPrefill } from './helpers'
 import { promptAdvancedSkills, collectAdvancedSkillsCredentials } from './skills.prompts'
-import { promptSrsConfiguration } from './srs.prompts'
+import { promptSrsConfiguration, promptSrsIngestion } from './srs.prompts'
 import { promptWorkflowConfiguration } from './workflow.prompts'
 
 export interface StartProjectInputsOptions {
@@ -424,6 +424,7 @@ export async function getUserStartProjectInputs(options: StartProjectInputsOptio
   }
 
   const srsAnswers = await promptSrsConfiguration({ ...answers, ...skillsAnswers }, { prefill, nonInteractive })
+  const ingestionAnswers = srsAnswers.srsEnable ? await promptSrsIngestion({ prefill, nonInteractive }) : { srsIngestEnable: false as const }
 
-  return { ...answers, ...s3Answers, ...analyticsAnswers, ...workflowAnswers, ...skillsAnswers, ...srsAnswers }
+  return { ...answers, ...s3Answers, ...analyticsAnswers, ...workflowAnswers, ...skillsAnswers, ...srsAnswers, ...ingestionAnswers }
 }

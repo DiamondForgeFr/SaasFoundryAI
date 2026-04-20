@@ -156,6 +156,22 @@ export interface RawContent {
   children?: RawContent[]
 }
 
+export interface DraftCandidateSource {
+  kind: 'notion-pages' | 'codebase'
+  pageIds?: string[]
+  files?: string[]
+  excerpt?: string
+}
+
+export interface DraftCandidate {
+  kind: 'epic' | 'fr'
+  confidence: 'high' | 'medium' | 'low'
+  epic?: EpicSpec
+  fr?: FrSpec
+  source: DraftCandidateSource
+  notes?: string
+}
+
 export interface SrsAdapter {
   init(): Promise<void>
 
