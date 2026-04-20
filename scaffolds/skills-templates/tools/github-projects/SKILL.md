@@ -44,6 +44,7 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 | `update-status <ticket> <status-name>`   | Write status on Projects V2 board (`gh project item-edit`)                                        |
 | `set-complexity <ticket> <level>`        | Set label `complexity: <bug\|low\|medium\|complex>` (removes any existing complexity label first) |
 | `get-complexity <ticket>`                | Read current complexity label                                                                     |
+| `get-labels <ticket>`                    | Print every label name, one per line (used by `sf-workflow` SRS guard)                            |
 | `get-ticket <ticket>`                    | Print title + body (used by `detect-complexity.sh`)                                               |
 | `create-pr <ticket>`                     | Push branch + open PR against `workingBranch`                                                     |
 | `list [status]`                          | List project items, optionally filtered by status                                                 |

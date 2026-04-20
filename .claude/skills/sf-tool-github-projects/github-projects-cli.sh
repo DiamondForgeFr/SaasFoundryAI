@@ -396,6 +396,20 @@ cmd_get_complexity() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# Command: get-labels — list every label name on a ticket (one per line)
+# Used by workflow-cli.sh to enforce the SRS drafting guard.
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_get_labels() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 get-labels <ticket-number>" >&2
+    exit 1
+  fi
+  local ticket=$1
+  gh issue view "$ticket" --json labels --jq '.labels[].name' 2>/dev/null || true
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Command: get-ticket — used by detect-complexity.sh
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -502,6 +516,7 @@ case "$COMMAND" in
   status)          cmd_status "$@" ;;
   set-complexity)  cmd_set_complexity "$@" ;;
   get-complexity)  cmd_get_complexity "$@" ;;
+  get-labels)      cmd_get_labels "$@" ;;
   get-ticket)      cmd_get_ticket "$@" ;;
   create-pr)       cmd_create_pr "$@" ;;
   list)            cmd_list "$@" ;;
@@ -517,6 +532,7 @@ case "$COMMAND" in
     echo "  update-status <ticket> <status-name>     Write status on the project board"
     echo "  set-complexity <ticket> <level>          bug | low | medium | complex"
     echo "  get-complexity <ticket>                  Read current complexity label"
+    echo "  get-labels <ticket>                      Print every label name (one per line)"
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
     echo "  create-pr <ticket>                       Open PR for current branch"
     echo "  list [status]                            List project items (optionally filtered)"
@@ -525,7 +541,7 @@ case "$COMMAND" in
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-ticket, create-pr, list, cache-clear"
+    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-labels, get-ticket, create-pr, list, cache-clear"
     exit 1
     ;;
 esac
