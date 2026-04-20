@@ -228,12 +228,21 @@ cmd_create_subtask() {
   fi
 
   # Separate positional args from the --bypass-srs flag. The flag can appear
-  # anywhere on the command line, carries a mandatory reason, and trips rule 8
+  # anywhere on the command line in either --bypass-srs <reason> or
+  # --bypass-srs=<reason> form, carries a mandatory reason, and trips rule 8
   # off. We accept up to three positional args (parent, title, body).
   local -a POSITIONAL=()
   local BYPASS_SRS_REASON=""
   while [ $# -gt 0 ]; do
     case "$1" in
+      --bypass-srs=*)
+        BYPASS_SRS_REASON="${1#--bypass-srs=}"
+        if [ -z "$BYPASS_SRS_REASON" ]; then
+          echo -e "${RED}Error: --bypass-srs= requires a reason (e.g. --bypass-srs=\"emergency hotfix\")${NC}" >&2
+          exit 1
+        fi
+        shift
+        ;;
       --bypass-srs)
         if [ -z "${2:-}" ] || [[ "${2}" == --* ]]; then
           echo -e "${RED}Error: --bypass-srs requires a reason (e.g. --bypass-srs \"emergency hotfix\")${NC}" >&2
@@ -267,7 +276,7 @@ cmd_create_subtask() {
   # success line so the intent is visible in shell history / PR review.
   if [ -f ".saasfoundry.json" ]; then
     local srs_backend
-    srs_backend=$(jq -r '.tools.srs.backend // empty' .saasfoundry.json 2>/dev/null)
+    srs_backend=$(jq -r 'if (.tools.srs.backend | type) == "string" then .tools.srs.backend else empty end' .saasfoundry.json 2>/dev/null)
     if [ -n "$srs_backend" ] && [ -z "$BYPASS_SRS_REASON" ]; then
       echo -e "${RED}✗ Rule 8: this project has SRS enabled (tools.srs.backend=${srs_backend}).${NC}" >&2
       echo "  Feature subtasks must be spawned from a drafted SRS page via:" >&2
@@ -284,7 +293,7 @@ cmd_create_subtask() {
 
   echo -e "${YELLOW}Creating subtask for parent issue #${PARENT_NUMBER}...${NC}"
   if [ -n "$BYPASS_SRS_REASON" ]; then
-    echo -e "${BLUE}  (bypassing rule 8 — reason: ${BYPASS_SRS_REASON})${NC}"
+    printf '%b  (bypassing rule 8 — reason: %s)%b\n' "${BLUE}" "${BYPASS_SRS_REASON}" "${NC}"
   fi
 
   PARENT_NODE_ID=$(gh issue view "$PARENT_NUMBER" --json id --jq ".id" 2>/dev/null)

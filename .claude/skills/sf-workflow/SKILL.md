@@ -164,8 +164,8 @@ Once an Epic page tree is drafted (Main spec + FR-001…FR-N children), the Stor
 .claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>
 ```
 
-The spawner enumerates FR pages, renders each Story body from `renderStoryTicketBody`, invokes `workflow-cli.sh create-subtask` with `--bypass-srs spawned-from-srs`, and tags the new issue with
-`srs:new`. Use `--dry-run` to preview without writing.
+The spawner enumerates FR pages, renders each Story body from `renderStoryTicketBody`, and invokes `workflow-cli.sh create-subtask` with `--bypass-srs spawned-from-srs`. Children land as regular
+sub-issues under the parent ticket (no `srs:*` label — they flow through the normal code-path workflow). Use `--dry-run` to preview without writing.
 
 On SRS-enabled projects (`tools.srs.backend` is set), `create-subtask` refuses calls without `--bypass-srs <reason>` and exits 2. The escape hatch is legitimate only for:
 
@@ -200,9 +200,9 @@ answer is always "go draft it first, then spawn."
 7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket is `In Progress` / `AI Testing` / `Human Testing` / `In Review`, drive it to `Done` before claiming or starting another. The only
    override is an explicit developer request to pause.
 8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use
-   `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody` and labelled
-   `srs:new`. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section below. The escape hatch exists for meta tickets (SRS
-   refactors, tooling) but must never be used to duplicate an FR that already has a page.
+   `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody`. The
+   `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section below. The escape hatch exists for meta tickets (SRS refactors,
+   tooling) but must never be used to duplicate an FR that already has a page.
 
 ## Implementation
 
