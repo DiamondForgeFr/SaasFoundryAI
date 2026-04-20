@@ -156,6 +156,25 @@ Each phase is documented in detail:
 **Guard** — `update-status <ticket> "AI testing|Human testing|In review"` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch
 errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
 
+### Rule 8 — spawning Stories from SRS
+
+Once an Epic page tree is drafted (Main spec + FR-001…FR-N children), the Story sub-tickets under the parent must be created by the spawner, not by hand:
+
+```bash
+.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>
+```
+
+The spawner enumerates FR pages, renders each Story body from `renderStoryTicketBody`, invokes `workflow-cli.sh create-subtask` with `--bypass-srs spawned-from-srs`, and tags the new issue with
+`srs:new`. Use `--dry-run` to preview without writing.
+
+On SRS-enabled projects (`tools.srs.backend` is set), `create-subtask` refuses calls without `--bypass-srs <reason>` and exits 2. The escape hatch is legitimate only for:
+
+- Meta tickets that don't map to an FR page (SRS tooling, drafter refactors, eval polish)
+- Bootstrapping an Epic's own SUBs during rollout before the page tree exists
+
+Typing the reason is the audit trail — pick something a reviewer can grep for (`spawned-from-srs`, `meta-srs-tooling`, `bootstrap-epic-174`…). If the ticket represents a feature requirement, the
+answer is always "go draft it first, then spawn."
+
 ## Workflow Statuses
 
 1. **Backlog** (GRAY) — Read `statuses/1-backlog.md` for full description
@@ -180,6 +199,10 @@ errors (offline / auth issues) so normal teams are not punished by infrastructur
    ensure it returns empty. If not, go back and close the children first.
 7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket is `In Progress` / `AI Testing` / `Human Testing` / `In Review`, drive it to `Done` before claiming or starting another. The only
    override is an explicit developer request to pause.
+8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use
+   `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody` and labelled
+   `srs:new`. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section below. The escape hatch exists for meta tickets (SRS
+   refactors, tooling) but must never be used to duplicate an FR that already has a page.
 
 ## Implementation
 
