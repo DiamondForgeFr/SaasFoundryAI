@@ -2,6 +2,10 @@
 
 **ROLE**: Active development with subtasks creation and regular commits
 
+> **⚠️ SRS drafting tickets** (labelled `srs:drafting | srs:update | srs:new`) do **NOT** follow the steps below. They stay in the `In progress` board column but flow through a separate lifecycle —
+> stop here and read `statuses/3a-ai-drafting.md`. Drive the ticket with `.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> <phase>`
+> (`ai-draft | human-review | spawning | done`), never with `update-status` — the SRS guard blocks code-path transitions for those tickets.
+
 ## When to Enter This Status
 
 - After receiving assignment or confirmation from developer in Ready
@@ -12,12 +16,14 @@
 ### 1. CREATE A BRANCH
 
 **Read configuration from `.saasfoundry.json`:**
+
 ```bash
 WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
 BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
 ```
 
 **Create feature branch:**
+
 1. Ensure you're on working branch: `git checkout ${WORKING_BRANCH}`
 2. Pull latest with rebase: `git pull origin ${WORKING_BRANCH} --rebase`
 3. Create feature branch: `git checkout -b feature/{N}-{description}`
@@ -26,6 +32,7 @@ BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
    - Replace `{description}` with kebab-case description
 
 ### 2. MOVE TICKET TO "IN PROGRESS"
+
 - Update status in the project management tool
 
 ### 3. CREATE SUBTASKS
@@ -35,6 +42,7 @@ BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
 **MUST be real GitHub issues** (NOT checkboxes) linked as sub-issues to the parent.
 
 **Use the helper script:**
+
 ```bash
 # Create a subtask linked to parent issue
 .claude/skills/sf-workflow/create-subtask.sh <parent-number> "Subtask title" ["Optional body"]
@@ -45,23 +53,27 @@ BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
 ```
 
 **The script automatically:**
+
 - Prepends `[Parent #{N}]` to the title
 - Creates the GitHub issue
 - Links it as a sub-issue to the parent (via GraphQL API)
 - Outputs the subtask number and URL
 
 **Track subtask status in project board:**
+
 - Backlog → In Progress (when you start) → Done (when complete)
 
 ### 4. DEVELOP ITERATIVELY
 
 **Read commit format from config:**
+
 ```bash
 COMMIT_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.commitFormat.pattern')
 COMMIT_TYPES=$(cat .saasfoundry.json | jq -r '.workflow.commitFormat.types[]')
 ```
 
 For each subtask:
+
 - a. Move subtask to "In Progress"
 - b. Write code for this subtask
 - c. Commit with format from config: `${COMMIT_PATTERN}`
@@ -72,6 +84,7 @@ For each subtask:
 - e. Move to the next one
 
 ### 5. WHEN ALL SUBTASKS ARE DONE
+
 - a. **Verify zero open children** — `gh issue list --state open --search "parent #{N}"` must return an empty array before going further. If not, close the remaining children first.
 - b. Run: `npm run build && npm run lint`
 - c. Fix all lint/build errors
@@ -94,9 +107,6 @@ For each subtask:
 
 ## Errors to Avoid
 
-❌ NEVER code without creating a branch first
-❌ NEVER mix multiple tickets in the same branch
-❌ NEVER move to AI Testing with lint errors
-❌ NEVER forget to push before moving to AI Testing
-❌ NEVER batch subtask closures at the end of the parent — close each one right after its commit lands
-❌ NEVER start another ticket while this one is still In Progress / AI Testing / Human Testing / In Review (unless the developer explicitly asks you to pause)
+❌ NEVER code without creating a branch first ❌ NEVER mix multiple tickets in the same branch ❌ NEVER move to AI Testing with lint errors ❌ NEVER forget to push before moving to AI Testing ❌ NEVER
+batch subtask closures at the end of the parent — close each one right after its commit lands ❌ NEVER start another ticket while this one is still In Progress / AI Testing / Human Testing / In Review
+(unless the developer explicitly asks you to pause)

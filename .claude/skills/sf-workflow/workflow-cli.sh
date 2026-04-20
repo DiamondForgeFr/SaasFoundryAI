@@ -143,8 +143,12 @@ show_status_description() {
 SRS_DRAFTING_LABELS_REGEX='^srs:(drafting|update|new)$'
 
 is_srs_blocked_target() {
+  # Fold case AND trim leading/trailing whitespace so " AI testing " is still caught
+  # (copy-paste from boards often sneaks in whitespace).
   local target=$1
-  case "$(echo "$target" | tr '[:upper:]' '[:lower:]')" in
+  local normalized
+  normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
+  case "$normalized" in
     "ai testing"|"human testing"|"in review") return 0 ;;
   esac
   return 1
@@ -362,13 +366,27 @@ case "$COMMAND" in
       exit 2
     fi
 
-    # Validate board state — must be "In progress" for every phase except "done".
+    # Validate board state:
+    #   - ai-draft / human-review / spawning require 'In progress'
+    #   - done accepts 'In progress' (normal exit) or 'Done' (idempotent re-run)
+    #     but rejects Backlog / Ready / … so we flag operator mistakes instead
+    #     of silently short-circuiting the drafting arc.
     BOARD_STATUS=$(get_current_status "$TICKET" 2>/dev/null || true)
     BOARD_STATUS_NORMALIZED=$(echo "$BOARD_STATUS" | tr '[:upper:]' '[:lower:]')
-    if [[ "$PHASE" != "done" && "$BOARD_STATUS_NORMALIZED" != "in progress" ]]; then
-      echo -e "${RED}✗ Ticket #${TICKET} must be in 'In progress' before running transition-drafting ${PHASE} (current: ${BOARD_STATUS:-unknown}).${NC}" >&2
-      exit 2
-    fi
+    case "$PHASE" in
+      done)
+        if [[ "$BOARD_STATUS_NORMALIZED" != "in progress" && "$BOARD_STATUS_NORMALIZED" != "done" ]]; then
+          echo -e "${RED}✗ Ticket #${TICKET} must be in 'In progress' (or already 'Done') before running transition-drafting done (current: ${BOARD_STATUS:-unknown}).${NC}" >&2
+          exit 2
+        fi
+        ;;
+      *)
+        if [[ "$BOARD_STATUS_NORMALIZED" != "in progress" ]]; then
+          echo -e "${RED}✗ Ticket #${TICKET} must be in 'In progress' before running transition-drafting ${PHASE} (current: ${BOARD_STATUS:-unknown}).${NC}" >&2
+          exit 2
+        fi
+        ;;
+    esac
 
     SRS_CLI=".claude/skills/sf-srs/scripts/srs-cli.sh"
     case "$PHASE" in
