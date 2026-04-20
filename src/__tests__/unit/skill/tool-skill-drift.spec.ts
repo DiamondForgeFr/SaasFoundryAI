@@ -13,6 +13,31 @@ const PAIRS = [
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/tools/github-projects/github-projects-cli.sh')
   },
   {
+    name: 'sf-tool-github-projects SKILL.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-tool-github-projects/SKILL.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/tools/github-projects/SKILL.md')
+  },
+  {
+    name: 'sf-workflow CLI',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/workflow-cli.sh'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/workflow-cli.sh')
+  },
+  {
+    name: 'sf-workflow statuses/3a-ai-drafting.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3a-ai-drafting.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3a-ai-drafting.md')
+  },
+  {
+    name: 'sf-workflow statuses/3b-human-review.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3b-human-review.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3b-human-review.md')
+  },
+  {
+    name: 'sf-workflow statuses/3c-spawning.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3c-spawning.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3c-spawning.md')
+  },
+  {
     name: 'sf-srs SKILL.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/SKILL.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/SKILL.md')

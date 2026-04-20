@@ -128,6 +128,34 @@ When a ticket crosses into **Ready** and requires Software Requirements Specific
 
 Never bypass the skill to write SRS by hand — the backend dispatch is how new projects get to swap Notion for Confluence / local markdown without touching the workflow logic.
 
+### Drafting lifecycle (tickets labelled `srs:drafting | srs:update | srs:new`)
+
+SRS tickets don't flow through the code-path statuses — they have their own lifecycle inside the `In progress` board column:
+
+```
+Ready → In progress (brainstorm)
+         → ai-draft        (srs-cli.sh draft)
+         → human-review    (owner reviews the backend page)
+         → spawning        (srs-cli.sh spawn — creates Backlog children)
+         → done            (board status → Done)
+```
+
+Drive it with:
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> <phase>
+# phase: ai-draft | human-review | spawning | done
+```
+
+Each phase is documented in detail:
+
+- `statuses/3a-ai-drafting.md` — AI drafter runs against the configured backend
+- `statuses/3b-human-review.md` — spec owner reviews and approves
+- `statuses/3c-spawning.md` — children land in Backlog, drafting ticket closes
+
+**Guard** — `update-status <ticket> "AI testing|Human testing|In review"` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch
+errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
+
 ## Workflow Statuses
 
 1. **Backlog** (GRAY) — Read `statuses/1-backlog.md` for full description

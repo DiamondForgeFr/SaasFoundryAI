@@ -128,6 +128,61 @@ show_status_description() {
   fi
 }
 
+# ───────────────────────────────────────────────────────────────────────────
+# SRS drafting guard
+# ───────────────────────────────────────────────────────────────────────────
+#
+# A ticket tagged with any srs:drafting|srs:update|srs:new label is on the
+# *drafting lifecycle*, not the code-path lifecycle. It must flow through
+# `transition-drafting`, not through the code-path statuses.
+#
+# Block code-path targets (AI testing, Human testing, In review). Allow every
+# other target (Backlog, Ready, In progress, Done). The `transition-drafting`
+# command sets SF_WORKFLOW_BYPASS_SRS_GUARD=1 before routing to `update-status`
+# so its own "→ Done" transition doesn't get rejected.
+SRS_DRAFTING_LABELS_REGEX='^srs:(drafting|update|new)$'
+
+is_srs_blocked_target() {
+  local target=$1
+  case "$(echo "$target" | tr '[:upper:]' '[:lower:]')" in
+    "ai testing"|"human testing"|"in review") return 0 ;;
+  esac
+  return 1
+}
+
+get_ticket_srs_label() {
+  # Prints the first srs:* label on the ticket, or empty string if none.
+  # Returns 0 on clean fetch (even if no label), 1 if the label fetch failed.
+  local ticket=$1
+  local raw
+  raw=$(route_to_tool "$WORKFLOW_TOOL" get-labels "$ticket" 2>/dev/null) || return 1
+  echo "$raw" | grep -E "$SRS_DRAFTING_LABELS_REGEX" | head -n1
+}
+
+check_srs_guard() {
+  # Returns 0 if the caller may proceed, 1 if blocked (message already printed).
+  local ticket=$1
+  local target=$2
+
+  [[ "${SF_WORKFLOW_BYPASS_SRS_GUARD:-}" == "1" ]] && return 0
+  is_srs_blocked_target "$target" || return 0
+
+  local label
+  label=$(get_ticket_srs_label "$ticket") || return 0   # fail-open on fetch error — don't punish offline/auth issues
+
+  if [[ -n "$label" ]]; then
+    echo -e "${RED}✗ Ticket #${ticket} carries '${label}' — the code-path transition to '${target}' is blocked.${NC}" >&2
+    echo "" >&2
+    echo "  SRS tickets flow through the drafting lifecycle, not the code-path lifecycle." >&2
+    echo "  Use instead:" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh transition-drafting ${ticket} <phase>" >&2
+    echo "  Phases: ai-draft → human-review → spawning → done" >&2
+    echo "  See .claude/skills/sf-workflow/statuses/3a-ai-drafting.md" >&2
+    return 1
+  fi
+  return 0
+}
+
 # Function to show next status
 show_next_status() {
   local current_status=$1
@@ -265,9 +320,90 @@ case "$COMMAND" in
     ;;
 
   # Tool delegation commands - route to appropriate tool CLI
-  create-subtask|update-status|create-pr|list)
+  update-status)
+    load_config
+    TICKET=$1
+    TARGET=$2
+    if [[ -z "$TICKET" || -z "$TARGET" ]]; then
+      echo "Usage: workflow-cli.sh update-status <ticket> <status-name>" >&2
+      exit 1
+    fi
+    if ! check_srs_guard "$TICKET" "$TARGET"; then
+      exit 2
+    fi
+    route_to_tool "$WORKFLOW_TOOL" update-status "$@"
+    ;;
+
+  create-subtask|create-pr|list|get-labels)
     load_config
     route_to_tool "$WORKFLOW_TOOL" "$COMMAND" "$@"
+    ;;
+
+  # ───────────────────────────────────────────────────────────────────
+  # transition-drafting — drive a ticket through the SRS drafting arc
+  #   Phases: ai-draft → human-review → spawning → done
+  # ───────────────────────────────────────────────────────────────────
+  transition-drafting)
+    TICKET=$1
+    PHASE=$2
+    if [[ -z "$TICKET" || -z "$PHASE" ]]; then
+      echo "Usage: workflow-cli.sh transition-drafting <ticket> <phase>" >&2
+      echo "Phases: ai-draft | human-review | spawning | done" >&2
+      exit 1
+    fi
+
+    load_config
+
+    # Validate ticket is in the drafting lifecycle (has a srs:* label).
+    SRS_LABEL=$(get_ticket_srs_label "$TICKET" || true)
+    if [[ -z "$SRS_LABEL" ]]; then
+      echo -e "${RED}✗ Ticket #${TICKET} has no srs:* label — transition-drafting does not apply.${NC}" >&2
+      echo "  Apply 'srs:drafting' (or srs:update / srs:new) before running this command." >&2
+      exit 2
+    fi
+
+    # Validate board state — must be "In progress" for every phase except "done".
+    BOARD_STATUS=$(get_current_status "$TICKET" 2>/dev/null || true)
+    BOARD_STATUS_NORMALIZED=$(echo "$BOARD_STATUS" | tr '[:upper:]' '[:lower:]')
+    if [[ "$PHASE" != "done" && "$BOARD_STATUS_NORMALIZED" != "in progress" ]]; then
+      echo -e "${RED}✗ Ticket #${TICKET} must be in 'In progress' before running transition-drafting ${PHASE} (current: ${BOARD_STATUS:-unknown}).${NC}" >&2
+      exit 2
+    fi
+
+    SRS_CLI=".claude/skills/sf-srs/scripts/srs-cli.sh"
+    case "$PHASE" in
+      ai-draft)
+        echo -e "${BLUE}→ AI drafting phase for #${TICKET} (label: ${SRS_LABEL})${NC}"
+        if [[ ! -x "$SRS_CLI" ]]; then
+          echo -e "${RED}✗ Expected ${SRS_CLI} to be executable. Run the SRS skill install first.${NC}" >&2
+          exit 2
+        fi
+        "$SRS_CLI" draft --ticket "$TICKET"
+        ;;
+      human-review)
+        echo -e "${BLUE}→ Human review phase for #${TICKET}${NC}"
+        echo "  Post a review checklist comment on the ticket and wait for the owner's approval."
+        echo "  The Notion page URL should already be in the ticket (posted by the AI draft phase)."
+        echo "  No automated action — this phase is driven by the human reviewer."
+        ;;
+      spawning)
+        echo -e "${BLUE}→ Spawning phase for #${TICKET}${NC}"
+        if [[ ! -x "$SRS_CLI" ]]; then
+          echo -e "${RED}✗ Expected ${SRS_CLI} to be executable. Run the SRS skill install first.${NC}" >&2
+          exit 2
+        fi
+        "$SRS_CLI" spawn --ticket "$TICKET"
+        ;;
+      done)
+        echo -e "${BLUE}→ Closing drafting ticket #${TICKET}${NC}"
+        SF_WORKFLOW_BYPASS_SRS_GUARD=1 route_to_tool "$WORKFLOW_TOOL" update-status "$TICKET" "Done"
+        ;;
+      *)
+        echo -e "${RED}✗ Unknown phase '${PHASE}'${NC}" >&2
+        echo "  Phases: ai-draft | human-review | spawning | done" >&2
+        exit 1
+        ;;
+    esac
     ;;
 
   "")
@@ -289,18 +425,24 @@ case "$COMMAND" in
     echo "  prepare <ticket> <complexity>    Run analyze + plan (Backlog → Ready)"
     echo "  test <ticket> [complexity]       Run validation + examine (→ AI Testing)"
     echo ""
+    echo "SRS drafting lifecycle (for tickets tagged srs:drafting|srs:update|srs:new):"
+    echo "  transition-drafting <ticket> <phase>"
+    echo "    phase: ai-draft | human-review | spawning | done"
+    echo "    Dispatches to .claude/skills/sf-srs/scripts/srs-cli.sh for draft/spawn."
+    echo ""
     echo "Tool commands (delegated to tool-specific CLI):"
     echo "  create-subtask ...           Create a sub-issue/task"
-    echo "  update-status ...            Update ticket status"
+    echo "  update-status ...            Update ticket status (SRS-label guarded)"
     echo "  create-pr ...                Create pull request"
     echo "  list ...                     List tickets"
+    echo "  get-labels <ticket>          List every label on a ticket"
     exit 1
     ;;
 
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
     echo ""
-    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, update-status, create-pr, list"
+    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, update-status, create-pr, list, get-labels, transition-drafting"
     echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;
