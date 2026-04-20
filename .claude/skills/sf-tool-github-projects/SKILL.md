@@ -87,11 +87,11 @@ gh label create "complexity: complex" --color FF1493 --description "🔴 Complex
 Applied on backlog / ready tickets so the `sf-srs` skill picks the right drafter when a ticket becomes active. A ticket carries at most one SRS label at a time ; absence of an SRS label means `sf-srs`
 leaves the ticket alone.
 
-| Label          | Color     | Applied when…                                                                  |
-| -------------- | --------- | ------------------------------------------------------------------------------ |
-| `srs:drafting` | `#8B5CF6` | Spec needs to be drafted / refined before the team can commit.                 |
-| `srs:update`   | `#F97316` | Existing SRS page must be updated to match code drift.                         |
-| `srs:new`      | `#3B82F6` | New Epic / FR spec to be created from scratch.                                 |
+| Label          | Color     | Applied when…                                                  |
+| -------------- | --------- | -------------------------------------------------------------- |
+| `srs:drafting` | `#8B5CF6` | Spec needs to be drafted / refined before the team can commit. |
+| `srs:update`   | `#F97316` | Existing SRS page must be updated to match code drift.         |
+| `srs:new`      | `#3B82F6` | New Epic / FR spec to be created from scratch.                 |
 
 Create them with (idempotent — `|| true` swallows the exit code when the label already exists) :
 
