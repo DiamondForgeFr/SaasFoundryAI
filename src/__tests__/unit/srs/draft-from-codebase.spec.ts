@@ -136,8 +136,99 @@ describe('runDraftFromCodebase', () => {
     const code = await runDraftFromCodebase({ scanPath: tmp, manifestPath })
 
     expect(code).toBe(0)
-    // No scanners → empty findings, but walker must not traverse those dirs.
     const body = JSON.parse(stdout.join(''))
     expect(body.findings).toEqual([])
+  })
+
+  it('emits endpoint + ui-flow findings for a monorepo scanned end-to-end', async () => {
+    const stdout: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+    // api/ side
+    mkdirSync(join(tmp, 'api', 'src', 'modules', 'users'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'api', 'src', 'modules', 'users', 'users.controller.ts'),
+      `
+      @Controller('users')
+      export class UsersController {
+        @Get()
+        findAll() {}
+      }
+    `
+    )
+    // web/ side
+    mkdirSync(join(tmp, 'web', 'src', 'router'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'web', 'src', 'router', 'routes.tsx'),
+      `
+      export const routes = [
+        { path: '/users', element: LazyRouteElement(UsersPage) }
+      ]
+    `
+    )
+    mkdirSync(join(tmp, 'web', 'src', 'pages', 'private'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'web', 'src', 'pages', 'private', 'UsersPage.tsx'),
+      `
+      export function UsersPage() {
+        return <div>users</div>
+      }
+    `
+    )
+    const manifestPath = writeManifest({ structure: 'monorepo', tools: { srs: { backend: 'notion' } } })
+
+    const code = await runDraftFromCodebase({ scanPath: tmp, manifestPath })
+
+    expect(code).toBe(0)
+    const body = JSON.parse(stdout.join(''))
+    const kinds = body.findings.map((f: { kind: string }) => f.kind).sort()
+    expect(kinds).toEqual(['endpoint', 'ui-flow'])
+    const endpoint = body.findings.find((f: { kind: string }) => f.kind === 'endpoint')
+    expect(endpoint).toMatchObject({
+      method: 'GET',
+      path: '/users',
+      area: 'users',
+      file: 'api/src/modules/users/users.controller.ts'
+    })
+    const uiFlow = body.findings.find((f: { kind: string }) => f.kind === 'ui-flow')
+    expect(uiFlow).toMatchObject({
+      title: 'UsersPage (private/UsersPage)',
+      route: '/users',
+      linkedEndpointGuess: 'users'
+    })
+  })
+
+  it('emits findings for a multirepo api at the scan root', async () => {
+    const stdout: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+    mkdirSync(join(tmp, 'src', 'modules', 'auth'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'src', 'modules', 'auth', 'auth.controller.ts'),
+      `
+      @Controller('auth')
+      export class AuthController {
+        @Post('login')
+        login() {}
+      }
+    `
+    )
+    const manifestPath = writeManifest({ structure: 'multirepo', tools: { srs: { backend: 'notion' } } })
+
+    const code = await runDraftFromCodebase({ scanPath: tmp, manifestPath })
+
+    expect(code).toBe(0)
+    const body = JSON.parse(stdout.join(''))
+    expect(body.findings).toHaveLength(1)
+    expect(body.findings[0]).toMatchObject({
+      kind: 'endpoint',
+      method: 'POST',
+      path: '/auth/login',
+      area: 'auth'
+    })
   })
 })
