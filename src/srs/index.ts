@@ -30,3 +30,4 @@ export type {
   DsRef,
   ResolvedParent
 } from '../builders/srs/types'
+export type { ScannerFinding, ScannerFindingKind, CodebaseScanner, CodebaseScannerContext } from './scanners/types'
