@@ -12,6 +12,12 @@ export default defineConfig({
     }
   },
 
+  markdown: {
+    languageAlias: {
+      env: 'bash'
+    }
+  },
+
   themeConfig: {
     logo: '/icon.svg',
 
@@ -90,10 +96,10 @@ export default defineConfig({
         {
           text: 'Modules',
           items: [
-            { text: 'Email (MailerSend)', link: '/modules/email' },
-            { text: 'Storage (S3)', link: '/modules/storage' },
-            { text: 'Analytics (Umami)', link: '/modules/analytics' },
-            { text: 'SRS (Notion)', link: '/modules/srs' }
+            { text: 'Email', link: '/modules/email' },
+            { text: 'Storage', link: '/modules/storage' },
+            { text: 'Analytics', link: '/modules/analytics' },
+            { text: 'SRS', link: '/modules/srs' }
           ]
         }
       ],
