@@ -30,10 +30,17 @@ Actions:
                                     sub-issue tagged `srs:new`; board placement
                                     follows the project's default automation.
                                     `--dry-run` previews without writing.
+  apply-update [--patch <path>] [--manifest]
+                                    Apply a conversational eval-hook patch
+                                    (ADD-only : new UR / new FR / new DS / new TC)
+                                    to the configured backend. Reads patch JSON
+                                    from stdin when --patch is omitted. Used by
+                                    the `sf-srs` eval hook after user accepts
+                                    the proposed diff — see SKILL.md.
 
 Actions populated by sibling SUBs under #174 :
   draft --from codebase             Codebase audit drafter                       (SUB-13)
-  eval                              Score SRS freshness against the codebase    (SUB-10)
+  eval                              Score SRS freshness vs. codebase (batch)    (SUB-16)
 
 Common options :
   --manifest <path>                 Manifest file to read (default: .saasfoundry.json)
@@ -100,6 +107,8 @@ run_write() { run_bin write-srs "$@"; }
 
 run_spawn() { run_bin spawn "$@"; }
 
+run_apply_update() { run_bin apply-srs-update "$@"; }
+
 run_draft() {
   # `--from <source>` selects which drafter to invoke ; default = notion-pages.
   local source="notion-pages"
@@ -134,6 +143,7 @@ case "$ACTION" in
   draft) run_draft "$@" ;;
   write) run_write "$@" ;;
   spawn) run_spawn "$@" ;;
+  apply-update) run_apply_update "$@" ;;
   eval)
     echo "sf-srs: action '$ACTION' not implemented yet — owned by a sibling SUB under #174." >&2
     exit 2

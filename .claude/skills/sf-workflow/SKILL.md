@@ -175,6 +175,12 @@ On SRS-enabled projects (`tools.srs.backend` is set), `create-subtask` refuses c
 Typing the reason is the audit trail — pick something a reviewer can grep for (`spawned-from-srs`, `meta-srs-tooling`, `bootstrap-epic-174`…). If the ticket represents a feature requirement, the
 answer is always "go draft it first, then spawn."
 
+### Conversational eval hook (SRS-enabled projects)
+
+When `tools.srs.enabled = true`, Claude must interject during conversation turns whose content looks like a new User Requirement / Functional Requirement / Design decision / Test Case, propose a diff,
+and on user accept apply it via `.claude/skills/sf-srs/scripts/srs-cli.sh apply-update`. The detection heuristics, confirmation flow, and scope limits (ADD-only in v1) live in the sf-srs SKILL.md —
+see its `## Conversational eval hook (SUB-10)` section. This skill only references it ; never duplicate the heuristics here.
+
 ## Workflow Statuses
 
 1. **Backlog** (GRAY) — Read `statuses/1-backlog.md` for full description

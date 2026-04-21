@@ -48,7 +48,8 @@ skill folder — the skill is a thin orchestrator.
 | `draft --from codebase`     | `draft-from-codebase.ts`        | SUB-13   |
 | `write`                     | `write-srs.ts`                  | SUB-6    |
 | `spawn`                     | `spawn-tickets.ts`              | SUB-9    |
-| `eval`                      | `eval-srs.ts`                   | SUB-10   |
+| `apply-update`              | `apply-srs-update.ts`           | SUB-10   |
+| `eval`                      | `eval-srs.ts`                   | SUB-16   |
 
 Placeholder subfolders under `templates/` are kept with `.gitkeep` until their owning SUB populates them.
 
@@ -66,15 +67,16 @@ Dispatch resolution happens inside `src/srs/` (SUB-14.2) — never directly in t
 
 All via `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]`.
 
-| Action     | Purpose                                                               | Populated by |
-| ---------- | --------------------------------------------------------------------- | ------------ |
-| `help`     | Print available actions                                               | SUB-14.3     |
-| `validate` | Smoke-test the configured backend via `createSrsAdapter().init()`     | SUB-14.3     |
-| `browse`   | List direct children of a backend page (tree navigation helper)       | SUB-6        |
-| `draft`    | Run the drafter matching `--from <source>` (notion-pages \| codebase) | SUB-6, 13    |
-| `write`    | Apply a `DraftCandidate[]` spec to the backend + clear pending flag   | SUB-6        |
-| `spawn`    | Spawn GitHub tickets from a published SRS                             | SUB-9        |
-| `eval`     | Compute freshness score comparing the SRS to the codebase             | SUB-10       |
+| Action         | Purpose                                                               | Populated by |
+| -------------- | --------------------------------------------------------------------- | ------------ |
+| `help`         | Print available actions                                               | SUB-14.3     |
+| `validate`     | Smoke-test the configured backend via `createSrsAdapter().init()`     | SUB-14.3     |
+| `browse`       | List direct children of a backend page (tree navigation helper)       | SUB-6        |
+| `draft`        | Run the drafter matching `--from <source>` (notion-pages \| codebase) | SUB-6, 13    |
+| `write`        | Apply a `DraftCandidate[]` spec to the backend + clear pending flag   | SUB-6        |
+| `spawn`        | Spawn GitHub tickets from a published SRS                             | SUB-9        |
+| `apply-update` | Apply a conversational eval-hook patch (ADD-only : UR / FR / DS / TC) | SUB-10       |
+| `eval`         | Compute freshness score comparing the SRS to the codebase (batch)     | SUB-16       |
 
 The wrapper is intentionally thin — real logic lives in `src/srs/` and consumes only the `SrsAdapter` interface.
 
@@ -125,6 +127,69 @@ Every TS entrypoint under `src/srs/bin/` honours the same contract. The skill mu
 | 5    | Backend runtime error (network, adapter `init()` failure, fetch failure)             |
 | 6    | `write` only — partial failure, JSON payload carries `rollbackHint`                  |
 | 7    | `write` only — pages created successfully but clearing `pendingIngestion` failed     |
+
+## Conversational eval hook (SUB-10)
+
+When the project declares `tools.srs.enabled = true` in `.saasfoundry.json`, Claude is responsible for **interjecting** during conversation turns whose content looks like a new Software Requirement.
+There is no message parser and no standalone script — the "hook" is Claude reading the heuristics below and self-invoking. The `sf-workflow` skill's SKILL.md references this section and stays out of
+the way.
+
+### Detection heuristics — when to fire
+
+Fire at most **once per conversation turn**. Skip trivial turns (pure tool invocations, "ok", "thanks", "read X", "what does this do"). Fire when the user's message matches **any** of the following
+signals :
+
+| Signal                                   | Target                              | Example utterance                                               |
+| ---------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| Describes a **user need / outcome**      | new **UR** on the Epic page         | "users should be able to log in with SSO"                       |
+| Defines a new **feature or rule**        | new **FR** page under the Epic      | "we need a feature that lets admins export audit logs as CSV"   |
+| Clarifies an **implementation decision** | new **DS** on the relevant FR page  | "let's use BCrypt with cost factor 12 for password hashing"     |
+| Adds an **acceptance / test condition**  | new **TC** on the relevant FR page  | "and a test that proves unicode passwords are accepted"         |
+| Reopens a **previously closed decision** | likely an **FR** or **DS** revision | "on reconsidère la règle : finalement on autorise les chiffres" |
+
+Treat as **trivial and skip** : formatting nitpicks, small bug reports already covered by an existing FR, performance tweaks without observable user impact, pure refactor requests.
+
+### Confirmation flow
+
+When a signal fires, **pause before coding** and propose a diff in plain text :
+
+```
+💡 Ce que tu viens de décrire ressemble à <UR / FR / DS / TC>. Proposition :
+  • <target page> — add <item id> : <narrative | title>
+  • (if TC)        steps : ...
+
+J'applique via `srs-cli.sh apply-update` ? [accept / edit / reject]
+```
+
+- **accept** → build the patch JSON (see shape below) and run `.claude/skills/sf-srs/scripts/srs-cli.sh apply-update < patch.json` (or pipe via stdin). On exit 0, continue with the coding task.
+- **edit** → rework the proposed item text with the user, then re-confirm.
+- **reject** → drop the proposal and continue. Do **not** re-propose the same item in the same conversation.
+
+### Patch shape consumed by `apply-update`
+
+```jsonc
+{
+  "kind": "add-ur" | "add-fr" | "add-ds" | "add-tc",
+  "pageId": "<epic page id for add-ur / add-fr, FR page id for add-ds / add-tc>",
+  "item": { /* UrItem | FrSpec | DsItem | TcItem, same shapes as src/builders/srs/types.ts */ },
+  "note": "optional free-text annotation appended as a paragraph"
+}
+```
+
+### Scope limits (v1, intentional)
+
+- **ADD-only.** Modifying an existing item (e.g. tightening FR-012's acceptance criteria) is **out of scope** — the current `SrsAdapter.updatePage` is append-only on Notion, so surgical section
+  replacement is not available through the contract. A follow-up SUB will extend the adapter with replace/delete semantics.
+- **Append placement.** `add-ur` / `add-ds` / `add-tc` append new blocks to the **end** of the target page under an "Added …" heading2. The canonical section (User Requirements / Design / Test Cases)
+  is _not_ updated in-place. Reviewers must fold the appended block back into the right section during the next human SRS review. The limitation is deliberate and documented.
+- **`add-fr`** creates a brand-new child page under the Epic via `adapter.createFrPage`. The Epic page's "Traceability" table is **not** refreshed (same append-only limitation) — the new FR is still
+  discoverable as a child page.
+- **Throttling.** 1 proposal maximum per conversation turn. No persistent dedup cache (the turn boundary is sufficient — Claude's own judgment avoids re-proposing within the same turn).
+
+### Dogfood checklist
+
+After any change to the heuristics above, run a short manual session : drop 5 utterances (one per signal row + one trivial control) and confirm the hook fires exactly on the four signals and skips the
+trivial one.
 
 ## How other skills hand off to `sf-srs`
 
