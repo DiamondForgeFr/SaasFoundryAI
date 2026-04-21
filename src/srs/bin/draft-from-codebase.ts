@@ -4,9 +4,12 @@ import { join, relative, resolve } from 'node:path'
 import ignore, { Ignore } from 'ignore'
 
 import { getSrsBackend, listSrsBackends, SrsConfigError, SrsManifestSubset } from '../index'
+import { docsScanner } from '../scanners/docs.scanner'
 import { nestjsScanner } from '../scanners/nestjs.scanner'
 import { resolveScannerRoots } from '../scanners/paths'
+import { prismaScanner } from '../scanners/prisma.scanner'
 import { reactScanner } from '../scanners/react.scanner'
+import { testsScanner } from '../scanners/tests.scanner'
 import { CodebaseScanner, CodebaseScannerContext, ScannerFinding } from '../scanners/types'
 
 interface CodebaseManifest extends SrsManifestSubset {
@@ -27,7 +30,7 @@ const HARD_EXCLUDE_DIRS = new Set(['node_modules', 'dist', 'coverage', '.git', '
 const HARD_EXCLUDE_DIR_SEGMENTS = ['node_modules', 'dist', 'coverage', '.git']
 const HARD_EXCLUDE_PATH_FRAGMENTS = ['.vitepress/cache']
 
-const SCANNERS: CodebaseScanner[] = [nestjsScanner, reactScanner]
+const SCANNERS: CodebaseScanner[] = [nestjsScanner, reactScanner, prismaScanner, testsScanner, docsScanner]
 
 function parseManifest(path: string): CodebaseManifest {
   const raw = readFileSync(path, 'utf8')
