@@ -204,6 +204,72 @@ echo '{
 
 The FR-001 page now has a new "Added Test Case — TC-007" block appended at the end. Reviewers fold it back into the canonical "Test Cases" section during the next SRS review.
 
+## Drafting from an existing codebase
+
+If the project already has code (controllers, Prisma models, React pages, specs, docs) and Notion is empty or stale, skip the brainstorm in section 3 and let the scanners propose the first draft from
+the source tree.
+
+```bash
+.claude/skills/sf-srs/scripts/srs-cli.sh draft --from codebase
+# or point at a specific repo :
+.claude/skills/sf-srs/scripts/srs-cli.sh draft --from codebase --path /path/to/repo
+```
+
+The CLI walks the tree (respecting `.gitignore`) and emits a JSON envelope :
+
+```jsonc
+{
+  "source": "codebase",
+  "findings": [
+    { "kind": "endpoint", "area": "auth", "method": "POST", "path": "/auth/signin", "hasTests": true, "file": "api/src/modules/auth/auth.controller.ts" },
+    {
+      "kind": "entity",
+      "area": "auth",
+      "model": "Session",
+      "fields": [
+        /* … */
+      ],
+      "relations": [{ "field": "user", "target": "User" }],
+      "file": "api/prisma/schema/auth.prisma"
+    },
+    { "kind": "ui-flow", "area": "auth", "title": "SignInPage (public/SignInPage)", "route": "/signin", "linkedEndpointGuess": "signin", "file": "web/src/pages/public/SignInPage.tsx" },
+    {
+      "kind": "test",
+      "area": "auth",
+      "describe": "AuthService",
+      "cases": ["hashes passwords with bcrypt", "rejects expired refresh tokens"],
+      "file": "api/src/modules/auth/tests/unit/auth.service.spec.ts"
+    },
+    { "kind": "doc-context", "area": "project", "heading": "Authentication", "excerpt": "Email + password sign-in with refresh tokens.", "file": "docs/auth.md" }
+    /* … */
+  ]
+}
+```
+
+Five scanner kinds fire today — see [Scanner findings reference](/srs/scanner-findings) for the full JSON shape of each.
+
+Claude then drives a review loop **one domain at a time**. The scanner output groups findings by `area`, so the conversation reads like :
+
+```
+🔍 Findings cluster for `auth` — 6 endpoints, 2 entities, 2 specs, 1 page, 1 doc block.
+
+📘 Epic proposal : Authentication & session management
+   ├─ FR-001 Password sign-in   (POST /auth/signin + SignInPage + auth.service.spec.ts)
+   ├─ FR-002 Sign-up            (POST /auth/signup + SignUpPage)
+   └─ FR-003 Session refresh    (GET /auth/me + Session model)
+
+Accept this Epic structure, or tighten the FR split first? [accept / edit / reject / skip-area]
+```
+
+On **accept**, Claude serialises the cluster as `DraftCandidate[]` and calls `srs-cli.sh write --spec <tmp.json>` exactly like the green-field flow in section 4. You can drive multiple Epics in a row,
+one prompt per cluster — the reviewer always gets a chance to course-correct before any Notion write happens.
+
+Use this flow when :
+
+- You want to bootstrap SRS on a mature project and the codebase is the truth of record
+- Your Notion SRS has drifted and you want a fresh baseline from the code
+- You want to audit coverage gaps (endpoints without tests, pages without linked endpoints — the scanner marks both)
+
 ## Troubleshooting
 
 ### `srs-cli.sh validate` exits with code 5

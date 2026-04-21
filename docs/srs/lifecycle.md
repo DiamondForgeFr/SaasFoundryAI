@@ -55,6 +55,9 @@ What happens in this phase depends on the source :
 - **Ingestion path** (when `pendingIngestion` is set, or the owner pointed at existing notes) : Claude calls `srs-cli.sh browse` to pick pages worth ingesting, then
   `srs-cli.sh draft --from notion-pages --ids ...` to fetch them as `RawContent`. Claude reads the raw content and proposes a `DraftCandidate[]` list (one Epic + its FR children) in the conversation.
   On owner approval, `srs-cli.sh write --spec <tmp.json>` applies the draft to the backend.
+- **Codebase path** (mature project, the source tree is the truth of record) : Claude runs `srs-cli.sh draft --from codebase` — five scanners emit `ScannerFinding[]` for endpoints, UI flows, Prisma
+  entities, specs, and docs. Claude clusters findings by `area`, proposes one Epic at a time in conversation, and writes accepted clusters via `srs-cli.sh write`. See
+  [Scanner findings reference](/srs/scanner-findings) for the full JSON shape.
 - **Green-field path** (no source notes) : Claude drafts the `EpicSpec` + `FrSpec[]` directly from conversation, serialises to `DraftCandidate[]`, then runs `srs-cli.sh write`.
 
 At the end of this phase, the backend has an Epic page + one FR child page per requirement. `tools.srs.pendingIngestion` is cleared if it was set.

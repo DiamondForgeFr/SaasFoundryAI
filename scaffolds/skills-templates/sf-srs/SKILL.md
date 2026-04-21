@@ -128,6 +128,106 @@ Every TS entrypoint under `src/srs/bin/` honours the same contract. The skill mu
 | 6    | `write` only — partial failure, JSON payload carries `rollbackHint`                  |
 | 7    | `write` only — pages created successfully but clearing `pendingIngestion` failed     |
 
+## Drafting from codebase (SUB-13)
+
+For projects where the codebase already exists and Notion is empty (or sparse), `srs-cli.sh draft --from codebase` scans the repo and emits structured `ScannerFinding[]` that Claude clusters into
+`DraftCandidate[]` conversationally with the user. The CLI never calls an LLM — it only surfaces what it can prove from the source tree.
+
+### When to trigger `--from codebase`
+
+Fire the flow when **any** of the following matches :
+
+| Signal                                                    | Example utterance                                                      |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| User wants to **bootstrap an SRS** on an existing project | "draft an SRS from my codebase", "audit the repo for SRS material"     |
+| User mentions **drift** between code and docs             | "my Notion SRS is stale, rebuild it from the code"                     |
+| User asks for **coverage gaps**                           | "what's in the code but not in Notion?"                                |
+| First-time user of `sf-srs` on a mature repo              | empty / sparse Notion root + non-empty `src/` — propose it proactively |
+
+Skip the flow when Notion is the source of truth (run `--from notion-pages` instead) or when the user is describing a **new** feature that doesn't yet exist in code (use the conversational eval hook).
+
+### Running the drafter
+
+```bash
+.claude/skills/sf-srs/scripts/srs-cli.sh draft --from codebase [--path <repo>]
+```
+
+`--path` defaults to the current working directory. The CLI walks the tree (honouring `.gitignore` and excluding `node_modules / dist / coverage / .git / .vitepress/cache`), runs every registered
+scanner, and writes the result to stdout :
+
+```jsonc
+{
+  "source": "codebase",
+  "findings": [
+    /* ScannerFinding[] */
+  ]
+}
+```
+
+Five scanner kinds fire today (see `docs/srs/scanner-findings.md` for the full JSON shape) :
+
+| Kind          | Source of truth                                | Area heuristic                                      |
+| ------------- | ---------------------------------------------- | --------------------------------------------------- |
+| `endpoint`    | NestJS `@Controller` + method decorators       | nearest `src/modules/<area>/`                       |
+| `ui-flow`     | React pages linked from `routes.tsx`           | `src/pages/<area>/<PageName>`                       |
+| `entity`      | Prisma `model` blocks                          | model-name dictionary (User→users, Session→auth, …) |
+| `test`        | Jest `describe` / `it` / `test` in `*.spec.ts` | `src/modules/<area>/` or filename stem              |
+| `doc-context` | `README.md` / `CLAUDE.md` / `docs/**/*.md`     | folder name (`docs`, `modules`, …)                  |
+
+### Reading the findings[] output
+
+For each finding :
+
+- **Every shape has `kind` + `title`** — use them for first-pass clustering.
+- **`area`** is the glue : findings that share an `area` usually belong to the same Epic / FR cluster.
+- **`file`** is the authoritative path — quote it back to the user when proposing a cluster ("FR-Auth — based on `api/src/modules/auth/auth.controller.ts` + `api/prisma/schema/auth.prisma`").
+- **`endpoint.hasTests`** flags `true` when the same `area` has at least one test finding — use it to prime the TC section of the proposed FR.
+- **`ui-flow.linkedEndpointGuess`** is a soft hint (filename / route substring match against endpoint paths) — verify it against the actual endpoint list before trusting it.
+- **`doc-context.excerpt`** is capped at 280 chars — treat it as a **summary seed**, not the full text.
+
+### Clustering into `DraftCandidate[]`
+
+The skill's job is to convert raw findings into publishable draft candidates. Work **Epic-by-Epic, then FR-by-FR** :
+
+1. **Group by area.** Collect every finding whose `area` matches. Add `doc-context` findings that share the area name or a parent folder.
+2. **Pick the Epic level.** One Epic per coherent area (e.g. `auth`, `storage`, `accounts`). Title + narrative come from the richest `doc-context` in the group, or from the user's wording.
+3. **Propose the FRs.**
+   - One FR per `endpoint` (or per tight endpoint cluster — e.g. CRUD on the same resource collapses into one FR).
+   - Add DS items for noteworthy `entity` fields (PK, unique constraints, relations).
+   - Seed TC items from `test.cases[]` of the matching area.
+   - Reuse `ui-flow` routes as acceptance criteria on the user-facing FR.
+4. **Flag gaps.** Any `endpoint` with `hasTests=false` is a test-coverage gap — surface it as a TODO in the drafted FR, not silently.
+
+### Review-loop prompts
+
+Never write to Notion without confirmation. Drive the loop one cluster at a time :
+
+```
+🔍 J'ai trouvé <N> éléments dans le scanner pour le domaine `<area>`. Je te propose de créer :
+
+  📘 Epic : <title>
+     ├─ FR : <title 1>  (based on: <file-1>, <file-2>)
+     ├─ FR : <title 2>  (based on: <file-3>)
+     └─ gaps : <endpoint without tests>, <page without linked endpoint>
+
+Je pars sur cette structure, ou tu veux retailler l'Epic ? [accept / edit / reject / skip-area]
+```
+
+On **accept** → serialise the cluster as `DraftCandidate[]` and call `srs-cli.sh write --spec <tmp.json>`. On **edit** → negotiate the title / narrative / FR split and re-confirm. On **skip-area** →
+park the area and continue with the next. Never batch-accept more than **one Epic per prompt** — the reviewer has to be able to course-correct cluster by cluster.
+
+### Exit codes
+
+`draft --from codebase` reuses the standard envelope :
+
+| Code | Meaning                                                               |
+| ---- | --------------------------------------------------------------------- |
+| 0    | Success — findings emitted on stdout                                  |
+| 2    | `--path` does not exist, is not a directory, or manifest is malformed |
+| 3    | `tools.srs.backend` missing from the manifest                         |
+| 4    | Unknown / invalid backend name                                        |
+| 5    | Unexpected scanner runtime error                                      |
+
 ## Conversational eval hook (SUB-10)
 
 When the project declares `tools.srs.enabled = true` in `.saasfoundry.json`, Claude is responsible for **interjecting** during conversation turns whose content looks like a new Software Requirement.
