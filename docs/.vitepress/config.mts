@@ -110,7 +110,8 @@ export default defineConfig({
           items: [
             { text: 'Module overview', link: '/modules/srs' },
             { text: 'Lifecycle', link: '/srs/lifecycle' },
-            { text: 'Walkthrough', link: '/srs/walkthrough' }
+            { text: 'Walkthrough', link: '/srs/walkthrough' },
+            { text: 'Scanner findings', link: '/srs/scanner-findings' }
           ]
         }
       ],

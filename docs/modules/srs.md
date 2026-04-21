@@ -107,13 +107,14 @@ The installer will:
 
 ## Usage
 
-### The three primary flows
+### The four primary flows
 
-| Flow                 | Trigger                                                                    | Entry point                                                  |
-| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Draft from notes** | `pendingIngestion` is set (one-shot) or you explicitly ask for a draft     | `srs-cli.sh browse` → `srs-cli.sh draft --from notion-pages` |
-| **Spawn tickets**    | An Epic page tree (Main spec + FR-001…FR-N) is ready for ticket creation   | `srs-cli.sh spawn --ticket <parent> --epic <url-or-id>`      |
-| **Evolve the spec**  | A conversation turn looks like a new UR / FR / DS / TC → Claude interjects | `srs-cli.sh apply-update` (ADD-only v1)                      |
+| Flow                    | Trigger                                                                    | Entry point                                                  |
+| ----------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Draft from notes**    | `pendingIngestion` is set (one-shot) or you explicitly ask for a draft     | `srs-cli.sh browse` → `srs-cli.sh draft --from notion-pages` |
+| **Draft from codebase** | The code already exists and you want to bootstrap SRS from the source tree | `srs-cli.sh draft --from codebase [--path <repo>]`           |
+| **Spawn tickets**       | An Epic page tree (Main spec + FR-001…FR-N) is ready for ticket creation   | `srs-cli.sh spawn --ticket <parent> --epic <url-or-id>`      |
+| **Evolve the spec**     | A conversation turn looks like a new UR / FR / DS / TC → Claude interjects | `srs-cli.sh apply-update` (ADD-only v1)                      |
 
 All three go through the `SrsAdapter` interface — the Notion vs. Confluence vs. local-markdown choice never leaks into the skill or the CLI.
 
@@ -130,6 +131,9 @@ srs-cli.sh browse --parent <id>
 
 # Draft Epic / FR specs from selected source pages
 srs-cli.sh draft --from notion-pages --ids id1,id2,...
+
+# Draft from the codebase (five scanners → ScannerFinding[] envelope)
+srs-cli.sh draft --from codebase [--path <repo>]
 
 # Apply a drafted spec (creates Epic + FR pages, clears pendingIngestion)
 srs-cli.sh write --spec /tmp/candidates.json
@@ -225,6 +229,7 @@ The backend adapter code lives under `src/tools/<backend>/srs.adapter.ts` in you
 
 - [SRS lifecycle](/srs/lifecycle) — the full `Backlog → ai-draft → human-review → spawning → done` flow
 - [SRS walkthrough](/srs/walkthrough) — end-to-end tutorial: enable, draft, spawn
+- [Scanner findings reference](/srs/scanner-findings) — JSON shape emitted by `draft --from codebase`
 - [Updating Projects](/guide/updating-projects#enable-srs-on-an-existing-project) — adding SRS after the fact
 - [Skills System → Tool skills → `sf-tool-notion`](/skills/tool-skills#sf-tool-notion) — Notion credentials setup
 
