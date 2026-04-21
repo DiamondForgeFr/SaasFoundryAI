@@ -19,6 +19,12 @@ Actions:
                                     Fetch pages from the backend as RawContent (JSON).
                                     The skill then drafts Epic/FR specs conversationally
                                     and hands them back via `write`.
+  draft --from codebase [--path <dir>] [--manifest]
+                                    Scan the local codebase and emit structured
+                                    findings (JSON). The skill then drafts Epic/FR
+                                    specs conversationally from the findings and
+                                    hands them back via `write`. Scanners plug in
+                                    via sibling SUBs under #173 (13.2 + 13.3).
   write  --spec <path> [--manifest] [--no-clear-pending]
                                     Apply a DraftCandidate[] spec file : creates Epic /
                                     FR pages through the adapter and clears the
@@ -39,7 +45,6 @@ Actions:
                                     the proposed diff — see SKILL.md.
 
 Actions populated by sibling SUBs under #174 :
-  draft --from codebase             Codebase audit drafter                       (SUB-13)
   eval                              Score SRS freshness vs. codebase (batch)    (SUB-16)
 
 Common options :
@@ -122,10 +127,7 @@ run_draft() {
   done
   case "$source" in
     notion-pages) run_bin draft-from-notion-pages ${forwarded[@]+"${forwarded[@]}"} ;;
-    codebase)
-      echo "sf-srs draft --from codebase: not implemented yet — owned by SUB-13." >&2
-      exit 2
-      ;;
+    codebase) run_bin draft-from-codebase ${forwarded[@]+"${forwarded[@]}"} ;;
     *)
       echo "sf-srs draft: unknown --from value '$source' (expected: notion-pages | codebase)." >&2
       exit 1
