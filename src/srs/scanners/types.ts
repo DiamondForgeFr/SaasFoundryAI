@@ -25,19 +25,42 @@ export interface UiFlowFinding extends BaseScannerFinding {
   linkedEndpointGuess?: string
 }
 
+export interface EntityField {
+  name: string
+  type: string
+  optional?: boolean
+  isId?: boolean
+}
+
+export interface EntityRelation {
+  field: string
+  target: string
+}
+
 export interface EntityFinding extends BaseScannerFinding {
   kind: 'entity'
-  sourceFiles: string[]
+  area: string
+  file: string
+  model: string
+  fields: EntityField[]
+  relations: EntityRelation[]
 }
 
 export interface TestFinding extends BaseScannerFinding {
   kind: 'test'
-  sourceFiles: string[]
+  area: string
+  file: string
+  describe: string
+  cases: string[]
 }
 
 export interface DocContextFinding extends BaseScannerFinding {
   kind: 'doc-context'
-  sourceFiles: string[]
+  area: string
+  file: string
+  heading: string
+  headingLevel: 1 | 2 | 3
+  excerpt: string
 }
 
 export type ScannerFinding = EndpointFinding | UiFlowFinding | EntityFinding | TestFinding | DocContextFinding

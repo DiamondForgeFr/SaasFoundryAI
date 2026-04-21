@@ -37,6 +37,8 @@ export type {
   EndpointFinding,
   UiFlowFinding,
   EntityFinding,
+  EntityField,
+  EntityRelation,
   TestFinding,
   DocContextFinding,
   CodebaseScanner,

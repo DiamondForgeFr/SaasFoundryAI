@@ -231,4 +231,77 @@ describe('runDraftFromCodebase', () => {
       area: 'auth'
     })
   })
+
+  it('runs the full 5-scanner pipeline end-to-end for a monorepo', async () => {
+    const stdout: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+    // NestJS controller + spec (endpoint + test)
+    mkdirSync(join(tmp, 'api', 'src', 'modules', 'users'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'api', 'src', 'modules', 'users', 'users.controller.ts'),
+      `
+      @Controller('users')
+      export class UsersController {
+        @Get()
+        list() {}
+      }
+    `
+    )
+    writeFileSync(
+      join(tmp, 'api', 'src', 'modules', 'users', 'users.service.spec.ts'),
+      `
+      describe('UsersService', () => {
+        it('lists users', () => {})
+      })
+    `
+    )
+    // Prisma schema (entity)
+    mkdirSync(join(tmp, 'api', 'prisma', 'schema'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'api', 'prisma', 'schema', 'users.prisma'),
+      `
+      model User {
+        id    String @id
+        email String
+      }
+    `
+    )
+    // React page + router (ui-flow)
+    mkdirSync(join(tmp, 'web', 'src', 'router'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'web', 'src', 'router', 'routes.tsx'),
+      `
+      export const routes = [
+        { path: '/users', element: LazyRouteElement(UsersPage) }
+      ]
+    `
+    )
+    mkdirSync(join(tmp, 'web', 'src', 'pages', 'private'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'web', 'src', 'pages', 'private', 'UsersPage.tsx'),
+      `
+      export function UsersPage() {
+        return <div>users</div>
+      }
+    `
+    )
+    // Docs (doc-context)
+    writeFileSync(
+      join(tmp, 'README.md'),
+      `# Project
+A SaaS platform for users and their accounts.
+`
+    )
+    const manifestPath = writeManifest({ structure: 'monorepo', tools: { srs: { backend: 'notion' } } })
+
+    const code = await runDraftFromCodebase({ scanPath: tmp, manifestPath })
+
+    expect(code).toBe(0)
+    const body = JSON.parse(stdout.join(''))
+    const kinds = body.findings.map((f: { kind: string }) => f.kind)
+    expect(new Set(kinds)).toEqual(new Set(['endpoint', 'ui-flow', 'entity', 'test', 'doc-context']))
+  })
 })
