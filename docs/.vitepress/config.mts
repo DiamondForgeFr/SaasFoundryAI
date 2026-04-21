@@ -20,6 +20,7 @@ export default defineConfig({
       { text: 'CLI', link: '/cli/sf-new' },
       { text: 'Skills', link: '/skills/overview' },
       { text: 'Modules', link: '/modules/email' },
+      { text: 'SRS', link: '/modules/srs' },
       {
         text: 'v1.0.0-beta',
         items: [
@@ -91,7 +92,19 @@ export default defineConfig({
           items: [
             { text: 'Email (MailerSend)', link: '/modules/email' },
             { text: 'Storage (S3)', link: '/modules/storage' },
-            { text: 'Analytics (Umami)', link: '/modules/analytics' }
+            { text: 'Analytics (Umami)', link: '/modules/analytics' },
+            { text: 'SRS (Notion)', link: '/modules/srs' }
+          ]
+        }
+      ],
+
+      '/srs/': [
+        {
+          text: 'SRS',
+          items: [
+            { text: 'Module overview', link: '/modules/srs' },
+            { text: 'Lifecycle', link: '/srs/lifecycle' },
+            { text: 'Walkthrough', link: '/srs/walkthrough' }
           ]
         }
       ],
