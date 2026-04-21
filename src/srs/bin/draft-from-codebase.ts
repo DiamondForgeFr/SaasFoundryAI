@@ -4,7 +4,14 @@ import { join, relative, resolve } from 'node:path'
 import ignore, { Ignore } from 'ignore'
 
 import { getSrsBackend, listSrsBackends, SrsConfigError, SrsManifestSubset } from '../index'
+import { nestjsScanner } from '../scanners/nestjs.scanner'
+import { resolveScannerRoots } from '../scanners/paths'
+import { reactScanner } from '../scanners/react.scanner'
 import { CodebaseScanner, CodebaseScannerContext, ScannerFinding } from '../scanners/types'
+
+interface CodebaseManifest extends SrsManifestSubset {
+  structure?: 'monorepo' | 'multirepo'
+}
 
 export interface DraftFromCodebaseOptions {
   scanPath: string
@@ -20,12 +27,12 @@ const HARD_EXCLUDE_DIRS = new Set(['node_modules', 'dist', 'coverage', '.git', '
 const HARD_EXCLUDE_DIR_SEGMENTS = ['node_modules', 'dist', 'coverage', '.git']
 const HARD_EXCLUDE_PATH_FRAGMENTS = ['.vitepress/cache']
 
-const SCANNERS: CodebaseScanner[] = []
+const SCANNERS: CodebaseScanner[] = [nestjsScanner, reactScanner]
 
-function parseManifest(path: string): SrsManifestSubset {
+function parseManifest(path: string): CodebaseManifest {
   const raw = readFileSync(path, 'utf8')
   try {
-    return JSON.parse(raw) as SrsManifestSubset
+    return JSON.parse(raw) as CodebaseManifest
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`draft-from-codebase: failed to parse ${path} as JSON — ${message}`)
@@ -108,7 +115,7 @@ export async function runDraftFromCodebase(options: DraftFromCodebaseOptions): P
   }
 
   const manifestPath = resolve(options.manifestPath)
-  let manifest: SrsManifestSubset
+  let manifest: CodebaseManifest
   try {
     manifest = parseManifest(manifestPath)
   } catch (error) {
@@ -129,7 +136,14 @@ export async function runDraftFromCodebase(options: DraftFromCodebaseOptions): P
     void manifest
 
     const files = collectFiles(scanRoot)
-    const context: CodebaseScannerContext = { scanRoot, files }
+    const roots = resolveScannerRoots(scanRoot, manifest.structure)
+    const context: CodebaseScannerContext = {
+      scanRoot,
+      files,
+      structure: manifest.structure,
+      apiRoot: roots.apiRoot,
+      webRoot: roots.webRoot
+    }
 
     const findings: ScannerFinding[] = []
     for (const scanner of SCANNERS) {
