@@ -167,6 +167,9 @@ Create a Notion integration at https://www.notion.so/my-integrations, then share
 **Gotcha**: Notion's permission model is opt-in — an integration can only read / write pages that have been explicitly shared with it. If a command fails with "object not found", the page likely was
 not shared.
 
+**Also the default SRS backend** : the same integration token powers the [SRS module](/modules/srs), where Notion is the V1 backend for Epic / FR page hierarchies. Confluence and local-markdown
+backends are on the roadmap. See the [SRS lifecycle](/srs/lifecycle) and [walkthrough](/srs/walkthrough) for how this plays with the drafting workflow.
+
 ## `sf-tool-figma`
 
 Read-only access to Figma files + frames + metadata. Auto-triggers on `figma.com/file/...` URLs.

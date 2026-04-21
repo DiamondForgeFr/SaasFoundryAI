@@ -103,12 +103,56 @@ The `--add-modules` flag accepts a comma-separated list:
 - `email` — MailerSend transactional mail
 - `storage` — S3-compatible object storage (Docker MinIO or external credentials)
 - `analytics` — Umami self-hosted analytics
+- `srs` — Software Requirements Specifications (Notion backend today ; Confluence + local-markdown on the roadmap)
 - `sf-skill-context7` — Context7 library docs skill
 - `sf-skill-atlassian` — Jira / Confluence skill
 - `sf-skill-notion` — Notion skill
 - `sf-skill-figma` — Figma skill
 
 Each module has its own credential flags. See [`sf update`](/cli/sf-update) for the full option table.
+
+## Enable SRS on an existing project
+
+The [SRS module](/modules/srs) ships a pluggable specifications system with a Notion backend (V1). Enabling it on a project that was generated without SRS uses the same module-addition flow as any
+other optional feature :
+
+```bash
+# Interactive (menu picks 'srs' from the module list)
+sf update
+
+# Scripted
+sf update --non-interactive \
+  --add-modules srs \
+  --srs-backend notion \
+  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123" \
+  --notion-api-token "secret_..."
+```
+
+What the installer does :
+
+1. Installs the `sf-srs` skill under `.claude/skills/sf-srs/` (templates, scripts, dispatcher)
+2. Installs `sf-tool-notion` if not already present (the SRS V1 backend)
+3. Bootstraps the Epic root page on Notion via `adapter.init()` — sharing the parent page with the Notion integration is a prerequisite
+4. Writes `tools.srs.*` into `.saasfoundry.json` (enabled, backend, rootPage)
+
+### Ingesting existing notes (one-shot)
+
+If your team already has free-form spec notes on Notion that you want to bootstrap the SRS from, point the CLI at them :
+
+```bash
+sf update --non-interactive \
+  --add-modules srs \
+  --srs-backend notion \
+  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root" \
+  --srs-ingest-enable \
+  --srs-ingest-parent-input "https://www.notion.so/your-workspace/Legacy-notes" \
+  --notion-api-token "secret_..."
+```
+
+This sets `tools.srs.pendingIngestion` in the manifest. The flag is ephemeral — on the next Claude Code session, the `sf-srs` skill sees it, drives a conversational loop to pick which legacy pages to
+draft into structured Epic / FR specs, and clears the flag once `srs-cli.sh write` succeeds.
+
+See the [SRS walkthrough](/srs/walkthrough) for a complete end-to-end tutorial.
 
 ## Typical upgrade recipe
 
