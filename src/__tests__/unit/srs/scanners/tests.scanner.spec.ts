@@ -2,12 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 
-import {
-  extractCaseTitles,
-  extractDescribeTitles,
-  extractTestAreaFromPath,
-  testsScanner
-} from '../../../../srs/scanners/tests.scanner'
+import { extractCaseTitles, extractDescribeTitles, extractTestAreaFromPath, testsScanner } from '../../../../srs/scanners/tests.scanner'
 import { CodebaseScannerContext, TestFinding } from '../../../../srs/scanners/types'
 
 function walkSync(root: string): string[] {
