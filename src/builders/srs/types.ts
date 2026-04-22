@@ -4,10 +4,14 @@ export interface PageRef {
   title: string
 }
 
+export type Priority = 'P1' | 'P2' | 'P3'
+
 export interface UrItem {
   id: string
   narrative: string
   businessValue?: string
+  priority?: Priority
+  group?: string
 }
 
 export interface FrItem {
@@ -18,6 +22,12 @@ export interface FrItem {
   urRefs?: string[]
   dsRefs?: string[]
   tcRefs?: string[]
+  priority?: Priority
+  group?: string
+  endpoint?: string
+  requestBody?: string
+  validationRules?: string[]
+  securityRationale?: string
 }
 
 export interface DsItem {
@@ -25,6 +35,7 @@ export interface DsItem {
   title: string
   description?: string
   frRefs?: string[]
+  group?: string
 }
 
 export interface TcItem {
@@ -33,6 +44,15 @@ export interface TcItem {
   steps?: string[]
   expectedResult?: string
   frRefs?: string[]
+}
+
+export interface NfrItem {
+  id: string
+  title: string
+  target?: string
+  priority?: Priority
+  frRefs?: string[]
+  group?: string
 }
 
 export interface EpicSpec {
@@ -44,6 +64,7 @@ export interface EpicSpec {
   frs: FrItem[]
   dsItems?: DsItem[]
   tcItems?: TcItem[]
+  nfrItems?: NfrItem[]
 }
 
 export interface FrSpec {
