@@ -19,13 +19,14 @@ interface AvailableModule {
  * they ship with `sf new` and cannot be added post-generation.
  */
 function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): boolean {
+  const modules = manifest.modules
   switch (moduleName) {
     case 'email':
-      return manifest.modules.emailService === 'none'
+      return modules !== undefined && modules.emailService === 'none'
     case 'storage':
-      return manifest.modules.s3Setup === 'manual'
+      return modules !== undefined && modules.s3Setup === 'manual'
     case 'analytics':
-      return !manifest.modules.includeAnalytics
+      return modules !== undefined && !modules.includeAnalytics
     case 'srs':
       return !(manifest.tools?.srs?.enabled === true)
     case 'sf-skill-context7':
@@ -33,7 +34,7 @@ function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): b
     case 'sf-skill-notion':
     case 'sf-skill-figma': {
       const skillName = moduleName.replace(/^sf-skill-/, '')
-      const installed = manifest.modules.advancedSkills || []
+      const installed = modules?.advancedSkills ?? []
       return !installed.includes(skillName)
     }
     default:

@@ -39,6 +39,11 @@ export interface FileUpdate {
  * Returns the temp dir path and the file hashes of the regenerated project.
  */
 async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tempDir: string; hashes: Record<string, string> }> {
+  // Template regeneration only applies to projects scaffolded by `sf new` (which always have a `modules` block).
+  // Callers must gate on `manifest.modules` before invoking this helper.
+  if (!manifest.modules) {
+    throw new Error('regenerateInTempDir requires a manifest with a modules block')
+  }
   const tempDir = join(tmpdir(), `saasfoundry-update-${Date.now()}`)
   const projectDir = join(tempDir, manifest.projectName)
   await mkdir(`${projectDir}/apps`, { recursive: true })
@@ -300,7 +305,10 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   console.log()
 
   // ─── FLOW 1: Template updates (version differs) ───
-  if (manifest.version !== cliVersion) {
+  // Only meaningful for projects that were scaffolded by `sf new` (have a `modules` block).
+  // `cli`-structure manifests (e.g., SaaSFoundry dogfooding itself) have no generated app to
+  // regenerate — skip straight to FLOW 2 which handles module additions like SRS.
+  if (manifest.version !== cliVersion && manifest.modules) {
     if (!manifest.fileHashes) {
       console.log(chalk.yellow(`  Your project was generated with SaaSFoundry v${manifest.version} (before hash tracking).`))
       console.log(chalk.yellow('  Template updates require file hashes. Skipping template update.\n'))
@@ -541,6 +549,12 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   const moduleSpinner = ora('Installing modules...').start()
 
   try {
+    // email/storage/analytics/skills modules require a scaffolded app (manifest.modules block).
+    // `isModuleAvailable` already filters them out for cli-structure manifests; this narrows the type.
+    if (selectedModules.some((m) => m !== 'srs') && !manifest.modules) {
+      throw new Error('Non-SRS modules require a manifest with a modules block (likely a scaffolded SaaS project)')
+    }
+
     if (selectedModules.includes('email') && emailCredentials) {
       moduleSpinner.text = 'Installing MailerSend email module...'
       await installEmailModule({
@@ -549,7 +563,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
         mailersendSenderEmail: emailCredentials.mailersendSenderEmail,
         mailersendSenderName: emailCredentials.mailersendSenderName
       })
-      manifest.modules.emailService = 'mailersend'
+      manifest.modules!.emailService = 'mailersend'
     }
 
     if (selectedModules.includes('storage') && storageConfig) {
@@ -568,19 +582,19 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
         await createDevServicesCompose({
           apiPath,
           projectName: manifest.projectName,
-          dbSetup: manifest.modules.dbSetup,
+          dbSetup: manifest.modules!.dbSetup,
           s3Setup: storageConfig.s3Setup,
           s3Credentials: storageConfig.s3Credentials
         })
       }
 
-      manifest.modules.s3Setup = storageConfig.s3Setup
+      manifest.modules!.s3Setup = storageConfig.s3Setup
     }
 
     if (selectedModules.includes('analytics')) {
       moduleSpinner.text = 'Installing Umami analytics module...'
       await installAnalyticsModule({ webPath })
-      manifest.modules.includeAnalytics = true
+      manifest.modules!.includeAnalytics = true
     }
 
     if (selectedModules.includes('srs') && srsBootstrap) {
@@ -613,10 +627,10 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
         webPath,
         projectName: manifest.projectName,
         version: cliVersion,
-        advancedSkills: [...(manifest.modules.advancedSkills || []), ...skillsToAdd],
+        advancedSkills: [...(manifest.modules!.advancedSkills || []), ...skillsToAdd],
         ...skillsCredentials
       })
-      manifest.modules.advancedSkills = [...(manifest.modules.advancedSkills || []), ...skillsToAdd]
+      manifest.modules!.advancedSkills = [...(manifest.modules!.advancedSkills || []), ...skillsToAdd]
     }
 
     // Run npm install if new dependencies were added
