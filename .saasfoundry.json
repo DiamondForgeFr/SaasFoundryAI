@@ -28,5 +28,23 @@
       { "name": "In review", "color": "PINK" },
       { "name": "Done", "color": "GREEN" }
     ]
+  },
+  "tools": {
+    "srs": {
+      "enabled": true,
+      "backend": "notion",
+      "rootPage": {
+        "id": "34aa31bb-4f3f-8170-8989-d8738f3356d8",
+        "url": "https://www.notion.so/saasfoundry-cli-Project-Overview-34aa31bb4f3f81708989d8738f3356d8",
+        "name": "saasfoundry-cli — Project Overview"
+      },
+      "categories": {
+        "userFlowsAndSpecifications": {
+          "id": "34aa31bb-4f3f-814c-abb7-c345d0f8a9cb",
+          "url": "https://www.notion.so/User-flows-Specifications-34aa31bb4f3f814cabb7c345d0f8a9cb",
+          "name": "User flows & Specifications"
+        }
+      }
+    }
   }
 }
