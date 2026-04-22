@@ -44,6 +44,7 @@ describe('renderEpicPage — DIAMONFORGE-style structure', () => {
         { id: 'DS-AUTH-01-01', title: 'bcrypt', frRefs: ['FR-AUTH-01-01'], group: 'DS-AUTH-01' },
         { id: 'DS-AUTH-03-01', title: 'JWT cookies', frRefs: ['FR-AUTH-02-01'], group: 'DS-AUTH-03' }
       ],
+      tcItems: [{ id: 'TC-AUTH-01-01', title: 'successful login', steps: ['submit valid credentials'], expectedResult: '200 OK + cookie set', frRefs: ['FR-AUTH-02-01'] }],
       nfrItems: [{ id: 'NFR-AUTH-01-01', title: 'login speed', target: '≤ 1s p95', priority: 'P1', frRefs: ['FR-AUTH-02-01'], group: 'NFR-AUTH-01' }]
     }
 
@@ -62,18 +63,20 @@ describe('renderEpicPage — DIAMONFORGE-style structure', () => {
       'table',
       'heading:2', // DS
       'table',
+      'heading:2', // TC
+      'table',
       'heading:2', // NFR
       'table'
     ])
   })
 
-  it('renders the Requirement Types table with UR/FR/DS/NFR rows', () => {
+  it('renders the Requirement Types table with UR/FR/DS/TC/NFR rows', () => {
     const spec: EpicSpec = { title: 'E', parentPageId: 'p', urs: [], frs: [] }
     const page = renderEpicPage(spec)
     const reqTypes = findTableAfterHeading(page.blocks, 'Requirement Types')
     expect(reqTypes.header).toEqual(['Prefix', 'Type', 'Description', 'Example'])
     const prefixes = reqTypes.rows.map((r) => r[0])
-    expect(prefixes).toEqual(['UR', 'FR', 'DS', 'NFR'])
+    expect(prefixes).toEqual(['UR', 'FR', 'DS', 'TC', 'NFR'])
   })
 
   it('renders the UR table with group headers and Related FR derived from spec.frs', () => {
@@ -174,7 +177,28 @@ describe('renderEpicPage — DIAMONFORGE-style structure', () => {
     expect(findParagraphAfterHeading(page.blocks, 'User Requirements (UR)')).toBe('No user requirements yet.')
     expect(findParagraphAfterHeading(page.blocks, 'Functional Requirements (FR)')).toBe('No functional requirements yet.')
     expect(findParagraphAfterHeading(page.blocks, 'Design Specifications (DS)')).toBe('No design specifications yet.')
+    expect(findParagraphAfterHeading(page.blocks, 'Test Cases (TC)')).toBe('No test cases yet.')
     expect(findParagraphAfterHeading(page.blocks, 'Non-Functional Requirements (NFR)')).toBe('No non-functional requirements yet.')
+  })
+
+  it('renders the TC table with Steps + Expected Result + Related FR', () => {
+    const spec: EpicSpec = {
+      title: 'E',
+      parentPageId: 'p',
+      urs: [],
+      frs: [],
+      tcItems: [
+        { id: 'TC-X-01', title: 'happy path', steps: ['step a', 'step b'], expectedResult: '200 OK', frRefs: ['FR-X-01'] },
+        { id: 'TC-X-02', title: 'empty body' }
+      ]
+    }
+    const page = renderEpicPage(spec)
+    const tcTable = findTableAfterHeading(page.blocks, 'Test Cases (TC)')
+    expect(tcTable.header).toEqual(['ID', 'Title', 'Steps', 'Expected Result', 'Related FR'])
+    expect(tcTable.rows).toEqual([
+      ['TC-X-01', 'happy path', '• step a\n• step b', '200 OK', 'FR-X-01'],
+      ['TC-X-02', 'empty body', '—', '—', '—']
+    ])
   })
 
   it('emits the Traceability tree as a plain-text code block', () => {
@@ -189,6 +213,7 @@ describe('renderEpicPage — DIAMONFORGE-style structure', () => {
       expect(codeBlock.text).toContain('FR (Functional Requirement)')
       expect(codeBlock.text).toContain('DS (Design Specification)')
       expect(codeBlock.text).toContain('TC (Test Case)')
+      expect(codeBlock.text).toContain('NFR (Non-Functional Requirement)')
     }
   })
 

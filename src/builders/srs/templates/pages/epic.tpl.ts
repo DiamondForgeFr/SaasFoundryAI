@@ -1,4 +1,4 @@
-import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, UrItem } from '../../types'
+import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, TcItem, UrItem } from '../../types'
 
 const EMPTY_CELL = '—'
 
@@ -14,13 +14,20 @@ const REQUIREMENT_TYPES_ROWS: string[][] = [
   ['UR', 'User Requirement', "High-level user need describing what the user wants to achieve. Written from the user's perspective.", '"The user must be able to log in to access the product"'],
   ['FR', 'Functional Requirement', 'What the system must do to fulfill user requirements. Describes system behavior.', '"The system displays a generic error message on login failure"'],
   ['DS', 'Design Specification', 'How the system implements the functional requirements. Technical implementation details.', '"JWT tokens stored in httpOnly cookies"'],
+  [
+    'TC',
+    'Test Case',
+    'Verifiable steps that prove a functional requirement is satisfied. Bridges spec and QA.',
+    '"Given valid credentials, when user submits login form, then 200 OK and JWT cookie set"'
+  ],
   ['NFR', 'Non-Functional Requirement', 'Quality attributes: performance, security, availability, scalability.', '"Login response time ≤ 1 second (p95)"']
 ]
 
 const TRACEABILITY_TREE = `UR (User Requirement)
   └── FR (Functional Requirement)
-        └── DS (Design Specification)
-              └── TC (Test Case)`
+        ├── DS (Design Specification)
+        ├── TC (Test Case)
+        └── NFR (Non-Functional Requirement)`
 
 const TRACEABILITY_NOTE = 'Each lower-level requirement traces back to a higher-level requirement, ensuring complete coverage and compliance traceability.'
 
@@ -61,6 +68,15 @@ function dsRow(ds: DsItem): string[] {
 
 function nfrRow(nfr: NfrItem): string[] {
   return [nfr.id, nfr.title, nfr.target ?? EMPTY_CELL, priorityCell(nfr.priority), refsCell(nfr.frRefs)]
+}
+
+function listCell(items?: string[]): string {
+  if (!items || items.length === 0) return EMPTY_CELL
+  return items.map((item) => `• ${item}`).join('\n')
+}
+
+function tcRow(tc: TcItem): string[] {
+  return [tc.id, tc.title, listCell(tc.steps), tc.expectedResult ?? EMPTY_CELL, refsCell(tc.frRefs)]
 }
 
 export function renderEpicPage(spec: EpicSpec): PageContent {
@@ -108,6 +124,18 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
       kind: 'table',
       header: ['ID', 'Specification', 'Related FR'],
       rows: buildGroupedRows(dsItems, (ds) => ds.group, dsRow)
+    })
+  }
+
+  const tcItems = spec.tcItems ?? []
+  blocks.push({ kind: 'heading', level: 2, text: 'Test Cases (TC)' })
+  if (tcItems.length === 0) {
+    blocks.push({ kind: 'paragraph', text: 'No test cases yet.' })
+  } else {
+    blocks.push({
+      kind: 'table',
+      header: ['ID', 'Title', 'Steps', 'Expected Result', 'Related FR'],
+      rows: tcItems.map(tcRow)
     })
   }
 

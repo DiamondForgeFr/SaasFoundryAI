@@ -34,12 +34,13 @@ type PageBlock =
 
 Produced by `renderEpicPage(spec)` in this order (DIAMONFORGE-style):
 
-1. `Traceability` (H2) + plain-text code block (ASCII tree `UR → FR → DS → TC`) + explanatory paragraph
-2. `Requirement Types` (H2) + definitions table `Prefix | Type | Description | Example` with one row per UR/FR/DS/NFR
+1. `Traceability` (H2) + plain-text code block (ASCII tree `UR → FR → { DS, TC, NFR }`) + explanatory paragraph
+2. `Requirement Types` (H2) + definitions table `Prefix | Type | Description | Example` with one row per UR/FR/DS/TC/NFR
 3. `User Requirements (UR)` (H2) + table `ID | Requirement | Priority | Related FR`, with group-header rows when items carry a `group`
 4. `Functional Requirements (FR)` (H2) + table `ID | Requirement | Priority | Related UR | Related DS`, grouped
 5. `Design Specifications (DS)` (H2) + table `ID | Specification | Related FR`, grouped
-6. `Non-Functional Requirements (NFR)` (H2) + table `ID | Requirement | Target | Priority | Related FR`, grouped
+6. `Test Cases (TC)` (H2) + table `ID | Title | Steps | Expected Result | Related FR`
+7. `Non-Functional Requirements (NFR)` (H2) + table `ID | Requirement | Target | Priority | Related FR`, grouped
 
 Empty sections emit a placeholder paragraph (e.g. `No user requirements yet.`) instead of the table. Missing optional fields render as the em-dash cell `—`. Group headers appear as a single-cell row
 carrying the group id followed by empty cells matching the table arity.
@@ -48,10 +49,10 @@ carrying the group id followed by empty cells matching the table arity.
 
 Produced by `renderFrPage(spec)` in this order (DIAMONFORGE-style):
 
-1. `Summary` (H2) + table `ID | Requirement | Priority | Related UR | Related DS` — one row per FR item on the page
+1. `Summary` (H2) + table `ID | Requirement | Priority | Related UR | Related DS | Related TC` — one row per FR item on the page
 2. Divider
-3. Per FR item: `{FR-id} — {title}` (H2) + vertical detail table `Field | Value` with canonical rows (in order): `ID`, `Title`, `Endpoint`, `Priority`, `Related UR`, `Related DS`, `Description`,
-   `Request Body`, `Acceptance Criteria`, `Validation Rules`, `Security Rationale`
+3. Per FR item: `{FR-id} — {title}` (H2) + vertical detail table `Field | Value` with canonical rows (in order): `ID`, `Title`, `Endpoint`, `Priority`, `Related UR`, `Related DS`, `Related TC`,
+   `Description`, `Request Body`, `Acceptance Criteria`, `Validation Rules`, `Security Rationale`
 4. Divider **between** items (not after the last item)
 
 List-typed fields (`acceptanceCriteria`, `validationRules`) render as newline-joined `• item` entries within a single cell — Notion preserves newlines in table cells. Missing optional fields render as

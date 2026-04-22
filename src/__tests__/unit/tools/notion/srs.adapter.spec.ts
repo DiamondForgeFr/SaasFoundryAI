@@ -312,7 +312,7 @@ describe('NotionSrsAdapter', () => {
       expect(types).toEqual(['heading_2', 'table', 'divider', 'heading_2', 'table'])
       const tables = call.children.filter((c): c is AnyBlock & { table: { table_width: number; has_column_header: boolean } } => c.type === 'table' && c.table !== undefined)
       expect(tables).toHaveLength(2)
-      expect(tables[0].table.table_width).toBe(5) // Summary: ID, Requirement, Priority, Related UR, Related DS
+      expect(tables[0].table.table_width).toBe(6) // Summary: ID, Requirement, Priority, Related UR, Related DS, Related TC
       expect(tables[0].table.has_column_header).toBe(true)
       expect(tables[1].table.table_width).toBe(2) // Detail: Field, Value
       expect(tables[1].table.has_column_header).toBe(true)
@@ -320,7 +320,7 @@ describe('NotionSrsAdapter', () => {
   })
 
   describe('createEpicPage — DIAMONFORGE structural shape', () => {
-    it('emits Traceability + Requirement Types + UR/FR/DS/NFR sections with grouped tables', async () => {
+    it('emits Traceability + Requirement Types + UR/FR/DS/TC/NFR sections with grouped tables', async () => {
       const richEpic: EpicSpec = {
         title: 'Auth epic',
         parentPageId: 'parent_xyz',
@@ -330,6 +330,7 @@ describe('NotionSrsAdapter', () => {
         ],
         frs: [{ id: 'FR-AUTH-01', title: 'Sign in endpoint', group: 'Sign-in flow', urRefs: ['UR-AUTH-01'] }],
         dsItems: [{ id: 'DS-AUTH-01', title: 'JWT cookie', group: 'Sign-in flow', frRefs: ['FR-AUTH-01'] }],
+        tcItems: [{ id: 'TC-AUTH-01', title: 'sign-in happy path', steps: ['submit valid creds'], expectedResult: '200 OK', frRefs: ['FR-AUTH-01'] }],
         nfrItems: [{ id: 'NFR-PERF-01', title: 'Login latency', target: 'p95 ≤ 1s', priority: 'P1', frRefs: ['FR-AUTH-01'] }]
       }
       const { client, calls } = buildMockClient()
@@ -344,15 +345,23 @@ describe('NotionSrsAdapter', () => {
       const call = calls.pagesCreateCalls[0] as unknown as { children: AnyBlock[] }
       const types = call.children.map((c) => c.type)
       // Notion page title is set as page property (not a child block);
-      // children start at heading_2 (Traceability) + code + paragraph + heading_2 (Requirement Types) + table + UR/FR/DS/NFR (H2 + table each)
+      // children start at heading_2 (Traceability) + code + paragraph + heading_2 (Requirement Types) + table + UR/FR/DS/TC/NFR (H2 + table each)
       expect(types[0]).toBe('heading_2')
       expect(types).toContain('code')
       const tables = call.children.filter((c) => c.type === 'table')
-      expect(tables).toHaveLength(5) // Requirement Types, UR, FR, DS, NFR
+      expect(tables).toHaveLength(6) // Requirement Types, UR, FR, DS, TC, NFR
 
       const headings = call.children.filter((c): c is AnyBlock & { heading_2: { rich_text: Array<{ text: { content: string } }> } } => c.type === 'heading_2' && c.heading_2 !== undefined)
       const headingTexts = headings.map((h) => h.heading_2.rich_text[0].text.content)
-      expect(headingTexts).toEqual(['Traceability', 'Requirement Types', 'User Requirements (UR)', 'Functional Requirements (FR)', 'Design Specifications (DS)', 'Non-Functional Requirements (NFR)'])
+      expect(headingTexts).toEqual([
+        'Traceability',
+        'Requirement Types',
+        'User Requirements (UR)',
+        'Functional Requirements (FR)',
+        'Design Specifications (DS)',
+        'Test Cases (TC)',
+        'Non-Functional Requirements (NFR)'
+      ])
     })
 
     it('renders empty placeholder paragraphs when sections have no items', async () => {
@@ -376,7 +385,7 @@ describe('NotionSrsAdapter', () => {
             c.type === 'paragraph' && c.paragraph !== undefined && c.paragraph.rich_text[0]?.text.content.startsWith('No ')
         )
         .map((c) => c.paragraph.rich_text[0].text.content)
-      expect(placeholderTexts).toEqual(['No user requirements yet.', 'No functional requirements yet.', 'No design specifications yet.', 'No non-functional requirements yet.'])
+      expect(placeholderTexts).toEqual(['No user requirements yet.', 'No functional requirements yet.', 'No design specifications yet.', 'No test cases yet.', 'No non-functional requirements yet.'])
     })
   })
 

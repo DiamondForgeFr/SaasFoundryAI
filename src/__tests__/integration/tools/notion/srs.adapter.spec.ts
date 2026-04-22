@@ -50,6 +50,7 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
         }
       ],
       dsItems: [{ id: 'DS-1', title: 'Use Notion REST API', frRefs: ['FR-1'], group: 'Adapter smoke' }],
+      tcItems: [{ id: 'TC-1', title: 'Adapter round-trip', steps: ['create epic', 'fetch page'], expectedResult: 'fetched content matches spec', frRefs: ['FR-1'] }],
       nfrItems: [{ id: 'NFR-1', title: 'Round-trip latency', target: 'create+fetch ≤ 10s in CI', priority: 'P2', frRefs: ['FR-1'] }]
     }
   })
@@ -84,13 +85,21 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
     expect(raw.title).toBe(epicSpec.title)
     expect(raw.blocks.length).toBeGreaterThan(0)
 
-    // Structural assertions on the rendered DIAMONFORGE shape (table count, NFR section, headings)
+    // Structural assertions on the rendered DIAMONFORGE shape (table count, TC + NFR sections, headings)
     const tables = raw.blocks.filter((b) => b.kind === 'table')
-    // 5 tables: Requirement Types + UR + FR + DS + NFR
-    expect(tables).toHaveLength(5)
+    // 6 tables: Requirement Types + UR + FR + DS + TC + NFR
+    expect(tables).toHaveLength(6)
     const headings = raw.blocks.filter((b) => b.kind === 'heading').map((b) => b.text)
     expect(headings).toEqual(
-      expect.arrayContaining(['Traceability', 'Requirement Types', 'User Requirements (UR)', 'Functional Requirements (FR)', 'Design Specifications (DS)', 'Non-Functional Requirements (NFR)'])
+      expect.arrayContaining([
+        'Traceability',
+        'Requirement Types',
+        'User Requirements (UR)',
+        'Functional Requirements (FR)',
+        'Design Specifications (DS)',
+        'Test Cases (TC)',
+        'Non-Functional Requirements (NFR)'
+      ])
     )
 
     const children = await adapter.listChildren(epic.id)

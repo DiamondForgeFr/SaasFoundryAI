@@ -29,7 +29,7 @@ describe('renderFrPage — DIAMONFORGE-style structure', () => {
     expect(kinds).toEqual(['heading:2:Summary', 'table', 'divider', 'heading:2:FR-AUTH-01-01 — Sign in', 'table'])
   })
 
-  it('renders the Summary table with the 5 canonical columns', () => {
+  it('renders the Summary table with the 6 canonical columns', () => {
     const spec: FrSpec = {
       parentEpicPageId: 'epic',
       fr: {
@@ -37,16 +37,17 @@ describe('renderFrPage — DIAMONFORGE-style structure', () => {
         title: 'Sign in',
         priority: 'P1',
         urRefs: ['UR-AUTH-01-01'],
-        dsRefs: ['DS-AUTH-01-01', 'DS-AUTH-01-02']
+        dsRefs: ['DS-AUTH-01-01', 'DS-AUTH-01-02'],
+        tcRefs: ['TC-AUTH-01-01']
       }
     }
     const page = renderFrPage(spec)
     const summary = findTableAfterHeading(page.blocks, 'Summary')
-    expect(summary.header).toEqual(['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS'])
-    expect(summary.rows).toEqual([['FR-AUTH-01-01', 'Sign in', 'P1', 'UR-AUTH-01-01', 'DS-AUTH-01-01, DS-AUTH-01-02']])
+    expect(summary.header).toEqual(['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS', 'Related TC'])
+    expect(summary.rows).toEqual([['FR-AUTH-01-01', 'Sign in', 'P1', 'UR-AUTH-01-01', 'DS-AUTH-01-01, DS-AUTH-01-02', 'TC-AUTH-01-01']])
   })
 
-  it('renders a vertical detail table with all 11 canonical rows', () => {
+  it('renders a vertical detail table with all 12 canonical rows', () => {
     const spec: FrSpec = {
       parentEpicPageId: 'epic',
       fr: {
@@ -57,6 +58,7 @@ describe('renderFrPage — DIAMONFORGE-style structure', () => {
         priority: 'P1',
         urRefs: ['UR-AUTH-01-01'],
         dsRefs: ['DS-AUTH-01-01'],
+        tcRefs: ['TC-AUTH-01-01', 'TC-AUTH-01-02'],
         requestBody: '{ email, password }',
         acceptanceCriteria: ['returns 200 on success', 'returns 401 on invalid credentials'],
         validationRules: ['email required', 'password min 8 chars'],
@@ -73,6 +75,7 @@ describe('renderFrPage — DIAMONFORGE-style structure', () => {
       ['Priority', 'P1'],
       ['Related UR', 'UR-AUTH-01-01'],
       ['Related DS', 'DS-AUTH-01-01'],
+      ['Related TC', 'TC-AUTH-01-01, TC-AUTH-01-02'],
       ['Description', 'Authenticate user via email + password'],
       ['Request Body', '{ email, password }'],
       ['Acceptance Criteria', '• returns 200 on success\n• returns 401 on invalid credentials'],
@@ -85,7 +88,7 @@ describe('renderFrPage — DIAMONFORGE-style structure', () => {
     const spec: FrSpec = { parentEpicPageId: 'epic', fr: { id: 'FR-1', title: 'Minimal' } }
     const page = renderFrPage(spec)
     const summary = findTableAfterHeading(page.blocks, 'Summary')
-    expect(summary.rows).toEqual([['FR-1', 'Minimal', '—', '—', '—']])
+    expect(summary.rows).toEqual([['FR-1', 'Minimal', '—', '—', '—', '—']])
 
     const detail = findTableAfterHeading(page.blocks, 'FR-1 — Minimal')
     const cellFor = (label: string) => detail.rows.find((row) => row[0] === label)?.[1]
@@ -93,6 +96,7 @@ describe('renderFrPage — DIAMONFORGE-style structure', () => {
     expect(cellFor('Priority')).toBe('—')
     expect(cellFor('Related UR')).toBe('—')
     expect(cellFor('Related DS')).toBe('—')
+    expect(cellFor('Related TC')).toBe('—')
     expect(cellFor('Description')).toBe('—')
     expect(cellFor('Request Body')).toBe('—')
     expect(cellFor('Acceptance Criteria')).toBe('—')

@@ -20,7 +20,7 @@ function listCell(items?: string[]): string {
 }
 
 function summaryRow(fr: FrItem): string[] {
-  return [fr.id, fr.title, priorityCell(fr.priority), refsCell(fr.urRefs), refsCell(fr.dsRefs)]
+  return [fr.id, fr.title, priorityCell(fr.priority), refsCell(fr.urRefs), refsCell(fr.dsRefs), refsCell(fr.tcRefs)]
 }
 
 function detailRows(fr: FrItem): string[][] {
@@ -31,6 +31,7 @@ function detailRows(fr: FrItem): string[][] {
     ['Priority', priorityCell(fr.priority)],
     ['Related UR', refsCell(fr.urRefs)],
     ['Related DS', refsCell(fr.dsRefs)],
+    ['Related TC', refsCell(fr.tcRefs)],
     ['Description', textCell(fr.description)],
     ['Request Body', textCell(fr.requestBody)],
     ['Acceptance Criteria', listCell(fr.acceptanceCriteria)],
@@ -46,7 +47,7 @@ export function renderFrPage(spec: FrSpec): PageContent {
   blocks.push({ kind: 'heading', level: 2, text: 'Summary' })
   blocks.push({
     kind: 'table',
-    header: ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS'],
+    header: ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS', 'Related TC'],
     rows: frs.map(summaryRow)
   })
 
