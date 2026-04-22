@@ -11,9 +11,9 @@
 
 ### 1. READ THE TICKET THOROUGHLY
 
-### 2. DETECT COMPLEXITY
+### 2. DETECT COMPLEXITY → THEN WRITE IT TO THE TICKET
 
-**Run complexity detection:**
+**Step 2a — Run complexity detection (suggestion only):**
 
 ```bash
 .claude/skills/sf-workflow/scripts/detect-complexity.sh {ticket-number}
@@ -34,6 +34,16 @@
 - 🔴 **complex** - Critical feature (full apex with review)
 
 **Developer ALWAYS has final say - ask for confirmation or adjustment.**
+
+**Step 2b — Persist the complexity label on the ticket:**
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh retag {ticket-number} {level}
+# level: bug | low | medium | complex
+```
+
+⚠️ **This step is mandatory, not optional.** `detect-complexity.sh` only prints a suggestion; it does NOT write anything to the ticket. Without the `complexity: *` label, the ticket cannot leave
+Backlog — `update-status` is hard-gated on it (see errors to avoid below).
 
 ### 3. ANALYZE (adaptive based on complexity)
 
@@ -101,7 +111,7 @@
 
 ## Exit Conditions
 
-- Complexity tag is set
+- **Complexity label persisted on the ticket** (run `get-complexity {ticket}` and confirm it prints one of `bug|low|medium|complex`, not `(none)`)
 - Analysis complete (if required by complexity)
 - Plan approved (if required by complexity)
 - Developer validates that specs are complete
@@ -114,5 +124,5 @@
 
 ## Errors to Avoid
 
-❌ NEVER create a branch from Backlog ❌ NEVER start coding before Ready ❌ NEVER skip complexity detection ❌ NEVER skip analysis/planning if required by complexity ❌ NEVER move to Ready without
-developer validation
+❌ NEVER create a branch from Backlog ❌ NEVER start coding before Ready ❌ NEVER skip complexity detection ❌ NEVER leave Backlog without persisting the `complexity: *` label via `retag` (suggestion
+≠ label; `update-status` is hard-gated) ❌ NEVER skip analysis/planning if required by complexity ❌ NEVER move to Ready without developer validation
