@@ -247,19 +247,13 @@ describe('NotionSrsAdapter', () => {
     })
 
     it('splits >100 children across one create + N appends (Notion caps at 100 per request)', async () => {
-      const urs = Array.from({ length: 40 }, (_, i) => ({ id: `UR-${i + 1}`, narrative: `narrative ${i + 1}` }))
-      const frs = Array.from({ length: 40 }, (_, i) => ({
-        id: `FR-${i + 1}`,
-        title: `fr ${i + 1}`,
-        description: `desc ${i + 1}`,
-        acceptanceCriteria: ['ac-1', 'ac-2'],
-        urRefs: [`UR-${i + 1}`]
-      }))
-      const bigEpic: EpicSpec = { ...sampleEpic, urs, frs }
+      // Uses createPage directly to drive the chunker with a controlled block count,
+      // independent of template shape (which collapses many items into few blocks via tables).
+      const manyBlocks = Array.from({ length: 150 }, (_, i) => ({ kind: 'paragraph' as const, text: `p-${i + 1}` }))
       const { client, calls } = buildMockClient()
       const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
 
-      await adapter.createEpicPage(bigEpic)
+      await adapter.createPage('parent_123', 'Big page', { blocks: manyBlocks })
 
       expect(calls.pagesCreateCalls).toHaveLength(1)
       const create = calls.pagesCreateCalls[0] as { children: unknown[] }
@@ -271,15 +265,7 @@ describe('NotionSrsAdapter', () => {
     })
 
     it('rolls back (archives) the created page when a follow-up append fails', async () => {
-      const urs = Array.from({ length: 40 }, (_, i) => ({ id: `UR-${i + 1}`, narrative: `narrative ${i + 1}` }))
-      const frs = Array.from({ length: 40 }, (_, i) => ({
-        id: `FR-${i + 1}`,
-        title: `fr ${i + 1}`,
-        description: `desc ${i + 1}`,
-        acceptanceCriteria: ['ac-1'],
-        urRefs: [`UR-${i + 1}`]
-      }))
-      const bigEpic: EpicSpec = { ...sampleEpic, urs, frs }
+      const manyBlocks = Array.from({ length: 150 }, (_, i) => ({ kind: 'paragraph' as const, text: `p-${i + 1}` }))
       const pagesUpdateCalls: unknown[] = []
       const { client } = buildMockClient({
         blocksAppendImpl: async () => {
@@ -293,7 +279,7 @@ describe('NotionSrsAdapter', () => {
       }
       const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
 
-      await expect(adapter.createEpicPage(bigEpic)).rejects.toThrow(/append failed/)
+      await expect(adapter.createPage('parent_123', 'Big page', { blocks: manyBlocks })).rejects.toThrow(/append failed/)
       expect(pagesUpdateCalls).toHaveLength(1)
       expect(pagesUpdateCalls[0]).toMatchObject({ page_id: 'page_new', archived: true })
     })
