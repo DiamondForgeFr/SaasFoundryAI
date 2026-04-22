@@ -38,16 +38,19 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
       parentPageId: sandboxParentPageId,
       businessValue: 'Automated sandbox run — safe to archive.',
       scope: 'Exercises create → fetch → list → update → archive path.',
-      urs: [{ id: 'UR-1', narrative: 'Adapter is callable against a live workspace.' }],
+      urs: [{ id: 'UR-1', narrative: 'Adapter is callable against a live workspace.', group: 'Adapter smoke' }],
       frs: [
         {
           id: 'FR-1',
           title: 'Live create + list',
           description: 'Confirms the Notion Create + Children Read flow.',
           acceptanceCriteria: ['FR page appears under the parent Epic.'],
-          urRefs: ['UR-1']
+          urRefs: ['UR-1'],
+          group: 'Adapter smoke'
         }
-      ]
+      ],
+      dsItems: [{ id: 'DS-1', title: 'Use Notion REST API', frRefs: ['FR-1'], group: 'Adapter smoke' }],
+      nfrItems: [{ id: 'NFR-1', title: 'Round-trip latency', target: 'create+fetch ≤ 10s in CI', priority: 'P2', frRefs: ['FR-1'] }]
     }
   })
 
@@ -81,9 +84,23 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
     expect(raw.title).toBe(epicSpec.title)
     expect(raw.blocks.length).toBeGreaterThan(0)
 
+    // Structural assertions on the rendered DIAMONFORGE shape (table count, NFR section, headings)
+    const tables = raw.blocks.filter((b) => b.kind === 'table')
+    // 5 tables: Requirement Types + UR + FR + DS + NFR
+    expect(tables).toHaveLength(5)
+    const headings = raw.blocks.filter((b) => b.kind === 'heading').map((b) => b.text)
+    expect(headings).toEqual(expect.arrayContaining(['Traceability', 'Requirement Types', 'User Requirements (UR)', 'Functional Requirements (FR)', 'Design Specifications (DS)', 'Non-Functional Requirements (NFR)']))
+
     const children = await adapter.listChildren(epic.id)
     const childIds = children.map((c) => c.id)
     expect(childIds).toContain(fr.id)
+
+    // FR page also rendered with the new shape: Summary + per-item detail (2 tables expected)
+    const frRaw = await adapter.fetchPage(fr.id)
+    const frTables = frRaw.blocks.filter((b) => b.kind === 'table')
+    expect(frTables).toHaveLength(2)
+    const frHeadings = frRaw.blocks.filter((b) => b.kind === 'heading').map((b) => b.text)
+    expect(frHeadings).toEqual(expect.arrayContaining(['Summary', 'FR-1 — Live create + list']))
 
     await adapter.updatePage(epic.id, {
       title: 'Integration test update',

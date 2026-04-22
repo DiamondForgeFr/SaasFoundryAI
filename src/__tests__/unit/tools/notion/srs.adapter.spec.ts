@@ -297,6 +297,91 @@ describe('NotionSrsAdapter', () => {
       expect(call.parent).toEqual({ page_id: 'epic_42' })
       expect(call.children.length).toBeGreaterThan(0)
     })
+
+    it('produces the DIAMONFORGE-shape children: Summary table + divider + per-item detail table', async () => {
+      const { client, calls } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await adapter.createFrPage(sampleFr)
+
+      type AnyBlock = { type: string; table?: { table_width: number; has_column_header: boolean } }
+      const call = calls.pagesCreateCalls[0] as unknown as { children: AnyBlock[] }
+      const types = call.children.map((c) => c.type)
+      // Notion page title is set as page property (not a child block);
+      // children start at heading_2 (Summary), table, divider, heading_2 (id — title), table
+      expect(types).toEqual(['heading_2', 'table', 'divider', 'heading_2', 'table'])
+      const tables = call.children.filter((c): c is AnyBlock & { table: { table_width: number; has_column_header: boolean } } => c.type === 'table' && c.table !== undefined)
+      expect(tables).toHaveLength(2)
+      expect(tables[0].table.table_width).toBe(5) // Summary: ID, Requirement, Priority, Related UR, Related DS
+      expect(tables[0].table.has_column_header).toBe(true)
+      expect(tables[1].table.table_width).toBe(2) // Detail: Field, Value
+      expect(tables[1].table.has_column_header).toBe(true)
+    })
+  })
+
+  describe('createEpicPage — DIAMONFORGE structural shape', () => {
+    it('emits Traceability + Requirement Types + UR/FR/DS/NFR sections with grouped tables', async () => {
+      const richEpic: EpicSpec = {
+        title: 'Auth epic',
+        parentPageId: 'parent_xyz',
+        urs: [
+          { id: 'UR-AUTH-01', narrative: 'Sign-in', group: 'Sign-in flow' },
+          { id: 'UR-AUTH-02', narrative: 'Sign-out', group: 'Sign-out flow' }
+        ],
+        frs: [
+          { id: 'FR-AUTH-01', title: 'Sign in endpoint', group: 'Sign-in flow', urRefs: ['UR-AUTH-01'] }
+        ],
+        dsItems: [{ id: 'DS-AUTH-01', title: 'JWT cookie', group: 'Sign-in flow', frRefs: ['FR-AUTH-01'] }],
+        nfrItems: [{ id: 'NFR-PERF-01', title: 'Login latency', target: 'p95 ≤ 1s', priority: 'P1', frRefs: ['FR-AUTH-01'] }]
+      }
+      const { client, calls } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await adapter.createEpicPage(richEpic)
+
+      type AnyBlock = {
+        type: string
+        heading_2?: { rich_text: Array<{ text: { content: string } }> }
+      }
+      const call = calls.pagesCreateCalls[0] as unknown as { children: AnyBlock[] }
+      const types = call.children.map((c) => c.type)
+      // Notion page title is set as page property (not a child block);
+      // children start at heading_2 (Traceability) + code + paragraph + heading_2 (Requirement Types) + table + UR/FR/DS/NFR (H2 + table each)
+      expect(types[0]).toBe('heading_2')
+      expect(types).toContain('code')
+      const tables = call.children.filter((c) => c.type === 'table')
+      expect(tables).toHaveLength(5) // Requirement Types, UR, FR, DS, NFR
+
+      const headings = call.children.filter((c): c is AnyBlock & { heading_2: { rich_text: Array<{ text: { content: string } }> } } => c.type === 'heading_2' && c.heading_2 !== undefined)
+      const headingTexts = headings.map((h) => h.heading_2.rich_text[0].text.content)
+      expect(headingTexts).toEqual(['Traceability', 'Requirement Types', 'User Requirements (UR)', 'Functional Requirements (FR)', 'Design Specifications (DS)', 'Non-Functional Requirements (NFR)'])
+    })
+
+    it('renders empty placeholder paragraphs when sections have no items', async () => {
+      const emptyEpic: EpicSpec = {
+        title: 'Empty epic',
+        parentPageId: 'p',
+        urs: [],
+        frs: []
+        // dsItems + nfrItems undefined → placeholder paragraphs expected
+      }
+      const { client, calls } = buildMockClient()
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      await adapter.createEpicPage(emptyEpic)
+
+      type AnyBlock = { type: string; paragraph?: { rich_text: Array<{ text: { content: string } }> } }
+      const call = calls.pagesCreateCalls[0] as unknown as { children: AnyBlock[] }
+      const placeholderTexts = call.children
+        .filter((c): c is AnyBlock & { paragraph: { rich_text: Array<{ text: { content: string } }> } } => c.type === 'paragraph' && c.paragraph !== undefined && c.paragraph.rich_text[0]?.text.content.startsWith('No '))
+        .map((c) => c.paragraph.rich_text[0].text.content)
+      expect(placeholderTexts).toEqual([
+        'No user requirements yet.',
+        'No functional requirements yet.',
+        'No design specifications yet.',
+        'No non-functional requirements yet.'
+      ])
+    })
   })
 
   describe('fetchPage', () => {
