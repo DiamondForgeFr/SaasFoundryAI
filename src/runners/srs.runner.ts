@@ -25,7 +25,7 @@ export async function bootstrapSrs(options: BootstrapSrsOptions): Promise<Bootst
   await adapter.init()
   const parent = await adapter.resolveParent(parentInput)
 
-  const rootTitle = `${projectName} — Project Overview`
+  const rootTitle = `${projectName}-srs`
   const rootRef = await adapter.createPage(parent.id, rootTitle)
   const rootPage: SrsPageRef = { id: rootRef.id, url: rootRef.url, name: rootTitle }
 

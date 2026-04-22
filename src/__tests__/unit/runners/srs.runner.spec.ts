@@ -63,18 +63,18 @@ describe('bootstrapSrs', () => {
     expect(adapter.initCalls).toBe(1)
     expect(adapter.resolveCalls).toEqual(['https://notion.so/parent'])
     expect(adapter.createCalls).toEqual([
-      { parentPageId: 'resolved_parent_id', title: 'acme — Project Overview', hasContent: false },
-      { parentPageId: 'resolved_parent_id__acme_—_Project_Overview', title: 'User flows & Specifications', hasContent: false }
+      { parentPageId: 'resolved_parent_id', title: 'acme-srs', hasContent: false },
+      { parentPageId: 'resolved_parent_id__acme-srs', title: 'User flows & Specifications', hasContent: false }
     ])
 
     expect(result.rootPage).toEqual({
-      id: 'resolved_parent_id__acme_—_Project_Overview',
-      url: 'https://notion.so/resolved_parent_id__acme_—_Project_Overview',
-      name: 'acme — Project Overview'
+      id: 'resolved_parent_id__acme-srs',
+      url: 'https://notion.so/resolved_parent_id__acme-srs',
+      name: 'acme-srs'
     })
     expect(result.categoryPage).toEqual({
-      id: 'resolved_parent_id__acme_—_Project_Overview__User_flows_&_Specifications',
-      url: 'https://notion.so/resolved_parent_id__acme_—_Project_Overview__User_flows_&_Specifications',
+      id: 'resolved_parent_id__acme-srs__User_flows_&_Specifications',
+      url: 'https://notion.so/resolved_parent_id__acme-srs__User_flows_&_Specifications',
       name: 'User flows & Specifications'
     })
   })
@@ -88,7 +88,7 @@ describe('bootstrapSrs', () => {
 
     const [rootCall, categoryCall] = adapter.createCalls
     expect(rootCall.parentPageId).toBe('resolved_parent_id')
-    expect(categoryCall.parentPageId).toBe('id-demo — Project Overview')
+    expect(categoryCall.parentPageId).toBe('id-demo-srs')
   })
 
   it('propagates errors from resolveParent without calling createPage', async () => {
