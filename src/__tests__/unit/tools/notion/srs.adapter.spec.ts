@@ -328,9 +328,7 @@ describe('NotionSrsAdapter', () => {
           { id: 'UR-AUTH-01', narrative: 'Sign-in', group: 'Sign-in flow' },
           { id: 'UR-AUTH-02', narrative: 'Sign-out', group: 'Sign-out flow' }
         ],
-        frs: [
-          { id: 'FR-AUTH-01', title: 'Sign in endpoint', group: 'Sign-in flow', urRefs: ['UR-AUTH-01'] }
-        ],
+        frs: [{ id: 'FR-AUTH-01', title: 'Sign in endpoint', group: 'Sign-in flow', urRefs: ['UR-AUTH-01'] }],
         dsItems: [{ id: 'DS-AUTH-01', title: 'JWT cookie', group: 'Sign-in flow', frRefs: ['FR-AUTH-01'] }],
         nfrItems: [{ id: 'NFR-PERF-01', title: 'Login latency', target: 'p95 ≤ 1s', priority: 'P1', frRefs: ['FR-AUTH-01'] }]
       }
@@ -373,14 +371,12 @@ describe('NotionSrsAdapter', () => {
       type AnyBlock = { type: string; paragraph?: { rich_text: Array<{ text: { content: string } }> } }
       const call = calls.pagesCreateCalls[0] as unknown as { children: AnyBlock[] }
       const placeholderTexts = call.children
-        .filter((c): c is AnyBlock & { paragraph: { rich_text: Array<{ text: { content: string } }> } } => c.type === 'paragraph' && c.paragraph !== undefined && c.paragraph.rich_text[0]?.text.content.startsWith('No '))
+        .filter(
+          (c): c is AnyBlock & { paragraph: { rich_text: Array<{ text: { content: string } }> } } =>
+            c.type === 'paragraph' && c.paragraph !== undefined && c.paragraph.rich_text[0]?.text.content.startsWith('No ')
+        )
         .map((c) => c.paragraph.rich_text[0].text.content)
-      expect(placeholderTexts).toEqual([
-        'No user requirements yet.',
-        'No functional requirements yet.',
-        'No design specifications yet.',
-        'No non-functional requirements yet.'
-      ])
+      expect(placeholderTexts).toEqual(['No user requirements yet.', 'No functional requirements yet.', 'No design specifications yet.', 'No non-functional requirements yet.'])
     })
   })
 

@@ -89,7 +89,9 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
     // 5 tables: Requirement Types + UR + FR + DS + NFR
     expect(tables).toHaveLength(5)
     const headings = raw.blocks.filter((b) => b.kind === 'heading').map((b) => b.text)
-    expect(headings).toEqual(expect.arrayContaining(['Traceability', 'Requirement Types', 'User Requirements (UR)', 'Functional Requirements (FR)', 'Design Specifications (DS)', 'Non-Functional Requirements (NFR)']))
+    expect(headings).toEqual(
+      expect.arrayContaining(['Traceability', 'Requirement Types', 'User Requirements (UR)', 'Functional Requirements (FR)', 'Design Specifications (DS)', 'Non-Functional Requirements (NFR)'])
+    )
 
     const children = await adapter.listChildren(epic.id)
     const childIds = children.map((c) => c.id)
