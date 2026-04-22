@@ -32,27 +32,32 @@ type PageBlock =
 
 ## Epic page sections
 
-Produced by `renderEpicPage(spec)` in this order:
+Produced by `renderEpicPage(spec)` in this order (DIAMONFORGE-style):
 
-1. `Overview` (H1) + business value paragraph
-2. `Scope` (H2) + scope paragraph (omitted when absent)
-3. Divider
-4. `Requirement Types` (H2) + table `[UR, FR, DS, TC]` with counts
-5. `Traceability` (H2) + table `[FR, UR refs, DS refs, TC refs]`
-6. Divider
-7. `User Requirements (UR)` (H2) + bulleted list
-8. Divider
-9. `Functional Requirements (FR)` (H2) + per-FR detail blocks (H3 + description + acceptance criteria list + refs paragraph)
+1. `Traceability` (H2) + plain-text code block (ASCII tree `UR → FR → DS → TC`) + explanatory paragraph
+2. `Requirement Types` (H2) + definitions table `Prefix | Type | Description | Example` with one row per UR/FR/DS/NFR
+3. `User Requirements (UR)` (H2) + table `ID | Requirement | Priority | Related FR`, with group-header rows when items carry a `group`
+4. `Functional Requirements (FR)` (H2) + table `ID | Requirement | Priority | Related UR | Related DS`, grouped
+5. `Design Specifications (DS)` (H2) + table `ID | Specification | Related FR`, grouped
+6. `Non-Functional Requirements (NFR)` (H2) + table `ID | Requirement | Target | Priority | Related FR`, grouped
+
+Empty sections emit a placeholder paragraph (e.g. `No user requirements yet.`) instead of the table. Missing optional fields render as the em-dash cell `—`. Group headers appear as a single-cell row
+carrying the group id followed by empty cells matching the table arity.
 
 ## FR page sections
 
-Produced by `renderFrPage(spec)` in this order:
+Produced by `renderFrPage(spec)` in this order (DIAMONFORGE-style):
 
-1. `{FR-id} — {title}` (H1) + description paragraph
-2. `User Requirements` (H2) + bulleted list (placeholder when empty)
-3. `Acceptance Criteria` (H2) + bulleted list (placeholder when empty)
-4. `Design (DS)` (H2) + bulleted list (placeholder when empty)
-5. `Test Cases (TC)` (H2) + bulleted list (placeholder when empty)
+1. `Summary` (H2) + table `ID | Requirement | Priority | Related UR | Related DS` — one row per FR item on the page
+2. Divider
+3. Per FR item: `{FR-id} — {title}` (H2) + vertical detail table `Field | Value` with canonical rows (in order): `ID`, `Title`, `Endpoint`, `Priority`, `Related UR`, `Related DS`, `Description`,
+   `Request Body`, `Acceptance Criteria`, `Validation Rules`, `Security Rationale`
+4. Divider **between** items (not after the last item)
+
+List-typed fields (`acceptanceCriteria`, `validationRules`) render as newline-joined `• item` entries within a single cell — Notion preserves newlines in table cells. Missing optional fields render as
+`—`. The page title is `{FR-id} — {title}` of `spec.fr`.
+
+`FrSpec.fr` is currently singular (one FR per page); the template wraps it as `[spec.fr]` internally so a future type extension to multi-FR pages is a single-line change.
 
 ## Adding a new backend
 
