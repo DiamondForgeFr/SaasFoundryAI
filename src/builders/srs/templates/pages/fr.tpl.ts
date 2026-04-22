@@ -1,40 +1,62 @@
-import { FrSpec, PageBlock, PageContent } from '../../types'
+import { FrItem, FrSpec, PageBlock, PageContent, Priority } from '../../types'
+
+const EMPTY_CELL = '—'
+
+function refsCell(refs?: string[]): string {
+  return refs && refs.length > 0 ? refs.join(', ') : EMPTY_CELL
+}
+
+function priorityCell(priority?: Priority): string {
+  return priority ?? EMPTY_CELL
+}
+
+function textCell(value?: string): string {
+  return value && value.trim().length > 0 ? value : EMPTY_CELL
+}
+
+function listCell(items?: string[]): string {
+  if (!items || items.length === 0) return EMPTY_CELL
+  return items.map((item) => `• ${item}`).join('\n')
+}
+
+function summaryRow(fr: FrItem): string[] {
+  return [fr.id, fr.title, priorityCell(fr.priority), refsCell(fr.urRefs), refsCell(fr.dsRefs)]
+}
+
+function detailRows(fr: FrItem): string[][] {
+  return [
+    ['ID', fr.id],
+    ['Title', fr.title],
+    ['Endpoint', textCell(fr.endpoint)],
+    ['Priority', priorityCell(fr.priority)],
+    ['Related UR', refsCell(fr.urRefs)],
+    ['Related DS', refsCell(fr.dsRefs)],
+    ['Description', textCell(fr.description)],
+    ['Request Body', textCell(fr.requestBody)],
+    ['Acceptance Criteria', listCell(fr.acceptanceCriteria)],
+    ['Validation Rules', listCell(fr.validationRules)],
+    ['Security Rationale', textCell(fr.securityRationale)]
+  ]
+}
 
 export function renderFrPage(spec: FrSpec): PageContent {
-  const { fr } = spec
+  const frs: FrItem[] = [spec.fr]
   const blocks: PageBlock[] = []
 
-  blocks.push({ kind: 'heading', level: 1, text: `${fr.id} — ${fr.title}` })
-  if (fr.description) blocks.push({ kind: 'paragraph', text: fr.description })
+  blocks.push({ kind: 'heading', level: 2, text: 'Summary' })
+  blocks.push({
+    kind: 'table',
+    header: ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS'],
+    rows: frs.map(summaryRow)
+  })
 
-  blocks.push({ kind: 'heading', level: 2, text: 'User Requirements' })
-  if (!spec.urs || spec.urs.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No linked user requirements.' })
-  } else {
-    blocks.push({ kind: 'bulleted_list', items: spec.urs.map((ur) => `${ur.id}: ${ur.narrative}`) })
-  }
+  blocks.push({ kind: 'divider' })
 
-  blocks.push({ kind: 'heading', level: 2, text: 'Acceptance Criteria' })
-  if (!fr.acceptanceCriteria || fr.acceptanceCriteria.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No acceptance criteria yet.' })
-  } else {
-    blocks.push({ kind: 'bulleted_list', items: fr.acceptanceCriteria })
-  }
+  frs.forEach((fr, idx) => {
+    blocks.push({ kind: 'heading', level: 2, text: `${fr.id} — ${fr.title}` })
+    blocks.push({ kind: 'table', header: ['Field', 'Value'], rows: detailRows(fr) })
+    if (idx < frs.length - 1) blocks.push({ kind: 'divider' })
+  })
 
-  blocks.push({ kind: 'heading', level: 2, text: 'Design (DS)' })
-  if (!spec.dsItems || spec.dsItems.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No design items yet.' })
-  } else {
-    blocks.push({ kind: 'bulleted_list', items: spec.dsItems.map((ds) => `${ds.id}: ${ds.title}`) })
-  }
-
-  blocks.push({ kind: 'heading', level: 2, text: 'Test Cases (TC)' })
-  if (!spec.tcItems || spec.tcItems.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No test cases yet.' })
-  } else {
-    blocks.push({ kind: 'bulleted_list', items: spec.tcItems.map((tc) => `${tc.id}: ${tc.title}`) })
-  }
-
-  const title = `${fr.id} — ${fr.title}`
-  return { title, blocks }
+  return { title: `${spec.fr.id} — ${spec.fr.title}`, blocks }
 }
