@@ -146,4 +146,16 @@ describe('getAvailableModules', () => {
     expect(context7?.description).toContain('free')
     expect(context7?.name).toBe('Advanced Skill: Context7')
   })
+
+  it('should offer only srs + skill modules when manifest has no modules block (cli-structure dogfood)', () => {
+    const manifest = manifestFixture({ structure: 'cli', modules: undefined })
+
+    const available = getAvailableModules(manifest)
+
+    const values = available.map((m) => m.value)
+    expect(values).toEqual(expect.arrayContaining(['srs', 'sf-skill-context7', 'sf-skill-atlassian', 'sf-skill-notion', 'sf-skill-figma']))
+    expect(values).not.toContain('email')
+    expect(values).not.toContain('storage')
+    expect(values).not.toContain('analytics')
+  })
 })

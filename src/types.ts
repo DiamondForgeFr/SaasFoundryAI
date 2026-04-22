@@ -205,9 +205,9 @@ export interface ToolsConfig {
 export interface SaaSFoundryManifest {
   version: string
   generatedAt: string
-  structure: 'monorepo' | 'multirepo'
+  structure: 'monorepo' | 'multirepo' | 'cli'
   projectName: string
-  modules: {
+  modules?: {
     emailService: 'none' | 'mailersend'
     s3Setup: 'docker' | 'credentials' | 'manual'
     dbSetup: 'docker' | 'credentials' | 'manual'

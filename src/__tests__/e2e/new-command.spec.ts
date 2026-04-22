@@ -168,8 +168,8 @@ describe('newCommand flow (E2E)', () => {
       })
 
       expect(manifest.structure).toBe('monorepo')
-      expect(manifest.modules.emailService).toBe('mailersend')
-      expect(manifest.modules.includeAnalytics).toBe(true)
+      expect(manifest.modules!.emailService).toBe('mailersend')
+      expect(manifest.modules!.includeAnalytics).toBe(true)
 
       await expectFileExists(join(tempDir, 'full-mono/apps/api/src/main.ts'))
       await expectFileExists(join(tempDir, 'full-mono/apps/web/src/main.tsx'))
@@ -190,7 +190,7 @@ describe('newCommand flow (E2E)', () => {
         includeAnalytics: false
       })
 
-      expect(manifest.modules.dbSetup).toBe('docker')
+      expect(manifest.modules!.dbSetup).toBe('docker')
 
       const composeContent = await readFile(join(tempDir, 'db-only/apps/db-only-api/docker-compose.dev-services.yml'), 'utf8')
       expect(composeContent).toContain('db-dev:')
@@ -211,7 +211,7 @@ describe('newCommand flow (E2E)', () => {
         includeAnalytics: false
       })
 
-      expect(manifest.modules.emailService).toBe('mailersend')
+      expect(manifest.modules!.emailService).toBe('mailersend')
 
       const emailService = await readFile(join(tempDir, 'email-only/apps/api/src/modules/email/services/email.service.ts'), 'utf8')
       expect(emailService).not.toContain("console.log('html', html)")
@@ -231,7 +231,7 @@ describe('newCommand flow (E2E)', () => {
         includeAnalytics: true
       })
 
-      expect(manifest.modules.includeAnalytics).toBe(true)
+      expect(manifest.modules!.includeAnalytics).toBe(true)
 
       const mainTsx = await readFile(join(tempDir, 'analytics-app/apps/analytics-app-web/src/main.tsx'), 'utf8')
       expect(mainTsx).toContain("import { initAnalytics } from '@/lib/analytics/analytics'")
