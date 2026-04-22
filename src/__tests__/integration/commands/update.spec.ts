@@ -19,10 +19,28 @@ jest.mock('../../../prompts/update.prompts', () => ({
   getSkillCredentials: jest.fn()
 }))
 
+jest.mock('../../../prompts/srs.prompts', () => ({
+  promptSrsConfiguration: jest.fn().mockResolvedValue({
+    srsEnable: true,
+    srsBackend: 'notion',
+    notionApiToken: 'secret_token',
+    notionApiVersion: '2022-06-28',
+    srsParentPageInput: 'https://notion.so/Parent-123'
+  })
+}))
+
 jest.mock('../../../installers/email.installer', () => ({ installEmailModule: jest.fn() }))
 jest.mock('../../../installers/storage.installer', () => ({ installStorageModule: jest.fn() }))
 jest.mock('../../../installers/analytics.installer', () => ({ installAnalyticsModule: jest.fn() }))
 jest.mock('../../../installers/skills.installer', () => ({ installSkills: jest.fn() }))
+jest.mock('../../../installers/srs-skill.installer', () => ({ installSrsSkill: jest.fn() }))
+jest.mock('../../../runners/srs.runner', () => ({
+  bootstrapSrs: jest.fn().mockResolvedValue({
+    rootPage: { id: 'root-id', url: 'https://notion/root', name: 'Root' },
+    categoryPage: { id: 'cat-id', url: 'https://notion/cat', name: 'User flows & Specifications' }
+  })
+}))
+jest.mock('../../../tools/notion/srs.adapter', () => ({ NotionSrsAdapter: jest.fn() }))
 jest.mock('../../../builders/api.builder', () => ({ createApiApp: jest.fn() }))
 jest.mock('../../../builders/web.builder', () => ({ createWebApp: jest.fn() }))
 jest.mock('../../../builders/monorepo.builder', () => ({ createMonorepoRoot: jest.fn() }))
@@ -361,6 +379,30 @@ describe('updateCommand (integration)', () => {
 
       const infoMsgs = logSpy.mock.calls.map((c) => String(c[0])).join('\n')
       expect(infoMsgs).toMatch(/Version change detected/i)
+    })
+  })
+
+  describe('cli-structure manifest (dogfooding)', () => {
+    const buildCliManifest = (): SaaSFoundryManifest => ({
+      version: cliVersion,
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      structure: 'cli',
+      projectName: 'saasfoundry-cli'
+    })
+
+    it('enables SRS without writing fileHashes when manifest has no modules block', async () => {
+      const manifest = buildCliManifest()
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
+
+      mockedGetModuleSelections.mockResolvedValue(['srs'])
+
+      await updateCommand()
+
+      const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+      expect(saved.tools?.srs?.enabled).toBe(true)
+      expect(saved.tools?.srs?.backend).toBe('notion')
+      expect(saved.modules).toBeUndefined()
+      expect(saved.fileHashes).toBeUndefined()
     })
   })
 })

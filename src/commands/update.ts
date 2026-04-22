@@ -644,9 +644,14 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       }
     }
 
-    // Recompute file hashes after module installation and update manifest
+    // Recompute file hashes after module installation and update manifest.
+    // `fileHashes` only drives the FLOW 1 template-drift comparison for scaffolded SaaS projects —
+    // skip the write for cli-structure manifests (no `modules` block) to avoid polluting the manifest
+    // with hundreds of unrelated entries.
     moduleSpinner.text = 'Updating project manifest...'
-    manifest.fileHashes = await computeFileHashes('.')
+    if (manifest.modules) {
+      manifest.fileHashes = await computeFileHashes('.')
+    }
     await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
 
     moduleSpinner.succeed(chalk.green('Modules installed successfully'))
