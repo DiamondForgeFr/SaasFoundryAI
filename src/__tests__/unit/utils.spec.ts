@@ -369,7 +369,7 @@ describe('utils', () => {
             rootPage: {
               id: 'abc-123',
               url: 'https://www.notion.so/SaaSFoundry-abc123',
-              name: 'SaaSFoundry — Project Overview'
+              name: 'srs-enabled-srs'
             },
             categories: {
               userFlowsAndSpecifications: {
