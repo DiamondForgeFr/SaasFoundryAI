@@ -166,18 +166,18 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
     })
 
     it('allows "In progress" even when srs:drafting is set (drafting lifecycle entry)', async () => {
-      const res = await runCli(['update-status', '42', 'In progress'], sandbox, { FAKE_LABELS: 'srs:drafting' })
+      const res = await runCli(['update-status', '42', 'In progress'], sandbox, { FAKE_LABELS: 'srs:drafting\ncomplexity: low' })
       expect(res.code).toBe(0)
     })
 
     it('allows "Done" even when srs:drafting is set (drafting lifecycle exit)', async () => {
-      const res = await runCli(['update-status', '42', 'Done'], sandbox, { FAKE_LABELS: 'srs:drafting' })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox, { FAKE_LABELS: 'srs:drafting\ncomplexity: low' })
       expect(res.code).toBe(0)
     })
 
     it('bypasses the guard when SF_WORKFLOW_BYPASS_SRS_GUARD=1', async () => {
       const res = await runCli(['update-status', '42', 'AI testing'], sandbox, {
-        FAKE_LABELS: 'srs:drafting',
+        FAKE_LABELS: 'srs:drafting\ncomplexity: low',
         SF_WORKFLOW_BYPASS_SRS_GUARD: '1'
       })
       expect(res.code).toBe(0)

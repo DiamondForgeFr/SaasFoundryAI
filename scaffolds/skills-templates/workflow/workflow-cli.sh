@@ -187,6 +187,64 @@ check_srs_guard() {
   return 0
 }
 
+# ───────────────────────────────────────────────────────────────────────────
+# Complexity guard
+# ───────────────────────────────────────────────────────────────────────────
+#
+# Every ticket must carry a `complexity: <bug|low|medium|complex>` label before
+# it leaves Backlog. Without it, the adaptive workflow (analyze / plan / examine
+# depth) has nothing to key off and the board ends up full of untagged tickets
+# — the exact failure mode the developer flagged.
+#
+# The guard fires on any `update-status` whose target is NOT 'Backlog'. It
+# fails open on fetch errors (same philosophy as check_srs_guard) so an offline
+# gh or auth hiccup never wedges the workflow. Escape hatch:
+# SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1.
+
+is_backlog_target() {
+  local target=$1
+  local normalized
+  normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
+  [[ "$normalized" == "backlog" ]]
+}
+
+get_ticket_complexity_label() {
+  # Prints the complexity level (bug|low|medium|complex) or empty if none.
+  # Returns 0 on clean fetch, 1 on fetch error.
+  local ticket=$1
+  local raw
+  raw=$(route_to_tool "$WORKFLOW_TOOL" get-labels "$ticket" 2>/dev/null) || return 1
+  echo "$raw" | grep -E '^complexity: ' | head -n1 | sed 's/^complexity: //'
+}
+
+check_complexity_guard() {
+  # Returns 0 if the caller may proceed, 1 if blocked (message already printed).
+  local ticket=$1
+  local target=$2
+
+  [[ "${SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD:-}" == "1" ]] && return 0
+  is_backlog_target "$target" && return 0   # moving back to Backlog is always allowed
+
+  local level
+  level=$(get_ticket_complexity_label "$ticket") || return 0   # fail-open on fetch error
+
+  if [[ -z "$level" ]]; then
+    echo -e "${RED}✗ Ticket #${ticket} has no complexity label — cannot transition to '${target}'.${NC}" >&2
+    echo "" >&2
+    echo "  Every ticket must be tagged with one of: bug | low | medium | complex" >&2
+    echo "  before it leaves Backlog. The adaptive workflow keys off this label." >&2
+    echo "" >&2
+    echo "  Fix:" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh detect-complexity ${ticket}" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh retag ${ticket} <level>" >&2
+    echo "" >&2
+    echo "  See .claude/skills/sf-workflow/complexity/README.md for level guidance." >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1" >&2
+    return 1
+  fi
+  return 0
+}
+
 # Function to show next status
 show_next_status() {
   local current_status=$1
@@ -333,6 +391,9 @@ case "$COMMAND" in
       exit 1
     fi
     if ! check_srs_guard "$TICKET" "$TARGET"; then
+      exit 2
+    fi
+    if ! check_complexity_guard "$TICKET" "$TARGET"; then
       exit 2
     fi
     route_to_tool "$WORKFLOW_TOOL" update-status "$@"

@@ -84,6 +84,9 @@ Developer always has final say.
 
 **`/workflow retag <ticket> <new-complexity>`** Changes ticket complexity level (bug | low | medium | complex). Adjusts remaining workflow steps to match new complexity.
 
+**Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. `detect-complexity` only suggests — you must call `retag` to
+persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare).
+
 ### Workflow Phase Commands (Complexity-Adaptive)
 
 **`/workflow prepare <ticket> <complexity>`** Runs adaptive analyze + plan phase (Backlog → Ready).
