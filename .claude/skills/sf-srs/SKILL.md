@@ -94,15 +94,37 @@ silent drift that already happened).
 
 ### Heuristics (v1)
 
-| Finding kind      | Trigger                                                                                | Severity |
-| ----------------- | -------------------------------------------------------------------------------------- | -------- |
-| `fr-without-code` | FR page exists in the SRS but no scanner finding matches its area token                | error    |
-| `orphan-area`     | Scanner area carries endpoints but no FR page exists for it (e.g. new module, no spec) | error    |
-| `code-without-fr` | Individual endpoint not covered by an FR whose area already has other matches          | warn     |
-| `fr-untested`     | FR is mapped to endpoints, but no endpoint in that area carries `hasTests=true`        | warn     |
+| Finding kind      | Trigger                                                                                                                        | Severity |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| `fr-without-code` | FR page exists but no scanner finding (endpoint / ui-flow / entity / test) matches its area token                              | error    |
+| `orphan-area`     | Scanner area carries implementation findings (endpoint / ui-flow / entity) but no FR page exists for it                        | error    |
+| `code-without-fr` | An implementation finding is outside the matched set but its area already carries other matches (or mismatches a hint filter)  | warn     |
+| `fr-untested`     | FR is mapped to code findings in its area but no test coverage is detected (no `endpoint.hasTests`, no test finding, no hints) | warn     |
 
 The overall score is the unweighted mean of FR coverage, endpoint coverage, and test coverage (each as a percentage). The per-category breakdown reports `FR` from the heuristics above.
 `UR / DS / TC / NFR` are emitted with `score: null` and a note — deeper drift on those categories requires the Notion adapter to preserve table-row cells on `fetchPage`, which is a follow-up SUB.
+
+### Three-layer matcher (L1 deterministic → L2 declarative → L3 AI review)
+
+The eval is AI-augmented by design: the CLI runs deterministic checks so the skill can spend agent tokens only on the semantic review that tooling cannot do. No LLM is ever invoked from the tool
+itself — cost for non-agent users stays at zero.
+
+- **L1 — deterministic script.** `eval-srs` matches every FR against all scanner findings whose `area` overlaps (not just endpoints). `ui-flow`, `entity`, and `test` findings now count alongside
+  `endpoint`, so frontend-only, data-only, and test-driven FRs are recognised without human intervention.
+- **L2 — declarative hints on the FR page.** FR authors can narrow the match with two optional fields on `SrsFrEntry` :
+  - `implementationKind: 'endpoint' | 'ui-flow' | 'entity' | 'mixed'` — filters impl findings to the declared kind (tests always count regardless).
+  - `areaHints: string[]` — additional area tokens to match (handy when the scanner area and the FR ID diverge, e.g. FR area `billing` ↔ code area `payments`). Inventory builders populate these when
+    the backend's page body carries them; today they are optional and unset.
+- **L3 — AI review packet.** Pass `--review-packet <path>` to `eval-srs` and the tool writes a structured JSON alongside the usual report :
+  ```bash
+  .claude/skills/sf-srs/scripts/srs-cli.sh eval --review-packet .srs-audit/review-packet.json
+  ```
+  The packet contains, per FR, its deterministic `status` (`matched` / `untested` / `unmatched`), the matched file list, and `promptHints` summarising the deterministic gaps. The skill feeds this
+  packet into its own context and proposes :
+  - matches the script missed (semantic mapping, e.g. an FR titled "Invoices" that should map to code area `billing`),
+  - reclassifications (FR that looks matched but actually covers a different behaviour),
+  - new UR / DS / TC / NFR items that the rendered report doesn't compute yet. The skill never edits the FR page silently — it uses the conversational eval hook (`apply-update`) to propose each change
+    with the user.
 
 ### Sample output (human)
 
@@ -376,8 +398,9 @@ trivial one.
 
 Running the full `sf srs` chain end-to-end on SaaSFoundry itself surfaced 12 gaps consolidated under parent #235. Key takeaways agents should know about:
 
-- **Matcher is endpoint-biased (#236).** Today's `matcher.ts` only counts an FR as matched when an HTTP endpoint finding shares its area. Non-backend FRs (frontend-only pages, CLI commands, infra
-  jobs) score 0 regardless of test coverage. Until fixed, treat low eval scores on non-backend projects as likely false negatives, not real drift.
+- **Matcher covers all finding kinds (#236 — landed).** `matcher.ts` now counts `endpoint`, `ui-flow`, `entity`, and `test` findings when scoring an FR. Frontend-only, data-only, and test-driven FRs
+  no longer score 0 purely because there is no endpoint. FR authors can further steer the match via `implementationKind` / `areaHints` (L2 hints) and the skill gets a `--review-packet` JSON for L3 AI
+  refinement. See "Three-layer matcher" above.
 - **Inventory walk assumes rootPage→Epic is direct (#237).** Bootstrap produces rootPage → `User flows & Specifications` category → Epics. Eval without `--root-page <category.id>` returns
   `FR.total = 0`. Until fixed, always pass `--root-page` when running eval on a standard manifest.
 - **Scan from CWD ratisse scaffolds/ + docs/ (#238).** On CLI / library projects, run `draft --from codebase --path src` — a full-repo scan drowns real findings with template code.

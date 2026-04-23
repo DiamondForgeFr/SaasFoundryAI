@@ -9,17 +9,15 @@ Generated: 2026-04-23 · audit ran on commit of branch `feature/203-srs-audit-ca
 
 ## P1 — Correctness blockers
 
-### 1. Matcher FR↔code is 100% endpoint-based — non-backend FRs always score 0
+### 1. Matcher FR↔code is 100% endpoint-based — non-backend FRs always score 0 — **RESOLVED (#236, 2026-04-23)**
 
-**Where:** `src/srs/eval/matcher.ts:64-67` **What:** An FR is only counted as `matched` when at least one `endpoint` finding's area matches the FR's area. But an SRS FR is not always tied to an HTTP
-endpoint — it can be backend-only, **frontend-only** (page / route, no endpoint), full-stack, data/infra (job, migration, CLI script), or pure UX/workflow. Area-matching on endpoints alone
-systematically fails on every non-backend FR. **Evidence:** On SaaSFoundry (CLI project) — 34 FRs, 83 test findings, 0 endpoints in `src/` → all 34 FRs flagged `fr-without-code`, score collapses to 32
-despite full coverage. **Fix direction — three layers that stack (AI is augmentation, not fallback):**
+**Where:** `src/srs/eval/matcher.ts` **Status:** Landed on branch `feature/236-matcher-three-layers` across three commits.
 
-- **L1 — Deterministic match:** FR matches if any finding in the same area exists (endpoint OR frontend-route OR entity OR test OR doc-context). Produces candidate findings for the AI.
-- **L2 — Declarative hints:** optional `implementationKind: "backend"|"frontend"|"fullstack"|"infra"|"workflow"` + `areaHints: string[]` on FrSpec. Pre-filters candidates, doesn't decide alone.
-- **L3 — AI pass, always runs:** for every FR, feed title + description + L1 findings + L2 hints to an LLM. Refines the match even when L1 already succeeded (confidence, missing-edge reasoning,
-  cross-area matches L1 missed). Flag-gated (`--ai-match`), cached for CI determinism. Key: L3 is _not_ a fallback — it always adds nuance on top of the deterministic output.
+- **L1 — Deterministic match (landed):** FR matches if any finding (`endpoint` / `ui-flow` / `entity` / `test`) in the same area exists. `orphan-area` and `code-without-fr` now cover all impl kinds.
+- **L2 — Declarative hints (landed):** `SrsFrEntry.implementationKind` + `SrsFrEntry.areaHints` are honoured by the matcher when present. Inventory builders can populate them from page bodies (a
+  future adapter change will parse Notion code-blocks; the type plumbing is in place today).
+- **L3 — Review packet for AI refinement (landed):** `eval-srs --review-packet <path>` emits a deterministic JSON summary (per-FR status, per-finding mapping, `promptHints`) for the sf-srs skill to
+  refine with AI. The CLI never calls an LLM itself — cost stays zero for non-agent users.
 
 ### 2. Inventory walk assumes root→Epics directly, breaks with category sub-page
 
