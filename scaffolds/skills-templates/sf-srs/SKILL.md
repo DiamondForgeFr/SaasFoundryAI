@@ -226,16 +226,21 @@ For projects where the codebase already exists and Notion is empty (or sparse), 
 
 ### When to trigger `--from codebase`
 
-Fire the flow when **any** of the following matches :
+> **Precondition — "install" vs "initialise" are two different flows.** Before firing any drafter, verify `tools.srs` exists in `.saasfoundry.json`. If it does not, the user is asking to **install the
+> SRS module**, not to draft content — route them to `sf update --add-modules srs` (owned by `sf-update` / `sf-workflow`), **not** to this skill. The keyword "bootstrap" routinely conflates the two;
+> always check the manifest first.
 
-| Signal                                                    | Example utterance                                                      |
-| --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| User wants to **bootstrap an SRS** on an existing project | "draft an SRS from my codebase", "audit the repo for SRS material"     |
-| User mentions **drift** between code and docs             | "my Notion SRS is stale, rebuild it from the code"                     |
-| User asks for **coverage gaps**                           | "what's in the code but not in Notion?"                                |
-| First-time user of `sf-srs` on a mature repo              | empty / sparse Notion root + non-empty `src/` — propose it proactively |
+Fire the flow when **any** of the following matches (all assume the SRS module is already installed) :
 
-Skip the flow when Notion is the source of truth (run `--from notion-pages` instead) or when the user is describing a **new** feature that doesn't yet exist in code (use the conversational eval hook).
+| Signal                                                                             | Example utterance                                                      |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| User wants to **initialise SRS content** from the codebase (module already in use) | "draft an SRS from my codebase", "audit the repo for SRS material"     |
+| User mentions **drift** between code and docs                                      | "my Notion SRS is stale, rebuild it from the code"                     |
+| User asks for **coverage gaps**                                                    | "what's in the code but not in Notion?"                                |
+| First-time drafter run on a mature repo                                            | empty / sparse Notion root + non-empty `src/` — propose it proactively |
+
+Skip the flow when Notion is the source of truth (run `--from notion-pages` instead), when the user is describing a **new** feature that doesn't yet exist in code (use the conversational eval hook),
+or when the SRS module has not yet been installed (route to `sf update --add-modules srs` first).
 
 ### Running the drafter
 
