@@ -55,40 +55,32 @@ class FakeSrsAdapter implements SrsAdapter {
 }
 
 describe('bootstrapSrs', () => {
-  it('runs init → resolveParent → create root → create category and returns both refs', async () => {
+  it('runs init → resolveParent → create root and returns the root ref', async () => {
     const adapter = new FakeSrsAdapter()
 
     const result = await bootstrapSrs({ projectName: 'acme', parentInput: 'https://notion.so/parent', adapter })
 
     expect(adapter.initCalls).toBe(1)
     expect(adapter.resolveCalls).toEqual(['https://notion.so/parent'])
-    expect(adapter.createCalls).toEqual([
-      { parentPageId: 'resolved_parent_id', title: 'acme-srs', hasContent: false },
-      { parentPageId: 'resolved_parent_id__acme-srs', title: 'User flows & Specifications', hasContent: false }
-    ])
+    expect(adapter.createCalls).toEqual([{ parentPageId: 'resolved_parent_id', title: 'acme-srs', hasContent: false }])
 
     expect(result.rootPage).toEqual({
       id: 'resolved_parent_id__acme-srs',
       url: 'https://notion.so/resolved_parent_id__acme-srs',
       name: 'acme-srs'
     })
-    expect(result.categoryPage).toEqual({
-      id: 'resolved_parent_id__acme-srs__User_flows_&_Specifications',
-      url: 'https://notion.so/resolved_parent_id__acme-srs__User_flows_&_Specifications',
-      name: 'User flows & Specifications'
-    })
   })
 
-  it('creates the category under the root, not under the resolved parent', async () => {
+  it('creates only the root page — Epics land directly under it, no intermediate layer', async () => {
     const adapter = new FakeSrsAdapter({
       createImpl: async (parentId, title) => ({ id: `id-${title}`, url: `url-${title}`, title })
     })
 
     await bootstrapSrs({ projectName: 'demo', parentInput: 'abc', adapter })
 
-    const [rootCall, categoryCall] = adapter.createCalls
-    expect(rootCall.parentPageId).toBe('resolved_parent_id')
-    expect(categoryCall.parentPageId).toBe('id-demo-srs')
+    expect(adapter.createCalls).toHaveLength(1)
+    expect(adapter.createCalls[0].parentPageId).toBe('resolved_parent_id')
+    expect(adapter.createCalls[0].title).toBe('demo-srs')
   })
 
   it('propagates errors from resolveParent without calling createPage', async () => {
@@ -102,17 +94,14 @@ describe('bootstrapSrs', () => {
     expect(adapter.createCalls).toHaveLength(0)
   })
 
-  it('propagates errors from the root page creation without creating the category', async () => {
-    let calls = 0
+  it('propagates errors from the root page creation', async () => {
     const adapter = new FakeSrsAdapter({
       createImpl: async () => {
-        calls += 1
-        if (calls === 1) throw new Error('create failed')
-        return { id: 'x', url: '', title: 'x' }
+        throw new Error('create failed')
       }
     })
 
     await expect(bootstrapSrs({ projectName: 'x', parentInput: 'ok', adapter })).rejects.toThrow(/create failed/)
-    expect(calls).toBe(1)
+    expect(adapter.createCalls).toHaveLength(1)
   })
 })

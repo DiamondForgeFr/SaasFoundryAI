@@ -197,7 +197,7 @@
       "false": "Default for MVPs — adding analytics later via `sf update --add-modules analytics` is a one-liner."
     },
     "srsEnable": {
-      "true": "Recommend when product requirements should be centralised for AI agents (User flows & Specifications). Creates a Notion workspace under a parent page shared with the integration.",
+      "true": "Recommend when product requirements should be centralised for AI agents. Creates a Notion root page where Epics are hosted as direct children, under a parent page shared with the integration.",
       "false": "Default — opt-in later via `sf update --add-modules srs --srs-backend notion --srs-parent-page-input <urlOrId>`."
     },
     "srsIngestEnable": {

@@ -401,8 +401,9 @@ Running the full `sf srs` chain end-to-end on SaaSFoundry itself surfaced 12 gap
 - **Matcher covers all finding kinds (#236 — landed).** `matcher.ts` now counts `endpoint`, `ui-flow`, `entity`, and `test` findings when scoring an FR. Frontend-only, data-only, and test-driven FRs
   no longer score 0 purely because there is no endpoint. FR authors can further steer the match via `implementationKind` / `areaHints` (L2 hints) and the skill gets a `--review-packet` JSON for L3 AI
   refinement. See "Three-layer matcher" above.
-- **Inventory walk assumes rootPage→Epic is direct (#237).** Bootstrap produces rootPage → `User flows & Specifications` category → Epics. Eval without `--root-page <category.id>` returns
-  `FR.total = 0`. Until fixed, always pass `--root-page` when running eval on a standard manifest.
+- **Epics land directly under rootPage (#237 — landed).** Earlier bootstrap inserted a `User flows & Specifications` category between rootPage and the Epics, which broke eval (`FR.total = 0` without
+  `--root-page <category.id>`). The category layer is now removed — `bootstrapSrs` creates only the project root, Epics are its direct children, and eval works on the standard manifest with no
+  override.
 - **Scan from CWD ratisse scaffolds/ + docs/ (#238).** On CLI / library projects, run `draft --from codebase --path src` — a full-repo scan drowns real findings with template code.
 - **Bootstrap does not persist `NOTION_API_TOKEN` (#239).** After `sf update --add-modules srs`, the token lives only in the interactive shell. For non-interactive / Claude bash sessions, load it from
   `.env` with `set -a && source .env && set +a` until the fix lands.

@@ -19,16 +19,16 @@ Generated: 2026-04-23 · audit ran on commit of branch `feature/203-srs-audit-ca
 - **L3 — Review packet for AI refinement (landed):** `eval-srs --review-packet <path>` emits a deterministic JSON summary (per-FR status, per-finding mapping, `promptHints`) for the sf-srs skill to
   refine with AI. The CLI never calls an LLM itself — cost stays zero for non-agent users.
 
-### 2. Inventory walk assumes root→Epics directly, breaks with category sub-page
+### 2. Inventory walk assumes root→Epics directly, breaks with category sub-page — **RESOLVED (#237, 2026-04-23)**
 
-**Where:** `src/srs/eval/inventory.ts:26-27` **What:** `buildSrsInventory(adapter, rootPageId)` calls `listChildren(rootPageId)` expecting each child to be an Epic. Today's manifest points
-`tools.srs.rootPage.id` at `<project>-srs` (the "umbrella" page) which itself contains a single category page `User flows & Specifications` — and the Epics live under that. Result: eval finds 0 Epics,
-0 FRs. **Evidence:** First eval pass on SaaSFoundry returned `FR.total = 0` with note "No FR pages found under the configured rootPage". Re-running with `--root-page <userFlowsAndSpecifications.id>`
-fixed it. **Fix direction (pick one):**
+**Where:** `src/srs/eval/inventory.ts:26-27` **What:** `buildSrsInventory(adapter, rootPageId)` calls `listChildren(rootPageId)` expecting each child to be an Epic. Earlier bootstrap inserted a
+`User flows & Specifications` category page between rootPage and the Epics, which made eval return `FR.total = 0` on the standard manifest. **Resolution:** Option C was taken — the intermediate
+category served no purpose (single hardcoded key, no extensibility) and conflicted with the DIAMONFORGE reference shape where Epics live directly under the product-spec root. Removed:
 
-- Option A: Change the runtime to resolve `tools.srs.categories.userFlowsAndSpecifications.id` as the effective SRS root (preserves manifest layout from `sf update --add-modules srs`).
-- Option B: Make `inventory.ts` drill through a category-level page if the direct children are not Epic-shaped.
-- Option C: Change `srs.runner.ts` to put Epics directly under `<project>-srs` (flat) and drop the category layer.
+- `bootstrapSrs` no longer creates the category page (`src/runners/srs.runner.ts`).
+- `SrsToolConfig.categories` field dropped from the manifest type (`src/types.ts`) and from the write path in `sf new` / `sf update --add-modules srs`.
+- This project's Notion migrated: the former `User flows & Specifications` page is now the root, and the 2 drafted Epics (`Commands`, `Init`) sit as its direct children. Old rootPage archived.
+- `tools.srs.categories` stripped from `.saasfoundry.json`.
 
 ### 3. Scan defaults ratisse scaffolds/ and docs/ — dominates findings with template code
 
