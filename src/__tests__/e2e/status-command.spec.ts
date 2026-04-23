@@ -1,0 +1,80 @@
+import { mkdir, rm } from 'fs/promises'
+import { join } from 'path'
+import { tmpdir } from 'os'
+
+import { statusCommand } from '../../commands/status'
+import { writeManifest } from '../../utils'
+import type { SaaSFoundryManifest } from '../../types'
+
+function captureStdout(): { stop: () => string } {
+  const originalWrite = process.stdout.write.bind(process.stdout)
+  let buf = ''
+  process.stdout.write = ((chunk: string | Buffer) => {
+    buf += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    return true
+  }) as typeof process.stdout.write
+  return {
+    stop: () => {
+      process.stdout.write = originalWrite
+      return buf
+    }
+  }
+}
+
+describe('status command (E2E)', () => {
+  let tempDir: string
+  let originalCwd: string
+  let originalExitCode: typeof process.exitCode
+
+  beforeEach(async () => {
+    tempDir = join(tmpdir(), `sf-e2e-status-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    originalCwd = process.cwd()
+    originalExitCode = process.exitCode
+    await mkdir(tempDir, { recursive: true })
+    process.chdir(tempDir)
+  })
+
+  afterEach(async () => {
+    process.chdir(originalCwd)
+    process.exitCode = originalExitCode
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  })
+
+  it('emits JSON with a failing manifest precondition on a non-project directory', async () => {
+    const cap = captureStdout()
+    await statusCommand({ json: true })
+    const out = cap.stop()
+    const parsed = JSON.parse(out)
+    expect(parsed.manifest).toBeNull()
+    const manifestCheck = parsed.preconditions.find((p: { name: string }) => p.name === 'manifest')
+    expect(manifestCheck.status).toBe('fail')
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('emits Claude-friendly markdown on a valid SaaSFoundry project', async () => {
+    const manifest: SaaSFoundryManifest = {
+      version: '1.0.0-beta',
+      generatedAt: new Date().toISOString(),
+      structure: 'monorepo',
+      projectName: 'demo',
+      workflow: { tool: 'github-projects' }
+    }
+    await writeManifest(tempDir, manifest)
+
+    const cap = captureStdout()
+    await statusCommand({ claudeFriendly: true })
+    const out = cap.stop()
+    expect(out).toContain('# SaaSFoundry project status')
+    expect(out).toContain('project: demo')
+    expect(out).toContain('workflow: github-projects')
+    expect(out).toContain('## How to use this output')
+  })
+
+  it('does not set exit code to 1 when --claude-friendly is used even with fail preconditions', async () => {
+    const cap = captureStdout()
+    process.exitCode = 0
+    await statusCommand({ claudeFriendly: true })
+    cap.stop()
+    expect(process.exitCode).toBe(0)
+  })
+})

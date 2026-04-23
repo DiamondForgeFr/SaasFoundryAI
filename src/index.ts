@@ -7,6 +7,7 @@ import { newCommand } from './commands/new'
 import { skillCommand, runFullUninstall } from './commands/skill'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
+import { statusCommand } from './commands/status'
 import { workflowCommand } from './commands/workflow'
 import { maybeEmitStaleSkillWarning } from './skill/warn'
 
@@ -120,6 +121,14 @@ program
   .argument('[args...]', 'Additional arguments for the subcommand')
   .action((subcommand, args) => toolsCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
+  .command('status')
+  .description('Report project state and preconditions (manifest, workflow, SRS, git)')
+  .option('--json', 'Output a machine-readable JSON report')
+  .option('--claude-friendly', 'Output a markdown report tailored for Claude Code SessionStart hooks')
+  .option('--no-network', 'Skip any network-dependent checks')
+  .option('--check-gh', 'Probe for the GitHub CLI (gh) in PATH')
+  .action((opts) => statusCommand(opts))
+program
   .command('workflow')
   .description('Manage workflow configuration and AI rules')
   .argument('[subcommand]', 'Subcommand to execute (list, create, show, use, set-working-branch, set-ai-rules, etc.)')
@@ -153,4 +162,4 @@ program
   })
 program.parse()
 
-export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, feedbackCommand }
+export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, feedbackCommand, statusCommand }
