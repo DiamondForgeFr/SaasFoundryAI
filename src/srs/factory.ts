@@ -17,6 +17,9 @@ export interface SrsManifestSubset {
   tools?: {
     srs?: {
       backend?: string
+      scan?: {
+        exclude?: string[]
+      }
     }
   }
 }

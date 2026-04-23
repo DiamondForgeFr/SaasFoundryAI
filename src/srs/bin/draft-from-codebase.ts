@@ -68,7 +68,8 @@ export async function runDraftFromCodebase(options: DraftFromCodebaseOptions): P
     }
     void manifest
 
-    const findings: ScannerFinding[] = await collectFindings(scanRoot, manifest.structure)
+    const exclusions = { exclude: manifest.tools?.srs?.scan?.exclude }
+    const findings: ScannerFinding[] = await collectFindings(scanRoot, manifest.structure, exclusions)
 
     const output: DraftFromCodebaseOutput = { source: 'codebase', findings }
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)

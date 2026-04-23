@@ -251,6 +251,32 @@ or when the SRS module has not yet been installed (route to `sf update --add-mod
 `--path` defaults to the current working directory. The CLI walks the tree (honouring `.gitignore` and excluding `node_modules / dist / coverage / .git / .vitepress/cache`), runs every registered
 scanner, and writes the result to stdout :
 
+**Tuning the scan for noise-heavy repos.** CLI/library/template projects (SaaSFoundry itself, monorepos shipping `scaffolds/`, heavily-documented repos with large `docs/` trees) can drown the signal
+under fixture code the scanners treat as production source. Two ways to opt out:
+
+- **`.srsignore`** — a gitignore-style file at the scan root. Same syntax as `.gitignore`, additive to it.
+- **`tools.srs.scan.exclude`** in `.saasfoundry.json` — a `string[]` of gitignore-style patterns applied on top of `.gitignore` + `.srsignore`.
+
+```jsonc
+// .saasfoundry.json
+{
+  "tools": {
+    "srs": {
+      "enabled": true,
+      "backend": "notion",
+      "scan": {
+        "exclude": ["scaffolds/", "docs/", ".claude/"]
+      }
+    }
+  }
+}
+```
+
+Both layers stack. Use `.srsignore` for local/developer tuning (it stays out of other projects generated from this repo), and `tools.srs.scan.exclude` for project-wide defaults the whole team should
+share.
+
+Output example:
+
 ```jsonc
 {
   "source": "codebase",

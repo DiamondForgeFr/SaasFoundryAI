@@ -15,6 +15,7 @@ interface EvalManifest extends SrsManifestSubset {
     srs?: {
       backend?: string
       rootPage?: { id?: string }
+      scan?: { exclude?: string[] }
     }
   }
 }
@@ -84,7 +85,8 @@ export async function runEvalSrs(options: EvalSrsOptions, io: EvalSrsIO = defaul
       const adapter: SrsAdapter = await createSrsAdapter(manifest)
       await adapter.init()
       inventory = await buildSrsInventory(adapter, rootPageId)
-      findings = await collectFindings(scanRoot, manifest.structure === 'monorepo' || manifest.structure === 'multirepo' ? manifest.structure : undefined)
+      const exclusions = { exclude: manifest.tools?.srs?.scan?.exclude }
+      findings = await collectFindings(scanRoot, manifest.structure === 'monorepo' || manifest.structure === 'multirepo' ? manifest.structure : undefined, exclusions)
     }
 
     const report = matchSrsAgainstScanners(inventory, findings, { thresholdPct: options.thresholdPct })
