@@ -1,4 +1,4 @@
-import { EndpointFinding, ScannerFinding } from '../scanners/types'
+import { EndpointFinding, EntityFinding, ScannerFinding, UiFlowFinding } from '../scanners/types'
 import { CategoryScore, DriftFinding, FreshnessReport, SrsInventory } from './types'
 
 const DEFAULT_THRESHOLD_PCT = 80
@@ -7,15 +7,33 @@ export interface MatchOptions {
   thresholdPct?: number
 }
 
+type ImplementationFinding = EndpointFinding | UiFlowFinding | EntityFinding
+
+function isImplementation(f: ScannerFinding): f is ImplementationFinding {
+  return f.kind === 'endpoint' || f.kind === 'ui-flow' || f.kind === 'entity'
+}
+
+function describeImpl(f: ImplementationFinding): string {
+  if (f.kind === 'endpoint') return `${f.method} ${f.path}`
+  if (f.kind === 'ui-flow') return f.route ? `route ${f.route}` : `ui ${f.title}`
+  return `model ${f.model}`
+}
+
+function implLabel(kind: ImplementationFinding['kind']): string {
+  if (kind === 'endpoint') return 'endpoint'
+  if (kind === 'ui-flow') return 'UI flow'
+  return 'entity'
+}
+
 function normalizeArea(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
-function endpointMatchesFrArea(endpoint: EndpointFinding, frArea: string): boolean {
-  const area = normalizeArea(endpoint.area)
+function findingMatchesFrArea(finding: ScannerFinding, frArea: string): boolean {
+  const area = normalizeArea(finding.area)
   if (area === frArea) return true
-  // Fall back to a prefix check: scanner areas are folder names, FR areas are
-  // tokens embedded in FR IDs — "accounts" / "account" should match.
+  // Prefix tolerance: scanner areas are folder names, FR areas are tokens
+  // embedded in FR IDs — "accounts" / "account" should match either way.
   if (area.startsWith(frArea) || frArea.startsWith(area)) return true
   return false
 }
@@ -53,26 +71,32 @@ function unsupportedCategory(label: 'UR' | 'DS' | 'TC' | 'NFR'): CategoryScore {
 export function matchSrsAgainstScanners(inventory: SrsInventory, findings: ScannerFinding[], options: MatchOptions = {}): FreshnessReport {
   const threshold = options.thresholdPct ?? DEFAULT_THRESHOLD_PCT
   const endpoints = findings.filter((f): f is EndpointFinding => f.kind === 'endpoint')
+  const implFindings = findings.filter(isImplementation)
   const tests = findings.filter((f) => f.kind === 'test')
   const testedAreas = new Set<string>(tests.map((t) => normalizeArea(t.area)))
   const driftFindings: DriftFinding[] = []
 
   const matchedFrIds = new Set<string>()
-  const matchedEndpointFiles = new Set<string>()
-  const frEndpointMap = new Map<string, EndpointFinding[]>()
+  const matchedImplFiles = new Set<string>()
 
   for (const fr of inventory.frs) {
-    const matches = endpoints.filter((e) => endpointMatchesFrArea(e, fr.area))
+    const matches = findings.filter((f) => findingMatchesFrArea(f, fr.area))
     if (matches.length > 0) {
       matchedFrIds.add(fr.id)
-      frEndpointMap.set(fr.id, matches)
-      for (const m of matches) matchedEndpointFiles.add(m.file)
-      const anyTested = matches.some((m) => m.hasTests) || testedAreas.has(fr.area)
+      for (const m of matches) {
+        if (isImplementation(m)) matchedImplFiles.add(m.file)
+      }
+      const endpointMatches = matches.filter((m): m is EndpointFinding => m.kind === 'endpoint')
+      const anyTested = endpointMatches.some((m) => m.hasTests) || testedAreas.has(fr.area) || matches.some((m) => m.kind === 'test')
       if (!anyTested) {
+        const msg =
+          endpointMatches.length > 0
+            ? `FR ${fr.id} is mapped to ${endpointMatches.length} endpoint(s) but none carry tests`
+            : `FR ${fr.id} matches ${matches.length} code finding(s) in area "${fr.area}" but no test coverage was detected`
         driftFindings.push({
           kind: 'fr-untested',
           severity: 'warn',
-          message: `FR ${fr.id} is mapped to ${matches.length} endpoint(s) but none carry tests`,
+          message: msg,
           frId: fr.id,
           frTitle: fr.title,
           area: fr.area,
@@ -91,21 +115,21 @@ export function matchSrsAgainstScanners(inventory: SrsInventory, findings: Scann
     }
   }
 
-  const frAreas = new Set<string>(inventory.frs.map((f) => f.area))
-  const unmatchedEndpoints = endpoints.filter((e) => !matchedEndpointFiles.has(e.file))
-  const unmatchedAreas = new Map<string, EndpointFinding[]>()
-  for (const e of unmatchedEndpoints) {
-    const area = normalizeArea(e.area)
-    if (!unmatchedAreas.has(area)) unmatchedAreas.set(area, [])
-    unmatchedAreas.get(area)!.push(e)
+  const frAreas = new Set<string>(inventory.frs.map((f) => normalizeArea(f.area)))
+  const unmatchedImpl = implFindings.filter((f) => !matchedImplFiles.has(f.file))
+  const unmatchedByArea = new Map<string, ImplementationFinding[]>()
+  for (const f of unmatchedImpl) {
+    const area = normalizeArea(f.area)
+    if (!unmatchedByArea.has(area)) unmatchedByArea.set(area, [])
+    unmatchedByArea.get(area)!.push(f)
   }
-  for (const [area, group] of unmatchedAreas) {
+  for (const [area, group] of unmatchedByArea) {
     const sample = group[0]
     if (!frAreas.has(area)) {
       driftFindings.push({
         kind: 'orphan-area',
         severity: 'error',
-        message: `Code area "${area}" carries ${group.length} endpoint(s) but has no FR page (e.g. ${sample.method} ${sample.path})`,
+        message: `Code area "${area}" carries ${group.length} ${implLabel(sample.kind)}(s) but has no FR page (e.g. ${describeImpl(sample)})`,
         area,
         file: sample.file
       })
@@ -113,7 +137,7 @@ export function matchSrsAgainstScanners(inventory: SrsInventory, findings: Scann
       driftFindings.push({
         kind: 'code-without-fr',
         severity: 'warn',
-        message: `${sample.method} ${sample.path} in "${area}" is not covered by any FR in the SRS`,
+        message: `${describeImpl(sample)} in "${area}" is not covered by any FR in the SRS`,
         area,
         file: sample.file
       })
@@ -124,6 +148,7 @@ export function matchSrsAgainstScanners(inventory: SrsInventory, findings: Scann
 
   const untestedFrCount = driftFindings.filter((d) => d.kind === 'fr-untested').length
   const untestedEndpoints = endpoints.filter((e) => !e.hasTests).length
+  const unmatchedEndpoints = endpoints.filter((e) => !matchedImplFiles.has(e.file))
   const frCoverageScore = frScore.score ?? 100
   const codeCoverageScore = endpoints.length === 0 ? 100 : percent(endpoints.length - unmatchedEndpoints.length, endpoints.length)
   const testCoverageScore = endpoints.length === 0 ? 100 : percent(endpoints.length - untestedEndpoints, endpoints.length)
