@@ -1,4 +1,4 @@
-import { EndpointFinding, ScannerFinding, TestFinding } from '../../../../srs/scanners/types'
+import { EndpointFinding, EntityFinding, ScannerFinding, TestFinding, UiFlowFinding } from '../../../../srs/scanners/types'
 import { matchSrsAgainstScanners } from '../../../../srs/eval/matcher'
 import { SrsInventory } from '../../../../srs/eval/types'
 
@@ -8,6 +8,14 @@ function endpoint(area: string, method: string, path: string, hasTests = false, 
 
 function test(area: string, file = `${area}/spec.ts`): TestFinding {
   return { kind: 'test', area, file, describe: 'd', cases: ['c'], title: 't' }
+}
+
+function uiFlow(area: string, route: string, file = `${area}/page.tsx`): UiFlowFinding {
+  return { kind: 'ui-flow', area, file, route, formFields: [], title: `UI ${route}` }
+}
+
+function entity(area: string, model: string, file = `${area}/schema.prisma`): EntityFinding {
+  return { kind: 'entity', area, file, model, fields: [], relations: [], title: `model ${model}` }
 }
 
 function inventory(frs: Array<{ id: string; area: string; title: string }>): SrsInventory {
@@ -111,5 +119,76 @@ describe('matchSrsAgainstScanners', () => {
       expect(report.categories[label].score).toBeNull()
       expect(report.categories[label].note).toMatch(/not evaluated in v1/i)
     }
+  })
+
+  it('matches an FR to a ui-flow finding (frontend-only feature)', () => {
+    const inv = inventory([{ id: 'FR-SETTINGS-01', area: 'settings', title: 'Preferences page' }])
+    const findings: ScannerFinding[] = [uiFlow('settings', '/settings/preferences')]
+    const report = matchSrsAgainstScanners(inv, findings)
+    expect(report.counts.frMatched).toBe(1)
+    expect(report.findings.some((f) => f.kind === 'fr-without-code')).toBe(false)
+    // No endpoint, no test — should surface fr-untested since coverage can't be proven
+    expect(report.findings.some((f) => f.kind === 'fr-untested')).toBe(true)
+  })
+
+  it('matches an FR to an entity finding (data-only feature)', () => {
+    const inv = inventory([{ id: 'FR-AUDIT-01', area: 'audit', title: 'Audit log model' }])
+    const findings: ScannerFinding[] = [entity('audit', 'AuditLog')]
+    const report = matchSrsAgainstScanners(inv, findings)
+    expect(report.counts.frMatched).toBe(1)
+    expect(report.findings.some((f) => f.kind === 'fr-without-code')).toBe(false)
+  })
+
+  it('matches an FR when only a test finding exists for its area', () => {
+    const inv = inventory([{ id: 'FR-HEALTH-01', area: 'health', title: 'Health probe' }])
+    const findings: ScannerFinding[] = [test('health')]
+    const report = matchSrsAgainstScanners(inv, findings)
+    expect(report.counts.frMatched).toBe(1)
+    // Test finding itself provides coverage — no fr-untested expected
+    expect(report.findings.some((f) => f.kind === 'fr-untested')).toBe(false)
+  })
+
+  it('reports orphan-area for ui-flow findings with no FR', () => {
+    const inv = inventory([{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in' }])
+    const findings: ScannerFinding[] = [endpoint('auth', 'POST', '/signin', true), uiFlow('marketing', '/landing')]
+    const report = matchSrsAgainstScanners(inv, findings)
+    const orphan = report.findings.find((f) => f.kind === 'orphan-area' && f.area === 'marketing')
+    expect(orphan).toBeDefined()
+    expect(orphan?.message).toMatch(/UI flow/)
+  })
+
+  it('reports orphan-area for entity findings with no FR', () => {
+    const inv = inventory([{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in' }])
+    const findings: ScannerFinding[] = [endpoint('auth', 'POST', '/signin', true), entity('legacy', 'OldTable')]
+    const report = matchSrsAgainstScanners(inv, findings)
+    const orphan = report.findings.find((f) => f.kind === 'orphan-area' && f.area === 'legacy')
+    expect(orphan).toBeDefined()
+    expect(orphan?.message).toMatch(/entity/)
+  })
+
+  it('honours areaHints when matching (FR area "billing" ↔ finding area "payments")', () => {
+    const invBase = inventory([{ id: 'FR-BILL-01', area: 'billing', title: 'Invoices' }])
+    const inv: SrsInventory = {
+      ...invBase,
+      frs: [{ ...invBase.frs[0], areaHints: ['payments'] }]
+    }
+    const findings: ScannerFinding[] = [endpoint('payments', 'GET', '/charges', true)]
+    const report = matchSrsAgainstScanners(inv, findings)
+    expect(report.counts.frMatched).toBe(1)
+    expect(report.findings.some((f) => f.kind === 'orphan-area' && f.area === 'payments')).toBe(false)
+  })
+
+  it('honours implementationKind=ui-flow (ignores endpoint for match but still counts ui-flow)', () => {
+    const invBase = inventory([{ id: 'FR-HOME-01', area: 'home', title: 'Landing page' }])
+    const inv: SrsInventory = {
+      ...invBase,
+      frs: [{ ...invBase.frs[0], implementationKind: 'ui-flow' }]
+    }
+    const findings: ScannerFinding[] = [endpoint('home', 'GET', '/api/home', true), uiFlow('home', '/home')]
+    const report = matchSrsAgainstScanners(inv, findings)
+    expect(report.counts.frMatched).toBe(1)
+    // The endpoint in `home` should now be unmatched (its area has the FR but impl kind mismatched) → code-without-fr
+    const cwf = report.findings.find((f) => f.kind === 'code-without-fr' && f.area === 'home')
+    expect(cwf).toBeDefined()
   })
 })

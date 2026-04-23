@@ -1,10 +1,11 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { SrsAdapter } from '../../builders/srs/types'
 import { buildSrsInventory } from '../eval/inventory'
 import { matchSrsAgainstScanners } from '../eval/matcher'
 import { formatHumanReport, formatJsonReport } from '../eval/report'
+import { buildReviewPacket } from '../eval/review-packet'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { collectFindings } from './codebase-scan'
 
@@ -26,6 +27,7 @@ export interface EvalSrsOptions {
   output: 'human' | 'json'
   fixtureInventoryPath?: string
   fixtureFindingsPath?: string
+  reviewPacketPath?: string
 }
 
 export interface EvalSrsIO {
@@ -86,6 +88,12 @@ export async function runEvalSrs(options: EvalSrsOptions, io: EvalSrsIO = defaul
     }
 
     const report = matchSrsAgainstScanners(inventory, findings, { thresholdPct: options.thresholdPct })
+    if (options.reviewPacketPath) {
+      const packet = buildReviewPacket(inventory, findings, report)
+      const packetPath = resolve(options.reviewPacketPath)
+      writeFileSync(packetPath, JSON.stringify(packet, null, 2) + '\n', 'utf8')
+      io.stderr(`review packet written → ${packetPath}\n`)
+    }
     io.stdout(options.output === 'json' ? formatJsonReport(report) : formatHumanReport(report))
     return report.overall.status === 'fresh' ? 0 : 1
   } catch (error) {
@@ -107,6 +115,7 @@ export function parseArgs(argv: string[]): EvalSrsOptions {
   let output: 'human' | 'json' = 'human'
   let fixtureInventoryPath: string | undefined
   let fixtureFindingsPath: string | undefined
+  let reviewPacketPath: string | undefined
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--path' || arg === '-p') scanPath = argv[++i] ?? ''
@@ -120,8 +129,10 @@ export function parseArgs(argv: string[]): EvalSrsOptions {
     else if (arg === '--json') output = 'json'
     else if (arg === '--fixture-inventory') fixtureInventoryPath = argv[++i]
     else if (arg === '--fixture-findings') fixtureFindingsPath = argv[++i]
+    else if (arg === '--review-packet') reviewPacketPath = argv[++i]
+    else if (arg.startsWith('--review-packet=')) reviewPacketPath = arg.slice('--review-packet='.length)
   }
-  return { scanPath, manifestPath, rootPageId, thresholdPct, output, fixtureInventoryPath, fixtureFindingsPath }
+  return { scanPath, manifestPath, rootPageId, thresholdPct, output, fixtureInventoryPath, fixtureFindingsPath, reviewPacketPath }
 }
 
 if (require.main === module) {

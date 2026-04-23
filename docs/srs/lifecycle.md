@@ -120,7 +120,7 @@ All commands are driven from two wrappers :
 | `srs-cli.sh write --spec <path>`                       | Apply `DraftCandidate[]` to the backend (creates Epic + FR pages)               |
 | `srs-cli.sh spawn --ticket <parent> --epic <url>`      | Create one Story sub-issue per FR page                                          |
 | `srs-cli.sh apply-update < patch.json`                 | Conversational eval hook — append new UR / FR / DS / TC (ADD-only v1)           |
-| `srs-cli.sh eval` _(coming — SUB-16)_                  | Batch freshness score SRS vs. codebase                                          |
+| `srs-cli.sh eval [--review-packet <path>]`             | Batch freshness score SRS vs. codebase (L1 script + L2 hints + L3 AI packet)    |
 
 ::: warning `update-status` is gated on SRS tickets `workflow-cli.sh update-status <ticket> "AI testing|Human testing|In review"` is **rejected** when the ticket carries an `srs:*` label. SRS tickets
 have their own phases (`ai-draft`, `human-review`, `spawning`) — always use `transition-drafting` instead. The guard fails open if label fetch errors so networked teams aren't punished by
