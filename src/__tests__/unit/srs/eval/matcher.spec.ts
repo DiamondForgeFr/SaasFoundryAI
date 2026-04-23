@@ -165,4 +165,30 @@ describe('matchSrsAgainstScanners', () => {
     expect(orphan).toBeDefined()
     expect(orphan?.message).toMatch(/entity/)
   })
+
+  it('honours areaHints when matching (FR area "billing" ↔ finding area "payments")', () => {
+    const invBase = inventory([{ id: 'FR-BILL-01', area: 'billing', title: 'Invoices' }])
+    const inv: SrsInventory = {
+      ...invBase,
+      frs: [{ ...invBase.frs[0], areaHints: ['payments'] }]
+    }
+    const findings: ScannerFinding[] = [endpoint('payments', 'GET', '/charges', true)]
+    const report = matchSrsAgainstScanners(inv, findings)
+    expect(report.counts.frMatched).toBe(1)
+    expect(report.findings.some((f) => f.kind === 'orphan-area' && f.area === 'payments')).toBe(false)
+  })
+
+  it('honours implementationKind=ui-flow (ignores endpoint for match but still counts ui-flow)', () => {
+    const invBase = inventory([{ id: 'FR-HOME-01', area: 'home', title: 'Landing page' }])
+    const inv: SrsInventory = {
+      ...invBase,
+      frs: [{ ...invBase.frs[0], implementationKind: 'ui-flow' }]
+    }
+    const findings: ScannerFinding[] = [endpoint('home', 'GET', '/api/home', true), uiFlow('home', '/home')]
+    const report = matchSrsAgainstScanners(inv, findings)
+    expect(report.counts.frMatched).toBe(1)
+    // The endpoint in `home` should now be unmatched (its area has the FR but impl kind mismatched) → code-without-fr
+    const cwf = report.findings.find((f) => f.kind === 'code-without-fr' && f.area === 'home')
+    expect(cwf).toBeDefined()
+  })
 })

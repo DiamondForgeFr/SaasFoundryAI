@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -29,6 +29,13 @@ describe('parseArgs (eval-srs)', () => {
     expect(opts.scanPath).toBe('/p')
     expect(opts.rootPageId).toBe('rr')
     expect(opts.thresholdPct).toBe(70)
+  })
+
+  it('parses --review-packet in both forms', () => {
+    const space = parseArgs(['--review-packet', '/out/packet.json'])
+    expect(space.reviewPacketPath).toBe('/out/packet.json')
+    const eq = parseArgs(['--review-packet=/out/packet.json'])
+    expect(eq.reviewPacketPath).toBe('/out/packet.json')
   })
 })
 
@@ -125,6 +132,27 @@ describe('runEvalSrs (fixture mode)', () => {
     const code = await runEvalSrs({ scanPath: tmp, manifestPath, thresholdPct: 80, output: 'human' }, io)
     expect(code).toBe(2)
     expect(err.join('')).toMatch(/--root-page is required/)
+  })
+
+  it('writes a review packet when --review-packet is set', async () => {
+    const { inv, fnd, manifest } = writeFixture(
+      {
+        rootPageId: 'root',
+        epics: [{ pageId: 'e', title: 'E' }],
+        frs: [{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'f', epicPageId: 'e', epicTitle: 'E' }],
+        unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
+      },
+      [{ kind: 'endpoint', area: 'auth', method: 'POST', path: '/signin', hasTests: true, file: 'auth/c.ts', title: 'POST /signin' }]
+    )
+
+    const packetPath = join(tmp, 'packet.json')
+    const code = await runEvalSrs({ scanPath: tmp, manifestPath: manifest, thresholdPct: 80, output: 'json', fixtureInventoryPath: inv, fixtureFindingsPath: fnd, reviewPacketPath: packetPath }, io)
+    expect(code).toBe(0)
+    expect(existsSync(packetPath)).toBe(true)
+    const packet = JSON.parse(readFileSync(packetPath, 'utf8'))
+    expect(packet.inventory.frCount).toBe(1)
+    expect(packet.frs[0].status).toBe('matched')
+    expect(Array.isArray(packet.promptHints)).toBe(true)
   })
 
   it('returns 3 when the backend is missing from the manifest', async () => {

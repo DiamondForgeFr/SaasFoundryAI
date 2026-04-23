@@ -1,5 +1,5 @@
 import { EndpointFinding, EntityFinding, ScannerFinding, UiFlowFinding } from '../scanners/types'
-import { CategoryScore, DriftFinding, FreshnessReport, SrsInventory } from './types'
+import { CategoryScore, DriftFinding, FreshnessReport, ImplementationKind, SrsFrEntry, SrsInventory } from './types'
 
 const DEFAULT_THRESHOLD_PCT = 80
 
@@ -29,13 +29,29 @@ function normalizeArea(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
-function findingMatchesFrArea(finding: ScannerFinding, frArea: string): boolean {
-  const area = normalizeArea(finding.area)
-  if (area === frArea) return true
+function areaMatchesToken(findingArea: string, frToken: string): boolean {
+  if (findingArea === frToken) return true
   // Prefix tolerance: scanner areas are folder names, FR areas are tokens
   // embedded in FR IDs — "accounts" / "account" should match either way.
-  if (area.startsWith(frArea) || frArea.startsWith(area)) return true
+  if (findingArea.startsWith(frToken) || frToken.startsWith(findingArea)) return true
   return false
+}
+
+function frAreaCandidates(fr: SrsFrEntry): string[] {
+  const hints = (fr.areaHints ?? []).map(normalizeArea).filter((h) => h.length > 0)
+  return [fr.area, ...hints]
+}
+
+function findingMatchesFr(finding: ScannerFinding, fr: SrsFrEntry): boolean {
+  const area = normalizeArea(finding.area)
+  return frAreaCandidates(fr).some((token) => areaMatchesToken(area, token))
+}
+
+function findingKindMatchesHint(finding: ScannerFinding, hint: ImplementationKind | undefined): boolean {
+  // Tests and doc-context always fit, regardless of implementationKind hint
+  if (finding.kind === 'test' || finding.kind === 'doc-context') return true
+  if (!hint || hint === 'mixed') return true
+  return finding.kind === hint
 }
 
 function percent(numer: number, denom: number): number {
@@ -80,7 +96,7 @@ export function matchSrsAgainstScanners(inventory: SrsInventory, findings: Scann
   const matchedImplFiles = new Set<string>()
 
   for (const fr of inventory.frs) {
-    const matches = findings.filter((f) => findingMatchesFrArea(f, fr.area))
+    const matches = findings.filter((f) => findingMatchesFr(f, fr) && findingKindMatchesHint(f, fr.implementationKind))
     if (matches.length > 0) {
       matchedFrIds.add(fr.id)
       for (const m of matches) {
@@ -115,7 +131,10 @@ export function matchSrsAgainstScanners(inventory: SrsInventory, findings: Scann
     }
   }
 
-  const frAreas = new Set<string>(inventory.frs.map((f) => normalizeArea(f.area)))
+  const frAreas = new Set<string>()
+  for (const fr of inventory.frs) {
+    for (const candidate of frAreaCandidates(fr)) frAreas.add(candidate)
+  }
   const unmatchedImpl = implFindings.filter((f) => !matchedImplFiles.has(f.file))
   const unmatchedByArea = new Map<string, ImplementationFinding[]>()
   for (const f of unmatchedImpl) {
