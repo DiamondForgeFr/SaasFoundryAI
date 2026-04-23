@@ -192,9 +192,6 @@ export interface SrsToolConfig {
   enabled: boolean
   backend: 'notion'
   rootPage?: SrsPageRef
-  categories?: {
-    userFlowsAndSpecifications?: SrsPageRef
-  }
   pendingIngestion?: PendingIngestion
 }
 

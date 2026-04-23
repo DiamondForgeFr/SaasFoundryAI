@@ -217,8 +217,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       srsTools = {
         enabled: true,
         backend: startProjectAnswers.srsBackend!,
-        rootPage: result.rootPage,
-        categories: { userFlowsAndSpecifications: result.categoryPage }
+        rootPage: result.rootPage
       }
 
       // Optional ingestion flag — resolve the source parent and record pendingIngestion.

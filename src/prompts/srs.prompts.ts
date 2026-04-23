@@ -79,7 +79,7 @@ export async function promptSrsConfiguration(currentAnswers: Partial<Answers>, o
   })
 
   if (!nonInteractive) {
-    console.log(chalk.gray('  The parent page will host both the project root page and the "User flows & Specifications" sub-page.'))
+    console.log(chalk.gray('  The parent page will host the project root page. Epics will be created as direct children of that root.'))
   }
 
   return {

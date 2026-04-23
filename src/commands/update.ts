@@ -612,8 +612,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       const srsTools: SrsToolConfig = {
         enabled: true,
         backend: srsBootstrap.backend,
-        rootPage: result.rootPage,
-        categories: { userFlowsAndSpecifications: result.categoryPage }
+        rootPage: result.rootPage
       }
       manifest.tools = { ...(manifest.tools ?? {}), srs: srsTools }
     }

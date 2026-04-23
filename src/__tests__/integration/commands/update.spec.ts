@@ -36,8 +36,7 @@ jest.mock('../../../installers/skills.installer', () => ({ installSkills: jest.f
 jest.mock('../../../installers/srs-skill.installer', () => ({ installSrsSkill: jest.fn() }))
 jest.mock('../../../runners/srs.runner', () => ({
   bootstrapSrs: jest.fn().mockResolvedValue({
-    rootPage: { id: 'root-id', url: 'https://notion/root', name: 'Root' },
-    categoryPage: { id: 'cat-id', url: 'https://notion/cat', name: 'User flows & Specifications' }
+    rootPage: { id: 'root-id', url: 'https://notion/root', name: 'Root' }
   })
 }))
 jest.mock('../../../tools/notion/srs.adapter', () => ({ NotionSrsAdapter: jest.fn() }))
