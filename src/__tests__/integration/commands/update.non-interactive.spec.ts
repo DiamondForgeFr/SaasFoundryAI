@@ -258,4 +258,53 @@ describe('updateCommand (non-interactive integration)', () => {
     const report = JSON.parse(match![1])
     expect(report.conflictStrategy).toBe('replace')
   })
+
+  it('skips an already-installed module requested via --add-modules without re-installing', async () => {
+    const manifest = baseManifest({
+      modules: {
+        emailService: 'none',
+        s3Setup: 'manual',
+        dbSetup: 'docker',
+        includeAnalytics: true,
+        advancedSkills: []
+      }
+    })
+    await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+    await updateCommand({
+      nonInteractive: true,
+      addModules: 'analytics'
+    })
+
+    const combined = logSpy.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(combined).toMatch(/'analytics' is already installed/)
+    expect(combined).toMatch(/All requested modules are already installed/)
+    expect(mockedInstallAnalytics).not.toHaveBeenCalled()
+  })
+
+  it('skips installed modules but proceeds with the installable ones in the same --add-modules', async () => {
+    const manifest = baseManifest({
+      modules: {
+        emailService: 'none',
+        s3Setup: 'manual',
+        dbSetup: 'docker',
+        includeAnalytics: true,
+        advancedSkills: []
+      }
+    })
+    await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+    await updateCommand({
+      nonInteractive: true,
+      addModules: 'analytics,email',
+      mailersendApiKey: 'ms-key',
+      mailersendSenderEmail: 'hello@acme.com',
+      mailersendSenderName: 'Acme'
+    })
+
+    const combined = logSpy.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(combined).toMatch(/'analytics' is already installed/)
+    expect(mockedInstallAnalytics).not.toHaveBeenCalled()
+    expect(mockedInstallEmail).toHaveBeenCalled()
+  })
 })

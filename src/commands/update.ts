@@ -441,6 +441,25 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   const availableModules = getAvailableModules(manifest)
   if (dryRunReport) dryRunReport.moduleAddition.available = availableModules.map((m) => m.value)
 
+  // Guard against --add-modules re-requesting an already-installed module.
+  // Without this, the prefill ('srs', for instance) bypasses the
+  // availability filter and triggers a duplicate bootstrap downstream.
+  const availableValues = new Set(availableModules.map((m) => m.value))
+  let effectivePrefill = prefill.selectedModules
+  if (effectivePrefill !== undefined) {
+    const alreadyInstalled = effectivePrefill.filter((m) => !availableValues.has(m))
+    const installable = effectivePrefill.filter((m) => availableValues.has(m))
+    for (const mod of alreadyInstalled) {
+      console.log(chalk.yellow(`  ⊘ '${mod}' is already installed (see .saasfoundry.json) — skipping`))
+    }
+    effectivePrefill = installable
+    if (alreadyInstalled.length > 0 && installable.length === 0) {
+      console.log(chalk.green('  All requested modules are already installed. Nothing to do.'))
+      if (dryRunReport) emitDryRunReport(dryRunReport)
+      return
+    }
+  }
+
   if (availableModules.length === 0) {
     if (manifest.version === cliVersion) {
       console.log(chalk.green('  All available modules are already installed. Nothing to update.'))
@@ -452,7 +471,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   console.log(chalk.blue(`  ${availableModules.length} module(s) available to add:\n`))
 
   const selectedModules = await getModuleSelections(availableModules, {
-    prefill: prefill.selectedModules !== undefined ? { selectedModules: prefill.selectedModules } : {},
+    prefill: effectivePrefill !== undefined ? { selectedModules: effectivePrefill } : {},
     nonInteractive
   })
 
