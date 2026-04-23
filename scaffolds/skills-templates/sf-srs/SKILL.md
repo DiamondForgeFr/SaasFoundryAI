@@ -418,3 +418,10 @@ Artefacts from the capstone (kept for reference):
 
 - `.srs-audit/follow-ups.md` — full lessons-learned analysis
 - `.srs-audit/baseline-report-fixed-root.json` — first eval baseline (score 32, all FRs flagged fr-without-code due to #236)
+
+## Contributor notes
+
+- **FR page title format.** The canonical separator between the FR id and the title is the em-dash character (U+2014) wrapped in spaces: `FR-AREA-NN — Title`. It lives as the shared constant
+  `FR_TITLE_SEPARATOR` in `src/builders/srs/constants.ts`, imported by both the page renderer (`src/builders/srs/templates/pages/fr.tpl.ts`) and the inventory parser (`src/srs/eval/inventory.ts`). Do
+  not substitute an ASCII hyphen (U+002D) — it round-trips through Notion as the same glyph visually but breaks the byte-level identity the tests enforce. If you change the separator, update the
+  constant in one place and both sites follow.

@@ -1,3 +1,4 @@
+import { FR_TITLE_SEPARATOR } from '../../../../builders/srs/constants'
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../../builders/srs/types'
 import { buildSrsInventory, parseFrPageTitle } from '../../../../srs/eval/inventory'
 
@@ -39,6 +40,11 @@ describe('parseFrPageTitle', () => {
 
   it('accepts a colon separator', () => {
     expect(parseFrPageTitle('FR-STORAGE-01: Upload')).toEqual({ id: 'FR-STORAGE-01', area: 'storage', title: 'Upload' })
+  })
+
+  it('parses a title built with the shared FR_TITLE_SEPARATOR constant', () => {
+    const raw = `FR-AUTH-01${FR_TITLE_SEPARATOR}Sign in`
+    expect(parseFrPageTitle(raw)).toEqual({ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in' })
   })
 
   it('normalises the area to lowercase', () => {
