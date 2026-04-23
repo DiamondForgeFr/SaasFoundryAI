@@ -78,6 +78,75 @@ All via `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]`.
 | `apply-update` | Apply a conversational eval-hook patch (ADD-only : UR / FR / DS / TC) | SUB-10       |
 | `eval`         | Compute freshness score comparing the SRS to the codebase (batch)     | SUB-16       |
 
+## Freshness eval (SUB-16)
+
+`srs-cli.sh eval` scores SRS drift against the codebase in batch mode — the complement to the conversational eval hook described above (which catches new decisions at conversation time ; eval catches
+silent drift that already happened).
+
+```bash
+.claude/skills/sf-srs/scripts/srs-cli.sh eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json]
+```
+
+- `--path` defaults to the current working directory (same rules as `draft --from codebase` — honours `.gitignore`, skips `node_modules / dist / coverage / .git`).
+- `--root-page` defaults to `tools.srs.rootPage.id` in `.saasfoundry.json`.
+- `--threshold` is the minimum overall freshness score (default `80`). Exit code is `0` when the overall score ≥ threshold, `1` when below.
+- `--json` emits the full `FreshnessReport` JSON for CI consumption instead of the human-readable summary.
+
+### Heuristics (v1)
+
+| Finding kind      | Trigger                                                                                | Severity |
+| ----------------- | -------------------------------------------------------------------------------------- | -------- |
+| `fr-without-code` | FR page exists in the SRS but no scanner finding matches its area token                | error    |
+| `orphan-area`     | Scanner area carries endpoints but no FR page exists for it (e.g. new module, no spec) | error    |
+| `code-without-fr` | Individual endpoint not covered by an FR whose area already has other matches          | warn     |
+| `fr-untested`     | FR is mapped to endpoints, but no endpoint in that area carries `hasTests=true`        | warn     |
+
+The overall score is the unweighted mean of FR coverage, endpoint coverage, and test coverage (each as a percentage). The per-category breakdown reports `FR` from the heuristics above.
+`UR / DS / TC / NFR` are emitted with `score: null` and a note — deeper drift on those categories requires the Notion adapter to preserve table-row cells on `fetchPage`, which is a follow-up SUB.
+
+### Sample output (human)
+
+```
+─── SRS freshness report ───
+Root page   : 34aa31bb-4f3f-8170-8989-d8738f3356d8
+Generated   : 2026-04-22T12:34:56.000Z
+Threshold   : 80% (status = DRIFT)
+Overall     : 62%
+
+Per category:
+  UR     n/a  (0/0)
+       UR drift is not evaluated in v1 — rendered Notion tables return empty cells via fetchPage…
+  FR    50%  (3/6)
+  DS     n/a  (0/0)
+  …
+
+Counts:
+  FR pages       : 6 (matched 3, untested 1)
+  Endpoints      : 12 (matched 9, untested 4)
+
+Drift findings (4):
+  ✗ [fr-without-code] FR FR-BILLING-01 — "Invoice export" has no matching code finding in area "billing"
+  ✗ [orphan-area] Code area "payments" carries 3 endpoint(s) but has no FR page (e.g. GET /charges) — api/src/modules/payments/payments.controller.ts
+  ! [fr-untested] FR FR-AUTH-02 is mapped to 1 endpoint(s) but none carry tests — api/src/modules/auth/auth.controller.ts
+  ! [code-without-fr] GET /session in "auth" is not covered by any FR in the SRS — api/src/modules/auth/session.controller.ts
+```
+
+### Exit codes
+
+| Code | Meaning                                                                 |
+| ---- | ----------------------------------------------------------------------- |
+| 0    | Overall score ≥ threshold (FRESH) OR no FRs to evaluate                 |
+| 1    | Overall score < threshold (DRIFT)                                       |
+| 2    | Bad input (missing `--root-page`, malformed manifest, invalid `--path`) |
+| 3    | `tools.srs.backend` missing from the manifest                           |
+| 4    | Unknown / invalid backend name                                          |
+| 5    | Adapter runtime error (`init()` / `listChildren` / scanner failure)     |
+
+### CI integration pattern
+
+Run eval as a nightly job or on `develop` pushes. Gate the pipeline on exit code `1` if strict mode is desired, or always allow through and surface the JSON in a step summary. The CI wiring itself is
+project-side — this SUB only ships the eval contract.
+
 The wrapper is intentionally thin — real logic lives in `src/srs/` and consumes only the `SrsAdapter` interface.
 
 ## Ingestion workflow (SUB-6)
