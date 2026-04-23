@@ -1,3 +1,4 @@
+import { FR_TITLE_SEPARATOR } from '../../../../builders/srs/constants'
 import { renderFrPage } from '../../../../builders/srs/templates/pages/fr.tpl'
 import { FrSpec, PageBlock, TableBlock } from '../../../../builders/srs/types'
 
@@ -17,6 +18,18 @@ describe('renderFrPage — DIAMONFORGE-style structure', () => {
     const spec: FrSpec = { parentEpicPageId: 'epic', fr: { id: 'FR-AUTH-01-01', title: 'Sign in' } }
     const page = renderFrPage(spec)
     expect(page.title).toBe('FR-AUTH-01-01 — Sign in')
+  })
+
+  it('separates FR id from title with em-dash (U+2014), not ASCII hyphen', () => {
+    const spec: FrSpec = { parentEpicPageId: 'epic', fr: { id: 'FR-AUTH-01-01', title: 'Sign in' } }
+    const page = renderFrPage(spec)
+    // Lock the exact separator at the byte level so a silent switch to "-"
+    // (U+002D) or ":" breaks the test and surfaces in review.
+    expect(page.title).toBe(`FR-AUTH-01-01${FR_TITLE_SEPARATOR}Sign in`)
+    expect(FR_TITLE_SEPARATOR).toBe(' \u2014 ')
+    const title = page.title ?? ''
+    expect(title.includes('\u2014')).toBe(true)
+    expect(title.split('\u2014').length).toBe(2)
   })
 
   it('emits Summary + divider + per-item detail in order', () => {

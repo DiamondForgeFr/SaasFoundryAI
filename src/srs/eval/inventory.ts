@@ -1,10 +1,14 @@
+import { FR_TITLE_SEPARATOR } from '../../builders/srs/constants'
 import { PageRef, SrsAdapter } from '../../builders/srs/types'
 import { SrsFrEntry, SrsInventory } from './types'
 
-// FR page titles follow "FR-AREA-NN[-MM] — Title" after SUB-3 / SUB-18.
-// parseFrTitle (src/srs/bin/spawn.ts) only handles the legacy "FR-NNN" shape,
-// so we ship a dedicated parser here that tolerates both.
+// FR page titles follow `FR-AREA-NN[-MM]${FR_TITLE_SEPARATOR}Title` (em-dash,
+// U+2014) produced by `renderFrPage`. The parser accepts the canonical
+// separator and tolerates colon or hyphen as fallbacks for resilience against
+// manual edits in Notion.
 const FR_ID_RE = /^(FR-([A-Z0-9]+)(?:-\d+)+)/i
+const CANONICAL_SEP_CHAR = FR_TITLE_SEPARATOR.trim()
+const SEPARATOR_RE = new RegExp(`^\\s*[${CANONICAL_SEP_CHAR}:\\-]\\s*`)
 
 export interface ParsedFrTitle {
   id: string
@@ -18,7 +22,7 @@ export function parseFrPageTitle(raw: string): ParsedFrTitle | null {
   if (!match) return null
   const id = match[1].toUpperCase()
   const area = match[2].toLowerCase()
-  const rest = trimmed.slice(match[0].length).replace(/^\s*[—:\-]\s*/, '')
+  const rest = trimmed.slice(match[0].length).replace(SEPARATOR_RE, '')
   const title = rest.length > 0 ? rest : id
   return { id, area, title }
 }
