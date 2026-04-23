@@ -43,9 +43,15 @@ Actions:
                                     from stdin when --patch is omitted. Used by
                                     the `sf-srs` eval hook after user accepts
                                     the proposed diff — see SKILL.md.
-
-Actions populated by sibling SUBs under #174 :
-  eval                              Score SRS freshness vs. codebase (batch)    (SUB-16)
+  eval  [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--manifest]
+                                    Score SRS freshness vs. codebase (batch).
+                                    Lists FR pages under the configured root,
+                                    runs the scanners, and reports drift
+                                    findings (FR pages with no matching code,
+                                    code areas with no FR, untested FRs).
+                                    Exit 0 when overall score >= threshold,
+                                    1 otherwise. --json emits the structured
+                                    report for CI consumption.
 
 Common options :
   --manifest <path>                 Manifest file to read (default: .saasfoundry.json)
@@ -114,6 +120,8 @@ run_spawn() { run_bin spawn "$@"; }
 
 run_apply_update() { run_bin apply-srs-update "$@"; }
 
+run_eval() { run_bin eval-srs "$@"; }
+
 run_draft() {
   # `--from <source>` selects which drafter to invoke ; default = notion-pages.
   local source="notion-pages"
@@ -146,10 +154,7 @@ case "$ACTION" in
   write) run_write "$@" ;;
   spawn) run_spawn "$@" ;;
   apply-update) run_apply_update "$@" ;;
-  eval)
-    echo "sf-srs: action '$ACTION' not implemented yet — owned by a sibling SUB under #174." >&2
-    exit 2
-    ;;
+  eval) run_eval "$@" ;;
   *)
     echo "sf-srs: unknown action '$ACTION'" >&2
     usage
