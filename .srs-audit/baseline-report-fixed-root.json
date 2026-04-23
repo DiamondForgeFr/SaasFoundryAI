@@ -1,0 +1,371 @@
+{
+  "generatedAt": "2026-04-23T16:04:08.512Z",
+  "rootPageId": "34ba31bb-4f3f-8163-ac75-fb4acf80f6c9",
+  "thresholdPct": 80,
+  "overall": {
+    "score": 32,
+    "status": "drift"
+  },
+  "categories": {
+    "UR": {
+      "total": 0,
+      "covered": 0,
+      "score": null,
+      "note": "UR drift is not evaluated in v1 — rendered Notion tables return empty cells via fetchPage. Follow-up work will extend the adapter to preserve table rows."
+    },
+    "FR": {
+      "total": 34,
+      "covered": 0,
+      "score": 0
+    },
+    "DS": {
+      "total": 0,
+      "covered": 0,
+      "score": null,
+      "note": "DS drift is not evaluated in v1 — rendered Notion tables return empty cells via fetchPage. Follow-up work will extend the adapter to preserve table rows."
+    },
+    "TC": {
+      "total": 0,
+      "covered": 0,
+      "score": null,
+      "note": "TC drift is not evaluated in v1 — rendered Notion tables return empty cells via fetchPage. Follow-up work will extend the adapter to preserve table rows."
+    },
+    "NFR": {
+      "total": 0,
+      "covered": 0,
+      "score": null,
+      "note": "NFR drift is not evaluated in v1 — rendered Notion tables return empty cells via fetchPage. Follow-up work will extend the adapter to preserve table rows."
+    }
+  },
+  "counts": {
+    "frTotal": 34,
+    "frMatched": 0,
+    "frUntested": 0,
+    "endpointsTotal": 23,
+    "endpointsMatched": 0,
+    "endpointsUntested": 1
+  },
+  "findings": [
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-01 — \"sf new — scaffold a new project\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-01",
+      "frTitle": "sf new — scaffold a new project",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-02 — \"sf update — add modules to an existing project\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-02",
+      "frTitle": "sf update — add modules to an existing project",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-03 — \"sf workflow — manage workflow configuration\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-03",
+      "frTitle": "sf workflow — manage workflow configuration",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-04 — \"sf skill — install and uninstall AI skills\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-04",
+      "frTitle": "sf skill — install and uninstall AI skills",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-05 — \"sf tools — list & configure tool accounts\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-05",
+      "frTitle": "sf tools — list & configure tool accounts",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-06 — \"sf modules — list available optional modules\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-06",
+      "frTitle": "sf modules — list available optional modules",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-07 — \"sf feedback — submit feedback\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-07",
+      "frTitle": "sf feedback — submit feedback",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-COMMANDS-08 — \"sf uninstall — full uninstall\" has no matching code finding in area \"commands\"",
+      "frId": "FR-COMMANDS-08",
+      "frTitle": "sf uninstall — full uninstall",
+      "area": "commands"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-BUILDERS-01 — \"API builder — NestJS backend\" has no matching code finding in area \"builders\"",
+      "frId": "FR-BUILDERS-01",
+      "frTitle": "API builder — NestJS backend",
+      "area": "builders"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-BUILDERS-02 — \"Web builder — React frontend\" has no matching code finding in area \"builders\"",
+      "frId": "FR-BUILDERS-02",
+      "frTitle": "Web builder — React frontend",
+      "area": "builders"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-BUILDERS-03 — \"DB builder — PostgreSQL + Prisma\" has no matching code finding in area \"builders\"",
+      "frId": "FR-BUILDERS-03",
+      "frTitle": "DB builder — PostgreSQL + Prisma",
+      "area": "builders"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-BUILDERS-04 — \"S3 builder — object storage infra\" has no matching code finding in area \"builders\"",
+      "frId": "FR-BUILDERS-04",
+      "frTitle": "S3 builder — object storage infra",
+      "area": "builders"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-BUILDERS-05 — \"Monorepo overlay\" has no matching code finding in area \"builders\"",
+      "frId": "FR-BUILDERS-05",
+      "frTitle": "Monorepo overlay",
+      "area": "builders"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-BUILDERS-06 — \"Multirepo overlay\" has no matching code finding in area \"builders\"",
+      "frId": "FR-BUILDERS-06",
+      "frTitle": "Multirepo overlay",
+      "area": "builders"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-BUILDERS-07 — \"Dev-services builder — docker-compose dev stack\" has no matching code finding in area \"builders\"",
+      "frId": "FR-BUILDERS-07",
+      "frTitle": "Dev-services builder — docker-compose dev stack",
+      "area": "builders"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-MODULES-01 — \"Email module — MailerSend integration\" has no matching code finding in area \"modules\"",
+      "frId": "FR-MODULES-01",
+      "frTitle": "Email module — MailerSend integration",
+      "area": "modules"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-MODULES-02 — \"Storage module — S3 object storage\" has no matching code finding in area \"modules\"",
+      "frId": "FR-MODULES-02",
+      "frTitle": "Storage module — S3 object storage",
+      "area": "modules"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-MODULES-03 — \"Analytics module — Umami\" has no matching code finding in area \"modules\"",
+      "frId": "FR-MODULES-03",
+      "frTitle": "Analytics module — Umami",
+      "area": "modules"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-MODULES-04 — \"SRS module — Notion workspace bootstrap\" has no matching code finding in area \"modules\"",
+      "frId": "FR-MODULES-04",
+      "frTitle": "SRS module — Notion workspace bootstrap",
+      "area": "modules"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-MODULES-05 — \"Advanced skills — Context7, Atlassian, Notion, Figma\" has no matching code finding in area \"modules\"",
+      "frId": "FR-MODULES-05",
+      "frTitle": "Advanced skills — Context7, Atlassian, Notion, Figma",
+      "area": "modules"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-01 — \"Scan codebase — endpoint/entity/test/doc-context scanners\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-01",
+      "frTitle": "Scan codebase — endpoint/entity/test/doc-context scanners",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-02 — \"Draft from codebase\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-02",
+      "frTitle": "Draft from codebase",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-03 — \"Draft from Notion pages\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-03",
+      "frTitle": "Draft from Notion pages",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-04 — \"Write drafts to backend\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-04",
+      "frTitle": "Write drafts to backend",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-05 — \"Browse backend tree\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-05",
+      "frTitle": "Browse backend tree",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-06 — \"Eval freshness vs codebase\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-06",
+      "frTitle": "Eval freshness vs codebase",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-07 — \"Spawn Story tickets from Epic\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-07",
+      "frTitle": "Spawn Story tickets from Epic",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-SRS-08 — \"Apply conversational SRS update\" has no matching code finding in area \"srs\"",
+      "frId": "FR-SRS-08",
+      "frTitle": "Apply conversational SRS update",
+      "area": "srs"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-WORKFLOW-01 — \"Create subtask — GitHub sub-issue\" has no matching code finding in area \"workflow\"",
+      "frId": "FR-WORKFLOW-01",
+      "frTitle": "Create subtask — GitHub sub-issue",
+      "area": "workflow"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-WORKFLOW-02 — \"Update status — workflow transitions\" has no matching code finding in area \"workflow\"",
+      "frId": "FR-WORKFLOW-02",
+      "frTitle": "Update status — workflow transitions",
+      "area": "workflow"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-WORKFLOW-03 — \"Complexity guard — label enforcement\" has no matching code finding in area \"workflow\"",
+      "frId": "FR-WORKFLOW-03",
+      "frTitle": "Complexity guard — label enforcement",
+      "area": "workflow"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-WORKFLOW-04 — \"Create PR with test-plan check\" has no matching code finding in area \"workflow\"",
+      "frId": "FR-WORKFLOW-04",
+      "frTitle": "Create PR with test-plan check",
+      "area": "workflow"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-WORKFLOW-05 — \"Configure workflow — branches & AI rules\" has no matching code finding in area \"workflow\"",
+      "frId": "FR-WORKFLOW-05",
+      "frTitle": "Configure workflow — branches & AI rules",
+      "area": "workflow"
+    },
+    {
+      "kind": "fr-without-code",
+      "severity": "error",
+      "message": "FR FR-WORKFLOW-06 — \"Bypass-srs meta flag\" has no matching code finding in area \"workflow\"",
+      "frId": "FR-WORKFLOW-06",
+      "frTitle": "Bypass-srs meta flag",
+      "area": "workflow"
+    },
+    {
+      "kind": "orphan-area",
+      "severity": "error",
+      "message": "Code area \"accounts\" carries 6 endpoint(s) but has no FR page (e.g. GET /accounts/:id)",
+      "area": "accounts",
+      "file": "scaffolds/blueprints/api/src/modules/accounts/controllers/account.controller.ts"
+    },
+    {
+      "kind": "orphan-area",
+      "severity": "error",
+      "message": "Code area \"api-docs\" carries 1 endpoint(s) but has no FR page (e.g. GET /api/docs/openapi.json)",
+      "area": "api-docs",
+      "file": "scaffolds/blueprints/api/src/modules/api-docs/controllers/api-docs.controller.ts"
+    },
+    {
+      "kind": "orphan-area",
+      "severity": "error",
+      "message": "Code area \"auth\" carries 7 endpoint(s) but has no FR page (e.g. POST /auth/signup)",
+      "area": "auth",
+      "file": "scaffolds/blueprints/api/src/modules/auth/controllers/auth.controller.ts"
+    },
+    {
+      "kind": "orphan-area",
+      "severity": "error",
+      "message": "Code area \"entities\" carries 2 endpoint(s) but has no FR page (e.g. POST /entities)",
+      "area": "entities",
+      "file": "scaffolds/blueprints/api/src/modules/entities/controllers/entity.controller.ts"
+    },
+    {
+      "kind": "orphan-area",
+      "severity": "error",
+      "message": "Code area \"health\" carries 1 endpoint(s) but has no FR page (e.g. GET /health)",
+      "area": "health",
+      "file": "scaffolds/blueprints/api/src/modules/health/controllers/health.controller.ts"
+    },
+    {
+      "kind": "orphan-area",
+      "severity": "error",
+      "message": "Code area \"invitation\" carries 3 endpoint(s) but has no FR page (e.g. POST /invitations)",
+      "area": "invitation",
+      "file": "scaffolds/blueprints/api/src/modules/invitation/controllers/invitation.controller.ts"
+    },
+    {
+      "kind": "orphan-area",
+      "severity": "error",
+      "message": "Code area \"organizations\" carries 3 endpoint(s) but has no FR page (e.g. GET /organizations/:id)",
+      "area": "organizations",
+      "file": "scaffolds/blueprints/api/src/modules/organizations/controllers/organization.controller.ts"
+    }
+  ]
+}

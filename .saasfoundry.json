@@ -20,13 +20,34 @@
       "types": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore", "ci", "build", "revert"]
     },
     "statuses": [
-      { "name": "Backlog", "color": "GRAY" },
-      { "name": "Ready", "color": "YELLOW" },
-      { "name": "In progress", "color": "BLUE" },
-      { "name": "AI testing", "color": "PURPLE" },
-      { "name": "Human testing", "color": "ORANGE" },
-      { "name": "In review", "color": "PINK" },
-      { "name": "Done", "color": "GREEN" }
+      {
+        "name": "Backlog",
+        "color": "GRAY"
+      },
+      {
+        "name": "Ready",
+        "color": "YELLOW"
+      },
+      {
+        "name": "In progress",
+        "color": "BLUE"
+      },
+      {
+        "name": "AI testing",
+        "color": "PURPLE"
+      },
+      {
+        "name": "Human testing",
+        "color": "ORANGE"
+      },
+      {
+        "name": "In review",
+        "color": "PINK"
+      },
+      {
+        "name": "Done",
+        "color": "GREEN"
+      }
     ]
   },
   "tools": {
@@ -34,14 +55,14 @@
       "enabled": true,
       "backend": "notion",
       "rootPage": {
-        "id": "34aa31bb-4f3f-8170-8989-d8738f3356d8",
-        "url": "https://www.notion.so/saasfoundry-cli-Project-Overview-34aa31bb4f3f81708989d8738f3356d8",
-        "name": "saasfoundry-cli — Project Overview"
+        "id": "34ba31bb-4f3f-8139-a6e4-f4327648a6b9",
+        "url": "https://www.notion.so/saasfoundry-cli-srs-34ba31bb4f3f8139a6e4f4327648a6b9",
+        "name": "saasfoundry-cli-srs"
       },
       "categories": {
         "userFlowsAndSpecifications": {
-          "id": "34aa31bb-4f3f-814c-abb7-c345d0f8a9cb",
-          "url": "https://www.notion.so/User-flows-Specifications-34aa31bb4f3f814cabb7c345d0f8a9cb",
+          "id": "34ba31bb-4f3f-8163-ac75-fb4acf80f6c9",
+          "url": "https://www.notion.so/User-flows-Specifications-34ba31bb4f3f8163ac75fb4acf80f6c9",
           "name": "User flows & Specifications"
         }
       }

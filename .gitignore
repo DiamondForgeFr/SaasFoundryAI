@@ -50,3 +50,13 @@ docs/.vitepress/dist/
 
 # Claude Code runtime
 .claude/scheduled_tasks.lock
+
+# Local env (tokens, secrets — never committed)
+.env
+.env.local
+
+# Local audit workspace (lessons-learned capstone #203) — drafts, reports, scratch
+/.srs-audit/*
+# …except the persisted artefacts referenced by #203 exit conditions
+!/.srs-audit/follow-ups.md
+!/.srs-audit/baseline-report-fixed-root.json
