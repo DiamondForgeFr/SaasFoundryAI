@@ -23,6 +23,8 @@ import { promptSrsConfiguration } from '../prompts/srs.prompts'
 import { bootstrapSrs } from '../runners/srs.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { SaaSFoundryManifest, SrsToolConfig } from '../types'
+import { upsertEnvKey } from '../utils/env-file'
+import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { buildUpdatePrefillFromOptions, ConflictStrategy, parseConflictStrategy, UpdateCommandOptions, UpdateDryRunReport } from './update.options'
@@ -634,6 +636,13 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
         rootPage: result.rootPage
       }
       manifest.tools = { ...(manifest.tools ?? {}), srs: srsTools }
+
+      const envPath = join('.', '.env')
+      upsertEnvKey(envPath, 'NOTION_API_TOKEN', srsBootstrap.notionApiToken)
+      if (srsBootstrap.notionApiVersion) {
+        upsertEnvKey(envPath, 'NOTION_API_VERSION', srsBootstrap.notionApiVersion)
+      }
+      ensureGitignorePatterns(join('.', '.gitignore'), ['.env', '.env.local', '.env*.local'])
     }
 
     // Install selected advanced skills

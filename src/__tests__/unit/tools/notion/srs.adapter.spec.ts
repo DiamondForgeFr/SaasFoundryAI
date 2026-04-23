@@ -515,17 +515,33 @@ describe('NotionSrsAdapter', () => {
 describe('createNotionSrsAdapterFromEnv', () => {
   const previousToken = process.env.NOTION_API_TOKEN
   const previousVersion = process.env.NOTION_API_VERSION
+  const previousCwd = process.cwd()
+  let isolatedCwd: string
+
+  beforeEach(() => {
+    isolatedCwd = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'sf-adapter-env-'))
+    process.chdir(isolatedCwd)
+  })
 
   afterEach(() => {
+    process.chdir(previousCwd)
+    require('fs').rmSync(isolatedCwd, { recursive: true, force: true })
     if (previousToken === undefined) delete process.env.NOTION_API_TOKEN
     else process.env.NOTION_API_TOKEN = previousToken
     if (previousVersion === undefined) delete process.env.NOTION_API_VERSION
     else process.env.NOTION_API_VERSION = previousVersion
   })
 
-  it('throws when NOTION_API_TOKEN is unset', () => {
+  it('throws when NOTION_API_TOKEN is unset and no .env is present', () => {
     delete process.env.NOTION_API_TOKEN
     expect(() => createNotionSrsAdapterFromEnv()).toThrow(/NOTION_API_TOKEN is not set/)
+  })
+
+  it('falls back to .env in the current working directory', () => {
+    delete process.env.NOTION_API_TOKEN
+    require('fs').writeFileSync(require('path').join(isolatedCwd, '.env'), 'NOTION_API_TOKEN=from_env_file\n', 'utf8')
+    expect(createNotionSrsAdapterFromEnv()).toBeInstanceOf(NotionSrsAdapter)
+    expect(process.env.NOTION_API_TOKEN).toBe('from_env_file')
   })
 
   it('constructs an adapter when NOTION_API_TOKEN is set', () => {

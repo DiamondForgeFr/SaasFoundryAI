@@ -1,8 +1,11 @@
+import path from 'node:path'
+
 import { Client, isFullPage } from '@notionhq/client'
 
 import { renderEpicPage } from '../../builders/srs/templates/pages/epic.tpl'
 import { renderFrPage } from '../../builders/srs/templates/pages/fr.tpl'
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../builders/srs/types'
+import { loadEnvFile } from '../../utils/env-file'
 import { renderPageContentToNotionBlocks } from './page-content.renderer'
 
 export interface NotionSrsAdapterOptions {
@@ -159,9 +162,12 @@ export class NotionSrsAdapter implements SrsAdapter {
 }
 
 export function createNotionSrsAdapterFromEnv(): NotionSrsAdapter {
+  if (!process.env.NOTION_API_TOKEN) {
+    loadEnvFile(path.join(process.cwd(), '.env'))
+  }
   const apiToken = process.env.NOTION_API_TOKEN
   if (!apiToken) {
-    throw new Error('createNotionSrsAdapterFromEnv: NOTION_API_TOKEN is not set')
+    throw new Error('createNotionSrsAdapterFromEnv: NOTION_API_TOKEN is not set (checked process.env and .env). Run `sf update` to persist it, or export it manually.')
   }
   return new NotionSrsAdapter({
     apiToken,

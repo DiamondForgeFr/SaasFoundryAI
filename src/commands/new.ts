@@ -19,6 +19,8 @@ import { bootstrapSrs } from '../runners/srs.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { SaaSFoundryManifest, SrsToolConfig } from '../types'
+import { upsertEnvKey } from '../utils/env-file'
+import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
@@ -230,6 +232,12 @@ export async function newCommand(opts: NewCommandOptions = {}) {
           createdAt: new Date().toISOString()
         }
       }
+
+      upsertEnvKey('.env', 'NOTION_API_TOKEN', startProjectAnswers.notionApiToken!)
+      if (startProjectAnswers.notionApiVersion) {
+        upsertEnvKey('.env', 'NOTION_API_VERSION', startProjectAnswers.notionApiVersion)
+      }
+      ensureGitignorePatterns('.gitignore', ['.env', '.env.local', '.env*.local'])
     }
 
     // Generate .saasfoundry.json manifest with file hashes
