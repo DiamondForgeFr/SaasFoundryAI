@@ -371,3 +371,26 @@ trivial one.
 2. **Never hardcode backend branches** (`if backend === 'notion'`) ; the registry in `src/srs/` is the only place that knows about concrete backends
 3. **Never call `gh`, the Notion SDK, or any tool-specific CLI directly** ; delegate through the adapter or through `sf-tool-<backend>`
 4. **Every new SUB under #174 ships its artefact in the directory map above** — do not invent new locations
+
+## Lessons learned — #203 capstone dogfood (2026-04-23)
+
+Running the full `sf srs` chain end-to-end on SaaSFoundry itself surfaced 12 gaps consolidated under parent #235. Key takeaways agents should know about:
+
+- **Matcher is endpoint-biased (#236).** Today's `matcher.ts` only counts an FR as matched when an HTTP endpoint finding shares its area. Non-backend FRs (frontend-only pages, CLI commands, infra
+  jobs) score 0 regardless of test coverage. Until fixed, treat low eval scores on non-backend projects as likely false negatives, not real drift.
+- **Inventory walk assumes rootPage→Epic is direct (#237).** Bootstrap produces rootPage → `User flows & Specifications` category → Epics. Eval without `--root-page <category.id>` returns
+  `FR.total = 0`. Until fixed, always pass `--root-page` when running eval on a standard manifest.
+- **Scan from CWD ratisse scaffolds/ + docs/ (#238).** On CLI / library projects, run `draft --from codebase --path src` — a full-repo scan drowns real findings with template code.
+- **Bootstrap does not persist `NOTION_API_TOKEN` (#239).** After `sf update --add-modules srs`, the token lives only in the interactive shell. For non-interactive / Claude bash sessions, load it from
+  `.env` with `set -a && source .env && set +a` until the fix lands.
+- **`write-srs` needs two passes today (#245).** Epics must be written first to obtain page IDs, then an FR spec referencing `parentEpicPageId` is generated, then written. Scripted in `.srs-audit/` as
+  reference until logical-ID resolution lands.
+- **SRS completeness is UR+FR only (#247).** DS / TC / NFR are not generated yet. The DIAMONFORGE reference shape expects all five. AI-assisted generation planned under #247, reusing the L1+L2+L3
+  matcher architecture.
+- **Preconditions first.** Before asking the user scope questions (backend choice, Notion parent page, etc.), read `.saasfoundry.json` — the answers are almost always already there. Re-running
+  `sf update --add-modules srs` on an already-installed module silently re-bootstraps and duplicates Notion pages (#240).
+
+Artefacts from the capstone (kept for reference):
+
+- `.srs-audit/follow-ups.md` — full lessons-learned analysis
+- `.srs-audit/baseline-report-fixed-root.json` — first eval baseline (score 32, all FRs flagged fr-without-code due to #236)
