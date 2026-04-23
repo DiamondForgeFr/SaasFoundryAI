@@ -10,22 +10,22 @@ sf status [--json | --claude-friendly] [--check-gh] [--no-network]
 
 ## Options
 
-| Flag                | Description                                                                 | Default |
-| ------------------- | --------------------------------------------------------------------------- | ------- |
-| `--json`            | Machine-readable JSON report (fails with exit code 1 on any `fail` check)   | -       |
-| `--claude-friendly` | Markdown report tailored for Claude Code SessionStart hooks (exit code 0)   | -       |
-| `--no-network`      | Skip network-dependent checks                                               | -       |
-| `--check-gh`        | Probe for `gh` (GitHub CLI) availability in `$PATH`                         | off     |
+| Flag                | Description                                                               | Default |
+| ------------------- | ------------------------------------------------------------------------- | ------- |
+| `--json`            | Machine-readable JSON report (fails with exit code 1 on any `fail` check) | -       |
+| `--claude-friendly` | Markdown report tailored for Claude Code SessionStart hooks (exit code 0) | -       |
+| `--no-network`      | Skip network-dependent checks                                             | -       |
+| `--check-gh`        | Probe for `gh` (GitHub CLI) availability in `$PATH`                       | off     |
 
 ## Preconditions
 
-| Name       | Checks                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| `manifest` | `.saasfoundry.json` exists at the project root                                           |
-| `workflow` | `workflow.tool` is set (non-`none`)                                                      |
-| `srs`      | `tools.srs.enabled` with a `rootPage` configured (skipped when SRS is not installed)     |
-| `git`      | Project is a git repo and the working tree is clean                                      |
-| `gh`       | GitHub CLI available in `$PATH` (only when `--check-gh` is passed)                       |
+| Name       | Checks                                                                               |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `manifest` | `.saasfoundry.json` exists at the project root                                       |
+| `workflow` | `workflow.tool` is set (non-`none`)                                                  |
+| `srs`      | `tools.srs.enabled` with a `rootPage` configured (skipped when SRS is not installed) |
+| `git`      | Project is a git repo and the working tree is clean                                  |
+| `gh`       | GitHub CLI available in `$PATH` (only when `--check-gh` is passed)                   |
 
 ## Examples
 
