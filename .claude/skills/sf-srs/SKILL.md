@@ -361,10 +361,97 @@ The skill's job is to convert raw findings into publishable draft candidates. Wo
 2. **Pick the Epic level.** One Epic per coherent area (e.g. `auth`, `storage`, `accounts`). Title + narrative come from the richest `doc-context` in the group, or from the user's wording.
 3. **Propose the FRs.**
    - One FR per `endpoint` (or per tight endpoint cluster — e.g. CRUD on the same resource collapses into one FR).
-   - Add DS items for noteworthy `entity` fields (PK, unique constraints, relations).
-   - Seed TC items from `test.cases[]` of the matching area.
    - Reuse `ui-flow` routes as acceptance criteria on the user-facing FR.
-4. **Flag gaps.** Any `endpoint` with `hasTests=false` is a test-coverage gap — surface it as a TODO in the drafted FR, not silently.
+   - Populate `dsRefs` / `tcRefs` from the items seeded in step 4 so the FR page surfaces the traceability links.
+4. **Seed the Epic-level DS / TC / NFR sections.** The DIAMONFORGE shape expects five categories per Epic (UR + FR + DS + TC + NFR). The seeding rules below turn scanner findings into initial items
+   the reviewer accepts / edits / rejects. See the dedicated subsection below.
+5. **Flag gaps.** Any `endpoint` with `hasTests=false` is a test-coverage gap — surface it as a **TODO** TC item (title `"{METHOD} {PATH} — happy path"`, `expectedResult: "to write"`), not silently.
+
+### Seeding DS / TC / NFR (DIAMONFORGE completeness)
+
+These three sections are **interpretive** — scanners surface the raw material, the agent synthesises the items. Reuse the L1+L2+L3 pattern from the eval (`docs/srs/scanner-findings.md`): deterministic
+findings feed AI prompts, the agent always runs, the user always validates before write.
+
+#### DS items (Design Specifications)
+
+One `DsItem` per material design decision visible in code. Source findings → seeded `DsItem`:
+
+| Finding                                                      | Seeded `DsItem.title`            | Seeded `description` source                                                |
+| ------------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------- |
+| `entity` (Prisma model)                                      | `Data model — <EntityName>`      | fields + `@unique` / `@id` / `@relation` + `deletedAt` flag                |
+| `endpoint` with non-trivial DTO (POST/PATCH body ≥ 2 fields) | `API contract — <METHOD> <path>` | DTO field list + validation rules surfaced by `class-validator` decorators |
+| `ui-flow` with `formFields.length ≥ 2`                       | `UI form — <PageName>`           | form field list + `linkedEndpointGuess` if present                         |
+
+Group by the Epic's area; set `frRefs` to every FR in the group whose endpoint/entity/UI flow matches. Deduplicate by title prefix — if two entities share the same core name (e.g. `User` +
+`UserProfile`), collapse them into a single DS item with both sub-models listed in the description.
+
+#### TC items (Test Cases)
+
+One `TcItem` per `test.cases[]` entry. Source mapping:
+
+| Source                                   | Seeded `TcItem` field                                                                                |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `test.cases[i].title`                    | `title` (the `it(...)` / `test(...)` string verbatim)                                                |
+| `test.cases[i]` structure                | `steps` — parse Given/When/Then from the title if phrased that way, else bullet the `describe` chain |
+| assertion in the test body (if readable) | `expectedResult`; if not parseable, use `"see <test.file>"`                                          |
+| `test.area` or `endpoint.area`           | `frRefs` — every FR whose area matches                                                               |
+
+**Untested endpoints** — for each `endpoint` with `hasTests=false`, emit a **TODO** TC item so the drift is auditable, not invisible:
+
+```jsonc
+{
+  "id": "TC-<area>-<slug>-todo",
+  "title": "<METHOD> <path> — happy path",
+  "expectedResult": "to write",
+  "frRefs": ["<FR-id>"]
+}
+```
+
+The reviewer can either accept the TODO (making the gap part of the public contract) or reject it and flag it upstream.
+
+#### NFR items (Non-Functional Requirements)
+
+NFRs are **proposed, not derived** — every seeded item must be marked for explicit human validation. Build the candidate list from two layers:
+
+**Layer 1 — stack signals** (present in `.saasfoundry.json` or inferred from findings):
+
+| Signal                                                                                       | Seeded NFR(s)                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth` module present (endpoints under `/auth/*` or Prisma `Session` / `RefreshToken` model) | `Security — JWT access token expiry ≤ 15 min`; `Security — refresh token rotation on every use`; `Security — login rate limit ≤ 5 attempts / minute / IP` |
+| `i18n` module (`src/locales/` folder or `i18next` dep)                                       | `i18n — all user-facing strings translated in FR + EN`; `a11y — locale switchable without page reload`                                                    |
+| Prisma + Postgres detected                                                                   | `Data — soft delete via deletedAt on user-owned entities`; `Data — all migrations reversible (up + down)`                                                 |
+| `docker-compose*.yml` + `/health` endpoint present                                           | `Ops — API health check p95 ≤ 1 s`                                                                                                                        |
+| Playwright or e2e spec files present                                                         | `Quality — e2e coverage on critical user flows (login, signup, checkout when applicable)`                                                                 |
+| `@nestjs/swagger` + `docs/openapi.json` generated                                            | `Docs — OpenAPI spec regenerated on every API change (CI guard)`                                                                                          |
+
+**Layer 2 — standard SaaS catalogue** (always propose, mark low-confidence):
+
+- `Perf — p95 API latency ≤ 500 ms at 100 req/s sustained`
+- `Availability — uptime target 99.5% (excluding scheduled maintenance)`
+- `Security — all user-uploaded files virus-scanned before persistence` (only if storage module present)
+- `Privacy — PII fields encrypted at rest` (only if the schema carries `email`, `phone`, `address`)
+
+Always emit NFRs with `priority: 'P3'` and `target: '<proposed — needs human validation>'`. The reviewer lifts priority / refines target before accepting.
+
+#### Coverage table (pre-accept)
+
+Before firing the review prompt on an Epic cluster, emit a one-shot **coverage table** so the reviewer sees what got seeded per category and where it came from:
+
+```
+DIAMONFORGE coverage for Epic: <title>
+┌──────┬───────────────┬──────────────────────────────────────────────┐
+│ Cat  │ Items proposed│ Source                                       │
+├──────┼───────────────┼──────────────────────────────────────────────┤
+│ UR   │ 3             │ doc-context + inferred from FRs              │
+│ FR   │ 5             │ 5 endpoint clusters                          │
+│ DS   │ 4             │ 2 entities + 1 endpoint + 1 UI form          │
+│ TC   │ 8 (+ 2 TODO)  │ test.cases[] across 3 spec files             │
+│ NFR  │ 4 (proposed)  │ auth + i18n + prisma + playwright signals    │
+└──────┴───────────────┴──────────────────────────────────────────────┘
+```
+
+A cluster with **zero DS or zero TC** is a red flag — either the area is genuinely pure UI glue (no data model, no tests yet) or the scanners missed something. Surface the anomaly in the review prompt
+rather than silently proposing an Epic with empty sections.
 
 ### Review-loop prompts
 
