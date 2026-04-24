@@ -197,6 +197,21 @@ Example :
 
 `excerpt` is capped to keep payloads small and to prime the skill with a summary, not the full document. Load the file directly when you need more than the excerpt.
 
+## DIAMONFORGE section seeding (#247)
+
+Scanner findings are the raw material for the five DIAMONFORGE sections. The mapping below tells the skill which finding kind feeds which section when the drafter builds an Epic cluster:
+
+| Section | Primary source                                                                                         | Seeding rule (summary)                                                                                                                                      |
+| ------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **UR**  | `doc-context` excerpts + inferred from FR titles                                                       | One UR per coherent user goal in the area — narrative comes from the richest `doc-context`, else written by the agent from FR groupings.                    |
+| **FR**  | `endpoint`, `ui-flow`                                                                                  | One FR per endpoint (or tight endpoint cluster). `ui-flow` routes become acceptance criteria.                                                               |
+| **DS**  | `entity`, `endpoint` (non-trivial DTO), `ui-flow` (forms)                                              | `Data model — <Entity>`, `API contract — <METHOD> <path>`, `UI form — <Page>`. Deduplicate by title prefix.                                                 |
+| **TC**  | `test.cases[]`, plus **TODO** items for `endpoint.hasTests=false`                                      | One TC per `test.cases[i].title`; untested endpoints emit a TODO TC (`expectedResult: "to write"`) so the gap is auditable.                                 |
+| **NFR** | stack signals (auth / i18n / prisma / docker-compose / playwright / swagger) + standard SaaS catalogue | Always **proposed** with `priority: 'P3'` and `target: '<proposed — needs human validation>'`. Reviewer lifts priority and refines target before accepting. |
+
+The full seeding rules (including the catalogue of stack signals → NFRs and the pre-accept coverage table) live in `.claude/skills/sf-srs/SKILL.md` → "Seeding DS / TC / NFR (DIAMONFORGE
+completeness)". Keep the two documents consistent — the skill is the source of truth for the agent's behaviour, this file is the source of truth for the finding shapes it consumes.
+
 ## Stability guarantees
 
 The scanner pipeline respects `.gitignore` and hard-excludes `node_modules`, `dist`, `coverage`, `.git`, and `.vitepress/cache`. The order of findings is :
