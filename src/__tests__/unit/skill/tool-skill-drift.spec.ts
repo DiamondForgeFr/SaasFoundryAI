@@ -88,6 +88,16 @@ const PAIRS = [
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/scripts/srs-cli.sh')
   },
   {
+    name: 'sf-srs detect-eval-signals.sh',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/scripts/detect-eval-signals.sh'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/scripts/detect-eval-signals.sh')
+  },
+  {
+    name: 'sf-srs data/clustering-rules.json',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/data/clustering-rules.json'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/data/clustering-rules.json')
+  },
+  {
     name: 'sf-srs templates/pages/README.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/pages/README.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/pages/README.md')
