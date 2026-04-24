@@ -80,7 +80,9 @@ export class NotionSrsAdapter implements SrsAdapter {
 
   async createFrPage(spec: FrSpec): Promise<PageRef> {
     if (!spec.parentEpicPageId) {
-      throw new Error(`NotionSrsAdapter.createFrPage: FR "${spec.fr.id}" has no parentEpicPageId resolved. write-srs must resolve FrSpec.parentEpicId to a concrete page id before calling the adapter.`)
+      throw new Error(
+        `NotionSrsAdapter.createFrPage: FR "${spec.fr.id}" has no parentEpicPageId resolved. write-srs must resolve FrSpec.parentEpicId to a concrete page id before calling the adapter.`
+      )
     }
     const pageContent = renderFrPage(spec)
     const title = pageContent.title ?? `${spec.fr.id} — ${spec.fr.title}`
