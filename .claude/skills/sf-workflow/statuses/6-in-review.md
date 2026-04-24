@@ -2,6 +2,12 @@
 
 **ROLE**: Code review + mandatory green CI
 
+> **ℹ️ Ticket type matters** (see `SKILL.md` → "Ticket Hierarchy"):
+>
+> - **Epic** (`type: epic`): **NEVER produces a PR**. Do not open one, do not attach one. Epic status in `In review` is purely **derived** from children — it reflects that every child Story/Task/Issue
+>   is itself in `In review` (one open PR per child). Skip all steps below.
+> - **Story / Task / Issue** (`type: story | task | issue`): full flow below — each one opens its own PR.
+
 ## When to Enter This Status
 
 - After validation in Human Testing

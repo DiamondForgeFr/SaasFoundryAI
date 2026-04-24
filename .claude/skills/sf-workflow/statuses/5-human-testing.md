@@ -2,6 +2,12 @@
 
 **ROLE**: Manual validation by human developer
 
+> **ℹ️ Ticket type matters** (see `SKILL.md` → "Ticket Hierarchy"):
+>
+> - **Epic** (`type: epic`): no manual test, no PR. Epic status is **derived** from children — it only enters `Human testing` when the last child does, and only leaves once every child has moved on.
+>   Do not run the steps below for an Epic.
+> - **Story / Task / Issue** (`type: story | task | issue`): full flow below — the developer validates, then E2E tests are written before moving to `In review`.
+
 ## When to Enter This Status
 
 - After successfully passing all tests in AI Testing

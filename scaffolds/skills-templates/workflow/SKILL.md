@@ -18,6 +18,66 @@ This workflow adapts its rigor based on ticket complexity:
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 
+## 🧩 Ticket Hierarchy (Epic / Story / Task / Subtask)
+
+{{WORKFLOW_NAME}} uses a **three-level ticket hierarchy**. Each level has a distinct role, lifecycle, and deliverable. Agents must treat them differently — notably, **Epics produce no PR** and **Subtasks are not {{TOOL}} issues**.
+
+```
+(Epic)          optional grouper — SRS feature, bug batch, transverse refactor
+ └─ Story/Task  mandatory — branch + PR + full workflow
+     └─ Subtask optional — commit of the action plan on the Story/Task branch
+```
+
+### Level 1 — Epic (optional parent)
+
+- **Role**: groups related Stories/Tasks under a single banner (an SRS feature, a batch of related bugs, a transverse refactor).
+- **Deliverable**: **NONE directly**. An Epic has no branch, no commit, no PR.
+- **Tracking**: a regular ticket, labeled `type: epic`, with child Story/Task tickets linked as sub-issues.
+- **Status**: **derived from children** (see derivation rule below).
+
+### Level 2 — Story or Task (the unit of work)
+
+**Both Story and Task are first-class tickets with full workflow lifecycle** (branch + PR + statuses). They differ only in the **nature of their acceptance**:
+
+|                   | Story                            | Task                                              |
+| ----------------- | -------------------------------- | ------------------------------------------------- |
+| **Delivers**      | user-observable value            | a technical action                                |
+| **Acceptance**    | Acceptance Criteria (functional) | Completion Criteria (action-oriented)             |
+| **Typical title** | _"User can export CSV"_          | _"Extract CSV generator into `shared/exporters`"_ |
+| **Template**      | `story.tpl.ts`                   | `task.tpl.ts`                                     |
+
+**Issue** is a variant of Task for bugs — same lifecycle, different body template (`issue.tpl.ts`: Behavior Observed / Expected / Repro / Environment / Impact / Evidence).
+
+### Level 3 — Subtask (commit on the Story/Task branch)
+
+- **Role**: step in the action plan of a Story/Task, executed as a commit on the Story/Task branch.
+- **Deliverable**: a single commit. **Never a ticket, never a branch, never a PR.**
+- **Granularity**: one coherent change that could be reverted atomically.
+
+**⚠️ Naming warning**: the `create-subtask` CLI misnames its output — it actually creates **Story tickets** (linked to a parent). True Subtasks (commits) are not tracked on the board.
+
+### Epic status derivation rule
+
+An Epic's board status is **computed from its children**, not set directly:
+
+- **Ascent** (Backlog → Ready → In progress) : Epic = **earliest** status among children. As soon as the first child advances, the Epic moves with it.
+- **Descent** (In progress → AI testing → Human testing → In review → Done) : Epic = **latest** status among children. Epic reaches a later stage only when **all** children have reached it.
+
+**Consequence**: an Epic in `Done` is a strong contract — every child has been merged.
+
+**Example**: Epic #100 has 3 children #101, #102, #103.
+
+- #101 → `In progress`, #102 → `Ready`, #103 → `Backlog` ⇒ Epic `Ready` (earliest: Ready is reached when any child crosses Ready)
+- #101 → `Done`, #102 → `In review`, #103 → `In review` ⇒ Epic `In review` (latest: Epic moves to Done only when #102 and #103 also reach Done)
+
+### Where each level flows
+
+| Level                    | Backlog  | Ready    | In progress            | AI testing | Human testing | In review | Done     |
+| ------------------------ | -------- | -------- | ---------------------- | ---------- | ------------- | --------- | -------- |
+| **Epic**                 | derived  | derived  | derived                | derived    | derived       | derived   | derived  |
+| **Story / Task / Issue** | explicit | explicit | explicit               | explicit   | explicit      | explicit  | explicit |
+| **Subtask (commit)**     | —        | —        | commit lands on branch | —          | —             | —         | —        |
+
 ## How to use this skill
 
 **FIRST TIME on a ticket:**
@@ -190,8 +250,8 @@ When `tools.srs.enabled = true`, Claude must interject during conversation turns
 2. **NEVER skip steps** described in a status
 3. **NEVER move to the next status** without meeting all exit conditions
 4. **ASK if uncertain** - don't assume or guess
-5. **CLOSE SUBTASKS AS YOU GO** — after a subtask's commit lands, immediately run `workflow-cli.sh update-status <sub> Done` and verify `gh issue view <sub> --json state` prints `CLOSED` before starting the next one. Never batch closures at the end of the parent ticket.
-6. **GATE PARENT TRANSITIONS ON OPEN CHILDREN** — before any parent transition (`AI Testing` → `Human Testing` → `In Review` → `Done`), run `gh issue list --state open --search "parent #<N>"` and ensure it returns empty. If not, go back and close the children first.
+5. **CLOSE CHILD TICKETS AS THEY LAND** — after a child Story/Task/Issue's final commit is merged, immediately run `workflow-cli.sh update-status <child> Done` and verify `gh issue view <child> --json state` prints `CLOSED` before starting the next sibling. Never batch closures at the end of an Epic. (A true Subtask is a commit, not a {{TOOL}} issue — there is no status to close.)
+6. **EPIC STATUS FOLLOWS CHILDREN** — an Epic's board status is derived from its children (earliest for ascent Backlog→In progress, latest for descent In progress→Done — see "Epic status derivation rule" above). Before advancing an Epic, run `gh issue list --state open --search "parent #<N>"` and confirm the target status is consistent with all children. An Epic can only reach `Done` when every child is `Done`.
 7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket is `In Progress` / `AI Testing` / `Human Testing` / `In Review`, drive it to `Done` before claiming or starting another. The only override is an explicit developer request to pause.
 8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody`. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section above. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
 

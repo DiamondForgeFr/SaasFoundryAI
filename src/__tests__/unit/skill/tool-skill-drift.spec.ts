@@ -22,6 +22,26 @@ const PAIRS = [
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/workflow-cli.sh'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/workflow-cli.sh')
   },
+  // Note: sf-workflow/SKILL.md intentionally NOT in this drift set.
+  // The scaffolded copy carries `{{WORKFLOW_NAME}}` / `{{TOOL}}` / `{{STATUSES_LIST}}`
+  // placeholders that `workflow-skill.installer.ts` substitutes at project creation —
+  // byte-identity would break those substitutions. Status files (`statuses/*.md`) have
+  // no placeholders so they stay byte-identical.
+  {
+    name: 'sf-workflow statuses/1-backlog.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/1-backlog.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/1-backlog.md')
+  },
+  {
+    name: 'sf-workflow statuses/2-ready.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/2-ready.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/2-ready.md')
+  },
+  {
+    name: 'sf-workflow statuses/3-in-progress.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3-in-progress.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3-in-progress.md')
+  },
   {
     name: 'sf-workflow statuses/3a-ai-drafting.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3a-ai-drafting.md'),
@@ -36,6 +56,26 @@ const PAIRS = [
     name: 'sf-workflow statuses/3c-spawning.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3c-spawning.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3c-spawning.md')
+  },
+  {
+    name: 'sf-workflow statuses/4-ai-testing.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/4-ai-testing.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/4-ai-testing.md')
+  },
+  {
+    name: 'sf-workflow statuses/5-human-testing.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/5-human-testing.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/5-human-testing.md')
+  },
+  {
+    name: 'sf-workflow statuses/6-in-review.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/6-in-review.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/6-in-review.md')
+  },
+  {
+    name: 'sf-workflow statuses/7-done.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/7-done.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/7-done.md')
   },
   {
     name: 'sf-srs SKILL.md',

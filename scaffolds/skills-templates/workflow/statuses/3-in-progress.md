@@ -6,6 +6,13 @@
 > stop here and read `statuses/3a-ai-drafting.md`. Drive the ticket with `.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> <phase>`
 > (`ai-draft | human-review | spawning | done`), never with `update-status` — the SRS guard blocks code-path transitions for those tickets.
 
+> **ℹ️ Ticket type matters** (see `SKILL.md` → "Ticket Hierarchy"):
+>
+> - **Epic** (`type: epic`): no branch, no commit, no PR. Skip sections 1, 4, 5 below. Only create children (Stories/Tasks/Issues) via `create-subtask` and coordinate them. Epic status is **derived**
+>   from children — it reaches `In progress` automatically when the first child does.
+> - **Story / Task / Issue** (`type: story | task | issue`): full flow below — branch + commits + PR.
+> - **Subtask**: a commit on the current Story/Task branch, not a GitHub issue. Don't create one via `create-subtask`.
+
 ## When to Enter This Status
 
 - After receiving assignment or confirmation from developer in Ready
