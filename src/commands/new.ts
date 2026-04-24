@@ -18,7 +18,7 @@ import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '.
 import { bootstrapSrs } from '../runners/srs.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
-import { SaaSFoundryManifest, SrsToolConfig } from '../types'
+import { manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, setDefaultDbCredentials } from '../utils'
@@ -244,6 +244,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     spinner.text = 'Computing file hashes for update tracking...'
     const fileHashes = await computeFileHashes('.')
     const manifest: SaaSFoundryManifest = {
+      $schema: manifestSchemaUrl,
       version: cliVersion,
       generatedAt: new Date().toISOString(),
       structure: startProjectAnswers.isMonorepo ? 'monorepo' : 'multirepo',
