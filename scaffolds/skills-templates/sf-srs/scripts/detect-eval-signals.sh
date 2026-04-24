@@ -167,7 +167,7 @@ classify_text() {
     echo '{"signal":"trivial","confidence":"medium","target":"acknowledgement"}'
     return 0
   fi
-  if [[ "$lowered" =~ ^(read |show me |what does |explain |describe ) ]]; then
+  if [[ "$lowered" =~ ^(read |show me |what does |explain |describe |montre-moi |montre moi |explique |peux-tu |peux tu |qu\'est-ce que |qu\ est-ce que ) ]]; then
     echo '{"signal":"trivial","confidence":"low","target":"read-only request"}'
     return 0
   fi
