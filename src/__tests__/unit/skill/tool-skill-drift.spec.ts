@@ -66,6 +66,26 @@ const PAIRS = [
     name: 'sf-srs templates/examples/example-epic.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/examples/example-epic.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/examples/example-epic.md')
+  },
+  {
+    name: 'sf-srs templates/tickets/examples/epic.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/tickets/examples/epic.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/tickets/examples/epic.md')
+  },
+  {
+    name: 'sf-srs templates/tickets/examples/story.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/tickets/examples/story.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/tickets/examples/story.md')
+  },
+  {
+    name: 'sf-srs templates/tickets/examples/task.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/tickets/examples/task.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/tickets/examples/task.md')
+  },
+  {
+    name: 'sf-srs templates/tickets/examples/issue.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/tickets/examples/issue.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/tickets/examples/issue.md')
   }
 ]
 
