@@ -2,6 +2,12 @@
 
 **ROLE**: Finalization and cleanup after merge
 
+> **ℹ️ Ticket type matters** (see `SKILL.md` → "Ticket Hierarchy"):
+>
+> - **Epic** (`type: epic`): `Done` is **derived** — the Epic only moves to `Done` when **every** child Story/Task/Issue has been merged and closed. No branch to delete, no cleanup to run. Just close
+>   the Epic issue once the last child reaches `Done`.
+> - **Story / Task / Issue** (`type: story | task | issue`): full cleanup flow below — after the PR is merged by the developer.
+
 ## When to Enter This Status
 
 - PR has been merged by the developer
