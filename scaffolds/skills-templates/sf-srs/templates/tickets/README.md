@@ -116,6 +116,18 @@ Produced by `renderIssueTicketBody(spec)` in this order:
 5. `## Impact / Severity` — optional `**Severity:**` line + free-form impact paragraph (placeholder when both are empty)
 6. `## Evidence / Data` — bulleted list (placeholder when empty)
 
+## Authoring examples
+
+Filled-in archetypal examples — one per type — live under `examples/` and are the reference a writing agent should skim before drafting a real ticket:
+
+- [`examples/epic.md`](examples/epic.md) — Epic archetype (multi-tenant workspace isolation)
+- [`examples/story.md`](examples/story.md) — Story archetype (invite teammate to workspace)
+- [`examples/task.md`](examples/task.md) — Task archetype (extract shared email validation)
+- [`examples/issue.md`](examples/issue.md) — Issue archetype (register form swallows `E_EMAIL_TAKEN`)
+
+Each example opens with a `<!-- Why this example -->` preamble that names the pattern it illustrates and the anti-patterns to avoid. Import the **pattern** (tone, density, section usage, title
+convention) — not the literal content, which is fictional.
+
 ## Adding a new ticket body variant
 
 Add a new template under `src/builders/srs/templates/tickets/`, export it from `src/srs/index.ts`, and wire the subtask spawner (SUB-9) to dispatch to the right renderer based on the parent label

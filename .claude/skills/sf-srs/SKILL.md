@@ -33,9 +33,13 @@ sf-srs/
 ├── templates/
 │   ├── pages/                       # Epic + FR page templates → PageContent   (SUB-3)
 │   └── tickets/                     # GitHub ticket templates (srs-epic, srs-story)   (SUB-4)
+│       └── examples/                # archetypal filled-in examples: epic.md | story.md | task.md | issue.md
 └── scripts/
     └── srs-cli.sh                   # single orchestrator entrypoint           (SUB-14.3)
 ```
+
+**Authoring guidance** — before drafting a real Epic / Story / Task / Issue body, skim the matching file under [`templates/tickets/examples/`](templates/tickets/examples/). Each example opens with a
+`<!-- Why this example -->` preamble that names the pattern it illustrates and the anti-patterns to avoid. Import the **pattern** (tone, section density, title convention), not the fictional content.
 
 TS entrypoints dispatched by `srs-cli.sh` live alongside the CLI source under `src/srs/bin/` (dogfood) or `node_modules/saasfoundry-cli/dist/srs/bin/` (shipped). They are **not** duplicated inside the
 skill folder — the skill is a thin orchestrator.
