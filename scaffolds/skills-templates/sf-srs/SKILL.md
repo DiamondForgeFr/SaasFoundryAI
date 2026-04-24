@@ -212,6 +212,45 @@ The flag is ephemeral — it signals "the user asked us to ingest existing notes
 On partial failure during `write`, `write-srs.ts` emits a JSON report with a `rollbackHint` listing the pages it already created — Notion has no transactional rollback, so the skill surfaces this list
 to the user and suggests either archiving manually or retrying from where it failed.
 
+### Single-pass Epic + FR writes (logical IDs, #245)
+
+FRs reference their parent Epic via one of two fields :
+
+- `parentEpicPageId` — an explicit Notion page ID. Use when attaching an FR to an Epic that already exists (incremental writes, post-import).
+- `parentEpicId` — a **logical ID** that matches the `epic.id` of an Epic appearing earlier in the same batch. `write-srs` resolves it on the fly by building a logical-id → page-id map as Epics are
+  created.
+
+Example mixed spec (a single `write` call creates both Epic and FRs, no intermediate page-id collection) :
+
+```json
+[
+  {
+    "kind": "epic",
+    "confidence": "high",
+    "source": { "kind": "notion-pages" },
+    "epic": {
+      "id": "EPIC-AUTH",
+      "title": "Authentication",
+      "parentPageId": "<workspace-root-id>",
+      "urs": [],
+      "frs": []
+    }
+  },
+  {
+    "kind": "fr",
+    "confidence": "high",
+    "source": { "kind": "notion-pages" },
+    "fr": {
+      "parentEpicId": "EPIC-AUTH",
+      "fr": { "id": "FR-1", "title": "Login endpoint" }
+    }
+  }
+]
+```
+
+If `parentEpicId` references an Epic that is neither in the batch nor resolved via `parentEpicPageId`, `write-srs` exits 6 with an error listing every logical id known so far — easy to spot typos and
+missing Epics.
+
 ### Exit codes
 
 Every TS entrypoint under `src/srs/bin/` honours the same contract. The skill must branch on these codes rather than parsing stderr :
@@ -445,8 +484,8 @@ Running the full `sf srs` chain end-to-end on SaaSFoundry itself surfaced 12 gap
 - **Scan from CWD ratisse scaffolds/ + docs/ (#238).** On CLI / library projects, run `draft --from codebase --path src` — a full-repo scan drowns real findings with template code.
 - **Bootstrap does not persist `NOTION_API_TOKEN` (#239).** After `sf update --add-modules srs`, the token lives only in the interactive shell. For non-interactive / Claude bash sessions, load it from
   `.env` with `set -a && source .env && set +a` until the fix lands.
-- **`write-srs` needs two passes today (#245).** Epics must be written first to obtain page IDs, then an FR spec referencing `parentEpicPageId` is generated, then written. Scripted in `.srs-audit/` as
-  reference until logical-ID resolution lands.
+- **`write-srs` supports single-pass Epic + FR writes via logical IDs (#245).** Mix Epics (with `epic.id`) and FRs (with `parentEpicId`) in one spec — `write-srs` resolves the references as it goes.
+  `parentEpicPageId` remains as an escape hatch for incremental writes against pre-existing Epics.
 - **SRS completeness is UR+FR only (#247).** DS / TC / NFR are not generated yet. The DIAMONFORGE reference shape expects all five. AI-assisted generation planned under #247, reusing the L1+L2+L3
   matcher architecture.
 - **Preconditions first.** Before asking the user scope questions (backend choice, Notion parent page, etc.), read `.saasfoundry.json` — the answers are almost always already there. Re-running
