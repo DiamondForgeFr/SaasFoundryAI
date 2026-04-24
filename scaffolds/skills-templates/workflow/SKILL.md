@@ -18,65 +18,36 @@ This workflow adapts its rigor based on ticket complexity:
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 
-## 🧩 Ticket Hierarchy (Epic / Story / Task / Subtask)
+## 🧩 Ticket Hierarchy (Epic / Story-Task / Subtask)
 
-{{WORKFLOW_NAME}} uses a **three-level ticket hierarchy**. Each level has a distinct role, lifecycle, and deliverable. Agents must treat them differently — notably, **Epics produce no PR** and **Subtasks are not {{TOOL}} issues**.
+{{WORKFLOW_NAME}} uses a **three-level ticket hierarchy** — Epics produce **no PR**, Subtasks are **not {{TOOL}} issues**.
 
 ```
-(Epic)          optional grouper — SRS feature, bug batch, transverse refactor
- └─ Story/Task  mandatory — branch + PR + full workflow
-     └─ Subtask optional — commit of the action plan on the Story/Task branch
+(Epic)          optional grouper
+ └─ Story|Task  mandatory — branch + PR + full workflow
+     └─ Subtask optional — commit on the Story/Task branch
 ```
 
-### Level 1 — Epic (optional parent)
+| Level | Role | Deliverable | Tracking artifact | Status |
+| --- | --- | --- | --- | --- |
+| **Epic** | Grouper for related Stories/Tasks (SRS feature, bug batch, transverse refactor) | **None directly** — no branch, no commit, no PR | Ticket, labeled `type: epic`, with child Story/Task tickets linked as sub-issues | **Derived from children** (see rule below) |
+| **Story** | Delivers user-observable value | Branch + commits + PR | Regular ticket, `story.tpl.ts` body — Acceptance Criteria section | Explicit, full workflow lifecycle |
+| **Task** | Delivers a technical action | Branch + commits + PR | Regular ticket, `task.tpl.ts` body — Completion Criteria section | Explicit, full workflow lifecycle |
+| **Issue (bug)** | Task variant for defects | Branch + commits + PR | Regular ticket, `issue.tpl.ts` body — Behavior/Expected/Repro/Environment/Impact/Evidence | Explicit, full workflow lifecycle |
+| **Subtask** | Step in the action plan of a Story/Task | A single commit (atomically revertible) | **Never** a ticket, **never** a branch, **never** a PR | — (commit lands on parent branch) |
 
-- **Role**: groups related Stories/Tasks under a single banner (an SRS feature, a batch of related bugs, a transverse refactor).
-- **Deliverable**: **NONE directly**. An Epic has no branch, no commit, no PR.
-- **Tracking**: a regular ticket, labeled `type: epic`, with child Story/Task tickets linked as sub-issues.
-- **Status**: **derived from children** (see derivation rule below).
-
-### Level 2 — Story or Task (the unit of work)
-
-**Both Story and Task are first-class tickets with full workflow lifecycle** (branch + PR + statuses). They differ only in the **nature of their acceptance**:
-
-|                   | Story                            | Task                                              |
-| ----------------- | -------------------------------- | ------------------------------------------------- |
-| **Delivers**      | user-observable value            | a technical action                                |
-| **Acceptance**    | Acceptance Criteria (functional) | Completion Criteria (action-oriented)             |
-| **Typical title** | _"User can export CSV"_          | _"Extract CSV generator into `shared/exporters`"_ |
-| **Template**      | `story.tpl.ts`                   | `task.tpl.ts`                                     |
-
-**Issue** is a variant of Task for bugs — same lifecycle, different body template (`issue.tpl.ts`: Behavior Observed / Expected / Repro / Environment / Impact / Evidence).
-
-### Level 3 — Subtask (commit on the Story/Task branch)
-
-- **Role**: step in the action plan of a Story/Task, executed as a commit on the Story/Task branch.
-- **Deliverable**: a single commit. **Never a ticket, never a branch, never a PR.**
-- **Granularity**: one coherent change that could be reverted atomically.
-
-**⚠️ Naming warning**: the `create-subtask` CLI misnames its output — it actually creates **Story tickets** (linked to a parent). True Subtasks (commits) are not tracked on the board.
+**⚠️ Naming warning** — the `create-subtask` CLI misnames its output: it creates **Story tickets**, not true Subtasks. True Subtasks are commits and are not tracked on the board.
 
 ### Epic status derivation rule
 
-An Epic's board status is **computed from its children**, not set directly:
+An Epic's board status is **computed from its children**, never set directly.
 
-- **Ascent** (Backlog → Ready → In progress) : Epic = **earliest** status among children. As soon as the first child advances, the Epic moves with it.
-- **Descent** (In progress → AI testing → Human testing → In review → Done) : Epic = **latest** status among children. Epic reaches a later stage only when **all** children have reached it.
+| Direction | Rule | Intuition |
+| --- | --- | --- |
+| **Ascent** (Backlog → Ready → In progress) | Epic = **earliest** status among children | As soon as one child advances, the Epic moves with it |
+| **Descent** (In progress → AI testing → Human testing → In review → Done) | Epic = **latest** status among children | The Epic reaches a later stage only when **all** children have reached it |
 
-**Consequence**: an Epic in `Done` is a strong contract — every child has been merged.
-
-**Example**: Epic #100 has 3 children #101, #102, #103.
-
-- #101 → `In progress`, #102 → `Ready`, #103 → `Backlog` ⇒ Epic `Ready` (earliest: Ready is reached when any child crosses Ready)
-- #101 → `Done`, #102 → `In review`, #103 → `In review` ⇒ Epic `In review` (latest: Epic moves to Done only when #102 and #103 also reach Done)
-
-### Where each level flows
-
-| Level                    | Backlog  | Ready    | In progress            | AI testing | Human testing | In review | Done     |
-| ------------------------ | -------- | -------- | ---------------------- | ---------- | ------------- | --------- | -------- |
-| **Epic**                 | derived  | derived  | derived                | derived    | derived       | derived   | derived  |
-| **Story / Task / Issue** | explicit | explicit | explicit               | explicit   | explicit      | explicit  | explicit |
-| **Subtask (commit)**     | —        | —        | commit lands on branch | —          | —             | —         | —        |
+**Consequence** — an Epic at `Done` is a strong contract: every child is merged. Example: children at `{In progress, Ready, Backlog}` ⇒ Epic = `Ready` (earliest). Children at `{Done, In review, In review}` ⇒ Epic = `In review` (latest).
 
 ## How to use this skill
 
@@ -93,28 +64,7 @@ An Epic's board status is **computed from its children**, not set directly:
 
 ## Configuration (Source of Truth)
 
-**ALL workflow configuration is in `.saasfoundry.json` at the project root.**
-
-When you need workflow information (branches, naming conventions, etc.), read it from there:
-
-```bash
-# Read working branch
-cat .saasfoundry.json | jq -r '.workflow.workingBranch'
-
-# Read PR target branch
-cat .saasfoundry.json | jq -r '.workflow.prTargetBranch'
-
-# Read project URL
-cat .saasfoundry.json | jq -r '.workflow.projectUrl'
-
-# Read branch naming pattern
-cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature'
-
-# Read commit format
-cat .saasfoundry.json | jq -r '.workflow.commitFormat.pattern'
-```
-
-**NEVER hardcode branch names** (develop, master, etc.) - always read from `.saasfoundry.json`.
+All workflow configuration lives in **`.saasfoundry.json`** at the project root. See [manifest schema](../../docs/manifest-schema.md) for the full field list and read snippets. **Never hardcode branch names** — always read from the manifest.
 
 ## Available Commands
 
@@ -149,17 +99,15 @@ Adjusts remaining workflow steps to match new complexity.
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 
-**`/workflow prepare <ticket> <complexity>`**
-Runs adaptive analyze + plan phase (Backlog → Ready).
-- **bug**: Skip (direct to implementation)
-- **low**: Minimal (2-3 files, mental plan)
-- **medium**: Standard (2-4 agents, detailed plan + approval)
-- **complex**: Deep (6-10 agents, comprehensive plan + approval)
+**`/workflow prepare <ticket> <complexity>`** — adaptive analyze + plan phase (Backlog → Ready).
+**`/workflow test <ticket> [complexity]`** — validation + optional adversarial review (→ AI Testing).
 
-**`/workflow test <ticket> [complexity]`**
-Runs validation + optional adversarial review (→ AI Testing).
-- **bug/low/medium**: Validation only (build, lint, typecheck, unit tests)
-- **complex**: + Adversarial review (security, logic, performance)
+| Complexity | `prepare` behavior | `test` behavior |
+| --- | --- | --- |
+| **bug** | Skip — direct to implementation | Validation only (build, lint, typecheck, unit tests) |
+| **low** | Minimal — 2–3 files, mental plan | Validation only |
+| **medium** | Standard — 2–4 agents, detailed plan + approval | Validation only |
+| **complex** | Deep — 6–10 agents, comprehensive plan + approval | Validation **+ adversarial review** (security, logic, performance) |
 
 ## Tool-Specific Commands
 

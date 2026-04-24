@@ -1,7 +1,6 @@
 # SRS SaaSFoundry AI
 
-Agnostic host for Software Requirements Specifications (SRS) — templates, drafters, ticket spawning, continuous evaluation. Tool-agnostic by construction : every backend call goes through an
-`SrsAdapter` implementation resolved from `.saasfoundry.json` → `tools.srs.backend`.
+Tool-agnostic SRS host — draft specs, spawn tickets, evaluate freshness via the configured `SrsAdapter`.
 
 ## Auto-trigger keywords
 
@@ -59,13 +58,8 @@ Placeholder subfolders under `templates/` are kept with `.gitkeep` until their o
 
 ## Configuration
 
-This skill reads `tools.srs.backend` from `.saasfoundry.json` to pick the right adapter :
-
-```bash
-jq -r '.tools.srs.backend' .saasfoundry.json   # notion | atlassian | local-markdown
-```
-
-Dispatch resolution happens inside `src/srs/` (SUB-14.2) — never directly in this skill.
+Reads `tools.srs.backend` from `.saasfoundry.json` to pick the right adapter — see [manifest schema](../../docs/manifest-schema.md). Dispatch resolution happens inside `src/srs/` (SUB-14.2) — never
+directly in this skill.
 
 ## Commands
 
