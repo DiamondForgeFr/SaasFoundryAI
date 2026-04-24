@@ -217,22 +217,184 @@ get_ticket_status() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# Skeleton body templates — kept byte-close to the TS renderers in
+# src/builders/srs/templates/tickets/*.tpl.ts so a created issue has the same
+# section shape regardless of whether it was spawned from a drafted SRS page
+# (full renderer) or ad-hoc via --type (bash skeleton).
+# ───────────────────────────────────────────────────────────────────────────
+
+render_skeleton_body() {
+  local type=$1
+  local title=$2
+  case "$type" in
+    epic)
+      cat <<EOF
+## Goal
+
+${title}
+
+## Business Value
+
+_Describe the business impact of this Epic._
+
+## Dates
+
+- **Start:** _Set on the board (custom field: Start date)._
+- **End:** _Set on the board (custom field: End date)._
+
+## Scope
+
+### Included
+
+_List what is in scope._
+
+### Excluded
+
+_List what is out of scope._
+
+## Specifications
+
+_Link the Epic SRS page here once the spec is published._
+
+_No FR pages linked yet._
+
+## Dependencies
+
+_List upstream tickets or services this Epic depends on._
+
+## Constraints
+
+_List technical or business constraints._
+
+## Assumptions
+
+_List assumptions made while drafting this Epic._
+
+## Definition of Done
+
+_List the exit criteria for this Epic._
+EOF
+      ;;
+    story)
+      cat <<EOF
+## Objective
+
+Implement ${title}.
+
+## Context (User Requirements)
+
+_No UR references yet._
+
+## Scope (Functional Requirements)
+
+_List the FRs this Story covers._
+
+## Acceptance Criteria
+
+_No acceptance criteria yet._
+
+## Specifications
+
+- FR page: _Link the FR SRS page here once the spec is published._
+
+## Dependencies
+
+_List upstream tickets or services this Story depends on._
+
+## Constraints
+
+_List technical or business constraints._
+
+## Design References
+
+_No design references yet._
+EOF
+      ;;
+    task)
+      cat <<EOF
+## Objective
+
+Deliver ${title}.
+
+## Context
+
+_Describe the technical motivation or pre-existing state this Task changes._
+
+## Scope
+
+### Included
+
+_List what is in scope._
+
+### Excluded
+
+_List what is out of scope._
+
+## Completion Criteria
+
+_No completion criteria yet._
+
+## Specifications
+
+_Link the SRS pages or external specs this Task implements._
+
+## Dependencies
+
+_List upstream tickets or services this Task depends on._
+
+## Constraints
+
+_List technical or business constraints._
+EOF
+      ;;
+    issue)
+      cat <<EOF
+## Behavior observed
+
+_Describe the actual buggy behavior._
+
+## Expected Behavior
+
+_Describe what should happen instead._
+
+## Steps to Reproduce / Trigger Conditions
+
+_List the steps or conditions that trigger the bug._
+
+## Environment / Configuration
+
+_List relevant environment details (OS, browser, version, flags…)._
+
+## Impact / Severity
+
+_Describe who/what is affected and how severely._
+
+## Evidence / Data
+
+_Attach logs, screenshots, or stack traces here._
+EOF
+      ;;
+  esac
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Command: create-subtask
 # ───────────────────────────────────────────────────────────────────────────
 
 cmd_create_subtask() {
   if [ "$#" -lt 2 ]; then
     echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--bypass-srs <reason>]"
+    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--type <epic|story|task|issue>] [--bypass-srs <reason>]"
     exit 1
   fi
 
-  # Separate positional args from the --bypass-srs flag. The flag can appear
-  # anywhere on the command line in either --bypass-srs <reason> or
-  # --bypass-srs=<reason> form, carries a mandatory reason, and trips rule 8
-  # off. We accept up to three positional args (parent, title, body).
+  # Separate positional args from the --bypass-srs and --type flags. Both
+  # flags can appear anywhere in either --flag <value> or --flag=<value> form.
+  # --type defaults to story (preserves current Story-shaped bodies).
+  # We accept up to three positional args (parent, title, body).
   local -a POSITIONAL=()
   local BYPASS_SRS_REASON=""
+  local TICKET_TYPE="story"
   while [ $# -gt 0 ]; do
     case "$1" in
       --bypass-srs=*)
@@ -251,6 +413,18 @@ cmd_create_subtask() {
         BYPASS_SRS_REASON=$2
         shift 2
         ;;
+      --type=*)
+        TICKET_TYPE="${1#--type=}"
+        shift
+        ;;
+      --type)
+        if [ -z "${2:-}" ] || [[ "${2}" == --* ]]; then
+          echo -e "${RED}Error: --type requires a value (epic|story|task|issue)${NC}" >&2
+          exit 1
+        fi
+        TICKET_TYPE=$2
+        shift 2
+        ;;
       *)
         POSITIONAL+=("$1")
         shift
@@ -258,9 +432,17 @@ cmd_create_subtask() {
     esac
   done
 
+  case "$TICKET_TYPE" in
+    epic|story|task|issue) ;;
+    *)
+      echo -e "${RED}Error: --type must be one of: epic, story, task, issue (got '${TICKET_TYPE}')${NC}" >&2
+      exit 1
+      ;;
+  esac
+
   if [ "${#POSITIONAL[@]}" -lt 2 ]; then
     echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--bypass-srs <reason>]"
+    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--type <epic|story|task|issue>] [--bypass-srs <reason>]"
     exit 1
   fi
 
@@ -268,6 +450,13 @@ cmd_create_subtask() {
   TITLE="${POSITIONAL[1]}"
   BODY="${POSITIONAL[2]:-}"
   FULL_TITLE="[Parent #${PARENT_NUMBER}] ${TITLE}"
+
+  # If no body was supplied, render a type-specific skeleton so the created
+  # issue lands with the right section shape instead of an empty body.
+  # Kept inline (no TS dependency) so the CLI stays pure-bash.
+  if [ -z "$BODY" ]; then
+    BODY=$(render_skeleton_body "$TICKET_TYPE" "$TITLE")
+  fi
 
   # Rule 8 (sf-workflow SKILL.md) — on SRS-enabled projects, subtask creation
   # is supposed to flow through `srs-cli.sh spawn` so tickets inherit an SRS
@@ -592,7 +781,8 @@ case "$COMMAND" in
     echo "Usage: $0 <command> [args...]"
     echo ""
     echo "Available commands:"
-    echo "  create-subtask <parent> <title> [body]   Create a sub-issue linked to parent"
+    echo "  create-subtask <parent> <title> [body] [--type <epic|story|task|issue>]"
+    echo "                                           Create a sub-issue linked to parent (default type: story)"
     echo "  status <ticket>                          Read status from the project board"
     echo "  update-status <ticket> <status-name>     Write status on the project board"
     echo "  set-complexity <ticket> <level>          bug | low | medium | complex"
