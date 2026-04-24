@@ -1,14 +1,16 @@
 # sf-srs — ticket body templates
 
-Agnostic Markdown templates for GitHub issue bodies linked to SRS pages. Each renderer consumes a typed spec (`EpicTicketBodySpec`, `StoryTicketBodySpec`) and emits a Markdown string suitable for
-posting to any ticketing backend that accepts Markdown (GitHub Projects, Jira, Linear…).
+Agnostic Markdown templates for GitHub issue bodies linked to SRS pages. Each renderer consumes a typed spec (`EpicTicketBodySpec`, `StoryTicketBodySpec`, `TaskTicketBodySpec`, `IssueTicketBodySpec`)
+and emits a Markdown string suitable for posting to any ticketing backend that accepts Markdown (GitHub Projects, Jira, Linear…).
 
 ## Runtime location
 
 The TypeScript source lives in the CLI repository:
 
-- `src/builders/srs/templates/tickets/epic.tpl.ts` — exports `renderEpicTicketBody(spec: EpicTicketBodySpec): string`
+- `src/builders/srs/templates/tickets/epic.tpl.ts` — exports `renderEpicTicketBody(spec: EpicTicketBodySpec): string` and `renderEpicTicketTitle(spec): string`
 - `src/builders/srs/templates/tickets/story.tpl.ts` — exports `renderStoryTicketBody(spec: StoryTicketBodySpec): string`
+- `src/builders/srs/templates/tickets/task.tpl.ts` — exports `renderTaskTicketBody(spec: TaskTicketBodySpec): string`
+- `src/builders/srs/templates/tickets/issue.tpl.ts` — exports `renderIssueTicketBody(spec: IssueTicketBodySpec): string`
 
 The skill bundle ships this README as reference; the subtask spawner (SUB-9) loads the compiled module from `dist/` (or the TS source via `tsx` in dogfood mode).
 
@@ -38,6 +40,31 @@ interface StoryTicketBodySpec {
   dependencies?: string[]
   constraints?: string[]
 }
+
+interface TaskTicketBodySpec {
+  title: string
+  objective?: string
+  context?: string
+  parentEpicUrl?: string
+  parentStoryUrl?: string
+  scopeIncluded?: string[]
+  scopeExcluded?: string[]
+  completionCriteria?: { id: string; text: string }[]
+  specLinks?: { label: string; url: string }[]
+  dependencies?: string[]
+  constraints?: string[]
+}
+
+interface IssueTicketBodySpec {
+  title: string
+  behaviorObserved?: string
+  expectedBehavior?: string
+  stepsToReproduce?: string[]
+  environment?: string[]
+  impact?: string
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  evidence?: string[]
+}
 ```
 
 ## Epic ticket sections
@@ -65,6 +92,29 @@ Produced by `renderStoryTicketBody(spec)` in this order:
 6. `## Dependencies` — bulleted list (placeholder when empty)
 7. `## Constraints` — bulleted list (placeholder when empty)
 8. `## Design References` — `DS-XXX` bulleted list (placeholder when empty)
+
+## Task ticket sections
+
+Produced by `renderTaskTicketBody(spec)` in this order:
+
+1. `## Objective` — `spec.objective` (fallback: `Deliver {title}.`)
+2. `## Context` — `spec.context` (placeholder when empty)
+3. `## Scope` — `### Included` + `### Excluded` bulleted lists (placeholders when empty)
+4. `## Completion Criteria` — Markdown table `[CC | Criterion]` (placeholder when empty)
+5. `## Specifications` — parent Epic/Story links + external spec links (placeholder when empty)
+6. `## Dependencies` — bulleted list (placeholder when empty)
+7. `## Constraints` — bulleted list (placeholder when empty)
+
+## Issue ticket sections
+
+Produced by `renderIssueTicketBody(spec)` in this order:
+
+1. `## Behavior observed` — `spec.behaviorObserved` (placeholder when empty)
+2. `## Expected Behavior` — `spec.expectedBehavior` (placeholder when empty)
+3. `## Steps to Reproduce / Trigger Conditions` — numbered list (placeholder when empty)
+4. `## Environment / Configuration` — bulleted list (placeholder when empty)
+5. `## Impact / Severity` — optional `**Severity:**` line + free-form impact paragraph (placeholder when both are empty)
+6. `## Evidence / Data` — bulleted list (placeholder when empty)
 
 ## Adding a new ticket body variant
 
