@@ -8,6 +8,9 @@
 > [!NOTE] This file is the canonical reference example shipped with the `sf-srs` skill. It shows what a complete Epic page looks like for the built-in SaaSFoundry auth module (`User` + polymorphic
 > `UserToken`, endpoints `/auth/signup` `/auth/signin` `/auth/signout`). Every DS / TC / NFR seeding pattern documented in `SKILL.md` is demonstrated here. The machine-readable source lives alongside
 > as `example-epic.spec.json`.
+>
+> **Intentionally scoped down.** The real scaffolded auth module exposes additional endpoints (`/auth/request-password-reset`, `/auth/reset-password`, `/auth/me`, `/auth/guest`) — this example focuses
+> on the core signup/signin/signout loop so the five-category shape stays readable. When drafting a real Epic, enumerate every endpoint your scanner surfaces.
 
 ## Traceability
 

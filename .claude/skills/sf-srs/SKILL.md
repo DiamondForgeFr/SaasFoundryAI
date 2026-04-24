@@ -569,15 +569,26 @@ Running the full `sf srs` chain end-to-end on SaaSFoundry itself surfaced 12 gap
 - **Epics land directly under rootPage (#237 — landed).** Earlier bootstrap inserted a `User flows & Specifications` category between rootPage and the Epics, which broke eval (`FR.total = 0` without
   `--root-page <category.id>`). The category layer is now removed — `bootstrapSrs` creates only the project root, Epics are its direct children, and eval works on the standard manifest with no
   override.
-- **Scan from CWD ratisse scaffolds/ + docs/ (#238).** On CLI / library projects, run `draft --from codebase --path src` — a full-repo scan drowns real findings with template code.
-- **Bootstrap does not persist `NOTION_API_TOKEN` (#239).** After `sf update --add-modules srs`, the token lives only in the interactive shell. For non-interactive / Claude bash sessions, load it from
-  `.env` with `set -a && source .env && set +a` until the fix lands.
-- **`write-srs` supports single-pass Epic + FR writes via logical IDs (#245).** Mix Epics (with `epic.id`) and FRs (with `parentEpicId`) in one spec — `write-srs` resolves the references as it goes.
-  `parentEpicPageId` remains as an escape hatch for incremental writes against pre-existing Epics.
-- **SRS completeness is UR+FR only (pre-#247).** Historically DS / TC / NFR were not generated. The five-category shape (UR+FR+DS+TC+NFR) is now seeded by #247, reusing the L1+L2+L3 matcher
-  architecture — see the "Seeding DS / TC / NFR" section above for the full mapping.
-- **Preconditions first.** Before asking the user scope questions (backend choice, Notion parent page, etc.), read `.saasfoundry.json` — the answers are almost always already there. Re-running
-  `sf update --add-modules srs` on an already-installed module silently re-bootstraps and duplicates Notion pages (#240).
+- **Scan from CWD ratisse scaffolds/ + docs/ (#238 — landed).** On CLI / library projects, run `draft --from codebase --path src` — a full-repo scan drowns real findings with template code. A
+  `.srsignore` file (glob syntax, loaded from `scanRoot`) further narrows what the walker visits.
+- **Bootstrap persists `NOTION_API_TOKEN` to `.env` (#239 — landed).** `sf update --add-modules srs` now writes the token to `.env` (gitignored) so non-interactive / Claude bash sessions pick it up
+  automatically. No more `set -a && source .env && set +a` dance in new projects.
+- **Preconditions first — no silent re-install (#240 — landed).** Before asking the user scope questions (backend choice, Notion parent page, etc.), read `.saasfoundry.json` — the answers are almost
+  always already there. `sf update --add-modules srs` on an already-installed module now refuses the re-install instead of silently re-bootstrapping and duplicating Notion pages.
+- **`write-srs` supports single-pass Epic + FR writes via logical IDs (#245 — landed).** Mix Epics (with `epic.id`) and FRs (with `parentEpicId`) in one spec — `write-srs` resolves the references as
+  it goes. `parentEpicPageId` remains as an escape hatch for incremental writes against pre-existing Epics.
+- **FR page-title separator is the em-dash (#246 — landed).** The canonical title shape is `FR-AREA-NN — Title` using U+2014 wrapped in spaces — the shared constant `FR_TITLE_SEPARATOR` lives in
+  `src/builders/srs/constants.ts` and is imported by both the page renderer and the inventory parser. Do not substitute an ASCII hyphen. See also Contributor notes below.
+- **SRS completeness is now five-category (#247 — landed).** Historically DS / TC / NFR were not generated — only UR+FR. The five-category shape (UR+FR+DS+TC+NFR) is seeded by the drafter, reusing the
+  L1+L2+L3 matcher architecture — see the "Seeding DS / TC / NFR" section above for the full mapping.
+- **`sf srs` has a first-class CLI surface (#241 — landed).** Prefer `sf srs eval` / `sf srs draft` / `sf srs write` / `sf srs spawn` / `sf srs apply-update` over calling the internal TS entrypoints;
+  the CLI layer wires logging, manifest resolution, and backend selection for you.
+- **`sf status` is the preflight (#242 — landed).** Run `sf status --claude-friendly --no-network` (auto-injected by the SessionStart hook, see #243) before proposing work — it reports manifest
+  version, installed modules, SRS backend, git cleanliness, and blocking preconditions. Do not re-derive these from scratch.
+- **SessionStart hook preloads preconditions (#243 — landed).** `.claude/settings.json` fires `sf status --claude-friendly --no-network` on session start so the manifest + precondition summary is in
+  context from turn 1. If you see stale output, re-run the command; do not ask the user to re-describe their setup.
+- **sf-srs skill triggers split install vs draft (#244 — landed).** The skill no longer conflates "bootstrap the Notion backend" with "draft SRS content" — install/configuration is owned by
+  `sf update --add-modules srs`, the skill handles drafting / eval / writes on an already-installed backend. Route users to the install CLI when the backend is not configured yet.
 
 Artefacts from the capstone (kept for reference):
 
