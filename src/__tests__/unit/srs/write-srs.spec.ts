@@ -229,4 +229,93 @@ describe('runWriteSrs', () => {
     const code = await runWriteSrs({ specPath, manifestPath })
     expect(code).toBe(2)
   })
+
+  it('resolves FR parentEpicId to the Epic created earlier in the same batch', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const epicCandidate: DraftCandidate = {
+      kind: 'epic',
+      confidence: 'medium',
+      epic: { title: 'Auth', id: 'EPIC-AUTH', parentPageId: 'root', urs: [], frs: [] },
+      source: { kind: 'notion-pages' }
+    }
+    const frCandidate: DraftCandidate = {
+      kind: 'fr',
+      confidence: 'medium',
+      fr: { parentEpicId: 'EPIC-AUTH', fr: { id: 'FR-1', title: 'Login endpoint' } },
+      source: { kind: 'notion-pages' }
+    }
+    const specPath = writeSpec([epicCandidate, frCandidate])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(0)
+    expect(adapter.createdFrs).toHaveLength(1)
+    expect(adapter.createdFrs[0].parentEpicPageId).toBe('epic-1')
+  })
+
+  it('fails with code 6 and a clear error when parentEpicId is unresolved', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    const stdout: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const frCandidate: DraftCandidate = {
+      kind: 'fr',
+      confidence: 'medium',
+      fr: { parentEpicId: 'EPIC-MISSING', fr: { id: 'FR-1', title: 'Orphan' } },
+      source: { kind: 'notion-pages' }
+    }
+    const specPath = writeSpec([frCandidate])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(6)
+    const body = JSON.parse(stdout.join(''))
+    expect(body.failed[0].error).toMatch(/parentEpicId="EPIC-MISSING"/)
+  })
+
+  it('still accepts explicit parentEpicPageId as an escape hatch', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const frCandidate: DraftCandidate = {
+      kind: 'fr',
+      confidence: 'medium',
+      fr: { parentEpicPageId: 'pre-existing-epic-xyz', fr: { id: 'FR-1', title: 'Attach to existing' } },
+      source: { kind: 'notion-pages' }
+    }
+    const specPath = writeSpec([frCandidate])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(0)
+    expect(adapter.createdFrs[0].parentEpicPageId).toBe('pre-existing-epic-xyz')
+  })
+
+  it('rejects an FR candidate with neither parentEpicPageId nor parentEpicId (exit 2)', async () => {
+    registerSrsBackend('write-stub', () => new StubAdapter())
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const frCandidate: DraftCandidate = {
+      kind: 'fr',
+      confidence: 'medium',
+      fr: { fr: { id: 'FR-1', title: 'Floating' } } as FrSpec,
+      source: { kind: 'notion-pages' }
+    }
+    const specPath = writeSpec([frCandidate])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(2)
+  })
 })

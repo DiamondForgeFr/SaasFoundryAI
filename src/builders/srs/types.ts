@@ -58,6 +58,7 @@ export interface NfrItem {
 export interface EpicSpec {
   title: string
   parentPageId: string
+  id?: string
   businessValue?: string
   scope?: string
   urs: UrItem[]
@@ -68,7 +69,8 @@ export interface EpicSpec {
 }
 
 export interface FrSpec {
-  parentEpicPageId: string
+  parentEpicPageId?: string
+  parentEpicId?: string
   fr: FrItem
   urs?: UrItem[]
   dsItems?: DsItem[]

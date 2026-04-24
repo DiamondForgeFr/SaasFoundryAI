@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { DraftCandidate, PageRef, SrsAdapter } from '../../builders/srs/types'
+import { DraftCandidate, FrSpec, PageRef, SrsAdapter } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 
 export interface WriteSrsOptions {
@@ -54,14 +54,37 @@ function assertCandidateShape(candidate: DraftCandidate, index: number): void {
   }
   if (candidate.kind === 'fr') {
     if (!candidate.fr) throw new Error(`write-srs: candidate #${index} has kind="fr" but the "fr" spec is missing.`)
+    if (!candidate.fr.parentEpicPageId && !candidate.fr.parentEpicId) {
+      throw new Error(`write-srs: candidate #${index} (fr) must set either "parentEpicPageId" (explicit Notion page ID) or "parentEpicId" (logical ID of an Epic in the same batch).`)
+    }
     return
   }
   throw new Error(`write-srs: candidate #${index} has an unknown kind="${String((candidate as { kind?: unknown }).kind)}" (expected "epic" or "fr").`)
 }
 
-async function applyCandidate(adapter: SrsAdapter, candidate: DraftCandidate): Promise<PageRef> {
-  if (candidate.kind === 'epic') return adapter.createEpicPage(candidate.epic!)
-  return adapter.createFrPage(candidate.fr!)
+function resolveFrParent(fr: FrSpec, logicalIdMap: Map<string, string>, index: number): FrSpec {
+  if (fr.parentEpicPageId && fr.parentEpicPageId.length > 0) return fr
+  const logicalId = fr.parentEpicId
+  if (!logicalId) {
+    throw new Error(`write-srs: candidate #${index} (fr) has no parent epic reference.`)
+  }
+  const resolved = logicalIdMap.get(logicalId)
+  if (!resolved) {
+    const known = Array.from(logicalIdMap.keys())
+    const hint = known.length > 0 ? `Known logical IDs in this batch: ${known.join(', ')}.` : 'No Epic in this batch declared a logical "id" — did you set "epic.id" on the parent Epic candidate?'
+    throw new Error(`write-srs: candidate #${index} (fr) references parentEpicId="${logicalId}" but no Epic with that logical id was created before it. ${hint}`)
+  }
+  return { ...fr, parentEpicPageId: resolved }
+}
+
+async function applyCandidate(adapter: SrsAdapter, candidate: DraftCandidate, logicalIdMap: Map<string, string>, index: number): Promise<PageRef> {
+  if (candidate.kind === 'epic') {
+    const page = await adapter.createEpicPage(candidate.epic!)
+    if (candidate.epic!.id) logicalIdMap.set(candidate.epic!.id, page.id)
+    return page
+  }
+  const fr = resolveFrParent(candidate.fr!, logicalIdMap, index)
+  return adapter.createFrPage(fr)
 }
 
 function clearPendingIngestion(manifestPath: string): boolean {
@@ -119,11 +142,12 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   }
 
   const report: WriteSrsReport = { created: [], failed: [], pendingIngestionCleared: false }
+  const logicalIdMap = new Map<string, string>()
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i]
     try {
-      const page = await applyCandidate(adapter, candidate)
+      const page = await applyCandidate(adapter, candidate, logicalIdMap, i)
       report.created.push({ index: i, kind: candidate.kind, page })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
