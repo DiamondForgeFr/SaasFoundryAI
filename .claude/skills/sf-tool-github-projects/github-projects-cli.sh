@@ -32,15 +32,20 @@ load_config() {
   PROJECT_URL=$(jq -r '.workflow.projectUrl // empty' .saasfoundry.json)
   WORKING_BRANCH=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
 
-  # Parse owner and project number from URL
-  # Formats supported:
+  # Parse owner + project number from PROJECT_URL in one pass. Supported shapes:
   #   https://github.com/orgs/{owner}/projects/{number}
   #   https://github.com/users/{owner}/projects/{number}
+  # On a non-matching / empty URL both fields stay empty — callers (notably
+  # load_project_schema) already guard on that and surface a clear error.
   PROJECT_OWNER=""
   PROJECT_NUMBER=""
   if [ -n "$PROJECT_URL" ]; then
-    PROJECT_OWNER=$(echo "$PROJECT_URL" | sed -nE 's#https?://github.com/(orgs|users)/([^/]+)/projects/[0-9]+.*#\2#p')
-    PROJECT_NUMBER=$(echo "$PROJECT_URL" | sed -nE 's#.*/projects/([0-9]+).*#\1#p')
+    local parsed
+    parsed=$(echo "$PROJECT_URL" | sed -nE 's#^https?://github\.com/(orgs|users)/([^/]+)/projects/([0-9]+).*$#\2/\3#p')
+    if [ -n "$parsed" ]; then
+      PROJECT_OWNER=${parsed%/*}
+      PROJECT_NUMBER=${parsed##*/}
+    fi
   fi
 }
 
