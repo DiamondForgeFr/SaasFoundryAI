@@ -32,7 +32,7 @@ type PageBlock =
 
 ## Epic page sections
 
-Produced by `renderEpicPage(spec)` in this order (DIAMONFORGE-style):
+Produced by `renderEpicPage(spec)` in this order (five-category shape):
 
 1. `Traceability` (H2) + plain-text code block (ASCII tree `UR → FR → { DS, TC, NFR }`) + explanatory paragraph
 2. `Requirement Types` (H2) + definitions table `Prefix | Type | Description | Example` with one row per UR/FR/DS/TC/NFR
@@ -47,7 +47,7 @@ carrying the group id followed by empty cells matching the table arity.
 
 ## FR page sections
 
-Produced by `renderFrPage(spec)` in this order (DIAMONFORGE-style):
+Produced by `renderFrPage(spec)` in this order (five-category shape):
 
 1. `Summary` (H2) + table `ID | Requirement | Priority | Related UR | Related DS | Related TC` — one row per FR item on the page
 2. Divider

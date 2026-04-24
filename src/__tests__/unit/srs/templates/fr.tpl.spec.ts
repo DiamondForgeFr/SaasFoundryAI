@@ -13,7 +13,7 @@ function findTableAfterHeading(blocks: PageBlock[], headingText: string): TableB
   throw new Error(`table after heading "${headingText}" not found`)
 }
 
-describe('renderFrPage — DIAMONFORGE-style structure', () => {
+describe('renderFrPage — five-category structure', () => {
   it('uses "ID — Title" as the page title', () => {
     const spec: FrSpec = { parentEpicPageId: 'epic', fr: { id: 'FR-AUTH-01-01', title: 'Sign in' } }
     const page = renderFrPage(spec)

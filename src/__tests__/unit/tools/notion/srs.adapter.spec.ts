@@ -298,7 +298,7 @@ describe('NotionSrsAdapter', () => {
       expect(call.children.length).toBeGreaterThan(0)
     })
 
-    it('produces the DIAMONFORGE-shape children: Summary table + divider + per-item detail table', async () => {
+    it('produces the five-category children: Summary table + divider + per-item detail table', async () => {
       const { client, calls } = buildMockClient()
       const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
 
@@ -319,7 +319,7 @@ describe('NotionSrsAdapter', () => {
     })
   })
 
-  describe('createEpicPage — DIAMONFORGE structural shape', () => {
+  describe('createEpicPage — five-category structural shape', () => {
     it('emits Traceability + Requirement Types + UR/FR/DS/TC/NFR sections with grouped tables', async () => {
       const richEpic: EpicSpec = {
         title: 'Auth epic',

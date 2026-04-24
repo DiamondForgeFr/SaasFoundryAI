@@ -56,6 +56,16 @@ const PAIRS = [
     name: 'sf-srs templates/tickets/README.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/tickets/README.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/tickets/README.md')
+  },
+  {
+    name: 'sf-srs templates/examples/example-epic.spec.json',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/examples/example-epic.spec.json'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/examples/example-epic.spec.json')
+  },
+  {
+    name: 'sf-srs templates/examples/example-epic.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/examples/example-epic.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/examples/example-epic.md')
   }
 ]
 

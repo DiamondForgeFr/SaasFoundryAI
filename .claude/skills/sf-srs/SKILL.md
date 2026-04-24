@@ -363,11 +363,12 @@ The skill's job is to convert raw findings into publishable draft candidates. Wo
    - One FR per `endpoint` (or per tight endpoint cluster — e.g. CRUD on the same resource collapses into one FR).
    - Reuse `ui-flow` routes as acceptance criteria on the user-facing FR.
    - Populate `dsRefs` / `tcRefs` from the items seeded in step 4 so the FR page surfaces the traceability links.
-4. **Seed the Epic-level DS / TC / NFR sections.** The DIAMONFORGE shape expects five categories per Epic (UR + FR + DS + TC + NFR). The seeding rules below turn scanner findings into initial items
-   the reviewer accepts / edits / rejects. See the dedicated subsection below.
+4. **Seed the Epic-level DS / TC / NFR sections.** Every Epic carries the SRS five-category shape (UR + FR + DS + TC + NFR) — see the canonical example at `templates/examples/example-epic.md`
+   (rendered) / `templates/examples/example-epic.spec.json` (machine-readable) for the exact layout. The seeding rules below turn scanner findings into initial items the reviewer accepts / edits /
+   rejects.
 5. **Flag gaps.** Any `endpoint` with `hasTests=false` is a test-coverage gap — surface it as a **TODO** TC item (title `"{METHOD} {PATH} — happy path"`, `expectedResult: "to write"`), not silently.
 
-### Seeding DS / TC / NFR (DIAMONFORGE completeness)
+### Seeding DS / TC / NFR (five-category completeness)
 
 These three sections are **interpretive** — scanners surface the raw material, the agent synthesises the items. Reuse the L1+L2+L3 pattern from the eval (`docs/srs/scanner-findings.md`): deterministic
 findings feed AI prompts, the agent always runs, the user always validates before write.
@@ -438,7 +439,7 @@ Always emit NFRs with `priority: 'P3'` and `target: '<proposed — needs human v
 Before firing the review prompt on an Epic cluster, emit a one-shot **coverage table** so the reviewer sees what got seeded per category and where it came from:
 
 ```
-DIAMONFORGE coverage for Epic: <title>
+SRS coverage for Epic: <title>
 ┌──────┬───────────────┬──────────────────────────────────────────────┐
 │ Cat  │ Items proposed│ Source                                       │
 ├──────┼───────────────┼──────────────────────────────────────────────┤
@@ -573,8 +574,8 @@ Running the full `sf srs` chain end-to-end on SaaSFoundry itself surfaced 12 gap
   `.env` with `set -a && source .env && set +a` until the fix lands.
 - **`write-srs` supports single-pass Epic + FR writes via logical IDs (#245).** Mix Epics (with `epic.id`) and FRs (with `parentEpicId`) in one spec — `write-srs` resolves the references as it goes.
   `parentEpicPageId` remains as an escape hatch for incremental writes against pre-existing Epics.
-- **SRS completeness is UR+FR only (#247).** DS / TC / NFR are not generated yet. The DIAMONFORGE reference shape expects all five. AI-assisted generation planned under #247, reusing the L1+L2+L3
-  matcher architecture.
+- **SRS completeness is UR+FR only (pre-#247).** Historically DS / TC / NFR were not generated. The five-category shape (UR+FR+DS+TC+NFR) is now seeded by #247, reusing the L1+L2+L3 matcher
+  architecture — see the "Seeding DS / TC / NFR" section above for the full mapping.
 - **Preconditions first.** Before asking the user scope questions (backend choice, Notion parent page, etc.), read `.saasfoundry.json` — the answers are almost always already there. Re-running
   `sf update --add-modules srs` on an already-installed module silently re-bootstraps and duplicates Notion pages (#240).
 

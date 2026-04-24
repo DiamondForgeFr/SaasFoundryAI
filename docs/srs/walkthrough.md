@@ -261,9 +261,9 @@ Claude then drives a review loop **one domain at a time**. The scanner output gr
 Accept this Epic structure, or tighten the FR split first? [accept / edit / reject / skip-area]
 ```
 
-Before asking for accept/edit, Claude emits a **DIAMONFORGE coverage table** so the reviewer sees what got seeded per section and where it came from — UR/FR come from endpoints and docs, DS comes from
-entities and API contracts, TC comes from `test.cases[]` (plus TODO items for endpoints without tests), NFR is proposed from stack signals and always marked `proposed — needs human validation`. See
-[Scanner findings reference → DIAMONFORGE section seeding](/srs/scanner-findings#diamonforge-section-seeding-247) for the full mapping.
+Before asking for accept/edit, Claude emits a **five-category coverage table** so the reviewer sees what got seeded per section and where it came from — UR/FR come from endpoints and docs, DS comes
+from entities and API contracts, TC comes from `test.cases[]` (plus TODO items for endpoints without tests), NFR is proposed from stack signals and always marked `proposed — needs human validation`.
+See [Scanner findings reference → Five-category section seeding](/srs/scanner-findings#five-category-section-seeding-247) for the full mapping.
 
 On **accept**, Claude serialises the cluster as `DraftCandidate[]` and calls `srs-cli.sh write --spec <tmp.json>` exactly like the green-field flow in section 4. You can drive multiple Epics in a row,
 one prompt per cluster — the reviewer always gets a chance to course-correct before any Notion write happens.

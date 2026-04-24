@@ -197,9 +197,10 @@ Example :
 
 `excerpt` is capped to keep payloads small and to prime the skill with a summary, not the full document. Load the file directly when you need more than the excerpt.
 
-## DIAMONFORGE section seeding (#247)
+## Five-category section seeding (#247)
 
-Scanner findings are the raw material for the five DIAMONFORGE sections. The mapping below tells the skill which finding kind feeds which section when the drafter builds an Epic cluster:
+Scanner findings are the raw material for the five SRS categories (UR + FR + DS + TC + NFR). The mapping below tells the skill which finding kind feeds which section when the drafter builds an Epic
+cluster:
 
 | Section | Primary source                                                                                         | Seeding rule (summary)                                                                                                                                      |
 | ------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -209,8 +210,9 @@ Scanner findings are the raw material for the five DIAMONFORGE sections. The map
 | **TC**  | `test.cases[]`, plus **TODO** items for `endpoint.hasTests=false`                                      | One TC per `test.cases[i].title`; untested endpoints emit a TODO TC (`expectedResult: "to write"`) so the gap is auditable.                                 |
 | **NFR** | stack signals (auth / i18n / prisma / docker-compose / playwright / swagger) + standard SaaS catalogue | Always **proposed** with `priority: 'P3'` and `target: '<proposed — needs human validation>'`. Reviewer lifts priority and refines target before accepting. |
 
-The full seeding rules (including the catalogue of stack signals → NFRs and the pre-accept coverage table) live in `.claude/skills/sf-srs/SKILL.md` → "Seeding DS / TC / NFR (DIAMONFORGE
-completeness)". Keep the two documents consistent — the skill is the source of truth for the agent's behaviour, this file is the source of truth for the finding shapes it consumes.
+The full seeding rules (including the catalogue of stack signals → NFRs and the pre-accept coverage table) live in `.claude/skills/sf-srs/SKILL.md` → "Seeding DS / TC / NFR (five-category
+completeness)". Keep the two documents consistent — the skill is the source of truth for the agent's behaviour, this file is the source of truth for the finding shapes it consumes. The canonical
+example `example-epic.md` shipped with the skill demonstrates all five categories on the built-in auth module.
 
 ## Stability guarantees
 

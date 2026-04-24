@@ -85,7 +85,7 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
     expect(raw.title).toBe(epicSpec.title)
     expect(raw.blocks.length).toBeGreaterThan(0)
 
-    // Structural assertions on the rendered DIAMONFORGE shape (table count, TC + NFR sections, headings)
+    // Structural assertions on the rendered five-category shape (table count, TC + NFR sections, headings)
     const tables = raw.blocks.filter((b) => b.kind === 'table')
     // 6 tables: Requirement Types + UR + FR + DS + TC + NFR
     expect(tables).toHaveLength(6)
