@@ -162,6 +162,41 @@ export interface StoryTicketBodySpec {
   constraints?: string[]
 }
 
+export interface CompletionCriterion {
+  id: string
+  text: string
+}
+
+export interface SpecLink {
+  label: string
+  url: string
+}
+
+export interface TaskTicketBodySpec {
+  title: string
+  objective?: string
+  context?: string
+  parentEpicUrl?: string
+  parentStoryUrl?: string
+  scopeIncluded?: string[]
+  scopeExcluded?: string[]
+  completionCriteria?: CompletionCriterion[]
+  specLinks?: SpecLink[]
+  dependencies?: string[]
+  constraints?: string[]
+}
+
+export interface IssueTicketBodySpec {
+  title: string
+  behaviorObserved?: string
+  expectedBehavior?: string
+  stepsToReproduce?: string[]
+  environment?: string[]
+  impact?: string
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  evidence?: string[]
+}
+
 export interface ResolvedParent {
   id: string
   name: string
