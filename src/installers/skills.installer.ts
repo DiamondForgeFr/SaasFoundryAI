@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'fs/promises'
 
+import { installClaudeDocs } from './claude-docs.installer'
 import { installCoreSkills } from './core-skills.installer'
 import { installOptionalSkills } from './optional-skills.installer'
 import { fileExists } from '../utils'
@@ -38,6 +39,7 @@ export async function installSkills({ isMonorepo, apiPath, webPath, projectName,
   if (isMonorepo) {
     // Monorepo: Install skills at root (centralized)
     await installCoreSkills({ targetPath: '.' })
+    await installClaudeDocs({ targetPath: '.' })
 
     if (advancedSkills.length > 0) {
       await installOptionalSkills({
@@ -57,6 +59,8 @@ export async function installSkills({ isMonorepo, apiPath, webPath, projectName,
     // Multirepo: Install skills in each app
     await installCoreSkills({ targetPath: apiPath })
     await installCoreSkills({ targetPath: webPath })
+    await installClaudeDocs({ targetPath: apiPath })
+    await installClaudeDocs({ targetPath: webPath })
 
     if (advancedSkills.length > 0) {
       await installOptionalSkills({

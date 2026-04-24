@@ -126,6 +126,26 @@ const PAIRS = [
     name: 'sf-srs templates/tickets/examples/issue.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/templates/tickets/examples/issue.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/templates/tickets/examples/issue.md')
+  },
+  {
+    name: 'shared docs manifest-schema.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/docs/manifest-schema.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/docs/manifest-schema.md')
+  },
+  {
+    name: 'shared docs github-labels.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/docs/github-labels.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/docs/github-labels.md')
+  },
+  {
+    name: 'shared docs exit-codes.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/docs/exit-codes.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/docs/exit-codes.md')
+  },
+  {
+    name: 'shared docs architecture-skills.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/docs/architecture-skills.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/docs/architecture-skills.md')
   }
 ]
 

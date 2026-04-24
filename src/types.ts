@@ -227,3 +227,4 @@ export interface SaaSFoundryManifest {
 export const blueprintsPath = resolve(__dirname, '../scaffolds/blueprints')
 export const overlaysPath = resolve(__dirname, '../scaffolds/overlays')
 export const skillsTemplatesPath = resolve(__dirname, '../scaffolds/skills-templates')
+export const scaffoldsDocsPath = resolve(__dirname, '../scaffolds/docs')

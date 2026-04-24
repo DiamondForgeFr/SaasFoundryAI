@@ -49,6 +49,19 @@ describe('installSkills (integration)', () => {
       await expectFileExists(join(webPath, '.claude/skills'))
     })
 
+    it('should install shared claude docs in both API and Web apps', async () => {
+      await installSkills({
+        isMonorepo: false,
+        apiPath,
+        webPath,
+        projectName: 'test-project',
+        version: '1.0.0-beta'
+      })
+
+      await expectFileExists(join(apiPath, '.claude/docs/manifest-schema.md'))
+      await expectFileExists(join(webPath, '.claude/docs/manifest-schema.md'))
+    })
+
     it('should install optional skills in both API and Web apps when selected', async () => {
       await installSkills({
         isMonorepo: false,
@@ -122,6 +135,21 @@ describe('installSkills (integration)', () => {
 
       // Root should have skills
       await expectFileExists(join(tempDir, '.claude/skills'))
+    })
+
+    it('should install shared claude docs at root for monorepo', async () => {
+      await installSkills({
+        isMonorepo: true,
+        apiPath: 'apps/api',
+        webPath: 'apps/web',
+        projectName: 'test-project',
+        version: '1.0.0-beta'
+      })
+
+      await expectFileExists(join(tempDir, '.claude/docs/manifest-schema.md'))
+      await expectFileExists(join(tempDir, '.claude/docs/github-labels.md'))
+      await expectFileExists(join(tempDir, '.claude/docs/exit-codes.md'))
+      await expectFileExists(join(tempDir, '.claude/docs/architecture-skills.md'))
     })
 
     it('should install optional skills at root for monorepo', async () => {
