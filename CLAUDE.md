@@ -2,6 +2,16 @@
 
 CLI tool that scaffolds production-ready SaaS projects (NestJS + React + PostgreSQL + Docker).
 
+## 🧭 Preconditions first (read before asking questions)
+
+Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
+
+1. Read `.saasfoundry.json` — this is the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
+2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. On a configured session this is also auto-injected via the `SessionStart` hook in `.claude/settings.json`.
+3. Only surface scope questions for things that are **not** resolvable from the manifest (e.g. genuine product decisions). If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead of asking scope questions.
+
+This rule exists because AI sessions historically asked users to re-pick the SRS backend (notion/atlassian/local-markdown) and parent page even though both were already in the manifest — those answers must come from `.saasfoundry.json`, not from a fresh dialogue.
+
 ## 🚨 Critical Rules (non-negotiable)
 
 **We are dogfooding our own system.** Users of SaaSFoundry will rely on their AI agents to follow the workflows we generate. If we don't follow ours rigorously, we can't guarantee the system works.

@@ -2,6 +2,14 @@
 
 Production-ready NestJS API generated with **SaaSFoundry** - An AI-First development platform.
 
+## 🧭 Preconditions first (read before asking questions)
+
+Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
+
+1. Read `.saasfoundry.json` — the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
+2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this summary at session start.
+3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead of opening a scope dialogue.
+
 ## Tech Stack
 
 - **Backend**: NestJS 11, Prisma 7 (driver adapters + PrismaPg), PostgreSQL 16
