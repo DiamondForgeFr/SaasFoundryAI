@@ -5,6 +5,7 @@ import { feedbackCommand } from './commands/feedback'
 import { modulesCommand } from './commands/modules'
 import { newCommand } from './commands/new'
 import { skillCommand, runFullUninstall } from './commands/skill'
+import { srsCommand } from './commands/srs'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
 import { statusCommand } from './commands/status'
@@ -135,6 +136,13 @@ program
   .argument('[args...]', 'Additional arguments for the subcommand')
   .action((subcommand, args) => workflowCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
+  .command('srs')
+  .description('SRS workspace operations (validate, browse, draft, write, spawn, apply-update, eval)')
+  .argument('[subcommand]', 'Subcommand to execute (validate, browse, draft, write, spawn, apply-update, eval)')
+  .argument('[args...]', 'Additional arguments forwarded to the subcommand (see `sf srs help`)')
+  .allowUnknownOption()
+  .action((subcommand, args) => srsCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
+program
   .command('skill')
   .description('Manage the tool-saasfoundry Claude Code skill (install, update, uninstall)')
   .argument('[subcommand]', 'Subcommand to execute (install)')
@@ -162,4 +170,4 @@ program
   })
 program.parse()
 
-export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, feedbackCommand, statusCommand }
+export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, srsCommand, feedbackCommand, statusCommand }

@@ -152,7 +152,7 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   return 0
 }
 
-function parseArgs(argv: string[]): { specPath: string; manifestPath: string; clearPendingIngestion: boolean } {
+export function parseArgs(argv: string[]): { specPath: string; manifestPath: string; clearPendingIngestion: boolean } {
   let specPath = ''
   let manifestPath = '.saasfoundry.json'
   let clearPendingIngestion = true

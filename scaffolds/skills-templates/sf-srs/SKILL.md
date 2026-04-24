@@ -65,7 +65,14 @@ Dispatch resolution happens inside `src/srs/` (SUB-14.2) — never directly in t
 
 ## Commands
 
-All via `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]`.
+Two equivalent entrypoints expose the same actions:
+
+- **CLI (preferred, non-interactive)**: `sf srs <action> [args]` — registered in Commander (see `src/commands/srs.ts`), forwards directly to the TS entrypoints under `src/srs/bin/*.ts`. Use this in
+  CI, scripts, and from AI agents that can't rely on a skill being installed.
+- **Skill shell wrapper**: `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]` — same actions, kept in parallel so the skill stays self-contained and works even if `sf` isn't on the `PATH` of
+  the Claude Code session.
+
+Run `sf srs help` or `srs-cli.sh help` to see the full action list.
 
 | Action         | Purpose                                                               | Populated by |
 | -------------- | --------------------------------------------------------------------- | ------------ |
