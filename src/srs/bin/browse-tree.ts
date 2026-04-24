@@ -57,7 +57,7 @@ export async function runBrowseTree(options: BrowseTreeOptions): Promise<number>
   }
 }
 
-function parseArgs(argv: string[]): { parentId: string; manifestPath: string } {
+export function parseArgs(argv: string[]): { parentId: string; manifestPath: string } {
   let parentId = ''
   let manifestPath = '.saasfoundry.json'
   for (let i = 0; i < argv.length; i++) {

@@ -85,7 +85,7 @@ export async function runDraftFromCodebase(options: DraftFromCodebaseOptions): P
   }
 }
 
-function parseArgs(argv: string[]): { scanPath: string; manifestPath: string; unknown?: string } {
+export function parseArgs(argv: string[]): { scanPath: string; manifestPath: string; unknown?: string } {
   let scanPath = ''
   let manifestPath = '.saasfoundry.json'
   for (let i = 0; i < argv.length; i++) {

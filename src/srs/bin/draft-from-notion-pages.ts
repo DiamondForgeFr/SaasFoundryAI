@@ -63,7 +63,7 @@ export async function runDraftFromNotionPages(options: DraftFromNotionPagesOptio
   }
 }
 
-function parseArgs(argv: string[]): { pageIds: string[]; manifestPath: string } {
+export function parseArgs(argv: string[]): { pageIds: string[]; manifestPath: string } {
   let pageIds: string[] = []
   let manifestPath = '.saasfoundry.json'
   for (let i = 0; i < argv.length; i++) {
