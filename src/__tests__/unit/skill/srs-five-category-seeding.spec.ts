@@ -2,15 +2,16 @@ import { readFileSync } from 'fs'
 import path from 'path'
 
 // Regression guard for #247: the sf-srs SKILL.md must teach the AI agent how to
-// seed DS / TC / NFR items from scanner findings (DIAMONFORGE completeness).
-// Without this guidance the drafter silently produces UR+FR only and the
-// generated SRS can't pass a real audit. The byte-equality drift guard
-// (tool-skill-drift.spec.ts) ensures the scaffolded copy stays in sync — this
-// spec pins the *content* so a refactor can't accidentally strip the sections.
+// seed DS / TC / NFR items from scanner findings (five-category completeness:
+// UR + FR + DS + TC + NFR). Without this guidance the drafter silently produces
+// UR+FR only and the generated SRS can't pass a real audit. The byte-equality
+// drift guard (tool-skill-drift.spec.ts) ensures the scaffolded copy stays in
+// sync — this spec pins the *content* so a refactor can't accidentally strip
+// the sections.
 const SKILL_PATHS = [path.resolve(__dirname, '../../../../.claude/skills/sf-srs/SKILL.md'), path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/SKILL.md')]
 
 const REQUIRED_HEADINGS = [
-  /### Seeding DS \/ TC \/ NFR \(DIAMONFORGE completeness\)/,
+  /### Seeding DS \/ TC \/ NFR \(five-category completeness\)/,
   /#### DS items \(Design Specifications\)/,
   /#### TC items \(Test Cases\)/,
   /#### NFR items \(Non-Functional Requirements\)/,
@@ -31,7 +32,7 @@ const REQUIRED_MAPPINGS = [
   /proposed — needs human validation/
 ]
 
-describe('sf-srs DIAMONFORGE seeding guidance (#247)', () => {
+describe('sf-srs five-category seeding guidance (#247)', () => {
   it.each(SKILL_PATHS)('%s declares all DS/TC/NFR seeding headings', (file) => {
     const content = readFileSync(file, 'utf8')
     for (const pattern of REQUIRED_HEADINGS) {
@@ -46,9 +47,9 @@ describe('sf-srs DIAMONFORGE seeding guidance (#247)', () => {
     }
   })
 
-  it.each(SKILL_PATHS)('%s tells the agent to emit a DIAMONFORGE coverage table', (file) => {
+  it.each(SKILL_PATHS)('%s tells the agent to emit a five-category coverage table', (file) => {
     const content = readFileSync(file, 'utf8')
-    expect(content).toMatch(/DIAMONFORGE coverage for Epic/)
+    expect(content).toMatch(/SRS coverage for Epic/)
     expect(content).toMatch(/Items proposed/)
   })
 })

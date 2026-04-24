@@ -30,7 +30,7 @@ class StubAdapter implements SrsAdapter {
 }
 
 describe('parseFrPageTitle', () => {
-  it('parses the DIAMONFORGE shape "FR-AREA-NN — Title"', () => {
+  it('parses the canonical FR page-title shape "FR-AREA-NN — Title"', () => {
     expect(parseFrPageTitle('FR-AUTH-01 — Sign in')).toEqual({ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in' })
   })
 

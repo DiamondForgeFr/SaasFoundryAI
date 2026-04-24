@@ -27,7 +27,7 @@ function findParagraphAfterHeading(blocks: PageBlock[], headingText: string): st
   throw new Error(`paragraph after heading "${headingText}" not found`)
 }
 
-describe('renderEpicPage — DIAMONFORGE-style structure', () => {
+describe('renderEpicPage — five-category structure', () => {
   it('emits the spec-sections scaffold in order', () => {
     const spec: EpicSpec = {
       title: 'Authentication',
