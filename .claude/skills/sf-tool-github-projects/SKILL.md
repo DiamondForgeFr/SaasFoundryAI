@@ -19,19 +19,9 @@ Never encode status in a label. Never encode complexity on the board. Keep them 
 
 ## Configuration
 
-This skill reads everything from `.saasfoundry.json`:
+Reads `workflow.projectUrl` and `workflow.workingBranch` from `.saasfoundry.json` — see [manifest schema](../../docs/manifest-schema.md).
 
-```bash
-jq -r '.workflow.projectUrl' .saasfoundry.json
-jq -r '.workflow.workingBranch' .saasfoundry.json
-```
-
-Supported `projectUrl` formats:
-
-- `https://github.com/orgs/<owner>/projects/<number>`
-- `https://github.com/users/<owner>/projects/<number>`
-
-Requires `gh auth login` with `project` + `repo` scopes.
+Supported `projectUrl` formats: `https://github.com/orgs/<owner>/projects/<N>` or `https://github.com/users/<owner>/projects/<N>`. Requires `gh auth login` with `project` + `repo` scopes.
 
 ## Commands
 
