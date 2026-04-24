@@ -17,8 +17,11 @@ const HARD_EXCLUDE_PATH_FRAGMENTS = ['.vitepress/cache']
 
 const SCANNERS: CodebaseScanner[] = [nestjsScanner, reactScanner, prismaScanner, testsScanner, docsScanner]
 
-function loadGitignore(scanRoot: string): Ignore {
-  const ig = ignore()
+export interface ScanExclusions {
+  exclude?: string[]
+}
+
+function addGitignore(ig: Ignore, scanRoot: string): void {
   const gitignorePath = join(scanRoot, '.gitignore')
   if (existsSync(gitignorePath)) {
     try {
@@ -26,6 +29,26 @@ function loadGitignore(scanRoot: string): Ignore {
     } catch {
       // unreadable — fall through with hard excludes only
     }
+  }
+}
+
+function addSrsIgnore(ig: Ignore, scanRoot: string): void {
+  const srsignorePath = join(scanRoot, '.srsignore')
+  if (existsSync(srsignorePath)) {
+    try {
+      ig.add(readFileSync(srsignorePath, 'utf8'))
+    } catch {
+      // unreadable — fall through
+    }
+  }
+}
+
+function buildIgnore(scanRoot: string, exclusions?: ScanExclusions): Ignore {
+  const ig = ignore()
+  addGitignore(ig, scanRoot)
+  addSrsIgnore(ig, scanRoot)
+  if (exclusions?.exclude && exclusions.exclude.length > 0) {
+    ig.add(exclusions.exclude)
   }
   return ig
 }
@@ -36,8 +59,8 @@ function isHardExcluded(relPath: string): boolean {
   return HARD_EXCLUDE_PATH_FRAGMENTS.some((fragment) => relPath.includes(fragment))
 }
 
-export function collectFiles(scanRoot: string): string[] {
-  const ig = loadGitignore(scanRoot)
+export function collectFiles(scanRoot: string, exclusions?: ScanExclusions): string[] {
+  const ig = buildIgnore(scanRoot, exclusions)
   const results: string[] = []
 
   const walk = (absDir: string): void => {
@@ -74,8 +97,8 @@ export function collectFiles(scanRoot: string): string[] {
   return results.sort()
 }
 
-export async function collectFindings(scanRoot: string, structure?: 'monorepo' | 'multirepo'): Promise<ScannerFinding[]> {
-  const files = collectFiles(scanRoot)
+export async function collectFindings(scanRoot: string, structure?: 'monorepo' | 'multirepo', exclusions?: ScanExclusions): Promise<ScannerFinding[]> {
+  const files = collectFiles(scanRoot, exclusions)
   const roots = resolveScannerRoots(scanRoot, structure)
   const context: CodebaseScannerContext = {
     scanRoot,

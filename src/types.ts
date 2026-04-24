@@ -188,11 +188,16 @@ export interface PendingIngestion {
   createdAt: string
 }
 
+export interface SrsScanConfig {
+  exclude?: string[]
+}
+
 export interface SrsToolConfig {
   enabled: boolean
   backend: 'notion'
   rootPage?: SrsPageRef
   pendingIngestion?: PendingIngestion
+  scan?: SrsScanConfig
 }
 
 export interface ToolsConfig {
