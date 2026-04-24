@@ -1,62 +1,40 @@
+---
+status: Done
+complexity_profiles: [bug, low, medium, complex]
+entry_conditions:
+  - PR merged by the developer
+  - Code is on the target branch
+mandatory_actions:
+  - Move ticket to `Done`
+  - Local branch cleanup — checkout working branch, rebase-pull, delete feature branch
+  - Rebase any other in-progress branches on the fresh working branch
+exit_conditions:
+  - Ticket marked `Done`
+  - Local feature branch deleted
+  - Other in-progress branches rebased
+next_status: N/A (end of cycle)
+---
+
 # STATUS: Done
 
-**ROLE**: Finalization and cleanup after merge
+Finalization and cleanup after merge.
 
-> **ℹ️ Ticket type matters** (see `SKILL.md` → "Ticket Hierarchy"):
->
-> - **Epic** (`type: epic`): `Done` is **derived** — the Epic only moves to `Done` when **every** child Story/Task/Issue has been merged and closed. No branch to delete, no cleanup to run. Just close
->   the Epic issue once the last child reaches `Done`.
-> - **Story / Task / Issue** (`type: story | task | issue`): full cleanup flow below — after the PR is merged by the developer.
+## Ticket type
 
-## When to Enter This Status
+- **Epic** — `Done` is **derived** only when every child Story/Task/Issue is merged and closed. No branch to delete. Close the Epic issue once the last child reaches `Done`.
+- **Story / Task / Issue** — full cleanup flow below.
 
-- PR has been merged by the developer
-- Code is now in the main branch
+## Action checklist
 
-## Mandatory Actions
+- [ ] **Move ticket to Done** via `workflow-cli.sh update-status <ticket> Done`
+- [ ] **Local cleanup** (working branch from `jq -r '.workflow.workingBranch' .saasfoundry.json`):
+  - `git checkout <workingBranch>`
+  - `git pull origin <workingBranch> --rebase`
+  - `git branch -d <feature-branch>`
+- [ ] **Rebase other in-progress branches** on the refreshed working branch:
+  - per branch: `git checkout <other> && git rebase <workingBranch>` → resolve conflicts → `git push --force-with-lease`
 
-### 1. MOVE TICKET TO "DONE"
+## Errors to avoid
 
-- Update status in the project management tool
-
-### 2. LOCAL BRANCH CLEANUP
-
-**Read working branch from config:**
-
-```bash
-WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
-```
-
-**Cleanup:**
-
-1. `git checkout ${WORKING_BRANCH}`
-2. `git pull origin ${WORKING_BRANCH} --rebase`
-3. `git branch -d {feature-branch}`
-
-### 3. IF OTHER BRANCHES ARE IN PROGRESS
-
-**Rebase other branches with updated working branch:**
-
-```bash
-WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
-
-# For each other branch:
-git checkout {other-branch}
-git rebase ${WORKING_BRANCH}
-# Resolve conflicts if necessary
-git push --force-with-lease
-```
-
-## Exit Conditions
-
-- Ticket marked Done
-- Local branch deleted
-- Other branches rebased
-
-## Next Status
-
-N/A (end of cycle)
-
-## Errors to Avoid
-
-❌ NEVER move to Done before actual merge ❌ NEVER forget to rebase other in-progress branches
+- Moving to Done before the actual merge
+- Forgetting to rebase other in-progress branches

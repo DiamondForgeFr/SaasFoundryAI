@@ -522,14 +522,28 @@ cmd_create_subtask() {
 
 # ───────────────────────────────────────────────────────────────────────────
 # Command: status — read status from Projects V2 board
+# Flags:
+#   --json   Emit machine-parseable JSON: {"ticket","title","state","status","labels"}
+#            Used by workflow-cli.sh get_current_status so parsing stays deterministic
+#            (no more grep|awk on human-oriented output).
 # ───────────────────────────────────────────────────────────────────────────
 
 cmd_status() {
-  if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 status <ticket-number>" >&2
+  local ticket=""
+  local json_mode=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --json) json_mode=1; shift ;;
+      *)
+        if [ -z "$ticket" ]; then ticket=$1; fi
+        shift
+        ;;
+    esac
+  done
+  if [ -z "$ticket" ]; then
+    echo "Usage: $0 status <ticket-number> [--json]" >&2
     exit 1
   fi
-  local ticket=$1
   load_config
   if [ -z "$PROJECT_OWNER" ] || [ -z "$PROJECT_NUMBER" ]; then
     echo -e "${RED}Error: workflow.projectUrl is missing or malformed in .saasfoundry.json${NC}" >&2
@@ -544,8 +558,27 @@ cmd_status() {
   status=$(echo "$info" | jq -r '.status // ""')
 
   if [ -z "$title" ]; then
+    if [ "$json_mode" = 1 ]; then
+      jq -n --argjson t "$ticket" '{ticket:$t, title:"", state:"", status:"", labels:[], error:"not-found"}'
+      exit 1
+    fi
     echo -e "${RED}Error: Could not find issue #${ticket}${NC}" >&2
     exit 1
+  fi
+
+  if [ "$json_mode" = 1 ]; then
+    # Labels fetched via gh (separate call — cheap) so the JSON payload carries
+    # everything callers need without a second round-trip.
+    local labels_json
+    labels_json=$(gh issue view "$ticket" --json labels --jq '[.labels[].name]' 2>/dev/null || echo '[]')
+    jq -n \
+      --argjson t "$ticket" \
+      --arg title "$title" \
+      --arg state "$state" \
+      --arg status "$status" \
+      --argjson labels "${labels_json:-[]}" \
+      '{ticket:$t, title:$title, state:$state, status:$status, labels:$labels}'
+    return 0
   fi
 
   echo -e "${BLUE}Issue #${ticket}: ${title}${NC}"

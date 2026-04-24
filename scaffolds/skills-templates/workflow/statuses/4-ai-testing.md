@@ -1,111 +1,49 @@
+---
+status: AI Testing
+complexity_profiles: [bug, low, medium, complex]
+entry_conditions:
+  - All subtasks completed in In Progress
+  - All subtasks CLOSED on GitHub (issues closed, not just merged)
+  - Code pushed and ready for testing
+mandatory_actions:
+  - Gate check — zero open children (`gh issue list --state open --search "parent #<N>"` must be `[]`)
+  - Generate test plan and post as ticket comment
+  - Move ticket to `AI Testing`
+  - Run automated tests (build, lint, type-check, unit tests)
+  - Execute the test plan manually (nominal + edge cases)
+  - Adversarial review — only for complexity `complex` (`examine.sh`)
+  - If problems found — fix, commit, push, restart from automated tests
+  - Post test report summary as comment when all green
+exit_conditions:
+  - All automated tests pass
+  - Test plan fully executed and validated
+  - Adversarial review complete (complex tickets only)
+  - All Critical/High findings fixed
+  - Code pushed
+next_status: Human Testing
+---
+
 # STATUS: AI Testing
 
-**ROLE**: First automated validation + test plan execution
+First automated validation + test plan execution.
 
-## When to Enter This Status
+## Action checklist
 
-- After completing all subtasks in In Progress
-- **All subtasks are CLOSED on GitHub** (not just merged — the issues themselves must be closed)
-- Code is pushed and ready to be tested
+- [ ] **Gate:** `gh issue list --state open --search "parent #<N>"` returns `[]`. If not — back to In Progress, close children, then return.
+- [ ] **Test plan** — post a comment covering: setup, nominal + edge scenarios, expected results per scenario, non-regression coverage
+- [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`
+- [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`
+- [ ] **Execute test plan** step by step — verify each scenario, document any failure
+- [ ] **On failure** — document, fix, commit, push, restart from automated tests
+- [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel review agents (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
+      automated tests.
+- [ ] **On green** — post test report summary (include examine findings if complex), then transition to Human Testing
 
-## Mandatory Actions (in this order)
+## Errors to avoid
 
-### 0. GATE CHECK — ZERO OPEN CHILDREN
-
-Before doing anything else, verify the parent has no open children:
-
-```bash
-gh issue list --state open --search "parent #{N}"
-```
-
-Must return `[]`. If any children are still open, **go back to In Progress**, close them (`workflow-cli.sh update-status <sub> Done`), and only then proceed to step 1. This gate exists because
-merged-code-with-open-issues creates an inconsistent board state.
-
-### 1. GENERATE THE TEST PLAN
-
-- Analyze all changes (git diff, commits)
-- Create a complete test plan with:
-  - Setup instructions
-  - Scenarios to test (all nominal cases + edge cases)
-  - Expected results for each scenario
-  - Non-regression tests
-- Post the test plan as ticket comment
-
-### 2. MOVE TICKET TO "AI TESTING"
-
-- Update status in the project management tool
-
-### 3. RUN AUTOMATED TESTS
-
-- Build: `npm run build`
-- Lint: `npm run lint`
-- Type-check: `npm run type-check` (if TypeScript)
-- Unit tests: `npm run test:unit`
-
-### 4. EXECUTE TEST PLAN MANUALLY
-
-- Follow EACH step of the test plan
-- Verify implemented functionalities
-- Test edge cases
-- Validate expected results
-- Document any problems found
-
-### 5. IF PROBLEMS ARE FOUND:
-
-- a. Document problems in ticket comment
-- b. Fix the problems
-- c. Commit corrections
-- d. Push
-- e. RESTART from step 3 (automated tests)
-
-### 6. ADVERSARIAL REVIEW (if complexity = complex)
-
-**Only for 🔴 complex tickets:**
-
-```bash
-.claude/skills/sf-workflow/scripts/examine.sh {ticket-number}
-```
-
-**Run adversarial code review:**
-
-- Launch 3 parallel review agents
-- Security analysis (OWASP top 10)
-- Logic flaws detection
-- Performance issues identification
-- Classify findings by severity
-- Fix Critical/High findings immediately
-
-**If findings found:**
-
-- Fix Real issues
-- Commit corrections
-- Push
-- RESTART from step 3 (automated tests)
-- Re-run examine if needed
-
-**Follow the guidance from examine.sh.**
-
-### 7. IF ALL TESTS PASS (and examine complete if complex):
-
-- a. Create test report summary as comment
-- b. If examine was run: include findings summary
-- c. Commit and push final corrections (if any)
-- d. Automatically move to Human Testing
-
-## Exit Conditions
-
-- All automated tests pass ✅
-- Entire test plan executed and validated ✅
-- Adversarial review complete (if complex) ✅
-- All Critical/High findings fixed ✅
-- No problems detected
-- Code is pushed
-
-## Next Status
-
-**Human Testing**
-
-## Errors to Avoid
-
-❌ NEVER move to Human Testing with failing tests ❌ NEVER skip test plan steps ❌ NEVER say "it should work" - RUN the tests ❌ If a test fails, do NOT move to Human Testing, FIX it first ❌ NEVER
-skip examine phase for complex tickets ❌ NEVER ignore Critical/High security findings ❌ NEVER enter AI Testing while subtasks are still OPEN on GitHub — close them first (step 0 gate)
+- Moving to Human Testing with failing tests
+- Skipping test plan steps
+- Saying "it should work" — RUN the tests
+- Skipping examine for complex tickets
+- Ignoring Critical/High security findings
+- Entering AI Testing while subtasks are still OPEN on GitHub (gate rule)
