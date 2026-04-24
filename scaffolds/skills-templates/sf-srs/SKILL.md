@@ -330,145 +330,17 @@ Output example:
 }
 ```
 
-Five scanner kinds fire today (see `docs/srs/scanner-findings.md` for the full JSON shape) :
+Scanner kinds, clustering steps, DS/TC/NFR seeding rules, coverage-table template, and review-loop prompt shape live as structured data in [`data/clustering-rules.json`](data/clustering-rules.json).
+Read that file once per drafting session — it is the source of truth. The JSON replaces prose that used to span ~180 lines of this SKILL.md.
 
-| Kind          | Source of truth                                | Area heuristic                                      |
-| ------------- | ---------------------------------------------- | --------------------------------------------------- |
-| `endpoint`    | NestJS `@Controller` + method decorators       | nearest `src/modules/<area>/`                       |
-| `ui-flow`     | React pages linked from `routes.tsx`           | `src/pages/<area>/<PageName>`                       |
-| `entity`      | Prisma `model` blocks                          | model-name dictionary (User→users, Session→auth, …) |
-| `test`        | Jest `describe` / `it` / `test` in `*.spec.ts` | `src/modules/<area>/` or filename stem              |
-| `doc-context` | `README.md` / `CLAUDE.md` / `docs/**/*.md`     | folder name (`docs`, `modules`, …)                  |
+Operational quick-reference (full detail in the JSON):
 
-### Reading the findings[] output
-
-For each finding :
-
-- **Every shape has `kind` + `title`** — use them for first-pass clustering.
-- **`area`** is the glue : findings that share an `area` usually belong to the same Epic / FR cluster.
-- **`file`** is the authoritative path — quote it back to the user when proposing a cluster ("FR-Auth — based on `api/src/modules/auth/auth.controller.ts` + `api/prisma/schema/auth.prisma`").
-- **`endpoint.hasTests`** flags `true` when the same `area` has at least one test finding — use it to prime the TC section of the proposed FR.
-- **`ui-flow.linkedEndpointGuess`** is a soft hint (filename / route substring match against endpoint paths) — verify it against the actual endpoint list before trusting it.
-- **`doc-context.excerpt`** is capped at 280 chars — treat it as a **summary seed**, not the full text.
-
-### Clustering into `DraftCandidate[]`
-
-The skill's job is to convert raw findings into publishable draft candidates. Work **Epic-by-Epic, then FR-by-FR** :
-
-1. **Group by area.** Collect every finding whose `area` matches. Add `doc-context` findings that share the area name or a parent folder.
-2. **Pick the Epic level.** One Epic per coherent area (e.g. `auth`, `storage`, `accounts`). Title + narrative come from the richest `doc-context` in the group, or from the user's wording.
-3. **Propose the FRs.**
-   - One FR per `endpoint` (or per tight endpoint cluster — e.g. CRUD on the same resource collapses into one FR).
-   - Reuse `ui-flow` routes as acceptance criteria on the user-facing FR.
-   - Populate `dsRefs` / `tcRefs` from the items seeded in step 4 so the FR page surfaces the traceability links.
-4. **Seed the Epic-level DS / TC / NFR sections.** Every Epic carries the SRS five-category shape (UR + FR + DS + TC + NFR) — see the canonical example at `templates/examples/example-epic.md`
-   (rendered) / `templates/examples/example-epic.spec.json` (machine-readable) for the exact layout. The seeding rules below turn scanner findings into initial items the reviewer accepts / edits /
-   rejects.
-5. **Flag gaps.** Any `endpoint` with `hasTests=false` is a test-coverage gap — surface it as a **TODO** TC item (title `"{METHOD} {PATH} — happy path"`, `expectedResult: "to write"`), not silently.
-
-### Seeding DS / TC / NFR (five-category completeness)
-
-These three sections are **interpretive** — scanners surface the raw material, the agent synthesises the items. Reuse the L1+L2+L3 pattern from the eval (`docs/srs/scanner-findings.md`): deterministic
-findings feed AI prompts, the agent always runs, the user always validates before write.
-
-#### DS items (Design Specifications)
-
-One `DsItem` per material design decision visible in code. Source findings → seeded `DsItem`:
-
-| Finding                                                      | Seeded `DsItem.title`            | Seeded `description` source                                                |
-| ------------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------- |
-| `entity` (Prisma model)                                      | `Data model — <EntityName>`      | fields + `@unique` / `@id` / `@relation` + `deletedAt` flag                |
-| `endpoint` with non-trivial DTO (POST/PATCH body ≥ 2 fields) | `API contract — <METHOD> <path>` | DTO field list + validation rules surfaced by `class-validator` decorators |
-| `ui-flow` with `formFields.length ≥ 2`                       | `UI form — <PageName>`           | form field list + `linkedEndpointGuess` if present                         |
-
-Group by the Epic's area; set `frRefs` to every FR in the group whose endpoint/entity/UI flow matches. Deduplicate by title prefix — if two entities share the same core name (e.g. `User` +
-`UserProfile`), collapse them into a single DS item with both sub-models listed in the description.
-
-#### TC items (Test Cases)
-
-One `TcItem` per `test.cases[]` entry. Source mapping:
-
-| Source                                   | Seeded `TcItem` field                                                                                |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `test.cases[i].title`                    | `title` (the `it(...)` / `test(...)` string verbatim)                                                |
-| `test.cases[i]` structure                | `steps` — parse Given/When/Then from the title if phrased that way, else bullet the `describe` chain |
-| assertion in the test body (if readable) | `expectedResult`; if not parseable, use `"see <test.file>"`                                          |
-| `test.area` or `endpoint.area`           | `frRefs` — every FR whose area matches                                                               |
-
-**Untested endpoints** — for each `endpoint` with `hasTests=false`, emit a **TODO** TC item so the drift is auditable, not invisible:
-
-```jsonc
-{
-  "id": "TC-<area>-<slug>-todo",
-  "title": "<METHOD> <path> — happy path",
-  "expectedResult": "to write",
-  "frRefs": ["<FR-id>"]
-}
-```
-
-The reviewer can either accept the TODO (making the gap part of the public contract) or reject it and flag it upstream.
-
-#### NFR items (Non-Functional Requirements)
-
-NFRs are **proposed, not derived** — every seeded item must be marked for explicit human validation. Build the candidate list from two layers:
-
-**Layer 1 — stack signals** (present in `.saasfoundry.json` or inferred from findings):
-
-| Signal                                                                                       | Seeded NFR(s)                                                                                                                                             |
-| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth` module present (endpoints under `/auth/*` or Prisma `Session` / `RefreshToken` model) | `Security — JWT access token expiry ≤ 15 min`; `Security — refresh token rotation on every use`; `Security — login rate limit ≤ 5 attempts / minute / IP` |
-| `i18n` module (`src/locales/` folder or `i18next` dep)                                       | `i18n — all user-facing strings translated in FR + EN`; `a11y — locale switchable without page reload`                                                    |
-| Prisma + Postgres detected                                                                   | `Data — soft delete via deletedAt on user-owned entities`; `Data — all migrations reversible (up + down)`                                                 |
-| `docker-compose*.yml` + `/health` endpoint present                                           | `Ops — API health check p95 ≤ 1 s`                                                                                                                        |
-| Playwright or e2e spec files present                                                         | `Quality — e2e coverage on critical user flows (login, signup, checkout when applicable)`                                                                 |
-| `@nestjs/swagger` + `docs/openapi.json` generated                                            | `Docs — OpenAPI spec regenerated on every API change (CI guard)`                                                                                          |
-
-**Layer 2 — standard SaaS catalogue** (always propose, mark low-confidence):
-
-- `Perf — p95 API latency ≤ 500 ms at 100 req/s sustained`
-- `Availability — uptime target 99.5% (excluding scheduled maintenance)`
-- `Security — all user-uploaded files virus-scanned before persistence` (only if storage module present)
-- `Privacy — PII fields encrypted at rest` (only if the schema carries `email`, `phone`, `address`)
-
-Always emit NFRs with `priority: 'P3'` and `target: '<proposed — needs human validation>'`. The reviewer lifts priority / refines target before accepting.
-
-#### Coverage table (pre-accept)
-
-Before firing the review prompt on an Epic cluster, emit a one-shot **coverage table** so the reviewer sees what got seeded per category and where it came from:
-
-```
-SRS coverage for Epic: <title>
-┌──────┬───────────────┬──────────────────────────────────────────────┐
-│ Cat  │ Items proposed│ Source                                       │
-├──────┼───────────────┼──────────────────────────────────────────────┤
-│ UR   │ 3             │ doc-context + inferred from FRs              │
-│ FR   │ 5             │ 5 endpoint clusters                          │
-│ DS   │ 4             │ 2 entities + 1 endpoint + 1 UI form          │
-│ TC   │ 8 (+ 2 TODO)  │ test.cases[] across 3 spec files             │
-│ NFR  │ 4 (proposed)  │ auth + i18n + prisma + playwright signals    │
-└──────┴───────────────┴──────────────────────────────────────────────┘
-```
-
-A cluster with **zero DS or zero TC** is a red flag — either the area is genuinely pure UI glue (no data model, no tests yet) or the scanners missed something. Surface the anomaly in the review prompt
-rather than silently proposing an Epic with empty sections.
-
-### Review-loop prompts
-
-Never write to Notion without confirmation. Drive the loop one cluster at a time :
-
-```
-🔍 J'ai trouvé <N> éléments dans le scanner pour le domaine `<area>`. Je te propose de créer :
-
-  📘 Epic : <title>
-     ├─ FR : <title 1>  (based on: <file-1>, <file-2>)
-     ├─ FR : <title 2>  (based on: <file-3>)
-     └─ gaps : <endpoint without tests>, <page without linked endpoint>
-
-Je pars sur cette structure, ou tu veux retailler l'Epic ? [accept / edit / reject / skip-area]
-```
-
-On **accept** → serialise the cluster as `DraftCandidate[]` and call `srs-cli.sh write --spec <tmp.json>`. On **edit** → negotiate the title / narrative / FR split and re-confirm. On **skip-area** →
-park the area and continue with the next. Never batch-accept more than **one Epic per prompt** — the reviewer has to be able to course-correct cluster by cluster.
+- **Five scanner kinds** (`endpoint`, `ui-flow`, `entity`, `test`, `doc-context`) — see `docs/srs/scanner-findings.md` for the JSON shape.
+- **Clustering**: work Epic-by-Epic, then FR-by-FR. Group by `area`, one Epic per coherent area, one FR per endpoint (or tight endpoint cluster).
+- **Five-category seeding** (UR + FR + DS + TC + NFR): scanners surface raw material, the agent synthesises, the user validates before write. NFRs are always marked `priority: P3` and
+  `target: '<proposed — needs human validation>'` until the reviewer accepts.
+- **Untested endpoints** emit a TODO TC item so drift is auditable — never silently drop them.
+- **Review loop**: one Epic per prompt, branches `[accept / edit / reject / skip-area]`. Never batch-accept. Never write without confirmation.
 
 ### Exit codes
 
@@ -484,65 +356,20 @@ park the area and continue with the next. Never batch-accept more than **one Epi
 
 ## Conversational eval hook (SUB-10)
 
-When the project declares `tools.srs.enabled = true` in `.saasfoundry.json`, Claude is responsible for **interjecting** during conversation turns whose content looks like a new Software Requirement.
-There is no message parser and no standalone script — the "hook" is Claude reading the heuristics below and self-invoking. The `sf-workflow` skill's SKILL.md references this section and stays out of
-the way.
+When the project declares `tools.srs.enabled = true` in `.saasfoundry.json`, Claude interjects during conversation turns whose content looks like a new Software Requirement. There is no message parser
+baked into the runtime — the "hook" is Claude reading the rules and self-invoking. The `sf-workflow` skill's SKILL.md references this section and stays out of the way.
 
-### Detection heuristics — when to fire
+Detection heuristics, confirmation prompt, patch shape, and v1 scope limits live as structured rules in [`scripts/detect-eval-signals.sh`](scripts/detect-eval-signals.sh). Two modes:
 
-Fire at most **once per conversation turn**. Skip trivial turns (pure tool invocations, "ok", "thanks", "read X", "what does this do"). Fire when the user's message matches **any** of the following
-signals :
+- `detect-eval-signals.sh --rules` — emits the full rules + patch shape as JSON. Read this once per session; it is the source of truth.
+- `detect-eval-signals.sh --classify "<text>"` (or stdin) — crude regex prefilter over a turn, returns `{signal, confidence, target}`. Use it to cheap-skip trivial turns; the agent still has the final
+  say on whether to fire.
 
-| Signal                                   | Target                              | Example utterance                                               |
-| ---------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| Describes a **user need / outcome**      | new **UR** on the Epic page         | "users should be able to log in with SSO"                       |
-| Defines a new **feature or rule**        | new **FR** page under the Epic      | "we need a feature that lets admins export audit logs as CSV"   |
-| Clarifies an **implementation decision** | new **DS** on the relevant FR page  | "let's use BCrypt with cost factor 12 for password hashing"     |
-| Adds an **acceptance / test condition**  | new **TC** on the relevant FR page  | "and a test that proves unicode passwords are accepted"         |
-| Reopens a **previously closed decision** | likely an **FR** or **DS** revision | "on reconsidère la règle : finalement on autorise les chiffres" |
+Fire at most **once per conversation turn**. On a signal hit, propose a diff in plain text, wait for `accept / edit / reject`, and — on accept — pipe the patch through
+`.claude/skills/sf-srs/scripts/srs-cli.sh apply-update`. v1 is ADD-only and appends to an "Added …" heading on the target page; the reviewer folds it back into the canonical section during the next
+human SRS review.
 
-Treat as **trivial and skip** : formatting nitpicks, small bug reports already covered by an existing FR, performance tweaks without observable user impact, pure refactor requests.
-
-### Confirmation flow
-
-When a signal fires, **pause before coding** and propose a diff in plain text :
-
-```
-💡 Ce que tu viens de décrire ressemble à <UR / FR / DS / TC>. Proposition :
-  • <target page> — add <item id> : <narrative | title>
-  • (if TC)        steps : ...
-
-J'applique via `srs-cli.sh apply-update` ? [accept / edit / reject]
-```
-
-- **accept** → build the patch JSON (see shape below) and run `.claude/skills/sf-srs/scripts/srs-cli.sh apply-update < patch.json` (or pipe via stdin). On exit 0, continue with the coding task.
-- **edit** → rework the proposed item text with the user, then re-confirm.
-- **reject** → drop the proposal and continue. Do **not** re-propose the same item in the same conversation.
-
-### Patch shape consumed by `apply-update`
-
-```jsonc
-{
-  "kind": "add-ur" | "add-fr" | "add-ds" | "add-tc",
-  "pageId": "<epic page id for add-ur / add-fr, FR page id for add-ds / add-tc>",
-  "item": { /* UrItem | FrSpec | DsItem | TcItem, same shapes as src/builders/srs/types.ts */ },
-  "note": "optional free-text annotation appended as a paragraph"
-}
-```
-
-### Scope limits (v1, intentional)
-
-- **ADD-only.** Modifying an existing item (e.g. tightening FR-012's acceptance criteria) is **out of scope** — the current `SrsAdapter.updatePage` is append-only on Notion, so surgical section
-  replacement is not available through the contract. A follow-up SUB will extend the adapter with replace/delete semantics.
-- **Append placement.** `add-ur` / `add-ds` / `add-tc` append new blocks to the **end** of the target page under an "Added …" heading2. The canonical section (User Requirements / Design / Test Cases)
-  is _not_ updated in-place. Reviewers must fold the appended block back into the right section during the next human SRS review. The limitation is deliberate and documented.
-- **`add-fr`** creates a brand-new child page under the Epic via `adapter.createFrPage`. The Epic page's "Traceability" table is **not** refreshed (same append-only limitation) — the new FR is still
-  discoverable as a child page.
-- **Throttling.** 1 proposal maximum per conversation turn. No persistent dedup cache (the turn boundary is sufficient — Claude's own judgment avoids re-proposing within the same turn).
-
-### Dogfood checklist
-
-After any change to the heuristics above, run a short manual session : drop 5 utterances (one per signal row + one trivial control) and confirm the hook fires exactly on the four signals and skips the
+After any change to the rules or classifier, run a short dogfood session: 5 utterances (one per signal row + one trivial control), confirm the hook fires exactly on the four signals and skips the
 trivial one.
 
 ## How other skills hand off to `sf-srs`
