@@ -20,13 +20,26 @@ function specReferenceLine(epicPageUrl: string | undefined): string {
   return `Main spec: [Epic SRS page](${epicPageUrl})`
 }
 
+function formatVersionSuffix(version: number | string | undefined): string {
+  if (version === undefined || version === null || version === '') return ''
+  return ` - v${version}`
+}
+
+export function renderEpicTicketTitle(spec: EpicTicketBodySpec): string {
+  return `${spec.epic.title}${formatVersionSuffix(spec.version)}`
+}
+
 export function renderEpicTicketBody(spec: EpicTicketBodySpec): string {
   const { epic } = spec
   const sections: string[] = []
 
-  sections.push(`## Goal\n\n${epic.title}`)
+  sections.push(`## Goal\n\n${epic.title}${formatVersionSuffix(spec.version)}`)
 
   sections.push(`## Business Value\n\n${epic.businessValue ?? '_Describe the business impact of this Epic._'}`)
+
+  const start = spec.startDate ?? '_Set on the board (custom field: Start date)._'
+  const end = spec.endDate ?? '_Set on the board (custom field: End date)._'
+  sections.push(`## Dates\n\n- **Start:** ${start}\n- **End:** ${end}`)
 
   const included = bulletList(spec.scopeIncluded, 'List what is in scope.')
   const excluded = bulletList(spec.scopeExcluded, 'List what is out of scope.')

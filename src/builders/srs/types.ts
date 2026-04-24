@@ -137,6 +137,9 @@ export interface EpicTicketBodySpec {
   constraints?: string[]
   assumptions?: string[]
   definitionOfDone?: string[]
+  version?: number | string
+  startDate?: string
+  endDate?: string
 }
 
 export interface AcceptanceCriterion {
