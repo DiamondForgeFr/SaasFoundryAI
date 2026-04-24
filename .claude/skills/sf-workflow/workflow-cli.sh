@@ -65,29 +65,27 @@ route_to_tool() {
   "$tool_cli" "$@"
 }
 
-# Function to get current status of a ticket
+# Function to get current status of a ticket.
+#
+# Uses the tool CLI's --json flag and parses with jq — no more grep|awk on
+# human-oriented output. Tool CLIs without --json support fall back to the
+# legacy "Status: X" line so installers can upgrade skills independently.
 get_current_status() {
   local ticket=$1
   local status=""
+  local payload
 
   load_config
 
   case "$WORKFLOW_TOOL" in
-    github-projects)
-      # Delegate to GitHub Projects tool CLI
-      status=$(route_to_tool github-projects status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
-      ;;
-    jira)
-      # Delegate to Jira tool CLI
-      status=$(route_to_tool jira status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
-      ;;
-    notion)
-      # Delegate to Notion tool CLI
-      status=$(route_to_tool notion status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
-      ;;
-    linear)
-      # Delegate to Linear tool CLI
-      status=$(route_to_tool linear status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
+    github-projects|jira|notion|linear)
+      payload=$(route_to_tool "$WORKFLOW_TOOL" status "$ticket" --json 2>/dev/null || true)
+      if [[ -n "$payload" ]] && echo "$payload" | jq -e . >/dev/null 2>&1; then
+        status=$(echo "$payload" | jq -r '.status // ""')
+      else
+        # Legacy fallback — tool CLI has no --json yet
+        status=$(route_to_tool "$WORKFLOW_TOOL" status "$ticket" 2>&1 | grep "^Status:" | awk -F': ' '{print $2}')
+      fi
       ;;
     *)
       echo -e "${RED}Unknown workflow tool: $WORKFLOW_TOOL${NC}" >&2

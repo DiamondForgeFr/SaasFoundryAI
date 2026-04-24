@@ -1,119 +1,55 @@
+---
+status: In Progress
+complexity_profiles: [bug, low, medium, complex]
+entry_conditions:
+  - Assignment or confirmation received in Ready
+  - Ready to start development
+mandatory_actions:
+  - Create feature branch from `workingBranch` (manifest)
+  - Move ticket to `In Progress`
+  - Create subtasks as real GitHub issues (NOT checkboxes)
+  - Develop iteratively — one commit per subtask, close each subtask right after its commit lands
+  - Final validation — build, lint, unit tests green
+  - Push branch
+exit_conditions:
+  - All subtasks closed on GitHub (`gh issue list --state open --search "parent #<N>"` returns [])
+  - Code compiles without errors
+  - Lint passes
+  - Existing tests pass
+  - Branch pushed to remote
+next_status: AI Testing
+---
+
 # STATUS: In Progress
 
-**ROLE**: Active development with subtasks creation and regular commits
+Active development — subtask creation, iterative commits, final validation.
 
-> **⚠️ SRS drafting tickets** (labelled `srs:drafting | srs:update | srs:new`) do **NOT** follow the steps below. They stay in the `In progress` board column but flow through a separate lifecycle —
-> stop here and read `statuses/3a-ai-drafting.md`. Drive the ticket with `.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> <phase>`
-> (`ai-draft | human-review | spawning | done`), never with `update-status` — the SRS guard blocks code-path transitions for those tickets.
+## Ticket type
 
-> **ℹ️ Ticket type matters** (see `SKILL.md` → "Ticket Hierarchy"):
->
-> - **Epic** (`type: epic`): no branch, no commit, no PR. Skip sections 1, 4, 5 below. Only create children (Stories/Tasks/Issues) via `create-subtask` and coordinate them. Epic status is **derived**
->   from children — it reaches `In progress` automatically when the first child does.
-> - **Story / Task / Issue** (`type: story | task | issue`): full flow below — branch + commits + PR.
-> - **Subtask**: a commit on the current Story/Task branch, not a GitHub issue. Don't create one via `create-subtask`.
+- **Epic** (`type: epic`): no branch, no commit, no PR. Skip "Branch + develop" + "Final validation" below. Only create children via `create-subtask` and coordinate. Epic status is **derived** — moves
+  to `In progress` automatically when the first child does.
+- **Story / Task / Issue**: full flow below.
+- **Subtask**: a commit on the current branch, not a GitHub issue. Do not use `create-subtask`.
 
-## When to Enter This Status
+## SRS drafting tickets (`srs:drafting | srs:update | srs:new`)
 
-- After receiving assignment or confirmation from developer in Ready
-- Ready to start development
+These stay in the `In progress` board column but flow through a **separate lifecycle** — see `statuses/3a-ai-drafting.md`. Drive with
+`workflow-cli.sh transition-drafting <ticket> <ai-draft|human-review|spawning|done>`. Never use `update-status` — the SRS guard blocks code-path transitions.
 
-## Mandatory Actions (in this order)
+## Action checklist — Story / Task / Issue
 
-### 1. CREATE A BRANCH
+- [ ] **Branch** — from `jq -r '.workflow.workingBranch' .saasfoundry.json`, pattern `jq -r '.workflow.branchNaming.feature'`
+  - `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`
+- [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
+- [ ] **Create subtasks** — `workflow-cli.sh create-subtask <parent> "<title>" ["<body>"]` (auto-links as sub-issue)
+- [ ] **Per subtask:** move to In Progress → code → commit (`<type>(#<N>): <description>`) → `update-status <sub> Done` → `gh issue view <sub> --json state` must print `CLOSED` (never batch closures)
+- [ ] **All subtasks done:** verify zero open children (`gh issue list --state open --search "parent #<N>"` → `[]`) → `npm run build && npm run lint` → `npm test` → push
 
-**Read configuration from `.saasfoundry.json`:**
+## Errors to avoid
 
-```bash
-WORKING_BRANCH=$(cat .saasfoundry.json | jq -r '.workflow.workingBranch')
-BRANCH_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.branchNaming.feature')
-```
-
-**Create feature branch:**
-
-1. Ensure you're on working branch: `git checkout ${WORKING_BRANCH}`
-2. Pull latest with rebase: `git pull origin ${WORKING_BRANCH} --rebase`
-3. Create feature branch: `git checkout -b feature/{N}-{description}`
-   - Format from config: `${BRANCH_PATTERN}` (e.g., `feature/{N}-{description}`)
-   - Replace `{N}` with ticket number
-   - Replace `{description}` with kebab-case description
-
-### 2. MOVE TICKET TO "IN PROGRESS"
-
-- Update status in the project management tool
-
-### 3. CREATE SUBTASKS
-
-**Break down the ticket into atomic sub-tasks.**
-
-**MUST be real GitHub issues** (NOT checkboxes) linked as sub-issues to the parent.
-
-**Use the helper script:**
-
-```bash
-# Create a subtask linked to parent issue
-.claude/skills/sf-workflow/create-subtask.sh <parent-number> "Subtask title" ["Optional body"]
-
-# Example:
-.claude/skills/sf-workflow/create-subtask.sh 9 "Add validation logic"
-.claude/skills/sf-workflow/create-subtask.sh 9 "Write unit tests" "Cover edge cases"
-```
-
-**The script automatically:**
-
-- Prepends `[Parent #{N}]` to the title
-- Creates the GitHub issue
-- Links it as a sub-issue to the parent (via GraphQL API)
-- Outputs the subtask number and URL
-
-**Track subtask status in project board:**
-
-- Backlog → In Progress (when you start) → Done (when complete)
-
-### 4. DEVELOP ITERATIVELY
-
-**Read commit format from config:**
-
-```bash
-COMMIT_PATTERN=$(cat .saasfoundry.json | jq -r '.workflow.commitFormat.pattern')
-COMMIT_TYPES=$(cat .saasfoundry.json | jq -r '.workflow.commitFormat.types[]')
-```
-
-For each subtask:
-
-- a. Move subtask to "In Progress"
-- b. Write code for this subtask
-- c. Commit with format from config: `${COMMIT_PATTERN}`
-  - Example: `type(#{N}): description`
-  - Use allowed types: `feat`, `fix`, `docs`, `refactor`, etc.
-  - Replace `#{N}` with ticket number
-- d. **Close the subtask immediately** — run `workflow-cli.sh update-status <sub> Done` and **verify** with `gh issue view <sub> --json state` that it prints `CLOSED`. Never batch closures.
-- e. Move to the next one
-
-### 5. WHEN ALL SUBTASKS ARE DONE
-
-- a. **Verify zero open children** — `gh issue list --state open --search "parent #{N}"` must return an empty array before going further. If not, close the remaining children first.
-- b. Run: `npm run build && npm run lint`
-- c. Fix all lint/build errors
-- d. Run existing tests (unit tests)
-- e. Ensure nothing is broken
-- f. Final commit if corrections needed
-- g. Push the branch: `git push -u origin {branch-name}`
-
-## Exit Conditions
-
-- All subtasks are Done
-- Code compiles without errors
-- Lint passes
-- Existing tests pass
-- Code is pushed to remote
-
-## Next Status
-
-**AI Testing**
-
-## Errors to Avoid
-
-❌ NEVER code without creating a branch first ❌ NEVER mix multiple tickets in the same branch ❌ NEVER move to AI Testing with lint errors ❌ NEVER forget to push before moving to AI Testing ❌ NEVER
-batch subtask closures at the end of the parent — close each one right after its commit lands ❌ NEVER start another ticket while this one is still In Progress / AI Testing / Human Testing / In Review
-(unless the developer explicitly asks you to pause)
+- Coding without creating a branch first
+- Mixing multiple tickets in the same branch
+- Moving to AI Testing with lint/build errors
+- Forgetting to push before AI Testing
+- Batching subtask closures at the end — close each one right after its commit lands
+- Starting another ticket while this one is still In Progress / AI Testing / Human Testing / In Review (unless the developer explicitly asks to pause)

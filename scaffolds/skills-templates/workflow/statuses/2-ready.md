@@ -1,29 +1,29 @@
+---
+status: Ready
+complexity_profiles: [bug, low, medium, complex]
+entry_conditions:
+  - Specs validated in Backlog
+  - Priority assigned
+  - All blockers resolved
+mandatory_actions:
+  - Wait for explicit ticket assignment or confirmation
+  - Do nothing else — this status is a waiting queue
+exit_conditions:
+  - Developer asks you to work on this ticket
+  - OR you receive confirmation to take it
+next_status: In Progress
+---
+
 # STATUS: Ready
 
-**ROLE**: Queue of validated tickets ready for development
+Queue of validated tickets waiting for pickup.
 
-## When to Enter This Status
+## Action checklist
 
-- After specs validation in Backlog
-- Ticket has assigned priority
-- All blockers are resolved
+- [ ] Wait for the developer to assign the ticket (or ask which one to take, respecting priority order)
+- [ ] Otherwise, do nothing — Ready is strictly a waiting queue
 
-## Mandatory Actions
+## Errors to avoid
 
-1. **Wait for ticket assignment:**
-   - Either the developer explicitly assigns the ticket to you
-   - Or you ask which ticket to take (prioritize by order)
-2. **Do nothing else** - this status is a waiting queue
-
-## Exit Conditions
-
-- Developer asks you to work on this ticket
-- OR you get confirmation to take the ticket
-
-## Next Status
-
-**In Progress**
-
-## Errors to Avoid
-
-❌ NEVER take a Ready ticket without confirmation ❌ NEVER skip higher priority tickets
+- Taking a Ready ticket without confirmation
+- Skipping higher-priority tickets

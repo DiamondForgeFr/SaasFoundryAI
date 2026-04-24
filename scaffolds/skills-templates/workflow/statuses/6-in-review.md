@@ -1,75 +1,44 @@
+---
+status: In Review
+complexity_profiles: [bug, low, medium, complex]
+entry_conditions:
+  - Human Testing validated
+  - Non-regression tests created and pushed
+  - Ready to open the Pull Request
+mandatory_actions:
+  - Create the Pull Request (title + description + test plan + test list + reviewers + ticket link)
+  - Move ticket to `In Review`
+  - Monitor CI until green
+  - Answer reviewer comments and implement requested changes
+  - Add tests when reviewer asks; verify locally, commit, push, wait for green CI
+  - Wait for approval AND green CI — do NOT merge
+exit_conditions:
+  - PR approved by all required reviewers
+  - CI is green
+  - Developer merged the PR to the target branch
+next_status: Done
+---
+
 # STATUS: In Review
 
-**ROLE**: Code review + mandatory green CI
+Code review with mandatory green CI.
 
-> **ℹ️ Ticket type matters** (see `SKILL.md` → "Ticket Hierarchy"):
->
-> - **Epic** (`type: epic`): **NEVER produces a PR**. Do not open one, do not attach one. Epic status in `In review` is purely **derived** from children — it reflects that every child Story/Task/Issue
->   is itself in `In review` (one open PR per child). Skip all steps below.
-> - **Story / Task / Issue** (`type: story | task | issue`): full flow below — each one opens its own PR.
+## Ticket type
 
-## When to Enter This Status
+- **Epic** — **never produces a PR**. Status is **derived** — reflects that every child Story/Task/Issue is itself in `In Review` (one open PR per child). Skip the checklist.
+- **Story / Task / Issue** — full flow below, one PR each.
 
-- After validation in Human Testing
-- Non-regression tests created and pushed
-- Ready to create the Pull Request
+## Action checklist
 
-## Mandatory Actions
+- [ ] **Create the PR** — title = ticket title; description = ticket link + change summary + test plan (copy from ticket) + created tests (unit + E2E); assign configured reviewers; link PR to ticket
+- [ ] **Move ticket** to `In Review` via `workflow-cli.sh update-status`
+- [ ] **Monitor CI** — on red: analyze logs, fix, commit, push, wait for green
+- [ ] **Monitor reviews** — answer questions, implement requested changes
+- [ ] **Reviewer asks for extra tests** — create them, run locally, commit, push, wait for green CI, resolve conversation
+- [ ] **Wait for approval + green CI** — do nothing until the developer merges
 
-### 1. CREATE THE PULL REQUEST
+## Errors to avoid
 
-- Title: Repeat the ticket title
-- Description:
-  - Link to the ticket
-  - Summary of changes
-  - Test plan (copy from ticket)
-  - List of created tests (unit + E2E)
-- Assign configured reviewers
-- Link PR to ticket
-
-### 2. MOVE TICKET TO "IN REVIEW"
-
-- Update status in the project management tool
-
-### 3. MONITOR CI
-
-- CI will run the full test suite (unit + E2E)
-- If CI is red 🔴:
-  - a. Analyze error logs
-  - b. Fix problems
-  - c. Commit and push
-  - d. Wait for CI to turn green ✅
-
-### 4. MONITOR REVIEW COMMENTS
-
-- Read all reviewer comments
-- Answer questions
-- Implement requested changes
-
-### 5. IF REVIEWER REQUESTS ADDITIONAL TESTS:
-
-- a. Create requested tests (unit or E2E)
-- b. Run tests locally to verify
-- c. Commit and push tests
-- d. Wait for CI to pass ✅
-- e. Resolve conversation when done
-
-### 6. WAIT FOR APPROVAL AND GREEN CI
-
-- ⚠️ MANDATORY CONDITION: CI must be green ✅
-- Developer will merge ONLY if CI is green
-- Do nothing until merged
-
-## Exit Conditions
-
-- PR approved by all required reviewers
-- CI is green ✅ (all tests pass)
-- Developer has merged the PR to target branch
-
-## Next Status
-
-**Done**
-
-## Errors to Avoid
-
-❌ NEVER ask developer to merge with red CI ❌ NEVER ignore test failures in CI ❌ NEVER merge yourself (unless explicit instruction)
+- Asking the developer to merge with red CI
+- Ignoring test failures in CI
+- Merging yourself (unless explicitly instructed)
