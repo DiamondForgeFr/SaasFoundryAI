@@ -42,9 +42,20 @@ function runSafe(cmd: string, cwd: string): string | null {
   }
 }
 
+function findGitDir(startDir: string): string | null {
+  let cur = path.resolve(startDir)
+  while (true) {
+    if (fs.existsSync(path.join(cur, '.git'))) return cur
+    const parent = path.dirname(cur)
+    if (parent === cur) return null
+    cur = parent
+  }
+}
+
 function collectGit(projectRoot: string): GitInfo {
-  const isGitRepo = fs.existsSync(path.join(projectRoot, '.git')) || runSafe('git rev-parse --is-inside-work-tree', projectRoot) === 'true'
-  if (!isGitRepo) return { available: false }
+  // Walk up ourselves instead of shelling out to `git rev-parse --is-inside-work-tree`:
+  // under parallel jest workers the subprocess probe flaked in ~25% of runs.
+  if (findGitDir(projectRoot) === null) return { available: false }
 
   const branch = runSafe('git rev-parse --abbrev-ref HEAD', projectRoot) ?? undefined
   const statusShort = runSafe('git status --porcelain', projectRoot)
