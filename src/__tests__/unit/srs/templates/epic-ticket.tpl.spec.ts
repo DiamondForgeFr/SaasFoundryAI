@@ -1,4 +1,4 @@
-import { renderEpicTicketBody } from '../../../../builders/srs/templates/tickets/epic.tpl'
+import { renderEpicTicketBody, renderEpicTicketTitle } from '../../../../builders/srs/templates/tickets/epic.tpl'
 import { EpicTicketBodySpec } from '../../../../builders/srs/types'
 
 describe('renderEpicTicketBody', () => {
@@ -26,7 +26,7 @@ describe('renderEpicTicketBody', () => {
     })
 
     const headings = body.match(/^## .+$/gm) ?? []
-    expect(headings).toEqual(['## Goal', '## Business Value', '## Scope', '## Specifications', '## Dependencies', '## Constraints', '## Assumptions', '## Definition of Done'])
+    expect(headings).toEqual(['## Goal', '## Business Value', '## Dates', '## Scope', '## Specifications', '## Dependencies', '## Constraints', '## Assumptions', '## Definition of Done'])
   })
 
   it('embeds the FR table row linking to the Notion FR page when provided', () => {
@@ -53,5 +53,56 @@ describe('renderEpicTicketBody', () => {
   it('uses the epic title as the Goal body line', () => {
     const body = renderEpicTicketBody(baseSpec)
     expect(body).toMatch(/## Goal\n\nUser authentication/)
+  })
+
+  it('appends version suffix to the Goal line when version is provided', () => {
+    const body = renderEpicTicketBody({ ...baseSpec, version: 2 })
+    expect(body).toMatch(/## Goal\n\nUser authentication - v2/)
+  })
+
+  it('accepts string versions for release names like "1.0"', () => {
+    const body = renderEpicTicketBody({ ...baseSpec, version: '1.0' })
+    expect(body).toMatch(/## Goal\n\nUser authentication - v1\.0/)
+  })
+
+  it('leaves the Goal line unchanged when version is omitted (backward compat)', () => {
+    const body = renderEpicTicketBody(baseSpec)
+    expect(body).toContain('## Goal\n\nUser authentication\n\n')
+    expect(body).not.toMatch(/User authentication - v/)
+  })
+
+  it('renders a Dates section with placeholders when start/end are absent', () => {
+    const body = renderEpicTicketBody(baseSpec)
+    expect(body).toContain('## Dates')
+    expect(body).toContain('**Start:** _Set on the board (custom field: Start date)._')
+    expect(body).toContain('**End:** _Set on the board (custom field: End date)._')
+  })
+
+  it('renders the provided Start/End dates when supplied', () => {
+    const body = renderEpicTicketBody({ ...baseSpec, startDate: '2026-05-01', endDate: '2026-06-15' })
+    expect(body).toContain('**Start:** 2026-05-01')
+    expect(body).toContain('**End:** 2026-06-15')
+  })
+})
+
+describe('renderEpicTicketTitle', () => {
+  const baseSpec: EpicTicketBodySpec = {
+    epic: { title: 'User authentication', parentPageId: 'page-epic', urs: [], frs: [] }
+  }
+
+  it('returns the epic title unchanged when version is omitted', () => {
+    expect(renderEpicTicketTitle(baseSpec)).toBe('User authentication')
+  })
+
+  it('appends - v{version} when version is a number', () => {
+    expect(renderEpicTicketTitle({ ...baseSpec, version: 3 })).toBe('User authentication - v3')
+  })
+
+  it('appends - v{version} when version is a string', () => {
+    expect(renderEpicTicketTitle({ ...baseSpec, version: '2.1' })).toBe('User authentication - v2.1')
+  })
+
+  it('ignores empty-string version (treats as absent)', () => {
+    expect(renderEpicTicketTitle({ ...baseSpec, version: '' })).toBe('User authentication')
   })
 })
