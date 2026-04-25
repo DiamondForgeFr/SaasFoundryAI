@@ -195,30 +195,10 @@ describe('sf-tool-github-projects — create-subtask Rule 8 guard', () => {
       }
     })
 
-    it('treats a non-string tools.srs.backend (e.g. number) as "not set" (Rule 8 dormant)', async () => {
-      const sandbox = await buildSandbox({
-        workflow: { projectUrl: 'https://github.com/orgs/FakeOrg/projects/42', workingBranch: 'develop' },
-        tools: { srs: { backend: 42 } }
-      })
-      try {
-        const res = await runCli(['create-subtask', '42', 'Thing'], sandbox)
-        expect(res.code).toBe(0)
-      } finally {
-        await sandbox.cleanup()
-      }
-    })
-
-    it('treats a boolean tools.srs.backend as "not set" (Rule 8 dormant)', async () => {
-      const sandbox = await buildSandbox({
-        workflow: { projectUrl: 'https://github.com/orgs/FakeOrg/projects/42', workingBranch: 'develop' },
-        tools: { srs: { backend: true } }
-      })
-      try {
-        const res = await runCli(['create-subtask', '42', 'Thing'], sandbox)
-        expect(res.code).toBe(0)
-      } finally {
-        await sandbox.cleanup()
-      }
-    })
+    // Non-string backend values (number, boolean) used to be tested here as
+    // "treats X as not set". The manifest JSON Schema now pins
+    // tools.srs.backend to const "notion" — so a malformed value is caught at
+    // the schema layer (ajv / IDE), not by the bash script's runtime guard.
+    // The script side simplified accordingly (#291).
   })
 })
