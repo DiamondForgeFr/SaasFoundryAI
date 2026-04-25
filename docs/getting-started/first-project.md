@@ -17,7 +17,7 @@ In this guide, you'll:
 
 ## Prerequisites
 
-- Node.js 20.19+ installed
+- Node.js 22.13+ installed
 - Docker Desktop (for database and S3)
 - Claude Code installed (optional but recommended)
 - Basic knowledge of TypeScript, React, and NestJS

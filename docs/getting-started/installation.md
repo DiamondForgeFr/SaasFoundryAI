@@ -12,7 +12,7 @@ with git operations, workflow management, and development tasks. :::
 
 ### 1. Node.js and Package Manager
 
-- **Node.js** >= 20.19.0
+- **Node.js** >= 22.13.0
 - **npm**, **yarn**, or **pnpm**
 - **Git**
 

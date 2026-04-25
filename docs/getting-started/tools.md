@@ -59,7 +59,7 @@ claude
 
 **Learn more**: [Claude Code Documentation](https://docs.anthropic.com/claude-code)
 
-### 2. Node.js >= 20.19.0
+### 2. Node.js >= 22.13.0
 
 **Why this version**: Required for:
 
@@ -71,8 +71,8 @@ claude
 
 ```bash
 # Using nvm (recommended)
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
 
 # Or download from nodejs.org
 ```
@@ -263,10 +263,10 @@ cmux is macOS only. For other platforms:
 # Check version
 node --version
 
-# Should be >= 20.19.0
+# Should be >= 22.13.0
 # If not, use nvm to upgrade
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
 ```
 
 ## Next Steps
