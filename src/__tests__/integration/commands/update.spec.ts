@@ -122,6 +122,63 @@ describe('updateCommand (integration)', () => {
     })
   })
 
+  // Regression guard for #290 — `sf update` is the migration vector that
+  // back-fills the JSON Schema URL into manifests scaffolded before #286
+  // shipped. The migration must persist on the early-return paths (most users
+  // run `sf update` to see "up to date" and bail) and never clobber a
+  // user-customized $schema (e.g. someone forking the schema for a private
+  // CLI build).
+  describe('$schema migration (#290)', () => {
+    const SCHEMA_URL = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json'
+
+    it('stamps $schema on a legacy manifest even when the run hits the early-return', async () => {
+      mockedGetModuleSelections.mockResolvedValue([])
+      const manifest = buildBaseManifest()
+      delete (manifest as Partial<SaaSFoundryManifest>).$schema
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+      await updateCommand()
+
+      const written = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest
+      expect(written.$schema).toBe(SCHEMA_URL)
+    })
+
+    it('writes $schema as the first field for shape parity with sf new', async () => {
+      mockedGetModuleSelections.mockResolvedValue([])
+      const manifest = buildBaseManifest()
+      delete (manifest as Partial<SaaSFoundryManifest>).$schema
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+      await updateCommand()
+
+      const written = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+      expect(Object.keys(written)[0]).toBe('$schema')
+    })
+
+    it('preserves a user-customized $schema (idempotent)', async () => {
+      mockedGetModuleSelections.mockResolvedValue([])
+      const customUrl = 'https://internal.example.com/schemas/saasfoundry-manifest.schema.json'
+      const manifest = buildBaseManifest({ $schema: customUrl })
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+      await updateCommand()
+
+      const written = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest
+      expect(written.$schema).toBe(customUrl)
+    })
+
+    it('does not mutate disk in --dry-run mode', async () => {
+      const manifest = buildBaseManifest()
+      delete (manifest as Partial<SaaSFoundryManifest>).$schema
+      const original = JSON.stringify(manifest)
+      await writeFile('.saasfoundry.json', original)
+
+      await updateCommand({ dryRun: true, nonInteractive: true })
+
+      expect(await readFile('.saasfoundry.json', 'utf8')).toBe(original)
+    })
+  })
+
   describe('no modules available', () => {
     it('returns early when everything is already installed', async () => {
       const manifest = buildBaseManifest({
