@@ -103,9 +103,7 @@ describe('saasfoundry-manifest.schema.json — rejection cases', () => {
   })
 
   it('rejects an unknown workflow.statuses[].color value', () => {
-    expect(
-      validate({ ...baseManifest, workflow: { tool: 'github-projects', statuses: [{ name: 'Done', color: 'NEON' }] } })
-    ).toBe(false)
+    expect(validate({ ...baseManifest, workflow: { tool: 'github-projects', statuses: [{ name: 'Done', color: 'NEON' }] } })).toBe(false)
   })
 
   it('rejects a non-string tools.srs.backend (schema pins const "notion")', () => {
