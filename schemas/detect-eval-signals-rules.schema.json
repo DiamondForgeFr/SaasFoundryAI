@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/detect-eval-signals-rules.schema.json",
+  "title": "sf-srs detect-eval-signals --rules output",
+  "description": "Shape of the JSON emitted by `.claude/skills/sf-srs/scripts/detect-eval-signals.sh --rules`. Pinned by #287 so the conversational eval hook contract is verifiable at commit time.",
+  "type": "object",
+  "required": ["description", "precondition", "throttle", "trivial_skip", "signals", "confirmation_flow", "patch_shape", "scope_limits_v1", "dogfood_checklist"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional pointer to this schema for IDE live validation."
+    },
+    "description": { "type": "string", "minLength": 1 },
+    "precondition": {
+      "type": "object",
+      "required": ["manifest_key", "expected_value", "behavior_when_disabled"],
+      "additionalProperties": false,
+      "properties": {
+        "manifest_key": { "type": "string", "minLength": 1 },
+        "expected_value": {},
+        "behavior_when_disabled": { "type": "string", "minLength": 1 }
+      }
+    },
+    "throttle": {
+      "type": "object",
+      "required": ["max_proposals_per_turn", "dedup_window"],
+      "additionalProperties": false,
+      "properties": {
+        "max_proposals_per_turn": { "type": "integer", "minimum": 1 },
+        "dedup_window": { "type": "string", "minLength": 1 }
+      }
+    },
+    "trivial_skip": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "signals": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/signal" }
+    },
+    "confirmation_flow": {
+      "type": "object",
+      "required": ["before_coding", "prompt_template", "branches"],
+      "additionalProperties": false,
+      "properties": {
+        "before_coding": { "type": "boolean" },
+        "prompt_template": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "branches": {
+          "type": "object",
+          "required": ["accept", "edit", "reject"],
+          "additionalProperties": false,
+          "properties": {
+            "accept": { "type": "string", "minLength": 1 },
+            "edit": { "type": "string", "minLength": 1 },
+            "reject": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "patch_shape": {
+      "type": "object",
+      "required": ["kind", "pageId", "item", "note"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "pageId": { "type": "string", "minLength": 1 },
+        "item": { "type": "string", "minLength": 1 },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scope_limits_v1": {
+      "type": "object",
+      "required": ["add_only", "append_placement", "add_fr"],
+      "additionalProperties": false,
+      "properties": {
+        "add_only": { "type": "string", "minLength": 1 },
+        "append_placement": { "type": "string", "minLength": 1 },
+        "add_fr": { "type": "string", "minLength": 1 }
+      }
+    },
+    "dogfood_checklist": { "type": "string", "minLength": 1 }
+  },
+  "definitions": {
+    "signal": {
+      "type": "object",
+      "required": ["id", "meaning", "target", "patch_kind", "example", "regex_hints"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": ["ur", "fr", "ds", "tc", "revision"]
+        },
+        "meaning": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "patch_kind": {
+          "type": "string",
+          "enum": ["add-ur", "add-fr", "add-ds", "add-tc"]
+        },
+        "example": { "type": "string", "minLength": 1 },
+        "regex_hints": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

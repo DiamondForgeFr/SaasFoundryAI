@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/clustering-rules.schema.json",
   "version": 1,
   "description": "Structured clustering & seeding rules consumed by the sf-srs drafting flow (`srs-cli.sh draft --from codebase`). SKILL.md points to this file; edit here, not in prose.",
   "finding_kinds": [
