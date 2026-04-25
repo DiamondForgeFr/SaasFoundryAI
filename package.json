@@ -6,13 +6,13 @@
   "description": "CLI for SaaSFoundry - Integrated SaaS Development Platform",
   "main": "dist/index.js",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=20.0.0",
+      "version": ">=22.0.0",
       "onFail": "error"
     },
     "packageManager": {

@@ -13,13 +13,13 @@
     "url": "https://github.com/agachet/saasfoundry/issues"
   },
   "engines": {
-    "node": ">=20.19.0",
+    "node": ">=22.13.0",
     "npm": ">=10.0.0"
   },
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=20.19.0",
+      "version": ">=22.13.0",
       "onFail": "error"
     },
     "packageManager": {

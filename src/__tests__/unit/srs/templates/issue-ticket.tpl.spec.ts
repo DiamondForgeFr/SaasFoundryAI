@@ -10,7 +10,7 @@ describe('renderIssueTicketBody', () => {
       behaviorObserved: 'POST /auth/login with empty password returns 500',
       expectedBehavior: 'Should return 400 with a validation error',
       stepsToReproduce: ['POST /auth/login', 'Leave password empty', 'Observe 500'],
-      environment: ['api@1.2.3', 'node 20.19.0'],
+      environment: ['api@1.2.3', 'node 22.13.0'],
       impact: 'Users see a generic error and cannot recover.',
       severity: 'high',
       evidence: ['stack trace at AuthService.ts:42']

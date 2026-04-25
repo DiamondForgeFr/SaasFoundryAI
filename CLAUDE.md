@@ -127,4 +127,4 @@ scripts/              # Version management (tag-manager.sh)
 - This is a **scaffold/generator** CLI — the code in `scaffolds/` is template code, not application code
 - **NEVER** modify scaffold templates without considering the impact on generated projects
 - Current version: 1.0.0-beta (npm package `saasfoundry-cli`)
-- Node.js >= 20.19.0 required (Prisma 7 + Vite 7)
+- Node.js >= 22.13.0 required (matches scaffolds + .nvmrc)
