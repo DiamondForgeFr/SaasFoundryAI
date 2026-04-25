@@ -470,7 +470,7 @@ cmd_create_subtask() {
   # success line so the intent is visible in shell history / PR review.
   if [ -f ".saasfoundry.json" ]; then
     local srs_backend
-    srs_backend=$(jq -r 'if (.tools.srs.backend | type) == "string" then .tools.srs.backend else empty end' .saasfoundry.json 2>/dev/null)
+    srs_backend=$(jq -r '.tools.srs.backend // empty' .saasfoundry.json)
     if [ -n "$srs_backend" ] && [ -z "$BYPASS_SRS_REASON" ]; then
       echo -e "${RED}✗ Rule 8: this project has SRS enabled (tools.srs.backend=${srs_backend}).${NC}" >&2
       echo "  Feature subtasks must be spawned from a drafted SRS page via:" >&2
