@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "description": "Shared TypeScript types consumed by both apps/api and apps/web",
   "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "type-check": "tsc --noEmit",

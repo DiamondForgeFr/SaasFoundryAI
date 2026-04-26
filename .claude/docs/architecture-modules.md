@@ -173,25 +173,28 @@ unconditionally. Their purpose is to give every monorepo project a canonical, dr
 
 **Source layout** — `scaffolds/overlays/monorepo/root/packages/shared-{types,validation,config}/`:
 
-- `package.json` declares a private workspace package with scoped name `@{{PROJECT_NAME}}/shared-*` and points `main`/`types` at `./src/index.ts` directly (no build step required for consumption).
-- `tsconfig.json` emits `./dist` declarations so a future strict bundler step can lean on it.
+- `package.json` declares a private workspace package with scoped name `@{{PROJECT_NAME}}/shared-*` and points `main`/`types` at the compiled `./dist/index.js` + `./dist/index.d.ts`. Consumers read the built artefacts.
+- `tsconfig.json` emits `./dist` declarations via `tsc` (the package's `build` script).
 - `src/index.ts` carries one placeholder export so the type-check pipeline exercises the package even before consumers wire schemas in.
 - `README.md` documents the rules: what goes in, what does not, how to add an entry.
 
 **App wiring** — `scaffolds/overlays/monorepo/{api,web}/`:
 
-- `tsconfig.json` (and `tsconfig.app.json` for web) extends the blueprint with three `paths` aliases pointing at `../../packages/shared-*/src`. TS resolution and Vite bundling both work via the alias,
-  so neither side needs the dist artefacts at dev time.
-- `package.json` declares the three packages as workspace deps (`"@<projectName>/shared-*": "*"`) so npm workspaces hoists them into the root `node_modules`.
-- `src/shared-wiring.ts` imports a value, a type and a schema from each package and re-exports a constant. This file is the compile-time proof that the alias chain is healthy — if any package drifts,
+- `package.json` declares the three packages as workspace deps (`"@<projectName>/shared-*": "*"`). npm workspaces symlinks them into the root `node_modules/@<projectName>/shared-*`, so standard
+  module resolution finds the compiled `dist/` entries from both apps. No tsconfig path alias is needed.
+- `src/shared-wiring.ts` imports a value, a type and a schema from each package and re-exports a constant. This file is the compile-time proof that the resolution chain is healthy — if any package drifts,
   `tsc -b` fails immediately.
+- Build order is handled by Turborepo: the `build` task uses `dependsOn: ["^build"]`, so `apps/api` and `apps/web` only compile after every `packages/shared-*` workspace has produced its `dist/`.
 
 **Placeholder substitution** — the scoped `@{{PROJECT_NAME}}/shared-*` literal is rewritten to the real project name during scaffold via `substitutePlaceholdersInFiles` (`src/utils.ts`). The
 substitution pass runs from:
 
 - `src/builders/monorepo.builder.ts` — patches the package files (`package.json`, `README.md`)
-- `src/builders/api.builder.ts` — patches `apps/api/{tsconfig.json, package.json, src/shared-wiring.ts}`
-- `src/builders/web.builder.ts` — patches `apps/web/{tsconfig.json, tsconfig.app.json, package.json, src/shared-wiring.ts}`
+- `src/builders/api.builder.ts` — patches `apps/api/{package.json, src/shared-wiring.ts}`
+- `src/builders/web.builder.ts` — patches `apps/web/{package.json, src/shared-wiring.ts}`
+
+**Dev-mode caveat** — because consumers read from `dist/`, edits to a shared package's source require a rebuild before `apps/api` (Nest watch) or `apps/web` (Vite HMR) sees the change. `npm run build`
+at the root (which calls `turbo run build`) handles the dependency order. A future iteration may wire each package's `tsc --watch` into the root `dev` task.
 
 **Why scoped names** — they avoid collisions with public npm packages and make grep + import autocomplete unambiguous. The convention mirrors how a real organisation would publish internal packages,
 even though we keep them `private: true`.

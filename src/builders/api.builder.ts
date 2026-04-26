@@ -41,8 +41,8 @@ export async function createApiApp({
     let eslintConfig = await readFile(eslintConfigPath, 'utf8')
     eslintConfig = eslintConfig.replace(`'./eslint-rules/no-version-prefix.mjs'`, `'../../eslint-rules/no-version-prefix.mjs'`)
     await writeFile(eslintConfigPath, eslintConfig)
-    // Substitute {{PROJECT_NAME}} in shared-* wiring (tsconfig path aliases, package deps, wiring proof)
-    await substitutePlaceholdersInFiles([`${apiPath}/tsconfig.json`, `${apiPath}/package.json`, `${apiPath}/src/shared-wiring.ts`], { PROJECT_NAME: projectName })
+    // Substitute {{PROJECT_NAME}} in shared-* wiring (workspace deps + wiring proof imports)
+    await substitutePlaceholdersInFiles([`${apiPath}/package.json`, `${apiPath}/src/shared-wiring.ts`], { PROJECT_NAME: projectName })
   }
 
   // Update package.json
