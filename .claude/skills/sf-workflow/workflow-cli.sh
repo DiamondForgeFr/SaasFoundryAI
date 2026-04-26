@@ -308,6 +308,65 @@ check_nature_guard() {
   return 1
 }
 
+# ───────────────────────────────────────────────────────────────────────────
+# PR-merged guard — Done requires the PR to be merged
+# ───────────────────────────────────────────────────────────────────────────
+#
+# A ticket cannot transition to Done while its PR is still open. Done means
+# "shipped to <workingBranch>"; an open PR means develop doesn't have the
+# commits yet, so moving to Done would create an inconsistent state. The PR
+# merge event is what should trigger Done — not reviewer approval.
+#
+# Tickets without any PR (Epic groupers, doc-only chores) are allowed through.
+# Fail-open on `gh` fetch errors (offline / auth). Escape hatch:
+# SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1.
+
+is_done_target() {
+  local target=$1
+  local normalized
+  normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
+  [[ "$normalized" == "done" ]]
+}
+
+get_open_pr_for_ticket() {
+  # Prints the PR number of the FIRST open PR whose head branch matches
+  # `feature/<ticket>-…` or `fix/<ticket>-…` (the conventions enforced by
+  # `.saasfoundry.json` → workflow.branchNaming). Empty if none.
+  # Returns 0 on clean fetch (even when no PR exists), 1 on fetch error.
+  local ticket=$1
+  local payload
+  payload=$(gh pr list --state open --json number,headRefName 2>/dev/null) || return 1
+  echo "$payload" | jq -r --arg t "$ticket" '
+    .[] | select(.headRefName | test("^(feature|fix)/" + $t + "(-|$)")) | .number
+  ' | head -n1
+}
+
+check_pr_merged_guard() {
+  # Returns 0 if the caller may proceed, 1 if blocked (message printed).
+  local ticket=$1
+  local target=$2
+
+  [[ "${SF_WORKFLOW_BYPASS_PR_MERGED_GUARD:-}" == "1" ]] && return 0
+  is_done_target "$target" || return 0
+
+  local pr_number
+  pr_number=$(get_open_pr_for_ticket "$ticket") || return 0   # fail-open on fetch error
+
+  if [[ -n "$pr_number" ]]; then
+    echo -e "${RED}✗ Ticket #${ticket} has an open PR (#${pr_number}) — cannot transition to 'Done'.${NC}" >&2
+    echo "" >&2
+    echo "  An open PR means '${WORKING_BRANCH}' doesn't have the commits yet." >&2
+    echo "  The PR merge event is what should trigger 'Done' — not reviewer approval." >&2
+    echo "" >&2
+    echo "  Current ticket should stay in 'In review'. After PR merge:" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh update-status ${ticket} Done" >&2
+    echo "" >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1" >&2
+    return 1
+  fi
+  return 0
+}
+
 # Function to show next status
 show_next_status() {
   local current_status=$1
@@ -473,6 +532,9 @@ case "$COMMAND" in
       exit 2
     fi
     if ! check_nature_guard "$TICKET" "$TARGET"; then
+      exit 2
+    fi
+    if ! check_pr_merged_guard "$TICKET" "$TARGET"; then
       exit 2
     fi
     route_to_tool "$WORKFLOW_TOOL" update-status "$@"

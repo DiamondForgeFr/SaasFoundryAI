@@ -2,8 +2,9 @@
 status: Done
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
-  - PR merged by the developer
+  - PR merged into the working branch (verified via `gh pr view <N> --json state` → `MERGED`)
   - Code is on the target branch
+  - Tickets without a PR (Epic groupers, doc-only chores) skip the merge check
 mandatory_actions:
   - Move ticket to `Done`
   - Local branch cleanup — checkout working branch, rebase-pull, delete feature branch
@@ -36,5 +37,11 @@ Finalization and cleanup after merge.
 
 ## Errors to avoid
 
-- Moving to Done before the actual merge
+- Moving to Done before the actual merge — `update-status` blocks this when an open PR exists for the ticket. The PR merge event is what triggers Done; reviewer "validation" / approval is **not** a
+  Done signal (the ticket stays in `In review` until merged).
 - Forgetting to rebase other in-progress branches
+
+## Guard
+
+`workflow-cli.sh update-status <N> Done` exits non-zero if `gh pr list --state open` finds a PR whose head branch matches `feature/<N>-…` or `fix/<N>-…`. Escape hatch (rare, e.g. force-closed PR
+re-opened by mistake): `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`.
