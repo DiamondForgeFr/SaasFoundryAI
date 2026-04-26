@@ -16,6 +16,7 @@ import {
   assertApiBuildOutput,
   assertClaudeMdConfigured,
   assertMonorepoBuildOutput,
+  assertMonorepoSharedPackages,
   assertMonorepoSkills,
   assertMultirepoSkills,
   assertWebBuildOutput,
@@ -211,6 +212,7 @@ async function runGenerationScenario(scenario: GenerationScenario): Promise<bool
 
   if (scenario.isMonorepo) {
     results.push(...assertMonorepoBuildOutput(projectDir))
+    results.push(...assertMonorepoSharedPackages(projectDir, scenario.projectName))
   } else {
     results.push(...assertApiBuildOutput(join(projectDir, 'apps', `${scenario.projectName}-api`)))
     results.push(...assertWebBuildOutput(join(projectDir, 'apps', `${scenario.projectName}-web`)))
@@ -299,6 +301,7 @@ async function runUpdateScenario(scenario: UpdateScenario): Promise<boolean> {
 
   if (scenario.base.isMonorepo) {
     results.push(...assertMonorepoBuildOutput(projectDir))
+    results.push(...assertMonorepoSharedPackages(projectDir, scenario.base.projectName))
   } else {
     results.push(...assertApiBuildOutput(join(projectDir, 'apps', `${scenario.base.projectName}-api`)))
     results.push(...assertWebBuildOutput(join(projectDir, 'apps', `${scenario.base.projectName}-web`)))

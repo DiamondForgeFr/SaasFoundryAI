@@ -117,6 +117,31 @@ export function assertMonorepoBuildOutput(projectPath: string): AssertionResult[
   return [...assertApiBuildOutput(join(projectPath, 'apps', 'api')), ...assertWebBuildOutput(join(projectPath, 'apps', 'web'))]
 }
 
+/**
+ * Verify the three monorepo shared packages are present, scoped to the project
+ * name, wired into both apps and built via `turbo run build`.
+ */
+export function assertMonorepoSharedPackages(projectPath: string, projectName: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+  const packages = ['shared-types', 'shared-validation', 'shared-config']
+  const scopedName = (pkg: string) => `"name": "@${projectName}/${pkg}"`
+
+  for (const pkg of packages) {
+    const pkgPath = join(projectPath, 'packages', pkg)
+    results.push(assertDirExists(pkgPath))
+    results.push(assertFileExists(join(pkgPath, 'package.json')))
+    results.push(assertFileExists(join(pkgPath, 'src', 'index.ts')))
+    results.push(assertFileContains(join(pkgPath, 'package.json'), scopedName(pkg)))
+    results.push(assertFileNotContains(join(pkgPath, 'package.json'), '{{PROJECT_NAME}}'))
+    results.push(assertFileExists(join(pkgPath, 'dist', 'index.js')))
+  }
+
+  results.push(assertFileExists(join(projectPath, 'apps', 'api', 'src', 'shared-wiring.ts')))
+  results.push(assertFileExists(join(projectPath, 'apps', 'web', 'src', 'shared-wiring.ts')))
+
+  return results
+}
+
 // ── Skills Assertions ──────────────────────────────────────────
 
 const CORE_SKILLS = ['sf-git-commit', 'sf-git-create-pr', 'sf-git-fix-pr-comments', 'sf-git-merge', 'sf-utils-fix-errors', 'sf-utils-fix-grammar']
