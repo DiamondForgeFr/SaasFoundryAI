@@ -24,10 +24,23 @@ This is a **Turborepo monorepo** with centralized tooling and shared skills.
 │   │   └── CLAUDE.md     # API-specific context
 │   └── web/              # React frontend
 │       └── CLAUDE.md     # Web-specific context
-├── packages/             # Shared packages (optional)
+├── packages/             # Shared packages (consumed by both apps/api and apps/web)
+│   ├── shared-types/     # Pure TypeScript types + z.infer outputs
+│   ├── shared-validation/ # Zod schemas (signup, signin, org CRUD, …)
+│   └── shared-config/    # Runtime constants (routes, flags, locales, …)
 ├── turbo.json            # Turborepo configuration
 └── package.json          # Root workspace configuration
 ```
+
+### 📦 Shared packages — the no-drift contract
+
+`packages/shared-*` is the single source of truth for code that must be identical on both sides of the wire. Each package is a private npm workspace published under `@{{PROJECT_NAME}}/shared-*`:
+
+- **`@{{PROJECT_NAME}}/shared-types`** — Pure TypeScript types and `z.infer` outputs reused by `apps/api` (DTO types) and `apps/web` (props, hook responses).
+- **`@{{PROJECT_NAME}}/shared-validation`** — Zod schemas consumed by NestJS DTOs (via the chosen Zod-Nest bridge) and React Hook Form (`zodResolver`). Define a schema once; both sides validate identically.
+- **`@{{PROJECT_NAME}}/shared-config`** — Runtime constants (public route segments, feature flag defaults, supported locales, validation thresholds) that both apps reference.
+
+Path aliases are wired in `apps/api/tsconfig.json` and `apps/web/{tsconfig.json,tsconfig.app.json}`, so `import { Foo } from '@{{PROJECT_NAME}}/shared-types'` works in both apps without an explicit build step. Each package ships its own README with the "what goes in / what does not" rules.
 
 ## 🎯 Skills Priority
 
