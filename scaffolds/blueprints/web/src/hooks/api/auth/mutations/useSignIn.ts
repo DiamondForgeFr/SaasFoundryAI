@@ -23,7 +23,7 @@ export const useSignInSchema = () => {
   const payload = buildSigninPayloadSchema({
     emailRequired: tAuth('fields.tk_emailRequired_'),
     emailInvalid: tAuth('fields.tk_emailError_'),
-    passwordRequired: tAuth('fields.tk_passwordRequired_'),
+    passwordMinLength: tAuth('fields.tk_passwordRequired_'),
     localeInvalid: tCommon('fields.tk_localeError_')
   })
 
