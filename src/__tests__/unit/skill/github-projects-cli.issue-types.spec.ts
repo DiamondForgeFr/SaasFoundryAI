@@ -35,7 +35,7 @@ const DEFAULT_MANIFEST_TYPES = [
   { name: 'Epic', color: 'PURPLE', description: 'Grouper' },
   { name: 'Story', color: 'BLUE', description: 'User value' },
   { name: 'Task', color: 'GRAY' },
-  { name: 'Issue', color: 'RED' }
+  { name: 'Issues', color: 'RED' }
 ]
 
 async function buildSandbox(opts: SandboxOpts = {}): Promise<Sandbox> {
@@ -191,7 +191,7 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
         { id: 'IT_E', name: 'Epic' },
         { id: 'IT_S', name: 'Story' },
         { id: 'IT_T', name: 'Task' },
-        { id: 'IT_I', name: 'Issue' }
+        { id: 'IT_I', name: 'Issues' }
       ]
     })
     const res = await runCli(['ensure-issue-types'], sandbox)
@@ -210,7 +210,7 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
     const res = await runCli(['ensure-issue-types'], sandbox)
     expect(res.code).toBe(0)
     const trace = readTrace(sandbox.tracePath)
-    expect(trace).toEqual(['create:Task:GRAY', 'create:Issue:RED'])
+    expect(trace).toEqual(['create:Task:GRAY', 'create:Issues:RED'])
     expect(res.stdout).toMatch(/2 missing type\(s\) to create/)
     expect(res.stdout).toMatch(/ensure-issue-types complete/)
   })
@@ -221,7 +221,7 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
         { id: 'IT_E', name: 'epic' },
         { id: 'IT_S', name: 'STORY' },
         { id: 'IT_T', name: 'Task' },
-        { id: 'IT_I', name: 'issue' }
+        { id: 'IT_I', name: 'issues' }
       ]
     })
     const res = await runCli(['ensure-issue-types'], sandbox)
@@ -235,7 +235,7 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
     expect(res.code).toBe(0)
     expect(res.stdout).toMatch(/\[dry-run\] would create: Story/)
     expect(res.stdout).toMatch(/\[dry-run\] would create: Task/)
-    expect(res.stdout).toMatch(/\[dry-run\] would create: Issue/)
+    expect(res.stdout).toMatch(/\[dry-run\] would create: Issues/)
     expect(readTrace(sandbox.tracePath)).toEqual([])
   })
 

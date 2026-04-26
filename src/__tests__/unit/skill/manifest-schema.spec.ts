@@ -55,7 +55,7 @@ describe('saasfoundry-manifest.schema.json — canonical shapes', () => {
           { name: 'Backlog', color: 'GRAY' },
           { name: 'In progress', color: 'BLUE' }
         ],
-        issueTypes: [{ name: 'Epic', description: 'Grouper', color: 'PURPLE' }, { name: 'Story', color: 'BLUE' }, { name: 'Task' }, { name: 'Issue', color: 'RED' }],
+        issueTypes: [{ name: 'Epic', description: 'Grouper', color: 'PURPLE' }, { name: 'Story', color: 'BLUE' }, { name: 'Task' }, { name: 'Issues', color: 'RED' }],
         validated: true,
         lastValidated: '2026-04-25T00:00:00.000Z'
       },
