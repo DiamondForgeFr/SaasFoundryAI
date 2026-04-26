@@ -132,6 +132,22 @@ export function setDefaultDbCredentials(credentials?: DbCredentials): DbCredenti
 }
 
 /**
+ * Replace `{{KEY}}` placeholders in the given files with the supplied values.
+ * Files that do not exist are skipped silently — overlay-driven scaffolds may
+ * not always materialise every targeted file.
+ */
+export async function substitutePlaceholdersInFiles(filePaths: string[], replacements: Record<string, string>): Promise<void> {
+  for (const filePath of filePaths) {
+    if (!(await fileExists(filePath))) continue
+    let content = await fs.promises.readFile(filePath, 'utf8')
+    for (const [key, value] of Object.entries(replacements)) {
+      content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
+    }
+    await fs.promises.writeFile(filePath, content, 'utf8')
+  }
+}
+
+/**
  * Check if a file exists
  */
 export async function fileExists(filePath: string): Promise<boolean> {

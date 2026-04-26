@@ -6,13 +6,26 @@ import { exec } from 'shelljs'
 import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
-import { fileExists, getNvmPrefix, validateProjectName } from '../utils'
+import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 
 export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch, workflow }: CreateMonorepoRootParams) {
   validateProjectName(projectName)
 
   // Copy monorepo root overlay to project root (current directory)
   await copy(resolve(overlaysPath, 'monorepo/root'), '.', { overwrite: true })
+
+  // Substitute {{PROJECT_NAME}} in shared-* package files (scoped package names + docs)
+  await substitutePlaceholdersInFiles(
+    [
+      'packages/shared-types/package.json',
+      'packages/shared-types/README.md',
+      'packages/shared-validation/package.json',
+      'packages/shared-validation/README.md',
+      'packages/shared-config/package.json',
+      'packages/shared-config/README.md'
+    ],
+    { PROJECT_NAME: projectName }
+  )
 
   const nvm = getNvmPrefix()
 
