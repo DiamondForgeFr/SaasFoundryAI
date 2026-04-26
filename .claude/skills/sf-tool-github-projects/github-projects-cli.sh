@@ -457,7 +457,7 @@ cmd_create_subtask() {
   # Native sub-issue linking (addSubIssue mutation below) makes the parent
   # relationship visible in the GitHub UI on its own — no need for a textual
   # `[Parent #N]` title prefix anymore. Native Issue Type chips (Epic/Story/
-  # Task/Issue) replace the old `[EPIC]`/`[STORY]` markers via assign-type.
+  # Task/Issues) replace the old `[EPIC]`/`[STORY]` markers via assign-type.
   FULL_TITLE="${TITLE}"
 
   # If no body was supplied, render a type-specific skeleton so the created
@@ -540,7 +540,7 @@ cmd_create_subtask() {
       epic)   target_type="Epic" ;;
       story)  target_type="Story" ;;
       task)   target_type="Task" ;;
-      issue)  target_type="Issue" ;;
+      issue)  target_type="Issues" ;;  # GitHub reserves "Issue" singular — must be plural
     esac
     if [ -n "$target_type" ]; then
       "$0" assign-type "$CHILD_NUMBER" "$target_type" 2>/dev/null || \

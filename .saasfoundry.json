@@ -66,8 +66,8 @@
         "color": "GRAY"
       },
       {
-        "name": "Issue",
-        "description": "Defect or unexpected behavior to investigate and fix",
+        "name": "Issues",
+        "description": "Defect or unexpected behavior to investigate and fix (plural form — 'Issue' singular is a GitHub-reserved name)",
         "color": "RED"
       }
     ]
