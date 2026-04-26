@@ -19,23 +19,39 @@ In a monorepo, the same domain shapes (User, Account, Organization, RBAC permiss
 - Validation schemas → `@{{PROJECT_NAME}}/shared-validation`
 - React-only or NestJS-only types — keep them in their respective app
 
+## How types are physically distributed
+
+This package is the **canonical source** for shared TypeScript types. To stay topology-agnostic
+(monorepo and multirepo scaffolds emit the same `apps/api` and `apps/web` blueprints), each app
+ships a **vendored mirror** of these files under `src/shared-types/` and imports them via the
+TS path alias `@shared-types/*`. The CLI's drift-guard test
+(`src/__tests__/integration/skill/shared-types-drift.spec.ts`) enforces byte-equality between:
+
+- `scaffolds/overlays/monorepo/root/packages/shared-types/src/` (this directory — canonical)
+- `scaffolds/blueprints/api/src/shared-types/` (vendored into every API)
+- `scaffolds/blueprints/web/src/shared-types/` (vendored into every Web)
+
+So in a generated **monorepo** the package exists for two reasons:
+1. It documents the canonical contract (one place to read/review).
+2. It is a real npm workspace so future shared **runtime** code (helpers, constants) can live next
+   to the types without re-introducing the topology split.
+
 ## How to add a new shared type
 
 1. Create or extend a file under `src/` named after the domain (e.g. `src/user.ts`).
-2. Export the type from `src/index.ts` so consumers can `import { Foo } from '@{{PROJECT_NAME}}/shared-types'`.
-3. Run `npx turbo run build --filter @{{PROJECT_NAME}}/shared-types` (or the workspace-wide `npm run build`) so the freshly compiled `dist/` is visible to consumers.
-4. Update `apps/api` or `apps/web` to consume the new type, then run `npm run type-check` from the repo root to verify both apps still compile.
+2. Export it from `src/index.ts`.
+3. Mirror the changes into both `scaffolds/blueprints/api/src/shared-types/` and
+   `scaffolds/blueprints/web/src/shared-types/` (or run the drift test — it will tell you what's
+   out of sync).
+4. Consumers import via `import type { Foo } from '@shared-types/index'` (the alias is wired in
+   each app's `tsconfig.json` / `tsconfig.app.json` / `vite.config.ts`).
 
 ## Consumption example
 
 ```ts
-import type { SharedTypesPlaceholder } from '@{{PROJECT_NAME}}/shared-types'
+import type { Organization } from '@shared-types/index'
 
-function describe(item: SharedTypesPlaceholder): string {
-  return `Item ${item.id}`
+function describe(org: Organization): string {
+  return `${org.name} (${org.type})`
 }
 ```
-
-Module resolution is handled by npm workspaces — the package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/shared-types` and consumed via its `main`/`types` entries (`dist/index.js` + `dist/index.d.ts`). No tsconfig path alias is required in the consuming apps.
-
-Because consumers read from `dist/`, any edit to this package's source must be followed by a build step before the apps pick it up. `npm run build` at the repo root (which calls `turbo run build`) handles the dependency order automatically.
