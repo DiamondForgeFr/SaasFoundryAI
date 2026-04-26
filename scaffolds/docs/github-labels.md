@@ -47,6 +47,24 @@ gh label create srs:new      --repo DiamondForgeFr/SaaSFoundry --color 3B82F6 --
 - **`sf feedback vote --list`** ranks open `module-request` issues by 👍 reaction count.
 - **`sf-srs` skill** reads the `srs:*` label on an active ticket to pick the right drafter action (see `.claude/skills/sf-srs/SKILL.md` — "How other skills hand off to `sf-srs`").
 
+## Labels used by `sf-workflow` (Nature axis)
+
+The Nature axis controls whether a ticket must visit **Human Testing** or can skip straight to **In Review** after AI Testing. See `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
+
+| Label                | Color     | Purpose                                                                                 | Workflow effect                                        |
+| -------------------- | --------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `nature:user-facing` | `#0E8A16` | Bug fix or feature with visible UX impact (default behaviour when no `nature:*` label). | Mandatory `AI Testing → Human Testing → In Review`     |
+| `nature:internal`    | `#C5DEF5` | Refactor, scaffolding, internal tooling, non-terminal story of a multi-step Epic.       | Optional `AI Testing → In Review` (skip Human Testing) |
+
+Create them once with:
+
+```bash
+gh label create "nature:user-facing" --repo DiamondForgeFr/SaaSFoundry --color "0E8A16" --description "Workflow: ticket has user-visible impact, requires Human Testing" || true
+gh label create "nature:internal"    --repo DiamondForgeFr/SaaSFoundry --color "C5DEF5" --description "Workflow: refactor/scaffolding/non-terminal story, Human Testing optional" || true
+```
+
+The `workflow-cli.sh update-status` guard enforces the rule — see "Nature guard" in `.claude/skills/sf-workflow/workflow-cli.sh`.
+
 ## Not managed here
 
 - `complexity: {bug,low,medium,complex}` — internal workflow labels, managed by `sf-tool-github-projects` (see `.claude/skills/sf-tool-github-projects/`).

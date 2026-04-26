@@ -20,7 +20,7 @@ exit_conditions:
   - Adversarial review complete (complex tickets only)
   - All Critical/High findings fixed
   - Code pushed
-next_status: Human Testing
+next_status: Human Testing (default) | In Review (when ticket has `nature:internal` label)
 ---
 
 # STATUS: AI Testing
@@ -37,7 +37,9 @@ First automated validation + test plan execution.
 - [ ] **On failure** — document, fix, commit, push, restart from automated tests
 - [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel review agents (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
       automated tests.
-- [ ] **On green** — post test report summary (include examine findings if complex), then transition to Human Testing
+- [ ] **On green** — post test report summary (include examine findings if complex), then transition:
+  - `nature:user-facing` (or no `nature:*` label): → **Human Testing**
+  - `nature:internal`: → **In Review** directly (skip Human Testing — see SKILL.md "Nature axis" section). The transition is enforced by the workflow guard.
 
 ## Errors to avoid
 

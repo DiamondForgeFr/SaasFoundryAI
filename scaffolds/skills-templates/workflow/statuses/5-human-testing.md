@@ -23,9 +23,16 @@ next_status: In Review (create PR)
 
 Manual validation by the developer, followed by non-regression test creation.
 
+## Applicability
+
+This status is **mandatory for `nature:user-facing` tickets** (or any ticket without a `nature:*` label — safe default). It is **skipped for `nature:internal` tickets**, which transition AI Testing →
+In Review directly. See SKILL.md "Nature axis" section.
+
 ## Ticket type
 
-- **Epic** — no manual test, no PR. Status is **derived** from children (only enters Human Testing when the last child does). Skip this checklist.
+- **Epic** — no manual test, no PR. Status is **derived** from children (only enters Human Testing when the last child does). Skip this checklist. **Special case** — when the Epic groups exclusively
+  `nature:internal` children, the meaningful manual validation happens at Epic completion (e.g. integration test on freshly merged `develop`); tag the Epic itself `nature:user-facing` so it visits
+  this status.
 - **Story / Task / Issue** — full flow below.
 
 ## Action checklist
