@@ -23,6 +23,7 @@
       "@modules/*": ["src/modules/*"],
       "@common/*": ["src/common/*"],
       "@configs/*": ["src/configs/*"],
+      "@shared-types/*": ["src/shared-types/*"],
       "@/*": ["src/*"]
     }
   }
