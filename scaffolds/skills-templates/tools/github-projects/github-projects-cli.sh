@@ -932,6 +932,9 @@ cmd_ensure_issue_types() {
 
   local owner
   owner=$(_get_issue_types_owner)
+  # `exit 1` inside _get_issue_types_owner only kills the $() subshell — the
+  # parent script keeps running with $owner empty unless we re-check here.
+  [ -z "$owner" ] && exit 1
 
   local desired_json
   desired_json=$(jq -c '.workflow.issueTypes // []' .saasfoundry.json 2>/dev/null)
@@ -989,7 +992,10 @@ cmd_ensure_issue_types() {
       }' \
       -F oid="$owner_id" -F n="$name" -F d="$desc" -F c="$color" 2>&1) || true
 
-    if echo "$resp" | jq -e '.data.createIssueType.issueType.id' > /dev/null 2>&1; then
+    # Treat "data + errors" partial responses as failures — GraphQL allows
+    # both to coexist, and we don't want a half-broken type silently logged
+    # as ✓ created.
+    if echo "$resp" | jq -e '.data.createIssueType.issueType.id and (.errors | not)' > /dev/null 2>&1; then
       echo -e "    ${GREEN}✓ created${NC} ${name} (${color})"
     else
       _handle_issue_type_error "Create issue type '${name}'" "$resp"
@@ -1011,6 +1017,7 @@ cmd_assign_type() {
 
   local owner
   owner=$(_get_issue_types_owner)
+  [ -z "$owner" ] && exit 1
 
   local type_id
   type_id=$(_find_type_id "$owner" "$type_name")
@@ -1036,7 +1043,7 @@ cmd_assign_type() {
     }' \
     -F iid="$issue_id" -F tid="$type_id" 2>&1) || true
 
-  if echo "$resp" | jq -e '.data.updateIssueIssueType.issue.number' > /dev/null 2>&1; then
+  if echo "$resp" | jq -e '.data.updateIssueIssueType.issue.number and (.errors | not)' > /dev/null 2>&1; then
     local applied
     applied=$(echo "$resp" | jq -r '.data.updateIssueIssueType.issue.issueType.name // "?"')
     echo -e "${GREEN}✓ Issue #${issue} → type '${applied}'${NC}"
@@ -1056,6 +1063,7 @@ cmd_delete_issue_type() {
 
   local owner
   owner=$(_get_issue_types_owner)
+  [ -z "$owner" ] && exit 1
 
   local type_id
   type_id=$(_find_type_id "$owner" "$type_name")
@@ -1069,7 +1077,7 @@ cmd_delete_issue_type() {
     -f query='mutation($tid:ID!){deleteIssueType(input:{issueTypeId:$tid}){clientMutationId}}' \
     -F tid="$type_id" 2>&1) || true
 
-  if echo "$resp" | jq -e '.data.deleteIssueType' > /dev/null 2>&1; then
+  if echo "$resp" | jq -e '.data.deleteIssueType and (.errors | not)' > /dev/null 2>&1; then
     _invalidate_types_cache
     echo -e "${GREEN}✓ Deleted issue type '${type_name}' from '${owner}'${NC}"
   else

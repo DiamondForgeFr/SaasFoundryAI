@@ -20,7 +20,7 @@ const BASH = '/bin/bash'
 interface SandboxOpts {
   existingTypes?: Array<{ id: string; name: string; color?: string; description?: string }>
   projectUrl?: string
-  failMode?: 'scopes' | 'permission' | 'unknown'
+  failMode?: 'scopes' | 'permission' | 'unknown' | 'partial-create' | 'partial-assign'
   manifestIssueTypes?: Array<{ name: string; color?: string; description?: string }>
 }
 
@@ -64,12 +64,20 @@ async function buildSandbox(opts: SandboxOpts = {}): Promise<Sandbox> {
   )
 
   if (opts.failMode) {
+    // The "partial-*" payloads pin the regression for the GraphQL "data + errors"
+    // case: a malformed mutation can return BOTH a `data.X.Y` field AND a top-level
+    // `errors[]`. Without a `.errors | not` guard the CLI would print "✓ created"
+    // while the type wasn't actually persisted. See _handle_issue_type_error.
     const payload =
       opts.failMode === 'scopes'
         ? '{"errors":[{"type":"INSUFFICIENT_SCOPES","message":"Resource not accessible by integration; admin:org scope required"}]}'
         : opts.failMode === 'permission'
           ? '{"errors":[{"type":"FORBIDDEN","message":"You are not authorized to perform this action"}]}'
-          : '{"errors":[{"message":"Schema is wonky"}]}'
+          : opts.failMode === 'partial-create'
+            ? '{"data":{"createIssueType":{"issueType":{"id":"IT_X","name":"X","color":"GRAY"}}},"errors":[{"message":"degraded"}]}'
+            : opts.failMode === 'partial-assign'
+              ? '{"data":{"updateIssueIssueType":{"issue":{"number":42,"issueType":{"name":"Story"}}}},"errors":[{"message":"degraded"}]}'
+              : '{"errors":[{"message":"Schema is wonky"}]}'
     await writeFile(failMarker, payload)
   }
 
@@ -252,6 +260,13 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
     expect(res.stderr).toMatch(/'admin:org' scope/)
     expect(res.stderr).toMatch(/gh auth refresh --hostname github\.com --scopes admin:org/)
   })
+
+  it('rejects "data + errors" partial responses instead of declaring success', async () => {
+    sandbox = await buildSandbox({ existingTypes: [], failMode: 'partial-create' })
+    const res = await runCli(['ensure-issue-types'], sandbox)
+    expect(res.code).toBe(1)
+    expect(res.stdout).not.toMatch(/✓ created/)
+  })
 })
 
 describe('sf-tool-github-projects — assign-type', () => {
@@ -298,6 +313,16 @@ describe('sf-tool-github-projects — assign-type', () => {
     expect(res.code).toBe(1)
     expect(res.stderr).toMatch(/Missing arguments/)
     expect(res.stderr).toMatch(/Usage:/)
+  })
+
+  it('rejects "data + errors" partial responses on assign instead of declaring success', async () => {
+    sandbox = await buildSandbox({
+      existingTypes: [{ id: 'IT_STORY', name: 'Story' }],
+      failMode: 'partial-assign'
+    })
+    const res = await runCli(['assign-type', '42', 'Story'], sandbox)
+    expect(res.code).toBe(1)
+    expect(res.stdout).not.toMatch(/Issue #42 → type 'Story'/)
   })
 })
 
