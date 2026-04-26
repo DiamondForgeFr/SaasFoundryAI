@@ -173,17 +173,18 @@ unconditionally. Their purpose is to give every monorepo project a canonical, dr
 
 **Source layout** — `scaffolds/overlays/monorepo/root/packages/shared-{types,validation,config}/`:
 
-- `package.json` declares a private workspace package with scoped name `@{{PROJECT_NAME}}/shared-*` and points `main`/`types` at the compiled `./dist/index.js` + `./dist/index.d.ts`. Consumers read the built artefacts.
+- `package.json` declares a private workspace package with scoped name `@{{PROJECT_NAME}}/shared-*` and points `main`/`types` at the compiled `./dist/index.js` + `./dist/index.d.ts`. Consumers read
+  the built artefacts.
 - `tsconfig.json` emits `./dist` declarations via `tsc` (the package's `build` script).
 - `src/index.ts` carries one placeholder export so the type-check pipeline exercises the package even before consumers wire schemas in.
 - `README.md` documents the rules: what goes in, what does not, how to add an entry.
 
 **App wiring** — `scaffolds/overlays/monorepo/{api,web}/`:
 
-- `package.json` declares the three packages as workspace deps (`"@<projectName>/shared-*": "*"`). npm workspaces symlinks them into the root `node_modules/@<projectName>/shared-*`, so standard
-  module resolution finds the compiled `dist/` entries from both apps. No tsconfig path alias is needed.
-- `src/shared-wiring.ts` imports a value, a type and a schema from each package and re-exports a constant. This file is the compile-time proof that the resolution chain is healthy — if any package drifts,
-  `tsc -b` fails immediately.
+- `package.json` declares the three packages as workspace deps (`"@<projectName>/shared-*": "*"`). npm workspaces symlinks them into the root `node_modules/@<projectName>/shared-*`, so standard module
+  resolution finds the compiled `dist/` entries from both apps. No tsconfig path alias is needed.
+- `src/shared-wiring.ts` imports a value, a type and a schema from each package and re-exports a constant. This file is the compile-time proof that the resolution chain is healthy — if any package
+  drifts, `tsc -b` fails immediately.
 - Build order is handled by Turborepo: the `build` task uses `dependsOn: ["^build"]`, so `apps/api` and `apps/web` only compile after every `packages/shared-*` workspace has produced its `dist/`.
 
 **Placeholder substitution** — the scoped `@{{PROJECT_NAME}}/shared-*` literal is rewritten to the real project name during scaffold via `substitutePlaceholdersInFiles` (`src/utils.ts`). The
