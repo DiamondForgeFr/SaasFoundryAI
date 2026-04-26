@@ -24,22 +24,22 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
 
 ## Fields read by each skill
 
-| Skill                     | Field                           | Purpose                                                                                                                                          |
-| ------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `sf-workflow`             | `workflow.tool`                 | Routes CLI calls to the right tool adapter                                                                                                       |
-| `sf-workflow`             | `workflow.workingBranch`        | Default branch for `git checkout -b feature/...`                                                                                                 |
-| `sf-workflow`             | `workflow.prTargetBranch`       | Default PR target                                                                                                                                |
-| `sf-workflow`             | `workflow.branchNaming.feature` | Pattern for feature branches                                                                                                                     |
-| `sf-workflow`             | `workflow.commitFormat.pattern` | Enforced by commitlint hook                                                                                                                      |
-| `sf-tool-github-projects` | `workflow.projectUrl`           | GitHub Projects V2 URL (org or user)                                                                                                             |
-| `sf-tool-github-projects` | `workflow.workingBranch`        | Used by `create-pr` to target the right base                                                                                                     |
-| `sf-tool-github-projects` | `workflow.statuses`             | Status options declared on the board                                                                                                             |
-| `sf-tool-github-projects` | `workflow.issueTypes`           | Native GitHub Issue Type chips (Epic/Story/Task/Issues) — org-level. Note: `Issues` is plural because GitHub reserves the singular `Issue` name. |
-| `sf-tool-github-projects` | `tools.srs.backend`             | Enables SRS gating on `create-subtask` (Rule 8)                                                                                                  |
-| `sf-srs`                  | `tools.srs.backend`             | Resolves which `SrsAdapter` to instantiate                                                                                                       |
-| `sf-srs`                  | `tools.srs.rootPage.id`         | Default root container for drafters / eval                                                                                                       |
-| `sf-srs`                  | `tools.srs.enabled`             | Gates the conversational eval hook                                                                                                               |
-| `sf-srs`                  | `tools.srs.scan.exclude`        | Extra exclusion patterns on top of `.gitignore` + `.srsignore`                                                                                   |
+| Skill                     | Field                           | Purpose                                                                                                                                                                                                                                     |
+| ------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sf-workflow`             | `workflow.tool`                 | Routes CLI calls to the right tool adapter                                                                                                                                                                                                  |
+| `sf-workflow`             | `workflow.workingBranch`        | Default branch for `git checkout -b feature/...`                                                                                                                                                                                            |
+| `sf-workflow`             | `workflow.prTargetBranch`       | Default PR target                                                                                                                                                                                                                           |
+| `sf-workflow`             | `workflow.branchNaming.feature` | Pattern for feature branches                                                                                                                                                                                                                |
+| `sf-workflow`             | `workflow.commitFormat.pattern` | Enforced by commitlint hook                                                                                                                                                                                                                 |
+| `sf-tool-github-projects` | `workflow.projectUrl`           | GitHub Projects V2 URL (org or user)                                                                                                                                                                                                        |
+| `sf-tool-github-projects` | `workflow.workingBranch`        | Used by `create-pr` to target the right base                                                                                                                                                                                                |
+| `sf-tool-github-projects` | `workflow.statuses`             | Status options declared on the board                                                                                                                                                                                                        |
+| `sf-tool-github-projects` | `workflow.issueTypes`           | Native GitHub Issue Type chips (sf-epic/sf-story/sf-task/sf-issue) — org-level. The `sf-` prefix avoids collisions with vanilla Epic/Story/Task types defined elsewhere in the org and sidesteps the GitHub-reserved singular `Issue` name. |
+| `sf-tool-github-projects` | `tools.srs.backend`             | Enables SRS gating on `create-subtask` (Rule 8)                                                                                                                                                                                             |
+| `sf-srs`                  | `tools.srs.backend`             | Resolves which `SrsAdapter` to instantiate                                                                                                                                                                                                  |
+| `sf-srs`                  | `tools.srs.rootPage.id`         | Default root container for drafters / eval                                                                                                                                                                                                  |
+| `sf-srs`                  | `tools.srs.enabled`             | Gates the conversational eval hook                                                                                                                                                                                                          |
+| `sf-srs`                  | `tools.srs.scan.exclude`        | Extra exclusion patterns on top of `.gitignore` + `.srsignore`                                                                                                                                                                              |
 
 ## Canonical shape
 
@@ -75,10 +75,10 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
       { "name": "Done", "color": "GREEN" }
     ],
     "issueTypes": [
-      { "name": "Epic", "description": "Grouper for related Stories/Tasks (no PR, no branch)", "color": "PURPLE" },
-      { "name": "Story", "description": "Delivers user-observable value", "color": "BLUE" },
-      { "name": "Task", "description": "Delivers a technical action", "color": "GRAY" },
-      { "name": "Issues", "description": "Defect or unexpected behavior (plural — GitHub reserves the singular 'Issue' name)", "color": "RED" }
+      { "name": "sf-epic", "description": "Grouper for related sf-stories/sf-tasks (no PR, no branch)", "color": "PURPLE" },
+      { "name": "sf-story", "description": "Delivers user-observable value", "color": "BLUE" },
+      { "name": "sf-task", "description": "Delivers a technical action", "color": "GRAY" },
+      { "name": "sf-issue", "description": "Defect or unexpected behavior to investigate and fix", "color": "RED" }
     ]
   },
   "tools": {

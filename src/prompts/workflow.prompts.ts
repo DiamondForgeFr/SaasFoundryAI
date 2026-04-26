@@ -58,6 +58,12 @@ const WORKFLOW_PRESETS = {
           'Feature completed and merged to main branch. Code is deployed or ready for deployment. Close the ticket, archive subtasks, and update any related documentation. Celebrate the win!',
         color: 'GREEN' as GitHubProjectColor
       }
+    ],
+    issueTypes: [
+      { name: 'sf-epic', description: 'Grouper for related sf-stories/sf-tasks (no PR, no branch)', color: 'PURPLE' as GitHubProjectColor },
+      { name: 'sf-story', description: 'Delivers user-observable value', color: 'BLUE' as GitHubProjectColor },
+      { name: 'sf-task', description: 'Delivers a technical action (refactor, infra, tooling)', color: 'GRAY' as GitHubProjectColor },
+      { name: 'sf-issue', description: 'Defect or unexpected behavior to investigate and fix', color: 'RED' as GitHubProjectColor }
     ]
   }
 }
@@ -340,6 +346,8 @@ export const DEFAULT_STATUSES = {
   linear: WORKFLOW_PRESETS.saasfoundry.statuses,
   none: []
 }
+
+export const DEFAULT_ISSUE_TYPES = WORKFLOW_PRESETS.saasfoundry.issueTypes
 
 export const DEFAULT_BRANCH_NAMING = {
   feature: 'feature/{name}',
@@ -974,6 +982,7 @@ export async function promptWorkflowConfiguration(
     prTargetBranch,
     requireCodeReview,
     statuses: workflowStatuses.length > 0 ? workflowStatuses : DEFAULT_STATUSES[tool as keyof typeof DEFAULT_STATUSES],
+    issueTypes: tool === 'github-projects' ? DEFAULT_ISSUE_TYPES : undefined,
     branchNaming: DEFAULT_BRANCH_NAMING,
     commitFormat: DEFAULT_COMMIT_FORMAT
   }
@@ -1019,6 +1028,7 @@ export async function promptWorkflowConfiguration(
         prTargetBranch: workflowConfig.prTargetBranch!,
         requireCodeReview: workflowConfig.requireCodeReview!,
         statuses: workflowConfig.statuses!,
+        issueTypes: workflowConfig.issueTypes,
         branchNaming: workflowConfig.branchNaming!,
         commitFormat: workflowConfig.commitFormat!,
         aiRules: aiRulesConfig

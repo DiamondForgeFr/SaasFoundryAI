@@ -456,8 +456,11 @@ cmd_create_subtask() {
   BODY="${POSITIONAL[2]:-}"
   # Native sub-issue linking (addSubIssue mutation below) makes the parent
   # relationship visible in the GitHub UI on its own — no need for a textual
-  # `[Parent #N]` title prefix anymore. Native Issue Type chips (Epic/Story/
-  # Task/Issues) replace the old `[EPIC]`/`[STORY]` markers via assign-type.
+  # `[Parent #N]` title prefix anymore. Native Issue Type chips
+  # (sf-epic/sf-story/sf-task/sf-issue) replace the old `[EPIC]`/`[STORY]`
+  # markers via assign-type. The `sf-` prefix avoids collisions with vanilla
+  # Epic/Story/Task types defined elsewhere in the org and sidesteps the
+  # "Issue" reserved-name constraint.
   FULL_TITLE="${TITLE}"
 
   # If no body was supplied, render a type-specific skeleton so the created
@@ -537,10 +540,10 @@ cmd_create_subtask() {
   if [ "${declared_types:-0}" != "0" ]; then
     local target_type
     case "$TICKET_TYPE" in
-      epic)   target_type="Epic" ;;
-      story)  target_type="Story" ;;
-      task)   target_type="Task" ;;
-      issue)  target_type="Issues" ;;  # GitHub reserves "Issue" singular — must be plural
+      epic)   target_type="sf-epic" ;;
+      story)  target_type="sf-story" ;;
+      task)   target_type="sf-task" ;;
+      issue)  target_type="sf-issue" ;;  # `sf-` prefix avoids the GitHub-reserved "Issue" name
     esac
     if [ -n "$target_type" ]; then
       "$0" assign-type "$CHILD_NUMBER" "$target_type" 2>/dev/null || \
@@ -1122,7 +1125,7 @@ case "$COMMAND" in
     echo "  list [status]                            List project items (optionally filtered)"
     echo "  cache-clear                              Drop the on-disk schema cache"
     echo "  ensure-issue-types [--dry-run]           Idempotently create missing issue types from .saasfoundry.json"
-    echo "  assign-type <issue> <type>               Assign a native GitHub Issue Type (Epic|Story|Task|Issue)"
+    echo "  assign-type <issue> <type>               Assign a native GitHub Issue Type (sf-epic|sf-story|sf-task|sf-issue)"
     echo "  delete-issue-type <type>                 Remove an issue type from the org (cleanup)"
     exit 1
     ;;

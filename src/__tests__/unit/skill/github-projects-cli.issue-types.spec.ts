@@ -32,10 +32,10 @@ interface Sandbox {
 }
 
 const DEFAULT_MANIFEST_TYPES = [
-  { name: 'Epic', color: 'PURPLE', description: 'Grouper' },
-  { name: 'Story', color: 'BLUE', description: 'User value' },
-  { name: 'Task', color: 'GRAY' },
-  { name: 'Issues', color: 'RED' }
+  { name: 'sf-epic', color: 'PURPLE', description: 'Grouper' },
+  { name: 'sf-story', color: 'BLUE', description: 'User value' },
+  { name: 'sf-task', color: 'GRAY' },
+  { name: 'sf-issue', color: 'RED' }
 ]
 
 async function buildSandbox(opts: SandboxOpts = {}): Promise<Sandbox> {
@@ -76,7 +76,7 @@ async function buildSandbox(opts: SandboxOpts = {}): Promise<Sandbox> {
           : opts.failMode === 'partial-create'
             ? '{"data":{"createIssueType":{"issueType":{"id":"IT_X","name":"X","color":"GRAY"}}},"errors":[{"message":"degraded"}]}'
             : opts.failMode === 'partial-assign'
-              ? '{"data":{"updateIssueIssueType":{"issue":{"number":42,"issueType":{"name":"Story"}}}},"errors":[{"message":"degraded"}]}'
+              ? '{"data":{"updateIssueIssueType":{"issue":{"number":42,"issueType":{"name":"sf-story"}}}},"errors":[{"message":"degraded"}]}'
               : '{"errors":[{"message":"Schema is wonky"}]}'
     await writeFile(failMarker, payload)
   }
@@ -127,7 +127,7 @@ if [ "$1" = "api" ] && [ "$2" = "graphql" ]; then
       cat "$FAIL_MARKER"
       exit 1
     fi
-    echo '{"data":{"updateIssueIssueType":{"issue":{"number":42,"issueType":{"name":"Story"}}}}}'
+    echo '{"data":{"updateIssueIssueType":{"issue":{"number":42,"issueType":{"name":"sf-story"}}}}}'
     exit 0
   fi
   if echo "$query" | grep -q 'deleteIssueType'; then
@@ -188,10 +188,10 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
   it('reports "all already exist" when the org has every declared type', async () => {
     sandbox = await buildSandbox({
       existingTypes: [
-        { id: 'IT_E', name: 'Epic' },
-        { id: 'IT_S', name: 'Story' },
-        { id: 'IT_T', name: 'Task' },
-        { id: 'IT_I', name: 'Issues' }
+        { id: 'IT_E', name: 'sf-epic' },
+        { id: 'IT_S', name: 'sf-story' },
+        { id: 'IT_T', name: 'sf-task' },
+        { id: 'IT_I', name: 'sf-issue' }
       ]
     })
     const res = await runCli(['ensure-issue-types'], sandbox)
@@ -203,14 +203,14 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
   it('creates only the missing types, leaving existing ones untouched', async () => {
     sandbox = await buildSandbox({
       existingTypes: [
-        { id: 'IT_E', name: 'Epic' },
-        { id: 'IT_S', name: 'Story' }
+        { id: 'IT_E', name: 'sf-epic' },
+        { id: 'IT_S', name: 'sf-story' }
       ]
     })
     const res = await runCli(['ensure-issue-types'], sandbox)
     expect(res.code).toBe(0)
     const trace = readTrace(sandbox.tracePath)
-    expect(trace).toEqual(['create:Task:GRAY', 'create:Issues:RED'])
+    expect(trace).toEqual(['create:sf-task:GRAY', 'create:sf-issue:RED'])
     expect(res.stdout).toMatch(/2 missing type\(s\) to create/)
     expect(res.stdout).toMatch(/ensure-issue-types complete/)
   })
@@ -218,10 +218,10 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
   it('matches existing names case-insensitively (no duplicate creation)', async () => {
     sandbox = await buildSandbox({
       existingTypes: [
-        { id: 'IT_E', name: 'epic' },
-        { id: 'IT_S', name: 'STORY' },
-        { id: 'IT_T', name: 'Task' },
-        { id: 'IT_I', name: 'issues' }
+        { id: 'IT_E', name: 'SF-EPIC' },
+        { id: 'IT_S', name: 'Sf-Story' },
+        { id: 'IT_T', name: 'sf-task' },
+        { id: 'IT_I', name: 'SF-ISSUE' }
       ]
     })
     const res = await runCli(['ensure-issue-types'], sandbox)
@@ -230,12 +230,12 @@ describe('sf-tool-github-projects — ensure-issue-types', () => {
   })
 
   it('--dry-run lists missing types without firing any mutation', async () => {
-    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_E', name: 'Epic' }] })
+    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_E', name: 'sf-epic' }] })
     const res = await runCli(['ensure-issue-types', '--dry-run'], sandbox)
     expect(res.code).toBe(0)
-    expect(res.stdout).toMatch(/\[dry-run\] would create: Story/)
-    expect(res.stdout).toMatch(/\[dry-run\] would create: Task/)
-    expect(res.stdout).toMatch(/\[dry-run\] would create: Issues/)
+    expect(res.stdout).toMatch(/\[dry-run\] would create: sf-story/)
+    expect(res.stdout).toMatch(/\[dry-run\] would create: sf-task/)
+    expect(res.stdout).toMatch(/\[dry-run\] would create: sf-issue/)
     expect(readTrace(sandbox.tracePath)).toEqual([])
   })
 
@@ -274,35 +274,35 @@ describe('sf-tool-github-projects — assign-type', () => {
   afterEach(async () => sandbox?.cleanup())
 
   it('looks up the type id and calls updateIssueIssueType', async () => {
-    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_STORY', name: 'Story' }] })
-    const res = await runCli(['assign-type', '42', 'Story'], sandbox)
+    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_STORY', name: 'sf-story' }] })
+    const res = await runCli(['assign-type', '42', 'sf-story'], sandbox)
     expect(res.code).toBe(0)
-    expect(res.stdout).toMatch(/Issue #42 → type 'Story'/)
+    expect(res.stdout).toMatch(/Issue #42 → type 'sf-story'/)
     expect(readTrace(sandbox.tracePath)).toEqual(['assign:I_ISSUE_42:IT_STORY'])
   })
 
   it('matches the type name case-insensitively', async () => {
-    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_STORY', name: 'Story' }] })
-    const res = await runCli(['assign-type', '42', 'story'], sandbox)
+    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_STORY', name: 'sf-story' }] })
+    const res = await runCli(['assign-type', '42', 'SF-STORY'], sandbox)
     expect(res.code).toBe(0)
     expect(readTrace(sandbox.tracePath)).toEqual(['assign:I_ISSUE_42:IT_STORY'])
   })
 
   it('exits 1 with a remediation hint when the type is unknown to the org', async () => {
-    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_E', name: 'Epic' }] })
-    const res = await runCli(['assign-type', '42', 'Saga'], sandbox)
+    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_E', name: 'sf-epic' }] })
+    const res = await runCli(['assign-type', '42', 'sf-saga'], sandbox)
     expect(res.code).toBe(1)
-    expect(res.stderr).toMatch(/Issue type 'Saga' not found/)
+    expect(res.stderr).toMatch(/Issue type 'sf-saga' not found/)
     expect(res.stderr).toMatch(/ensure-issue-types/)
     expect(readTrace(sandbox.tracePath)).toEqual([])
   })
 
   it('translates permission errors into a manual-fallback message', async () => {
     sandbox = await buildSandbox({
-      existingTypes: [{ id: 'IT_STORY', name: 'Story' }],
+      existingTypes: [{ id: 'IT_STORY', name: 'sf-story' }],
       failMode: 'permission'
     })
-    const res = await runCli(['assign-type', '42', 'Story'], sandbox)
+    const res = await runCli(['assign-type', '42', 'sf-story'], sandbox)
     expect(res.code).toBe(1)
     expect(res.stderr).toMatch(/Permission denied|admin:org/)
   })
@@ -317,12 +317,12 @@ describe('sf-tool-github-projects — assign-type', () => {
 
   it('rejects "data + errors" partial responses on assign instead of declaring success', async () => {
     sandbox = await buildSandbox({
-      existingTypes: [{ id: 'IT_STORY', name: 'Story' }],
+      existingTypes: [{ id: 'IT_STORY', name: 'sf-story' }],
       failMode: 'partial-assign'
     })
-    const res = await runCli(['assign-type', '42', 'Story'], sandbox)
+    const res = await runCli(['assign-type', '42', 'sf-story'], sandbox)
     expect(res.code).toBe(1)
-    expect(res.stdout).not.toMatch(/Issue #42 → type 'Story'/)
+    expect(res.stdout).not.toMatch(/Issue #42 → type 'sf-story'/)
   })
 })
 
@@ -331,7 +331,7 @@ describe('sf-tool-github-projects — delete-issue-type', () => {
   afterEach(async () => sandbox?.cleanup())
 
   it('is idempotent when the type is already absent (no mutation)', async () => {
-    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_S', name: 'Story' }] })
+    sandbox = await buildSandbox({ existingTypes: [{ id: 'IT_S', name: 'sf-story' }] })
     const res = await runCli(['delete-issue-type', 'Bug'], sandbox)
     expect(res.code).toBe(0)
     expect(res.stdout).toMatch(/Type 'Bug' not present/)

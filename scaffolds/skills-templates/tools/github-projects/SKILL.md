@@ -10,11 +10,11 @@ github project, create subtask, update ticket status, github issue, project boar
 
 Three orthogonal axes on every ticket:
 
-| Axis           | Where it lives                                              | What it controls                                                                                                                            |
-| -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**     | Projects V2 board (Single select field "Status")            | Workflow phase (Backlog → … → Done)                                                                                                         |
-| **Complexity** | GitHub label (`complexity: bug\|low\|medium\|complex`)      | Rigor level applied in each phase (agents, tests, reviews)                                                                                  |
-| **Type**       | GitHub Issue Type (org-level chip — Epic/Story/Task/Issues) | Ticket nature in the hierarchy (replaces `[EPIC]`/`[STORY]` title markers). `Issues` is plural — GitHub reserves the singular `Issue` name. |
+| Axis           | Where it lives                                                         | What it controls                                                                                                                                                                                                                        |
+| -------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Status**     | Projects V2 board (Single select field "Status")                       | Workflow phase (Backlog → … → Done)                                                                                                                                                                                                     |
+| **Complexity** | GitHub label (`complexity: bug\|low\|medium\|complex`)                 | Rigor level applied in each phase (agents, tests, reviews)                                                                                                                                                                              |
+| **Type**       | GitHub Issue Type (org-level chip — sf-epic/sf-story/sf-task/sf-issue) | Ticket nature in the hierarchy (replaces `[EPIC]`/`[STORY]` title markers). The `sf-` prefix avoids collisions with vanilla Epic/Story/Task types defined elsewhere in the org and sidesteps the GitHub-reserved singular `Issue` name. |
 
 Never encode status in a label. Never encode complexity on the board. Type is org-scoped — a single set of types serves every repo in the org.
 
@@ -40,7 +40,7 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 | `create-pr <ticket>`                     | Push branch + open PR against `workingBranch`                                                     |
 | `list [status]`                          | List project items, optionally filtered by status                                                 |
 | `ensure-issue-types [--dry-run]`         | Idempotently create org-level issue types from `workflow.issueTypes` in `.saasfoundry.json`       |
-| `assign-type <issue> <type>`             | Attach a native GitHub Issue Type chip (Epic/Story/Task/Issues) to the issue                      |
+| `assign-type <issue> <type>`             | Attach a native GitHub Issue Type chip (sf-epic/sf-story/sf-task/sf-issue) to the issue           |
 | `delete-issue-type <type>`               | Remove an issue type from the org (cleanup of legacy types like Bug/Feature)                      |
 
 Status names are case-insensitive — the CLI matches against the options defined on the board.

@@ -51,23 +51,23 @@
     ],
     "issueTypes": [
       {
-        "name": "Epic",
-        "description": "Grouper for related Stories/Tasks (no PR, no branch)",
+        "name": "sf-epic",
+        "description": "Grouper for related sf-stories/sf-tasks (no PR, no branch)",
         "color": "PURPLE"
       },
       {
-        "name": "Story",
+        "name": "sf-story",
         "description": "Delivers user-observable value",
         "color": "BLUE"
       },
       {
-        "name": "Task",
+        "name": "sf-task",
         "description": "Delivers a technical action (refactor, infra, tooling)",
         "color": "GRAY"
       },
       {
-        "name": "Issues",
-        "description": "Defect or unexpected behavior to investigate and fix (plural form — 'Issue' singular is a GitHub-reserved name)",
+        "name": "sf-issue",
+        "description": "Defect or unexpected behavior to investigate and fix",
         "color": "RED"
       }
     ]
