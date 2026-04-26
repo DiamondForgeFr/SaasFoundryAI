@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
-export class SignUpResponseDto {
+import type { SignUpResponse } from '@shared-types/index'
+
+export class SignUpResponseDto implements SignUpResponse {
   @ApiProperty({
     description: 'Registration confirmation message',
     example: 'User registration successful. Please check your email for confirmation.'

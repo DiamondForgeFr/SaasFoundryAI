@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-export class OrganizationDto {
+import type { Collection, EntityWithOrgRef, OrganizationRef } from '@shared-types/index'
+
+export class OrganizationDto implements OrganizationRef {
   @ApiProperty({
     description: 'Organization ID',
     example: '123e4567-e89b-12d3-a456-426614174000'
@@ -14,7 +16,7 @@ export class OrganizationDto {
   name: string
 }
 
-export class EntityWithOrganizationDto {
+export class EntityWithOrganizationDto implements EntityWithOrgRef {
   @ApiProperty({
     description: 'Entity ID',
     example: 'cmagp5dy70001t84nzb9t39j8'
@@ -163,7 +165,7 @@ export class AccountRoleDto {
   updatedAt: Date
 }
 
-export class CollectionResponseDto<T> {
+export class CollectionResponseDto<T> implements Collection<T> {
   @ApiProperty({
     description: 'Total number of items in the collection'
   })

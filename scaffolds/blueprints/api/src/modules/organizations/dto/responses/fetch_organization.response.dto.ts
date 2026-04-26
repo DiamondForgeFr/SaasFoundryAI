@@ -4,10 +4,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { OrganizationType } from '@/generated/prisma/client'
 
+import type { Organization } from '@shared-types/index'
+
 /**
  * Declaration
  */
-export class FetchOrganizationResponseDto {
+export class FetchOrganizationResponseDto implements Organization {
   @ApiProperty({
     description: 'Organization unique identifier',
     example: '123e4567-e89b-12d3-a456-426614174000'
