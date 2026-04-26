@@ -44,9 +44,6 @@ import { sharedValidationPlaceholderSchema } from '@{{PROJECT_NAME}}/shared-vali
 const form = useForm({ resolver: zodResolver(sharedValidationPlaceholderSchema) })
 ```
 
-The path alias resolution is wired in:
+Module resolution is handled by npm workspaces — the package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/shared-validation` and consumed via its `main`/`types` entries (`dist/index.js` + `dist/index.d.ts`). No tsconfig path alias is required in the consuming apps.
 
-- `apps/api/tsconfig.json` → `paths`
-- `apps/web/tsconfig.json` + `tsconfig.app.json` → `paths`
-
-Vite bundles the schema at build time via the path alias; HMR triggers automatically when this package's source changes.
+Because consumers read from `dist/`, any edit to this package's source must be followed by a build step before the apps pick it up. `npm run build` at the repo root (which calls `turbo run build`) handles the dependency order automatically.

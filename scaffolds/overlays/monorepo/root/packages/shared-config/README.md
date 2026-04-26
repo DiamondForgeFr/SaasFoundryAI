@@ -36,9 +36,6 @@ import { SHARED_CONFIG_PLACEHOLDER } from '@{{PROJECT_NAME}}/shared-config'
 console.log(`Hello from ${SHARED_CONFIG_PLACEHOLDER}`)
 ```
 
-The path alias resolution is wired in:
+Module resolution is handled by npm workspaces — the package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/shared-config` and consumed via its `main`/`types` entries (`dist/index.js` + `dist/index.d.ts`). No tsconfig path alias is required in the consuming apps.
 
-- `apps/api/tsconfig.json` → `paths`
-- `apps/web/tsconfig.json` + `tsconfig.app.json` → `paths`
-
-Hot reload works automatically — editing this package's source triggers a recompile in `apps/api` (Nest watch) and HMR in `apps/web` (Vite).
+Because consumers read from `dist/`, any edit to this package's source must be followed by a build step before the apps pick it up. `npm run build` at the repo root (which calls `turbo run build`) handles the dependency order automatically.

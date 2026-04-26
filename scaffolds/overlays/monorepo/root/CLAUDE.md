@@ -40,7 +40,7 @@ This is a **Turborepo monorepo** with centralized tooling and shared skills.
 - **`@{{PROJECT_NAME}}/shared-validation`** — Zod schemas consumed by NestJS DTOs (via the chosen Zod-Nest bridge) and React Hook Form (`zodResolver`). Define a schema once; both sides validate identically.
 - **`@{{PROJECT_NAME}}/shared-config`** — Runtime constants (public route segments, feature flag defaults, supported locales, validation thresholds) that both apps reference.
 
-Path aliases are wired in `apps/api/tsconfig.json` and `apps/web/{tsconfig.json,tsconfig.app.json}`, so `import { Foo } from '@{{PROJECT_NAME}}/shared-types'` works in both apps without an explicit build step. Each package ships its own README with the "what goes in / what does not" rules.
+Module resolution goes through npm workspaces — each package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/shared-*` and consumed via its compiled `dist/` (set as the package's `main`/`types`). Build order is handled by Turborepo (`build` depends on `^build`), so `npm run build` always rebuilds shared packages first. After editing a shared package's source, run `npm run build` (or rely on CI) before the change is picked up by `apps/api` or `apps/web`. Each package ships its own README with the "what goes in / what does not" rules.
 
 ## 🎯 Skills Priority
 
