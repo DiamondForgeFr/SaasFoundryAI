@@ -50,6 +50,7 @@ docs/.vitepress/dist/
 
 # Claude Code runtime
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 
 # Local env (tokens, secrets — never committed)
 .env
