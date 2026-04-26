@@ -55,7 +55,7 @@ describe('saasfoundry-manifest.schema.json — canonical shapes', () => {
           { name: 'Backlog', color: 'GRAY' },
           { name: 'In progress', color: 'BLUE' }
         ],
-        issueTypes: [{ name: 'Epic', description: 'Grouper', color: 'PURPLE' }, { name: 'Story', color: 'BLUE' }, { name: 'Task' }, { name: 'Issues', color: 'RED' }],
+        issueTypes: [{ name: 'sf-epic', description: 'Grouper', color: 'PURPLE' }, { name: 'sf-story', color: 'BLUE' }, { name: 'sf-task' }, { name: 'sf-issue', color: 'RED' }],
         validated: true,
         lastValidated: '2026-04-25T00:00:00.000Z'
       },
@@ -108,7 +108,7 @@ describe('saasfoundry-manifest.schema.json — rejection cases', () => {
   })
 
   it('rejects an unknown workflow.issueTypes[].color value', () => {
-    expect(validate({ ...baseManifest, workflow: { tool: 'github-projects', issueTypes: [{ name: 'Epic', color: 'NEON' }] } })).toBe(false)
+    expect(validate({ ...baseManifest, workflow: { tool: 'github-projects', issueTypes: [{ name: 'sf-epic', color: 'NEON' }] } })).toBe(false)
   })
 
   it('rejects a workflow.issueTypes[] entry missing the required name field', () => {

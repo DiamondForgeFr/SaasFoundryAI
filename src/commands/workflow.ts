@@ -184,6 +184,7 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
     prTargetBranch: template.prTargetBranch,
     requireCodeReview: template.requireCodeReview,
     statuses: template.statuses,
+    issueTypes: template.issueTypes,
     branchNaming: template.branchNaming,
     commitFormat: template.commitFormat,
     validated: false
@@ -308,6 +309,7 @@ async function saveAsTemplate(manifest: SaaSFoundryManifest, templateName?: stri
       prTargetBranch: manifest.workflow.prTargetBranch,
       requireCodeReview: manifest.workflow.requireCodeReview,
       statuses: manifest.workflow.statuses,
+      issueTypes: manifest.workflow.issueTypes,
       branchNaming: manifest.workflow.branchNaming,
       commitFormat: manifest.workflow.commitFormat,
       aiRules: manifest.aiRules || {
@@ -327,6 +329,7 @@ async function saveAsTemplate(manifest: SaaSFoundryManifest, templateName?: stri
       prTargetBranch: manifest.workflow.prTargetBranch,
       requireCodeReview: manifest.workflow.requireCodeReview,
       statuses: manifest.workflow.statuses,
+      issueTypes: manifest.workflow.issueTypes,
       branchNaming: manifest.workflow.branchNaming,
       commitFormat: manifest.workflow.commitFormat,
       aiRules: manifest.aiRules || {
@@ -484,6 +487,7 @@ async function createTemplate(templateName?: string) {
     prTargetBranch: workflow.prTargetBranch,
     requireCodeReview: workflow.requireCodeReview,
     statuses: workflow.statuses,
+    issueTypes: workflow.issueTypes,
     branchNaming: workflow.branchNaming,
     commitFormat: workflow.commitFormat,
     aiRules
