@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildAcceptInvitationPayloadSchema } from '@shared-validation/invitation'
 import { useMe } from '@/hooks/api/auth'
 import apiClient from '@/lib/api/client'
 
@@ -19,15 +20,11 @@ const tCommon = (key: string) => i18next.t(key, { ns: 'common' })
  * Schemas & DTOs
  */
 export const useAcceptUserInvitationSchema = () => {
-  const payload = z.object({
-    invitationToken: z.string().min(1, { message: tAuth('fields.tk_invitationTokenRequired_') }),
-    password: z.string().min(1, { message: tAuth('fields.tk_passwordRequired_') }),
-    firstname: z.string().min(1, { message: tAuth('fields.tk_firstNameError_') }),
-    lastname: z.string().min(1, { message: tAuth('fields.tk_lastNameError_') }),
-    locale: z
-      .string()
-      .optional()
-      .refine((val) => !val || /^[A-Z]{2}$/.test(val), { message: tCommon('fields.tk_localeError_') })
+  const payload = buildAcceptInvitationPayloadSchema({
+    tokenRequired: tAuth('fields.tk_invitationTokenRequired_'),
+    passwordMinLength: tAuth('fields.tk_passwordMinLength_'),
+    passwordComplexity: tAuth('fields.tk_passwordComplexityError_'),
+    localeInvalid: tCommon('fields.tk_localeError_')
   })
 
   const response = z.object({
@@ -49,21 +46,17 @@ export const useAcceptUserInvitation = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: AcceptUserInvitationPayloadDto) => {
-      // Add locale only if not provided
+      const navigatorLocale = navigator.language.split('-')[0].toUpperCase()
       const payload = {
         ...data,
-        locale: data.locale || navigator.language.split('-')[0].toUpperCase()
+        locale: data.locale ?? (navigatorLocale === 'FR' ? 'FR' : 'EN')
       }
 
-      // Send data to the API
       const response = await apiClient.post<AcceptUserInvitationResponseDto>('/invitations/accept', payload)
       return schemas.response.parse(response)
     },
     onSuccess: async () => {
-      // Remove guest access
       localStorage.removeItem('guestAccess')
-
-      // Fetch user profile
       await me.refetch()
     },
     onError: (error) => {

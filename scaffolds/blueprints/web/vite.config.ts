@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        '@shared-types': path.resolve(__dirname, './src/shared-types')
+        '@shared-types': path.resolve(__dirname, './src/shared-types'),
+        '@shared-validation': path.resolve(__dirname, './src/shared-validation')
       }
     },
     server: {

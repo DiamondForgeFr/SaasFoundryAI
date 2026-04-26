@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildUpdateOrganizationPayloadSchema } from '@shared-validation/organization'
 import apiClient from '@/lib/api/client'
 
 // Translation
@@ -17,18 +18,9 @@ const tOrganizations = (key: string) => i18next.t(key, { ns: 'organizations' })
  * Schemas & DTOs
  */
 export const useOrganizationUpdateSchema = () => {
-  const payload = z.object({
-    name: z
-      .string()
-      .max(100, { message: tOrganizations('fields.tk_nameMaxLength_') })
-      .optional(),
-    type: z
-      .enum(['COMPANY', 'ASSOCIATION', 'COMMUNITY'], {
-        message: tOrganizations('fields.tk_typeError_')
-      })
-      .optional(),
-    description: z.string().max(255).optional(),
-    website: z.string().max(100).optional()
+  const payload = buildUpdateOrganizationPayloadSchema({
+    nameMaxLength: tOrganizations('fields.tk_nameMaxLength_'),
+    typeInvalid: tOrganizations('fields.tk_typeError_')
   })
 
   const response = z.object({
@@ -59,7 +51,6 @@ export const useOrganizationUpdate = (organizationId: string) => {
 
   const mutation = useMutation({
     mutationFn: async (data: OrganizationUpdatePayloadDto) => {
-      // Send data to the API
       const response = await apiClient.patch<OrganizationUpdateResponseDto>(`/organizations/${organizationId}`, data)
       return schemas.response.parse(response)
     },

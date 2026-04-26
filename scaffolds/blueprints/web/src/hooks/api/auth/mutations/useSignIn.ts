@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildSigninPayloadSchema } from '@shared-validation/auth'
 import { useMe } from '@/hooks/api/auth'
 import apiClient from '@/lib/api/client'
 
@@ -19,19 +20,11 @@ const tCommon = (key: string) => i18next.t(key, { ns: 'common' })
  * Schemas & DTOs
  */
 export const useSignInSchema = () => {
-  const payload = z.object({
-    email: z
-      .string()
-      .min(1, { message: tAuth('fields.tk_emailRequired_') })
-      .email({ message: tAuth('fields.tk_emailError_') }),
-    password: z.string().min(1, { message: tAuth('fields.tk_passwordRequired_') }),
-    confirmAccountToken: z.string().optional(),
-    firstname: z.string().optional(),
-    lastname: z.string().optional(),
-    locale: z
-      .string()
-      .optional()
-      .refine((val) => !val || /^[A-Z]{2}$/.test(val), { message: tCommon('fields.tk_localeError_') })
+  const payload = buildSigninPayloadSchema({
+    emailRequired: tAuth('fields.tk_emailRequired_'),
+    emailInvalid: tAuth('fields.tk_emailError_'),
+    passwordRequired: tAuth('fields.tk_passwordRequired_'),
+    localeInvalid: tCommon('fields.tk_localeError_')
   })
 
   const response = z.object({
@@ -53,21 +46,17 @@ export const useSignIn = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: SignInPayloadDto) => {
-      // Add locale only if not provided
+      const navigatorLocale = navigator.language.split('-')[0].toUpperCase()
       const payload = {
         ...data,
-        locale: data.locale || navigator.language.split('-')[0].toUpperCase()
+        locale: data.locale ?? (navigatorLocale === 'FR' ? 'FR' : 'EN')
       }
 
-      // Send data to the API
       const response = await apiClient.post<SignInResponseDto>('/auth/signin', payload)
       return schemas.response.parse(response)
     },
     onSuccess: async () => {
-      // Remove guest access
       localStorage.removeItem('guestAccess')
-
-      // Fetch user profile
       await me.refetch()
     },
     onError: (error) => {
