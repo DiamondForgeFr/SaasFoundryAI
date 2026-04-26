@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildCreateInvitationPayloadSchema } from '@shared-validation/invitation'
 import apiClient from '@/lib/api/client'
 
 // Translation
@@ -18,21 +19,10 @@ const tCommon = (key: string) => i18next.t(key, { ns: 'common' })
  * Schemas & DTOs
  */
 export const useInviteUserSchema = () => {
-  const payload = z.object({
-    email: z
-      .string()
-      .min(2, { message: tCommon('fields.errors.tk_minLength_') })
-      .email({ message: tCommon('fields.errors.tk_emailError_') })
-      .max(100),
-    firstname: z.string().max(30).optional(),
-    lastname: z.string().max(30).optional(),
-    roleIds: z.array(z.number()).optional(),
-    accountIds: z.array(z.string()).optional(),
-    entityIds: z.array(z.string()).optional(),
-    locale: z
-      .string()
-      .optional()
-      .refine((val) => !val || /^[A-Z]{2}$/.test(val), { message: tCommon('fields.tk_localeError_') })
+  const payload = buildCreateInvitationPayloadSchema({
+    emailRequired: tCommon('fields.errors.tk_minLength_'),
+    emailInvalid: tCommon('fields.errors.tk_emailError_'),
+    localeInvalid: tCommon('fields.tk_localeError_')
   })
 
   const response = z.object({
@@ -57,13 +47,12 @@ export const useInviteUser = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: InviteUserPayloadDto) => {
-      // Add locale only if not provided
+      const navigatorLocale = navigator.language.split('-')[0].toUpperCase()
       const payload = {
         ...data,
-        locale: data.locale || navigator.language.split('-')[0].toUpperCase()
+        locale: data.locale ?? (navigatorLocale === 'FR' ? 'FR' : 'EN')
       }
 
-      // Send data to the API
       const response = await apiClient.post<InviteUserResponseDto>('/invitations', payload)
       return schemas.response.parse(response)
     },

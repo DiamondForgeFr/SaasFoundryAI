@@ -24,6 +24,7 @@
       "@common/*": ["src/common/*"],
       "@configs/*": ["src/configs/*"],
       "@shared-types/*": ["src/shared-types/*"],
+      "@shared-validation/*": ["src/shared-validation/*"],
       "@/*": ["src/*"]
     }
   }

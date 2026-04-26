@@ -25,7 +25,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@shared-types/*": ["./src/shared-types/*"]
+      "@shared-types/*": ["./src/shared-types/*"],
+      "@shared-validation/*": ["./src/shared-validation/*"]
     }
   },
   "include": ["src"]

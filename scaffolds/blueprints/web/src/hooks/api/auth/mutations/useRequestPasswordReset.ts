@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildRequestPasswordResetPayloadSchema } from '@shared-validation/auth'
 import apiClient from '@/lib/api/client'
 
 // Translation
@@ -17,11 +18,9 @@ const tAuth = (key: string) => i18next.t(key, { ns: 'auth' })
  * Schemas & DTOs
  */
 export const useRequestPasswordResetSchema = () => {
-  const payload = z.object({
-    email: z
-      .string()
-      .min(1, { message: tAuth('fields.tk_emailRequired_') })
-      .email({ message: tAuth('fields.tk_emailError_') })
+  const payload = buildRequestPasswordResetPayloadSchema({
+    emailRequired: tAuth('fields.tk_emailRequired_'),
+    emailInvalid: tAuth('fields.tk_emailError_')
   })
 
   const response = z.object({
@@ -43,7 +42,6 @@ export const useRequestPasswordReset = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: RequestPasswordResetPayloadDto) => {
-      // Send data to the API
       const response = await apiClient.post<RequestPasswordResetResponseDto>('/auth/request-password-reset', data)
       return schemas.response.parse(response)
     },

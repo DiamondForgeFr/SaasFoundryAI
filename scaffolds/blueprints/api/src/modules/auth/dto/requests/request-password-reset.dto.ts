@@ -1,14 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
-import { Transform } from 'class-transformer'
-import { IsEmail } from 'class-validator'
+import { createZodDto } from 'nestjs-zod'
+import { buildRequestPasswordResetPayloadSchema } from '@shared-validation/auth'
 
-export class RequestPasswordResetDto {
-  @ApiProperty({
-    description: 'Email address of the user requesting password reset',
-    example: 'user@example.com',
-    format: 'email'
-  })
-  @Transform(({ value }) => value?.toLowerCase())
-  @IsEmail({}, { message: 'Invalid email format' })
-  email: string
-}
+export class RequestPasswordResetDto extends createZodDto(buildRequestPasswordResetPayloadSchema()) {}

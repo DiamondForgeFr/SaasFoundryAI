@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildSignupPayloadSchema } from '@shared-validation/auth'
 import apiClient from '@/lib/api/client'
 
 // Translation
@@ -18,22 +19,12 @@ const tCommon = (key: string) => i18next.t(key, { ns: 'common' })
  * Schemas & DTOs
  */
 export const useSignUpSchema = () => {
-  const payload = z.object({
-    email: z
-      .string()
-      .min(1, { message: tAuth('fields.tk_emailRequired_') })
-      .email({ message: tAuth('fields.tk_emailError_') }),
-    password: z
-      .string()
-      .min(8, { message: tAuth('fields.tk_passwordMinLength_') })
-      .max(40)
-      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/, {
-        message: tAuth('fields.tk_passwordComplexityError_')
-      }),
-    locale: z
-      .string()
-      .optional()
-      .refine((val) => !val || /^[A-Z]{2}$/.test(val), { message: tCommon('fields.tk_localeError_') })
+  const payload = buildSignupPayloadSchema({
+    emailRequired: tAuth('fields.tk_emailRequired_'),
+    emailInvalid: tAuth('fields.tk_emailError_'),
+    passwordMinLength: tAuth('fields.tk_passwordMinLength_'),
+    passwordComplexity: tAuth('fields.tk_passwordComplexityError_'),
+    localeInvalid: tCommon('fields.tk_localeError_')
   })
 
   const response = z.object({
@@ -57,13 +48,12 @@ export const useSignUp = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: SignUpPayloadDto) => {
-      // Add locale only if not provided
+      const navigatorLocale = navigator.language.split('-')[0].toUpperCase()
       const payload = {
         ...data,
-        locale: data.locale || navigator.language.split('-')[0].toUpperCase()
+        locale: data.locale ?? (navigatorLocale === 'FR' ? 'FR' : 'EN')
       }
 
-      // Send data to the API
       const response = await apiClient.post<SignUpResponseDto>('/auth/signup', payload)
       return schemas.response.parse(response)
     },

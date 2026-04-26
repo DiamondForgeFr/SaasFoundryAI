@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildCreateEntityPayloadSchema, buildInlineOrganizationSchema } from '@shared-validation/entity'
 import apiClient from '@/lib/api/client'
 
 // Translation
@@ -16,23 +17,21 @@ const tCommon = (key: string) => i18next.t(key, { ns: 'common' })
 
 /**
  * Schemas & DTOs
+ *
+ * Entity create form requires inline organization (no organizationId-only mode in the UI).
+ * The shared schema keeps `organization` optional to also serve API clients that link to
+ * an existing org by id; the form-level schema below tightens that constraint.
  */
 export const useEntityCreateSchema = () => {
-  const payload = z.object({
-    name: z.string().max(100).optional(),
-    description: z.string().max(255).optional(),
-    accountId: z.string().min(1, { message: tCommon('fields.errors.tk_required_') }),
-    organization: z.object({
-      name: z
-        .string()
-        .min(2, { message: tCommon('fields.errors.tk_minLength_') })
-        .max(100, { message: tCommon('fields.errors.tk_maxLength_') }),
-      type: z.enum(['COMPANY', 'ASSOCIATION', 'COMMUNITY'], {
-        message: tCommon('fields.errors.tk_invalid_')
-      }),
-      description: z.string().max(255).optional(),
-      website: z.string().max(100).optional()
-    })
+  const messages = {
+    accountIdRequired: tCommon('fields.errors.tk_required_'),
+    organizationNameMinLength: tCommon('fields.errors.tk_minLength_'),
+    organizationNameMaxLength: tCommon('fields.errors.tk_maxLength_'),
+    organizationTypeInvalid: tCommon('fields.errors.tk_invalid_')
+  }
+
+  const payload = buildCreateEntityPayloadSchema(messages).extend({
+    organization: buildInlineOrganizationSchema(messages)
   })
 
   const response = z.object({
@@ -85,7 +84,6 @@ export const useEntityCreate = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: EntityCreatePayloadDto) => {
-      // Single API call — backend creates org + entity in one transaction
       const response = await apiClient.post<EntityCreateResponseDto>('/entities', {
         name: data.name,
         description: data.description,

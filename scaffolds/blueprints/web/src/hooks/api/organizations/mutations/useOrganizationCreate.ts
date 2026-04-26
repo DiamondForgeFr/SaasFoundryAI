@@ -8,6 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { buildCreateOrganizationPayloadSchema } from '@shared-validation/organization'
 import apiClient from '@/lib/api/client'
 
 // Translation
@@ -17,17 +18,11 @@ const tOrganizations = (key: string) => i18next.t(key, { ns: 'organizations' })
  * Schemas & DTOs
  */
 export const useOrganizationCreateSchema = () => {
-  const payload = z.object({
-    name: z
-      .string()
-      .min(1, { message: tOrganizations('fields.tk_nameRequired_') })
-      .max(100, { message: tOrganizations('fields.tk_nameMaxLength_') }),
-    type: z.enum(['COMPANY', 'ASSOCIATION', 'COMMUNITY'], {
-      message: tOrganizations('fields.tk_typeError_')
-    }),
-    accountId: z.string().min(1, { message: tOrganizations('fields.tk_accountIdRequired_') }),
-    description: z.string().max(255).optional(),
-    website: z.string().max(100).optional()
+  const payload = buildCreateOrganizationPayloadSchema({
+    nameRequired: tOrganizations('fields.tk_nameRequired_'),
+    nameMaxLength: tOrganizations('fields.tk_nameMaxLength_'),
+    typeInvalid: tOrganizations('fields.tk_typeError_'),
+    accountIdRequired: tOrganizations('fields.tk_accountIdRequired_')
   })
 
   const response = z.object({
@@ -58,7 +53,6 @@ export const useOrganizationCreate = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: OrganizationCreatePayloadDto) => {
-      // Send data to the API
       const response = await apiClient.post<OrganizationCreateResponseDto>('/organizations', data)
       return schemas.response.parse(response)
     },
