@@ -160,6 +160,44 @@ When a user runs `sf update` and their project version differs from the CLI vers
 | `src/main.tsx`       | TODO markers uncommented (import + initAnalytics call)         |
 | `.env`               | `VITE_ANALYTICS_URL` + `VITE_ANALYTICS_WEBSITE_ID` uncommented |
 
+### Shared Packages (Monorepo Only)
+
+In a monorepo scaffold, the workspace ships three first-class shared packages alongside `apps/api` and `apps/web`. They are NOT optional modules — they are part of the monorepo skeleton and exist
+unconditionally. Their purpose is to give every monorepo project a canonical, drift-free home for code that must remain identical on both sides of the wire.
+
+| Package                                | Owns                                          | Consumed by                                                 |
+| -------------------------------------- | --------------------------------------------- | ----------------------------------------------------------- |
+| `@<projectName>/shared-types`          | Pure TypeScript types and `z.infer` outputs   | `apps/api` (DTO types) + `apps/web` (props, hook responses) |
+| `@<projectName>/shared-validation`     | Zod schemas (signup, signin, org CRUD, …)     | NestJS DTO adapter + React Hook Form `zodResolver`          |
+| `@<projectName>/shared-config`         | Runtime constants (routes, flags, locales, …) | Both `apps/api` and `apps/web`                              |
+
+**Source layout** — `scaffolds/overlays/monorepo/root/packages/shared-{types,validation,config}/`:
+
+- `package.json` declares a private workspace package with scoped name `@{{PROJECT_NAME}}/shared-*` and points `main`/`types` at `./src/index.ts` directly (no build step required for consumption).
+- `tsconfig.json` emits `./dist` declarations so a future strict bundler step can lean on it.
+- `src/index.ts` carries one placeholder export so the type-check pipeline exercises the package even before consumers wire schemas in.
+- `README.md` documents the rules: what goes in, what does not, how to add an entry.
+
+**App wiring** — `scaffolds/overlays/monorepo/{api,web}/`:
+
+- `tsconfig.json` (and `tsconfig.app.json` for web) extends the blueprint with three `paths` aliases pointing at `../../packages/shared-*/src`. TS resolution and Vite bundling both work via the
+  alias, so neither side needs the dist artefacts at dev time.
+- `package.json` declares the three packages as workspace deps (`"@<projectName>/shared-*": "*"`) so npm workspaces hoists them into the root `node_modules`.
+- `src/shared-wiring.ts` imports a value, a type and a schema from each package and re-exports a constant. This file is the compile-time proof that the alias chain is healthy — if any package
+  drifts, `tsc -b` fails immediately.
+
+**Placeholder substitution** — the scoped `@{{PROJECT_NAME}}/shared-*` literal is rewritten to the real project name during scaffold via `substitutePlaceholdersInFiles` (`src/utils.ts`). The
+substitution pass runs from:
+
+- `src/builders/monorepo.builder.ts` — patches the package files (`package.json`, `README.md`)
+- `src/builders/api.builder.ts` — patches `apps/api/{tsconfig.json, package.json, src/shared-wiring.ts}`
+- `src/builders/web.builder.ts` — patches `apps/web/{tsconfig.json, tsconfig.app.json, package.json, src/shared-wiring.ts}`
+
+**Why scoped names** — they avoid collisions with public npm packages and make grep + import autocomplete unambiguous. The convention mirrors how a real organisation would publish internal
+packages, even though we keep them `private: true`.
+
+**Multirepo note** — none of this exists in the multirepo topology. Cross-repo sharing is left to the consumer (npm publish, git submodule, …); SaaSFoundry does not assume an opinion there.
+
 ### Adding a New Module — Checklist
 
 When adding a new optional module to SaaSFoundry, follow these steps:
