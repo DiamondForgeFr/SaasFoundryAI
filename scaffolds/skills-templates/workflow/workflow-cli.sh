@@ -243,15 +243,92 @@ check_complexity_guard() {
   return 0
 }
 
+# ───────────────────────────────────────────────────────────────────────────
+# Nature guard — Human Testing optional for `nature:internal` tickets
+# ───────────────────────────────────────────────────────────────────────────
+#
+# A ticket tagged `nature:internal` may transition AI Testing → In Review
+# directly (skip Human Testing). Default behaviour (no `nature:*` label, or
+# `nature:user-facing`) requires the Human Testing step.
+#
+# The guard fires only on `update-status … "In Review"` when the current
+# board status is `AI Testing`. Other paths into In Review (Human Testing →
+# In Review) are unaffected. Fails open on label fetch errors (offline / auth)
+# to avoid wedging the workflow. Escape hatch: SF_WORKFLOW_BYPASS_NATURE_GUARD=1.
+
+is_in_review_target() {
+  local target=$1
+  local normalized
+  normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
+  [[ "$normalized" == "in review" ]]
+}
+
+get_ticket_nature_label() {
+  # Prints `internal`, `user-facing`, or empty if no nature label.
+  # Returns 0 on clean fetch, 1 on fetch error.
+  local ticket=$1
+  local raw
+  raw=$(route_to_tool "$WORKFLOW_TOOL" get-labels "$ticket" 2>/dev/null) || return 1
+  echo "$raw" | grep -E '^nature:' | head -n1 | sed 's/^nature://'
+}
+
+check_nature_guard() {
+  # Returns 0 if the caller may proceed, 1 if blocked (message printed).
+  local ticket=$1
+  local target=$2
+
+  [[ "${SF_WORKFLOW_BYPASS_NATURE_GUARD:-}" == "1" ]] && return 0
+  is_in_review_target "$target" || return 0
+
+  local current_status
+  current_status=$(get_current_status "$ticket" 2>/dev/null || true)
+  local current_normalized
+  current_normalized=$(echo "$current_status" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
+
+  # Only fire when coming from AI Testing — the Human Testing → In Review
+  # path is the standard route and never needs a nature label check.
+  [[ "$current_normalized" == "ai testing" ]] || return 0
+
+  local nature
+  nature=$(get_ticket_nature_label "$ticket") || return 0   # fail-open on fetch error
+
+  if [[ "$nature" == "internal" ]]; then
+    return 0
+  fi
+
+  echo -e "${RED}✗ Ticket #${ticket} is in 'AI Testing' and lacks 'nature:internal' — cannot skip Human Testing.${NC}" >&2
+  echo "" >&2
+  echo "  Default workflow requires AI Testing → Human Testing → In Review." >&2
+  echo "  To allow skipping Human Testing, tag the ticket as internal:" >&2
+  echo "    gh issue edit ${ticket} --add-label 'nature:internal'" >&2
+  echo "" >&2
+  echo "  Use 'nature:internal' for refactors, scaffolding, internal tooling, or" >&2
+  echo "  non-terminal stories of a multi-step Epic — see SKILL.md 'Nature axis'." >&2
+  echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
+  return 1
+}
+
 # Function to show next status
 show_next_status() {
   local current_status=$1
+  local ticket=${2:-}
 
   case "$current_status" in
     "Backlog") echo "Next: Ready" ;;
     "Ready") echo "Next: In Progress" ;;
     "In Progress"|"In progress") echo "Next: AI Testing" ;;
-    "AI Testing"|"AI testing") echo "Next: Human Testing" ;;
+    "AI Testing"|"AI testing")
+      # Nature-aware: internal tickets skip Human Testing.
+      if [[ -n "$ticket" ]]; then
+        local nature
+        nature=$(get_ticket_nature_label "$ticket" 2>/dev/null || true)
+        if [[ "$nature" == "internal" ]]; then
+          echo "Next: In Review (nature:internal — Human Testing skipped)"
+          return
+        fi
+      fi
+      echo "Next: Human Testing"
+      ;;
     "Human Testing"|"Human testing") echo "Next: In Review" ;;
     "In Review"|"In review") echo "Next: Done" ;;
     "Done") echo "Workflow complete - no next status" ;;
@@ -296,8 +373,9 @@ case "$COMMAND" in
       exit 1
     fi
 
+    load_config
     echo "Current status: $STATUS"
-    show_next_status "$STATUS"
+    show_next_status "$STATUS" "$TICKET"
     ;;
 
   validate)
@@ -392,6 +470,9 @@ case "$COMMAND" in
       exit 2
     fi
     if ! check_complexity_guard "$TICKET" "$TARGET"; then
+      exit 2
+    fi
+    if ! check_nature_guard "$TICKET" "$TARGET"; then
       exit 2
     fi
     route_to_tool "$WORKFLOW_TOOL" update-status "$@"

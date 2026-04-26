@@ -19,6 +19,26 @@ This workflow adapts its rigor based on ticket complexity:
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 
+## 🎚️ Nature axis (user-facing vs internal)
+
+Orthogonal to complexity. Controls whether **Human Testing** is mandatory or optional in the lifecycle.
+
+| Label                | Use case                                                                                          | Workflow effect                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `nature:user-facing` | Bug fix or feature with visible UX impact — anything a user can click, see, or feel               | Mandatory `AI Testing → Human Testing → In Review`     |
+| `nature:internal`    | Refactor, scaffolding, non-terminal story of a multi-step Epic, internal tooling, doc-only change | Optional `AI Testing → In Review` (skip Human Testing) |
+
+**Default** — if a ticket has no `nature:*` label, the workflow treats it as `user-facing` (safe default).
+
+**Why this exists** — the Human Testing status is theatrical on tickets that have nothing user-visible to validate (the docker tests + lint + tsc already cover the integration risk). For those, going
+AI Testing → In Review directly removes ceremony without sacrificing safety.
+
+**Epic-level Human Testing** — when an Epic is composed entirely of `nature:internal` children, the meaningful manual validation happens at **Epic completion** (e.g. integration test on freshly merged
+`develop`), not on each child. Tag the Epic itself `nature:user-facing` so its own AI Testing → In Review transition still requires that integration check.
+
+**Guard** — `update-status <ticket> "In review"` is rejected when the current status is `AI Testing` and the ticket lacks `nature:internal`. Fix by either tagging the ticket internal or going through
+Human Testing first. Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1` (rare).
+
 ## 🧩 Ticket Hierarchy (Epic / Story-Task / Subtask)
 
 SaaSFoundry uses a **three-level ticket hierarchy** — Epics produce **no PR**, Subtasks are **not GitHub issues**.

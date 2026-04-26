@@ -23,7 +23,10 @@ must come from `.saasfoundry.json`, not from a fresh dialogue.
 
 - **Statuses**: `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`
 - **Before any status transition**: read `.claude/skills/sf-workflow/statuses/<N>-<name>.md` for mandatory actions and exit conditions
-- **Never skip statuses.** In particular: never go Backlog → AI Testing, never create a PR before Human Testing validation, never mark Done before the PR is merged
+- **Never skip statuses.** In particular: never go Backlog → AI Testing, never create a PR before Human Testing validation (unless ticket carries `nature:internal`), never mark Done before the PR is
+  merged
+- **Nature axis (Human Testing optionality)** — `nature:internal` tickets (refactor / scaffolding / non-terminal stories of an Epic) may transition AI Testing → In Review directly. Default (no label
+  or `nature:user-facing`) requires Human Testing. The `update-status` guard enforces this — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
 - **Never bypass the CLI**: use `.claude/skills/sf-workflow/workflow-cli.sh` and `.claude/skills/sf-tool-github-projects/github-projects-cli.sh` — not raw `gh api graphql` mutations
 - **Commit + push BEFORE moving to AI Testing.** Code must be on remote before any testing phase.
 - **Subtasks must be real GitHub issues** (not checkboxes), created via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`

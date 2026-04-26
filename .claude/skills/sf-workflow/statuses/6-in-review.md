@@ -2,8 +2,9 @@
 status: In Review
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
-  - Human Testing validated
-  - Non-regression tests created and pushed
+  - One of:
+      - Human Testing validated + non-regression tests created and pushed (`nature:user-facing` path)
+      - AI Testing passed + ticket carries `nature:internal` label (skip-Human-Testing path — see SKILL.md "Nature axis")
   - Ready to open the Pull Request
 mandatory_actions:
   - Create the Pull Request (title + description + test plan + test list + reviewers + ticket link)
