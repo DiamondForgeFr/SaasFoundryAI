@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@{{PROJECT_NAME}}/shared-types": ["../../packages/shared-types/src"],
+      "@{{PROJECT_NAME}}/shared-validation": ["../../packages/shared-validation/src"],
+      "@{{PROJECT_NAME}}/shared-config": ["../../packages/shared-config/src"]
+    }
+  }
+}
