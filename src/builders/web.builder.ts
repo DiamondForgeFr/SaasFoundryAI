@@ -7,7 +7,7 @@ import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
-import { fileExists, getNvmPrefix, validateProjectName } from '../utils'
+import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 
 export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, workflow }: CreateWebAppParams) {
   validateProjectName(projectName)
@@ -26,6 +26,11 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     let eslintConfig = await readFile(eslintConfigPath, 'utf8')
     eslintConfig = eslintConfig.replace(`'./eslint-rules/no-version-prefix.js'`, `'../../eslint-rules/no-version-prefix.mjs'`)
     await writeFile(eslintConfigPath, eslintConfig)
+    // Substitute {{PROJECT_NAME}} in shared-* wiring (tsconfig path aliases, package deps, wiring proof)
+    await substitutePlaceholdersInFiles(
+      [`${webPath}/tsconfig.json`, `${webPath}/tsconfig.app.json`, `${webPath}/package.json`, `${webPath}/src/shared-wiring.ts`],
+      { PROJECT_NAME: projectName }
+    )
   }
 
   // Update package.json
