@@ -454,7 +454,11 @@ cmd_create_subtask() {
   PARENT_NUMBER="${POSITIONAL[0]}"
   TITLE="${POSITIONAL[1]}"
   BODY="${POSITIONAL[2]:-}"
-  FULL_TITLE="[Parent #${PARENT_NUMBER}] ${TITLE}"
+  # Native sub-issue linking (addSubIssue mutation below) makes the parent
+  # relationship visible in the GitHub UI on its own — no need for a textual
+  # `[Parent #N]` title prefix anymore. Native Issue Type chips (Epic/Story/
+  # Task/Issue) replace the old `[EPIC]`/`[STORY]` markers via assign-type.
+  FULL_TITLE="${TITLE}"
 
   # If no body was supplied, render a type-specific skeleton so the created
   # issue lands with the right section shape instead of an empty body.
@@ -522,6 +526,26 @@ cmd_create_subtask() {
     echo -e "${RED}Error: Failed to link subtask${NC}"
     echo "$RESULT"
     exit 1
+  fi
+
+  # Auto-assign the native GitHub Issue Type matching --type. Best-effort: a
+  # missing type (org doesn't have it yet) or a missing org-admin scope must
+  # not break subtask creation — the chip is cosmetic, the parent link is
+  # already in place. Skip silently when workflow.issueTypes isn't declared.
+  local declared_types
+  declared_types=$(jq -r '(.workflow.issueTypes // []) | length' .saasfoundry.json 2>/dev/null)
+  if [ "${declared_types:-0}" != "0" ]; then
+    local target_type
+    case "$TICKET_TYPE" in
+      epic)   target_type="Epic" ;;
+      story)  target_type="Story" ;;
+      task)   target_type="Task" ;;
+      issue)  target_type="Issue" ;;
+    esac
+    if [ -n "$target_type" ]; then
+      "$0" assign-type "$CHILD_NUMBER" "$target_type" 2>/dev/null || \
+        echo -e "${YELLOW}  (issue type '${target_type}' not assigned — run 'ensure-issue-types' or assign manually)${NC}"
+    fi
   fi
 }
 
@@ -799,20 +823,279 @@ cmd_cache_clear() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# Issue Types — native GitHub typing (replaces textual [EPIC]/[STORY] markers)
+#
+# GitHub Issue Types (GA 2024) live at the **org level** — types are created
+# once on the organisation and then assigned to issues across any of its repos.
+# Three commands cover the full lifecycle:
+#
+#   ensure-issue-types     idempotent: creates each name in workflow.issueTypes
+#                          missing from the org (reads .saasfoundry.json)
+#   assign-type            attach a type to a single issue
+#   delete-issue-type      remove a type from the org (cleanup of legacy types)
+#
+# All operate via raw GraphQL (`gh api graphql`) — `gh` has no first-class
+# Issue Types subcommand yet. Mutations: createIssueType / deleteIssueType /
+# updateIssueIssueType. The `_TYPES_CACHE` map is per-process to keep the
+# bootstrap script (which assigns hundreds of issues) reasonably snappy.
+# ───────────────────────────────────────────────────────────────────────────
+
+# Resolve the org login from .saasfoundry.json's projectUrl. Issue Types are
+# always org-scoped — user-projects are unsupported (GitHub limitation).
+_get_issue_types_owner() {
+  load_config
+  if [ -z "$PROJECT_OWNER" ]; then
+    echo -e "${RED}Error: workflow.projectUrl is missing or malformed in .saasfoundry.json${NC}" >&2
+    exit 1
+  fi
+  if ! echo "$PROJECT_URL" | grep -q '/orgs/'; then
+    echo -e "${RED}Error: Issue Types require an organisation project (URL must contain /orgs/<owner>/projects/<n>)${NC}" >&2
+    echo "  Current projectUrl: ${PROJECT_URL}" >&2
+    exit 1
+  fi
+  echo "$PROJECT_OWNER"
+}
+
+# Fetch the org node ID — needed as ownerId for createIssueType.
+_get_org_node_id() {
+  local owner=$1
+  gh api graphql -f query='query($o:String!){organization(login:$o){id}}' -F o="$owner" 2>/dev/null \
+    | jq -r '.data.organization.id // empty'
+}
+
+# Fetch the org's existing issue types as JSON array of {id,name,color,description}.
+# Cached per-process — bootstrap workflows can call this dozens of times.
+_TYPES_CACHE_OWNER=""
+_TYPES_CACHE_JSON=""
+_get_org_issue_types() {
+  local owner=$1
+  if [ "$_TYPES_CACHE_OWNER" = "$owner" ] && [ -n "$_TYPES_CACHE_JSON" ]; then
+    echo "$_TYPES_CACHE_JSON"
+    return 0
+  fi
+  local resp
+  resp=$(gh api graphql \
+    -f query='query($o:String!){organization(login:$o){issueTypes(first:50){nodes{id name description color isEnabled}}}}' \
+    -F o="$owner" 2>/dev/null)
+  local types
+  types=$(echo "$resp" | jq -c '.data.organization.issueTypes.nodes // []')
+  _TYPES_CACHE_OWNER="$owner"
+  _TYPES_CACHE_JSON="$types"
+  echo "$types"
+}
+
+# Reset the per-process cache (called after create/delete mutations).
+_invalidate_types_cache() {
+  _TYPES_CACHE_OWNER=""
+  _TYPES_CACHE_JSON=""
+}
+
+# Look up a type id by case-insensitive name. Echoes empty if not found.
+_find_type_id() {
+  local owner=$1 name=$2
+  _get_org_issue_types "$owner" | jq -r --arg s "$name" '
+    .[] | select((.name | ascii_downcase) == ($s | ascii_downcase)) | .id
+  ' | head -n1
+}
+
+# Translate "permission denied" GraphQL responses into a single, actionable line.
+# Issue Type mutations require org-admin scope — users without that role need
+# to ask their org owner (or fall back to manual creation in the org settings UI).
+_handle_issue_type_error() {
+  local action=$1 detail=$2
+  if echo "$detail" | grep -qiE 'INSUFFICIENT_SCOPES|admin:org'; then
+    echo -e "${RED}✗ ${action}: gh token is missing the 'admin:org' scope.${NC}" >&2
+    echo "  Issue Type mutations are org-admin operations and need this scope." >&2
+    echo "  Fix once with:" >&2
+    echo "    gh auth refresh --hostname github.com --scopes admin:org" >&2
+    echo "  …then re-run this command. Alternative: ask an org owner to run it." >&2
+  elif echo "$detail" | grep -qiE 'permission|forbidden|not authorized'; then
+    echo -e "${RED}✗ Permission denied: ${action} requires org-admin on this organisation.${NC}" >&2
+    echo "  Manual fallback — ask an org owner to:" >&2
+    echo "    1. Visit https://github.com/organizations/<org>/settings/issue-types" >&2
+    echo "    2. ${action}" >&2
+    echo "    3. Re-run this command (the create step will become a no-op)." >&2
+  else
+    echo -e "${RED}✗ ${action} failed:${NC}" >&2
+    echo "  $detail" >&2
+  fi
+}
+
+cmd_ensure_issue_types() {
+  local DRY_RUN=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) DRY_RUN=1; shift ;;
+      *) shift ;;
+    esac
+  done
+
+  local owner
+  owner=$(_get_issue_types_owner)
+
+  local desired_json
+  desired_json=$(jq -c '.workflow.issueTypes // []' .saasfoundry.json 2>/dev/null)
+  if [ "$desired_json" = "[]" ] || [ -z "$desired_json" ]; then
+    echo -e "${YELLOW}No workflow.issueTypes declared in .saasfoundry.json — nothing to ensure.${NC}"
+    return 0
+  fi
+
+  local existing_json
+  existing_json=$(_get_org_issue_types "$owner")
+
+  echo -e "${BLUE}Ensuring issue types on org '${owner}'...${NC}"
+
+  local owner_id=""
+  local missing
+  missing=$(jq -c --argjson existing "$existing_json" '
+    [.[] | . as $d
+      | select(($existing | map(.name | ascii_downcase) | index(($d.name | ascii_downcase))) | not)]
+  ' <<<"$desired_json")
+
+  local count
+  count=$(echo "$missing" | jq 'length')
+  if [ "$count" = "0" ]; then
+    echo -e "${GREEN}✓ All declared issue types already exist on '${owner}'.${NC}"
+    return 0
+  fi
+
+  echo "  → ${count} missing type(s) to create"
+
+  local i name desc color
+  for ((i=0; i<count; i++)); do
+    name=$(echo "$missing" | jq -r ".[$i].name")
+    desc=$(echo "$missing" | jq -r ".[$i].description // \"\"")
+    color=$(echo "$missing" | jq -r ".[$i].color // \"GRAY\"")
+
+    if [ "$DRY_RUN" = "1" ]; then
+      echo "    [dry-run] would create: ${name} (${color})"
+      continue
+    fi
+
+    if [ -z "$owner_id" ]; then
+      owner_id=$(_get_org_node_id "$owner")
+      if [ -z "$owner_id" ]; then
+        echo -e "${RED}Error: Could not resolve org node id for '${owner}'${NC}" >&2
+        exit 1
+      fi
+    fi
+
+    local resp
+    resp=$(gh api graphql \
+      -f query='mutation($oid:ID!,$n:String!,$d:String,$c:IssueTypeColor){
+        createIssueType(input:{ownerId:$oid,isEnabled:true,name:$n,description:$d,color:$c}){
+          issueType{id name color}
+        }
+      }' \
+      -F oid="$owner_id" -F n="$name" -F d="$desc" -F c="$color" 2>&1) || true
+
+    if echo "$resp" | jq -e '.data.createIssueType.issueType.id' > /dev/null 2>&1; then
+      echo -e "    ${GREEN}✓ created${NC} ${name} (${color})"
+    else
+      _handle_issue_type_error "Create issue type '${name}'" "$resp"
+      exit 1
+    fi
+  done
+
+  _invalidate_types_cache
+  echo -e "${GREEN}✓ ensure-issue-types complete${NC}"
+}
+
+cmd_assign_type() {
+  if [ "$#" -lt 2 ]; then
+    echo -e "${RED}Error: Missing arguments${NC}" >&2
+    echo "Usage: $0 assign-type <issue-number> <type-name>" >&2
+    exit 1
+  fi
+  local issue=$1 type_name=$2
+
+  local owner
+  owner=$(_get_issue_types_owner)
+
+  local type_id
+  type_id=$(_find_type_id "$owner" "$type_name")
+  if [ -z "$type_id" ]; then
+    echo -e "${RED}Error: Issue type '${type_name}' not found on org '${owner}'${NC}" >&2
+    echo "  Run: $0 ensure-issue-types  (or create it manually in the org settings)" >&2
+    exit 1
+  fi
+
+  local issue_id
+  issue_id=$(gh issue view "$issue" --json id --jq '.id' 2>/dev/null)
+  if [ -z "$issue_id" ]; then
+    echo -e "${RED}Error: Could not find issue #${issue}${NC}" >&2
+    exit 1
+  fi
+
+  local resp
+  resp=$(gh api graphql \
+    -f query='mutation($iid:ID!,$tid:ID!){
+      updateIssueIssueType(input:{issueId:$iid,issueTypeId:$tid}){
+        issue{number issueType{name}}
+      }
+    }' \
+    -F iid="$issue_id" -F tid="$type_id" 2>&1) || true
+
+  if echo "$resp" | jq -e '.data.updateIssueIssueType.issue.number' > /dev/null 2>&1; then
+    local applied
+    applied=$(echo "$resp" | jq -r '.data.updateIssueIssueType.issue.issueType.name // "?"')
+    echo -e "${GREEN}✓ Issue #${issue} → type '${applied}'${NC}"
+  else
+    _handle_issue_type_error "Assign type '${type_name}' to #${issue}" "$resp"
+    exit 1
+  fi
+}
+
+cmd_delete_issue_type() {
+  if [ "$#" -lt 1 ]; then
+    echo -e "${RED}Error: Missing arguments${NC}" >&2
+    echo "Usage: $0 delete-issue-type <type-name>" >&2
+    exit 1
+  fi
+  local type_name=$1
+
+  local owner
+  owner=$(_get_issue_types_owner)
+
+  local type_id
+  type_id=$(_find_type_id "$owner" "$type_name")
+  if [ -z "$type_id" ]; then
+    echo -e "${YELLOW}Type '${type_name}' not present on org '${owner}' — nothing to delete.${NC}"
+    return 0
+  fi
+
+  local resp
+  resp=$(gh api graphql \
+    -f query='mutation($tid:ID!){deleteIssueType(input:{issueTypeId:$tid}){clientMutationId}}' \
+    -F tid="$type_id" 2>&1) || true
+
+  if echo "$resp" | jq -e '.data.deleteIssueType' > /dev/null 2>&1; then
+    _invalidate_types_cache
+    echo -e "${GREEN}✓ Deleted issue type '${type_name}' from '${owner}'${NC}"
+  else
+    _handle_issue_type_error "Delete issue type '${type_name}'" "$resp"
+    exit 1
+  fi
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Router
 # ───────────────────────────────────────────────────────────────────────────
 
 case "$COMMAND" in
-  create-subtask)  cmd_create_subtask "$@" ;;
-  update-status)   cmd_update_status "$@" ;;
-  status)          cmd_status "$@" ;;
-  set-complexity)  cmd_set_complexity "$@" ;;
-  get-complexity)  cmd_get_complexity "$@" ;;
-  get-labels)      cmd_get_labels "$@" ;;
-  get-ticket)      cmd_get_ticket "$@" ;;
-  create-pr)       cmd_create_pr "$@" ;;
-  list)            cmd_list "$@" ;;
-  cache-clear)     cmd_cache_clear "$@" ;;
+  create-subtask)     cmd_create_subtask "$@" ;;
+  update-status)      cmd_update_status "$@" ;;
+  status)             cmd_status "$@" ;;
+  set-complexity)     cmd_set_complexity "$@" ;;
+  get-complexity)     cmd_get_complexity "$@" ;;
+  get-labels)         cmd_get_labels "$@" ;;
+  get-ticket)         cmd_get_ticket "$@" ;;
+  create-pr)          cmd_create_pr "$@" ;;
+  list)               cmd_list "$@" ;;
+  cache-clear)        cmd_cache_clear "$@" ;;
+  ensure-issue-types) cmd_ensure_issue_types "$@" ;;
+  assign-type)        cmd_assign_type "$@" ;;
+  delete-issue-type)  cmd_delete_issue_type "$@" ;;
   "")
     echo -e "${RED}Error: No command specified${NC}"
     echo ""
@@ -830,11 +1113,14 @@ case "$COMMAND" in
     echo "  create-pr <ticket>                       Open PR for current branch"
     echo "  list [status]                            List project items (optionally filtered)"
     echo "  cache-clear                              Drop the on-disk schema cache"
+    echo "  ensure-issue-types [--dry-run]           Idempotently create missing issue types from .saasfoundry.json"
+    echo "  assign-type <issue> <type>               Assign a native GitHub Issue Type (Epic|Story|Task|Issue)"
+    echo "  delete-issue-type <type>                 Remove an issue type from the org (cleanup)"
     exit 1
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-labels, get-ticket, create-pr, list, cache-clear"
+    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-labels, get-ticket, create-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type"
     exit 1
     ;;
 esac
