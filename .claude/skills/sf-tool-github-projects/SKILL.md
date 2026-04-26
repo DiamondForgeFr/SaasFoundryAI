@@ -8,14 +8,15 @@ github project, create subtask, update ticket status, github issue, project boar
 
 ## Data model
 
-Two orthogonal axes on every ticket:
+Three orthogonal axes on every ticket:
 
-| Axis           | Where it lives                                         | What it controls                                           |
-| -------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| **Status**     | Projects V2 board (Single select field "Status")       | Workflow phase (Backlog → … → Done)                        |
-| **Complexity** | GitHub label (`complexity: bug\|low\|medium\|complex`) | Rigor level applied in each phase (agents, tests, reviews) |
+| Axis           | Where it lives                                             | What it controls                                                           |
+| -------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Status**     | Projects V2 board (Single select field "Status")           | Workflow phase (Backlog → … → Done)                                        |
+| **Complexity** | GitHub label (`complexity: bug\|low\|medium\|complex`)     | Rigor level applied in each phase (agents, tests, reviews)                 |
+| **Type**       | GitHub Issue Type (org-level chip — Epic/Story/Task/Issue) | Ticket nature in the hierarchy (replaces `[EPIC]`/`[STORY]` title markers) |
 
-Never encode status in a label. Never encode complexity on the board. Keep them independent.
+Never encode status in a label. Never encode complexity on the board. Type is org-scoped — a single set of types serves every repo in the org.
 
 ## Configuration
 
@@ -38,6 +39,9 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 | `get-ticket <ticket>`                    | Print title + body (used by `detect-complexity.sh`)                                               |
 | `create-pr <ticket>`                     | Push branch + open PR against `workingBranch`                                                     |
 | `list [status]`                          | List project items, optionally filtered by status                                                 |
+| `ensure-issue-types [--dry-run]`         | Idempotently create org-level issue types from `workflow.issueTypes` in `.saasfoundry.json`       |
+| `assign-type <issue> <type>`             | Attach a native GitHub Issue Type chip (Epic/Story/Task/Issue) to the issue                       |
+| `delete-issue-type <type>`               | Remove an issue type from the org (cleanup of legacy types like Bug/Feature)                      |
 
 Status names are case-insensitive — the CLI matches against the options defined on the board.
 
@@ -118,9 +122,36 @@ $CLI update-status 42 "In review"
 $CLI update-status 42 "Done"
 ```
 
+## Issue Types (org-level chips)
+
+Native GitHub Issue Types replace the legacy textual title markers (`[EPIC]`, `[STORY]`, `[Parent #N]`). Types live at the **organisation** level — one canonical set is shared across every repo in the
+org. The CLI keeps the org in sync with `.saasfoundry.json` → `workflow.issueTypes[]`:
+
+```bash
+# 1. One-time setup — create missing types declared in the manifest (idempotent)
+$CLI ensure-issue-types
+
+# 2. Assign a type to an existing issue
+$CLI assign-type 42 Story
+
+# 3. Cleanup — remove a legacy type after reassigning its issues
+$CLI delete-issue-type Bug
+```
+
+`create-subtask` automatically calls `assign-type` for the matching native type after creation (best-effort — subtask creation never fails because of a type-assignment hiccup).
+
+**Permissions** — `ensure-issue-types`, `assign-type`, and `delete-issue-type` write to org-level config and require the `admin:org` scope on the `gh` token. Refresh once with:
+
+```bash
+gh auth refresh --hostname github.com --scopes admin:org
+```
+
+Without that scope the CLI still works for read paths and prints an actionable message before exiting (no silent failure).
+
 ## Requirements
 
 - `gh` CLI authenticated (`gh auth status` must show `project` + `repo` scopes)
+- `gh` token has `admin:org` scope **only** if you'll run the Issue Types commands (otherwise read paths are enough)
 - `jq` for JSON parsing
 - Project exists with a single-select "Status" field whose options match `.saasfoundry.json` → `workflow.statuses`
 

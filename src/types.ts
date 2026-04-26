@@ -141,6 +141,12 @@ export interface WorkflowStatus {
   color?: GitHubProjectColor
 }
 
+export interface WorkflowIssueType {
+  name: string
+  description?: string
+  color?: GitHubProjectColor
+}
+
 export interface WorkflowConfig {
   tool: 'github-projects' | 'jira' | 'notion' | 'linear' | 'none'
   projectUrl?: string
@@ -148,6 +154,7 @@ export interface WorkflowConfig {
   prTargetBranch?: string
   requireCodeReview?: boolean
   statuses?: WorkflowStatus[]
+  issueTypes?: WorkflowIssueType[]
   branchNaming?: {
     feature?: string
     fix?: string

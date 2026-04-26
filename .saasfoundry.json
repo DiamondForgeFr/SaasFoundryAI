@@ -48,6 +48,28 @@
         "name": "Done",
         "color": "GREEN"
       }
+    ],
+    "issueTypes": [
+      {
+        "name": "Epic",
+        "description": "Grouper for related Stories/Tasks (no PR, no branch)",
+        "color": "PURPLE"
+      },
+      {
+        "name": "Story",
+        "description": "Delivers user-observable value",
+        "color": "BLUE"
+      },
+      {
+        "name": "Task",
+        "description": "Delivers a technical action (refactor, infra, tooling)",
+        "color": "GRAY"
+      },
+      {
+        "name": "Issue",
+        "description": "Defect or unexpected behavior to investigate and fix",
+        "color": "RED"
+      }
     ]
   },
   "tools": {

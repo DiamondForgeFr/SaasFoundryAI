@@ -99,11 +99,28 @@
           "type": "array",
           "items": { "$ref": "#/definitions/workflowStatus" }
         },
+        "issueTypes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/workflowIssueType" }
+        },
         "validated": { "type": "boolean" },
         "lastValidated": { "type": "string", "format": "date-time" }
       }
     },
     "workflowStatus": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "color": {
+          "type": "string",
+          "enum": ["GRAY", "YELLOW", "BLUE", "PURPLE", "ORANGE", "PINK", "GREEN", "RED"]
+        }
+      }
+    },
+    "workflowIssueType": {
       "type": "object",
       "required": ["name"],
       "additionalProperties": false,
