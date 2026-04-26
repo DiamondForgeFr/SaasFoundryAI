@@ -3,10 +3,12 @@
  */
 import { ApiProperty } from '@nestjs/swagger'
 
+import type { InvitationResponse } from '@shared-types/index'
+
 /**
  * Declaration
  */
-export class InvitationResponseDto {
+export class InvitationResponseDto implements InvitationResponse {
   @ApiProperty({
     description: 'Friendly message indicating the status of the invitation',
     example: 'Invitation sent successfully. The user will receive an email with instructions to join.'

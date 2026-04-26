@@ -5,10 +5,12 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { OrganizationType } from '@/generated/prisma/client'
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator'
 
+import type { CreateOrganizationPayload } from '@shared-types/index'
+
 /**
  * Declaration
  */
-export class CreateOrganizationDto {
+export class CreateOrganizationDto implements CreateOrganizationPayload {
   @ApiProperty({
     description: 'Organization name',
     example: 'Acme Corporation'

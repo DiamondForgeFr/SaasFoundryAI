@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-export class AccountDto {
+import type { AccountSummary, Entity, MeResponse, OrganizationRef, People } from '@shared-types/index'
+
+export class AccountDto implements AccountSummary {
   @ApiProperty({
     description: 'Account unique identifier',
     example: '123e4567-e89b-12d3-a456-426614174000'
@@ -28,7 +30,7 @@ export class AccountDto {
   isActive: boolean
 }
 
-export class OrganizationDto {
+export class OrganizationDto implements OrganizationRef {
   @ApiProperty({
     description: 'Organization unique identifier',
     example: '123e4567-e89b-12d3-a456-426614174000'
@@ -42,7 +44,7 @@ export class OrganizationDto {
   name: string
 }
 
-export class PeopleDto {
+export class PeopleDto implements People {
   @ApiProperty({
     description: 'First name',
     example: 'John',
@@ -58,7 +60,7 @@ export class PeopleDto {
   lastname: string | null
 }
 
-export class EntityDto {
+export class EntityDto implements Entity {
   @ApiProperty({
     description: 'Entity unique identifier',
     example: '123e4567-e89b-12d3-a456-426614174000'
@@ -91,7 +93,7 @@ export class EntityDto {
   organization: OrganizationDto | null
 }
 
-export class MeResponseDto {
+export class MeResponseDto implements MeResponse {
   @ApiProperty({
     description: 'User unique identifier',
     example: '123e4567-e89b-12d3-a456-426614174000'

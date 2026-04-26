@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-export class GuestResponseDto {
+import type { GuestResponse } from '@shared-types/index'
+
+export class GuestResponseDto implements GuestResponse {
   @ApiProperty({
     description: 'User roles',
     example: ['GUEST'],
