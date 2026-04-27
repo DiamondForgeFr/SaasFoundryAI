@@ -148,16 +148,6 @@
         "description": "Invalidate user session and clear authentication tokens.",
         "operationId": "AuthController_signOut",
         "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SignOutDto"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "",
@@ -359,6 +349,7 @@
             "in": "query",
             "description": "Page number",
             "schema": {
+              "minimum": 1,
               "example": 1,
               "type": "number"
             }
@@ -369,6 +360,7 @@
             "in": "query",
             "description": "Number of items per page",
             "schema": {
+              "minimum": 1,
               "example": 10,
               "type": "number"
             }
@@ -537,6 +529,7 @@
             "in": "query",
             "description": "Page number",
             "schema": {
+              "minimum": 1,
               "example": 1,
               "type": "number"
             }
@@ -547,6 +540,7 @@
             "in": "query",
             "description": "Number of items per page",
             "schema": {
+              "minimum": 1,
               "example": 10,
               "type": "number"
             }
@@ -569,7 +563,8 @@
             "schema": {
               "type": "array",
               "items": {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               }
             }
           },
@@ -653,6 +648,7 @@
             "in": "query",
             "description": "Page number",
             "schema": {
+              "minimum": 1,
               "example": 1,
               "type": "number"
             }
@@ -663,6 +659,7 @@
             "in": "query",
             "description": "Number of items per page",
             "schema": {
+              "minimum": 1,
               "example": 10,
               "type": "number"
             }
@@ -905,6 +902,52 @@
         ]
       }
     },
+    "/api/organizations/{id}/logo": {
+      "post": {
+        "description": "Upload a logo image for the organization.",
+        "operationId": "OrganizationController_uploadLogo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Organization ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logo uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchOrganizationResponseDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchOrganizationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file type or size"
+          }
+        },
+        "summary": "Upload organization logo",
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
     "/api/entities": {
       "post": {
         "description": "Create a new entity and link it to an account and organization.",
@@ -1019,6 +1062,16 @@
               }
             }
           },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponseDto"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Invalid request"
           },
@@ -1085,6 +1138,16 @@
               }
             }
           },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInResponseDto"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Invalid request"
           },
@@ -1105,7 +1168,7 @@
     "version": "1.0.0",
     "contact": {
       "name": "SaaSFoundry Team",
-      "url": "https://github.com/agachet/saasfoundry",
+      "url": "https://github.com/DiamondForgeFr/SaaSFoundry",
       "email": "anthony.gachet@diamondforge.fr"
     },
     "license": {
@@ -1127,41 +1190,31 @@
       "SignUpDto": {
         "type": "object",
         "properties": {
-          "firstname": {
-            "type": "string",
-            "description": "First name of the user (optional during signup)",
-            "example": "John"
-          },
-          "lastname": {
-            "type": "string",
-            "description": "Last name of the user (optional during signup)",
-            "example": "Doe"
-          },
           "email": {
             "type": "string",
-            "description": "Email address of the user",
-            "example": "john.doe@example.com",
-            "format": "email"
+            "minLength": 1,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "password": {
             "type": "string",
-            "description": "User password",
-            "example": "NewPassword123",
-            "minLength": 6,
+            "minLength": 8,
             "maxLength": 40,
-            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[a-zA-Z\\d]{8,}$"
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$"
           },
           "locale": {
             "type": "string",
-            "description": "User locale preference",
-            "example": "EN",
-            "default": "EN"
+            "enum": [
+              "EN",
+              "FR"
+            ]
           }
         },
         "required": [
           "email",
           "password"
-        ]
+        ],
+        "additionalProperties": false
       },
       "SignUpResponseDto": {
         "type": "object",
@@ -1186,44 +1239,37 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "User email address",
-            "example": "user@example.com",
-            "format": "email"
+            "minLength": 1,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "password": {
             "type": "string",
-            "description": "User password",
-            "example": "mySecurePassword123",
             "minLength": 6,
             "maxLength": 40
           },
           "confirmAccountToken": {
-            "type": "string",
-            "description": "Account confirmation token (only required when validating a new account)",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-            "maxLength": 500
+            "type": "string"
           },
           "firstname": {
-            "type": "string",
-            "description": "First name (required during first login)",
-            "example": "John"
+            "type": "string"
           },
           "lastname": {
-            "type": "string",
-            "description": "Last name (required during first login)",
-            "example": "Doe"
+            "type": "string"
           },
           "locale": {
             "type": "string",
-            "description": "User locale preference",
-            "example": "EN",
-            "default": "EN"
+            "enum": [
+              "EN",
+              "FR"
+            ]
           }
         },
         "required": [
           "email",
           "password"
-        ]
+        ],
+        "additionalProperties": false
       },
       "SignInResponseDto": {
         "type": "object",
@@ -1231,19 +1277,6 @@
           "userId": {
             "type": "string",
             "description": "Authenticated user ID",
-            "example": "123e4567-e89b-12d3-a456-426614174000"
-          }
-        },
-        "required": [
-          "userId"
-        ]
-      },
-      "SignOutDto": {
-        "type": "object",
-        "properties": {
-          "userId": {
-            "type": "string",
-            "description": "ID of the user to sign out",
             "example": "123e4567-e89b-12d3-a456-426614174000"
           }
         },
@@ -1269,14 +1302,15 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "Email address of the user requesting password reset",
-            "example": "user@example.com",
-            "format": "email"
+            "minLength": 1,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           }
         },
         "required": [
           "email"
-        ]
+        ],
+        "additionalProperties": false
       },
       "RequestPasswordResetResponseDto": {
         "type": "object",
@@ -1301,29 +1335,25 @@
         "properties": {
           "resetPasswordToken": {
             "type": "string",
-            "description": "Token received by email for password reset",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            "minLength": 1
           },
           "password": {
             "type": "string",
-            "description": "New password (must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number)",
-            "example": "NewPassword123",
-            "minLength": 6,
+            "minLength": 8,
             "maxLength": 40,
-            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[a-zA-Z\\d]{8,}$"
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$"
           },
           "confirmPassword": {
             "type": "string",
-            "description": "Confirm the new password (must match password field)",
-            "example": "NewPassword123",
-            "minLength": 6
+            "minLength": 1
           }
         },
         "required": [
           "resetPasswordToken",
           "password",
           "confirmPassword"
-        ]
+        ],
+        "additionalProperties": false
       },
       "ResetPasswordResponseDto": {
         "type": "object",
@@ -1342,16 +1372,16 @@
         "type": "object",
         "properties": {
           "firstname": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "First name",
-            "example": "John",
-            "nullable": true
+            "example": "John"
           },
           "lastname": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Last name",
-            "example": "Doe",
-            "nullable": true
+            "example": "Doe"
           }
         },
         "required": [
@@ -1373,10 +1403,10 @@
             "example": "Main account"
           },
           "description": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Account description",
-            "example": "This is the main account for managing finances",
-            "nullable": true
+            "example": "This is the main account for managing finances"
           },
           "isActive": {
             "type": "boolean",
@@ -1433,8 +1463,8 @@
             "example": "123e4567-e89b-12d3-a456-426614174000"
           },
           "organization": {
-            "description": "Organization information",
             "nullable": true,
+            "description": "Organization information",
             "allOf": [
               {
                 "$ref": "#/components/schemas/OrganizationDto"
@@ -1472,38 +1502,50 @@
             ]
           },
           "roles": {
-            "description": "User roles",
-            "example": [
-              "USER",
-              "ADMIN",
-              "TESTER"
-            ],
             "type": "array",
             "items": {
-              "type": "array"
+              "required": true,
+              "description": "User roles",
+              "example": [
+                "USER",
+                "ADMIN",
+                "TESTER"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "modules": {
-            "description": "Accessible modules for the user",
-            "example": [
-              "USER_ACCOUNT_PASSWORD_RECOVERY",
-              "USER_ACCOUNT_CREATION"
-            ],
             "type": "array",
             "items": {
-              "type": "array"
+              "required": true,
+              "description": "Accessible modules for the user",
+              "example": [
+                "USER_ACCOUNT_PASSWORD_RECOVERY",
+                "USER_ACCOUNT_CREATION"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "permissions": {
-            "description": "User permissions",
-            "example": [
-              "USER_ACCOUNT_CREATE_OWN",
-              "PASSWORD_RECOVERY_LINK_REQUEST_OWN",
-              "PASSWORD_RECOVERY_RESET_OWN"
-            ],
             "type": "array",
             "items": {
-              "type": "array"
+              "required": true,
+              "description": "User permissions",
+              "example": [
+                "USER_ACCOUNT_CREATE_OWN",
+                "PASSWORD_RECOVERY_LINK_REQUEST_OWN",
+                "PASSWORD_RECOVERY_RESET_OWN"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "accounts": {
@@ -1543,35 +1585,47 @@
         "type": "object",
         "properties": {
           "roles": {
-            "description": "User roles",
-            "example": [
-              "GUEST"
-            ],
             "type": "array",
             "items": {
-              "type": "array"
+              "required": true,
+              "description": "User roles",
+              "example": [
+                "GUEST"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "modules": {
-            "description": "Accessible modules for the guest user",
-            "example": [
-              "USER_ACCOUNT_CREATION",
-              "USER_ACCOUNT_LOGIN"
-            ],
             "type": "array",
             "items": {
-              "type": "array"
+              "required": true,
+              "description": "Accessible modules for the guest user",
+              "example": [
+                "USER_ACCOUNT_CREATION",
+                "USER_ACCOUNT_LOGIN"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "permissions": {
-            "description": "Guest user permissions",
-            "example": [
-              "USER_ACCOUNT_CREATE_OWN",
-              "USER_ACCOUNT_LOGIN"
-            ],
             "type": "array",
             "items": {
-              "type": "array"
+              "required": true,
+              "description": "Guest user permissions",
+              "example": [
+                "USER_ACCOUNT_CREATE_OWN",
+                "USER_ACCOUNT_LOGIN"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         },
@@ -1615,7 +1669,8 @@
             "example": "Acme Corp"
           },
           "description": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Account description",
             "example": "Main account for Acme Corporation"
           },
@@ -1677,12 +1732,22 @@
         "properties": {
           "pagination": {
             "type": "object",
-            "description": "Pagination information",
-            "example": {
-              "current": 1,
-              "limit": 10,
-              "total": 5
-            }
+            "properties": {
+              "current": {
+                "type": "number"
+              },
+              "limit": {
+                "type": "number"
+              },
+              "total": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "current",
+              "limit",
+              "total"
+            ]
           },
           "count": {
             "type": "number",
@@ -1701,7 +1766,10 @@
           "items": {
             "description": "Users data",
             "items": {
-              "type": "array"
+              "type": "array",
+              "items": {
+                "type": "a"
+              }
             },
             "type": "array"
           },
@@ -1725,7 +1793,10 @@
           "items": {
             "description": "List of entities",
             "items": {
-              "type": "array"
+              "type": "array",
+              "items": {
+                "type": "a"
+              }
             },
             "type": "array"
           },
@@ -1749,7 +1820,10 @@
           "items": {
             "description": "List of roles",
             "items": {
-              "type": "array"
+              "type": "array",
+              "items": {
+                "type": "a"
+              }
             },
             "type": "array"
           },
@@ -1813,7 +1887,8 @@
             ],
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "/^c[a-z0-9]{20,}$/"
             }
           }
         },
@@ -1840,8 +1915,8 @@
             "example": true
           },
           "people": {
-            "description": "User personal information",
             "nullable": true,
+            "description": "User personal information",
             "allOf": [
               {
                 "$ref": "#/components/schemas/PeopleDto"
@@ -1906,16 +1981,22 @@
             ]
           },
           "description": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Organization description",
-            "example": "A leading technology company",
-            "nullable": true
+            "example": "A leading technology company"
           },
           "website": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Organization website",
-            "example": "https://www.acme.com",
-            "nullable": true
+            "example": "https://www.acme.com"
+          },
+          "logoUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Organization logo URL",
+            "example": "https://s3.example.com/org/logo.png"
           },
           "createdAt": {
             "format": "date-time",
@@ -1943,13 +2024,11 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Organization name",
-            "example": "Acme Corporation"
+            "minLength": 1,
+            "maxLength": 100
           },
           "type": {
             "type": "string",
-            "description": "Organization type",
-            "example": "COMPANY",
             "enum": [
               "COMPANY",
               "ASSOCIATION",
@@ -1958,38 +2037,37 @@
           },
           "accountId": {
             "type": "string",
-            "description": "Account ID that this organization belongs to",
-            "example": "123e4567-e89b-12d3-a456-426614174000"
+            "minLength": 1
           },
           "description": {
             "type": "string",
-            "description": "Organization description",
-            "example": "A leading technology company"
+            "maxLength": 255
           },
           "website": {
             "type": "string",
-            "description": "Organization website",
-            "example": "https://www.acme.com"
+            "maxLength": 100
+          },
+          "logoUrl": {
+            "type": "string",
+            "maxLength": 500
           }
         },
         "required": [
           "name",
           "type",
           "accountId"
-        ]
+        ],
+        "additionalProperties": false
       },
       "UpdateOrganizationDto": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "description": "Organization name",
-            "example": "Acme Corporation"
+            "maxLength": 100
           },
           "type": {
             "type": "string",
-            "description": "Organization type",
-            "example": "COMPANY",
             "enum": [
               "COMPANY",
               "ASSOCIATION",
@@ -1998,49 +2076,73 @@
           },
           "description": {
             "type": "string",
-            "description": "Organization description",
-            "example": "A leading technology company"
+            "maxLength": 255
           },
           "website": {
             "type": "string",
-            "description": "Organization website",
-            "example": "https://www.acme.com"
+            "maxLength": 100
+          },
+          "logoUrl": {
+            "type": "string",
+            "maxLength": 500
           }
         },
-        "required": [
-          "name",
-          "type"
-        ]
+        "additionalProperties": false
       },
       "CreateEntityDto": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "description": "The name of the entity",
-            "example": "Finance Department"
+            "maxLength": 100
           },
           "description": {
             "type": "string",
-            "description": "The description of the entity",
-            "example": "Handles all financial operations"
-          },
-          "organizationId": {
-            "type": "string",
-            "description": "The ID of the organization this entity belongs to",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+            "maxLength": 255
           },
           "accountId": {
             "type": "string",
-            "description": "The ID of the account this entity belongs to",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+            "minLength": 1
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "organization": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 100
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "COMPANY",
+                  "ASSOCIATION",
+                  "COMMUNITY"
+                ]
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "website": {
+                "type": "string",
+                "maxLength": 100
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
-          "name",
-          "organizationId",
           "accountId"
-        ]
+        ],
+        "additionalProperties": false
       },
       "EntityUserDto": {
         "type": "object",
@@ -2166,7 +2268,8 @@
             ],
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "/^c[a-z0-9]{20,}$/"
             }
           }
         },
@@ -2205,35 +2308,32 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "Email address of the person to invite",
-            "example": "john.doe@example.com"
+            "minLength": 1,
+            "maxLength": 100,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "firstname": {
             "type": "string",
-            "description": "Optional first name of the invited person",
-            "example": "John"
+            "maxLength": 30
           },
           "lastname": {
             "type": "string",
-            "description": "Optional last name of the invited person",
-            "example": "Doe"
+            "maxLength": 30
           },
           "roleIds": {
-            "description": "Optional list of role IDs to assign to the invited user",
             "type": "array",
             "items": {
               "type": "number"
             }
           },
           "accountIds": {
-            "description": "Optional list of account IDs to directly link the invited user to",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
           "entityIds": {
-            "description": "Optional list of entity IDs to link the invited user to",
             "type": "array",
             "items": {
               "type": "string"
@@ -2241,17 +2341,16 @@
           },
           "locale": {
             "type": "string",
-            "description": "Preferred locale for the invited user",
             "enum": [
               "EN",
               "FR"
-            ],
-            "default": "FR"
+            ]
           }
         },
         "required": [
           "email"
-        ]
+        ],
+        "additionalProperties": false
       },
       "InvitationResponseDto": {
         "type": "object",
@@ -2426,38 +2525,35 @@
         "properties": {
           "invitationToken": {
             "type": "string",
-            "description": "Invitation token received by email",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            "minLength": 1
           },
           "password": {
             "type": "string",
-            "description": "Password for the new account",
-            "example": "SecureP@ssword123"
+            "minLength": 8,
+            "maxLength": 40,
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$"
           },
           "firstname": {
             "type": "string",
-            "description": "First name of the user (can override the suggested value)",
-            "example": "John"
+            "maxLength": 30
           },
           "lastname": {
             "type": "string",
-            "description": "Last name of the user (can override the suggested value)",
-            "example": "Doe"
+            "maxLength": 30
           },
           "locale": {
             "type": "string",
-            "description": "Preferred locale for the user (can override the suggested value)",
             "enum": [
               "EN",
               "FR"
-            ],
-            "default": "FR"
+            ]
           }
         },
         "required": [
           "invitationToken",
           "password"
-        ]
+        ],
+        "additionalProperties": false
       }
     }
   }
