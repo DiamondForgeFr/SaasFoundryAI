@@ -4,6 +4,7 @@
 import { INestApplication, Injectable, Logger } from '@nestjs/common'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { cleanupOpenApiDoc } from 'nestjs-zod'
 import { join } from 'path'
 
 /**
@@ -33,7 +34,7 @@ export class ApiDocsService {
         .addBearerAuth()
         .build()
 
-      this.document = SwaggerModule.createDocument(app, config)
+      this.document = cleanupOpenApiDoc(SwaggerModule.createDocument(app, config))
 
       // Create docs directory at project root
       const docsPath = join(process.cwd(), 'docs')
