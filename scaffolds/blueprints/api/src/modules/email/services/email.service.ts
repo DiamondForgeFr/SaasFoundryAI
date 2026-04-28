@@ -41,9 +41,9 @@ export class EmailService {
       const confirmationUrl = `${this.envConfig.get('FRONTEND_URL')}/signin?confirmAccountToken=${confirmationToken}`
       const html = getAccountConfirmationHtmlTemplate(confirmationUrl, this.translationService, locale, firstName)
       const text = getAccountConfirmationTextTemplate(confirmationUrl, this.translationService, locale, firstName)
+      void html
+      void text
 
-      console.log('html', html)
-      console.log('text', text)
       // await this.sendEmail({
       //   to: email,
       //   subject: this.translationService.getTranslation(locale, 'accountConfirmation').subject,
@@ -64,9 +64,9 @@ export class EmailService {
       const resetUrl = `${this.envConfig.get('FRONTEND_URL')}/reset-password?resetPasswordToken=${resetToken}`
       const html = getPasswordResetHtmlTemplate(resetUrl, this.translationService, locale, firstName)
       const text = getPasswordResetTextTemplate(resetUrl, this.translationService, locale, firstName)
+      void html
+      void text
 
-      console.log('html', html)
-      console.log('text', text)
       // await this.sendEmail({
       //   to: email,
       //   subject: this.translationService.getTranslation(locale, 'passwordReset').subject,

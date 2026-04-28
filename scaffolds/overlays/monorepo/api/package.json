@@ -39,7 +39,7 @@
     "prod": "node dist/main",
     "lint": "eslint --config eslint.config.mjs .",
     "lint:fix": "eslint --config eslint.config.mjs . --fix",
-    "type-check": "tsc -b",
+    "type-check": "tsc --noEmit",
     "test:unit": "NODE_NO_WARNINGS=1 jest --config jest.config.js --silent",
     "test:unit:verbose": "NODE_NO_WARNINGS=1 jest --config jest.config.js --verbose --detectOpenHandles --forceExit --logHeapUsage",
     "test:unit:watch": "NODE_NO_WARNINGS=1 jest --config jest.config.js --watch",

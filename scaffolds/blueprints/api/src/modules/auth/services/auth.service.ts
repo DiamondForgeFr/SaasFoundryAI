@@ -110,7 +110,6 @@ export class AuthService {
 
     // Send confirmation email
     if (this.env.get('NODE_ENV') !== 'test') {
-      console.log('sendAccountConfirmationEmail', locale)
       // TODO mailer-service-active: await this.emailService.sendAccountConfirmationEmail(email, confirmationToken, 'User', locale)
     }
 
