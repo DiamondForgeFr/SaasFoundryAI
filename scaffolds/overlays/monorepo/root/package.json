@@ -41,6 +41,8 @@
     "test:unit": "turbo run test:unit",
     "test:e2e": "turbo run test:e2e",
     "test:full": "turbo run test:full",
+    "codegen": "turbo run codegen",
+    "codegen:api-client": "npm run codegen -w @{{PROJECT_NAME}}/api-client",
     "db:update:dev": "npm run db:update:dev -w apps/api",
     "db:update:prod": "npm run db:update:prod -w apps/api",
     "db:init:test": "npm run db:init:test -w apps/api",
