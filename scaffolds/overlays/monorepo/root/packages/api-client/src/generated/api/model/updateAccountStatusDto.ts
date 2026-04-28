@@ -8,5 +8,5 @@
 
 export interface UpdateAccountStatusDto {
   /** New account status */
-  isActive: boolean;
+  isActive: boolean
 }

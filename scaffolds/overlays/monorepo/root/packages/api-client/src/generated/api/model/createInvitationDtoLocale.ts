@@ -6,11 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type CreateInvitationDtoLocale = typeof CreateInvitationDtoLocale[keyof typeof CreateInvitationDtoLocale];
-
+export type CreateInvitationDtoLocale = (typeof CreateInvitationDtoLocale)[keyof typeof CreateInvitationDtoLocale]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CreateInvitationDtoLocale = {
   EN: 'EN',
-  FR: 'FR',
-} as const;
+  FR: 'FR'
+} as const

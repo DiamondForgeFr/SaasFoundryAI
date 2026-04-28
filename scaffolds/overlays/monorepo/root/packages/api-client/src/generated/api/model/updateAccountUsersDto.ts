@@ -8,5 +8,5 @@
 
 export interface UpdateAccountUsersDto {
   /** List of user IDs to associate with the account */
-  userIds: string[];
+  userIds: string[]
 }

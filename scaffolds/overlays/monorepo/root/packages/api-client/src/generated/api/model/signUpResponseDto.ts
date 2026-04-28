@@ -8,7 +8,7 @@
 
 export interface SignUpResponseDto {
   /** Registration confirmation message */
-  message: string;
+  message: string
   /** Account confirmation token (only available in development environment) */
-  confirmationToken?: string;
+  confirmationToken?: string
 }

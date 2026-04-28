@@ -5,157 +5,95 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation
-} from '@tanstack/react-query';
-import type {
-  MutationFunction,
-  QueryClient,
-  UseMutationOptions,
-  UseMutationResult
-} from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query'
+import type { MutationFunction, QueryClient, UseMutationOptions, UseMutationResult } from '@tanstack/react-query'
 
-import type {
-  CreateEntityDto,
-  CreateEntityResponseDto,
-  UpdateEntityUsersDto,
-  UpdateEntityUsersResponseDto
-} from '.././model';
+import type { CreateEntityDto, CreateEntityResponseDto, UpdateEntityUsersDto, UpdateEntityUsersResponseDto } from '.././model'
 
-import { apiClientMutator } from '../../../http-client';
-import type { ErrorType , BodyType } from '../../../http-client';
-
-
-
+import { apiClientMutator } from '../../../http-client'
+import type { ErrorType, BodyType } from '../../../http-client'
 
 /**
  * Create a new entity and link it to an account and organization.
  * @summary Create entity
  */
-export const entitiesControllerCreateEntity = (
-    createEntityDto: BodyType<CreateEntityDto>,
- signal?: AbortSignal
-) => {
-      
-      
-      return apiClientMutator<CreateEntityResponseDto>(
-      {url: `/api/entities`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: createEntityDto, signal
-    },
-      );
-    }
-  
+export const entitiesControllerCreateEntity = (createEntityDto: BodyType<CreateEntityDto>, signal?: AbortSignal) => {
+  return apiClientMutator<CreateEntityResponseDto>({ url: `/api/entities`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: createEntityDto, signal })
+}
 
+export const getEntitiesControllerCreateEntityMutationOptions = <TError = ErrorType<void | void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, TError, { data: BodyType<CreateEntityDto> }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, TError, { data: BodyType<CreateEntityDto> }, TContext> => {
+  const mutationKey = ['entitiesControllerCreateEntity']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-export const getEntitiesControllerCreateEntityMutationOptions = <TError = ErrorType<void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, TError,{data: BodyType<CreateEntityDto>}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, TError,{data: BodyType<CreateEntityDto>}, TContext> => {
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, { data: BodyType<CreateEntityDto> }> = (props) => {
+    const { data } = props ?? {}
 
-const mutationKey = ['entitiesControllerCreateEntity'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return entitiesControllerCreateEntity(data)
+  }
 
-      
+  return { mutationFn, ...mutationOptions }
+}
 
+export type EntitiesControllerCreateEntityMutationResult = NonNullable<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>>
+export type EntitiesControllerCreateEntityMutationBody = BodyType<CreateEntityDto>
+export type EntitiesControllerCreateEntityMutationError = ErrorType<void | void>
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, {data: BodyType<CreateEntityDto>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  entitiesControllerCreateEntity(data,)
-        }
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type EntitiesControllerCreateEntityMutationResult = NonNullable<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>>
-    export type EntitiesControllerCreateEntityMutationBody = BodyType<CreateEntityDto>
-    export type EntitiesControllerCreateEntityMutationError = ErrorType<void | void>
-
-    /**
+/**
  * @summary Create entity
  */
-export const useEntitiesControllerCreateEntity = <TError = ErrorType<void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, TError,{data: BodyType<CreateEntityDto>}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof entitiesControllerCreateEntity>>,
-        TError,
-        {data: BodyType<CreateEntityDto>},
-        TContext
-      > => {
+export const useEntitiesControllerCreateEntity = <TError = ErrorType<void | void>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, TError, { data: BodyType<CreateEntityDto> }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof entitiesControllerCreateEntity>>, TError, { data: BodyType<CreateEntityDto> }, TContext> => {
+  const mutationOptions = getEntitiesControllerCreateEntityMutationOptions(options)
 
-      const mutationOptions = getEntitiesControllerCreateEntityMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
+  return useMutation(mutationOptions, queryClient)
+}
+/**
  * Update the users linked to an entity.
  * @summary Update entity users
  */
-export const entitiesControllerUpdateEntityUsers = (
-    id: string,
-    updateEntityUsersDto: BodyType<UpdateEntityUsersDto>,
- ) => {
-      
-      
-      return apiClientMutator<UpdateEntityUsersResponseDto>(
-      {url: `/api/entities/${id}/users`, method: 'PATCH',
-      headers: {'Content-Type': 'application/json', },
-      data: updateEntityUsersDto
-    },
-      );
-    }
-  
+export const entitiesControllerUpdateEntityUsers = (id: string, updateEntityUsersDto: BodyType<UpdateEntityUsersDto>) => {
+  return apiClientMutator<UpdateEntityUsersResponseDto>({ url: `/api/entities/${id}/users`, method: 'PATCH', headers: { 'Content-Type': 'application/json' }, data: updateEntityUsersDto })
+}
 
+export const getEntitiesControllerUpdateEntityUsersMutationOptions = <TError = ErrorType<void | void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, TError, { id: string; data: BodyType<UpdateEntityUsersDto> }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, TError, { id: string; data: BodyType<UpdateEntityUsersDto> }, TContext> => {
+  const mutationKey = ['entitiesControllerUpdateEntityUsers']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-export const getEntitiesControllerUpdateEntityUsersMutationOptions = <TError = ErrorType<void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, TError,{id: string;data: BodyType<UpdateEntityUsersDto>}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, TError,{id: string;data: BodyType<UpdateEntityUsersDto>}, TContext> => {
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, { id: string; data: BodyType<UpdateEntityUsersDto> }> = (props) => {
+    const { id, data } = props ?? {}
 
-const mutationKey = ['entitiesControllerUpdateEntityUsers'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return entitiesControllerUpdateEntityUsers(id, data)
+  }
 
-      
+  return { mutationFn, ...mutationOptions }
+}
 
+export type EntitiesControllerUpdateEntityUsersMutationResult = NonNullable<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>>
+export type EntitiesControllerUpdateEntityUsersMutationBody = BodyType<UpdateEntityUsersDto>
+export type EntitiesControllerUpdateEntityUsersMutationError = ErrorType<void | void>
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, {id: string;data: BodyType<UpdateEntityUsersDto>}> = (props) => {
-          const {id,data} = props ?? {};
-
-          return  entitiesControllerUpdateEntityUsers(id,data,)
-        }
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type EntitiesControllerUpdateEntityUsersMutationResult = NonNullable<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>>
-    export type EntitiesControllerUpdateEntityUsersMutationBody = BodyType<UpdateEntityUsersDto>
-    export type EntitiesControllerUpdateEntityUsersMutationError = ErrorType<void | void>
-
-    /**
+/**
  * @summary Update entity users
  */
-export const useEntitiesControllerUpdateEntityUsers = <TError = ErrorType<void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, TError,{id: string;data: BodyType<UpdateEntityUsersDto>}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>,
-        TError,
-        {id: string;data: BodyType<UpdateEntityUsersDto>},
-        TContext
-      > => {
+export const useEntitiesControllerUpdateEntityUsers = <TError = ErrorType<void | void>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, TError, { id: string; data: BodyType<UpdateEntityUsersDto> }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof entitiesControllerUpdateEntityUsers>>, TError, { id: string; data: BodyType<UpdateEntityUsersDto> }, TContext> => {
+  const mutationOptions = getEntitiesControllerUpdateEntityUsersMutationOptions(options)
 
-      const mutationOptions = getEntitiesControllerUpdateEntityUsersMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    
+  return useMutation(mutationOptions, queryClient)
+}

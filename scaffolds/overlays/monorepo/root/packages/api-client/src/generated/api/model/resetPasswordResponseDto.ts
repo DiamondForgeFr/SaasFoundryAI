@@ -8,5 +8,5 @@
 
 export interface ResetPasswordResponseDto {
   /** Success message */
-  message: string;
+  message: string
 }

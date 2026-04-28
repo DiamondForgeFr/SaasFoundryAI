@@ -5,10 +5,10 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { OrganizationDto } from './organizationDto';
+import type { OrganizationDto } from './organizationDto'
 
 /**
  * Organization information
  * @nullable
  */
-export type EntityDtoOrganization = OrganizationDto | null;
+export type EntityDtoOrganization = OrganizationDto | null

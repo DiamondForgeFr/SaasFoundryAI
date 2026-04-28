@@ -8,13 +8,13 @@
 
 export interface ResetPasswordDto {
   /** @minLength 1 */
-  resetPasswordToken: string;
+  resetPasswordToken: string
   /**
    * @minLength 8
    * @maxLength 40
    * @pattern ^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$
    */
-  password: string;
+  password: string
   /** @minLength 1 */
-  confirmPassword: string;
+  confirmPassword: string
 }

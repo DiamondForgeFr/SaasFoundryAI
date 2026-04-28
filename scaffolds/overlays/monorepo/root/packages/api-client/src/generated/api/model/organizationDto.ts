@@ -8,7 +8,7 @@
 
 export interface OrganizationDto {
   /** Organization unique identifier */
-  id: string;
+  id: string
   /** Organization name */
-  name: string;
+  name: string
 }

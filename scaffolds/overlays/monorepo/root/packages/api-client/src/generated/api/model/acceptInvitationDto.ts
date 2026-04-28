@@ -5,20 +5,20 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { AcceptInvitationDtoLocale } from './acceptInvitationDtoLocale';
+import type { AcceptInvitationDtoLocale } from './acceptInvitationDtoLocale'
 
 export interface AcceptInvitationDto {
   /** @minLength 1 */
-  invitationToken: string;
+  invitationToken: string
   /**
    * @minLength 8
    * @maxLength 40
    * @pattern ^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$
    */
-  password: string;
+  password: string
   /** @maxLength 30 */
-  firstname?: string;
+  firstname?: string
   /** @maxLength 30 */
-  lastname?: string;
-  locale?: AcceptInvitationDtoLocale;
+  lastname?: string
+  locale?: AcceptInvitationDtoLocale
 }

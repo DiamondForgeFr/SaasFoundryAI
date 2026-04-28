@@ -5,32 +5,32 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { FetchOrganizationResponseDtoType } from './fetchOrganizationResponseDtoType';
+import type { FetchOrganizationResponseDtoType } from './fetchOrganizationResponseDtoType'
 
 export interface FetchOrganizationResponseDto {
   /** Organization unique identifier */
-  id: string;
+  id: string
   /** Organization name */
-  name: string;
+  name: string
   /** Organization type */
-  type: FetchOrganizationResponseDtoType;
+  type: FetchOrganizationResponseDtoType
   /**
    * Organization description
    * @nullable
    */
-  description?: string | null;
+  description?: string | null
   /**
    * Organization website
    * @nullable
    */
-  website?: string | null;
+  website?: string | null
   /**
    * Organization logo URL
    * @nullable
    */
-  logoUrl?: string | null;
+  logoUrl?: string | null
   /** Organization creation date */
-  createdAt: string;
+  createdAt: string
   /** Organization last update date */
-  updatedAt: string;
+  updatedAt: string
 }

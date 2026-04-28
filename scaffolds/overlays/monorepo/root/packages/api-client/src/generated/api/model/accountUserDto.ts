@@ -5,18 +5,25 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { AccountUserDtoPeople } from './accountUserDtoPeople';
+import type { AccountUserDtoPeople } from './accountUserDtoPeople'
+import type { AccountUserDtoRolesItem } from './accountUserDtoRolesItem'
+import type { EntityWithOrganizationDto } from './entityWithOrganizationDto'
 
 export interface AccountUserDto {
   /** User ID */
-  id: string;
+  id: string
   /** User email */
-  email: string;
+  email: string
   /** User active status */
-  isActive: boolean;
-  /**
-   * User personal information
-   * @nullable
-   */
-  people: AccountUserDtoPeople;
+  isActive: boolean
+  people?: AccountUserDtoPeople
+  roles: AccountUserDtoRolesItem[]
+  /** Entities the user is linked to */
+  entities: EntityWithOrganizationDto[]
+  /** Whether the user is directly linked to the account */
+  isDirectlyLinked: boolean
+  /** Creation date */
+  createdAt: string
+  /** Last update date */
+  updatedAt: string
 }

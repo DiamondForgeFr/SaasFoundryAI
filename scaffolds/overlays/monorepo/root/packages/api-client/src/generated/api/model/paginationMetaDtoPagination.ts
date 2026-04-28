@@ -7,7 +7,7 @@
  */
 
 export type PaginationMetaDtoPagination = {
-  current: number;
-  limit: number;
-  total: number;
-};
+  current: number
+  limit: number
+  total: number
+}

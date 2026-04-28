@@ -8,5 +8,5 @@
 
 export interface SignOutResponseDto {
   /** Success message */
-  message: string;
+  message: string
 }

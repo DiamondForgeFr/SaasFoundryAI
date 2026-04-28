@@ -8,9 +8,9 @@
 
 export interface EntityUserDto {
   /** User ID */
-  id: string;
+  id: string
   /** User email */
-  email: string;
+  email: string
   /** User active status */
-  isActive: boolean;
+  isActive: boolean
 }

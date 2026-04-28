@@ -5,9 +5,7 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useQuery
-} from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query'
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -18,103 +16,69 @@ import type {
   UndefinedInitialDataOptions,
   UseQueryOptions,
   UseQueryResult
-} from '@tanstack/react-query';
+} from '@tanstack/react-query'
 
-import { apiClientMutator } from '../../../http-client';
-import type { ErrorType } from '../../../http-client';
-
-
-
+import { apiClientMutator } from '../../../http-client'
+import type { ErrorType } from '../../../http-client'
 
 /**
  * Returns the OpenAPI specification in JSON format for the API documentation
  * @summary Get OpenAPI documentation
  */
-export const apiDocsControllerGetOpenApiJson = (
-    
- signal?: AbortSignal
-) => {
-      
-      
-      return apiClientMutator<void>(
-      {url: `/api/api/docs/openapi.json`, method: 'GET', signal
-    },
-      );
-    }
-  
-
-
+export const apiDocsControllerGetOpenApiJson = (signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/api/docs/openapi.json`, method: 'GET', signal })
+}
 
 export const getApiDocsControllerGetOpenApiJsonQueryKey = () => {
-    return [
-    `/api/api/docs/openapi.json`
-    ] as const;
-    }
+  return [`/api/api/docs/openapi.json`] as const
+}
 
-    
-export const getApiDocsControllerGetOpenApiJsonQueryOptions = <TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>>, }
-) => {
+export const getApiDocsControllerGetOpenApiJsonQueryOptions = <TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
 
-const {query: queryOptions} = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getApiDocsControllerGetOpenApiJsonQueryKey()
 
-  const queryKey =  queryOptions?.queryKey ?? getApiDocsControllerGetOpenApiJsonQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>> = ({ signal }) => apiDocsControllerGetOpenApiJson(signal)
 
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>> = ({ signal }) => apiDocsControllerGetOpenApiJson(signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type ApiDocsControllerGetOpenApiJsonQueryResult = NonNullable<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>>
 export type ApiDocsControllerGetOpenApiJsonQueryError = ErrorType<void>
 
-
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>,
-          TError,
-          Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>,
-          TError,
-          Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Get OpenAPI documentation
  */
 
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getApiDocsControllerGetOpenApiJsonQueryOptions(options)
 
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
-  query.queryKey = queryOptions.queryKey ;
+  query.queryKey = queryOptions.queryKey
 
-  return query;
+  return query
 }
-
-
-

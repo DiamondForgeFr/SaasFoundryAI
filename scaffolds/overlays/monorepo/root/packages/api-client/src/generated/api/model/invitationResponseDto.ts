@@ -8,7 +8,7 @@
 
 export interface InvitationResponseDto {
   /** Friendly message indicating the status of the invitation */
-  message: string;
+  message: string
   /** Invitation token (only visible in development and test environments) */
-  invitationToken?: string;
+  invitationToken?: string
 }

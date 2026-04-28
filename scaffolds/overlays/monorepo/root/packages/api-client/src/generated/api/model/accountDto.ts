@@ -8,14 +8,14 @@
 
 export interface AccountDto {
   /** Account unique identifier */
-  id: string;
+  id: string
   /** Account name */
-  name: string;
+  name: string
   /**
    * Account description
    * @nullable
    */
-  description?: string | null;
+  description?: string | null
   /** Account active status */
-  isActive: boolean;
+  isActive: boolean
 }

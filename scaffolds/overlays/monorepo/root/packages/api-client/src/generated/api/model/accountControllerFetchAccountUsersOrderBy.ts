@@ -6,13 +6,12 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AccountControllerFetchAccountUsersOrderBy = typeof AccountControllerFetchAccountUsersOrderBy[keyof typeof AccountControllerFetchAccountUsersOrderBy];
-
+export type AccountControllerFetchAccountUsersOrderBy = (typeof AccountControllerFetchAccountUsersOrderBy)[keyof typeof AccountControllerFetchAccountUsersOrderBy]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AccountControllerFetchAccountUsersOrderBy = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   name: 'name',
-  lastname: 'lastname',
-} as const;
+  lastname: 'lastname'
+} as const

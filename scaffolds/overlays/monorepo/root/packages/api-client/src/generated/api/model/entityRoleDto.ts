@@ -8,9 +8,9 @@
 
 export interface EntityRoleDto {
   /** Role ID */
-  id: number;
+  id: number
   /** Role name */
-  name: string;
+  name: string
   /** Role active status */
-  isActive: boolean;
+  isActive: boolean
 }

@@ -5,17 +5,17 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { CreateEntityDtoOrganizationType } from './createEntityDtoOrganizationType';
+import type { CreateEntityDtoOrganizationType } from './createEntityDtoOrganizationType'
 
 export type CreateEntityDtoOrganization = {
   /**
    * @minLength 2
    * @maxLength 100
    */
-  name: string;
-  type: CreateEntityDtoOrganizationType;
+  name: string
+  type: CreateEntityDtoOrganizationType
   /** @maxLength 255 */
-  description?: string;
+  description?: string
   /** @maxLength 100 */
-  website?: string;
-};
+  website?: string
+}

@@ -5,30 +5,30 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { InvitationListItemDtoStatus } from './invitationListItemDtoStatus';
-import type { InvitationAccountDto } from './invitationAccountDto';
-import type { InvitationEntityDto } from './invitationEntityDto';
-import type { InvitationRoleDto } from './invitationRoleDto';
+import type { InvitationListItemDtoStatus } from './invitationListItemDtoStatus'
+import type { InvitationAccountDto } from './invitationAccountDto'
+import type { InvitationEntityDto } from './invitationEntityDto'
+import type { InvitationRoleDto } from './invitationRoleDto'
 
 export interface InvitationListItemDto {
   /** Invitation ID */
-  id: string;
+  id: string
   /** Inviter user ID */
-  inviterUserId: string;
+  inviterUserId: string
   /** Invitee user ID */
-  inviteeUserId?: string;
+  inviteeUserId?: string
   /** Invitee email */
-  inviteeUserEmail: string;
+  inviteeUserEmail: string
   /** Invitation status */
-  status: InvitationListItemDtoStatus;
+  status: InvitationListItemDtoStatus
   /** Invitation date */
-  invitedAt: string;
+  invitedAt: string
   /** Acceptance date */
-  acceptedAt?: string;
+  acceptedAt?: string
   /** Accounts linked to the invitation */
-  accounts: InvitationAccountDto[];
+  accounts: InvitationAccountDto[]
   /** Entities linked to the invitation */
-  entities: InvitationEntityDto[];
+  entities: InvitationEntityDto[]
   /** Roles linked to the invitation */
-  roles: InvitationRoleDto[];
+  roles: InvitationRoleDto[]
 }

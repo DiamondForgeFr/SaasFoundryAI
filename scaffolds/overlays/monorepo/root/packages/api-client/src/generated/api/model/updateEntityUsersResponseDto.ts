@@ -5,13 +5,13 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { EntityUserDto } from './entityUserDto';
+import type { EntityUserDto } from './entityUserDto'
 
 export interface UpdateEntityUsersResponseDto {
   /** The ID of the entity */
-  id: string;
+  id: string
   /** Entity name */
-  name: string;
+  name: string
   /** List of users linked to the entity */
-  users: EntityUserDto[];
+  users: EntityUserDto[]
 }

@@ -5,10 +5,7 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
   DataTag,
   DefinedInitialDataOptions,
@@ -22,303 +19,214 @@ import type {
   UseMutationResult,
   UseQueryOptions,
   UseQueryResult
-} from '@tanstack/react-query';
+} from '@tanstack/react-query'
 
-import type {
-  CreateOrganizationDto,
-  FetchOrganizationResponseDto,
-  UpdateOrganizationDto
-} from '.././model';
+import type { CreateOrganizationDto, FetchOrganizationResponseDto, OrganizationControllerUploadLogoBody, UpdateOrganizationDto } from '.././model'
 
-import { apiClientMutator } from '../../../http-client';
-import type { ErrorType , BodyType } from '../../../http-client';
-
-
-
+import { apiClientMutator } from '../../../http-client'
+import type { ErrorType, BodyType } from '../../../http-client'
 
 /**
  * Fetch detailed account information.
  * @summary Fetch organization details
  */
-export const organizationControllerFetchOrganization = (
-    id: string,
- signal?: AbortSignal
+export const organizationControllerFetchOrganization = (id: string, signal?: AbortSignal) => {
+  return apiClientMutator<FetchOrganizationResponseDto>({ url: `/api/organizations/${id}`, method: 'GET', signal })
+}
+
+export const getOrganizationControllerFetchOrganizationQueryKey = (id?: string) => {
+  return [`/api/organizations/${id}`] as const
+}
+
+export const getOrganizationControllerFetchOrganizationQueryOptions = <TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void | void>>(
+  id: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> }
 ) => {
-      
-      
-      return apiClientMutator<FetchOrganizationResponseDto>(
-      {url: `/api/organizations/${id}`, method: 'GET', signal
-    },
-      );
-    }
-  
+  const { query: queryOptions } = options ?? {}
 
+  const queryKey = queryOptions?.queryKey ?? getOrganizationControllerFetchOrganizationQueryKey(id)
 
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>> = ({ signal }) => organizationControllerFetchOrganization(id, signal)
 
-export const getOrganizationControllerFetchOrganizationQueryKey = (id?: string,) => {
-    return [
-    `/api/organizations/${id}`
-    ] as const;
-    }
-
-    
-export const getOrganizationControllerFetchOrganizationQueryOptions = <TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void | void>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>>, }
-) => {
-
-const {query: queryOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getOrganizationControllerFetchOrganizationQueryKey(id);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>> = ({ signal }) => organizationControllerFetchOrganization(id, signal);
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 }
 
 export type OrganizationControllerFetchOrganizationQueryResult = NonNullable<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>>
 export type OrganizationControllerFetchOrganizationQueryError = ErrorType<void | void>
 
-
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void | void>>(
- id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof organizationControllerFetchOrganization>>,
-          TError,
-          Awaited<ReturnType<typeof organizationControllerFetchOrganization>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+  id: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, Awaited<ReturnType<typeof organizationControllerFetchOrganization>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void | void>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof organizationControllerFetchOrganization>>,
-          TError,
-          Awaited<ReturnType<typeof organizationControllerFetchOrganization>>
-        > , 'initialData'
-      >, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+  id: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, Awaited<ReturnType<typeof organizationControllerFetchOrganization>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void | void>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>>, }
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+  id: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary Fetch organization details
  */
 
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void | void>>(
- id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>>, }
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  id: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getOrganizationControllerFetchOrganizationQueryOptions(id, options)
 
-  const queryOptions = getOrganizationControllerFetchOrganizationQueryOptions(id,options)
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  query.queryKey = queryOptions.queryKey
 
-  query.queryKey = queryOptions.queryKey ;
-
-  return query;
+  return query
 }
-
-
 
 /**
  * Update the organization details.
  * @summary Update organization
  */
-export const organizationControllerUpdateOrganization = (
-    id: string,
-    updateOrganizationDto: BodyType<UpdateOrganizationDto>,
- ) => {
-      
-      
-      return apiClientMutator<FetchOrganizationResponseDto>(
-      {url: `/api/organizations/${id}`, method: 'PATCH',
-      headers: {'Content-Type': 'application/json', },
-      data: updateOrganizationDto
-    },
-      );
-    }
-  
+export const organizationControllerUpdateOrganization = (id: string, updateOrganizationDto: BodyType<UpdateOrganizationDto>) => {
+  return apiClientMutator<FetchOrganizationResponseDto>({ url: `/api/organizations/${id}`, method: 'PATCH', headers: { 'Content-Type': 'application/json' }, data: updateOrganizationDto })
+}
 
+export const getOrganizationControllerUpdateOrganizationMutationOptions = <TError = ErrorType<void | void | void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, TError, { id: string; data: BodyType<UpdateOrganizationDto> }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, TError, { id: string; data: BodyType<UpdateOrganizationDto> }, TContext> => {
+  const mutationKey = ['organizationControllerUpdateOrganization']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-export const getOrganizationControllerUpdateOrganizationMutationOptions = <TError = ErrorType<void | void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, TError,{id: string;data: BodyType<UpdateOrganizationDto>}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, TError,{id: string;data: BodyType<UpdateOrganizationDto>}, TContext> => {
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, { id: string; data: BodyType<UpdateOrganizationDto> }> = (props) => {
+    const { id, data } = props ?? {}
 
-const mutationKey = ['organizationControllerUpdateOrganization'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return organizationControllerUpdateOrganization(id, data)
+  }
 
-      
+  return { mutationFn, ...mutationOptions }
+}
 
+export type OrganizationControllerUpdateOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>>
+export type OrganizationControllerUpdateOrganizationMutationBody = BodyType<UpdateOrganizationDto>
+export type OrganizationControllerUpdateOrganizationMutationError = ErrorType<void | void | void>
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, {id: string;data: BodyType<UpdateOrganizationDto>}> = (props) => {
-          const {id,data} = props ?? {};
-
-          return  organizationControllerUpdateOrganization(id,data,)
-        }
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type OrganizationControllerUpdateOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>>
-    export type OrganizationControllerUpdateOrganizationMutationBody = BodyType<UpdateOrganizationDto>
-    export type OrganizationControllerUpdateOrganizationMutationError = ErrorType<void | void | void>
-
-    /**
+/**
  * @summary Update organization
  */
-export const useOrganizationControllerUpdateOrganization = <TError = ErrorType<void | void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, TError,{id: string;data: BodyType<UpdateOrganizationDto>}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>,
-        TError,
-        {id: string;data: BodyType<UpdateOrganizationDto>},
-        TContext
-      > => {
+export const useOrganizationControllerUpdateOrganization = <TError = ErrorType<void | void | void>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, TError, { id: string; data: BodyType<UpdateOrganizationDto> }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof organizationControllerUpdateOrganization>>, TError, { id: string; data: BodyType<UpdateOrganizationDto> }, TContext> => {
+  const mutationOptions = getOrganizationControllerUpdateOrganizationMutationOptions(options)
 
-      const mutationOptions = getOrganizationControllerUpdateOrganizationMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
+  return useMutation(mutationOptions, queryClient)
+}
+/**
  * Create a new organization for an account.
  * @summary Create organization
  */
-export const organizationControllerCreateOrganization = (
-    createOrganizationDto: BodyType<CreateOrganizationDto>,
- signal?: AbortSignal
-) => {
-      
-      
-      return apiClientMutator<FetchOrganizationResponseDto>(
-      {url: `/api/organizations`, method: 'POST',
-      headers: {'Content-Type': 'application/json', },
-      data: createOrganizationDto, signal
-    },
-      );
-    }
-  
+export const organizationControllerCreateOrganization = (createOrganizationDto: BodyType<CreateOrganizationDto>, signal?: AbortSignal) => {
+  return apiClientMutator<FetchOrganizationResponseDto>({ url: `/api/organizations`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: createOrganizationDto, signal })
+}
 
+export const getOrganizationControllerCreateOrganizationMutationOptions = <TError = ErrorType<void | void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, TError, { data: BodyType<CreateOrganizationDto> }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, TError, { data: BodyType<CreateOrganizationDto> }, TContext> => {
+  const mutationKey = ['organizationControllerCreateOrganization']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-export const getOrganizationControllerCreateOrganizationMutationOptions = <TError = ErrorType<void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, TError,{data: BodyType<CreateOrganizationDto>}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, TError,{data: BodyType<CreateOrganizationDto>}, TContext> => {
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, { data: BodyType<CreateOrganizationDto> }> = (props) => {
+    const { data } = props ?? {}
 
-const mutationKey = ['organizationControllerCreateOrganization'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+    return organizationControllerCreateOrganization(data)
+  }
 
-      
+  return { mutationFn, ...mutationOptions }
+}
 
+export type OrganizationControllerCreateOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>>
+export type OrganizationControllerCreateOrganizationMutationBody = BodyType<CreateOrganizationDto>
+export type OrganizationControllerCreateOrganizationMutationError = ErrorType<void | void>
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, {data: BodyType<CreateOrganizationDto>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  organizationControllerCreateOrganization(data,)
-        }
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type OrganizationControllerCreateOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>>
-    export type OrganizationControllerCreateOrganizationMutationBody = BodyType<CreateOrganizationDto>
-    export type OrganizationControllerCreateOrganizationMutationError = ErrorType<void | void>
-
-    /**
+/**
  * @summary Create organization
  */
-export const useOrganizationControllerCreateOrganization = <TError = ErrorType<void | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, TError,{data: BodyType<CreateOrganizationDto>}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof organizationControllerCreateOrganization>>,
-        TError,
-        {data: BodyType<CreateOrganizationDto>},
-        TContext
-      > => {
+export const useOrganizationControllerCreateOrganization = <TError = ErrorType<void | void>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, TError, { data: BodyType<CreateOrganizationDto> }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof organizationControllerCreateOrganization>>, TError, { data: BodyType<CreateOrganizationDto> }, TContext> => {
+  const mutationOptions = getOrganizationControllerCreateOrganizationMutationOptions(options)
 
-      const mutationOptions = getOrganizationControllerCreateOrganizationMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
+  return useMutation(mutationOptions, queryClient)
+}
+/**
  * Upload a logo image for the organization.
  * @summary Upload organization logo
  */
-export const organizationControllerUploadLogo = (
-    id: string,
- signal?: AbortSignal
-) => {
-      
-      
-      return apiClientMutator<FetchOrganizationResponseDto | FetchOrganizationResponseDto>(
-      {url: `/api/organizations/${id}/logo`, method: 'POST', signal
-    },
-      );
-    }
-  
+export const organizationControllerUploadLogo = (id: string, organizationControllerUploadLogoBody: BodyType<OrganizationControllerUploadLogoBody>, signal?: AbortSignal) => {
+  const formData = new FormData()
+  formData.append(`file`, organizationControllerUploadLogoBody.file)
 
+  return apiClientMutator<FetchOrganizationResponseDto | FetchOrganizationResponseDto>({
+    url: `/api/organizations/${id}/logo`,
+    method: 'POST',
+    headers: { 'Content-Type': 'multipart/form-data' },
+    data: formData,
+    signal
+  })
+}
 
-export const getOrganizationControllerUploadLogoMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, TError,{id: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, TError,{id: string}, TContext> => {
+export const getOrganizationControllerUploadLogoMutationOptions = <TError = ErrorType<void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, TError, { id: string; data: BodyType<OrganizationControllerUploadLogoBody> }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, TError, { id: string; data: BodyType<OrganizationControllerUploadLogoBody> }, TContext> => {
+  const mutationKey = ['organizationControllerUploadLogo']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-const mutationKey = ['organizationControllerUploadLogo'];
-const {mutation: mutationOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, { id: string; data: BodyType<OrganizationControllerUploadLogoBody> }> = (props) => {
+    const { id, data } = props ?? {}
 
-      
+    return organizationControllerUploadLogo(id, data)
+  }
 
+  return { mutationFn, ...mutationOptions }
+}
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, {id: string}> = (props) => {
-          const {id} = props ?? {};
+export type OrganizationControllerUploadLogoMutationResult = NonNullable<Awaited<ReturnType<typeof organizationControllerUploadLogo>>>
+export type OrganizationControllerUploadLogoMutationBody = BodyType<OrganizationControllerUploadLogoBody>
+export type OrganizationControllerUploadLogoMutationError = ErrorType<void>
 
-          return  organizationControllerUploadLogo(id,)
-        }
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type OrganizationControllerUploadLogoMutationResult = NonNullable<Awaited<ReturnType<typeof organizationControllerUploadLogo>>>
-    
-    export type OrganizationControllerUploadLogoMutationError = ErrorType<void>
-
-    /**
+/**
  * @summary Upload organization logo
  */
-export const useOrganizationControllerUploadLogo = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, TError,{id: string}, TContext>, }
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof organizationControllerUploadLogo>>,
-        TError,
-        {id: string},
-        TContext
-      > => {
+export const useOrganizationControllerUploadLogo = <TError = ErrorType<void>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, TError, { id: string; data: BodyType<OrganizationControllerUploadLogoBody> }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof organizationControllerUploadLogo>>, TError, { id: string; data: BodyType<OrganizationControllerUploadLogoBody> }, TContext> => {
+  const mutationOptions = getOrganizationControllerUploadLogoMutationOptions(options)
 
-      const mutationOptions = getOrganizationControllerUploadLogoMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    
+  return useMutation(mutationOptions, queryClient)
+}

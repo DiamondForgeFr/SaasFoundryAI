@@ -9,4 +9,4 @@
 /**
  * The organization this entity belongs to
  */
-export type CreateEntityResponseDtoOrganization = { [key: string]: unknown };
+export type CreateEntityResponseDtoOrganization = { [key: string]: unknown }

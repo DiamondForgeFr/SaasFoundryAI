@@ -8,7 +8,7 @@
 
 export interface InvitationRoleDto {
   /** Role ID */
-  id: number;
+  id: number
   /** Role name */
-  name: string;
+  name: string
 }

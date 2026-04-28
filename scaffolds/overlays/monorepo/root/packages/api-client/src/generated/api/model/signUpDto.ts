@@ -5,19 +5,19 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { SignUpDtoLocale } from './signUpDtoLocale';
+import type { SignUpDtoLocale } from './signUpDtoLocale'
 
 export interface SignUpDto {
   /**
    * @minLength 1
    * @pattern ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
    */
-  email: string;
+  email: string
   /**
    * @minLength 8
    * @maxLength 40
    * @pattern ^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$
    */
-  password: string;
-  locale?: SignUpDtoLocale;
+  password: string
+  locale?: SignUpDtoLocale
 }

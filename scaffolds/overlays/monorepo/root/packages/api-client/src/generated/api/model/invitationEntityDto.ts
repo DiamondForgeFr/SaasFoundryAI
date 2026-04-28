@@ -8,7 +8,7 @@
 
 export interface InvitationEntityDto {
   /** Entity ID */
-  id: string;
+  id: string
   /** Entity name */
-  name: string;
+  name: string
 }
