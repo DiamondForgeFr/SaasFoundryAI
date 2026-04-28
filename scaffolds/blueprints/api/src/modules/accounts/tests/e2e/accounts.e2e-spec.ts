@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { INestApplication } from '@nestjs/common'
+import { INestApplication, ValidationPipe } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import cookieParser from 'cookie-parser'
 import * as dotenv from 'dotenv'
@@ -61,7 +61,7 @@ describe('Accounts Module (e2e)', () => {
     app = moduleRef.createNestApplication()
     app.setGlobalPrefix(process.env.API_PREFIX ?? '/api')
     app.use(cookieParser())
-    app.useGlobalPipes(new ZodValidationPipe())
+    app.useGlobalPipes(new ZodValidationPipe(), new ValidationPipe({ transform: true }))
 
     prismaService = moduleRef.get<PrismaService>(PrismaService)
 
