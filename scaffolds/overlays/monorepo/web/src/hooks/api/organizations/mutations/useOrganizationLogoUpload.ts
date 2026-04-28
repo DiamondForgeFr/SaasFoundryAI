@@ -8,7 +8,7 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
-import apiClient from '@/lib/api/client'
+import { organizationControllerUploadLogo } from '@{{PROJECT_NAME}}/api-client/generated/api/organizations/organizations'
 
 // Translation
 const tOrganizations = (key: string) => i18next.t(key, { ns: 'organizations' })
@@ -41,7 +41,7 @@ export const useOrganizationLogoUpload = () => {
 
   const mutation = useMutation({
     mutationFn: async ({ organizationId, file }: { organizationId: string; file: File }) => {
-      const response = await apiClient.upload<OrganizationLogoUploadResponseDto>(`/organizations/${organizationId}/logo`, file)
+      const response = await organizationControllerUploadLogo(organizationId, { file })
       return schemas.response.parse(response)
     },
     onError: (error) => {

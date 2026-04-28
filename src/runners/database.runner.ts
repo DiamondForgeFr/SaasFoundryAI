@@ -28,8 +28,7 @@ export async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'c
     const conflict = detectPortConflict(5435, projectName)
     if (conflict) {
       throw new Error(
-        `Port 5435 is already in use by container "${conflict}" from another project.\n` +
-          `Stop it first: docker compose -f <other-project>/apps/api/docker-compose.dev-services.yml down`
+        `Port 5435 is already in use by container "${conflict}" from another project.\n` + `Stop it first: docker compose -f <other-project>/apps/api/docker-compose.dev-services.yml down`
       )
     }
 

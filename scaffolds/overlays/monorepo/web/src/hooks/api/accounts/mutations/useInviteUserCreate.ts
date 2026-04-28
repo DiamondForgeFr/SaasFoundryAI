@@ -8,8 +8,8 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { invitationControllerCreateInvitation } from '@{{PROJECT_NAME}}/api-client/generated/api/invitations/invitations'
 import { buildCreateInvitationPayloadSchema } from '@shared-validation/invitation'
-import apiClient from '@/lib/api/client'
 
 // Translation
 const tAccounts = (key: string) => i18next.t(key, { ns: 'accounts' })
@@ -53,7 +53,7 @@ export const useInviteUser = () => {
         locale: data.locale ?? (navigatorLocale === 'FR' ? 'FR' : 'EN')
       }
 
-      const response = await apiClient.post<InviteUserResponseDto>('/invitations', payload)
+      const response = await invitationControllerCreateInvitation(payload)
       return schemas.response.parse(response)
     },
     onError: (error) => {

@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
+import { accountControllerFetchAccountUsers } from '@{{PROJECT_NAME}}/api-client/generated/api/accounts/accounts'
+import type { AccountControllerFetchAccountUsersParams } from '@{{PROJECT_NAME}}/api-client/generated/api/model/accountControllerFetchAccountUsersParams'
 import { cleanParams } from '@/hooks/api/utils/cleanParams'
-import apiClient from '@/lib/api/client'
 import { useAccountSchema } from './useAccount'
 
 // Translation
@@ -69,7 +70,7 @@ export const useAccountUsers = (accountId: string, params: FetchAccountUsersPara
     queryKey: ['account', accountId, 'users', queryParams],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<AccountUsersResponseDto>(`/accounts/${accountId}/users`, queryParams)
+        const response = await accountControllerFetchAccountUsers(accountId, queryParams as AccountControllerFetchAccountUsersParams)
         return schemas.response.parse(response)
       } catch (error) {
         console.error(tAccounts('errors.tk_fetchAccountUsersError_'), error)

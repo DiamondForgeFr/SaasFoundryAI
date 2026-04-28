@@ -3,7 +3,7 @@
  */
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { ApiConsumes, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 /**
  * Dependencies
@@ -95,6 +95,7 @@ export class OrganizationController {
   // TODO storage-service-active: @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => { const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']; if (allowedMimes.includes(file.mimetype)) { cb(null, true) } else { cb(new BadRequestException('Only image files are allowed (jpeg, png, webp, svg)'), false) } } }))
   // TODO storage-service-active: @ApiOperation({ summary: 'Upload organization logo', description: 'Upload a logo image for the organization.' })
   // TODO storage-service-active: @ApiConsumes('multipart/form-data')
+  // TODO storage-service-active: @ApiBody({ description: 'Logo file (jpeg, png, webp, svg — max 5MB)', required: true, schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: 'Logo image file' } } } })
   // TODO storage-service-active: @ApiParam({ name: 'id', description: 'Organization ID' })
   // TODO storage-service-active: @ApiResponse({ status: 200, description: 'Logo uploaded successfully', type: FetchOrganizationResponseDto })
   // TODO storage-service-active: @ApiResponse({ status: 400, description: 'Invalid file type or size' })
