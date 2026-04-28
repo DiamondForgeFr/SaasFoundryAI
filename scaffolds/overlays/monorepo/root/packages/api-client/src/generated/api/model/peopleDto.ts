@@ -11,10 +11,10 @@ export interface PeopleDto {
    * First name
    * @nullable
    */
-  firstname: string | null;
+  firstname: string | null
   /**
    * Last name
    * @nullable
    */
-  lastname: string | null;
+  lastname: string | null
 }

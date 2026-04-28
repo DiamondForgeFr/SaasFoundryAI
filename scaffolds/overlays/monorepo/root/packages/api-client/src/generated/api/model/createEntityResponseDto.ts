@@ -5,27 +5,27 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { CreateEntityResponseDtoOrganization } from './createEntityResponseDtoOrganization';
-import type { EntityUserDto } from './entityUserDto';
-import type { EntityRoleDto } from './entityRoleDto';
+import type { CreateEntityResponseDtoOrganization } from './createEntityResponseDtoOrganization'
+import type { EntityUserDto } from './entityUserDto'
+import type { EntityRoleDto } from './entityRoleDto'
 
 export interface CreateEntityResponseDto {
   /** The unique ID of the entity */
-  id: string;
+  id: string
   /** The name of the entity */
-  name: string;
+  name: string
   /** The description of the entity */
-  description: string;
+  description: string
   /** Whether the entity is active */
-  isActive: boolean;
+  isActive: boolean
   /** The organization this entity belongs to */
-  organization?: CreateEntityResponseDtoOrganization;
+  organization?: CreateEntityResponseDtoOrganization
   /** The users associated with this entity */
-  users?: EntityUserDto[];
+  users?: EntityUserDto[]
   /** The roles associated with this entity */
-  roles?: EntityRoleDto[];
+  roles?: EntityRoleDto[]
   /** The date and time when the entity was created */
-  createdAt: string;
+  createdAt: string
   /** The date and time when the entity was last updated */
-  updatedAt: string;
+  updatedAt: string
 }

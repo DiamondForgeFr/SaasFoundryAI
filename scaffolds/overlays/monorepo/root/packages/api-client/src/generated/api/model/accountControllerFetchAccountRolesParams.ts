@@ -5,29 +5,29 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { AccountControllerFetchAccountRolesOrderBy } from './accountControllerFetchAccountRolesOrderBy';
+import type { AccountControllerFetchAccountRolesOrderBy } from './accountControllerFetchAccountRolesOrderBy'
 
 export type AccountControllerFetchAccountRolesParams = {
-/**
- * Page number
- * @minimum 1
- */
-page?: number;
-/**
- * Number of items per page
- * @minimum 1
- */
-limit?: number;
-/**
- * Search term to filter roles
- */
-search?: string;
-/**
- * Filter by active status
- */
-isActive?: boolean;
-/**
- * Order by field
- */
-orderBy?: AccountControllerFetchAccountRolesOrderBy;
-};
+  /**
+   * Page number
+   * @minimum 1
+   */
+  page?: number
+  /**
+   * Number of items per page
+   * @minimum 1
+   */
+  limit?: number
+  /**
+   * Search term to filter roles
+   */
+  search?: string
+  /**
+   * Filter by active status
+   */
+  isActive?: boolean
+  /**
+   * Order by field
+   */
+  orderBy?: AccountControllerFetchAccountRolesOrderBy
+}

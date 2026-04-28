@@ -8,20 +8,20 @@
 
 export interface AccountRoleDto {
   /** Role ID */
-  id: number;
+  id: number
   /** Role name */
-  name: string;
+  name: string
   /**
    * Role description
    * @nullable
    */
-  description: string | null;
+  description?: string | null
   /** Role active status */
-  isActive: boolean;
+  isActive: boolean
   /** Whether the role is global */
-  isGlobal: boolean;
+  isGlobal: boolean
   /** Creation date */
-  createdAt: string;
+  createdAt: string
   /** Last update date */
-  updatedAt: string;
+  updatedAt: string
 }

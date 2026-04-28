@@ -917,6 +917,25 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "description": "Logo file (jpeg, png, webp, svg — max 5MB)",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo image file"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Logo uploaded successfully",

@@ -5,41 +5,41 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { AccountControllerFetchAccountUsersOrderBy } from './accountControllerFetchAccountUsersOrderBy';
+import type { AccountControllerFetchAccountUsersOrderBy } from './accountControllerFetchAccountUsersOrderBy'
 
 export type AccountControllerFetchAccountUsersParams = {
-/**
- * Page number
- * @minimum 1
- */
-page?: number;
-/**
- * Number of items per page
- * @minimum 1
- */
-limit?: number;
-/**
- * Search term to filter users
- */
-search?: string;
-/**
- * Filter by role IDs
- */
-roleIds?: number[];
-/**
- * Filter by entity IDs
- */
-entityIds?: string[];
-/**
- * Filter by active status
- */
-isActive?: boolean;
-/**
- * Order by field
- */
-orderBy?: AccountControllerFetchAccountUsersOrderBy;
-/**
- * Include users linked directly to the account
- */
-includeDirectUsers?: boolean;
-};
+  /**
+   * Page number
+   * @minimum 1
+   */
+  page?: number
+  /**
+   * Number of items per page
+   * @minimum 1
+   */
+  limit?: number
+  /**
+   * Search term to filter users
+   */
+  search?: string
+  /**
+   * Filter by role IDs
+   */
+  roleIds?: number[]
+  /**
+   * Filter by entity IDs
+   */
+  entityIds?: string[]
+  /**
+   * Filter by active status
+   */
+  isActive?: boolean
+  /**
+   * Order by field
+   */
+  orderBy?: AccountControllerFetchAccountUsersOrderBy
+  /**
+   * Include users linked directly to the account
+   */
+  includeDirectUsers?: boolean
+}

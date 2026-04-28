@@ -5,11 +5,11 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { CollectionResponseDtoValuesItem } from './collectionResponseDtoValuesItem';
+import type { CollectionResponseDtoValuesItem } from './collectionResponseDtoValuesItem'
 
 export interface CollectionResponseDto {
   /** Total number of items in the collection */
-  count: number;
+  count: number
   /** Collection items */
-  values: CollectionResponseDtoValuesItem[];
+  values: CollectionResponseDtoValuesItem[]
 }

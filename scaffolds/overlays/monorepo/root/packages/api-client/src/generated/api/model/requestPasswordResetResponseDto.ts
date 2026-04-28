@@ -8,7 +8,7 @@
 
 export interface RequestPasswordResetResponseDto {
   /** Confirmation message */
-  message: string;
+  message: string
   /** Reset token (only available in development environment) */
-  resetToken?: string;
+  resetToken?: string
 }

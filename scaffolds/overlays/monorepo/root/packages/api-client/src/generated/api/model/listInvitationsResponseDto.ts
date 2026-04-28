@@ -5,9 +5,9 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { InvitationListItemDto } from './invitationListItemDto';
+import type { InvitationListItemDto } from './invitationListItemDto'
 
 export interface ListInvitationsResponseDto {
   /** List of invitations */
-  invitations: InvitationListItemDto[];
+  invitations: InvitationListItemDto[]
 }

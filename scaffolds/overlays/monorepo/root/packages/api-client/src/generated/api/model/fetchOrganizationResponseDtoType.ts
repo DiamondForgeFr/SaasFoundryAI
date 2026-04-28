@@ -9,12 +9,11 @@
 /**
  * Organization type
  */
-export type FetchOrganizationResponseDtoType = typeof FetchOrganizationResponseDtoType[keyof typeof FetchOrganizationResponseDtoType];
-
+export type FetchOrganizationResponseDtoType = (typeof FetchOrganizationResponseDtoType)[keyof typeof FetchOrganizationResponseDtoType]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FetchOrganizationResponseDtoType = {
   COMPANY: 'COMPANY',
   ASSOCIATION: 'ASSOCIATION',
-  COMMUNITY: 'COMMUNITY',
-} as const;
+  COMMUNITY: 'COMMUNITY'
+} as const

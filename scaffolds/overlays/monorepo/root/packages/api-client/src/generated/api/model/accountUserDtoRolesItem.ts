@@ -6,11 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface UpdateAccountStatusResponseDto {
-  /** Account ID */
-  id: string
-  /** Account name */
+export type AccountUserDtoRolesItem = {
+  id: number
   name: string
-  /** Account active status */
-  isActive: boolean
 }

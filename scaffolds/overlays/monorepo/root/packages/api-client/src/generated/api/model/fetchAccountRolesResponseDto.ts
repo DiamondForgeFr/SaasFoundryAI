@@ -5,12 +5,12 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { AccountRoleDto } from './accountRoleDto';
-import type { PaginationMetaDto } from './paginationMetaDto';
+import type { FetchAccountRolesResponseDtoItemsItem } from './fetchAccountRolesResponseDtoItemsItem'
+import type { PaginationMetaDto } from './paginationMetaDto'
 
 export interface FetchAccountRolesResponseDto {
   /** List of roles */
-  items: AccountRoleDto[];
+  items: FetchAccountRolesResponseDtoItemsItem[]
   /** Pagination metadata */
-  meta: PaginationMetaDto;
+  meta: PaginationMetaDto
 }

@@ -8,5 +8,5 @@
 
 export interface SignInResponseDto {
   /** Authenticated user ID */
-  userId: string;
+  userId: string
 }

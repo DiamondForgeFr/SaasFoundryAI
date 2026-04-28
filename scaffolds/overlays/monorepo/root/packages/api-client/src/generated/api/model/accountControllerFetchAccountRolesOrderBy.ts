@@ -6,11 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AccountControllerFetchAccountRolesOrderBy = typeof AccountControllerFetchAccountRolesOrderBy[keyof typeof AccountControllerFetchAccountRolesOrderBy];
-
+export type AccountControllerFetchAccountRolesOrderBy = (typeof AccountControllerFetchAccountRolesOrderBy)[keyof typeof AccountControllerFetchAccountRolesOrderBy]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AccountControllerFetchAccountRolesOrderBy = {
   createdAt: 'createdAt',
-  name: 'name',
-} as const;
+  name: 'name'
+} as const

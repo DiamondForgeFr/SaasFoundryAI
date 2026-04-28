@@ -5,28 +5,28 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { CollectionResponseDto } from './collectionResponseDto';
+import type { CollectionResponseDto } from './collectionResponseDto'
 
 export interface FetchAccountDeepResponseDto {
   /** Account ID */
-  id: string;
+  id: string
   /** Account name */
-  name: string;
+  name: string
   /**
    * Account description
    * @nullable
    */
-  description?: string | null;
+  description?: string | null
   /** Account active status */
-  isActive: boolean;
+  isActive: boolean
   /** Creation date */
-  createdAt: string;
+  createdAt: string
   /** Last update date */
-  updatedAt: string;
+  updatedAt: string
   /** Account users */
-  users: CollectionResponseDto;
+  users: CollectionResponseDto
   /** Account entities */
-  entities: CollectionResponseDto;
+  entities: CollectionResponseDto
   /** Account roles */
-  roles: CollectionResponseDto;
+  roles: CollectionResponseDto
 }

@@ -6,12 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type CreateEntityDtoOrganizationType = typeof CreateEntityDtoOrganizationType[keyof typeof CreateEntityDtoOrganizationType];
-
+export type CreateEntityDtoOrganizationType = (typeof CreateEntityDtoOrganizationType)[keyof typeof CreateEntityDtoOrganizationType]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CreateEntityDtoOrganizationType = {
   COMPANY: 'COMPANY',
   ASSOCIATION: 'ASSOCIATION',
-  COMMUNITY: 'COMMUNITY',
-} as const;
+  COMMUNITY: 'COMMUNITY'
+} as const

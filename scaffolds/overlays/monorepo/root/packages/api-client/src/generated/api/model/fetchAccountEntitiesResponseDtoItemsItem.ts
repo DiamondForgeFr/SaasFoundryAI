@@ -6,11 +6,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface UpdateAccountStatusResponseDto {
-  /** Account ID */
-  id: string
-  /** Account name */
-  name: string
-  /** Account active status */
-  isActive: boolean
-}
+export type FetchAccountEntitiesResponseDtoItemsItem = { [key: string]: unknown }

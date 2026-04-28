@@ -8,7 +8,7 @@
 
 export interface InvitationAccountDto {
   /** Account ID */
-  id: string;
+  id: string
   /** Account name */
-  name: string;
+  name: string
 }

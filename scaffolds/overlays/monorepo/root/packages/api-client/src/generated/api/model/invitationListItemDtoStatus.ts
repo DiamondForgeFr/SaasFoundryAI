@@ -9,12 +9,11 @@
 /**
  * Invitation status
  */
-export type InvitationListItemDtoStatus = typeof InvitationListItemDtoStatus[keyof typeof InvitationListItemDtoStatus];
-
+export type InvitationListItemDtoStatus = (typeof InvitationListItemDtoStatus)[keyof typeof InvitationListItemDtoStatus]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const InvitationListItemDtoStatus = {
   SENT: 'SENT',
   EXPIRED: 'EXPIRED',
-  ACCEPTED: 'ACCEPTED',
-} as const;
+  ACCEPTED: 'ACCEPTED'
+} as const

@@ -5,7 +5,7 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { CreateInvitationDtoLocale } from './createInvitationDtoLocale';
+import type { CreateInvitationDtoLocale } from './createInvitationDtoLocale'
 
 export interface CreateInvitationDto {
   /**
@@ -13,13 +13,13 @@ export interface CreateInvitationDto {
    * @maxLength 100
    * @pattern ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
    */
-  email: string;
+  email: string
   /** @maxLength 30 */
-  firstname?: string;
+  firstname?: string
   /** @maxLength 30 */
-  lastname?: string;
-  roleIds?: number[];
-  accountIds?: string[];
-  entityIds?: string[];
-  locale?: CreateInvitationDtoLocale;
+  lastname?: string
+  roleIds?: number[]
+  accountIds?: string[]
+  entityIds?: string[]
+  locale?: CreateInvitationDtoLocale
 }

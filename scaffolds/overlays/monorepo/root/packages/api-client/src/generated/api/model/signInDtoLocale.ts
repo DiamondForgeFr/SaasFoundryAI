@@ -6,11 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type SignInDtoLocale = typeof SignInDtoLocale[keyof typeof SignInDtoLocale];
-
+export type SignInDtoLocale = (typeof SignInDtoLocale)[keyof typeof SignInDtoLocale]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SignInDtoLocale = {
   EN: 'EN',
-  FR: 'FR',
-} as const;
+  FR: 'FR'
+} as const

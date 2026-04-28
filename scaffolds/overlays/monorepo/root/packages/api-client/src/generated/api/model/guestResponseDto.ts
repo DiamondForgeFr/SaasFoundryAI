@@ -7,7 +7,7 @@
  */
 
 export interface GuestResponseDto {
-  roles: string[][];
-  modules: string[][];
-  permissions: string[][];
+  roles: string[][]
+  modules: string[][]
+  permissions: string[][]
 }

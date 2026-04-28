@@ -5,24 +5,24 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { PeopleDto } from './peopleDto';
-import type { AccountDto } from './accountDto';
-import type { EntityDto } from './entityDto';
+import type { PeopleDto } from './peopleDto'
+import type { AccountDto } from './accountDto'
+import type { EntityDto } from './entityDto'
 
 export interface MeResponseDto {
   /** User unique identifier */
-  userId: string;
+  userId: string
   /** User email address */
-  email: string;
+  email: string
   /** User personal information */
-  people: PeopleDto;
-  roles: string[][];
-  modules: string[][];
-  permissions: string[][];
+  people: PeopleDto
+  roles: string[][]
+  modules: string[][]
+  permissions: string[][]
   /** User accounts */
-  accounts: AccountDto[];
+  accounts: AccountDto[]
   /** User entities */
-  entities: EntityDto[];
+  entities: EntityDto[]
   /** Account creation date */
-  createdAt: string;
+  createdAt: string
 }

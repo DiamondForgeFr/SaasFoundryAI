@@ -5,13 +5,13 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { AccountUserDto } from './accountUserDto';
+import type { AccountUserDto } from './accountUserDto'
 
 export interface UpdateAccountUsersResponseDto {
   /** The ID of the account */
-  id: string;
+  id: string
   /** Account name */
-  name: string;
+  name: string
   /** List of users linked to the account */
-  users: AccountUserDto[];
+  users: AccountUserDto[]
 }

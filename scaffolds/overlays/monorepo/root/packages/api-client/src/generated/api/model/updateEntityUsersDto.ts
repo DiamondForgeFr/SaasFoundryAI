@@ -8,5 +8,5 @@
 
 export interface UpdateEntityUsersDto {
   /** List of user IDs to associate with the entity */
-  userIds: string[];
+  userIds: string[]
 }

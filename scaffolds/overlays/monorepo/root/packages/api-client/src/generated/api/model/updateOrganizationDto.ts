@@ -5,16 +5,16 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { UpdateOrganizationDtoType } from './updateOrganizationDtoType';
+import type { UpdateOrganizationDtoType } from './updateOrganizationDtoType'
 
 export interface UpdateOrganizationDto {
   /** @maxLength 100 */
-  name?: string;
-  type?: UpdateOrganizationDtoType;
+  name?: string
+  type?: UpdateOrganizationDtoType
   /** @maxLength 255 */
-  description?: string;
+  description?: string
   /** @maxLength 100 */
-  website?: string;
+  website?: string
   /** @maxLength 500 */
-  logoUrl?: string;
+  logoUrl?: string
 }

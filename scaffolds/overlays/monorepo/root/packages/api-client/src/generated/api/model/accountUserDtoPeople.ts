@@ -5,10 +5,11 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { PeopleDto } from './peopleDto';
 
-/**
- * User personal information
- * @nullable
- */
-export type AccountUserDtoPeople = PeopleDto | null;
+export type AccountUserDtoPeople = {
+  id: string
+  /** @nullable */
+  firstname: string | null
+  /** @nullable */
+  lastname: string | null
+}

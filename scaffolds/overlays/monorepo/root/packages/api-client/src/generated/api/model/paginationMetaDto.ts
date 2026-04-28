@@ -5,10 +5,10 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
-import type { PaginationMetaDtoPagination } from './paginationMetaDtoPagination';
+import type { PaginationMetaDtoPagination } from './paginationMetaDtoPagination'
 
 export interface PaginationMetaDto {
-  pagination: PaginationMetaDtoPagination;
+  pagination: PaginationMetaDtoPagination
   /** Total number of items */
-  count: number;
+  count: number
 }
