@@ -1,26 +1,51 @@
 import ora from 'ora'
+import { resolve } from 'path'
 import { exec } from 'shelljs'
 
 import { getNvmPrefix } from '../utils'
 
+function run(command: string, opts: { cwd?: string; silent?: boolean } = {}): { code: number; stdout: string; stderr: string } {
+  const result = exec(command, { silent: opts.silent ?? true, cwd: opts.cwd ?? process.cwd() })
+  return { code: result.code, stdout: result.stdout, stderr: result.stderr }
+}
+
+function detectPortConflict(port: number, projectName: string): string | null {
+  // Returns name of the foreign container holding the port, or null if free / owned by us
+  const result = run(`docker ps --format '{{.Names}}\t{{.Ports}}' | grep ':${port}->' | head -1`)
+  if (!result.stdout.trim()) return null
+  const [name] = result.stdout.trim().split('\t')
+  if (name.startsWith(`${projectName}-`)) return null
+  return name
+}
+
 export async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner: ReturnType<typeof ora>) {
   spinner.text = 'Initializing and starting database...'
 
+  const projectRoot = process.cwd()
+  const apiPath = resolve(projectRoot, isMonorepo ? 'apps/api' : `apps/${projectName}-api`)
+
   if (dbSetup === 'docker') {
-    // Create network if it doesn't exist
-    await exec(`docker network create ${projectName}-network > /dev/null 2>&1 || true`)
-    // Start the database from unified dev-services compose
-    const apiPath = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
-    await exec(`docker compose -f ${apiPath}/docker-compose.dev-services.yml up -d db-dev > /dev/null 2>&1`)
+    const conflict = detectPortConflict(5435, projectName)
+    if (conflict) {
+      throw new Error(
+        `Port 5435 is already in use by container "${conflict}" from another project.\n` +
+          `Stop it first: docker compose -f <other-project>/apps/api/docker-compose.dev-services.yml down`
+      )
+    }
+
+    run(`docker network create ${projectName}-network`)
+    const composeResult = run(`docker compose -f ${apiPath}/docker-compose.dev-services.yml up -d db-dev`)
+    if (composeResult.code !== 0) {
+      throw new Error(`Failed to start db-dev container:\n${composeResult.stderr || composeResult.stdout}`)
+    }
   }
 
-  // Initialize the database with required configurations
   spinner.text = 'Configuring database...'
   const nvm = getNvmPrefix()
-  const apiPath = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
-  await exec(
-    `${nvm}cd ${apiPath} && npm run db:update:dev -- init_data_base_config --wf --wt --wds 2> /dev/null || (${nvm}cd ${apiPath} && npm run db:update:dev -- init_data_base_config --wf --wt --wds)`
-  )
+  const migrateResult = run(`${nvm}npm run db:update:dev -- init_data_base_config --wf --wt --wds`, { cwd: apiPath, silent: false })
+  if (migrateResult.code !== 0) {
+    throw new Error(`Failed to apply initial migrations (exit ${migrateResult.code}). Check the output above for details.`)
+  }
 
   return true
 }
