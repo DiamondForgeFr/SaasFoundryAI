@@ -29,6 +29,31 @@ To regenerate after a controller / DTO change:
 2. `npm run codegen`
 3. Commit both `apps/api/docs/openapi.json` AND `packages/api-client/src/generated/**` together.
 
+### What triggers a regen
+
+| Change                                                          | Regen needed?                          |
+| --------------------------------------------------------------- | -------------------------------------- |
+| New controller route / new method on an existing controller     | Yes (new hook surfaces in `<tag>.ts`)  |
+| Add / remove / rename a field on a request or response DTO      | Yes (model file changes)               |
+| Move an endpoint to a different `@ApiTags(...)`                 | Yes (file moves between tag bundles)   |
+| Refactor a controller's internal code without changing its DTOs | No (OpenAPI snapshot unchanged)        |
+| Change `apps/web` consumer code only                            | No                                     |
+| Bump orval / dependency in `packages/api-client`                | Yes — re-emit so output matches plugin |
+
+### HMR integration
+
+`apps/api`'s `ApiDocsService` rewrites `apps/api/docs/openapi.json` on every Nest boot — so a `npm run dev:api` restart **after** a controller change refreshes the snapshot in place. From there, `npm run codegen` (or `npm run codegen:api-client`) emits the new client. Wire a watcher into your editor's "on save → restart Nest" flow to keep the loop tight; the codegen step is sub-second on a warm npm cache.
+
+### Drift detection (pre-commit)
+
+The monorepo's `pre-commit` hook runs `npm run codegen:check`, which:
+
+1. Skips when `apps/api/docs/openapi.json` is missing (API hasn't been booted yet) or when `packages/api-client/src/generated/` already has unstaged changes (don't clobber WIP).
+2. Otherwise runs `orval` against the committed snapshot and `git diff --exit-code` on the generated tree.
+3. Fails the commit when the regen output differs from what's checked in — meaning the committed client is stale.
+
+To inspect drift without committing: `npm run codegen:check`. To regenerate and stage in one shot: `./scripts/check-codegen-drift.sh --fix && git add packages/api-client/src/generated`.
+
 ## Using a generated hook in `apps/web`
 
 ```tsx

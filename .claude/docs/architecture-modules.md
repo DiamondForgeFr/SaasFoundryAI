@@ -202,6 +202,48 @@ even though we keep them `private: true`.
 
 **Multirepo note** — none of this exists in the multirepo topology. Cross-repo sharing is left to the consumer (npm publish, git submodule, …); SaaSFoundry does not assume an opinion there.
 
+### Generated API Client (Monorepo Only)
+
+Alongside the three `shared-*` packages, the monorepo ships a fourth first-class workspace: `@<projectName>/api-client`. Unlike `shared-*` (hand-written contracts), `api-client` is **emitted from the
+OpenAPI snapshot** that `apps/api` writes on every Nest boot.
+
+| Path inside `packages/api-client/` | Owner     | Notes                                                                                                                                       |
+| ---------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orval.config.ts`                  | hand      | Codegen configuration. Reads `apps/api/docs/openapi.json`, emits per-tag bundles + a deduped models barrel.                                 |
+| `src/http-client.ts`               | hand      | Orval mutator. Wraps `fetch` with cookie auth, query-string serialization, 401 handler. Exposes `setApiBaseUrl` / `setUnauthorizedHandler`. |
+| `src/index.ts`                     | hand      | Public re-exports (mutator + helpers).                                                                                                      |
+| `src/generated/api/<tag>/<tag>.ts` | generated | One file per OpenAPI tag — `useXxx` React Query hooks. **Never edit; overwritten on every codegen run.**                                    |
+| `src/generated/api/model/*.ts`     | generated | Request/response TS types deduped across endpoints.                                                                                         |
+
+**Tool decision — orval (7.x)** chosen during the spike under #342, after evaluating `openapi-typescript-codegen` and `tsoa`:
+
+- First-class React Query adapter — emits typed `useQuery` / `useMutation` hooks directly, no wrapper layer.
+- `tags-split` mode keeps PR diffs readable (one file per controller).
+- Mutator hook lets us reuse the existing fetch + cookie-auth contract without forking it.
+- Mature, actively maintained, supports OpenAPI 3.0 / 3.1, ships a Zod adapter we may toggle later.
+
+**Codegen flow** — `apps/api`'s `ApiDocsService` rewrites `apps/api/docs/openapi.json` on Nest boot. From the monorepo root:
+
+```bash
+npm run dev:api          # boots Nest once → snapshot refreshes
+npm run codegen          # turbo task → orval emits packages/api-client/src/generated
+git add apps/api/docs/openapi.json packages/api-client/src/generated
+```
+
+Both the snapshot and the generated tree are committed — the rule is "the OpenAPI snapshot is the contract; the generated client is its reified form."
+
+**Drift detection (pre-commit)** — `npm run codegen:check` runs `scripts/check-codegen-drift.sh`, which:
+
+1. Skips when `apps/api/docs/openapi.json` is missing or when `packages/api-client/src/generated/` already has unstaged changes (don't clobber WIP).
+2. Otherwise runs orval against the committed snapshot and `git diff --exit-code` on the generated tree.
+3. Fails the commit when the regen output differs — meaning the committed client is stale relative to the OpenAPI snapshot.
+
+The `pre-commit` hook in `.husky/pre-commit` calls `npm run codegen:check` before `npm run test:full`, so a stale client never lands in `develop`.
+
+**Multirepo trade-off** — `api-client` lives only in the monorepo overlay. In multirepo, the OpenAPI snapshot crosses a repo boundary and needs to be published (npm package, GitHub release artefact,
+…) before the web repo can consume it. SaaSFoundry's multirepo topology does not ship this wiring out of the box — it's tracked under #304 and may land as an optional module later. For now, multirepo
+consumers either keep hand-written hooks or roll their own publish-and-pin flow.
+
 ### Adding a New Module — Checklist
 
 When adding a new optional module to SaaSFoundry, follow these steps:
