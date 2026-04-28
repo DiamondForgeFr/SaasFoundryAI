@@ -8,9 +8,9 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { invitationControllerAcceptInvitation } from '@{{PROJECT_NAME}}/api-client/generated/api/invitations/invitations'
 import { buildAcceptInvitationPayloadSchema } from '@shared-validation/invitation'
 import { useMe } from '@/hooks/api/auth'
-import apiClient from '@/lib/api/client'
 
 // Translation
 const tAuth = (key: string) => i18next.t(key, { ns: 'auth' })
@@ -55,7 +55,7 @@ export const useAcceptUserInvitation = () => {
         locale: data.locale ?? (navigatorLocale === 'FR' ? 'FR' : 'EN')
       }
 
-      const response = await apiClient.post<AcceptUserInvitationResponseDto>('/invitations/accept', payload)
+      const response = await invitationControllerAcceptInvitation(payload)
       return schemas.response.parse(response)
     },
     onSuccess: async () => {

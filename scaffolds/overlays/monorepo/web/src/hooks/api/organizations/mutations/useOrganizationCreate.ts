@@ -8,8 +8,8 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { organizationControllerCreateOrganization } from '@{{PROJECT_NAME}}/api-client/generated/api/organizations/organizations'
 import { buildCreateOrganizationPayloadSchema } from '@shared-validation/organization'
-import apiClient from '@/lib/api/client'
 
 // Translation
 const tOrganizations = (key: string) => i18next.t(key, { ns: 'organizations' })
@@ -53,7 +53,7 @@ export const useOrganizationCreate = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: OrganizationCreatePayloadDto) => {
-      const response = await apiClient.post<OrganizationCreateResponseDto>('/organizations', data)
+      const response = await organizationControllerCreateOrganization(data)
       return schemas.response.parse(response)
     },
     onError: (error) => {

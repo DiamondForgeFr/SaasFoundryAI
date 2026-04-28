@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
+import { accountControllerFetchAccountRoles } from '@{{PROJECT_NAME}}/api-client/generated/api/accounts/accounts'
+import type { AccountControllerFetchAccountRolesParams } from '@{{PROJECT_NAME}}/api-client/generated/api/model/accountControllerFetchAccountRolesParams'
 import { cleanParams } from '@/hooks/api/utils/cleanParams'
-import apiClient from '@/lib/api/client'
 
 // Translation
 const tAccounts = (key: string) => i18next.t(key, { ns: 'accounts' })
@@ -70,7 +71,7 @@ export const useAccountRoles = (accountId: string, params: FetchAccountRolesPara
     queryKey: ['account', accountId, 'roles', queryParams],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<AccountRolesResponseDto>(`/accounts/${accountId}/roles`, queryParams)
+        const response = await accountControllerFetchAccountRoles(accountId, queryParams as AccountControllerFetchAccountRolesParams)
         return schemas.response.parse(response)
       } catch (error) {
         console.error(tAccounts('errors.tk_fetchAccountRolesError_'), error)

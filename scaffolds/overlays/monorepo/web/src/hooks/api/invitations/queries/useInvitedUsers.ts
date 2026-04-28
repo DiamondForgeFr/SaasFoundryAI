@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
-import apiClient from '@/lib/api/client'
+import { invitationControllerGetUserInvitations } from '@{{PROJECT_NAME}}/api-client/generated/api/invitations/invitations'
 
 // Translation
 const tInvitations = (key: string) => i18next.t(key, { ns: 'invitations' })
@@ -64,7 +64,7 @@ export const useInvitedUsers = () => {
     queryKey: ['invitations'],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<InvitedUsersResponseDto>('/invitations')
+        const response = await invitationControllerGetUserInvitations()
         return schemas.response.parse(response)
       } catch (error) {
         console.error(tInvitations('errors.tk_fetchInvitationsError_'), error)

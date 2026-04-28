@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
+import { accountControllerFetchAccountEntities } from '@{{PROJECT_NAME}}/api-client/generated/api/accounts/accounts'
+import type { AccountControllerFetchAccountEntitiesParams } from '@{{PROJECT_NAME}}/api-client/generated/api/model/accountControllerFetchAccountEntitiesParams'
 import { cleanParams } from '@/hooks/api/utils/cleanParams'
-import apiClient from '@/lib/api/client'
 
 // Translation
 const tAccounts = (key: string) => i18next.t(key, { ns: 'accounts' })
@@ -80,7 +81,7 @@ export const useAccountEntities = (accountId: string, params: FetchAccountEntiti
     queryKey: ['account', accountId, 'entities', queryParams],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<AccountEntitiesResponseDto>(`/accounts/${accountId}/entities`, queryParams)
+        const response = await accountControllerFetchAccountEntities(accountId, queryParams as AccountControllerFetchAccountEntitiesParams)
         return schemas.response.parse(response)
       } catch (error) {
         console.error(tAccounts('errors.tk_fetchAccountEntitiesError_'), error)

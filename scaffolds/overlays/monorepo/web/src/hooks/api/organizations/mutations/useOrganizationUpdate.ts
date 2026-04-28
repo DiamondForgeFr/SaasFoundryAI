@@ -8,8 +8,8 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { organizationControllerUpdateOrganization } from '@{{PROJECT_NAME}}/api-client/generated/api/organizations/organizations'
 import { buildUpdateOrganizationPayloadSchema } from '@shared-validation/organization'
-import apiClient from '@/lib/api/client'
 
 // Translation
 const tOrganizations = (key: string) => i18next.t(key, { ns: 'organizations' })
@@ -51,7 +51,7 @@ export const useOrganizationUpdate = (organizationId: string) => {
 
   const mutation = useMutation({
     mutationFn: async (data: OrganizationUpdatePayloadDto) => {
-      const response = await apiClient.patch<OrganizationUpdateResponseDto>(`/organizations/${organizationId}`, data)
+      const response = await organizationControllerUpdateOrganization(organizationId, data)
       return schemas.response.parse(response)
     },
     onError: (error) => {

@@ -8,8 +8,8 @@ import { z } from 'zod'
 /**
  * Dependencies
  */
+import { entitiesControllerCreateEntity } from '@{{PROJECT_NAME}}/api-client/generated/api/entities/entities'
 import { buildCreateEntityPayloadSchema, buildInlineOrganizationSchema } from '@shared-validation/entity'
-import apiClient from '@/lib/api/client'
 
 // Translation
 const tEntities = (key: string) => i18next.t(key, { ns: 'entities' })
@@ -84,7 +84,7 @@ export const useEntityCreate = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: EntityCreatePayloadDto) => {
-      const response = await apiClient.post<EntityCreateResponseDto>('/entities', {
+      const response = await entitiesControllerCreateEntity({
         name: data.name,
         description: data.description,
         accountId: data.accountId,
