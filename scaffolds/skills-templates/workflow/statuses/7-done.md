@@ -2,17 +2,18 @@
 status: Done
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
-  - PR merged into the working branch (verified via `gh pr view <N> --json state` → `MERGED`)
-  - Code is on the target branch
-  - Tickets without a PR (Epic groupers, doc-only chores) skip the merge check
+  - One of:
+      - PR merged into the working branch (verified via `gh pr view <N> --json state` → `MERGED`) — standard path from `In Review`
+      - AI Testing passed + ticket carries `nature:bundled-pr` (skip-In-Review path — see SKILL.md "Nature axis"; no individual PR is opened at this Sub level)
+  - Tickets without a PR (Epic groupers, doc-only chores, `nature:bundled-pr` Subs) skip the merge check
 mandatory_actions:
   - Move ticket to `Done`
-  - Local branch cleanup — checkout working branch, rebase-pull, delete feature branch
-  - Rebase any other in-progress branches on the fresh working branch
+  - Local branch cleanup — checkout working branch, rebase-pull, delete feature branch (skip for `nature:bundled-pr` Subs — they share the parent Epic's branch)
+  - Rebase any other in-progress branches on the fresh working branch (after a real merge)
 exit_conditions:
   - Ticket marked `Done`
-  - Local feature branch deleted
-  - Other in-progress branches rebased
+  - Local feature branch deleted (where applicable)
+  - Other in-progress branches rebased (where applicable)
 next_status: N/A (end of cycle)
 ---
 
@@ -22,8 +23,10 @@ Finalization and cleanup after merge.
 
 ## Ticket type
 
-- **Epic** — `Done` is **derived** only when every child Story/Task/Issue is merged and closed. No branch to delete. Close the Epic issue once the last child reaches `Done`.
-- **Story / Task / Issue** — full cleanup flow below.
+- **Epic** — `Done` is **derived** only when every child Story/Task/Issue is `Done` (each child either merged its own PR or completed AI Testing as a `nature:bundled-pr` Sub). Close the Epic issue
+  once the last child reaches `Done` and, if the Epic uses bundled-PR Subs, after the Epic's own bundled PR is merged.
+- **Story / Task / Issue with its own PR** — full cleanup flow below; merge happens at the ticket level.
+- **`nature:bundled-pr` Sub** — no individual PR. Move directly to `Done` after AI Testing. Branch cleanup is owned by the parent Epic (the shared Epic branch is deleted when the Epic's PR merges).
 
 ## Action checklist
 

@@ -244,17 +244,26 @@ check_complexity_guard() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
-# Nature guard — Human Testing optional for `nature:internal` tickets
+# Nature guard — Human Testing / In Review optional based on `nature:*`
 # ───────────────────────────────────────────────────────────────────────────
 #
-# A ticket tagged `nature:internal` may transition AI Testing → In Review
-# directly (skip Human Testing). Default behaviour (no `nature:*` label, or
-# `nature:user-facing`) requires the Human Testing step.
+# Three paths controlled by the `nature:*` label:
+#   - `nature:user-facing` (or no label) → AI Testing → Human Testing → In Review → Done
+#   - `nature:internal`                  → AI Testing → In Review → Done (skip Human Testing)
+#   - `nature:bundled-pr`                → AI Testing → Done (skip Human Testing AND In Review)
 #
-# The guard fires only on `update-status … "In Review"` when the current
-# board status is `AI Testing`. Other paths into In Review (Human Testing →
-# In Review) are unaffected. Fails open on label fetch errors (offline / auth)
-# to avoid wedging the workflow. Escape hatch: SF_WORKFLOW_BYPASS_NATURE_GUARD=1.
+# `nature:bundled-pr` is for Sub-stories of an Epic whose merge happens via the
+# Epic's single bundled PR — there is no individual PR to review at this level,
+# so In Review would always be a lie. See SKILL.md "Nature axis".
+#
+# Two firing points:
+#   - `→ In Review` from AI Testing — requires `nature:internal` (or
+#     `nature:bundled-pr` is rejected here, since bundled-pr should not enter
+#     In Review at all).
+#   - `→ Done` from AI Testing — only allowed for `nature:bundled-pr`.
+#
+# Fails open on label fetch errors (offline / auth) to avoid wedging the
+# workflow. Escape hatch: SF_WORKFLOW_BYPASS_NATURE_GUARD=1.
 
 is_in_review_target() {
   local target=$1
@@ -264,7 +273,7 @@ is_in_review_target() {
 }
 
 get_ticket_nature_label() {
-  # Prints `internal`, `user-facing`, or empty if no nature label.
+  # Prints `internal`, `user-facing`, `bundled-pr`, or empty if no nature label.
   # Returns 0 on clean fetch, 1 on fetch error.
   local ticket=$1
   local raw
@@ -278,34 +287,65 @@ check_nature_guard() {
   local target=$2
 
   [[ "${SF_WORKFLOW_BYPASS_NATURE_GUARD:-}" == "1" ]] && return 0
-  is_in_review_target "$target" || return 0
 
   local current_status
   current_status=$(get_current_status "$ticket" 2>/dev/null || true)
   local current_normalized
   current_normalized=$(echo "$current_status" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
 
-  # Only fire when coming from AI Testing — the Human Testing → In Review
-  # path is the standard route and never needs a nature label check.
+  # Only fire when coming from AI Testing — Human Testing → In Review and
+  # In Review → Done are the standard routes and need no nature check.
   [[ "$current_normalized" == "ai testing" ]] || return 0
 
   local nature
   nature=$(get_ticket_nature_label "$ticket") || return 0   # fail-open on fetch error
 
-  if [[ "$nature" == "internal" ]]; then
-    return 0
+  if is_in_review_target "$target"; then
+    if [[ "$nature" == "internal" ]]; then
+      return 0
+    fi
+    if [[ "$nature" == "bundled-pr" ]]; then
+      echo -e "${RED}✗ Ticket #${ticket} is 'nature:bundled-pr' — cannot enter 'In Review'.${NC}" >&2
+      echo "" >&2
+      echo "  Bundled-PR tickets have no individual PR (merge happens via the parent" >&2
+      echo "  Epic's single PR). They go AI Testing → Done directly." >&2
+      echo "" >&2
+      echo "  Move to Done instead:" >&2
+      echo "    .claude/skills/sf-workflow/workflow-cli.sh update-status ${ticket} Done" >&2
+      echo "" >&2
+      echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
+      return 1
+    fi
+    echo -e "${RED}✗ Ticket #${ticket} is in 'AI Testing' and lacks 'nature:internal' — cannot skip Human Testing.${NC}" >&2
+    echo "" >&2
+    echo "  Default workflow requires AI Testing → Human Testing → In Review." >&2
+    echo "  To allow skipping Human Testing, tag the ticket as internal:" >&2
+    echo "    gh issue edit ${ticket} --add-label 'nature:internal'" >&2
+    echo "" >&2
+    echo "  Use 'nature:internal' for refactors, scaffolding, internal tooling, or" >&2
+    echo "  non-terminal stories of a multi-step Epic that ship their own PR." >&2
+    echo "  Use 'nature:bundled-pr' for Subs whose PR is bundled at the Epic level." >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
+    return 1
   fi
 
-  echo -e "${RED}✗ Ticket #${ticket} is in 'AI Testing' and lacks 'nature:internal' — cannot skip Human Testing.${NC}" >&2
-  echo "" >&2
-  echo "  Default workflow requires AI Testing → Human Testing → In Review." >&2
-  echo "  To allow skipping Human Testing, tag the ticket as internal:" >&2
-  echo "    gh issue edit ${ticket} --add-label 'nature:internal'" >&2
-  echo "" >&2
-  echo "  Use 'nature:internal' for refactors, scaffolding, internal tooling, or" >&2
-  echo "  non-terminal stories of a multi-step Epic — see SKILL.md 'Nature axis'." >&2
-  echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
-  return 1
+  if is_done_target "$target"; then
+    if [[ "$nature" == "bundled-pr" ]]; then
+      return 0
+    fi
+    echo -e "${RED}✗ Ticket #${ticket} is in 'AI Testing' and lacks 'nature:bundled-pr' — cannot skip 'In Review'.${NC}" >&2
+    echo "" >&2
+    echo "  Default workflow goes through 'In Review' (where the PR is opened, reviewed," >&2
+    echo "  and merged). Only 'nature:bundled-pr' subs may go AI Testing → Done directly." >&2
+    echo "" >&2
+    echo "  Either open a PR and move to In Review, or tag the ticket bundled-pr:" >&2
+    echo "    gh issue edit ${ticket} --add-label 'nature:bundled-pr'" >&2
+    echo "" >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
+    return 1
+  fi
+
+  return 0
 }
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -367,6 +407,54 @@ check_pr_merged_guard() {
   return 0
 }
 
+# ───────────────────────────────────────────────────────────────────────────
+# PR-existence guard — In Review requires an open PR
+# ───────────────────────────────────────────────────────────────────────────
+#
+# Entering 'In Review' means a Pull Request exists and is awaiting review.
+# Without an open PR there is nothing to review and the status is a board
+# lie. The status doc (statuses/6-in-review.md) lists "Create the PR" as a
+# mandatory entry action — this guard codifies that contract.
+#
+# Tickets tagged `nature:bundled-pr` are blocked separately by the nature
+# guard (they should not enter In Review at all). Tickets without any nature
+# label or with `nature:internal`/`nature:user-facing` need a real PR here.
+#
+# Fail-open on `gh` fetch errors (offline / auth). Escape hatch:
+# SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1.
+
+check_pr_existence_guard() {
+  # Returns 0 if the caller may proceed, 1 if blocked (message printed).
+  local ticket=$1
+  local target=$2
+
+  [[ "${SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD:-}" == "1" ]] && return 0
+  is_in_review_target "$target" || return 0
+
+  local pr_number
+  pr_number=$(get_open_pr_for_ticket "$ticket") || return 0   # fail-open on fetch error
+
+  if [[ -z "$pr_number" ]]; then
+    echo -e "${RED}✗ Ticket #${ticket} has no open PR — cannot transition to 'In Review'.${NC}" >&2
+    echo "" >&2
+    echo "  'In Review' means a Pull Request is open and awaiting review." >&2
+    echo "  Without a PR there is nothing to review — the status would be a board lie." >&2
+    echo "" >&2
+    echo "  Open the PR first, then move the ticket:" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh create-pr ${ticket}" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh update-status ${ticket} 'In review'" >&2
+    echo "" >&2
+    echo "  If this Sub's PR is bundled at the parent Epic level, tag it bundled-pr" >&2
+    echo "  and move to Done directly when AI Testing passes:" >&2
+    echo "    gh issue edit ${ticket} --add-label 'nature:bundled-pr'" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh update-status ${ticket} Done" >&2
+    echo "" >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1" >&2
+    return 1
+  fi
+  return 0
+}
+
 # Function to show next status
 show_next_status() {
   local current_status=$1
@@ -377,10 +465,15 @@ show_next_status() {
     "Ready") echo "Next: In Progress" ;;
     "In Progress"|"In progress") echo "Next: AI Testing" ;;
     "AI Testing"|"AI testing")
-      # Nature-aware: internal tickets skip Human Testing.
+      # Nature-aware: internal tickets skip Human Testing; bundled-pr subs
+      # skip both Human Testing and In Review (PR is at the parent Epic level).
       if [[ -n "$ticket" ]]; then
         local nature
         nature=$(get_ticket_nature_label "$ticket" 2>/dev/null || true)
+        if [[ "$nature" == "bundled-pr" ]]; then
+          echo "Next: Done (nature:bundled-pr — Human Testing + In Review skipped, PR bundled at parent Epic)"
+          return
+        fi
         if [[ "$nature" == "internal" ]]; then
           echo "Next: In Review (nature:internal — Human Testing skipped)"
           return
@@ -532,6 +625,9 @@ case "$COMMAND" in
       exit 2
     fi
     if ! check_nature_guard "$TICKET" "$TARGET"; then
+      exit 2
+    fi
+    if ! check_pr_existence_guard "$TICKET" "$TARGET"; then
       exit 2
     fi
     if ! check_pr_merged_guard "$TICKET" "$TARGET"; then

@@ -158,9 +158,9 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     expect(toolCalls).toHaveLength(1)
   })
 
-  it('does not query gh for non-Done targets (guard short-circuits)', async () => {
+  it('does not query gh for non-Done / non-In-Review targets (guard short-circuits)', async () => {
     sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing"}]')
-    const res = await runCli(['update-status', '42', 'In review'], sandbox)
+    const res = await runCli(['update-status', '42', 'Ready'], sandbox)
     expect(res.code).toBe(0)
     const ghCalls = readLog(sandbox.ghLogPath)
     expect(ghCalls.find((l) => l.startsWith('pr list'))).toBeUndefined()
