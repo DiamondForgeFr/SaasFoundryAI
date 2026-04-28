@@ -35,6 +35,11 @@
     },
     "test:full": {
       "cache": false
+    },
+    "codegen": {
+      "cache": false,
+      "outputs": ["src/generated/**"],
+      "inputs": ["orval.config.ts", "../../apps/api/docs/openapi.json"]
     }
   }
 }

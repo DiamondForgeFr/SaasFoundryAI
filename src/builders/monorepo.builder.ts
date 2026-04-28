@@ -14,7 +14,7 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   // Copy monorepo root overlay to project root (current directory)
   await copy(resolve(overlaysPath, 'monorepo/root'), '.', { overwrite: true })
 
-  // Substitute {{PROJECT_NAME}} in shared-* package files (scoped package names + docs)
+  // Substitute {{PROJECT_NAME}} in shared-* + api-client package files (scoped package names + docs)
   await substitutePlaceholdersInFiles(
     [
       'packages/shared-types/package.json',
@@ -22,12 +22,19 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
       'packages/shared-validation/package.json',
       'packages/shared-validation/README.md',
       'packages/shared-config/package.json',
-      'packages/shared-config/README.md'
+      'packages/shared-config/README.md',
+      'packages/api-client/package.json',
+      'packages/api-client/README.md',
+      'packages/api-client/src/index.ts'
     ],
     { PROJECT_NAME: projectName }
   )
 
   const nvm = getNvmPrefix()
+
+  // Substitute {{PROJECT_NAME}} in root package.json BEFORE the JSON merge below so the
+  // `codegen:api-client -w @<name>/api-client` script ends up with the project's npm scope.
+  await substitutePlaceholdersInFiles(['package.json'], { PROJECT_NAME: projectName })
 
   // Update root package.json
   const packageJsonPath = 'package.json'
