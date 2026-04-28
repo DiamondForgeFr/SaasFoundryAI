@@ -19,25 +19,33 @@ This workflow adapts its rigor based on ticket complexity:
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 
-## 🎚️ Nature axis (user-facing vs internal)
+## 🎚️ Nature axis (user-facing / internal / bundled-pr)
 
-Orthogonal to complexity. Controls whether **Human Testing** is mandatory or optional in the lifecycle.
+Orthogonal to complexity. Controls whether **Human Testing** and **In Review** are mandatory or optional in the lifecycle.
 
-| Label                | Use case                                                                                          | Workflow effect                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `nature:user-facing` | Bug fix or feature with visible UX impact — anything a user can click, see, or feel               | Mandatory `AI Testing → Human Testing → In Review`     |
-| `nature:internal`    | Refactor, scaffolding, non-terminal story of a multi-step Epic, internal tooling, doc-only change | Optional `AI Testing → In Review` (skip Human Testing) |
+| Label                | Use case                                                                                                                                        | Workflow effect                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `nature:user-facing` | Bug fix or feature with visible UX impact — anything a user can click, see, or feel                                                             | Mandatory `AI Testing → Human Testing → In Review → Done`                             |
+| `nature:internal`    | Refactor, scaffolding, internal tooling, doc-only change — ships its own PR                                                                     | Optional `AI Testing → In Review → Done` (skip Human Testing)                         |
+| `nature:bundled-pr`  | Sub-Story of a multi-step Epic whose merge happens via the **Epic's single bundled PR** — there is no individual PR to open at this Sub's level | `AI Testing → Done` (skip Human Testing **and** In Review — PR is at the parent Epic) |
 
 **Default** — if a ticket has no `nature:*` label, the workflow treats it as `user-facing` (safe default).
 
-**Why this exists** — the Human Testing status is theatrical on tickets that have nothing user-visible to validate (the docker tests + lint + tsc already cover the integration risk). For those, going
-AI Testing → In Review directly removes ceremony without sacrificing safety.
+**Why this exists** — Human Testing is theatrical on tickets with no user-visible surface (the docker tests + lint + tsc already cover the integration risk). And `In Review` on a Sub whose PR is
+bundled at the parent Epic is a board lie: there is no PR to review at this Sub level — the merge happens once at the end of the Epic. For those Subs we go AI Testing → Done directly, and the Epic's
+own ticket carries the In Review / merge ceremony.
 
-**Epic-level Human Testing** — when an Epic is composed entirely of `nature:internal` children, the meaningful manual validation happens at **Epic completion** (e.g. integration test on freshly merged
-`develop`), not on each child. Tag the Epic itself `nature:user-facing` so its own AI Testing → In Review transition still requires that integration check.
+**Epic-level Human Testing** — when an Epic is composed entirely of `nature:internal` (or `nature:bundled-pr`) children, the meaningful manual validation happens at **Epic completion** (e.g.
+integration test on freshly merged `develop`), not on each child. Tag the Epic itself `nature:user-facing` so its own AI Testing → In Review transition still requires that integration check.
 
-**Guard** — `update-status <ticket> "In review"` is rejected when the current status is `AI Testing` and the ticket lacks `nature:internal`. Fix by either tagging the ticket internal or going through
-Human Testing first. Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1` (rare).
+**Guards** (all enforced by `update-status`):
+
+- **Nature guard** on `→ In Review` from `AI Testing` — requires `nature:internal`. `nature:bundled-pr` is rejected here (must go to `Done` instead). Default (no label / `user-facing`) must go through
+  Human Testing first. Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`.
+- **PR-existence guard** on `→ In Review` — rejected when no open PR is found for the ticket (`In Review` without a PR is meaningless). Escape hatch: `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`.
+- **Nature guard** on `→ Done` from `AI Testing` — allowed **only** for `nature:bundled-pr` (everyone else must go through `In Review` first). Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`.
+- **PR-merged guard** on `→ Done` — rejected when an open PR still exists for the ticket (`Done` means merged). Does not fire on `nature:bundled-pr` (no PR is expected). Escape hatch:
+  `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`.
 
 ## 🧩 Ticket Hierarchy (Epic / Story-Task / Subtask)
 

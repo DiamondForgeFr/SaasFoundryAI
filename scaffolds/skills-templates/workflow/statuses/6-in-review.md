@@ -5,7 +5,8 @@ entry_conditions:
   - One of:
       - Human Testing validated + non-regression tests created and pushed (`nature:user-facing` path)
       - AI Testing passed + ticket carries `nature:internal` label (skip-Human-Testing path — see SKILL.md "Nature axis")
-  - Ready to open the Pull Request
+  - **An open Pull Request exists for the ticket** (PR-existence guard — `In Review` without a PR is rejected by the CLI)
+  - Ticket is **not** `nature:bundled-pr` — those go AI Testing → Done directly (no individual PR at this Sub level)
 mandatory_actions:
   - Create the Pull Request (title + description + test plan + test list + reviewers + ticket link)
   - Move ticket to `In Review`
@@ -26,8 +27,10 @@ Code review with mandatory green CI.
 
 ## Ticket type
 
-- **Epic** — **never produces a PR**. Status is **derived** — reflects that every child Story/Task/Issue is itself in `In Review` (one open PR per child). Skip the checklist.
-- **Story / Task / Issue** — full flow below, one PR each.
+- **Epic** — **never produces a PR**. Status is **derived** — reflects that every child Story/Task/Issue is itself in `In Review` (one open PR per child) **or** has gone AI Testing → Done as a
+  `nature:bundled-pr` Sub. When an Epic uses bundled-PR Subs, the Epic itself opens **one** PR at the very end. Skip the checklist for the Epic ticket.
+- **Story / Task / Issue with its own PR** — full flow below, one PR per ticket.
+- **`nature:bundled-pr` Sub** — **never enters `In Review`**. Goes AI Testing → Done directly. The CLI rejects `update-status <ticket> "In review"` for these tickets.
 
 ## Action checklist
 
