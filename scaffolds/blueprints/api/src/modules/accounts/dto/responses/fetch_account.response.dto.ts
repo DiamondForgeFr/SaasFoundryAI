@@ -173,7 +173,8 @@ export class CollectionResponseDto<T> implements Collection<T> {
 
   @ApiProperty({
     description: 'Collection items',
-    isArray: true
+    type: 'array',
+    items: { type: 'object' }
   })
   values: T[]
 }

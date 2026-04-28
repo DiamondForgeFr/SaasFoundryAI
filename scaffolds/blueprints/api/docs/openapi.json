@@ -1646,7 +1646,7 @@
             "description": "Collection items",
             "type": "array",
             "items": {
-              "type": "array"
+              "type": "object"
             }
           }
         },
