@@ -5,8 +5,7 @@ import { EntityWithOrganizationDto } from './fetch_account.response.dto'
 export class FetchAccountEntitiesResponseDto extends PaginatedResponseDto<EntityWithOrganizationDto> {
   @ApiProperty({
     description: 'List of entities',
-    type: [EntityWithOrganizationDto],
-    isArray: true
+    type: [EntityWithOrganizationDto]
   })
   items: EntityWithOrganizationDto[]
 }

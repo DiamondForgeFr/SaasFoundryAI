@@ -1765,13 +1765,10 @@
         "properties": {
           "items": {
             "description": "Users data",
+            "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "type": "a"
-              }
-            },
-            "type": "array"
+              "$ref": "#/components/schemas/AccountUserDto"
+            }
           },
           "meta": {
             "description": "Pagination metadata",
@@ -1792,13 +1789,10 @@
         "properties": {
           "items": {
             "description": "List of entities",
+            "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "type": "a"
-              }
-            },
-            "type": "array"
+              "$ref": "#/components/schemas/EntityWithOrganizationDto"
+            }
           },
           "meta": {
             "description": "Pagination metadata",
@@ -1819,13 +1813,10 @@
         "properties": {
           "items": {
             "description": "List of roles",
+            "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "type": "a"
-              }
-            },
-            "type": "array"
+              "$ref": "#/components/schemas/AccountRoleDto"
+            }
           },
           "meta": {
             "description": "Pagination metadata",
@@ -2554,6 +2545,87 @@
           "password"
         ],
         "additionalProperties": false
+      },
+      "EntityWithOrganizationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Entity ID",
+            "example": "cmagp5dy70001t84nzb9t39j8"
+          },
+          "name": {
+            "type": "string",
+            "description": "Entity name",
+            "example": "Main Office"
+          },
+          "organization": {
+            "description": "Associated organization",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrganizationDto"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "organization"
+        ]
+      },
+      "AccountRoleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "Role ID",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Role name",
+            "example": "Admin"
+          },
+          "description": {
+            "type": "string",
+            "description": "Role description",
+            "example": "Administrator with full access",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Role active status",
+            "example": true
+          },
+          "isGlobal": {
+            "type": "boolean",
+            "description": "Whether the role is global",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation date",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update date",
+            "example": "2024-01-01T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "isActive",
+          "isGlobal",
+          "createdAt",
+          "updatedAt"
+        ]
       }
     }
   }

@@ -2,6 +2,7 @@ import { copy } from 'fs-extra'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
+import glob from 'glob'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installToolSkill } from '../installers/tool-skill.installer'
@@ -28,6 +29,10 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     await writeFile(eslintConfigPath, eslintConfig)
     // Substitute {{PROJECT_NAME}} in shared-* wiring (workspace deps + wiring proof imports)
     await substitutePlaceholdersInFiles([`${webPath}/package.json`, `${webPath}/src/shared-wiring.ts`], { PROJECT_NAME: projectName })
+
+    // Substitute {{PROJECT_NAME}} across the api-client-aware hooks tree (monorepo only — those hooks import from `@<name>/api-client/...`)
+    const monorepoHookFiles = glob.sync(`${webPath}/src/hooks/api/**/*.ts`)
+    if (monorepoHookFiles.length > 0) await substitutePlaceholdersInFiles(monorepoHookFiles, { PROJECT_NAME: projectName })
   }
 
   // Update package.json

@@ -2,7 +2,7 @@
  * Resources
  */
 import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common'
-import { ApiOperation, ApiParam, ApiResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger'
+import { ApiExtraModels, ApiOperation, ApiParam, ApiResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger'
 
 /**
  * Dependencies
@@ -24,7 +24,7 @@ import { UpdateAccountUsersDto } from '@modules/accounts/dto/requests/update-acc
 import { FetchAccountEntitiesResponseDto } from '@modules/accounts/dto/responses/fetch-account-entities.response.dto'
 import { FetchAccountRolesResponseDto } from '@modules/accounts/dto/responses/fetch-account-roles.response.dto'
 import { FetchAccountUsersResponseDto } from '@modules/accounts/dto/responses/fetch-account-users.response.dto'
-import { FetchAccountDeepResponseDto } from '@modules/accounts/dto/responses/fetch_account.response.dto'
+import { AccountRoleDto, AccountUserDto, EntityWithOrganizationDto, FetchAccountDeepResponseDto } from '@modules/accounts/dto/responses/fetch_account.response.dto'
 import { UpdateAccountStatusResponseDto } from '@modules/accounts/dto/responses/update-account-status.response.dto'
 import { UpdateAccountUsersResponseDto } from '@modules/accounts/dto/responses/update-account-users.response.dto'
 
@@ -37,6 +37,7 @@ import type { AuthenticatedRequest } from '@common/types/authenticated-request.t
  * Declaration
  */
 @ApiTags('Accounts')
+@ApiExtraModels(AccountUserDto, EntityWithOrganizationDto, AccountRoleDto)
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)
 export class AccountController {
