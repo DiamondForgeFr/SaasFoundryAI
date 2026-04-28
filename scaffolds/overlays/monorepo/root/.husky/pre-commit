@@ -1,1 +1,2 @@
+npm run codegen:check
 npm run test:full
