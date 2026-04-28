@@ -1,10 +1,11 @@
 /**
  * Resources
  */
-import { INestApplication, ValidationPipe } from '@nestjs/common'
+import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import cookieParser from 'cookie-parser'
 import * as dotenv from 'dotenv'
+import { ZodValidationPipe } from 'nestjs-zod'
 import request from 'supertest'
 
 /**
@@ -60,7 +61,7 @@ describe('Accounts Module (e2e)', () => {
     app = moduleRef.createNestApplication()
     app.setGlobalPrefix(process.env.API_PREFIX ?? '/api')
     app.use(cookieParser())
-    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+    app.useGlobalPipes(new ZodValidationPipe())
 
     prismaService = moduleRef.get<PrismaService>(PrismaService)
 

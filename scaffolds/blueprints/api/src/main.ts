@@ -1,7 +1,6 @@
 /**
  * Resources
  */
-import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import chalk from 'chalk'
 import cookieParser from 'cookie-parser'
@@ -25,7 +24,7 @@ const bootstrap = async () => {
   const logger = app.get(Logger)
 
   app.setGlobalPrefix(env.get('API_PREFIX'))
-  app.useGlobalPipes(new ZodValidationPipe(), new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+  app.useGlobalPipes(new ZodValidationPipe())
   app.use(cookieParser())
 
   // Generate OpenAPI documentation in development mode
