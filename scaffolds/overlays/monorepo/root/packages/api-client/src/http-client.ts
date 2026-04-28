@@ -16,7 +16,7 @@ export type ErrorType<Error> = Error
 
 export interface ApiClientRequestConfig {
   url: string
-  method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head' | 'options'
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
   params?: Record<string, unknown>
   data?: unknown
   headers?: Record<string, string>
@@ -24,13 +24,12 @@ export interface ApiClientRequestConfig {
   signal?: AbortSignal
 }
 
-const BASE_URL = '/api'
-
 /**
- * Hook for consumers that need to override the base URL (e.g. tests, SSR).
- * Defaults to '/api' which is what the dev proxy + production Nginx expect.
+ * Hook for consumers that need to prepend a base URL (e.g. an absolute API
+ * host for SSR or tests). Defaults to '' because OpenAPI paths emitted by
+ * NestJS already include the global `/api` prefix.
  */
-let resolveBaseUrl: () => string = () => BASE_URL
+let resolveBaseUrl: () => string = () => ''
 
 export function setApiBaseUrl(resolver: string | (() => string)): void {
   resolveBaseUrl = typeof resolver === 'function' ? resolver : () => resolver
@@ -71,13 +70,13 @@ export const apiClientMutator = async <T>(config: ApiClientRequestConfig): Promi
   }
 
   const init: RequestInit = {
-    method: config.method.toUpperCase(),
+    method: config.method,
     headers,
     credentials: 'include',
     signal: config.signal
   }
 
-  if (config.data !== undefined && config.method !== 'get' && config.method !== 'head') {
+  if (config.data !== undefined && config.method !== 'GET' && config.method !== 'HEAD') {
     init.body = isFormData ? (config.data as FormData) : JSON.stringify(config.data)
   }
 
