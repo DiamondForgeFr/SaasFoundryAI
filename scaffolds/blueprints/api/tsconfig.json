@@ -27,5 +27,6 @@
       "@shared-validation/*": ["src/shared-validation/*"],
       "@/*": ["src/*"]
     }
-  }
+  },
+  "exclude": ["**/*.disabled-spec.ts"]
 }

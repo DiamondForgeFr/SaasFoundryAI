@@ -35,13 +35,13 @@ export async function installEmailModule({ apiPath, mailersendApiKey, mailersend
   // Uncomment email sending code in auth.service.ts
   const authServicePath = `${apiPath}/src/modules/auth/services/auth.service.ts`
   let authServiceContent = await readFile(authServicePath, 'utf8')
-  authServiceContent = authServiceContent.replace(/\/\/ TODO mailer-service-active: /g, '').replace(/console\.log\('sendAccountConfirmationEmail', locale\)\n/g, '')
+  authServiceContent = authServiceContent.replace(/\/\/ TODO mailer-service-active: /g, '')
   await writeFile(authServicePath, authServiceContent)
 
   // Uncomment invitation sending code in invitation.service.ts
   const invitationServicePath = `${apiPath}/src/modules/invitation/services/invitation.service.ts`
   let invitationServiceContent = await readFile(invitationServicePath, 'utf8')
-  invitationServiceContent = invitationServiceContent.replace(/\/\/ TODO mailer-service-active: /g, '').replace(/console\.log\('sendInvitationEmail', locale\)\n/g, '')
+  invitationServiceContent = invitationServiceContent.replace(/\/\/ TODO mailer-service-active: /g, '')
   await writeFile(invitationServicePath, invitationServiceContent)
 
   // Uncomment email configuration in env.service.ts
@@ -55,8 +55,8 @@ export async function installEmailModule({ apiPath, mailersendApiKey, mailersend
   let emailServiceContent = await readFile(emailServicePath, 'utf8')
   emailServiceContent = emailServiceContent
     .replace(/^(\s*)\/\/ /gm, '$1')
-    .replace(/[ \t]*console\.log\('html', html\)\n/g, '')
-    .replace(/[ \t]*console\.log\('text', text\)\n/g, '')
+    .replace(/[ \t]*void html\n/g, '')
+    .replace(/[ \t]*void text\n/g, '')
   await writeFile(emailServicePath, emailServiceContent)
 
   // Update email.module.ts to include MailerSendService

@@ -296,7 +296,6 @@ export class InvitationService {
 
       // Send the invitation email
       if (this.env.get('NODE_ENV') !== 'test') {
-        console.log('sendInvitationEmail', locale)
         // TODO mailer-service-active: const inviterName = inviter.people?.firstname ? `${inviter.people.firstname} ${inviter.people.lastname || ''}`.trim() : 'Un administrateur'
         // TODO mailer-service-active: await this.emailService.sendInvitationEmail(email, invitationToken, inviterName, firstname, locale || UserDefaults.preferences.locale)
       }
