@@ -244,6 +244,53 @@ The `pre-commit` hook in `.husky/pre-commit` calls `npm run codegen:check` befor
 …) before the web repo can consume it. SaaSFoundry's multirepo topology does not ship this wiring out of the box — it's tracked under #304 and may land as an optional module later. For now, multirepo
 consumers either keep hand-written hooks or roll their own publish-and-pin flow.
 
+## Shared UI Primitives — `@<projectName>/ui-primitives`
+
+The fifth first-class workspace in a monorepo scaffold is `@<projectName>/ui-primitives` — the shared design-system layer. It hosts ShadCN/Radix headless primitives (`button`, `dialog`, `select`, …),
+the Tailwind v4 theme tokens, the `cn()` className helper, and shared UI hooks (`useIsMobile`). Any future second frontend (mobile-web, admin panel) consumes the same primitives without copy-paste.
+
+| Package                        | Contents                                          | Consumed by                                    |
+| ------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
+| `@<projectName>/ui-primitives` | 27 ShadCN primitives + `theme.css` + `cn` + hooks | `apps/web` (and any future frontend workspace) |
+
+**Source layout** — `scaffolds/overlays/monorepo/root/packages/ui-primitives/`:
+
+- `package.json` — source-only workspace (no `dist/`, no build step), mirroring the `api-client` pattern. `main`/`types` point at `./src/index.ts`. The `exports` field exposes per-primitive subpaths
+  (`./button`, `./dialog`, …) so consumers can cherry-pick for tree-shaking, plus `./theme.css` for the Tailwind theme import. Radix, lucide-react, cva, cmdk, clsx, tailwind-merge, and tw-animate-css
+  live as `dependencies` here so they no longer pollute `apps/web/package.json`. React + react-hook-form are `peerDependencies`.
+- `src/<primitive>.tsx` — the 27 shadcn primitives. Inter-primitive imports use relative paths (`./button` instead of `@/components/ui/shadcn/button`) so the package is self-contained.
+- `src/lib/utils.ts` — the `cn()` helper. apps/web no longer ships its own copy.
+- `src/hooks/use-is-mobile.ts` — shared hook used by `sidebar.tsx`.
+- `src/theme.css` — the Tailwind v4 `@theme` blocks, light/dark CSS variables, and shared keyframes. Apps import this once at their root stylesheet.
+- `src/index.ts` — barrel for the utility/hook surface plus a `export *` of each primitive (rarely used; cherry-picking is preferred).
+
+**App wiring** — `scaffolds/overlays/monorepo/web/`:
+
+- `package.json` declares the workspace dep (`"@<projectName>/ui-primitives": "*"`) and no longer carries Radix/lucide/cva/cmdk/clsx/tailwind-merge/tw-animate-css.
+- `src/index.css` is reduced to a two-liner: `@import "@<projectName>/ui-primitives/theme.css"` + `@source "../../../node_modules/@<projectName>/ui-primitives/src"`. The `@source` directive tells
+  Tailwind v4 to scan the package source so utility classes used inside primitives end up in the final CSS bundle.
+
+**Build-time rewrites** — `src/builders/web.builder.ts` (mono branch only):
+
+1. Substitutes `{{PROJECT_NAME}}` in `apps/web/{package.json, src/index.css, src/shared-wiring.ts}` plus the api-client hook tree.
+2. **Deletes** `apps/web/src/components/ui/shadcn/`, `apps/web/src/utils/ui.ts`, and `apps/web/src/hooks/ui/useIsMobile.ts` — these now live in the package.
+3. **Rewrites imports** across `apps/web/src/**/*.{ts,tsx}`:
+   - `@/components/ui/shadcn/<x>` → `@<projectName>/ui-primitives/<x>`
+   - `@/utils/ui` → `@<projectName>/ui-primitives` (the `cn` barrel export)
+   - `@/hooks/ui/useIsMobile` → `@<projectName>/ui-primitives`
+
+**Multirepo behavior — strictly untouched** — multirepo apps keep the blueprint copy of `apps/<x>-web/src/components/ui/shadcn/` plus `src/utils/ui.ts` and `src/hooks/ui/useIsMobile.ts`. The
+`monorepo.builder.ts` deletions and import rewrites only run when `isMonorepo === true`. A drift-guard test (`src/__tests__/integration/skill/ui-primitives-drift.spec.ts`) enforces byte-equality
+between the canonical package copy and the blueprint copy after normalizing the import-path differences, so multirepo never silently lags behind a primitive update made on the package side.
+
+**Placeholder substitution** — the scoped `@{{PROJECT_NAME}}/ui-primitives` literal is rewritten to the real project name in three places by `substitutePlaceholdersInFiles`:
+
+- `src/builders/monorepo.builder.ts` — patches `packages/ui-primitives/{package.json, README.md, src/index.ts, src/theme.css}`
+- `src/builders/web.builder.ts` — patches `apps/web/{package.json, src/index.css, src/shared-wiring.ts}` (mono only)
+
+The `assertMonorepoUiPrimitives` Docker assertion (in `tests/docker/assertions.ts`) verifies every step end-to-end on real generated projects, and `assertMultirepoUiPrimitivesUntouched` verifies the
+inverse for multirepo.
+
 ### Adding a New Module — Checklist
 
 When adding a new optional module to SaaSFoundry, follow these steps:

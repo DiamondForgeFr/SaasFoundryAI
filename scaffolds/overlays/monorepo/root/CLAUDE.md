@@ -39,6 +39,7 @@ This is a **Turborepo monorepo** with centralized tooling and shared skills.
 - **`@{{PROJECT_NAME}}/shared-types`** — Pure TypeScript types and `z.infer` outputs reused by `apps/api` (DTO types) and `apps/web` (props, hook responses).
 - **`@{{PROJECT_NAME}}/shared-validation`** — Zod schemas consumed by NestJS DTOs (via the chosen Zod-Nest bridge) and React Hook Form (`zodResolver`). Define a schema once; both sides validate identically.
 - **`@{{PROJECT_NAME}}/shared-config`** — Runtime constants (public route segments, feature flag defaults, supported locales, validation thresholds) that both apps reference.
+- **`@{{PROJECT_NAME}}/ui-primitives`** — Headless ShadCN/Radix primitives, Tailwind v4 theme tokens, the `cn()` helper, and shared UI hooks (`useIsMobile`). `apps/web` (and any future second frontend) consumes them via `@{{PROJECT_NAME}}/ui-primitives/<name>`. Theme tokens are imported once via `@import "@{{PROJECT_NAME}}/ui-primitives/theme.css"` in the app's root stylesheet.
 
 Module resolution goes through npm workspaces — each package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/shared-*` and consumed via its compiled `dist/` (set as the package's `main`/`types`). Build order is handled by Turborepo (`build` depends on `^build`), so `npm run build` always rebuilds shared packages first. After editing a shared package's source, run `npm run build` (or rely on CI) before the change is picked up by `apps/api` or `apps/web`. Each package ships its own README with the "what goes in / what does not" rules.
 
