@@ -14,7 +14,7 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   // Copy monorepo root overlay to project root (current directory)
   await copy(resolve(overlaysPath, 'monorepo/root'), '.', { overwrite: true })
 
-  // Substitute {{PROJECT_NAME}} in shared-* + api-client package files (scoped package names + docs)
+  // Substitute {{PROJECT_NAME}} in shared-* + api-client + ui-primitives package files (scoped package names + docs)
   await substitutePlaceholdersInFiles(
     [
       'packages/shared-types/package.json',
@@ -25,7 +25,11 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
       'packages/shared-config/README.md',
       'packages/api-client/package.json',
       'packages/api-client/README.md',
-      'packages/api-client/src/index.ts'
+      'packages/api-client/src/index.ts',
+      'packages/ui-primitives/package.json',
+      'packages/ui-primitives/README.md',
+      'packages/ui-primitives/src/index.ts',
+      'packages/ui-primitives/src/theme.css'
     ],
     { PROJECT_NAME: projectName }
   )
