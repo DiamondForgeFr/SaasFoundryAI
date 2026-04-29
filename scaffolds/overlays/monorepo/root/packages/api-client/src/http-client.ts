@@ -69,6 +69,11 @@ export const apiClientMutator = async <T>(config: ApiClientRequestConfig): Promi
     ...config.headers
   }
 
+  // For FormData, fetch must set Content-Type itself so the multipart boundary
+  // is included. Orval emits 'Content-Type: multipart/form-data' (no boundary)
+  // for upload endpoints — strip it so the browser fills it in correctly.
+  if (isFormData) delete headers['Content-Type']
+
   const init: RequestInit = {
     method: config.method,
     headers,
