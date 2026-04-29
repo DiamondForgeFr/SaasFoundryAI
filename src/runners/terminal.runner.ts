@@ -51,9 +51,10 @@ export async function openTerminal(directory: string, options?: { command?: stri
         }
 
         // If not cmux or cmux failed, use the terminal the user is currently in
-        if (!success && currentTerminal === 'iTerm.app') {
-          // User is in iTerm2
-          const script = `
+        if (!success) {
+          if (currentTerminal === 'iTerm.app') {
+            // User is in iTerm2
+            const script = `
           tell application "iTerm"
             tell current window
               create tab with default profile
@@ -63,20 +64,20 @@ export async function openTerminal(directory: string, options?: { command?: stri
             end tell
           end tell
         `
-          execSync(`osascript -e '${script}'`)
-          success = true
-        } else if (currentTerminal === 'Apple_Terminal') {
-          // User is in Terminal.app
-          execSync(
-            `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
-          )
-          success = true
-        } else {
-          // Unknown terminal or not detected (could be cmux, Warp, Alacritty, etc.)
-          // Fallback: try iTerm2 first, then Terminal.app
-          try {
-            execSync('osascript -e "tell application \\"iTerm\\" to version"', { stdio: 'ignore' })
-            const script = `
+            execSync(`osascript -e '${script}'`)
+            success = true
+          } else if (currentTerminal === 'Apple_Terminal') {
+            // User is in Terminal.app
+            execSync(
+              `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
+            )
+            success = true
+          } else {
+            // Unknown terminal or not detected (Warp, Alacritty, etc.)
+            // Fallback: try iTerm2 first, then Terminal.app
+            try {
+              execSync('osascript -e "tell application \\"iTerm\\" to version"', { stdio: 'ignore' })
+              const script = `
             tell application "iTerm"
               tell current window
                 create tab with default profile
@@ -86,14 +87,15 @@ export async function openTerminal(directory: string, options?: { command?: stri
               end tell
             end tell
           `
-            execSync(`osascript -e '${script}'`)
-            success = true
-          } catch {
-            // iTerm2 not found, use Terminal.app
-            execSync(
-              `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
-            )
-            success = true
+              execSync(`osascript -e '${script}'`)
+              success = true
+            } catch {
+              // iTerm2 not found, use Terminal.app
+              execSync(
+                `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
+              )
+              success = true
+            }
           }
         }
         break
