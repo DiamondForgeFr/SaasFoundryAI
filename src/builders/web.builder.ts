@@ -28,11 +28,32 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     eslintConfig = eslintConfig.replace(`'./eslint-rules/no-version-prefix.js'`, `'../../eslint-rules/no-version-prefix.mjs'`)
     await writeFile(eslintConfigPath, eslintConfig)
     // Substitute {{PROJECT_NAME}} in shared-* wiring (workspace deps + wiring proof imports)
-    await substitutePlaceholdersInFiles([`${webPath}/package.json`, `${webPath}/src/shared-wiring.ts`], { PROJECT_NAME: projectName })
+    await substitutePlaceholdersInFiles([`${webPath}/package.json`, `${webPath}/src/shared-wiring.ts`, `${webPath}/src/index.css`], { PROJECT_NAME: projectName })
 
     // Substitute {{PROJECT_NAME}} across the api-client-aware hooks tree (monorepo only — those hooks import from `@<name>/api-client/...`)
     const monorepoHookFiles = glob.sync(`${webPath}/src/hooks/api/**/*.ts`)
     if (monorepoHookFiles.length > 0) await substitutePlaceholdersInFiles(monorepoHookFiles, { PROJECT_NAME: projectName })
+
+    // Drop the vendored shadcn copy + cn/useIsMobile — primitives now live in
+    // @<projectName>/ui-primitives. Multirepo keeps the blueprint copies (no
+    // overlay step deletes them there).
+    await rm(`${webPath}/src/components/ui/shadcn`, { recursive: true, force: true })
+    await rm(`${webPath}/src/utils/ui.ts`, { force: true })
+    await rm(`${webPath}/src/hooks/ui/useIsMobile.ts`, { force: true })
+
+    // Rewire all primitive imports across apps/web to the workspace package.
+    // Covers `@/components/ui/shadcn/<name>` → `@<projectName>/ui-primitives/<name>`,
+    // and `@/utils/ui` (cn) → `@<projectName>/ui-primitives` (barrel).
+    const monorepoSrcFiles = glob.sync(`${webPath}/src/**/*.{ts,tsx}`, { ignore: `${webPath}/node_modules/**` })
+    for (const filePath of monorepoSrcFiles) {
+      let body = await readFile(filePath, 'utf8')
+      const before = body
+      body = body
+        .replace(/from '@\/components\/ui\/shadcn\/([a-z-]+)'/g, `from '@${projectName}/ui-primitives/$1'`)
+        .replace(/from '@\/utils\/ui'/g, `from '@${projectName}/ui-primitives'`)
+        .replace(/from '@\/hooks\/ui\/useIsMobile'/g, `from '@${projectName}/ui-primitives'`)
+      if (body !== before) await writeFile(filePath, body)
+    }
   }
 
   // Update package.json
