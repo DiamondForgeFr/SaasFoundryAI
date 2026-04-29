@@ -142,6 +142,55 @@ export function assertMonorepoSharedPackages(projectPath: string, projectName: s
   return results
 }
 
+/**
+ * Verify the source-only `ui-primitives` workspace is present, scoped to the
+ * project name, and that `apps/web` no longer carries the vendored `shadcn/`
+ * copy nor the UI deps that have moved into the package (mono-only — multirepo
+ * keeps the blueprint shadcn copy untouched).
+ */
+export function assertMonorepoUiPrimitives(projectPath: string, projectName: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+  const pkgPath = join(projectPath, 'packages', 'ui-primitives')
+
+  results.push(assertDirExists(pkgPath))
+  results.push(assertFileExists(join(pkgPath, 'package.json')))
+  results.push(assertFileExists(join(pkgPath, 'src', 'index.ts')))
+  results.push(assertFileExists(join(pkgPath, 'src', 'theme.css')))
+  results.push(assertFileExists(join(pkgPath, 'src', 'button.tsx')))
+  results.push(assertFileContains(join(pkgPath, 'package.json'), `"name": "@${projectName}/ui-primitives"`))
+  results.push(assertFileNotContains(join(pkgPath, 'package.json'), '{{PROJECT_NAME}}'))
+
+  // apps/web must consume the workspace package, not the vendored copy
+  const webPkg = join(projectPath, 'apps', 'web', 'package.json')
+  results.push(assertFileContains(webPkg, `"@${projectName}/ui-primitives"`))
+  results.push(assertFileNotContains(webPkg, '"radix-ui"'))
+  results.push(assertFileNotContains(webPkg, '"lucide-react"'))
+  results.push(assertFileNotContains(webPkg, '"class-variance-authority"'))
+  results.push(assertFileNotContains(webPkg, '"cmdk"'))
+
+  // Vendored shadcn dir + cn helper are gone in the mono topology
+  const shadcnDir = join(projectPath, 'apps', 'web', 'src', 'components', 'ui', 'shadcn')
+  if (existsSync(shadcnDir)) {
+    results.push({ passed: false, message: `FAIL: ${shadcnDir} should not exist in monorepo (primitives live in packages/ui-primitives)` })
+  } else {
+    results.push({ passed: true, message: `OK: apps/web/src/components/ui/shadcn/ correctly removed in monorepo` })
+  }
+
+  return results
+}
+
+/**
+ * Verify the multirepo web app keeps the vendored shadcn primitives in place
+ * (no monorepo-only side effects leak into the multirepo topology).
+ */
+export function assertMultirepoUiPrimitivesUntouched(webPath: string): AssertionResult[] {
+  return [
+    assertDirExists(join(webPath, 'src', 'components', 'ui', 'shadcn')),
+    assertFileExists(join(webPath, 'src', 'components', 'ui', 'shadcn', 'button.tsx')),
+    assertFileExists(join(webPath, 'src', 'utils', 'ui.ts'))
+  ]
+}
+
 // ── Skills Assertions ──────────────────────────────────────────
 
 const CORE_SKILLS = ['sf-git-commit', 'sf-git-create-pr', 'sf-git-fix-pr-comments', 'sf-git-merge', 'sf-utils-fix-errors', 'sf-utils-fix-grammar']
