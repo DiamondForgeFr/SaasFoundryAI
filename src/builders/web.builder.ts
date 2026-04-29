@@ -41,6 +41,11 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     await rm(`${webPath}/src/utils/ui.ts`, { force: true })
     await rm(`${webPath}/src/hooks/ui/useIsMobile.ts`, { force: true })
 
+    // Drop apps/web/components.json — the shadcn-CLI alias `ui` pointed to the
+    // deleted local tree. In monorepo, primitives are owned by the workspace
+    // package; future `npx shadcn add` runs belong in packages/ui-primitives/.
+    await rm(`${webPath}/components.json`, { force: true })
+
     // Rewire all primitive imports across apps/web to the workspace package.
     // Covers `@/components/ui/shadcn/<name>` → `@<projectName>/ui-primitives/<name>`,
     // and `@/utils/ui` (cn) → `@<projectName>/ui-primitives` (barrel).

@@ -64,8 +64,8 @@ export default defineConfig(({ mode }) => {
               if (/class-variance-authority|clsx|tailwind-merge/.test(id)) return 'utils'
             }
 
-            // Local Shadcn components - grouped with Radix UI
-            if (id.includes('/src/components/ui/shadcn/')) {
+            // Shadcn primitives — multirepo: vendored under apps/web/src; monorepo: workspace package
+            if (id.includes('/src/components/ui/shadcn/') || id.includes('/ui-primitives/src/')) {
               return 'ui-components'
             }
 
