@@ -176,6 +176,18 @@ export function assertMonorepoUiPrimitives(projectPath: string, projectName: str
     results.push({ passed: true, message: `OK: apps/web/src/components/ui/shadcn/ correctly removed in monorepo` })
   }
 
+  // shadcn-CLI alias file is removed in mono — primitives are owned by the workspace package
+  const componentsJson = join(projectPath, 'apps', 'web', 'components.json')
+  if (existsSync(componentsJson)) {
+    results.push({ passed: false, message: `FAIL: ${componentsJson} should not exist in monorepo (alias would point to deleted shadcn tree)` })
+  } else {
+    results.push({ passed: true, message: `OK: apps/web/components.json correctly removed in monorepo` })
+  }
+
+  // vite.config.ts manualChunks must group ui-primitives into ui-components
+  const viteConfig = join(projectPath, 'apps', 'web', 'vite.config.ts')
+  results.push(assertFileContains(viteConfig, `'/ui-primitives/src/'`))
+
   return results
 }
 
@@ -187,7 +199,8 @@ export function assertMultirepoUiPrimitivesUntouched(webPath: string): Assertion
   return [
     assertDirExists(join(webPath, 'src', 'components', 'ui', 'shadcn')),
     assertFileExists(join(webPath, 'src', 'components', 'ui', 'shadcn', 'button.tsx')),
-    assertFileExists(join(webPath, 'src', 'utils', 'ui.ts'))
+    assertFileExists(join(webPath, 'src', 'utils', 'ui.ts')),
+    assertFileExists(join(webPath, 'components.json'))
   ]
 }
 
