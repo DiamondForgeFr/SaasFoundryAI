@@ -77,7 +77,8 @@ export const CATALOGUE: ModuleDefinition[] = [
       'apps/api/.env',
       'apps/api/.env.test',
       'apps/web/.env',
-      'docker-compose.dev-services.yml'
+      'docker-compose.dev-services.yml',
+      'packages/shared-config/src/storage.ts (monorepo only)'
     ],
     dependencies: ['@aws-sdk/client-s3', '@types/multer']
   },

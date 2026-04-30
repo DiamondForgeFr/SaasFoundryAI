@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
+import { depositStorageSharedConfig } from '../installers/storage.installer'
 import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
@@ -68,6 +69,14 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
     content = content.replace(/saasfoundry-api/g, `${projectName}-api`)
     await writeFile(deployWebPath, content)
   }
+
+  // Replay shared-config deposits for any module the API installer activated
+  // before the workspace existed. `installStorageModule` runs during
+  // `createApiApp` (i.e. before this builder lays down `packages/shared-config/`),
+  // so its mono-only deposit is a no-op the first time. The deposit fn is
+  // idempotent + gated on activation markers, so calling it here covers
+  // `sf new`, `sf update`, and the docker harness uniformly.
+  await depositStorageSharedConfig({ apiPath: 'apps/api', projectName })
 
   // Install all dependencies at root (npm workspaces hoists everything)
   await exec(`${nvm}npm install > /dev/null 2>&1`)

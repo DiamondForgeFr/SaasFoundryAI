@@ -192,6 +192,43 @@ export function assertMonorepoUiPrimitives(projectPath: string, projectName: str
 }
 
 /**
+ * Verify storage-on-monorepo deposits MIME/size constants in shared-config and
+ * the org controller consumes them (instead of the inline literals it carries
+ * in multirepo). Mirrors the no-drift contract: a single source of truth for
+ * the upload bounds when both apps live in the same workspace.
+ */
+export function assertMonorepoStorageSharedConfig(projectPath: string, projectName: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+
+  const storageFile = join(projectPath, 'packages', 'shared-config', 'src', 'storage.ts')
+  results.push(assertFileExists(storageFile))
+  results.push(assertFileContains(storageFile, 'STORAGE_LOGO_MAX_BYTES'))
+  results.push(assertFileContains(storageFile, 'STORAGE_LOGO_ALLOWED_MIMES'))
+
+  const indexFile = join(projectPath, 'packages', 'shared-config', 'src', 'index.ts')
+  results.push(assertFileContains(indexFile, `from './storage'`))
+
+  const orgController = join(projectPath, 'apps', 'api', 'src', 'modules', 'organizations', 'controllers', 'organization.controller.ts')
+  results.push(assertFileContains(orgController, `from '@${projectName}/shared-config'`))
+  results.push(assertFileContains(orgController, 'STORAGE_LOGO_MAX_BYTES'))
+  results.push(assertFileContains(orgController, 'STORAGE_LOGO_ALLOWED_MIMES'))
+  // The inlined literals are gone in monorepo (proves the rewrite happened).
+  results.push(assertFileNotContains(orgController, 'fileSize: 5 * 1024 * 1024'))
+
+  return results
+}
+
+/**
+ * Verify the multirepo storage path keeps the inlined literals (parity guard:
+ * no shared-config deposit leaks into multirepo, where the package doesn't
+ * exist).
+ */
+export function assertMultirepoStorageInlined(apiPath: string): AssertionResult[] {
+  const orgController = join(apiPath, 'src', 'modules', 'organizations', 'controllers', 'organization.controller.ts')
+  return [assertFileContains(orgController, 'fileSize: 5 * 1024 * 1024'), assertFileNotContains(orgController, '/shared-config'), assertFileNotContains(orgController, 'STORAGE_LOGO_MAX_BYTES')]
+}
+
+/**
  * Verify the multirepo web app keeps the vendored shadcn primitives in place
  * (no monorepo-only side effects leak into the multirepo topology).
  */

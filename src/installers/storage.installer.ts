@@ -1,4 +1,5 @@
 import { copy } from 'fs-extra'
+import { existsSync } from 'fs'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
@@ -26,6 +27,10 @@ interface InstallStorageModuleParams {
  * 4. Uncomments `// TODO storage-service-active:` markers in env.service, app.module, org module/controller/service
  * 5. Updates API .env and .env.test with S3 credentials
  * 6. Sets VITE_STORAGE_ENABLED=true in web .env
+ * 7. (Mono only) Deposits MIME/size constants in `packages/shared-config` and
+ *    rewires the org controller to consume them — gated on the workspace's
+ *    presence (no-op early in `sf new`; replayed by `new.ts` after
+ *    `createMonorepoRoot`).
  *
  * Used by both `sf new` (during initial project generation) and `sf update` (when adding the module later).
  */
@@ -118,4 +123,74 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
     webEnvContent = webEnvContent.replace(/VITE_STORAGE_ENABLED=.*$/m, 'VITE_STORAGE_ENABLED="true"')
     await writeFile(webEnvPath, webEnvContent)
   }
+
+  // Mono-only: deposit MIME/size constants into @<proj>/shared-config and
+  // rewire the controller. Gated on the workspace's presence: in `sf new` mono
+  // flow, `createApiApp` runs BEFORE `createMonorepoRoot` lays down
+  // `packages/shared-config/`, so this is a no-op the first time. `new.ts`
+  // calls `depositStorageSharedConfig` again after the root overlay runs.
+  // In `sf update` the workspace already exists, so it deposits in one pass.
+  if (isMonorepo) {
+    await depositStorageSharedConfig({ apiPath, projectName })
+  }
+}
+
+interface DepositStorageSharedConfigParams {
+  apiPath: string
+  projectName: string
+}
+
+/**
+ * Idempotent deposit of `STORAGE_LOGO_*` constants into the monorepo
+ * shared-config workspace + controller rewire to consume them.
+ *
+ * No-ops when:
+ * - `packages/shared-config/src/` doesn't exist (mono root not yet created)
+ * - the org controller still has `// TODO storage-service-active:` markers
+ *   (storage hasn't been activated yet — the rewire targets the uncommented
+ *   live code only)
+ *
+ * Multirepo never calls this — it keeps the inlined literals per side.
+ */
+export async function depositStorageSharedConfig({ apiPath, projectName }: DepositStorageSharedConfigParams): Promise<void> {
+  const monorepoRoot = resolve(apiPath, '..', '..')
+  const sharedConfigDir = `${monorepoRoot}/packages/shared-config/src`
+  if (!existsSync(sharedConfigDir)) return
+
+  // Storage activation gate — only deposit when the storage module has been
+  // installed (markers uncommented). Otherwise the shared-config workspace
+  // would carry a dangling `storage.ts` even on storage-less projects.
+  const orgControllerPath = `${apiPath}/src/modules/organizations/controllers/organization.controller.ts`
+  if (!existsSync(orgControllerPath)) return
+  let orgControllerContent = await readFile(orgControllerPath, 'utf8')
+  if (orgControllerContent.includes('// TODO storage-service-active:')) return
+
+  const storageFile = `${sharedConfigDir}/storage.ts`
+  await writeFile(
+    storageFile,
+    [
+      '/**',
+      ' * Logo upload contract — shared by apps/api (FileInterceptor) and any future',
+      ' * apps/web preview/validation. Multirepo equivalents are inlined per side.',
+      ' */',
+      'export const STORAGE_LOGO_MAX_BYTES = 5 * 1024 * 1024',
+      "export const STORAGE_LOGO_ALLOWED_MIMES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']",
+      ''
+    ].join('\n')
+  )
+
+  const indexPath = `${sharedConfigDir}/index.ts`
+  const indexContent = await readFile(indexPath, 'utf8')
+  if (!indexContent.includes("from './storage'")) {
+    await writeFile(indexPath, `${indexContent.replace(/\s*$/, '')}\nexport * from './storage'\n`)
+  }
+
+  const importLine = `import { STORAGE_LOGO_ALLOWED_MIMES, STORAGE_LOGO_MAX_BYTES } from '@${projectName}/shared-config'\n`
+  if (!orgControllerContent.includes(importLine)) {
+    orgControllerContent = orgControllerContent.replace(`import { FileInterceptor } from '@nestjs/platform-express'\n`, `import { FileInterceptor } from '@nestjs/platform-express'\n${importLine}`)
+  }
+  orgControllerContent = orgControllerContent
+    .replace('fileSize: 5 * 1024 * 1024', 'fileSize: STORAGE_LOGO_MAX_BYTES')
+    .replace(`const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']`, `const allowedMimes = STORAGE_LOGO_ALLOWED_MIMES`)
+  await writeFile(orgControllerPath, orgControllerContent)
 }
