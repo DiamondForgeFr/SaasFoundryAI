@@ -36,15 +36,42 @@ So in a generated **monorepo** the package exists for two reasons:
 2. It is a real npm workspace so future shared **runtime** code (helpers, constants) can live next
    to the types without re-introducing the topology split.
 
+## Two distribution tracks
+
+There are two ways shared types reach the apps:
+
+1. **Vendored mirror (default for hand-written domain types)** — types ship in
+   each app's `src/shared-types/` and are consumed via the TS alias
+   `@shared-types/*`. The drift-guard test enforces byte-equality across the
+   canonical and the two blueprint copies. This is what the seven domain files
+   (`account.ts`, `auth.ts`, `common.ts`, `entity.ts`, `invitation.ts`,
+   `organization.ts`) use.
+
+2. **Module-deposited (mono-only)** — when an installer adds a module that
+   carries a cross-cutting type, it writes a new file directly into this
+   workspace and rewires the consumer to import from
+   `@{{PROJECT_NAME}}/shared-types`. No vendored copy exists; multirepo apps
+   keep an inlined `interface` per side. Current deposit:
+
+   - **Email module** — writes `src/email.ts` (`EmailOptions`) and rewires
+     `apps/api/.../mailersend.service.ts` to import the type. Activation gate:
+     the email module's `mailersend.service.ts` must already be installed. On
+     multirepo, `mailersend.service.ts` keeps the inlined `export interface
+     EmailOptions { ... }`. The drift-guard / multirepo parity assertions in
+     `tests/docker/assertions.ts` enforce both behaviors.
+
+   These auto-managed files are idempotent (`sf update` won't duplicate them).
+
 ## How to add a new shared type
 
 1. Create or extend a file under `src/` named after the domain (e.g. `src/user.ts`).
 2. Export it from `src/index.ts`.
-3. Mirror the changes into both `scaffolds/blueprints/api/src/shared-types/` and
+3. **Vendored track**: mirror the changes into both `scaffolds/blueprints/api/src/shared-types/` and
    `scaffolds/blueprints/web/src/shared-types/` (or run the drift test — it will tell you what's
-   out of sync).
-4. Consumers import via `import type { Foo } from '@shared-types/index'` (the alias is wired in
-   each app's `tsconfig.json` / `tsconfig.app.json` / `vite.config.ts`).
+   out of sync). Consumers then import via `@shared-types/index`.
+4. **Module-deposit track**: extend the module's installer (`src/installers/<module>.installer.ts`)
+   with a deposit function gated on the module's activation marker. The consumer should keep an
+   inlined fallback for multirepo, and the installer rewires it to the package import on monorepo.
 
 ## Consumption example
 

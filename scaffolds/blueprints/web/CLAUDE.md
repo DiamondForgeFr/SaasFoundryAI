@@ -74,18 +74,38 @@ export function UserProfile() {
 
 ### Path Aliases
 - `@/*` → `./src/*`
+- `@shared-types/*` → `./src/shared-types/*` (cross-wire TypeScript types)
+- `@shared-validation/*` → `./src/shared-validation/*` (Zod schemas reused on the API side)
 
 ### Styling
-- **TailwindCSS** for utility classes
-- **ShadCN** for pre-built components
-- **Radix UI** for accessible primitives
+- **TailwindCSS 4** for utility classes
+- **ShadCN** primitives for the design system (`Button`, `Dialog`, `Form`, …)
+- **Radix UI** for accessible primitives (consumed through ShadCN)
 - Mobile-first responsive design
+- Theme tokens (colors, radii, animations, dark mode) live in a `theme.css` imported once in `src/index.css`
 
 ### API Integration
-- React Query hooks in `src/hooks/api/`
-- Axios for HTTP requests
-- Automatic token refresh
-- Type-safe with TypeScript
+- **Monorepo**: typed React Query hooks come from `@<root-package-name>/api-client/generated/api/<tag>/<tag>` (auto-emitted by orval from the API's OpenAPI snapshot). Hand-written hooks under `src/hooks/api/` are thin wrappers when extra logic is needed.
+- **Multirepo**: hand-written React Query hooks under `src/hooks/api/` consume a typed fetch wrapper directly.
+- Cookie-based auth with automatic refresh
+- Type-safe end-to-end via shared types + auto-generated client (mono) or shared types alone (multi)
+
+### 📦 Shared layers (mono vs multi)
+
+This blueprint always carries vendored copies of `src/shared-types/` and `src/shared-validation/` — that's the working source the web bundle compiles against. The full shared landscape diverges by topology:
+
+- **In a monorepo** (root has `packages/`):
+  - `src/shared-types/` and `src/shared-validation/` are mirrored from `<root>/packages/shared-{types,validation}/src/` — **edit hand-written files in all three places** (canonical + both apps' mirrors). The SaaSFoundry CLI's drift-guard tests block divergence.
+  - **ShadCN primitives** are not in `src/components/ui/shadcn/` — they live in the workspace package and are imported as `@<root-package-name>/ui-primitives/<name>` (see `package.json`). The Tailwind theme is pulled in via `@import "@<root-package-name>/ui-primitives/theme.css"` in `src/index.css`. App-specific compositions (logos, page-loaders, business widgets) stay under `src/components/`.
+  - **Typed API client**: `@<root-package-name>/api-client/generated/api/<tag>/<tag>` exposes `useXxx` React Query hooks generated from the API's OpenAPI snapshot.
+  - **Module-deposited shared constants** (e.g. `STORAGE_LOGO_MAX_BYTES` in `shared-config`) — consume them via the workspace import; don't re-declare locally.
+- **In multirepo** (this app stands alone):
+  - Vendored `src/shared-{types,validation}/` are the only copies.
+  - **ShadCN primitives** live in `src/components/ui/shadcn/` (vendored from the same canonical source as the mono `ui-primitives` package — drift-guarded by the CLI).
+  - No generated API client — hand-write React Query hooks under `src/hooks/api/`.
+  - Module-shared values (storage MIME list, email envelope, …) are inlined per side; keep them stable — the SaaSFoundry CLI's docker assertions enforce the inlined shape.
+
+Run `sf status --claude-friendly --no-network` to confirm topology before changing shared shapes.
 
 ## Git Workflow
 
