@@ -17,7 +17,9 @@ import {
   assertClaudeMdConfigured,
   assertMonorepoBuildOutput,
   assertMonorepoSharedPackages,
+  assertMonorepoStorageSharedConfig,
   assertMonorepoUiPrimitives,
+  assertMultirepoStorageInlined,
   assertMultirepoUiPrimitivesUntouched,
   assertMonorepoSkills,
   assertMultirepoSkills,
@@ -212,14 +214,19 @@ async function runGenerationScenario(scenario: GenerationScenario): Promise<bool
   // Assertions
   const results: AssertionResult[] = []
 
+  const storageInstalled = scenario.s3Setup !== 'manual'
+
   if (scenario.isMonorepo) {
     results.push(...assertMonorepoBuildOutput(projectDir))
     results.push(...assertMonorepoSharedPackages(projectDir, scenario.projectName))
     results.push(...assertMonorepoUiPrimitives(projectDir, scenario.projectName))
+    if (storageInstalled) results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.projectName))
   } else {
-    results.push(...assertApiBuildOutput(join(projectDir, 'apps', `${scenario.projectName}-api`)))
+    const apiPath = join(projectDir, 'apps', `${scenario.projectName}-api`)
+    results.push(...assertApiBuildOutput(apiPath))
     results.push(...assertWebBuildOutput(join(projectDir, 'apps', `${scenario.projectName}-web`)))
     results.push(...assertMultirepoUiPrimitivesUntouched(join(projectDir, 'apps', `${scenario.projectName}-web`)))
+    if (storageInstalled) results.push(...assertMultirepoStorageInlined(apiPath))
   }
 
   results.push(scanForUnreplacedPlaceholders(projectDir))
@@ -307,10 +314,13 @@ async function runUpdateScenario(scenario: UpdateScenario): Promise<boolean> {
     results.push(...assertMonorepoBuildOutput(projectDir))
     results.push(...assertMonorepoSharedPackages(projectDir, scenario.base.projectName))
     results.push(...assertMonorepoUiPrimitives(projectDir, scenario.base.projectName))
+    if (scenario.addModules.storage) results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.base.projectName))
   } else {
-    results.push(...assertApiBuildOutput(join(projectDir, 'apps', `${scenario.base.projectName}-api`)))
+    const apiPath = join(projectDir, 'apps', `${scenario.base.projectName}-api`)
+    results.push(...assertApiBuildOutput(apiPath))
     results.push(...assertWebBuildOutput(join(projectDir, 'apps', `${scenario.base.projectName}-web`)))
     results.push(...assertMultirepoUiPrimitivesUntouched(join(projectDir, 'apps', `${scenario.base.projectName}-web`)))
+    if (scenario.addModules.storage) results.push(...assertMultirepoStorageInlined(apiPath))
   }
 
   results.push(scanForUnreplacedPlaceholders(projectDir))
