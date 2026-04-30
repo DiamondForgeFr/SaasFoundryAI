@@ -32,17 +32,16 @@ export async function openTerminal(directory: string, options?: { command?: stri
         // macOS - check for cmux first (terminal multiplexer)
         if (isCmux) {
           try {
-            // Create a new terminal surface in current workspace
-            execSync('cmux new-surface --type terminal', { stdio: 'ignore' })
+            // Create a new terminal surface; cmux replies on stdout with `OK surface:<n> pane:<m> workspace:<k>`
+            const cmuxOut = execSync('cmux new-surface --type terminal', { encoding: 'utf8' })
+            const surfaceMatch = cmuxOut.match(/\b(surface:\d+)\b/)
+            if (!surfaceMatch) throw new Error(`unexpected cmux new-surface output: ${cmuxOut.trim()}`)
+            const surfaceRef = surfaceMatch[1]
 
-            // cmux doesn't support passing commands to new surfaces yet
-            // So we'll create the tab and show the command to run
-            spinner.succeed(chalk.green('New cmux tab created'))
-            if (command) {
-              console.log(chalk.cyan(`\nPlease run in the new tab:\n  cd ${absolutePath} && ${command}\n`))
-            } else {
-              console.log(chalk.cyan(`\nPlease navigate to:\n  cd ${absolutePath}\n`))
-            }
+            // Inject `cd <path> && <command>` then press Enter — cmux waits for shell readiness internally
+            const fullCmd = command ? `cd ${absolutePath} && ${command}` : `cd ${absolutePath}`
+            execSync(`cmux send --surface ${surfaceRef} ${JSON.stringify(fullCmd)}`, { stdio: 'ignore' })
+            execSync(`cmux send-key --surface ${surfaceRef} enter`, { stdio: 'ignore' })
             success = true
           } catch {
             // cmux command failed, fallback to regular terminal
