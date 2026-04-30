@@ -1,4 +1,5 @@
 import { copy } from 'fs-extra'
+import { existsSync } from 'fs'
 import { readFile, rename, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
@@ -7,6 +8,8 @@ import { fileExists } from '../utils'
 
 interface InstallEmailModuleParams {
   apiPath: string
+  isMonorepo: boolean
+  projectName: string
   mailersendApiKey: string
   mailersendSenderEmail: string
   mailersendSenderName: string
@@ -23,10 +26,14 @@ interface InstallEmailModuleParams {
  * 5. Updates .env with MailerSend credentials
  * 6. Updates .env.test with test credentials
  * 7. Updates deployment.yml with MailerSend env vars (if file exists)
+ * 8. (Mono only) Deposits `EmailOptions` in `packages/shared-types` and rewires
+ *    the MailerSend service to consume it — gated on the workspace's presence
+ *    (no-op early in `sf new`; replayed by `createMonorepoRoot` after the root
+ *    overlay runs).
  *
  * Used by both `sf new` (during initial project generation) and `sf update` (when adding the module later).
  */
-export async function installEmailModule({ apiPath, mailersendApiKey, mailersendSenderEmail, mailersendSenderName }: InstallEmailModuleParams) {
+export async function installEmailModule({ apiPath, isMonorepo, projectName, mailersendApiKey, mailersendSenderEmail, mailersendSenderName }: InstallEmailModuleParams) {
   // Copy MailerSend service to the API email services directory
   const mailerSendServicePath = resolve(overlaysPath, 'modules/email/services/mailersend.service.ts')
   const apiServicesPath = `${apiPath}/src/modules/email/services`
@@ -105,5 +112,77 @@ export async function installEmailModule({ apiPath, mailersendApiKey, mailersend
       .replace(/# MAILERSEND_SENDER_EMAIL=.*$/m, `MAILERSEND_SENDER_EMAIL=\\"${mailersendSenderEmail}\\"`)
       .replace(/# MAILERSEND_SENDER_NAME=.*$/m, `MAILERSEND_SENDER_NAME=\\"${mailersendSenderName}\\"`)
     await writeFile(deploymentYmlPath, deploymentYmlContent)
+  }
+
+  // Mono-only: deposit `EmailOptions` into @<proj>/shared-types and rewire the
+  // MailerSend service to consume it. Gated on the workspace's presence: in
+  // `sf new` mono flow, `createApiApp` runs BEFORE `createMonorepoRoot` lays
+  // down `packages/shared-types/`, so this is a no-op the first time.
+  // `createMonorepoRoot` calls `depositEmailSharedTypes` again after the root
+  // overlay runs. In `sf update` the workspace already exists, so it deposits
+  // in one pass.
+  if (isMonorepo) {
+    await depositEmailSharedTypes({ apiPath, projectName })
+  }
+}
+
+interface DepositEmailSharedTypesParams {
+  apiPath: string
+  projectName: string
+}
+
+/**
+ * Idempotent deposit of the `EmailOptions` send-envelope type into the
+ * monorepo shared-types workspace + MailerSend service rewire to consume it.
+ *
+ * No-ops when:
+ * - `packages/shared-types/src/` doesn't exist (mono root not yet created)
+ * - `mailersend.service.ts` doesn't exist (email module hasn't been installed
+ *   — the file is copied into place by `installEmailModule`, so its presence
+ *   is the activation gate)
+ *
+ * Multirepo never calls this — it keeps the inlined interface per side.
+ */
+export async function depositEmailSharedTypes({ apiPath, projectName }: DepositEmailSharedTypesParams): Promise<void> {
+  const monorepoRoot = resolve(apiPath, '..', '..')
+  const sharedTypesDir = `${monorepoRoot}/packages/shared-types/src`
+  if (!existsSync(sharedTypesDir)) return
+
+  // Mailer activation gate — only deposit when the email module has been
+  // installed (mailersend.service.ts copied in). Otherwise the shared-types
+  // workspace would carry a dangling `email.ts` even on email-less projects.
+  const mailerServicePath = `${apiPath}/src/modules/email/services/mailersend.service.ts`
+  if (!existsSync(mailerServicePath)) return
+
+  const emailTypeFile = `${sharedTypesDir}/email.ts`
+  await writeFile(
+    emailTypeFile,
+    [
+      '/**',
+      ' * Email send envelope — shared by apps/api (MailerSend wrapper) and any',
+      ' * future apps/web preview/validation. Multirepo equivalents are inlined per',
+      ' * side.',
+      ' */',
+      'export interface EmailOptions {',
+      '  to: string',
+      '  subject: string',
+      '  html: string',
+      '  text?: string',
+      '}',
+      ''
+    ].join('\n')
+  )
+
+  const indexPath = `${sharedTypesDir}/index.ts`
+  const indexContent = await readFile(indexPath, 'utf8')
+  if (!indexContent.includes("from './email'")) {
+    await writeFile(indexPath, `${indexContent.replace(/\s*$/, '')}\nexport * from './email'\n`)
+  }
+
+  let mailerServiceContent = await readFile(mailerServicePath, 'utf8')
+  const inlineInterface = `export interface EmailOptions {\n  to: string\n  subject: string\n  html: string\n  text?: string\n}`
+  if (mailerServiceContent.includes(inlineInterface)) {
+    mailerServiceContent = mailerServiceContent.replace(inlineInterface, `import type { EmailOptions } from '@${projectName}/shared-types'\nexport type { EmailOptions }`)
+    await writeFile(mailerServicePath, mailerServiceContent)
   }
 }

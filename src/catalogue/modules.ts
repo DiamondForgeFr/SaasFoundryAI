@@ -55,7 +55,8 @@ export const CATALOGUE: ModuleDefinition[] = [
       'apps/api/src/configs/env/services/env.service.ts',
       'apps/api/.env',
       'apps/api/.env.test',
-      'apps/api/deployment.yml'
+      'apps/api/deployment.yml',
+      'packages/shared-types/src/email.ts (monorepo only)'
     ],
     dependencies: ['mailersend']
   },

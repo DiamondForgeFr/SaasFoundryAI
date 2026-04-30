@@ -591,6 +591,8 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       moduleSpinner.text = 'Installing MailerSend email module...'
       await installEmailModule({
         apiPath,
+        isMonorepo,
+        projectName: manifest.projectName,
         mailersendApiKey: emailCredentials.mailersendApiKey,
         mailersendSenderEmail: emailCredentials.mailersendSenderEmail,
         mailersendSenderName: emailCredentials.mailersendSenderName

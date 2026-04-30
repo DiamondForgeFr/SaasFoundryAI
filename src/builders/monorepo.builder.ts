@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
+import { depositEmailSharedTypes } from '../installers/email.installer'
 import { depositStorageSharedConfig } from '../installers/storage.installer'
 import { installToolSkill } from '../installers/tool-skill.installer'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
@@ -70,13 +71,15 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
     await writeFile(deployWebPath, content)
   }
 
-  // Replay shared-config deposits for any module the API installer activated
-  // before the workspace existed. `installStorageModule` runs during
-  // `createApiApp` (i.e. before this builder lays down `packages/shared-config/`),
-  // so its mono-only deposit is a no-op the first time. The deposit fn is
-  // idempotent + gated on activation markers, so calling it here covers
+  // Replay shared-config / shared-types deposits for any module the API
+  // installer activated before the workspace existed. `installStorageModule`
+  // and `installEmailModule` run during `createApiApp` (i.e. before this
+  // builder lays down `packages/shared-config/` and `packages/shared-types/`),
+  // so their mono-only deposits are no-ops the first time. The deposit fns are
+  // idempotent + gated on activation markers, so calling them here covers
   // `sf new`, `sf update`, and the docker harness uniformly.
   await depositStorageSharedConfig({ apiPath: 'apps/api', projectName })
+  await depositEmailSharedTypes({ apiPath: 'apps/api', projectName })
 
   // Install all dependencies at root (npm workspaces hoists everything)
   await exec(`${nvm}npm install > /dev/null 2>&1`)

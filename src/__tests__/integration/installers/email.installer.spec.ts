@@ -26,6 +26,8 @@ describe('installEmailModule (integration)', () => {
   it('should copy MailerSend service file', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'test-key-123',
       mailersendSenderEmail: 'noreply@test.com',
       mailersendSenderName: 'TestApp'
@@ -37,6 +39,8 @@ describe('installEmailModule (integration)', () => {
   it('should uncomment mailer-service-active markers in auth.service.ts', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'test-key-123',
       mailersendSenderEmail: 'noreply@test.com',
       mailersendSenderName: 'TestApp'
@@ -48,6 +52,8 @@ describe('installEmailModule (integration)', () => {
   it('should uncomment mailer-service-active markers in invitation.service.ts', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'test-key-123',
       mailersendSenderEmail: 'noreply@test.com',
       mailersendSenderName: 'TestApp'
@@ -59,6 +65,8 @@ describe('installEmailModule (integration)', () => {
   it('should uncomment mailer-service-active markers in env.service.ts', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'test-key-123',
       mailersendSenderEmail: 'noreply@test.com',
       mailersendSenderName: 'TestApp'
@@ -70,6 +78,8 @@ describe('installEmailModule (integration)', () => {
   it('should uncomment code in email.service.ts and remove console.logs', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'test-key-123',
       mailersendSenderEmail: 'noreply@test.com',
       mailersendSenderName: 'TestApp'
@@ -85,6 +95,8 @@ describe('installEmailModule (integration)', () => {
   it('should add MailerSendService to email.module.ts providers', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'test-key-123',
       mailersendSenderEmail: 'noreply@test.com',
       mailersendSenderName: 'TestApp'
@@ -99,6 +111,8 @@ describe('installEmailModule (integration)', () => {
   it('should rename disabled spec file to active spec file', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'test-key-123',
       mailersendSenderEmail: 'noreply@test.com',
       mailersendSenderName: 'TestApp'
@@ -110,6 +124,8 @@ describe('installEmailModule (integration)', () => {
   it('should update .env with MailerSend credentials', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'ms_test_key_abc123',
       mailersendSenderEmail: 'hello@myapp.com',
       mailersendSenderName: 'MyApp'
@@ -123,6 +139,8 @@ describe('installEmailModule (integration)', () => {
   it('should update .env.test with test credentials', async () => {
     await installEmailModule({
       apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
       mailersendApiKey: 'ms_test_key_abc123',
       mailersendSenderEmail: 'hello@myapp.com',
       mailersendSenderName: 'MyApp'
@@ -144,6 +162,8 @@ describe('installEmailModule (integration)', () => {
       // Only test if it exists
       await installEmailModule({
         apiPath,
+        isMonorepo: false,
+        projectName: 'test-project',
         mailersendApiKey: 'test-key',
         mailersendSenderEmail: 'noreply@test.com',
         mailersendSenderName: 'Test'
