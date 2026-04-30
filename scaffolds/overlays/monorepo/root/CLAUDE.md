@@ -24,24 +24,55 @@ This is a **Turborepo monorepo** with centralized tooling and shared skills.
 │   │   └── CLAUDE.md     # API-specific context
 │   └── web/              # React frontend
 │       └── CLAUDE.md     # Web-specific context
-├── packages/             # Shared packages (consumed by both apps/api and apps/web)
-│   ├── shared-types/     # Pure TypeScript types + z.infer outputs
-│   ├── shared-validation/ # Zod schemas (signup, signin, org CRUD, …)
-│   └── shared-config/    # Runtime constants (routes, flags, locales, …)
+├── packages/             # Shared workspaces consumed by apps/api and apps/web
+│   ├── shared-types/     # TypeScript types (User, Organization, RBAC, …)
+│   ├── shared-validation/# Zod schemas (signup, signin, org CRUD, …)
+│   ├── shared-config/    # Runtime constants (MIME lists, size thresholds, …)
+│   ├── ui-primitives/    # Headless ShadCN/Radix + Tailwind v4 theme tokens
+│   └── api-client/       # Auto-generated typed React Query hooks (via orval)
 ├── turbo.json            # Turborepo configuration
 └── package.json          # Root workspace configuration
 ```
 
 ### 📦 Shared packages — the no-drift contract
 
-`packages/shared-*` is the single source of truth for code that must be identical on both sides of the wire. Each package is a private npm workspace published under `@{{PROJECT_NAME}}/shared-*`:
+`packages/*` is the single source of truth for code that must be identical on both sides of the wire. Each package is a private npm workspace published under `@{{PROJECT_NAME}}/<name>`. **Read each package's `README.md` for the full "what goes in / what does not" rules** — the summary below is just the AI-orientation map.
 
-- **`@{{PROJECT_NAME}}/shared-types`** — Pure TypeScript types and `z.infer` outputs reused by `apps/api` (DTO types) and `apps/web` (props, hook responses).
-- **`@{{PROJECT_NAME}}/shared-validation`** — Zod schemas consumed by NestJS DTOs (via the chosen Zod-Nest bridge) and React Hook Form (`zodResolver`). Define a schema once; both sides validate identically.
-- **`@{{PROJECT_NAME}}/shared-config`** — Runtime constants (public route segments, feature flag defaults, supported locales, validation thresholds) that both apps reference.
-- **`@{{PROJECT_NAME}}/ui-primitives`** — Headless ShadCN/Radix primitives, Tailwind v4 theme tokens, the `cn()` helper, and shared UI hooks (`useIsMobile`). `apps/web` (and any future second frontend) consumes them via `@{{PROJECT_NAME}}/ui-primitives/<name>`. Theme tokens are imported once via `@import "@{{PROJECT_NAME}}/ui-primitives/theme.css"` in the app's root stylesheet.
+| Package                                | Purpose                                                            | Distribution                            | Build artifact         |
+| -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------- | ---------------------- |
+| `@{{PROJECT_NAME}}/shared-types`       | Cross-wire TypeScript types + `z.infer` outputs                    | dist (`tsc`) + vendored mirror per app  | `dist/index.{js,d.ts}` |
+| `@{{PROJECT_NAME}}/shared-validation`  | Zod schemas for both NestJS DTOs and React Hook Form               | dist (`tsc`) + vendored mirror per app  | `dist/index.{js,d.ts}` |
+| `@{{PROJECT_NAME}}/shared-config`      | Runtime constants (MIME lists, size thresholds, public routes, …)  | dist (`tsc`), mono-only (no mirror)     | `dist/index.{js,d.ts}` |
+| `@{{PROJECT_NAME}}/ui-primitives`      | Headless ShadCN/Radix + Tailwind v4 theme tokens                   | source-only (`.tsx` via `exports`)      | none — Vite reads src  |
+| `@{{PROJECT_NAME}}/api-client`         | Auto-generated typed React Query hooks (orval from `apps/api` OAS) | source-only (`.ts` via `exports`)       | none — Vite reads src  |
 
-Module resolution goes through npm workspaces — each package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/shared-*` and consumed via its compiled `dist/` (set as the package's `main`/`types`). Build order is handled by Turborepo (`build` depends on `^build`), so `npm run build` always rebuilds shared packages first. After editing a shared package's source, run `npm run build` (or rely on CI) before the change is picked up by `apps/api` or `apps/web`. Each package ships its own README with the "what goes in / what does not" rules.
+**Module resolution.** Each package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/<name>`. `dist`-based packages need an `npm run build` before consumers see source edits — Turborepo's `build → ^build` topology takes care of that automatically. Source-only packages are picked up immediately by the consumer's bundler (Vite reads `.tsx` directly, TypeScript resolves the `exports` field).
+
+### 🧠 Decision matrix — where does new code go?
+
+When adding a new symbol, ask in order:
+
+1. **Is it a runtime constant or threshold both apps must agree on?** → `packages/shared-config`.
+2. **Is it a Zod schema validated identically on both sides?** → `packages/shared-validation` (factory pattern; web overrides messages with i18n, api uses defaults).
+3. **Is it a TypeScript type / interface / enum used on both sides of the wire?** → `packages/shared-types` (mirror into both blueprints if hand-written; deposit via installer if module-scoped — see "Module deposits" below).
+4. **Is it a headless UI building block (button, dialog, hook used by primitives, theme token)?** → `packages/ui-primitives`. Mirror to `apps/web/src/components/ui/shadcn/` blueprint side via the drift-guard. App-specific compositions (logos, page-loaders, business widgets) stay in `apps/web/src/components/`.
+5. **Is it a backend endpoint?** Add the controller in `apps/api`, regenerate the API client (`npm run codegen`), and consume the new typed hook from `@{{PROJECT_NAME}}/api-client/generated/api/<tag>/<tag>` in `apps/web`.
+6. **Otherwise** → it's app-specific and stays under the relevant `apps/<app>/src/`.
+
+### 🔁 Module deposits (auto-managed shared files)
+
+When SaaSFoundry installed an optional module on this monorepo, it may have deposited a shared file directly into `packages/shared-*`. The deposits are **idempotent** (re-running `sf update` won't duplicate them) and **gated** on the module being installed:
+
+| Module    | Deposits into                              | Consumer rewired to                              |
+| --------- | ------------------------------------------ | ------------------------------------------------ |
+| storage   | `packages/shared-config/src/storage.ts`    | `apps/api/.../organization.controller.ts`        |
+| email     | `packages/shared-types/src/email.ts`       | `apps/api/.../mailersend.service.ts`             |
+
+Edit these files like any other shared file once they exist — they're just canonical seeds, not generated artifacts. **If you delete one without removing the consumer's import, the build will break** — keep the deposit ↔ consumer pair in sync.
+
+### 🛡️ Vendored mirrors — keep them in sync
+
+`shared-types` and `shared-validation` ship as a **canonical workspace package** AND as a **vendored mirror** under each app's `src/shared-{types,validation}/`. The apps actually consume the mirror via the TS alias `@shared-types/*` / `@shared-validation/*` — the workspace package is the documentation source plus the home for module-deposited types/schemas. **When you change a hand-written file, change all three copies** (canonical + each app's mirror). If you only edit one, the other side will silently keep the old shape and types will drift.
 
 ## 🎯 Skills Priority
 

@@ -65,12 +65,23 @@ module-name/
 - `@modules/*` → `src/modules/*`
 - `@common/*` → `src/common/*`
 - `@configs/*` → `src/configs/*`
+- `@shared-types/*` → `src/shared-types/*` (cross-wire TypeScript types)
+- `@shared-validation/*` → `src/shared-validation/*` (Zod schemas reused on the web side)
 - `@/*` → `src/*`
 
 ### Validation
-- **DTOs**: Use Zod schemas for runtime validation
+- **DTOs**: Use Zod schemas via `nestjs-zod`'s `createZodDto`. Schemas are factory functions defined under `src/shared-validation/` and shared with the frontend.
 - **Decorators**: `@ApiProperty()` for OpenAPI docs
 - **Transform**: Use `class-transformer` for type coercion
+
+### 📦 Shared layers (mono vs multi)
+
+This blueprint always carries vendored copies of `src/shared-types/` and `src/shared-validation/` — those are the working source the API actually compiles against. The behavior diverges by topology:
+
+- **In a monorepo** (root has `packages/shared-*`): the same files also exist canonically at `<root>/packages/shared-{types,validation}/src/`, plus a non-vendored `<root>/packages/shared-config/`. **Hand-written types/schemas live in all three places** (canonical workspace + both apps' mirrors) and the SaaSFoundry CLI's drift-guard tests block divergence. **Module-deposited types/constants** (e.g. `EmailOptions`, `STORAGE_LOGO_*`) live in the workspace only and the relevant API service is rewired to import them via `@<root-package-name>/shared-{types,config}` — **do not duplicate them into `src/shared-types/`** or you'll have two sources of truth.
+- **In multirepo** (this app stands alone, no `packages/`): only the vendored copies under `src/shared-{types,validation}/` exist; module-shared values that would live in `shared-config` on mono are **inlined** in the consumer here (e.g. `STORAGE_LOGO_MAX_BYTES` in `organization.controller.ts`, `EmailOptions` interface in `mailersend.service.ts`). Keep the inlined values stable — the SaaSFoundry CLI's docker assertions enforce that the multirepo path stays inlined.
+
+When in doubt, run `sf status --claude-friendly --no-network` to confirm topology before editing shared shapes.
 
 ### Prisma Schema
 - Multi-file schemas in `prisma/schema/`
