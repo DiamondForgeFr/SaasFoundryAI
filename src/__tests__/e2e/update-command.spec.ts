@@ -112,6 +112,8 @@ describe('update command logic (E2E)', () => {
       const { installEmailModule } = await import('../../installers/email.installer')
       await installEmailModule({
         apiPath: 'apps/existing-project-api',
+        isMonorepo: false,
+        projectName: 'existing-project',
         mailersendApiKey: 'ms-update-key',
         mailersendSenderEmail: 'noreply@updated.com',
         mailersendSenderName: 'Updated'

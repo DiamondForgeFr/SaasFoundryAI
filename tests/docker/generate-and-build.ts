@@ -17,8 +17,10 @@ import {
   assertClaudeMdConfigured,
   assertMonorepoBuildOutput,
   assertMonorepoSharedPackages,
+  assertMonorepoEmailSharedTypes,
   assertMonorepoStorageSharedConfig,
   assertMonorepoUiPrimitives,
+  assertMultirepoEmailInlined,
   assertMultirepoStorageInlined,
   assertMultirepoUiPrimitivesUntouched,
   assertMonorepoSkills,
@@ -215,18 +217,21 @@ async function runGenerationScenario(scenario: GenerationScenario): Promise<bool
   const results: AssertionResult[] = []
 
   const storageInstalled = scenario.s3Setup !== 'manual'
+  const emailInstalled = scenario.emailService === 'mailersend'
 
   if (scenario.isMonorepo) {
     results.push(...assertMonorepoBuildOutput(projectDir))
     results.push(...assertMonorepoSharedPackages(projectDir, scenario.projectName))
     results.push(...assertMonorepoUiPrimitives(projectDir, scenario.projectName))
     if (storageInstalled) results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.projectName))
+    if (emailInstalled) results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.projectName))
   } else {
     const apiPath = join(projectDir, 'apps', `${scenario.projectName}-api`)
     results.push(...assertApiBuildOutput(apiPath))
     results.push(...assertWebBuildOutput(join(projectDir, 'apps', `${scenario.projectName}-web`)))
     results.push(...assertMultirepoUiPrimitivesUntouched(join(projectDir, 'apps', `${scenario.projectName}-web`)))
     if (storageInstalled) results.push(...assertMultirepoStorageInlined(apiPath))
+    if (emailInstalled) results.push(...assertMultirepoEmailInlined(apiPath))
   }
 
   results.push(scanForUnreplacedPlaceholders(projectDir))
@@ -261,6 +266,8 @@ async function runUpdateScenario(scenario: UpdateScenario): Promise<boolean> {
       const { installEmailModule } = await import(join(CLI_PATH, 'dist', 'installers', 'email.installer'))
       await installEmailModule({
         apiPath,
+        isMonorepo: scenario.base.isMonorepo,
+        projectName: scenario.base.projectName,
         mailersendApiKey: 'ms-test-key',
         mailersendSenderEmail: 'noreply@test.com',
         mailersendSenderName: 'Test'
@@ -315,12 +322,14 @@ async function runUpdateScenario(scenario: UpdateScenario): Promise<boolean> {
     results.push(...assertMonorepoSharedPackages(projectDir, scenario.base.projectName))
     results.push(...assertMonorepoUiPrimitives(projectDir, scenario.base.projectName))
     if (scenario.addModules.storage) results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.base.projectName))
+    if (scenario.addModules.email) results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.base.projectName))
   } else {
     const apiPath = join(projectDir, 'apps', `${scenario.base.projectName}-api`)
     results.push(...assertApiBuildOutput(apiPath))
     results.push(...assertWebBuildOutput(join(projectDir, 'apps', `${scenario.base.projectName}-web`)))
     results.push(...assertMultirepoUiPrimitivesUntouched(join(projectDir, 'apps', `${scenario.base.projectName}-web`)))
     if (scenario.addModules.storage) results.push(...assertMultirepoStorageInlined(apiPath))
+    if (scenario.addModules.email) results.push(...assertMultirepoEmailInlined(apiPath))
   }
 
   results.push(scanForUnreplacedPlaceholders(projectDir))

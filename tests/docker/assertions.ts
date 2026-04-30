@@ -229,6 +229,39 @@ export function assertMultirepoStorageInlined(apiPath: string): AssertionResult[
 }
 
 /**
+ * Verify email-on-monorepo deposits `EmailOptions` in shared-types and the
+ * MailerSend service consumes it (instead of declaring the inlined interface
+ * it carries in multirepo). Mirrors the storage no-drift contract.
+ */
+export function assertMonorepoEmailSharedTypes(projectPath: string, projectName: string): AssertionResult[] {
+  const results: AssertionResult[] = []
+
+  const emailFile = join(projectPath, 'packages', 'shared-types', 'src', 'email.ts')
+  results.push(assertFileExists(emailFile))
+  results.push(assertFileContains(emailFile, 'EmailOptions'))
+
+  const indexFile = join(projectPath, 'packages', 'shared-types', 'src', 'index.ts')
+  results.push(assertFileContains(indexFile, `from './email'`))
+
+  const mailerService = join(projectPath, 'apps', 'api', 'src', 'modules', 'email', 'services', 'mailersend.service.ts')
+  results.push(assertFileContains(mailerService, `from '@${projectName}/shared-types'`))
+  // The inlined interface body is gone in monorepo (proves the rewrite happened).
+  results.push(assertFileNotContains(mailerService, 'export interface EmailOptions {'))
+
+  return results
+}
+
+/**
+ * Verify the multirepo email path keeps the inlined `EmailOptions` interface
+ * (parity guard: no shared-types deposit leaks into multirepo, where the
+ * package doesn't exist).
+ */
+export function assertMultirepoEmailInlined(apiPath: string): AssertionResult[] {
+  const mailerService = join(apiPath, 'src', 'modules', 'email', 'services', 'mailersend.service.ts')
+  return [assertFileContains(mailerService, 'export interface EmailOptions {'), assertFileNotContains(mailerService, '/shared-types')]
+}
+
+/**
  * Verify the multirepo web app keeps the vendored shadcn primitives in place
  * (no monorepo-only side effects leak into the multirepo topology).
  */

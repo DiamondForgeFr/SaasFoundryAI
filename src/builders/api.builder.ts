@@ -113,6 +113,8 @@ export async function createApiApp({
   if (emailService === 'mailersend') {
     await installEmailModule({
       apiPath,
+      isMonorepo,
+      projectName,
       mailersendApiKey: mailersendApiKey || '',
       mailersendSenderEmail: mailersendSenderEmail || '',
       mailersendSenderName: mailersendSenderName || ''
