@@ -23,6 +23,7 @@ export default [
     },
     rules: {
       'no-trailing-spaces': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'prettier/prettier': [
         'error',
         {

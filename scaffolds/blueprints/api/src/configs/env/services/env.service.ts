@@ -31,11 +31,11 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']),
 
   // JWT Configuration
-  JWT_AUTH_EXPIRES_IN: z.string().refine((val): val is StringValue => true),
-  JWT_REFRESH_EXPIRES_IN: z.string().refine((val): val is StringValue => true),
-  JWT_CREATE_ACCOUNT_EXPIRES_IN: z.string().refine((val): val is StringValue => true),
-  JWT_RESET_PASSWORD_EXPIRES_IN: z.string().refine((val): val is StringValue => true),
-  JWT_INVITATION_EXPIRES_IN: z.string().refine((val): val is StringValue => true),
+  JWT_AUTH_EXPIRES_IN: z.string().refine((_val): _val is StringValue => true),
+  JWT_REFRESH_EXPIRES_IN: z.string().refine((_val): _val is StringValue => true),
+  JWT_CREATE_ACCOUNT_EXPIRES_IN: z.string().refine((_val): _val is StringValue => true),
+  JWT_RESET_PASSWORD_EXPIRES_IN: z.string().refine((_val): _val is StringValue => true),
+  JWT_INVITATION_EXPIRES_IN: z.string().refine((_val): _val is StringValue => true),
 
   JWT_SECRET_AUTH: z.string().min(process.env.NODE_ENV === 'test' ? 1 : 32),
   JWT_SECRET_REFRESH: z.string().min(process.env.NODE_ENV === 'test' ? 1 : 32),
