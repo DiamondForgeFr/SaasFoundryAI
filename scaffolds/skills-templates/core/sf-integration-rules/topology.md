@@ -179,8 +179,8 @@ import type { Organization } from '@my-app/shared-types'
 import { buildSignupPayloadSchema } from '@my-app/shared-validation'
 ```
 
-In the SaaSFoundry **scaffold sources** you'll see `@{{PROJECT_NAME}}/...` literals — those are placeholders. **Never** ship a placeholder import to a generated project; the builder must substitute
-first.
+In the SaaSFoundry **scaffold sources** you'll see imports written with a literal `PROJECT_NAME` mustache token — those are templates. **Never** ship a placeholder import to a generated project; the
+builder must substitute first.
 
 ## Multirepo trade-off (anchor)
 
