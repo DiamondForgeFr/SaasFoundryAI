@@ -126,6 +126,9 @@ All skills are located in `.claude/` at the root and are available across the en
 - **`sf-utils-fix-errors`** - Fix ESLint and TypeScript errors in parallel
 - **`sf-utils-fix-grammar`** - Fix grammar and spelling
 
+#### Integration grammar
+- **`sf-integration-rules`** - Integration grammar router. Triggers when adding a backend module, a page, an API hook, a form, an RBAC permission, or any cross-cutting wire-up. Routes to `backend.md` / `frontend.md` / `topology.md` sub-guides.
+
 #### Development Workflows
 - **`sf-utils-oneshot`** - Ultra-fast feature implementation
 - **`sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate)

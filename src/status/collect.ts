@@ -27,6 +27,7 @@ export interface StatusReport {
   git: GitInfo
   tools: ToolAvailability[]
   checkedNetwork: boolean
+  installedSkills: string[]
 }
 
 export interface CollectOptions {
@@ -76,6 +77,27 @@ function collectGit(projectRoot: string): GitInfo {
   return { available: true, branch, isClean, ahead, behind, upstream }
 }
 
+function listSkillsIn(skillsDir: string): string[] {
+  if (!fs.existsSync(skillsDir)) return []
+  return fs
+    .readdirSync(skillsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && fs.existsSync(path.join(skillsDir, d.name, 'SKILL.md')))
+    .map((d) => d.name)
+}
+
+function collectInstalledSkills(projectRoot: string, manifest: SaaSFoundryManifest | null): string[] {
+  const seen = new Set<string>()
+  const candidates = [path.join(projectRoot, '.claude', 'skills')]
+  if (manifest?.structure === 'multirepo') {
+    candidates.push(path.join(projectRoot, 'apps', 'api', '.claude', 'skills'))
+    candidates.push(path.join(projectRoot, 'apps', 'web', '.claude', 'skills'))
+  }
+  for (const dir of candidates) {
+    for (const name of listSkillsIn(dir)) seen.add(name)
+  }
+  return Array.from(seen).sort()
+}
+
 function checkTool(name: string, cmd: string, cwd: string): ToolAvailability {
   const out = runSafe(cmd, cwd)
   if (out === null) return { name, available: false }
@@ -91,12 +113,15 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   const tools: ToolAvailability[] = []
   if (options.checkGh) tools.push(checkTool('gh', 'gh --version', projectRoot))
 
+  const installedSkills = collectInstalledSkills(projectRoot, manifest)
+
   return {
     projectRoot,
     manifest,
     manifestPath,
     git,
     tools,
-    checkedNetwork: options.checkNetwork === true
+    checkedNetwork: options.checkNetwork === true,
+    installedSkills
   }
 }

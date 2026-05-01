@@ -161,6 +161,9 @@ Located in `.claude/skills/`:
   - Implements requested changes automatically
   - Creates new commits with fixes
 
+#### Integration grammar
+- **`/sf-integration-rules`** - Integration grammar router. Triggers when adding a page, an API hook, a form, a ShadCN composition, RBAC wiring, or i18n keys. Routes to `backend.md` / `frontend.md` / `topology.md` sub-guides — read first before scaffolding.
+
 #### Code Quality
 - **`/utils-fix-errors`** - Fix ESLint and TypeScript errors
   - Parallel processing for fast fixes

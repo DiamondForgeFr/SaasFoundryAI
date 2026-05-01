@@ -39,6 +39,9 @@ export function renderHuman(payload: RenderPayload): string {
     const tracking = report.git.upstream ? chalk.gray(` → ${report.git.upstream} [ahead ${report.git.ahead ?? '?'}, behind ${report.git.behind ?? '?'}]`) : ''
     lines.push(`${chalk.gray('Git:')} ${report.git.branch ?? 'detached'}${dirty}${tracking}`)
   }
+  if (report.installedSkills.length > 0) {
+    lines.push(`${chalk.gray('Skills:')} ${report.installedSkills.join(', ')}`)
+  }
   lines.push('')
   lines.push(chalk.bold('Preconditions'))
   for (const p of preconditions) {
@@ -68,6 +71,7 @@ export function renderJson(payload: RenderPayload): string {
         }
       : null,
     git: report.git,
+    installedSkills: report.installedSkills,
     preconditions: preconditions.map((p) => ({
       name: p.name,
       description: p.description,
@@ -95,6 +99,9 @@ export function renderClaudeFriendly(payload: RenderPayload): string {
   if (report.git.available) {
     const state = report.git.isClean === false ? 'dirty' : 'clean'
     lines.push(`- git: ${report.git.branch ?? 'detached'} (${state})`)
+  }
+  if (report.installedSkills.length > 0) {
+    lines.push(`- skills: ${report.installedSkills.join(', ')}`)
   }
   lines.push('')
   lines.push('## Preconditions')
