@@ -1,6 +1,7 @@
 # Frontend integration grammar (apps/web)
 
-> **Status: stub.** Filled by Story #308 (S3 — frontend grammar guides). Until that story lands, fall back to mirroring the structure of `apps/web/src/pages/private/dashboard/` (the most complete reference page) and use the section anchors below as a checklist for what S3 will eventually expand.
+> **Status: stub.** Filled by Story #308 (S3 — frontend grammar guides). Until that story lands, fall back to mirroring the structure of `apps/web/src/pages/private/dashboard/` (the most complete
+> reference page) and use the section anchors below as a checklist for what S3 will eventually expand.
 
 ## Pages & routing (anchor)
 
@@ -12,7 +13,8 @@
 
 ## API hooks (anchor)
 
-- **Monorepo**: typed React Query hooks come from `@<project>/api-client/generated/api/<tag>/<tag>` — call `useXxx()` directly. Hand-written wrappers under `src/hooks/api/` only for cross-cutting logic (cache key conventions, optimistic updates).
+- **Monorepo**: typed React Query hooks come from `@<project>/api-client/generated/api/<tag>/<tag>` — call `useXxx()` directly. Hand-written wrappers under `src/hooks/api/` only for cross-cutting
+  logic (cache key conventions, optimistic updates).
 - **Multirepo**: hand-written hooks under `src/hooks/api/<feature>/` — see `src/hooks/api/auth/mutations/useSignIn.ts` for the canonical shape.
 
 ## Forms (anchor)

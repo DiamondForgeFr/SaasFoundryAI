@@ -78,6 +78,26 @@ const PAIRS = [
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/7-done.md')
   },
   {
+    name: 'sf-integration-rules SKILL.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-integration-rules/SKILL.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/core/sf-integration-rules/SKILL.md')
+  },
+  {
+    name: 'sf-integration-rules backend.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-integration-rules/backend.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/core/sf-integration-rules/backend.md')
+  },
+  {
+    name: 'sf-integration-rules frontend.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-integration-rules/frontend.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/core/sf-integration-rules/frontend.md')
+  },
+  {
+    name: 'sf-integration-rules topology.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-integration-rules/topology.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/core/sf-integration-rules/topology.md')
+  },
+  {
     name: 'sf-srs SKILL.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/SKILL.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/SKILL.md')
