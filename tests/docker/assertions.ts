@@ -276,7 +276,7 @@ export function assertMultirepoUiPrimitivesUntouched(webPath: string): Assertion
 
 // ── Skills Assertions ──────────────────────────────────────────
 
-const CORE_SKILLS = ['sf-git-commit', 'sf-git-create-pr', 'sf-git-fix-pr-comments', 'sf-git-merge', 'sf-utils-fix-errors', 'sf-utils-fix-grammar']
+const CORE_SKILLS = ['sf-git-commit', 'sf-git-create-pr', 'sf-git-fix-pr-comments', 'sf-git-merge', 'sf-utils-fix-errors', 'sf-utils-fix-grammar', 'sf-integration-rules']
 
 /** Verify skills are installed in a multirepo app */
 export function assertMultirepoSkills(apiPath: string, webPath: string): AssertionResult[] {

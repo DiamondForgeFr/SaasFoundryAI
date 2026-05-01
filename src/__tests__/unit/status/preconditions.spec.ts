@@ -9,6 +9,7 @@ function makeReport(overrides: Partial<StatusReport> = {}): StatusReport {
     git: { available: false },
     tools: [],
     checkedNetwork: false,
+    installedSkills: [],
     ...overrides
   }
 }

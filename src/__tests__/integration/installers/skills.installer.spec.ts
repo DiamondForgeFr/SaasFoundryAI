@@ -49,6 +49,23 @@ describe('installSkills (integration)', () => {
       await expectFileExists(join(webPath, '.claude/skills'))
     })
 
+    it('should install the sf-integration-rules skill with all sub-guides in both apps', async () => {
+      await installSkills({
+        isMonorepo: false,
+        apiPath,
+        webPath,
+        projectName: 'test-project',
+        version: '1.0.0-beta'
+      })
+
+      for (const appPath of [apiPath, webPath]) {
+        await expectFileExists(join(appPath, '.claude/skills/sf-integration-rules/SKILL.md'))
+        await expectFileExists(join(appPath, '.claude/skills/sf-integration-rules/backend.md'))
+        await expectFileExists(join(appPath, '.claude/skills/sf-integration-rules/frontend.md'))
+        await expectFileExists(join(appPath, '.claude/skills/sf-integration-rules/topology.md'))
+      }
+    })
+
     it('should install shared claude docs in both API and Web apps', async () => {
       await installSkills({
         isMonorepo: false,
@@ -135,6 +152,21 @@ describe('installSkills (integration)', () => {
 
       // Root should have skills
       await expectFileExists(join(tempDir, '.claude/skills'))
+    })
+
+    it('should install the sf-integration-rules skill with all sub-guides at root', async () => {
+      await installSkills({
+        isMonorepo: true,
+        apiPath: 'apps/api',
+        webPath: 'apps/web',
+        projectName: 'test-project',
+        version: '1.0.0-beta'
+      })
+
+      await expectFileExists(join(tempDir, '.claude/skills/sf-integration-rules/SKILL.md'))
+      await expectFileExists(join(tempDir, '.claude/skills/sf-integration-rules/backend.md'))
+      await expectFileExists(join(tempDir, '.claude/skills/sf-integration-rules/frontend.md'))
+      await expectFileExists(join(tempDir, '.claude/skills/sf-integration-rules/topology.md'))
     })
 
     it('should install shared claude docs at root for monorepo', async () => {
