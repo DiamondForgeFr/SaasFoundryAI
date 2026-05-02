@@ -31,11 +31,26 @@ must come from `.saasfoundry.json`, not from a fresh dialogue.
 - **Commit + push BEFORE moving to AI Testing.** Code must be on remote before any testing phase.
 - **Subtasks must be real GitHub issues** (not checkboxes), created via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`
 
+### Migration framework — NEVER bypass
+
+The migration framework (Epic #310) only delivers value if every breaking change runs through it. Inline shims in `sf update`, ad-hoc type mutations, and "the user can fix their manifest manually"
+shortcuts reintroduce exactly the cross-version drift the framework was built to prevent.
+
+- **Manifest shape changes** — Any breaking change to `SaaSFoundryManifest` (renaming a field, removing one, restructuring a sub-block) MUST ship as a numbered migration in
+  `src/migrations/manifest/NNN-<name>.ts` with a registered entry in `src/migrations/manifest/index.ts`, a JSON-schema delta in `schemas/saasfoundry-manifest.schema.json`, and a golden fixture pair
+  under `src/__tests__/unit/migrations/fixtures/NNN-<name>/`. Never mutate manifests inline in commands; never bump `manifestVersion` without registering a migration.
+- **Module file-set changes** — Any breaking change to a module's installed file set (renaming a service file, splitting an installer's deposited files, requiring a new env var) MUST bump the
+  installer's `currentVersion` in `<name>.installer.ts` AND ship a `ModuleMigration` on its `migrations` array. Use `writeMigratedFile` from `src/migrations/module/conflict.ts` so user-edited files
+  fall back to a `.saasfoundry.new` sidecar.
+- **Read the playbook first** — Before editing `src/types.ts`, `schemas/saasfoundry-manifest.schema.json`, any installer's deposited templates, or any file under `src/migrations/`, read
+  `.claude/docs/migration-framework.md`. It covers the registry pattern, the file-naming convention, the conflict-aware writer, and worked examples for both manifest renames and module file splits.
+
 ### Reading before acting
 
 - Workflow: `.claude/skills/sf-workflow/SKILL.md` and the `statuses/` files
 - Module architecture (adding/modifying modules): `.claude/docs/architecture-modules.md`
 - Skills architecture (adding/modifying skills): `.claude/docs/architecture-skills.md`
+- Migration framework (any breaking manifest/module change): `.claude/docs/migration-framework.md`
 - Workflow configuration: `.saasfoundry.json` (source of truth — never hardcode branch names, status names, etc.)
 
 ## Tech Stack
