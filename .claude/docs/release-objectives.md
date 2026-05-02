@@ -25,7 +25,7 @@
 | C1  | One-command project creation                        | `sf new`                                                                                                              |
 | C2  | Modular generation                                  | User picks only what they need                                                                                        |
 | C3  | **Add a previously-skipped module later**           | Post-install module installation on an existing project                                                               |
-| C4  | **Cross-version update path**                       | Project scaffolded with v1.0 → upgrade CLI to v1.3 → `sf update` migrates project safely + can adopt new v1.3 modules |
+| C4  | **Cross-version update path** ✅ v2.0.0              | Closed by Epic #310 — manifest + module migration framework. See `.claude/docs/migration-framework.md`                |
 | C5  | Install **AI tool skills** for ticketing/services   | GitHub + GitHub Projects today; Notion / Jira / ClickUp / Linear later — uniform install pattern                      |
 | C6  | Install **AI tool skills** for SRS backends         | Notion today; Confluence + others later                                                                               |
 | C7  | Install **strategic ticketing skill** (workflow AI) | Actions adapt to ticket complexity; dispatched on whichever ticketing tool is configured                              |
