@@ -591,13 +591,9 @@ We welcome contributions! Whether you're fixing bugs, improving documentation, o
 
 ### Shipping a breaking change?
 
-Manifest field renames, restructured `modules.<x>` blocks, or any change
-that would corrupt a project scaffolded with an older CLI version go
-through the migration framework. Read
-[`.claude/docs/migration-framework.md`](.claude/docs/migration-framework.md)
-before opening the PR — it covers the registry pattern, the file naming
-convention, and the golden-fixture test you need to ship alongside the
-migration.
+Manifest field renames, restructured `modules.<x>` blocks, or any change that would corrupt a project scaffolded with an older CLI version go through the migration framework. Read
+[`.claude/docs/migration-framework.md`](.claude/docs/migration-framework.md) before opening the PR — it covers the registry pattern, the file naming convention, and the golden-fixture test you need to
+ship alongside the migration.
 
 ### Commit Message Guidelines
 

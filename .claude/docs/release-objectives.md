@@ -20,16 +20,16 @@
 
 ## 2. CLI (`sf`)
 
-| #   | Objective                                           | Notes                                                                                                                 |
-| --- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| C1  | One-command project creation                        | `sf new`                                                                                                              |
-| C2  | Modular generation                                  | User picks only what they need                                                                                        |
-| C3  | **Add a previously-skipped module later**           | Post-install module installation on an existing project                                                               |
-| C4  | **Cross-version update path** ✅ v2.0.0              | Closed by Epic #310 — manifest + module migration framework. See `.claude/docs/migration-framework.md`                |
-| C5  | Install **AI tool skills** for ticketing/services   | GitHub + GitHub Projects today; Notion / Jira / ClickUp / Linear later — uniform install pattern                      |
-| C6  | Install **AI tool skills** for SRS backends         | Notion today; Confluence + others later                                                                               |
-| C7  | Install **strategic ticketing skill** (workflow AI) | Actions adapt to ticket complexity; dispatched on whichever ticketing tool is configured                              |
-| C8  | Install **strategic SRS skill**                     | Drafts/maintains SRS on whichever doc tool is configured                                                              |
+| #   | Objective                                           | Notes                                                                                                  |
+| --- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| C1  | One-command project creation                        | `sf new`                                                                                               |
+| C2  | Modular generation                                  | User picks only what they need                                                                         |
+| C3  | **Add a previously-skipped module later**           | Post-install module installation on an existing project                                                |
+| C4  | **Cross-version update path** ✅ v2.0.0             | Closed by Epic #310 — manifest + module migration framework. See `.claude/docs/migration-framework.md` |
+| C5  | Install **AI tool skills** for ticketing/services   | GitHub + GitHub Projects today; Notion / Jira / ClickUp / Linear later — uniform install pattern       |
+| C6  | Install **AI tool skills** for SRS backends         | Notion today; Confluence + others later                                                                |
+| C7  | Install **strategic ticketing skill** (workflow AI) | Actions adapt to ticket complexity; dispatched on whichever ticketing tool is configured               |
+| C8  | Install **strategic SRS skill**                     | Drafts/maintains SRS on whichever doc tool is configured                                               |
 
 ## 3. AI layer (Claude skills)
 

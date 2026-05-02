@@ -251,6 +251,10 @@ see its `## Conversational eval hook (SUB-10)` section. This skill only referenc
    `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody`. The
    `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section below. The escape hatch exists for meta tickets (SRS refactors,
    tooling) but must never be used to duplicate an FR that already has a page.
+9. **MIGRATION FRAMEWORK ON BREAKING CHANGES** — when transitioning a ticket whose diff touches `src/types.ts`, `schemas/saasfoundry-manifest.schema.json`, any installer's deposited templates under
+   `scaffolds/`, or any file under `src/migrations/`, verify the change ships a numbered migration (`src/migrations/manifest/NNN-*.ts` for manifest shape changes, a `ModuleMigration` on the
+   installer's `migrations` array for module file-set changes). Inline manifest mutations and "let users fix it manually" shortcuts are forbidden by `CLAUDE.md`'s "Migration framework — NEVER bypass"
+   section. Read `.claude/docs/migration-framework.md` before approving the transition.
 
 ## Implementation
 
