@@ -16,7 +16,7 @@ jest.mock('../../../builders/api.builder', () => ({ createApiApp: jest.fn() }))
 jest.mock('../../../builders/web.builder', () => ({ createWebApp: jest.fn() }))
 jest.mock('../../../builders/monorepo.builder', () => ({ createMonorepoRoot: jest.fn() }))
 jest.mock('../../../builders/dev-services.builder', () => ({ createDevServicesCompose: jest.fn() }))
-jest.mock('../../../installers/skills.installer', () => ({ installSkills: jest.fn() }))
+jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
 
 jest.mock('../../../runners/database.runner', () => ({ initAndStartDb: jest.fn() }))
 jest.mock('../../../runners/s3.runner', () => ({ initAndStartS3: jest.fn() }))

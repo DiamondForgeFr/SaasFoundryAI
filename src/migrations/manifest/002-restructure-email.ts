@@ -29,12 +29,16 @@ export const migration002: ManifestMigration = {
       // input (e.g. hand-edited manifests).
       const legacyModules = manifest.modules as typeof manifest.modules & { emailService?: 'none' | 'mailersend' }
       const provider = legacyModules.email?.provider ?? legacyModules.emailService ?? 'none'
+      // Preserve any pre-existing `email.version` so a hand-edited manifest
+      // with a future module-migration target isn't downgraded by this run.
+      // Fresh manifests without the nested shape default to version 1.
+      const version = legacyModules.email?.version ?? 1
 
       const { emailService: _drop, ...rest } = legacyModules
       void _drop
       next.modules = {
         ...rest,
-        email: { provider, version: 1 }
+        email: { provider, version }
       }
     }
 

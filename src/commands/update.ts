@@ -23,6 +23,7 @@ import { promptSrsConfiguration } from '../prompts/srs.prompts'
 import { bootstrapSrs } from '../runners/srs.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { runManifestMigrations } from '../migrations/manifest/registry'
+import { runModuleMigrations } from '../migrations/module/registry'
 import { SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
 import { ensureGitignorePatterns } from '../utils/gitignore'
@@ -295,6 +296,23 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     console.log(chalk.gray(`  Manifest migrated: v${migrationResult.fromVersion} → v${migrationResult.toVersion}`))
     for (const m of migrationResult.appliedMigrations) {
       console.log(chalk.gray(`    • ${String(m.from).padStart(3, '0')} → ${String(m.to).padStart(3, '0')}  ${m.name}`))
+    }
+    if (!dryRun) {
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+    }
+  }
+
+  // Per-module migration chain — runs after the manifest chain so each
+  // migration sees the upgraded shape, and before any template regeneration so
+  // the regenerated project uses the post-migration module versions. Mutations
+  // to user files go through `writeMigratedFile`, which falls back to a
+  // `.saasfoundry.new` sidecar when the user has hand-edited the target.
+  const moduleMigrationResult = await runModuleMigrations(manifest, '.')
+  if (moduleMigrationResult.applied.length > 0) {
+    manifest = moduleMigrationResult.manifest
+    for (const a of moduleMigrationResult.applied) {
+      const chain = a.migrations.map((name, i) => `${String(a.fromVersion + i).padStart(3, '0')}→${String(a.fromVersion + i + 1).padStart(3, '0')} ${name}`).join(', ')
+      console.log(chalk.gray(`  Migrated module '${a.module}' v${a.fromVersion} → v${a.toVersion} via [${chain}]`))
     }
     if (!dryRun) {
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2))

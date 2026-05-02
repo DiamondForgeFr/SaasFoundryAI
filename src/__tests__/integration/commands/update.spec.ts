@@ -30,11 +30,11 @@ jest.mock('../../../prompts/srs.prompts', () => ({
   })
 }))
 
-jest.mock('../../../installers/email.installer', () => ({ installEmailModule: jest.fn() }))
-jest.mock('../../../installers/storage.installer', () => ({ installStorageModule: jest.fn() }))
-jest.mock('../../../installers/analytics.installer', () => ({ installAnalyticsModule: jest.fn() }))
-jest.mock('../../../installers/skills.installer', () => ({ installSkills: jest.fn() }))
-jest.mock('../../../installers/srs-skill.installer', () => ({ installSrsSkill: jest.fn() }))
+jest.mock('../../../installers/email.installer', () => ({ ...jest.requireActual('../../../installers/email.installer'), installEmailModule: jest.fn() }))
+jest.mock('../../../installers/storage.installer', () => ({ ...jest.requireActual('../../../installers/storage.installer'), installStorageModule: jest.fn() }))
+jest.mock('../../../installers/analytics.installer', () => ({ ...jest.requireActual('../../../installers/analytics.installer'), installAnalyticsModule: jest.fn() }))
+jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
+jest.mock('../../../installers/srs-skill.installer', () => ({ ...jest.requireActual('../../../installers/srs-skill.installer'), installSrsSkill: jest.fn() }))
 jest.mock('../../../runners/srs.runner', () => ({
   bootstrapSrs: jest.fn().mockResolvedValue({
     rootPage: { id: 'root-id', url: 'https://notion/root', name: 'Root' }

@@ -15,10 +15,10 @@ jest.mock('../../../utils', () => ({
   checkNodeVersion: jest.fn()
 }))
 
-jest.mock('../../../installers/email.installer', () => ({ installEmailModule: jest.fn() }))
-jest.mock('../../../installers/storage.installer', () => ({ installStorageModule: jest.fn() }))
-jest.mock('../../../installers/analytics.installer', () => ({ installAnalyticsModule: jest.fn() }))
-jest.mock('../../../installers/skills.installer', () => ({ installSkills: jest.fn() }))
+jest.mock('../../../installers/email.installer', () => ({ ...jest.requireActual('../../../installers/email.installer'), installEmailModule: jest.fn() }))
+jest.mock('../../../installers/storage.installer', () => ({ ...jest.requireActual('../../../installers/storage.installer'), installStorageModule: jest.fn() }))
+jest.mock('../../../installers/analytics.installer', () => ({ ...jest.requireActual('../../../installers/analytics.installer'), installAnalyticsModule: jest.fn() }))
+jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
 jest.mock('../../../builders/dev-services.builder', () => ({ createDevServicesCompose: jest.fn() }))
 
 jest.mock('ora', () => () => ({
