@@ -5,7 +5,7 @@ describe('getAvailableModules', () => {
   it('should return all modules when nothing is installed', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'docker',
         includeAnalytics: false,
@@ -23,7 +23,7 @@ describe('getAvailableModules', () => {
   it('should exclude email when mailersend is already installed', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'mailersend',
+        email: { provider: 'mailersend', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'docker',
         includeAnalytics: false,
@@ -39,7 +39,7 @@ describe('getAvailableModules', () => {
   it('should exclude storage when s3Setup is not manual', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'docker',
         dbSetup: 'docker',
         includeAnalytics: false,
@@ -55,7 +55,7 @@ describe('getAvailableModules', () => {
   it('should also exclude storage when s3Setup is credentials', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'credentials',
         dbSetup: 'docker',
         includeAnalytics: false,
@@ -71,7 +71,7 @@ describe('getAvailableModules', () => {
   it('should exclude analytics when already enabled', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'docker',
         includeAnalytics: true,
@@ -87,7 +87,7 @@ describe('getAvailableModules', () => {
   it('should exclude installed advanced skills', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'docker',
         includeAnalytics: false,
@@ -106,7 +106,7 @@ describe('getAvailableModules', () => {
   it('should exclude srs when already enabled in the manifest', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'docker',
         includeAnalytics: false,
@@ -123,7 +123,7 @@ describe('getAvailableModules', () => {
   it('should return empty array when everything is installed', () => {
     const manifest = manifestFixture({
       modules: {
-        emailService: 'mailersend',
+        email: { provider: 'mailersend', version: 1 },
         s3Setup: 'docker',
         dbSetup: 'docker',
         includeAnalytics: true,

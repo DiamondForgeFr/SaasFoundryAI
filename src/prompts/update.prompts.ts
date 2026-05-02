@@ -22,7 +22,7 @@ function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): b
   const modules = manifest.modules
   switch (moduleName) {
     case 'email':
-      return modules !== undefined && modules.emailService === 'none'
+      return modules !== undefined && modules.email.provider === 'none'
     case 'storage':
       return modules !== undefined && modules.s3Setup === 'manual'
     case 'analytics':

@@ -179,7 +179,7 @@ describe('newCommand (non-interactive integration)', () => {
       projectName: 'acme',
       structure: 'monorepo',
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'manual',
         includeAnalytics: true,

@@ -3,6 +3,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import shelljs from 'shelljs'
 
+import { targetManifestVersion } from '../../../migrations/manifest/registry'
 import { SaaSFoundryManifest } from '../../../types'
 import { version as cliVersion } from '../../../../package.json'
 
@@ -81,7 +82,7 @@ describe('updateCommand (integration)', () => {
     structure: 'monorepo',
     projectName: 'integration-project',
     modules: {
-      emailService: 'none',
+      email: { provider: 'none', version: 1 },
       s3Setup: 'manual',
       dbSetup: 'docker',
       includeAnalytics: false,
@@ -188,7 +189,7 @@ describe('updateCommand (integration)', () => {
       await updateCommand()
 
       const written = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest
-      expect(written.manifestVersion).toBe(1)
+      expect(written.manifestVersion).toBe(targetManifestVersion())
       expect(written.$schema).toBe(SCHEMA_URL)
     })
   })
@@ -197,7 +198,7 @@ describe('updateCommand (integration)', () => {
     it('returns early when everything is already installed', async () => {
       const manifest = buildBaseManifest({
         modules: {
-          emailService: 'mailersend',
+          email: { provider: 'mailersend', version: 1 },
           s3Setup: 'docker',
           dbSetup: 'docker',
           includeAnalytics: true,
@@ -255,7 +256,7 @@ describe('updateCommand (integration)', () => {
       )
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
-      expect(saved.modules.emailService).toBe('mailersend')
+      expect(saved.modules.email).toEqual({ provider: 'mailersend', version: 1 })
     })
 
     it('skips email module when user cancels credentials', async () => {
@@ -328,7 +329,7 @@ describe('updateCommand (integration)', () => {
     it('installs a single skill and merges with existing skills in the manifest', async () => {
       const manifest = buildBaseManifest({
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: false,

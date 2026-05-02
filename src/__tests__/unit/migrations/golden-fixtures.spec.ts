@@ -58,16 +58,26 @@ describe('manifest migration — full chain (v0 → current)', () => {
     expect(result.manifest.$schema).toBe(manifestSchemaUrl)
   })
 
-  it('preserves all original fields through the chain', () => {
+  it('preserves top-level fields and migrates the modules block through the chain', () => {
     const legacy = readJsonFixture('v0-legacy.json') as SaaSFoundryManifest
+    const legacyModules = (legacy.modules ?? {}) as { emailService?: 'none' | 'mailersend'; s3Setup?: string; dbSetup?: string; includeAnalytics?: boolean; advancedSkills?: string[] }
 
     const { manifest } = runManifestMigrations(legacy)
 
     expect(manifest.version).toBe(legacy.version)
     expect(manifest.projectName).toBe(legacy.projectName)
     expect(manifest.structure).toBe(legacy.structure)
-    expect(manifest.modules).toEqual(legacy.modules)
     expect(manifest.fileHashes).toEqual(legacy.fileHashes)
+
+    // Migration 002 lifts the flat `emailService` enum into `email.{provider, version}`
+    // while leaving the rest of the modules block untouched.
+    expect(manifest.modules).toEqual({
+      s3Setup: legacyModules.s3Setup,
+      dbSetup: legacyModules.dbSetup,
+      includeAnalytics: legacyModules.includeAnalytics,
+      advancedSkills: legacyModules.advancedSkills,
+      email: { provider: legacyModules.emailService, version: 1 }
+    })
   })
 
   it('produces a manifest that conforms to the JSON schema', async () => {

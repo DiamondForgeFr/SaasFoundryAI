@@ -97,7 +97,7 @@ describe('update command logic (E2E)', () => {
         structure: 'multirepo',
         projectName: 'existing-project',
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: false,

@@ -221,7 +221,14 @@ export interface SaaSFoundryManifest {
   structure: 'monorepo' | 'multirepo' | 'cli'
   projectName: string
   modules?: {
-    emailService: 'none' | 'mailersend'
+    // Email module — versioned shape introduced in manifestVersion 2.
+    // `provider` replaces the old flat `emailService` field; `version` is
+    // the per-module installed version, used by module-level migrations
+    // (Epic #310 — see installers' currentVersion + migrations array).
+    email: {
+      provider: 'none' | 'mailersend'
+      version: number
+    }
     s3Setup: 'docker' | 'credentials' | 'manual'
     dbSetup: 'docker' | 'credentials' | 'manual'
     includeAnalytics: boolean

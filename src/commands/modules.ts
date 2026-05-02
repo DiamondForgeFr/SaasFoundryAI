@@ -84,7 +84,7 @@ function isInstalled(module: ModuleDefinition, manifest: SaaSFoundryManifest | n
 
   switch (module.name) {
     case 'email':
-      return manifest.modules.emailService === 'mailersend'
+      return manifest.modules.email.provider === 'mailersend'
     case 'storage':
       return manifest.modules.s3Setup === 'docker' || manifest.modules.s3Setup === 'credentials'
     case 'analytics':

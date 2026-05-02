@@ -120,7 +120,7 @@ describe('newCommand flow (E2E)', () => {
       structure: config.isMonorepo ? 'monorepo' : 'multirepo',
       projectName: config.projectName,
       modules: {
-        emailService: config.emailService,
+        email: { provider: config.emailService, version: 1 },
         s3Setup: config.s3Setup,
         dbSetup: config.dbSetup,
         includeAnalytics: config.includeAnalytics,
@@ -168,7 +168,7 @@ describe('newCommand flow (E2E)', () => {
       })
 
       expect(manifest.structure).toBe('monorepo')
-      expect(manifest.modules!.emailService).toBe('mailersend')
+      expect(manifest.modules!.email).toEqual({ provider: 'mailersend', version: 1 })
       expect(manifest.modules!.includeAnalytics).toBe(true)
 
       await expectFileExists(join(tempDir, 'full-mono/apps/api/src/main.ts'))
@@ -211,7 +211,7 @@ describe('newCommand flow (E2E)', () => {
         includeAnalytics: false
       })
 
-      expect(manifest.modules!.emailService).toBe('mailersend')
+      expect(manifest.modules!.email).toEqual({ provider: 'mailersend', version: 1 })
 
       const emailService = await readFile(join(tempDir, 'email-only/apps/api/src/modules/email/services/email.service.ts'), 'utf8')
       expect(emailService).not.toContain("console.log('html', html)")

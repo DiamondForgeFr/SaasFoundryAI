@@ -158,7 +158,7 @@ async function generateProject(scenario: GenerationScenario | (UpdateScenario['b
           structure: scenario.isMonorepo ? 'monorepo' : 'multirepo',
           projectName: scenario.projectName,
           modules: {
-            emailService: scenario.emailService,
+            email: { provider: scenario.emailService, version: 1 },
             s3Setup: scenario.s3Setup,
             dbSetup: scenario.dbSetup,
             includeAnalytics: scenario.includeAnalytics,
@@ -485,6 +485,13 @@ async function runMigrationScenario(scenario: MigrationScenario): Promise<boolea
   const fieldsOk = after.projectName === scenario.projectName && after.version === '0.9.0'
   const firstKeyOk = Object.keys(after)[0] === '$schema'
 
+  // Migration 002 must have lifted the legacy flat `emailService` enum into
+  // the nested `email.{provider, version}` object — this catches a chain
+  // that stops mid-way (e.g. registry not appended-to when adding migrations).
+  const modules = (after.modules ?? {}) as Record<string, unknown>
+  const emailShape = (modules.email ?? null) as { provider?: unknown; version?: unknown } | null
+  const emailMigrated = emailShape !== null && emailShape.provider === 'none' && typeof emailShape.version === 'number' && !('emailService' in modules)
+
   const results: AssertionResult[] = [
     {
       passed: schemaOk,
@@ -501,6 +508,12 @@ async function runMigrationScenario(scenario: MigrationScenario): Promise<boolea
     {
       passed: firstKeyOk,
       message: firstKeyOk ? `OK: $schema is first key (sf new parity)` : `FAIL: first key=${Object.keys(after)[0]}`
+    },
+    {
+      passed: emailMigrated,
+      message: emailMigrated
+        ? `OK: modules.email migrated to {provider, version} and legacy emailService dropped`
+        : `FAIL: expected modules.email={provider,version} and no emailService, got ${JSON.stringify(modules)}`
     }
   ]
 

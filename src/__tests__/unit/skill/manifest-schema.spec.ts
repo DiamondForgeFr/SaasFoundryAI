@@ -33,7 +33,7 @@ describe('saasfoundry-manifest.schema.json — canonical shapes', () => {
     const full = {
       ...baseManifest,
       modules: {
-        emailService: 'mailersend',
+        email: { provider: 'mailersend', version: 1 },
         s3Setup: 'docker',
         dbSetup: 'credentials',
         includeAnalytics: true,
