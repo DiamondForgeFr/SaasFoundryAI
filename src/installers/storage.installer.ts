@@ -45,14 +45,17 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
   pkg.dependencies['@aws-sdk/client-s3'] = '3.1041.0'
   pkg.devDependencies['@types/multer'] = '2.1.0'
-  await writeFile(pkgPath, JSON.stringify(pkg, null, 2))
+  await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
 
   // Register multer in tsconfig types so @types/multer is picked up under explicit types[]
+  // Defensive: create compilerOptions/types if absent so manual edits to tsconfig don't silently skip the registration.
   const tsconfigPath = `${apiPath}/tsconfig.json`
   const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf8'))
-  if (Array.isArray(tsconfig.compilerOptions?.types) && !tsconfig.compilerOptions.types.includes('multer')) {
+  tsconfig.compilerOptions ??= {}
+  tsconfig.compilerOptions.types ??= ['node', 'jest']
+  if (!tsconfig.compilerOptions.types.includes('multer')) {
     tsconfig.compilerOptions.types.push('multer')
-    await writeFile(tsconfigPath, JSON.stringify(tsconfig, null, 2))
+    await writeFile(tsconfigPath, JSON.stringify(tsconfig, null, 2) + '\n')
   }
 
   // Run npm install (unless monorepo handles it or explicitly skipped)
