@@ -64,7 +64,7 @@ describe('skill/read-project', () => {
           structure: 'monorepo',
           version: '1.0.0-beta',
           generatedAt: '2026-04-01T10:00:00Z',
-          modules: { emailService: 'mailersend' }
+          modules: { email: { provider: 'mailersend', version: 1 } }
         },
         catalogue: fullCatalogue
       })
@@ -89,7 +89,7 @@ describe('skill/read-project', () => {
           structure: 'multirepo',
           version: '1.0.0-beta',
           modules: {
-            emailService: 'mailersend',
+            email: { provider: 'mailersend', version: 1 },
             s3Setup: 'docker',
             includeAnalytics: true,
             advancedSkills: ['context7', 'notion']
@@ -127,7 +127,7 @@ describe('skill/read-project', () => {
           projectName: 'stale',
           structure: 'monorepo',
           version: '1.0.0-beta',
-          modules: { emailService: 'mailersend', s3Setup: 'docker' }
+          modules: { email: { provider: 'mailersend', version: 1 }, s3Setup: 'docker' }
         },
         catalogue: [
           { name: 'email', minCliVersion: '1.1.0' },
@@ -144,7 +144,7 @@ describe('skill/read-project', () => {
           projectName: 'lean',
           structure: 'monorepo',
           version: '1.0.0-beta',
-          modules: { emailService: 'mailersend' }
+          modules: { email: { provider: 'mailersend', version: 1 } }
         },
         catalogue: [
           { name: 'email', minCliVersion: '1.0.0-beta' },
@@ -163,7 +163,7 @@ describe('skill/read-project', () => {
           projectName: 'offline',
           structure: 'monorepo',
           version: '1.0.0-beta',
-          modules: { emailService: 'mailersend' }
+          modules: { email: { provider: 'mailersend', version: 1 } }
         },
         catalogue: []
       })
@@ -189,12 +189,12 @@ describe('skill/read-project', () => {
       expect(report.modules.installed).toEqual([])
     })
 
-    it('treats emailService="none" as not installed', async () => {
+    it('treats email.provider="none" as not installed', async () => {
       const report = await runAndParse({
         manifest: {
           projectName: 'no-email',
           version: '1.0.0-beta',
-          modules: { emailService: 'none', includeAnalytics: true }
+          modules: { email: { provider: 'none', version: 1 }, includeAnalytics: true }
         },
         catalogue: fullCatalogue
       })

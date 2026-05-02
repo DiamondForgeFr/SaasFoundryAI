@@ -320,7 +320,7 @@ describe('utils', () => {
         structure: 'monorepo',
         projectName: 'test-project',
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: false,
@@ -356,7 +356,7 @@ describe('utils', () => {
         structure: 'monorepo',
         projectName: 'srs-enabled',
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: false,
@@ -390,7 +390,7 @@ describe('utils', () => {
         structure: 'multirepo',
         projectName: 'legacy',
         modules: {
-          emailService: 'mailersend',
+          email: { provider: 'mailersend', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: true,

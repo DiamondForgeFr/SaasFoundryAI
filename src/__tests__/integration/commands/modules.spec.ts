@@ -19,7 +19,7 @@ describe('modulesCommand (integration)', () => {
     structure: 'monorepo',
     projectName: 'modules-integration',
     modules: {
-      emailService: 'none',
+      email: { provider: 'none', version: 1 },
       s3Setup: 'manual',
       dbSetup: 'docker',
       includeAnalytics: false,
@@ -82,7 +82,7 @@ describe('modulesCommand (integration)', () => {
     })
 
     it('should mark email as installed when manifest has mailersend', async () => {
-      await writeManifest(buildManifest({ emailService: 'mailersend' }))
+      await writeManifest(buildManifest({ email: { provider: 'mailersend', version: 1 } }))
       await modulesCommand('list', '--json')
       const payload = getJsonOutput()
       const email = payload.modules.find((m: { name: string }) => m.name === 'email')

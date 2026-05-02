@@ -252,7 +252,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       structure: startProjectAnswers.isMonorepo ? 'monorepo' : 'multirepo',
       projectName: startProjectAnswers.projectName,
       modules: {
-        emailService: startProjectAnswers.emailService,
+        email: { provider: startProjectAnswers.emailService, version: 1 },
         s3Setup: startProjectAnswers.s3Setup,
         dbSetup: startProjectAnswers.dbSetup,
         includeAnalytics: startProjectAnswers.includeAnalytics,

@@ -53,8 +53,11 @@ describe('targetManifestVersion', () => {
     expect(targetManifestVersion([fakeMigration(0), fakeMigration(1), fakeMigration(2)])).toBe(3)
   })
 
-  it('reports the live registry target (currently 1)', () => {
-    expect(targetManifestVersion()).toBe(1)
+  it('reports the live registry target (matches the last shipped migration)', () => {
+    // Reads the live registry rather than pinning a magic number, so adding a
+    // new migration only requires touching the migrations folder + index.
+    const expected = manifestMigrations[manifestMigrations.length - 1].to
+    expect(targetManifestVersion()).toBe(expected)
   })
 })
 
@@ -62,21 +65,23 @@ describe('runManifestMigrations', () => {
   it('runs every migration on a manifest with no manifestVersion (treated as 0)', () => {
     const result = runManifestMigrations(baseManifest)
 
+    const target = manifestMigrations[manifestMigrations.length - 1].to
     expect(result.fromVersion).toBe(0)
-    expect(result.toVersion).toBe(1)
-    expect(result.appliedMigrations).toHaveLength(1)
+    expect(result.toVersion).toBe(target)
+    expect(result.appliedMigrations).toHaveLength(manifestMigrations.length)
     expect(result.appliedMigrations[0].name).toBe('add-schema-url')
     expect(result.manifest.$schema).toBe(manifestSchemaUrl)
-    expect(result.manifest.manifestVersion).toBe(1)
+    expect(result.manifest.manifestVersion).toBe(target)
   })
 
   it('skips when manifest is already at target version', () => {
-    const upToDate: SaaSFoundryManifest = { ...baseManifest, manifestVersion: 1, $schema: manifestSchemaUrl }
+    const target = manifestMigrations[manifestMigrations.length - 1].to
+    const upToDate: SaaSFoundryManifest = { ...baseManifest, manifestVersion: target, $schema: manifestSchemaUrl }
     const result = runManifestMigrations(upToDate)
 
     expect(result.appliedMigrations).toHaveLength(0)
-    expect(result.fromVersion).toBe(1)
-    expect(result.toVersion).toBe(1)
+    expect(result.fromVersion).toBe(target)
+    expect(result.toVersion).toBe(target)
     expect(result.manifest).toBe(upToDate)
   })
 

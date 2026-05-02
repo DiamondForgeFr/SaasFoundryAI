@@ -70,10 +70,10 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       backendRepoUrl: '',
       dbCredentials: { host: 'localhost', port: '5435', user: 'user', password: 'pass', database: 'db', dbType: 'postgresql' },
       mainBranch: 'main',
-      emailService: manifest.modules.emailService,
-      mailersendApiKey: manifest.modules.emailService === 'mailersend' ? 'dummy-key' : undefined,
-      mailersendSenderEmail: manifest.modules.emailService === 'mailersend' ? 'noreply@example.com' : undefined,
-      mailersendSenderName: manifest.modules.emailService === 'mailersend' ? 'App' : undefined,
+      emailService: manifest.modules.email.provider,
+      mailersendApiKey: manifest.modules.email.provider === 'mailersend' ? 'dummy-key' : undefined,
+      mailersendSenderEmail: manifest.modules.email.provider === 'mailersend' ? 'noreply@example.com' : undefined,
+      mailersendSenderName: manifest.modules.email.provider === 'mailersend' ? 'App' : undefined,
       s3Setup: manifest.modules.s3Setup,
       s3Credentials: manifest.modules.s3Setup === 'credentials' ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' } : undefined,
       advancedSkills: manifest.modules.advancedSkills || []
@@ -603,7 +603,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
         mailersendSenderEmail: emailCredentials.mailersendSenderEmail,
         mailersendSenderName: emailCredentials.mailersendSenderName
       })
-      manifest.modules!.emailService = 'mailersend'
+      manifest.modules!.email = { provider: 'mailersend', version: 1 }
     }
 
     if (selectedModules.includes('storage') && storageConfig) {

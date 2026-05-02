@@ -46,7 +46,7 @@ const baseManifest = (overrides: Partial<SaaSFoundryManifest> = {}): SaaSFoundry
   structure: 'monorepo',
   projectName: 'acme',
   modules: {
-    emailService: 'none',
+    email: { provider: 'none', version: 1 },
     s3Setup: 'manual',
     dbSetup: 'docker',
     includeAnalytics: false,
@@ -113,7 +113,7 @@ describe('updateCommand (non-interactive integration)', () => {
     )
 
     const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
-    expect(saved.modules.emailService).toBe('mailersend')
+    expect(saved.modules.email).toEqual({ provider: 'mailersend', version: 1 })
   })
 
   it('propagates storage flags (credentials) to the storage installer', async () => {
@@ -175,9 +175,9 @@ describe('updateCommand (non-interactive integration)', () => {
     const npmInstallCalls = shellSpy.mock.calls.filter((c) => String(c[0]).includes('npm install'))
     expect(npmInstallCalls).toHaveLength(0)
 
-    // Manifest remains unchanged (emailService stays 'none').
+    // Manifest remains unchanged (email.provider stays 'none').
     const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
-    expect(saved.modules.emailService).toBe('none')
+    expect(saved.modules.email).toEqual({ provider: 'none', version: 1 })
 
     // Report is emitted between the sentinel markers so callers can parse it.
     const combined = logSpy.mock.calls.map((c) => String(c[0])).join('\n')
@@ -262,7 +262,7 @@ describe('updateCommand (non-interactive integration)', () => {
   it('skips an already-installed module requested via --add-modules without re-installing', async () => {
     const manifest = baseManifest({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'docker',
         includeAnalytics: true,
@@ -285,7 +285,7 @@ describe('updateCommand (non-interactive integration)', () => {
   it('skips installed modules but proceeds with the installable ones in the same --add-modules', async () => {
     const manifest = baseManifest({
       modules: {
-        emailService: 'none',
+        email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
         dbSetup: 'docker',
         includeAnalytics: true,

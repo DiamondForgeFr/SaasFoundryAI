@@ -65,7 +65,11 @@ if (!Array.isArray(catalogue)) {
 function deriveInstalled(m) {
   const installed = []
   const mods = m.modules || {}
-  if (mods.emailService && mods.emailService !== 'none') installed.push('email')
+  // Support both legacy `emailService` (manifestVersion < 2) and the current
+  // nested `email.provider` shape — read-project may be invoked against an
+  // un-migrated manifest in older projects.
+  const emailProvider = (mods.email && mods.email.provider) || mods.emailService
+  if (emailProvider && emailProvider !== 'none') installed.push('email')
   if (mods.s3Setup) installed.push('storage')
   if (mods.includeAnalytics === true) installed.push('analytics')
   if (Array.isArray(mods.advancedSkills)) {

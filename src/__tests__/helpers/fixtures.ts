@@ -80,7 +80,7 @@ export function manifestFixture(overrides: Partial<SaaSFoundryManifest> = {}): S
     structure: 'monorepo',
     projectName: DEFAULT_PROJECT_NAME,
     modules: {
-      emailService: 'none',
+      email: { provider: 'none', version: 1 },
       s3Setup: 'manual',
       dbSetup: 'docker',
       includeAnalytics: false,

@@ -63,7 +63,7 @@ Generated projects carry a `.saasfoundry.json` manifest at the project root:
   "structure": "monorepo",
   "projectName": "my-project",
   "modules": {
-    "emailService": "none",
+    "email": { "provider": "none", "version": 1 },
     "s3Setup": "manual",
     "dbSetup": "docker",
     "includeAnalytics": false

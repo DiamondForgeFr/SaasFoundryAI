@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json",
+  "manifestVersion": 2,
+  "version": "1.0.0-beta",
+  "generatedAt": "2026-04-01T00:00:00.000Z",
+  "structure": "multirepo",
+  "projectName": "fixture-app",
+  "modules": {
+    "s3Setup": "docker",
+    "dbSetup": "docker",
+    "includeAnalytics": false,
+    "advancedSkills": [],
+    "email": {
+      "provider": "mailersend",
+      "version": 1
+    }
+  },
+  "workflow": {
+    "tool": "github-projects"
+  }
+}

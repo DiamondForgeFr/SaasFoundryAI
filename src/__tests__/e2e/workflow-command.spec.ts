@@ -49,7 +49,7 @@ describe('workflow command logic (E2E)', () => {
         structure: 'monorepo',
         generatedAt: new Date().toISOString(),
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: false,
@@ -72,7 +72,7 @@ describe('workflow command logic (E2E)', () => {
         structure: 'multirepo',
         generatedAt: new Date().toISOString(),
         modules: {
-          emailService: 'mailersend',
+          email: { provider: 'mailersend', version: 1 },
           s3Setup: 'docker',
           dbSetup: 'docker',
           includeAnalytics: true,
@@ -90,7 +90,7 @@ describe('workflow command logic (E2E)', () => {
 
       const manifest = await readManifest(tempDir)
       expect(manifest?.projectName).toBe('update-test')
-      expect(manifest?.modules?.emailService).toBe('mailersend')
+      expect(manifest?.modules?.email).toEqual({ provider: 'mailersend', version: 1 })
       expect(manifest?.workflow?.tool).toBe('jira')
     })
 
@@ -101,7 +101,7 @@ describe('workflow command logic (E2E)', () => {
         structure: 'monorepo',
         generatedAt: new Date().toISOString(),
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: false,
@@ -127,7 +127,7 @@ describe('workflow command logic (E2E)', () => {
         structure: 'monorepo',
         generatedAt: new Date().toISOString(),
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'docker',
           includeAnalytics: false,
@@ -163,7 +163,7 @@ describe('workflow command logic (E2E)', () => {
         structure: 'multirepo',
         generatedAt: new Date().toISOString(),
         modules: {
-          emailService: 'none',
+          email: { provider: 'none', version: 1 },
           s3Setup: 'manual',
           dbSetup: 'manual',
           includeAnalytics: false,

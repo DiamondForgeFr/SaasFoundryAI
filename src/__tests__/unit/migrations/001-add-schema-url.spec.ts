@@ -52,8 +52,12 @@ describe('migration 001 — add-schema-url', () => {
     expect(input).toEqual(snapshot)
   })
 
-  it('preserves all other manifest fields', () => {
-    const rich: SaaSFoundryManifest = {
+  it('preserves all other manifest fields (legacy v0 modules shape)', () => {
+    // Migration 001 runs against pre-v1 manifests where `modules.emailService`
+    // is still flat — that shape predates the v2 restructure (migration 002).
+    // Cast through unknown so we can assert preservation without type-checking
+    // the input against the current `SaaSFoundryManifest` shape.
+    const rich = {
       ...baseManifest,
       modules: {
         emailService: 'mailersend',
@@ -63,7 +67,7 @@ describe('migration 001 — add-schema-url', () => {
         advancedSkills: ['srs']
       },
       workflow: { tool: 'github-projects' }
-    }
+    } as unknown as SaaSFoundryManifest
 
     const result = migration001.up(rich)
 
