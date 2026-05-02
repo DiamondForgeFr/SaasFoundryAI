@@ -3,8 +3,15 @@ import { existsSync } from 'fs'
 import { readFile, rename, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
+import type { ModuleInstaller } from '../migrations/module/types'
 import { overlaysPath } from '../types'
 import { fileExists } from '../utils'
+
+export const emailInstallerMeta: ModuleInstaller = {
+  name: 'email',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallEmailModuleParams {
   apiPath: string

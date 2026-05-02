@@ -2,8 +2,15 @@ import { copy } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
+import type { ModuleInstaller } from '../migrations/module/types'
 import { WorkflowConfig, skillsTemplatesPath } from '../types'
 import { fileExists } from '../utils'
+
+export const workflowSkillInstallerMeta: ModuleInstaller = {
+  name: 'workflow-skill',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallWorkflowSkillParams {
   targetPath: string

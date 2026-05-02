@@ -2,7 +2,14 @@ import { copy } from 'fs-extra'
 import { mkdir } from 'fs/promises'
 import { join } from 'path'
 
+import type { ModuleInstaller } from '../migrations/module/types'
 import { skillsTemplatesPath } from '../types'
+
+export const coreSkillsInstallerMeta: ModuleInstaller = {
+  name: 'core-skills',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallCoreSkillsParams {
   targetPath: string

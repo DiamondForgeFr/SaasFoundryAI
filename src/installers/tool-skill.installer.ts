@@ -2,7 +2,14 @@ import { copy } from 'fs-extra'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 
+import type { ModuleInstaller } from '../migrations/module/types'
 import { skillsTemplatesPath } from '../types'
+
+export const toolSkillInstallerMeta: ModuleInstaller = {
+  name: 'tool-skill',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallToolSkillParams {
   targetPath: string

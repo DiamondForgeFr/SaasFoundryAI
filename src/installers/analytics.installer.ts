@@ -2,8 +2,15 @@ import { copy } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
+import type { ModuleInstaller } from '../migrations/module/types'
 import { overlaysPath } from '../types'
 import { fileExists } from '../utils'
+
+export const analyticsInstallerMeta: ModuleInstaller = {
+  name: 'analytics',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallAnalyticsModuleParams {
   webPath: string

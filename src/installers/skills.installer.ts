@@ -3,7 +3,14 @@ import { readFile, writeFile } from 'fs/promises'
 import { installClaudeDocs } from './claude-docs.installer'
 import { installCoreSkills } from './core-skills.installer'
 import { installOptionalSkills } from './optional-skills.installer'
+import type { ModuleInstaller } from '../migrations/module/types'
 import { fileExists } from '../utils'
+
+export const skillsInstallerMeta: ModuleInstaller = {
+  name: 'skills',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallSkillsParams {
   isMonorepo: boolean
