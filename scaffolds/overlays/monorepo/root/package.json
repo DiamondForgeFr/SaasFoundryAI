@@ -1,6 +1,6 @@
 {
   "name": "saasfoundry",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "SaaSFoundry monorepo",
   "private": true,
   "packageManager": "npm@10.9.2",
