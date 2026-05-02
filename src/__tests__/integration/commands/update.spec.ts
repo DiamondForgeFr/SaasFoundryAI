@@ -177,6 +177,20 @@ describe('updateCommand (integration)', () => {
 
       expect(await readFile('.saasfoundry.json', 'utf8')).toBe(original)
     })
+
+    it('stamps manifestVersion alongside $schema (migration framework)', async () => {
+      mockedGetModuleSelections.mockResolvedValue([])
+      const manifest = buildBaseManifest()
+      delete (manifest as Partial<SaaSFoundryManifest>).$schema
+      delete (manifest as Partial<SaaSFoundryManifest>).manifestVersion
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+      await updateCommand()
+
+      const written = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest
+      expect(written.manifestVersion).toBe(1)
+      expect(written.$schema).toBe(SCHEMA_URL)
+    })
   })
 
   describe('no modules available', () => {
