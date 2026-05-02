@@ -3,7 +3,7 @@
 // ALL_SCENARIOS is ordered by PRIORITY — first scenarios are the most critical.
 // This allows `--count N` to run the N most important scenarios.
 
-export type ScenarioType = 'generation' | 'update' | 'ai'
+export type ScenarioType = 'generation' | 'update' | 'ai' | 'migration'
 
 export interface GenerationScenario {
   type: 'generation'
@@ -38,7 +38,22 @@ export interface AIScenario {
   checks: ('skills' | 'claude-md' | 'workflow')[]
 }
 
-export type TestScenario = GenerationScenario | UpdateScenario | AIScenario
+/**
+ * Migration scenario — exercises the manifest migration framework end-to-end.
+ *
+ * Generates a project, hand-writes a legacy v0-shape manifest (no $schema, no
+ * manifestVersion), runs `sf update` and asserts the dispatcher upgrades the
+ * file in place. Catches integration bugs that pure unit tests can't see —
+ * e.g. early-return paths in update.ts that skip the persistence step.
+ */
+export interface MigrationScenario {
+  type: 'migration'
+  name: string
+  projectName: string
+  isMonorepo: boolean
+}
+
+export type TestScenario = GenerationScenario | UpdateScenario | AIScenario | MigrationScenario
 
 // ── ALL SCENARIOS — ordered by priority ────────────────────────
 // Priority rationale:
@@ -145,6 +160,14 @@ export const ALL_SCENARIOS: TestScenario[] = [
     projectName: 'ai-wf',
     isMonorepo: false,
     checks: ['workflow', 'claude-md']
+  },
+
+  // ── Migration framework E2E (Epic #310) ──────────────────────
+  {
+    type: 'migration',
+    name: 'migration-v0-to-current',
+    projectName: 'mig-v0',
+    isMonorepo: false
   },
 
   // ── Priority 10-12: Single module variations ──────────────────

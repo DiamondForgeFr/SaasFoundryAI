@@ -9,7 +9,7 @@
 //   node --import tsx generate-and-build.ts  # runs all scenarios
 
 import { execSync } from 'child_process'
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import {
@@ -31,7 +31,7 @@ import {
   reportResults,
   scanForUnreplacedPlaceholders
 } from './assertions'
-import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, TestScenario } from './scenarios'
+import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, MigrationScenario, TestScenario } from './scenarios'
 
 // ── Config ─────────────────────────────────────────────────────
 
@@ -428,6 +428,85 @@ async function runAIScenario(scenario: AIScenario): Promise<boolean> {
   return reportResults(scenario.name, results)
 }
 
+async function runMigrationScenario(scenario: MigrationScenario): Promise<boolean> {
+  console.log(`\nGenerating project for migration check: ${scenario.projectName}`)
+
+  // Reuse generateProject's minimal generation; we don't need a build for this scenario.
+  const projectDir = await generateProject({
+    projectName: scenario.projectName,
+    isMonorepo: scenario.isMonorepo,
+    dbSetup: 'manual',
+    s3Setup: 'manual',
+    emailService: 'none',
+    includeAnalytics: false
+  })
+
+  // Overwrite the manifest with a v0-shape (legacy) version: no $schema, no
+  // manifestVersion. This simulates a project scaffolded before Epic #310
+  // shipped, which is the input the migration framework must rescue.
+  const manifestPath = join(projectDir, '.saasfoundry.json')
+  const legacyManifest = {
+    version: '0.9.0',
+    generatedAt: '2026-01-15T00:00:00.000Z',
+    structure: scenario.isMonorepo ? 'monorepo' : 'multirepo',
+    projectName: scenario.projectName,
+    modules: {
+      emailService: 'none',
+      s3Setup: 'manual',
+      dbSetup: 'manual',
+      includeAnalytics: false,
+      advancedSkills: []
+    }
+  }
+  writeFileSync(manifestPath, JSON.stringify(legacyManifest, null, 2))
+
+  // Invoke the update command programmatically against the legacy manifest.
+  // Non-interactive + no module additions so the run hits the migration
+  // step then early-returns at the "no modules to install" branch — this is
+  // exactly the path that previously dropped the $schema stamp on the floor.
+  const originalCwd = process.cwd()
+  process.chdir(projectDir)
+  try {
+    const { updateCommand } = await import(join(CLI_PATH, 'dist', 'commands', 'update'))
+    // addModules='' → parseAddModules returns [] → prefill.selectedModules = []
+    // (an empty CSV is the contract for "non-interactive run that adds nothing")
+    await updateCommand({ nonInteractive: true, acceptTemplateUpdates: false, addModules: '' })
+  } finally {
+    process.chdir(originalCwd)
+  }
+
+  // Read back the manifest and check the dispatcher did its job.
+  const after = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
+
+  const expectedSchema = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json'
+
+  const schemaOk = after.$schema === expectedSchema
+  const versionOk = typeof after.manifestVersion === 'number' && after.manifestVersion >= 1
+  const fieldsOk = after.projectName === scenario.projectName && after.version === '0.9.0'
+  const firstKeyOk = Object.keys(after)[0] === '$schema'
+
+  const results: AssertionResult[] = [
+    {
+      passed: schemaOk,
+      message: schemaOk ? `OK: $schema stamped (${expectedSchema})` : `FAIL: expected $schema=${expectedSchema}, got ${String(after.$schema)}`
+    },
+    {
+      passed: versionOk,
+      message: versionOk ? `OK: manifestVersion=${after.manifestVersion} (>= 1)` : `FAIL: expected manifestVersion >= 1, got ${String(after.manifestVersion)}`
+    },
+    {
+      passed: fieldsOk,
+      message: fieldsOk ? `OK: original fields preserved (projectName + version)` : `FAIL: projectName=${String(after.projectName)} version=${String(after.version)}`
+    },
+    {
+      passed: firstKeyOk,
+      message: firstKeyOk ? `OK: $schema is first key (sf new parity)` : `FAIL: first key=${Object.keys(after)[0]}`
+    }
+  ]
+
+  return reportResults(scenario.name, results)
+}
+
 // ── Scenario Dispatcher ────────────────────────────────────────
 
 async function runScenario(scenario: TestScenario): Promise<boolean> {
@@ -436,6 +515,8 @@ async function runScenario(scenario: TestScenario): Promise<boolean> {
       return runGenerationScenario(scenario)
     case 'update':
       return runUpdateScenario(scenario)
+    case 'migration':
+      return runMigrationScenario(scenario)
     case 'ai':
       return runAIScenario(scenario)
   }
