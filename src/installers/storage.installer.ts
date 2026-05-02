@@ -4,8 +4,15 @@ import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
+import type { ModuleInstaller } from '../migrations/module/types'
 import { overlaysPath, S3Credentials } from '../types'
 import { fileExists, getNvmPrefix } from '../utils'
+
+export const storageInstallerMeta: ModuleInstaller = {
+  name: 'storage',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallStorageModuleParams {
   apiPath: string

@@ -2,7 +2,14 @@ import { copy, pathExists } from 'fs-extra'
 import { chmod, stat } from 'fs/promises'
 import { join, resolve } from 'path'
 
+import type { ModuleInstaller } from '../migrations/module/types'
 import { skillsTemplatesPath } from '../types'
+
+export const srsSkillInstallerMeta: ModuleInstaller = {
+  name: 'srs-skill',
+  currentVersion: 1,
+  migrations: []
+}
 
 interface InstallSrsSkillParams {
   targetPath: string
