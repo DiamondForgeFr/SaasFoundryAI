@@ -17,6 +17,7 @@ import { initAndStartS3 } from '../runners/s3.runner'
 import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '../runners/server.runner'
 import { bootstrapSrs } from '../runners/srs.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
+import { targetManifestVersion } from '../migrations/manifest/registry'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
@@ -245,6 +246,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     const fileHashes = await computeFileHashes('.')
     const manifest: SaaSFoundryManifest = {
       $schema: manifestSchemaUrl,
+      manifestVersion: targetManifestVersion(),
       version: cliVersion,
       generatedAt: new Date().toISOString(),
       structure: startProjectAnswers.isMonorepo ? 'monorepo' : 'multirepo',

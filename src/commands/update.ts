@@ -22,7 +22,8 @@ import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import { promptSrsConfiguration } from '../prompts/srs.prompts'
 import { bootstrapSrs } from '../runners/srs.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
-import { manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
+import { runManifestMigrations } from '../migrations/manifest/registry'
+import { SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
@@ -284,12 +285,17 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
   let manifest: SaaSFoundryManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
 
-  // Idempotent $schema migration: stamp the canonical URL on legacy manifests
-  // and persist immediately so the field survives early-return paths (dry-run
-  // aside — we never mutate the disk in dry-run mode). Preserves user-customized
-  // values. Rebuilt with $schema first to match the sf new output shape.
-  if (!manifest.$schema) {
-    manifest = { $schema: manifestSchemaUrl, ...manifest }
+  // Run the manifest migration chain. Idempotent at the chain level — a
+  // manifest already at the target version returns unchanged with an empty
+  // appliedMigrations list. Persisted immediately so any subsequent early-
+  // return path (skill install, dry-run aside) sees the upgraded shape.
+  const migrationResult = runManifestMigrations(manifest)
+  if (migrationResult.appliedMigrations.length > 0) {
+    manifest = migrationResult.manifest
+    console.log(chalk.gray(`  Manifest migrated: v${migrationResult.fromVersion} → v${migrationResult.toVersion}`))
+    for (const m of migrationResult.appliedMigrations) {
+      console.log(chalk.gray(`    • ${String(m.from).padStart(3, '0')} → ${String(m.to).padStart(3, '0')}  ${m.name}`))
+    }
     if (!dryRun) {
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
     }
