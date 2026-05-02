@@ -206,7 +206,7 @@ export async function openTerminal(directory: string, options?: { command?: stri
  * @returns A shell command string that handles Husky installation and script permissions
  */
 export function getHuskySetupCommand(extraCommand: string = ''): string {
-  const huskyCommand = ['npx husky install', 'chmod -R +x .husky 2>/dev/null || true', 'chmod -R +x ./scripts/*.sh 2>/dev/null || true']
+  const huskyCommand = ['npx husky', 'chmod -R +x .husky 2>/dev/null || true', 'chmod -R +x ./scripts/*.sh 2>/dev/null || true']
 
   if (extraCommand) {
     huskyCommand.push(extraCommand)
