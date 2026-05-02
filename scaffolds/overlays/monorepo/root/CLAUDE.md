@@ -214,7 +214,7 @@ npm install
 
 **Git hooks not working?**
 ```bash
-npx husky install
+npx husky
 ```
 
 **Skills not loading?**

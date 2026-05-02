@@ -53,7 +53,7 @@ Si vous rencontrez des problèmes avec les scripts :
 2. Réinstallez Husky :
 
    ```bash
-   npx husky install
+   npx husky
    ```
 
 3. Vérifiez que les hooks sont exécutables :
