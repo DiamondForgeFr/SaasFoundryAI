@@ -213,6 +213,9 @@ export interface ToolsConfig {
 
 export interface SaaSFoundryManifest {
   $schema?: string
+  // Schema-shape version, monotonic integer, bumped by registered manifest migrations.
+  // Treat absence as 0 (manifest predates the migration framework).
+  manifestVersion?: number
   version: string
   generatedAt: string
   structure: 'monorepo' | 'multirepo' | 'cli'
