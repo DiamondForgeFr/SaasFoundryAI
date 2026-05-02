@@ -1,6 +1,32 @@
 import chalk from 'chalk'
 import ora from 'ora'
 import { execSync } from 'child_process'
+import { randomBytes } from 'crypto'
+import { chmodSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+
+/**
+ * Write a tmp `.command` script that `open -a Terminal` can launch directly.
+ *
+ * Why: Terminal.app's `do script` types the cd/run command as keystrokes
+ * AFTER sending Cmd+T, which races with interactive shell startup hooks
+ * (notably oh-my-zsh's `Would you like to update? [Y/n]` prompt — the
+ * first typed character gets consumed as the prompt's answer, leaving the
+ * remaining characters as a malformed shell command). Launching a `.command`
+ * file via `open` bypasses that model: the script body is the argv passed
+ * to the shell, not typed input. We also set `DISABLE_UPDATE_PROMPT` so
+ * the omz reminder fires non-interactively in the inner zsh -ic invocation,
+ * then drop into a normal interactive shell once the user's command exits.
+ */
+function writeMacInitScript(absolutePath: string, command?: string): string {
+  const scriptPath = join(tmpdir(), `saasfoundry-init-${randomBytes(4).toString('hex')}.command`)
+  const cdAndCmd = command ? `cd ${JSON.stringify(absolutePath)} && ${command}` : `cd ${JSON.stringify(absolutePath)}`
+  const scriptContent = ['#!/bin/sh', 'rm -f "$0" 2>/dev/null', `DISABLE_UPDATE_PROMPT=true DISABLE_AUTO_UPDATE=true zsh -ic ${JSON.stringify(cdAndCmd)}`, 'exec zsh -i', ''].join('\n')
+  writeFileSync(scriptPath, scriptContent)
+  chmodSync(scriptPath, 0o755)
+  return scriptPath
+}
 
 /**
  * Opens a new terminal tab or window with contextual directory and optional command
@@ -66,10 +92,10 @@ export async function openTerminal(directory: string, options?: { command?: stri
             execSync(`osascript -e '${script}'`)
             success = true
           } else if (currentTerminal === 'Apple_Terminal') {
-            // User is in Terminal.app
-            execSync(
-              `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
-            )
+            // User is in Terminal.app — use a tmp .command file to bypass
+            // do-script's keystroke race with shell startup hooks.
+            const scriptPath = writeMacInitScript(absolutePath, command)
+            execSync(`open -a Terminal ${JSON.stringify(scriptPath)}`)
             success = true
           } else {
             // Unknown terminal or not detected (Warp, Alacritty, etc.)
@@ -89,10 +115,10 @@ export async function openTerminal(directory: string, options?: { command?: stri
               execSync(`osascript -e '${script}'`)
               success = true
             } catch {
-              // iTerm2 not found, use Terminal.app
-              execSync(
-                `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
-              )
+              // iTerm2 not found, fallback to Terminal.app via .command file
+              // (same race-avoidance rationale as the Apple_Terminal branch above)
+              const scriptPath = writeMacInitScript(absolutePath, command)
+              execSync(`open -a Terminal ${JSON.stringify(scriptPath)}`)
               success = true
             }
           }
