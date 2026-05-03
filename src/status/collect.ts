@@ -81,7 +81,20 @@ function listSkillsIn(skillsDir: string): string[] {
   if (!fs.existsSync(skillsDir)) return []
   return fs
     .readdirSync(skillsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && fs.existsSync(path.join(skillsDir, d.name, 'SKILL.md')))
+    .filter((d) => {
+      const entry = path.join(skillsDir, d.name)
+      // fs.statSync follows symlinks — needed so contributors can symlink a
+      // skill from scaffolds/skills-templates/ into .claude/skills/ without
+      // it dropping out of `sf status`. d.isDirectory() alone returns false
+      // for symlinks even when they point at a directory.
+      let isDir: boolean
+      try {
+        isDir = fs.statSync(entry).isDirectory()
+      } catch {
+        return false
+      }
+      return isDir && fs.existsSync(path.join(entry, 'SKILL.md'))
+    })
     .map((d) => d.name)
 }
 

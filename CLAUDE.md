@@ -48,6 +48,9 @@ shortcuts reintroduce exactly the cross-version drift the framework was built to
 ### Reading before acting
 
 - Workflow: `.claude/skills/sf-workflow/SKILL.md` and the `statuses/` files
+- SRS drafting / spawning: `.claude/skills/sf-srs/SKILL.md`
+- Integration grammar (adding modules / pages / endpoints): `.claude/skills/sf-integration-rules/SKILL.md`
+- CLI orchestration (`sf new`, `sf update`, `sf workflow`, feedback flows): `.claude/skills/tool-saasfoundry/SKILL.md` — symlinked to `scaffolds/skills-templates/tool-saasfoundry/` so contributor edits land in the source of truth
 - Module architecture (adding/modifying modules): `.claude/docs/architecture-modules.md`
 - Skills architecture (adding/modifying skills): `.claude/docs/architecture-skills.md`
 - Migration framework (any breaking manifest/module change): `.claude/docs/migration-framework.md`
