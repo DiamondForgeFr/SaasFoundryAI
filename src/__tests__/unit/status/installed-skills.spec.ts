@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'fs/promises'
+import { mkdir, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -62,5 +62,25 @@ describe('collectStatus.installedSkills', () => {
 
     const report = await collectStatus(tempDir, { checkNetwork: false })
     expect(report.installedSkills).toEqual(['sf-git-commit', 'sf-integration-rules'])
+  })
+
+  it('follows symlinks so contributors can dogfood a scaffold-templated skill in-place', async () => {
+    await writeFile(
+      join(tempDir, '.saasfoundry.json'),
+      JSON.stringify({
+        version: '1.0.0-beta',
+        generatedAt: '2026-04-30T00:00:00Z',
+        structure: 'monorepo',
+        projectName: 'demo'
+      })
+    )
+    const sourceDir = join(tempDir, 'scaffolds', 'tool-saasfoundry')
+    await makeSkill(join(tempDir, 'scaffolds'), 'tool-saasfoundry')
+    const skillsRoot = join(tempDir, '.claude', 'skills')
+    await mkdir(skillsRoot, { recursive: true })
+    await symlink(sourceDir, join(skillsRoot, 'tool-saasfoundry'))
+
+    const report = await collectStatus(tempDir, { checkNetwork: false })
+    expect(report.installedSkills).toEqual(['tool-saasfoundry'])
   })
 })
