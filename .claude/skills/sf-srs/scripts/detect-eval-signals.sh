@@ -186,21 +186,24 @@ classify_text() {
     return 0
   fi
 
-  # Revision markers — reopening a closed decision.
-  if [[ "$lowered" =~ (reconsider|revisit|on\ change\ d\'avis|finalement\ on|actually|in\ fact|scratch\ that) ]]; then
-    echo '{"signal":"revision","confidence":"low","target":"FR or DS revision (ADD-only in v1)"}'
-    return 0
-  fi
-
-  # FR — feature/rule language.
-  if [[ "$lowered" =~ (new\ feature|add\ a\ feature|feature\ that|functionality\ to|allow\ .*\ to|enable\ .*\ to|support\ .*\ to|on\ doit\ pouvoir|on\ veut\ permettre) ]]; then
+  # FR — feature/rule language. Checked BEFORE revision so a "actually, can we
+  # also add feature X" mid-task pivot is not swallowed by the revision marker.
+  if [[ "$lowered" =~ (new\ feature|add\ a\ feature|feature\ that|functionality\ to|allow\ .*\ to|enable\ .*\ to|support\ .*\ to|on\ doit\ pouvoir|on\ veut\ permettre|il\ faut\ une\ fonctionnalité|fonctionnalité\ pour) ]]; then
     echo '{"signal":"fr","confidence":"medium","target":"new FR page under the Epic"}'
     return 0
   fi
 
-  # UR — user-need language.
-  if [[ "$lowered" =~ (users?\ (should|need|want|must)|as\ a\ [a-z\ ]+\ i\ (want|need)|l\'utilisateur\ (doit|veut|a\ besoin)) ]]; then
+  # UR — user-need language. `as an? <role> i (want|need)` covers both "as a
+  # user I want" and "as an admin I want".
+  if [[ "$lowered" =~ (users?\ (should|need|want|must)|as\ an?\ [a-z\ ]+\ i\ (want|need)|l\'utilisateur\ (doit|veut|a\ besoin)) ]]; then
     echo '{"signal":"ur","confidence":"medium","target":"new UR on the Epic page"}'
+    return 0
+  fi
+
+  # Revision markers — reopening a closed decision. Checked LAST so that
+  # explicit FR / UR / DS / TC content in the same turn wins.
+  if [[ "$lowered" =~ (reconsider|revisit|on\ change\ d\'avis|finalement\ on|actually|in\ fact|scratch\ that) ]]; then
+    echo '{"signal":"revision","confidence":"low","target":"FR or DS revision (ADD-only in v1)"}'
     return 0
   fi
 

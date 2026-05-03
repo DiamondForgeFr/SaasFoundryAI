@@ -358,6 +358,29 @@ The `sf-tool-github-projects` CLI talks to GitHub Projects V2 via the `gh` CLI (
 - The in-repo copy at `.claude/skills/sf-tool-github-projects/` and the scaffold template at `scaffolds/skills-templates/tools/github-projects/` must stay byte-identical. A jest drift guard enforces
   this at pre-commit; if you edit one, copy to the other in the same commit.
 
+### Known classifier failure modes (`sf-srs` intent-detector hook, #317)
+
+The `UserPromptSubmit` hook uses a small bash regex classifier in `scripts/detect-eval-signals.sh`. Calibrated against a 64-prompt dataset (`eval-datasets/intent-detector.jsonl`) it currently scores
+precision 1.000 / recall 0.938 / F1 0.968 — comfortably past the spec pins (precision ≥ 0.85, recall ≥ 0.70 — "better to miss than to spam"). The two known false negatives are intentional gaps
+documented in the dataset and **safe to ignore unless they trip a real workflow**:
+
+1. **FR-language `décision :` (DS marker)** — the DS regex only matches the English `decision:` form. A French prompt like _"décision : les tokens JWT expirent après 15 minutes"_ falls through to
+   `none`. Fix: add `décision\s*:` to the DS regex; risk is dragging in opinion phrasings ("c'est ma décision") so test before merging.
+2. **FR-language `cas de test` (TC marker)** — the TC regex misses idiomatic FR test phrasings (`cas de test`, `ajouter un test`). Fix: extend the TC regex; same precision risk as above.
+
+Other patterns to **avoid** when extending the classifier:
+
+- **Anchored prefixes win over later content.** The trivial-read-only check (`^(show me|explain|…)`) eats the whole turn. A prompt like _"show me the config and also add a feature to override it per
+  env"_ classifies as `trivial` even though the second clause is a real FR. Fixing this means splitting on conjunctions, which is out of scope for the v1 regex classifier — accept it as a known
+  limitation.
+- **Soft "it'd be nice if…" wishlist phrasings** are intentionally not fired. They are not formal requirements; surfacing them as SRS candidates would balloon the false-positive rate.
+- **Bug reports phrased as questions** (`why is X gray?`) are not requirements and must not fire — the regex deliberately has no why/comment-based hook.
+- **Revision is checked LAST and stays at confidence=low** so the hook never auto-fires on it. Adding a "revisit" / "actually" rule earlier in the cascade WILL swallow legitimate FR/UR/DS/TC content
+  from the same turn. Don't.
+
+Regression guard: `src/__tests__/integration/skill/srs-intent-detector-eval.spec.ts` runs in the default Jest project and fails if precision drops below 0.85 or recall below 0.70. Any change to
+`detect-eval-signals.sh` rules must keep both pins or update the dataset to reflect new ground truth.
+
 ### Skills Priority in Generated Projects
 
 Generated projects have this note in their CLAUDE.md:
