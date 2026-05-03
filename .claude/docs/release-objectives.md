@@ -8,15 +8,16 @@
 
 ## 1. Generated application (mono + multirepo)
 
-| #   | Objective                                                       | Notes                                                                                   |
-| --- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| A1  | One command produces a clean monorepo **or** multirepo scaffold | User starts on business features immediately, no plumbing tax                           |
-| A2  | Database **RBAC-ready** out of the box                          | Roles, permissions, guards wired — not stubbed                                          |
-| A3  | **S3 usable directly** (not stub)                               | Upload/download flow works with sane defaults                                           |
-| A4  | Monorepo is **optimized**                                       | Zero duplication of shared resources between apps (types, configs, UI primitives, etc.) |
-| A5  | Backend **modular**                                             | Easy to evolve a module OR split into a microservice later without rewriting            |
-| A6  | Frontend "**exemplar**"                                         | Opinionated example pages + design rules a team can follow                              |
-| A7  | **Cohesion guardrails**                                         | Lint, commitlint, husky hooks, conventions — any contributor stays in line              |
+| #   | Objective                                                       | Notes                                                                                                                                                                 |
+| --- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | One command produces a clean monorepo **or** multirepo scaffold | User starts on business features immediately, no plumbing tax                                                                                                         |
+| A2  | Database **RBAC-ready** out of the box                          | Roles, permissions, guards wired — not stubbed                                                                                                                        |
+| A3  | **S3 usable directly** (not stub)                               | Upload/download flow works with sane defaults                                                                                                                         |
+| A4  | Monorepo is **optimized**                                       | Zero duplication of shared resources between apps (types, configs, UI primitives, etc.)                                                                               |
+| A5  | Backend **modular**                                             | Easy to evolve a module OR split into a microservice later without rewriting                                                                                          |
+| A6  | Frontend "**exemplar**"                                         | Opinionated example pages + design rules a team can follow                                                                                                            |
+| A7  | **Cohesion guardrails**                                         | Lint, commitlint, husky hooks, conventions — any contributor stays in line                                                                                            |
+| A8  | **RBAC scope-aware admin + invitation flow** 🚧 v2.0.0 blocker  | Epic #378 — account-admin / entity-admin / orphan-admin personae, invitation guard, scoped pickers, inheritance defaults. Must close before v2.0.0 tag + master merge |
 
 ## 2. CLI (`sf`)
 
@@ -55,6 +56,7 @@
 
 ## Change log
 
-| Date       | Author  | Change                               |
-| ---------- | ------- | ------------------------------------ |
-| 2026-04-25 | AGachet | Initial capture during release audit |
+| Date       | Author  | Change                                                                                          |
+| ---------- | ------- | ----------------------------------------------------------------------------------------------- |
+| 2026-04-25 | AGachet | Initial capture during release audit                                                            |
+| 2026-05-03 | AGachet | A8 added — Epic #378 (RBAC scope-aware admin + invitation flow) gated as v2.0.0 release blocker |
