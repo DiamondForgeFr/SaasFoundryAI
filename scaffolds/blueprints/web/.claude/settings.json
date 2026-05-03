@@ -9,6 +9,16 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/skills/sf-srs/scripts/srs-intent-hook.sh"
+          }
+        ]
+      }
     ]
   }
 }

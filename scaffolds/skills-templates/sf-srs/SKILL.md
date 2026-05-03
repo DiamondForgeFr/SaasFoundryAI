@@ -372,6 +372,26 @@ human SRS review.
 After any change to the rules or classifier, run a short dogfood session: 5 utterances (one per signal row + one trivial control), confirm the hook fires exactly on the four signals and skips the
 trivial one.
 
+### Auto-fire via Claude Code `UserPromptSubmit` hook (#316)
+
+The classifier above is also wired into Claude Code's `UserPromptSubmit` event so the agent never has to remember to self-invoke. The shell hook
+[`scripts/srs-intent-hook.sh`](scripts/srs-intent-hook.sh) runs on every prompt the user sends, pipes it through `detect-eval-signals.sh --classify`, and emits a `<system-reminder>` only when the
+classifier returns `signal ∈ {ur, fr, ds, tc, revision}` AND `confidence != "low"`. The reminder points the agent at this skill — it does not act on its own.
+
+The hook is registered under the `UserPromptSubmit` block of `.claude/settings.json` in every scaffold (root, api blueprint, web blueprint, monorepo overlay). It always exits 0 (`UserPromptSubmit`
+hooks are non-blocking by contract) and degrades silently when prerequisites are missing (no `jq`, classifier removed, garbage stdin).
+
+**Three opt-out paths**, in priority order:
+
+1. **Per-shell, ephemeral** — `export SF_DISABLE_SRS_HOOK=1`. Useful when you're doing a long exploration / debugging session and don't want the reminders. Survives until the shell exits.
+2. **Per-project, persistent** — set `tools.srs.intentDetectorEnabled = false` in `.saasfoundry.json`. The classifier still runs (other skills may use it) but the auto-fire is suppressed.
+3. **Per-project, full kill-switch** — set `tools.srs.enabled = false` in `.saasfoundry.json`. Disables both the auto-fire AND the conversational eval flow above.
+
+A malformed manifest, a missing manifest, or a manifest with `tools.srs.backend` set but no `enabled` flag all **fail open** — the hook fires. This is intentional: the only way to silence it is an
+explicit opt-out, so a botched config doesn't leave the user wondering why the SRS guidance disappeared.
+
+Performance budget: ≤250ms p95 in a real shell (mostly classifier regex + jq parsing — no network, no node). Regression-tested in `src/__tests__/unit/skill/srs-intent-hook.spec.ts`.
+
 ## How other skills hand off to `sf-srs`
 
 - **`sf-workflow`** — when a ticket enters `Backlog` with the `srs:drafting` label, the workflow skill calls `srs-cli.sh draft` (or the appropriate action) and stays out of the way otherwise
