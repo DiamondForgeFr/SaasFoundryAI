@@ -17,18 +17,18 @@ installers, and migrations that generate user projects).
 
 The high-level shape is documented in [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/CLAUDE.md) — the same file Claude Code reads at session start. Key directories:
 
-| Path                                  | Purpose                                                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `src/commands/`                       | CLI entry points wired to Commander (`new.ts`, `update.ts`, `workflow.ts`, `srs.ts`, `status.ts`, …)     |
-| `src/builders/`                       | Scaffold builders — `monorepo.builder.ts`, `multirepo.builder.ts`, `db.builder.ts`, etc.                 |
-| `src/installers/`                     | Reusable module installers (email, storage, analytics, srs)                                              |
-| `src/migrations/`                     | Manifest + module migration registries — see [Migration framework](#migration-framework-non-negotiable)  |
-| `scaffolds/blueprints/`               | Base project templates (`api/`, `web/`, `db/`, `s3/`)                                                    |
-| `scaffolds/overlays/`                 | Topology overrides (`monorepo/`, `multirepo/`) and module overlays (`modules/email/`, `modules/storage/`) |
-| `scaffolds/skills-templates/`         | Skill templates that ship into generated projects (sf-srs, sf-workflow, sf-integration-rules, …)         |
-| `tests/docker/`                       | Real-build E2E matrix — generates a project, runs `npm install`, `tsc`, `nest build`, `vite build`      |
-| `.claude/skills/`                     | Local copies of the same skills the scaffolds ship — drift-guarded against `scaffolds/skills-templates/` |
-| `.claude/docs/`                       | Reference docs the agent reads during dev (architecture-modules, architecture-skills, migration-framework) |
+| Path                          | Purpose                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `src/commands/`               | CLI entry points wired to Commander (`new.ts`, `update.ts`, `workflow.ts`, `srs.ts`, `status.ts`, …)       |
+| `src/builders/`               | Scaffold builders — `monorepo.builder.ts`, `multirepo.builder.ts`, `db.builder.ts`, etc.                   |
+| `src/installers/`             | Reusable module installers (email, storage, analytics, srs)                                                |
+| `src/migrations/`             | Manifest + module migration registries — see [Migration framework](#migration-framework-non-negotiable)    |
+| `scaffolds/blueprints/`       | Base project templates (`api/`, `web/`, `db/`, `s3/`)                                                      |
+| `scaffolds/overlays/`         | Topology overrides (`monorepo/`, `multirepo/`) and module overlays (`modules/email/`, `modules/storage/`)  |
+| `scaffolds/skills-templates/` | Skill templates that ship into generated projects (sf-srs, sf-workflow, sf-integration-rules, …)           |
+| `tests/docker/`               | Real-build E2E matrix — generates a project, runs `npm install`, `tsc`, `nest build`, `vite build`         |
+| `.claude/skills/`             | Local copies of the same skills the scaffolds ship — drift-guarded against `scaffolds/skills-templates/`   |
+| `.claude/docs/`               | Reference docs the agent reads during dev (architecture-modules, architecture-skills, migration-framework) |
 
 For deeper guidance on how to add or modify a module or skill, read the architecture docs the agent uses:
 
@@ -66,23 +66,23 @@ sf new --project-name local-test --structure monorepo
 
 ## Build, test, format, lint
 
-| Command                       | What it does                                                                                                | When to run                                          |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `npm run build`               | `tsc` — emits `dist/`                                                                                       | Before publishing or running the CLI standalone      |
-| `npm run dev`                 | `tsc -w` — incremental compile while editing                                                                | While developing                                     |
-| `npm run format`              | Prettier on `**/*.{js,jsx,ts,tsx,json,css,md}` (respects `.prettierignore`)                                 | Before pushing — Husky's pre-commit will retry it    |
-| `npm run lint`                | ESLint with the flat config in `eslint.config.mjs`                                                          | Before pushing                                       |
-| `npm test`                    | Jest across all four projects (`unit`, `integration`, `e2e`, `smoke`)                                       | While iterating                                      |
-| `npm run test:unit`           | Just the unit project (fastest)                                                                             | Quick local feedback                                 |
-| `npm run test:integration`    | Just integration tests (filesystem builders, scaffolds, installers)                                         | When changing builders / installers                  |
-| `npm run test:e2e`            | E2E tests (CLI command surface)                                                                             | When changing command wiring                         |
-| `npm run test:pre-commit`     | `format` + `lint` + `build` + `test` — what Husky runs on every commit (~15s)                              | Before pushing                                       |
-| `npm run test:pre-push`       | Top 2 Docker scenarios (`monorepo-minimal` + `multirepo-minimal`, ~2–3 min)                                 | Before opening a PR — Husky pre-push runs this       |
-| `npm run test:full`           | `test:pre-commit` + `test:pre-push` — full local validation                                                 | Before declaring something done                      |
-| `npm run test:docker`         | All 18 Docker scenarios (~65 min)                                                                           | When in doubt about a builder or installer change    |
-| `npm run test:docker:list`    | Lists every scenario without running them                                                                   | To pick a specific one                               |
-| `npm run test:docker -- --count N`             | Runs the top N priority scenarios                                                              | Selective E2E coverage                               |
-| `npm run test:docker -- --scenario <name>`     | Runs a single named scenario                                                                  | Targeted reproduction                                |
+| Command                                    | What it does                                                                  | When to run                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------- |
+| `npm run build`                            | `tsc` — emits `dist/`                                                         | Before publishing or running the CLI standalone   |
+| `npm run dev`                              | `tsc -w` — incremental compile while editing                                  | While developing                                  |
+| `npm run format`                           | Prettier on `**/*.{js,jsx,ts,tsx,json,css,md}` (respects `.prettierignore`)   | Before pushing — Husky's pre-commit will retry it |
+| `npm run lint`                             | ESLint with the flat config in `eslint.config.mjs`                            | Before pushing                                    |
+| `npm test`                                 | Jest across all four projects (`unit`, `integration`, `e2e`, `smoke`)         | While iterating                                   |
+| `npm run test:unit`                        | Just the unit project (fastest)                                               | Quick local feedback                              |
+| `npm run test:integration`                 | Just integration tests (filesystem builders, scaffolds, installers)           | When changing builders / installers               |
+| `npm run test:e2e`                         | E2E tests (CLI command surface)                                               | When changing command wiring                      |
+| `npm run test:pre-commit`                  | `format` + `lint` + `build` + `test` — what Husky runs on every commit (~15s) | Before pushing                                    |
+| `npm run test:pre-push`                    | Top 2 Docker scenarios (`monorepo-minimal` + `multirepo-minimal`, ~2–3 min)   | Before opening a PR — Husky pre-push runs this    |
+| `npm run test:full`                        | `test:pre-commit` + `test:pre-push` — full local validation                   | Before declaring something done                   |
+| `npm run test:docker`                      | All 18 Docker scenarios (~65 min)                                             | When in doubt about a builder or installer change |
+| `npm run test:docker:list`                 | Lists every scenario without running them                                     | To pick a specific one                            |
+| `npm run test:docker -- --count N`         | Runs the top N priority scenarios                                             | Selective E2E coverage                            |
+| `npm run test:docker -- --scenario <name>` | Runs a single named scenario                                                  | Targeted reproduction                             |
 
 Pre-commit runs in ~15 seconds; if it stalls, prettier is reformatting a large file (most often a `.md` you just changed).
 
@@ -112,11 +112,11 @@ A `chore:` without a ticket is rejected. Use `chore(#000): ...` only for genuine
 
 Husky installs three hooks under `.husky/`:
 
-| Hook         | What it runs                                                                  | How to bypass                                                          |
-| ------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `commit-msg` | `commitlint` — rejects commits that don't match the convention above          | Don't. Fix the message.                                                |
-| `pre-commit` | `npm run test:pre-commit` (format + lint + build + jest, ~15 s)               | `--no-verify` on `git commit`. Reserve for emergencies.                |
-| `pre-push`   | `npm run test:pre-push` on non-RC branches (top 2 Docker scenarios, ~2–3 min) | `--no-verify` on `git push`. Avoid — CI will catch it but slower.      |
+| Hook         | What it runs                                                                  | How to bypass                                                     |
+| ------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `commit-msg` | `commitlint` — rejects commits that don't match the convention above          | Don't. Fix the message.                                           |
+| `pre-commit` | `npm run test:pre-commit` (format + lint + build + jest, ~15 s)               | `--no-verify` on `git commit`. Reserve for emergencies.           |
+| `pre-push`   | `npm run test:pre-push` on non-RC branches (top 2 Docker scenarios, ~2–3 min) | `--no-verify` on `git push`. Avoid — CI will catch it but slower. |
 
 If pre-commit reformats files (prettier), the commit aborts so you can stage the formatted result. **Do not amend** — `git add` the formatted files and create a new commit. The same rule appears in
 the workflow skill: pre-commit retries are the source of truth for "the commit didn't happen."
@@ -148,8 +148,8 @@ Backlog → Ready → In progress → AI testing → Human testing → In review
 ```
 
 - Read `.claude/skills/sf-workflow/statuses/<N>-<name>.md` before any transition — the file lists the mandatory entry actions and exit conditions.
-- Use the workflow CLI: `.claude/skills/sf-workflow/workflow-cli.sh update-status <ticket> <status> --reason "..."`. Don't drag cards in the GitHub Projects UI manually — the CLI runs the guards
-  (PR existence, complexity label, parent-status mirror, …) the UI doesn't know about.
+- Use the workflow CLI: `.claude/skills/sf-workflow/workflow-cli.sh update-status <ticket> <status> --reason "..."`. Don't drag cards in the GitHub Projects UI manually — the CLI runs the guards (PR
+  existence, complexity label, parent-status mirror, …) the UI doesn't know about.
 - Subtasks are real GitHub issues, not checkboxes. Create them via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`.
 - Bundled PRs (one PR closing several tightly-coupled subs) are explicitly supported via `nature:bundled-pr` — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis".
 

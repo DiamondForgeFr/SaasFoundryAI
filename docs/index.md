@@ -44,6 +44,12 @@ features:
   - icon: 🧩
     title: Grow with `sf update`
     details: Email, storage, analytics and more ship as composable modules. Add them later, receive upstream improvements without rewriting, and stay aligned with the latest scaffold.
+
+  - icon: 🛟
+    title: Validated manifest, migrated safely
+    details:
+      `.saasfoundry.json` is validated against a JSON Schema by ajv on every CLI invocation — typos surface as actionable errors. Breaking changes ship through a numbered migration registry, so
+      `sf update` carries old projects forward without manual fix-ups.
 ---
 
 ## Built for teams that care about code quality — with or without AI

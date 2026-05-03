@@ -41,6 +41,7 @@ TypeScript full-stack development.
   - **Email Service** - MailerSend integration for transactional emails
   - **S3 Storage** - AWS S3 integration for file uploads and management
   - **Analytics** - Umami analytics integration for privacy-focused tracking
+  - **Shared packages** - Auto-generated `packages/shared-types`, `shared-validation`, `shared-config`, `ui-primitives`, and a typed `api-client` derived from OpenAPI (monorepo)
   - Install modules during project creation OR add them later with `sf update`
   - Three-way merge system for safe template updates
 
@@ -49,11 +50,12 @@ TypeScript full-stack development.
   - JWT authentication with Passport
   - Role-based access control (RBAC)
   - Granular permissions management
-  - Secure API endpoints with Zod validation
+  - Secure API endpoints with Zod 4 schemas (shared end-to-end via `nestjs-zod` + `shared-validation`)
 
 - **Developer Experience**
 
-  - Pre-built React hooks for API integration
+  - Typed `api-client` package generated from OpenAPI — no more hand-written hooks drifting from the backend
+  - Pre-built React hooks for API integration, wrapped on top of the typed client
   - React Query for data fetching and caching
   - Comprehensive Git hooks with Husky (commitlint, pre-push checks)
   - Prisma 7 with driver adapters and multi-file schemas
@@ -68,6 +70,9 @@ TypeScript full-stack development.
   - PostgreSQL 16 with Docker support
   - Nginx reverse proxy configuration
   - Automated OpenAPI documentation generation
+  - **Manifest validation** — `.saasfoundry.json` ships with a JSON Schema (draft-07) and is validated by ajv on every CLI invocation; typos surface as actionable errors instead of silent drift
+  - **Cross-version migration framework** — breaking changes to the manifest or to a module's installed file set ship through a numbered migration registry; `sf update` runs them automatically and
+    falls back to `.saasfoundry.new` sidecars on user-edited files
 
 ## 🔧 Prerequisites
 
@@ -388,7 +393,13 @@ Every SaaSFoundry project includes:
 ### 🎯 Claude Code Skills System
 
 SaaSFoundry projects come with a **skills library** that teaches Claude Code the project's conventions, workflows, and integrations. Skills are plain files shipped under `.claude/skills/` — no MCP
-server required.
+server required. Add skills after scaffold time with `sf skill install <name>` (project- or user-scope).
+
+#### 🎯 SRS auto-suggestion (when the SRS module is enabled)
+
+When you install the SRS skill (`sf-srs`) on a project, every Claude Code prompt is silently classified by a deterministic intent detector. If you describe a user need, a feature, a design decision,
+or a test condition, Claude is nudged to draft an SRS update before writing code — the spec stays in sync with the conversation, automatically. The classifier is conservative (precision ≈ 1.0, recall
+≈ 0.94 on a 64-prompt calibration set) and ships with three opt-out paths.
 
 #### 📦 Core Skills (Always Installed)
 
@@ -597,19 +608,25 @@ ship alongside the migration.
 
 ### Commit Message Guidelines
 
-We follow conventional commits for better versioning and changelog generation. While you can bypass checks with `--no-verify`, we encourage following these guidelines:
+We follow conventional commits enforced by commitlint. The format is `<type>(#<ticket>): <description>` — the ticket scope is **required**, header is capped at 100 characters.
 
 - `feat:` New features
 - `fix:` Bug fixes
 - `docs:` Documentation changes
 - `style:` Code style changes
 - `refactor:` Code refactoring
+- `perf:` Performance improvements
 - `test:` Adding tests
 - `chore:` Maintenance tasks
+- `ci:` Continuous integration changes
+- `build:` Build system changes
+- `revert:` Reverts a previous commit
+
+Examples: `feat(#317): SRS intent-detector calibration`, `fix(#292): apply prettier normalization`. See [Development guide](docs/contributing/development.md) for the full contributor workflow.
 
 ## 📚 Documentation
 
-Detailed documentation is available at [saasfoundry.diamondforge.fr](https://saasfoundry.diamondforge.fr) (coming soon).
+Detailed documentation is available at [saasfoundry.diamondforge.fr](https://saasfoundry.diamondforge.fr) — getting started, CLI reference, modules, SRS, workflow skills, troubleshooting.
 
 📦 Available on npm: [saasfoundry-cli](https://www.npmjs.com/package/saasfoundry-cli)
 
