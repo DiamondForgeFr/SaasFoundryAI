@@ -54,8 +54,8 @@ export const NavSection = ({ section }: NavSectionProps) => {
   )
 
   const renderCollapsibleItem = (item: NavSectionItem) => (
-    <Collapsible key={item.title} asChild defaultOpen={item.isActive} className="group/collapsible">
-      <SidebarMenuItem>
+    <Collapsible key={item.title} asChild defaultOpen={false} className="group/collapsible">
+      <SidebarMenuItem className="relative">
         <CollapsibleTrigger asChild>
           <SidebarMenuButton tooltip={tNav(item.title)}>
             {item.icon && <item.icon />}
@@ -69,17 +69,19 @@ export const NavSection = ({ section }: NavSectionProps) => {
   )
 
   const renderSimpleItem = (item: NavSectionItem) => (
-    <SidebarMenuButton key={item.title} asChild>
-      <a href={item.url}>
-        {item.icon && <item.icon />}
-        <span>{tNav(item.title)}</span>
-      </a>
-    </SidebarMenuButton>
+    <SidebarMenuItem key={item.title} className="relative">
+      <SidebarMenuButton asChild>
+        <a href={item.url}>
+          {item.icon && <item.icon />}
+          <span>{tNav(item.title)}</span>
+        </a>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   )
 
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel>{tNav(section.title)}</SidebarGroupLabel>
+    <SidebarGroup className="py-1">
+      <SidebarGroupLabel className="text-muted-foreground/70 px-2.5 pt-1 pb-1 text-[10px] tracking-wider uppercase">{tNav(section.title)}</SidebarGroupLabel>
       <SidebarMenu>{section.items.map((item) => (item.subItems ? renderCollapsibleItem(item) : renderSimpleItem(item)))}</SidebarMenu>
     </SidebarGroup>
   )

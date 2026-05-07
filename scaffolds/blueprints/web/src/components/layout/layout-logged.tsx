@@ -1,13 +1,15 @@
 /**
  * Resources
  */
-import { Fragment } from 'react'
+import { Fragment, useEffect } from 'react'
+import i18n from 'i18next'
 import { Outlet } from 'react-router-dom'
 
 /**
  * Dependencies
  */
 import { BreadcrumbProvider } from '@/components/ui/custom/breadcrumb-context'
+import { useMe } from '@/hooks/api/auth/queries/useMe'
 import { useBreadcrumb } from '@/hooks/ui/useBreadcrumb'
 
 /**
@@ -23,6 +25,14 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
  */
 const LayoutLoggedContent = () => {
   const { items } = useBreadcrumb()
+  const { data: me } = useMe()
+
+  useEffect(() => {
+    if (!me?.preferences?.locale) return
+    const desired = me.preferences.locale.toLowerCase()
+    const current = (i18n.language || '').toLowerCase().split('-')[0]
+    if (current !== desired) i18n.changeLanguage(desired)
+  }, [me?.preferences?.locale])
 
   const renderBreadcrumbItems = () => (
     <BreadcrumbList>
@@ -51,7 +61,7 @@ const LayoutLoggedContent = () => {
   )
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ '--sidebar-width': '14rem' } as React.CSSProperties}>
       <LayoutSidebar />
       <SidebarInset>
         {renderHeader()}
