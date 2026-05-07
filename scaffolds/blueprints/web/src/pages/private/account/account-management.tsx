@@ -14,6 +14,7 @@ import { useBreadcrumb } from '@/hooks/ui/useBreadcrumb'
 /**
  * Components
  */
+import { AccountScopeHeader } from '@/components/ui/custom/account-scope-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs'
 import { AccountEntities } from './account-entities'
 import { AccountOverview } from './account-overview'
@@ -45,16 +46,21 @@ export function AccountManagement() {
   }
 
   const tabTriggerClass = `
-      transition-all duration-300
-      flex-1 p-1 rounded-sm uppercase opacity-70 border border-dashed border-muted-foreground/30 border-opacity-0
-      hover:opacity-100 hover:border-opacity-60
-      data-[state=active]:opacity-100 data-[state=active]:border-opacity-0 data-[state=active]:bg-primary data-[state=active]:font-bold data-[state=active]:text-sm data-[state=active]:text-primary-foreground data-[state=active]:shadow-none
+      relative bg-transparent border-none rounded-none shadow-none
+      px-4 py-3 text-xs font-bold uppercase tracking-wider
+      text-muted-foreground transition-colors duration-150
+      hover:text-foreground
+      data-[state=active]:text-foreground data-[state=active]:shadow-none
+      data-[state=active]:bg-transparent
+      after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px]
+      after:bg-transparent data-[state=active]:after:bg-primary
     `
 
   return (
     <div className="container mx-auto">
-      <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-4">
-        <TabsList className="flex h-10 w-full justify-between space-x-1 rounded-md bg-muted">
+      <AccountScopeHeader />
+      <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-5">
+        <TabsList className="flex w-full justify-start gap-0 rounded-none bg-transparent border-b border-border p-0 h-auto">
           <TabsTrigger value="overview" className={tabTriggerClass}>
             {tAccount(`tabs.tk_overview_`)}
           </TabsTrigger>
