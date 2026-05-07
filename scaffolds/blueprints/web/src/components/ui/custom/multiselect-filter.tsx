@@ -1,9 +1,9 @@
 import { Badge } from '@/components/ui/shadcn/badge'
-import { Button } from '@/components/ui/shadcn/button'
+import { cn } from '@/utils/ui'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover'
 import { Skeleton } from '@/components/ui/shadcn/skeleton'
 import { SearchIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 export type MultiSelectFilterItem = {
   id: string | number
@@ -44,6 +44,8 @@ export function MultiSelectFilter({
   onSearchChange
 }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const hasSelection = selected.length > 0
 
   const handleSelect = (id: string | number) => {
     if (selected.includes(id)) {
@@ -53,26 +55,29 @@ export function MultiSelectFilter({
     }
   }
 
-  const handleReset = () => {
-    onChange([])
-    onSearchChange('')
-  }
-
   // Filtrage côté UI optionnel (ici on affiche tout, filtrage API recommandé)
   const displayItems = items
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
+        <button
+          type="button"
           data-testid={dataTestid}
-          variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={`w-[300px] justify-start border-0 shadow-none transition-colors ${open || selected.length > 0 ? 'bg-card ring-1 ring-border' : 'bg-muted-foreground/5 hover:bg-card hover:ring-1 hover:ring-border focus:bg-muted-foreground/5 focus:ring-0'} ${className}`}
+          className={cn(
+            'flex h-9 w-[300px] cursor-pointer items-center justify-start gap-2 rounded-sm border px-3 text-sm text-foreground transition-colors focus:outline-none',
+            open
+              ? 'border-accent bg-accent text-accent-foreground'
+              : hasSelection
+                ? 'border-border bg-card hover:border-primary/40'
+                : 'border-border bg-muted-foreground/5 hover:border-primary/40 hover:bg-card',
+            className
+          )}
         >
-          {icon && <span className="mr-2">{icon}</span>}
-          {selected.length > 0 ? (
+          {icon && <span className={open ? 'text-accent-foreground' : 'text-muted-foreground'}>{icon}</span>}
+          {hasSelection ? (
             <div className="flex flex-1 items-center justify-between gap-1">
               <span className="truncate">{selectedLabel}</span>
               <Badge variant="outline" className={`${badgeBg} border-none`}>
@@ -80,30 +85,36 @@ export function MultiSelectFilter({
               </Badge>
             </div>
           ) : (
-            placeholder
+            <span className={open ? 'text-accent-foreground' : 'text-muted-foreground'}>{placeholder}</span>
           )}
-        </Button>
+        </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0">
+      <PopoverContent
+        className="w-[300px] p-0"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          searchInputRef.current?.focus()
+        }}
+      >
         <div className="p-2">
           <div className="relative mb-2">
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
               <SearchIcon className="h-4 w-4" />
             </span>
             <input
+              ref={searchInputRef}
               type="text"
               placeholder={placeholder}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full rounded border border-border bg-transparent py-1 pl-7 pr-7 text-sm focus:border-border focus:outline-hidden focus:ring-0"
-              style={{ boxShadow: 'none' }}
+              className="h-9 w-full rounded-sm border border-border bg-card pl-7 pr-7 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/60 focus:outline-none"
             />
-            {selected.length > 0 && (
+            {search.length > 0 && (
               <button
                 type="button"
-                aria-label="Reset selection"
-                onClick={handleReset}
-                className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground hover:text-foreground focus:outline-hidden"
+                aria-label="Clear search"
+                onClick={() => onSearchChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground transition-colors hover:text-foreground focus:outline-hidden"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
