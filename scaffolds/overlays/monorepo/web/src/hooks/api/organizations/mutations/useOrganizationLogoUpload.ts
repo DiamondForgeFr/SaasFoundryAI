@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
@@ -39,10 +39,15 @@ export type OrganizationLogoUploadResponseDto = z.infer<ReturnType<typeof useOrg
 export const useOrganizationLogoUpload = () => {
   const schemas = useOrganizationLogoUploadSchema()
 
+  const queryClient = useQueryClient()
+
   const mutation = useMutation({
     mutationFn: async ({ organizationId, file }: { organizationId: string; file: File }) => {
       const response = await organizationControllerUploadLogo(organizationId, { file })
       return schemas.response.parse(response)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['account'] })
     },
     onError: (error) => {
       console.error(tOrganizations('errors.tk_uploadLogoError_'), error)

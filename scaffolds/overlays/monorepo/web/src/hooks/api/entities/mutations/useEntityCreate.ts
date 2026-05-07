@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
@@ -82,6 +82,7 @@ export type EntityCreateResponseDto = z.infer<ReturnType<typeof useEntityCreateS
  * Hook declaration
  */
 export const useEntityCreate = () => {
+  const queryClient = useQueryClient()
   const schemas = useEntityCreateSchema()
 
   const mutation = useMutation({
@@ -99,6 +100,9 @@ export const useEntityCreate = () => {
       })
 
       return schemas.response.parse(response)
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['account', variables.accountId, 'entities'] })
     },
     onError: (error) => {
       console.error(tEntities('errors.tk_createEntityError_'), error)
