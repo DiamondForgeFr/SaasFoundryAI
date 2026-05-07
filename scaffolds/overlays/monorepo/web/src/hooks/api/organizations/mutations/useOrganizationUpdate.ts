@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
@@ -49,10 +49,15 @@ export type OrganizationUpdateResponseDto = z.infer<ReturnType<typeof useOrganiz
 export const useOrganizationUpdate = (organizationId: string) => {
   const schemas = useOrganizationUpdateSchema()
 
+  const queryClient = useQueryClient()
+
   const mutation = useMutation({
     mutationFn: async (data: OrganizationUpdatePayloadDto) => {
       const response = await organizationControllerUpdateOrganization(organizationId, data)
       return schemas.response.parse(response)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['account'] })
     },
     onError: (error) => {
       console.error(tOrganizations('errors.tk_updateOrganizationError_'), error)

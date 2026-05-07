@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { z } from 'zod'
 
@@ -43,6 +43,7 @@ export type InviteUserResponseDto = z.infer<ReturnType<typeof useInviteUserSchem
  * Hook declaration
  */
 export const useInviteUser = () => {
+  const queryClient = useQueryClient()
   const schemas = useInviteUserSchema()
 
   const mutation = useMutation({
@@ -55,6 +56,9 @@ export const useInviteUser = () => {
 
       const response = await invitationControllerCreateInvitation(payload)
       return schemas.response.parse(response)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations'] })
     },
     onError: (error) => {
       console.error(tAccounts('errors.tk_inviteUserError_'), error)
