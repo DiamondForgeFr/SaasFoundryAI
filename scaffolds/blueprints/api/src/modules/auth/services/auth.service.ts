@@ -333,6 +333,7 @@ export class AuthService {
         where: { id: userId },
         include: {
           people: true,
+          preference: true,
           rolesLinked: {
             include: {
               role: {
@@ -431,6 +432,10 @@ export class AuthService {
         permissions,
         accounts,
         entities,
+        preferences: {
+          locale: user.preference?.locale ?? UserDefaults.preferences.locale,
+          avatarUrl: user.preference?.avatarUrl ?? null
+        },
         createdAt: user.createdAt
       }
     } catch (error) {

@@ -20,6 +20,7 @@ import { EntitiesModule } from '@modules/entities/entities.module'
 import { HealthModule } from '@modules/health/health.module'
 import { InvitationModule } from '@modules/invitation/invitation.module'
 import { OrganizationsModule } from '@modules/organizations/organizations.module'
+import { UsersModule } from '@modules/users/users.module'
 // TODO storage-service-active: import { StorageModule } from '@modules/storage/storage.module'
 
 /**
@@ -38,6 +39,7 @@ import { OrganizationsModule } from '@modules/organizations/organizations.module
     OrganizationsModule,
     EntitiesModule,
     InvitationModule,
+    UsersModule,
     // TODO storage-service-active: StorageModule,
     ScheduleModule.forRoot()
   ],

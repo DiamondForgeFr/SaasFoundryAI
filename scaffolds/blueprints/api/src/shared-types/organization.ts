@@ -5,6 +5,7 @@ export type OrganizationType = 'COMPANY' | 'ASSOCIATION' | 'COMMUNITY'
 export interface OrganizationRef {
   id: string
   name: string
+  type?: OrganizationType
 }
 
 export interface Organization {
