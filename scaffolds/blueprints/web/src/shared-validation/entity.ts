@@ -12,6 +12,7 @@ export interface CreateEntityPayloadMessages {
   organizationTypeInvalid?: string
   organizationDescriptionMaxLength?: string
   organizationWebsiteMaxLength?: string
+  organizationWebsiteInvalid?: string
 }
 
 export const buildInlineOrganizationSchema = (messages: CreateEntityPayloadMessages = {}) =>
@@ -33,8 +34,13 @@ export const buildInlineOrganizationSchema = (messages: CreateEntityPayloadMessa
         })
         .optional(),
       website: z
-        .string()
-        .max(100, { message: messages.organizationWebsiteMaxLength ?? 'Website must not exceed 100 characters' })
+        .union([
+          z.literal(''),
+          z
+            .string()
+            .url({ message: messages.organizationWebsiteInvalid ?? 'Invalid URL — must include http:// or https://' })
+            .max(100, { message: messages.organizationWebsiteMaxLength ?? 'Website must not exceed 100 characters' })
+        ])
         .optional()
     })
     .strict()

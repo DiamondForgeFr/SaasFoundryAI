@@ -27,7 +27,8 @@ export const useEntityCreateSchema = () => {
     accountIdRequired: tCommon('fields.errors.tk_required_'),
     organizationNameMinLength: tCommon('fields.errors.tk_minLength_'),
     organizationNameMaxLength: tCommon('fields.errors.tk_maxLength_'),
-    organizationTypeInvalid: tCommon('fields.errors.tk_invalid_')
+    organizationTypeInvalid: tCommon('fields.errors.tk_invalid_'),
+    organizationWebsiteInvalid: tCommon('fields.errors.tk_invalid-url_')
   }
 
   const payload = buildCreateEntityPayloadSchema(messages).extend({
