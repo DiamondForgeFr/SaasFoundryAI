@@ -1,0 +1,30 @@
+tk_title_: Gestion du profil
+tk_breadcrumb-settings_: Paramètres
+tk_breadcrumb-description_: Informations du profil et préférences personnelles
+
+sections:
+  profileInfo:
+    tk_title_: Informations du profil
+    tk_meta-readonly_: Lecture seule
+    tk_first-name_: Prénom
+    tk_last-name_: Nom
+    tk_email_: Email
+    tk_roles_: Rôles
+    tk_member-since_: Membre depuis
+  memberships:
+    tk_title_: Rattachements
+    tk_meta-one_: '{{accounts}} compte · {{entities}} entité'
+    tk_meta-many_: '{{accounts}} comptes · {{entities}} entités'
+    tk_accounts_: Comptes
+    tk_entities_: Entités
+  preferences:
+    tk_title_: Préférences
+    tk_meta_: Paramètres personnels
+    tk_theme_: Thème
+    tk_theme-light_: Clair
+    tk_theme-dark_: Sombre
+    tk_theme-system_: Système
+    tk_language_: Langue
+    tk_language-en_: English
+    tk_language-fr_: Français
+    tk_saving_: 'Enregistrement…'

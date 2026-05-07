@@ -7,6 +7,8 @@
  * Apps also need to add `@source` so Tailwind scans primitive files
  * for utility classes:
  *   @source "../../../node_modules/@{{PROJECT_NAME}}/ui-primitives/src";
+ *
+ * Theme: Warm Editorial · Sora + Mulish · Radius 2px
  */
 
 @import 'tailwindcss';
@@ -16,9 +18,33 @@
 
 @theme {
   --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-sm: var(--radius);
+  --radius-xs: var(--radius);
 
+  /* Typography */
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-body: 'Mulish', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.02em;
+
+  /* Colors (mapped from CSS vars) */
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
 
@@ -64,12 +90,7 @@
 
   --animate-shimmer: shimmer 1.2s linear infinite;
 
-  --background-image-shimmer-orange: linear-gradient(
-    90deg,
-    hsl(24.6, 70%, 96%) 25%,
-    hsl(24.6, 70%, 65%) 50%,
-    hsl(24.6, 70%, 96%) 75%
-  );
+  --background-image-shimmer-orange: linear-gradient(90deg, hsl(24.6, 70%, 96%) 25%, hsl(24.6, 70%, 65%) 50%, hsl(24.6, 70%, 96%) 75%);
 
   --background-size-shimmer: 200% 100%;
 
@@ -80,6 +101,235 @@
     100% {
       background-position: 200% 0;
     }
+  }
+
+  @keyframes igw-rotate {
+    100% {
+      transform: translate(-50%, -50%) rotate(1turn);
+    }
+  }
+}
+
+@layer components {
+  /* ── Animated glow border — apply on any card/container ── */
+  .glow-card {
+    position: relative;
+  }
+
+  /* Content wrapper inside glow-card must be above the overlay layers */
+  .glow-card > .relative.z-10 {
+    position: relative;
+    z-index: 10;
+  }
+
+  /* ── Floating label — slide-up style ── */
+  .fl-wrap {
+    position: relative;
+    padding-top: 1.25rem;
+  }
+
+  .fl-label {
+    position: absolute;
+    left: 0.5rem;
+    /* Exact center of h-11 (2.75rem) input, offset below padding-top (1.25rem) */
+    top: calc(1.25rem + 1.375rem);
+    transform: translateY(-50%);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+    padding: 2px 6px;
+    border-radius: var(--radius);
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* Caret — hidden by default */
+  .fl-label::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 8px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid transparent;
+    transition: border-top-color 0.22s ease;
+  }
+
+  /* Floated: focus OR has content — works for both regular and nested (password) */
+  .fl-wrap:focus-within .fl-label,
+  .fl-wrap:has(.fl-input:not(:placeholder-shown)) .fl-label {
+    top: 0;
+    left: 0;
+    transform: translateY(calc(-100% + 12px));
+    font-size: 0.6rem;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    padding: 2px 8px;
+  }
+
+  .fl-wrap:focus-within .fl-label::after,
+  .fl-wrap:has(.fl-input:not(:placeholder-shown)) .fl-label::after {
+    border-top-color: hsl(var(--primary));
+  }
+
+  /* ── Wave button ── */
+  .wave-btn {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    background: hsl(var(--primary));
+    box-shadow:
+      0 0 6px 0 hsl(var(--primary) / 0.12),
+      0 0 14px 0 hsl(var(--primary) / 0.18);
+    transition: box-shadow 0.4s ease;
+  }
+
+  .wave-btn:hover {
+    box-shadow:
+      0 0 8px 0 hsl(var(--primary) / 0.12),
+      0 0 18px 0 hsl(var(--primary) / 0.15);
+  }
+
+  .wave-btn > span {
+    position: relative;
+    z-index: 1;
+    color: white;
+  }
+
+  .wave-btn > i {
+    position: absolute;
+    z-index: 0;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    /* The wave area is a square based on button WIDTH — scales naturally with any button size */
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    background: inherit;
+    box-shadow: inset 0 0 50px hsl(0 0% 0% / 0.25);
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .wave-btn:hover > i {
+    opacity: 1;
+  }
+
+  .wave-btn > i::before,
+  .wave-btn > i::after {
+    content: '';
+    position: absolute;
+    /* Shapes proportional to i (square based on button width) — wave amplitude scales with size */
+    width: 200%;
+    height: 200%;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -78%);
+  }
+
+  .wave-btn > i::before {
+    border-radius: 38%;
+    background: hsl(0 0% 0% / 0.18);
+    animation: wave-spin 5s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .wave-btn > i::after {
+    border-radius: 32%;
+    background: hsl(0 0% 0% / 0.32);
+    animation: wave-spin 10s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .wave-btn:hover > i::before,
+  .wave-btn:hover > i::after {
+    animation-play-state: running;
+  }
+
+  @keyframes wave-spin {
+    to {
+      transform: translate(-50%, -75%) rotate(360deg);
+    }
+  }
+
+  /* ── Auth card flip transition ── */
+  @keyframes flip-from-right {
+    from {
+      transform: perspective(900px) rotateY(70deg);
+      opacity: 0;
+    }
+    to {
+      transform: perspective(900px) rotateY(0deg);
+      opacity: 1;
+    }
+  }
+  @keyframes flip-from-left {
+    from {
+      transform: perspective(900px) rotateY(-70deg);
+      opacity: 0;
+    }
+    to {
+      transform: perspective(900px) rotateY(0deg);
+      opacity: 1;
+    }
+  }
+  .auth-flip-right {
+    animation: flip-from-right 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  }
+  .auth-flip-left {
+    animation: flip-from-left 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  }
+
+  .glow-card .igw-border,
+  .glow-card .igw-glow {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* Blurred outer glow */
+  .glow-card .igw-glow {
+    filter: blur(12px);
+    z-index: 0;
+  }
+
+  /* Border layer */
+  .glow-card .igw-border {
+    z-index: 1;
+  }
+
+  /* Rotating conic — clipped by overflow:hidden */
+  .glow-card .igw-border::before,
+  .glow-card .igw-glow::before {
+    content: '';
+    position: absolute;
+    z-index: -2;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(0deg);
+    width: 99999px;
+    height: 99999px;
+    background: conic-gradient(transparent 0%, transparent 78%, hsl(var(--primary) / 0.3) 88%, hsl(var(--primary) / 0.7) 96%, transparent 100%);
+    animation: igw-rotate 14s linear infinite;
+  }
+
+  /* Inner fill — masks center, leaves only border visible */
+  .glow-card .igw-border::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: 1px;
+    background: hsl(var(--card));
+    border-radius: inherit;
   }
 }
 
@@ -100,80 +350,98 @@
 }
 
 @layer base {
+  html {
+    font-family: 'Mulish', system-ui, sans-serif;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Sora', system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 20 14.3% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 20 14.3% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 20 14.3% 4.1%;
+    /* ── Warm Editorial · Light ── */
+    --background: 35 25% 97%;
+    --foreground: 20 18% 10%;
+    --card: 33 20% 99%;
+    --card-foreground: 20 18% 10%;
+    --popover: 33 20% 99%;
+    --popover-foreground: 20 18% 10%;
     --primary: 24.6 95% 53.1%;
-    --primary-foreground: 60 9.1% 97.8%;
-    --secondary: 60 4.8% 95.9%;
-    --secondary-foreground: 24 9.8% 10%;
-    --muted: 60 4.8% 95.9%;
-    --muted-foreground: 25 5.3% 44.7%;
-    --accent: 60 4.8% 95.9%;
-    --accent-foreground: 24 9.8% 10%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 38 45% 90%;
+    --secondary-foreground: 25 20% 20%;
+    --muted: 30 15% 93%;
+    --muted-foreground: 28 12% 48%;
+    --accent: 38 70% 58%;
+    --accent-foreground: 20 18% 10%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 60 9.1% 97.8%;
-    --border: 20 5.9% 90%;
-    --input: 20 5.9% 90%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 12% 86%;
+    --input: 30 12% 86%;
     --ring: 24.6 95% 53.1%;
-    --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --radius: 0.125rem;
+    /* Charts — warm spectrum */
+    --chart-1: 24.6 95% 53.1%;
+    --chart-2: 38 75% 58%;
+    --chart-3: 48 85% 58%;
+    --chart-4: 155 45% 45%;
+    --chart-5: 200 30% 42%;
+    /* Sidebar */
+    --sidebar-background: 33 20% 95%;
+    --sidebar-foreground: 20 18% 25%;
+    --sidebar-primary: 24.6 95% 53.1%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 38 35% 88%;
+    --sidebar-accent-foreground: 20 18% 20%;
+    --sidebar-border: 30 12% 88%;
+    --sidebar-ring: 24.6 95% 53.1%;
   }
 
   .dark {
-    --background: 224 12% 7%;
-    --foreground: 210 20% 98%;
-    --card: 224 12% 11%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 12% 12%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 25 95% 53%;
+    /* ── Warm Editorial · Dark ── */
+    --background: 20 12% 8%;
+    --foreground: 33 25% 93%;
+    --card: 20 12% 11%;
+    --card-foreground: 33 25% 93%;
+    --popover: 20 12% 12%;
+    --popover-foreground: 33 25% 93%;
+    --primary: 24.6 92% 56%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 10% 16%;
-    --secondary-foreground: 210 15% 90%;
-    --muted: 220 10% 14%;
-    --muted-foreground: 215 12% 58%;
-    --accent: 220 10% 16%;
-    --accent-foreground: 210 15% 90%;
+    --secondary: 25 12% 18%;
+    --secondary-foreground: 33 25% 85%;
+    --muted: 22 10% 14%;
+    --muted-foreground: 30 10% 55%;
+    --accent: 38 65% 52%;
+    --accent-foreground: 33 25% 93%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 10% 18%;
-    --input: 220 10% 22%;
-    --ring: 25 90% 48%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 228 14% 5.5%;
-    --sidebar-foreground: 210 12% 80%;
-    --sidebar-primary: 25 95% 53%;
+    --border: 22 10% 18%;
+    --input: 22 10% 20%;
+    --ring: 24.6 90% 50%;
+    /* Charts dark */
+    --chart-1: 24.6 88% 58%;
+    --chart-2: 38 70% 58%;
+    --chart-3: 48 80% 56%;
+    --chart-4: 155 42% 50%;
+    --chart-5: 200 28% 52%;
+    /* Sidebar dark */
+    --sidebar-background: 20 14% 6%;
+    --sidebar-foreground: 33 20% 78%;
+    --sidebar-primary: 24.6 92% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 10% 12%;
-    --sidebar-accent-foreground: 210 12% 90%;
-    --sidebar-border: 220 10% 14%;
-    --sidebar-ring: 25 90% 48%;
+    --sidebar-accent: 22 10% 14%;
+    --sidebar-accent-foreground: 33 20% 85%;
+    --sidebar-border: 22 10% 14%;
+    --sidebar-ring: 24.6 90% 50%;
   }
 }

@@ -11,6 +11,7 @@ main-navigation:
   tk_sub-feature-3_: 'Subfeature 3'
 
 user-navigation:
+  tk_profile-management_: 'Profile management'
   tk_account-management_: 'Account management'
   tk_theme_: 'Theme'
   tk_theme-light_: 'Light'

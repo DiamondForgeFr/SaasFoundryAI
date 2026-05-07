@@ -1,5 +1,6 @@
 tk_title_: Compte
 tk_description_: Gérez les détails de votre compte, les utilisateurs, les entités et les rôles
+tk_failed-load_: Échec du chargement du compte
 
 tabs:
   tk_overview_: Vue d'ensemble
@@ -20,24 +21,40 @@ overview:
   statistics:
     tk_title_: Statistiques
     tk_description_: Vue d'ensemble des ressources de votre compte
-    # tk_users_: (common.yml > items)
-    # tk_entities_: (common.yml > items)
-    # tk_roles_: (common.yml > items)
+  kpi:
+    tk_users_: Utilisateurs
+    tk_entities_: Entités
+    tk_pending_: En attente
+    tk_users-sub_: '{{accountLinked}} liés au compte · {{entityLinked}} liés à une entité'
+    tk_entities-sub_: '{{active}} actives · {{disabled}} désactivées'
+    tk_pending-none_: Aucune en attente
+    tk_pending-one_: Invitation en attente
+    tk_pending-many_: Invitations en attente
   recentUsers:
     tk_title_: Utilisateurs récents
     tk_description_: Les 5 utilisateurs créés ou ajoutés récemment
+    tk_meta-most-recent_: '{{count}} plus récents'
     tk_invite-user_: Inviter un utilisateur
+    tk_invite-cta_: Inviter
     tk_view-all-users_: Voir tous les utilisateurs
+    tk_no-users_: Aucun utilisateur
   recentEntities:
     tk_title_: Entités récentes
     tk_description_: Les 5 entités créées récemment
+    tk_meta-total_: '{{count}} au total'
     tk_create-entity_: Créer une nouvelle entité
+    tk_create-cta_: Nouvelle entité
     tk_no-entity_: Ce compte n'a pas d'entité
+    tk_no-entities-yet_: Aucune entité
     tk_view-all-entities_: Voir toutes les entités
   recentRoles:
     tk_title_: Rôles récents
     tk_description_: Les 5 rôles créés récemment
     tk_view-all-roles_: Voir tous les rôles
+  rolesCard:
+    tk_title_: Rôles
+    tk_meta-defined_: '{{count}} définis'
+    tk_no-roles_: Aucun rôle
 
 users:
   tk_title_: Utilisateurs du compte
@@ -50,6 +67,40 @@ users:
   tk_direct-account-link-description_: Ce type d'utilisateur a accès à toutes les entités de ce compte
   tk_table-no-users_: Aucun utilisateur trouvé
   tk_pending-invitations_: Invitations en attente
+  tk_no-results-filtered_: Aucun utilisateur ne correspond aux filtres
+  tk_no-users-yet_: Aucun utilisateur
+  tk_invite-user-cta_: Inviter un utilisateur
+  kpi:
+    tk_total_: Total
+    tk_account-linked_: Lié au compte
+    tk_pending_: En attente
+    tk_total-sub_: '{{accountLinked}} liés au compte · {{entityLinked}} liés à une entité'
+    tk_account-linked-sub_: '{{percent}}% du total'
+    tk_account-linked-sub-empty_: '—'
+    tk_pending-none_: Aucune en attente
+    tk_pending-one_: Invitation en attente
+    tk_pending-many_: Invitations en attente
+  filters:
+    tk_search-placeholder_: Rechercher un utilisateur...
+    tk_status-all_: Tous
+    tk_status-active_: Actifs
+    tk_status-inactive_: Inactifs
+    tk_show-account-users_: Utilisateurs du compte
+  table:
+    tk_user_: Utilisateur
+    tk_access-scope_: Périmètre d'accès
+    tk_roles_: Rôles
+    tk_status_: Statut
+    tk_created_: Créé le
+    tk_access-account_: Compte
+    tk_status-active_: Actif
+    tk_status-inactive_: Inactif
+  pending:
+    tk_title_: Invitations en attente
+    tk_status-pending_: En attente
+    tk_status-expired_: Expirée
+    tk_resend_: Renvoyer
+    tk_sent-prefix_: Envoyée le
 
 entities:
   tk_title_: Entités du compte
@@ -59,14 +110,42 @@ entities:
   tk_table-no-entities_: Aucune entité trouvée
   tk_create-entity_: Nouvelle entité
   tk_create-entity-description_: Créez une nouvelle entité avec son organisation
+  tk_no-results-filtered_: Aucune entité ne correspond aux filtres
+  tk_no-entities-yet_: Aucune entité
+  kpi:
+    tk_total_: Total
+    tk_active_: Actives
+    tk_disabled_: Désactivées
+    tk_total-sub_: '{{active}} actives · {{disabled}} désactivées'
+    tk_active-sub_: '{{percent}}% du total'
+    tk_active-sub-empty_: '—'
+    tk_disabled-sub-none_: Aucune désactivée
+    tk_disabled-sub-some_: Actuellement inactives
+  filters:
+    tk_search-placeholder_: Rechercher des entités...
+    tk_status-all_: Toutes
+    tk_status-active_: Actives
+    tk_status-disabled_: Désactivées
+  table:
+    tk_entity_: Entité
+    tk_type_: Type
+    tk_status_: Statut
+    tk_created_: Créée le
+    tk_status-active_: Active
+    tk_status-disabled_: Désactivée
 
 organizations:
   tk_organization-details_: Détails de l'organisation
   tk_type-company_: Entreprise
+  tk_type-company-sub_: Commerciale
   tk_type-association_: Association
+  tk_type-association-sub_: Sans but lucratif
   tk_type-community_: Communauté
+  tk_type-community-sub_: Groupe ouvert
   tk_logo_: Logo
   tk_logo-upload_: Téléverser le logo
+  tk_logo-dropzone_: Déposez un logo ou cliquez pour parcourir
+  tk_logo-formats_: 'JPEG, PNG, WebP · Max 2 Mo'
 
 roles:
   tk_title_: Rôles du compte
@@ -74,3 +153,48 @@ roles:
   tk_filters-description_: Filtrez vos rôles par statut, nom, etc.
   tk_filters-search-placeholder_: Rechercher des rôles...
   tk_table-no-roles_: Aucun rôle trouvé
+  builtin:
+    tk_guest_: Invité
+    tk_guest-description_: Utilisateur non authentifié
+    tk_user_: Utilisateur
+    tk_user-description_: Utilisateur authentifié de base
+    tk_admin_: Administrateur
+    tk_admin-description_: Utilisateur administrateur
+
+scopeHeader:
+  tk_account-fallback_: Compte
+  tk_my-entities-fallback_: Mes entités
+  tk_role-account-admin_: Admin du compte
+  tk_role-entity-admin_: Admin d'entité
+  tk_status-active_: Actif
+  tk_id_: ID
+  tk_created_: Créé le
+  tk_updated_: Mis à jour le
+  tk_copy-id_: Copier l'ID
+  tk_switch-account_: Changer de compte
+  tk_switch-entity_: Changer d'entité
+  tk_your-accounts_: Vos comptes
+
+dialogs:
+  inviteUser:
+    tk_section-who_: 'A — Qui ?'
+    tk_section-access-scope_: "B — Périmètre d'accès"
+    tk_section-roles_: 'C — Rôles'
+    tk_section-summary_: 'D — Récapitulatif'
+    tk_search-entities_: Rechercher des entités…
+    tk_search-roles_: Rechercher des rôles…
+    tk_account-access_: Accès au compte
+    tk_account-access-sub_: Lien direct · accès à toutes les entités
+    tk_at-least-one-access_: Au moins un type d'accès est requis.
+    tk_roles-account-scoped_: Les rôles sont liés au compte et s'appliquent à toutes les entités rattachées.
+    tk_will-be-linked-to_: Sera rattaché à
+    tk_inviting_: 'Invitation de :'
+    tk_access-prefix_: 'Accès :'
+    tk_access-account-plus-all_: Compte + toutes les entités
+    tk_access-account-plus-n_: 'Compte + {{count}} entités'
+    tk_access-n-entity_: '{{count}} entité'
+    tk_access-n-entities_: '{{count}} entités'
+    tk_roles-prefix_: 'Rôles :'
+    tk_n-selected_: '{{count}} sélectionnés'
+  createEntity:
+    tk_logo-label_: Logo
