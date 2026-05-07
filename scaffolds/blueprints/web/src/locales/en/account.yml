@@ -1,5 +1,6 @@
 tk_title_: Account
 tk_description_: Manage your account details, users, entities and roles
+tk_failed-load_: Failed to load account
 
 tabs:
   tk_overview_: Overview
@@ -20,24 +21,40 @@ overview:
   statistics:
     tk_title_: Statistics
     tk_description_: Overview of your account resources
-    # tk_users_: (common.yml > items)
-    # tk_entities_: (common.yml > items)
-    # tk_roles_: (common.yml > items)
+  kpi:
+    tk_users_: Users
+    tk_entities_: Entities
+    tk_pending_: Pending
+    tk_users-sub_: '{{accountLinked}} account-linked · {{entityLinked}} entity-linked'
+    tk_entities-sub_: '{{active}} active · {{disabled}} disabled'
+    tk_pending-none_: None waiting
+    tk_pending-one_: Invitation awaiting
+    tk_pending-many_: Invitations awaiting
   recentUsers:
     tk_title_: Recent Users
     tk_description_: The 5 most recent users created or added
+    tk_meta-most-recent_: '{{count}} most recent'
     tk_invite-user_: Invite a new user
+    tk_invite-cta_: Invite user
     tk_view-all-users_: View all users
+    tk_no-users_: No users yet
   recentEntities:
     tk_title_: Recent Entities
     tk_description_: The 5 most recent entities created
+    tk_meta-total_: '{{count}} total'
     tk_create-entity_: Create a new entity
+    tk_create-cta_: New entity
     tk_no-entity_: This account has no entities
+    tk_no-entities-yet_: No entities yet
     tk_view-all-entities_: View all entities
   recentRoles:
     tk_title_: Recent Roles
     tk_description_: The 5 most recent roles created
     tk_view-all-roles_: View all roles
+  rolesCard:
+    tk_title_: Roles
+    tk_meta-defined_: '{{count}} defined'
+    tk_no-roles_: No roles
 
 users:
   tk_title_: Account users
@@ -50,6 +67,40 @@ users:
   tk_direct-account-link-description_: This kind of user has access to all entities of this account
   tk_table-no-users_: No users found
   tk_pending-invitations_: Pending invitations
+  tk_no-results-filtered_: No users match your filters
+  tk_no-users-yet_: No users yet
+  tk_invite-user-cta_: Invite user
+  kpi:
+    tk_total_: Total
+    tk_account-linked_: Account-linked
+    tk_pending_: Pending
+    tk_total-sub_: '{{accountLinked}} account-linked · {{entityLinked}} entity-linked'
+    tk_account-linked-sub_: '{{percent}}% of total'
+    tk_account-linked-sub-empty_: '—'
+    tk_pending-none_: None waiting
+    tk_pending-one_: Invitation awaiting
+    tk_pending-many_: Invitations awaiting
+  filters:
+    tk_search-placeholder_: Search users...
+    tk_status-all_: All
+    tk_status-active_: Active
+    tk_status-inactive_: Inactive
+    tk_show-account-users_: Show account users
+  table:
+    tk_user_: User
+    tk_access-scope_: Access scope
+    tk_roles_: Roles
+    tk_status_: Status
+    tk_created_: Created
+    tk_access-account_: Account
+    tk_status-active_: Active
+    tk_status-inactive_: Inactive
+  pending:
+    tk_title_: Pending invitations
+    tk_status-pending_: Pending
+    tk_status-expired_: Expired
+    tk_resend_: Resend
+    tk_sent-prefix_: Sent
 
 entities:
   tk_title_: Account Entities
@@ -59,14 +110,42 @@ entities:
   tk_table-no-entities_: No entities found
   tk_create-entity_: New entity
   tk_create-entity-description_: Create a new entity with its organization
+  tk_no-results-filtered_: No entities match your filters
+  tk_no-entities-yet_: No entities yet
+  kpi:
+    tk_total_: Total
+    tk_active_: Active
+    tk_disabled_: Disabled
+    tk_total-sub_: '{{active}} active · {{disabled}} disabled'
+    tk_active-sub_: '{{percent}}% of total'
+    tk_active-sub-empty_: '—'
+    tk_disabled-sub-none_: None disabled
+    tk_disabled-sub-some_: Currently inactive
+  filters:
+    tk_search-placeholder_: Search entities...
+    tk_status-all_: All
+    tk_status-active_: Active
+    tk_status-disabled_: Disabled
+  table:
+    tk_entity_: Entity
+    tk_type_: Type
+    tk_status_: Status
+    tk_created_: Created
+    tk_status-active_: Active
+    tk_status-disabled_: Disabled
 
 organizations:
   tk_organization-details_: Organization details
   tk_type-company_: Company
+  tk_type-company-sub_: Commercial
   tk_type-association_: Association
+  tk_type-association-sub_: Non-profit
   tk_type-community_: Community
+  tk_type-community-sub_: Open group
   tk_logo_: Logo
   tk_logo-upload_: Upload logo
+  tk_logo-dropzone_: Drop a logo or click to browse
+  tk_logo-formats_: 'JPEG, PNG, WebP · Max 2MB'
 
 roles:
   tk_title_: Account Roles
@@ -74,3 +153,48 @@ roles:
   tk_filters-description_: Filter your roles by status, name, etc.
   tk_filters-search-placeholder_: Search roles...
   tk_table-no-roles_: No roles found
+  builtin:
+    tk_guest_: Guest
+    tk_guest-description_: Non-authenticated user
+    tk_user_: User
+    tk_user-description_: Basic authenticated user
+    tk_admin_: Admin
+    tk_admin-description_: Administrator user
+
+scopeHeader:
+  tk_account-fallback_: Account
+  tk_my-entities-fallback_: My entities
+  tk_role-account-admin_: Account Admin
+  tk_role-entity-admin_: Entity Admin
+  tk_status-active_: Active
+  tk_id_: ID
+  tk_created_: Created
+  tk_updated_: Updated
+  tk_copy-id_: Copy ID
+  tk_switch-account_: Switch account
+  tk_switch-entity_: Switch entity
+  tk_your-accounts_: Your accounts
+
+dialogs:
+  inviteUser:
+    tk_section-who_: 'A — Who?'
+    tk_section-access-scope_: 'B — Access scope'
+    tk_section-roles_: 'C — Roles'
+    tk_section-summary_: 'D — Summary'
+    tk_search-entities_: Search entities…
+    tk_search-roles_: Search roles…
+    tk_account-access_: Account access
+    tk_account-access-sub_: Link directly · access all entities
+    tk_at-least-one-access_: At least one access type is required.
+    tk_roles-account-scoped_: Roles are account-scoped and apply to all linked entities.
+    tk_will-be-linked-to_: Will be linked to
+    tk_inviting_: 'Inviting:'
+    tk_access-prefix_: 'Access:'
+    tk_access-account-plus-all_: Account + all entities
+    tk_access-account-plus-n_: 'Account + {{count}} entities'
+    tk_access-n-entity_: '{{count}} entity'
+    tk_access-n-entities_: '{{count}} entities'
+    tk_roles-prefix_: 'Roles:'
+    tk_n-selected_: '{{count}} selected'
+  createEntity:
+    tk_logo-label_: Logo

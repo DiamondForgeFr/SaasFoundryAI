@@ -1,0 +1,30 @@
+tk_title_: Profile management
+tk_breadcrumb-settings_: Settings
+tk_breadcrumb-description_: Profile information and personal preferences
+
+sections:
+  profileInfo:
+    tk_title_: Profile information
+    tk_meta-readonly_: Read-only
+    tk_first-name_: First name
+    tk_last-name_: Last name
+    tk_email_: Email
+    tk_roles_: Roles
+    tk_member-since_: Member since
+  memberships:
+    tk_title_: Memberships
+    tk_meta-one_: '{{accounts}} account · {{entities}} entity'
+    tk_meta-many_: '{{accounts}} accounts · {{entities}} entities'
+    tk_accounts_: Accounts
+    tk_entities_: Entities
+  preferences:
+    tk_title_: Preferences
+    tk_meta_: Personal settings
+    tk_theme_: Theme
+    tk_theme-light_: Light
+    tk_theme-dark_: Dark
+    tk_theme-system_: System
+    tk_language_: Language
+    tk_language-en_: English
+    tk_language-fr_: Français
+    tk_saving_: 'Saving…'
