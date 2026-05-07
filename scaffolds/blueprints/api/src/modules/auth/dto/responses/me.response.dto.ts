@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-import type { AccountSummary, Entity, MeResponse, OrganizationRef, People } from '@shared-types/index'
+import type { AccountSummary, Entity, LocaleValue, MeResponse, OrganizationRef, People, UserPreferences } from '@shared-types/index'
 
 export class AccountDto implements AccountSummary {
   @ApiProperty({
@@ -93,6 +93,22 @@ export class EntityDto implements Entity {
   organization: OrganizationDto | null
 }
 
+export class UserPreferencesSummaryDto implements UserPreferences {
+  @ApiProperty({
+    description: 'User preferred locale (matches the Prisma Locale enum)',
+    enum: ['EN', 'FR'],
+    example: 'EN'
+  })
+  locale: LocaleValue
+
+  @ApiProperty({
+    description: 'Avatar URL pointing to the storage bucket; null when the user has no custom avatar',
+    nullable: true,
+    example: 'https://cdn.example.com/avatars/123.png'
+  })
+  avatarUrl: string | null
+}
+
 export class MeResponseDto implements MeResponse {
   @ApiProperty({
     description: 'User unique identifier',
@@ -144,6 +160,12 @@ export class MeResponseDto implements MeResponse {
     type: [EntityDto]
   })
   entities: EntityDto[]
+
+  @ApiProperty({
+    description: 'User preferences (locale, avatar URL)',
+    type: UserPreferencesSummaryDto
+  })
+  preferences: UserPreferencesSummaryDto
 
   @ApiProperty({
     description: 'Account creation date',
