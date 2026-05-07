@@ -49,6 +49,7 @@ fields:
   errors:
     tk_locale_: Invalid locale
     tk_required_: This field is required
+    tk_invalid-url_: Invalid URL — must include http:// or https://
     tk_emailError_: This email is not valid
     tk_minLength_: This field does not meet the minimum length requirements
     tk_maxLength_: This field exceeds the maximum length requirements
