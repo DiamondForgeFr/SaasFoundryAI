@@ -22,9 +22,7 @@ export const buildSignupPayloadSchema = (messages: SignupPayloadMessages = {}) =
         .min(8, { message: messages.passwordMinLength ?? 'Password must be at least 8 characters long' })
         .max(40, { message: messages.passwordMaxLength ?? 'Password must not exceed 40 characters' })
         .regex(PASSWORD_REGEX, {
-          message:
-            messages.passwordComplexity ??
-            'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'
+          message: messages.passwordComplexity ?? 'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'
         }),
       locale: buildOptionalLocaleSchema(messages)
     })
@@ -95,9 +93,7 @@ export const buildResetPasswordPayloadSchema = (messages: ResetPasswordPayloadMe
         .min(8, { message: messages.passwordMinLength ?? 'Password must be at least 8 characters long' })
         .max(40, { message: messages.passwordMaxLength ?? 'Password must not exceed 40 characters' })
         .regex(PASSWORD_REGEX, {
-          message:
-            messages.passwordComplexity ??
-            'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'
+          message: messages.passwordComplexity ?? 'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'
         }),
       confirmPassword: z.string().min(1, { message: messages.confirmRequired ?? 'Password confirmation is required' })
     })

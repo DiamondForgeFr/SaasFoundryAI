@@ -5,6 +5,12 @@
  */
 export type IsoDateString = string | Date
 
+/**
+ * Locale codes accepted across the API and the web. Mirrors the Prisma
+ * `Locale` enum without coupling shared-types to Prisma.
+ */
+export type LocaleValue = 'EN' | 'FR'
+
 export interface Collection<T> {
   count: number
   values: T[]
