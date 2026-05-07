@@ -1,19 +1,14 @@
 /**
- * Resources
- */
-import { cn } from '@/utils/ui'
-
-/**
  * Dependencies
  */
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 /**
  * Components
  */
-import { Button } from '@/components/ui/shadcn/button'
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail, useSidebar } from '@/components/ui/shadcn/sidebar'
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail, SidebarSeparator, useSidebar } from '@/components/ui/shadcn/sidebar'
 
 import { NavSection } from '@/components/nav/nav-section'
 import { NavUser } from '@/components/nav/nav-user'
@@ -139,27 +134,38 @@ export const LayoutSidebar = ({ ...props }: ComponentProps<typeof Sidebar>) => {
   const { t: tNav } = useTranslation('nav')
   const isCollapsed = state === 'collapsed'
   const navigate = useNavigate()
-
-  const buttonClassName = cn(
-    'mt-6 flex items-center gap-2 font-semibold transition-all duration-200',
-    'rounded-sm shadow-none',
-    'bg-primary text-primary-foreground',
-    'hover:bg-primary/90 hover:scale-[1.03]',
-    isCollapsed ? 'mx-2 overflow-hidden text-xs justify-center' : 'mx-3 px-4 py-2 text-base justify-start'
-  )
+  const location = useLocation()
+  const isDashboardActive = location.pathname.startsWith('/dashboard')
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <Logo className={!isCollapsed ? 'cursor-pointer px-4 pt-2' : 'cursor-pointer'} isLong={!isCollapsed} onClick={() => navigate('/dashboard')} />
+        <Logo
+          className={!isCollapsed ? 'cursor-pointer px-3 pt-3 pb-1 [&>img]:h-12 [&>img]:w-auto [&>img]:max-w-full [&>img]:object-contain' : 'cursor-pointer [&>img]:h-8 [&>img]:w-auto'}
+          isLong={!isCollapsed}
+          onClick={() => navigate('/dashboard')}
+        />
       </SidebarHeader>
       <SidebarContent>
-        <Button className={buttonClassName} onClick={() => navigate('/dashboard')} tabIndex={0} aria-label={tNav('main-navigation.tk_dashboard_')}>
-          <ChartNoAxesCombined className="size-5 shrink-0 cursor-pointer" />
-          {!isCollapsed && <span className="ml-2 truncate">{tNav('main-navigation.tk_dashboard_')}</span>}
-        </Button>
+        <SidebarMenu className="mt-6 px-1">
+          <SidebarMenuItem className="relative">
+            {isDashboardActive && <span aria-hidden className="pointer-events-none absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-r bg-primary" />}
+            <SidebarMenuButton
+              isActive={isDashboardActive}
+              tooltip={tNav('main-navigation.tk_dashboard_')}
+              onClick={() => navigate('/dashboard')}
+              className="data-[active=true]:bg-sidebar-accent/70 data-[active=true]:font-semibold data-[active=true]:[&>svg]:text-primary"
+            >
+              <ChartNoAxesCombined />
+              <span>{tNav('main-navigation.tk_dashboard_')}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         {data.navigation.map((section, index) => (
-          <NavSection key={`nav-section-${index}`} section={section} />
+          <Fragment key={`nav-section-${index}`}>
+            <SidebarSeparator className="bg-sidebar-border/50 mx-2 my-1" />
+            <NavSection section={section} />
+          </Fragment>
         ))}
       </SidebarContent>
       <SidebarFooter>
