@@ -7,8 +7,10 @@ Production-ready React application generated with **SaaSFoundry** - An AI-First 
 Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
 
 1. Read `.saasfoundry.json` — the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
-2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this summary at session start.
-3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead of opening a scope dialogue.
+2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this
+   summary at session start.
+3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead
+   of opening a scope dialogue.
 
 ## Tech Stack
 
@@ -35,9 +37,11 @@ SaaSFoundry skills are specifically optimized for this project's structure, conv
 ```
 src/
 ├── components/
-│   ├── layout/       # App layout components
+│   ├── dialogs/      # App-level dialog/modal compositions
+│   ├── layout/       # App layout components (sidebar, topbar, wrappers)
 │   ├── nav/          # Navigation components
-│   └── ui/           # ShadCN UI components
+│   ├── theme/        # Theme provider + dark/light toggle
+│   └── ui/           # ShadCN UI compositions (custom/) — primitives live in @<project>/ui-primitives on monorepo
 ├── pages/
 │   ├── private/      # Protected pages (require auth)
 │   └── public/       # Public pages (login, register)
@@ -57,6 +61,7 @@ src/
 ## Code Conventions
 
 ### Component Pattern
+
 ```tsx
 // PascalCase for components
 export function UserProfile() {
@@ -73,11 +78,13 @@ export function UserProfile() {
 ```
 
 ### Path Aliases
+
 - `@/*` → `./src/*`
 - `@shared-types/*` → `./src/shared-types/*` (cross-wire TypeScript types)
 - `@shared-validation/*` → `./src/shared-validation/*` (Zod schemas reused on the API side)
 
 ### Styling
+
 - **TailwindCSS 4** for utility classes
 - **ShadCN** primitives for the design system (`Button`, `Dialog`, `Form`, …)
 - **Radix UI** for accessible primitives (consumed through ShadCN)
@@ -85,18 +92,23 @@ export function UserProfile() {
 - Theme tokens (colors, radii, animations, dark mode) live in a `theme.css` imported once in `src/index.css`
 
 ### API Integration
-- **Monorepo**: typed React Query hooks come from `@<root-package-name>/api-client/generated/api/<tag>/<tag>` (auto-emitted by orval from the API's OpenAPI snapshot). Hand-written hooks under `src/hooks/api/` are thin wrappers when extra logic is needed.
+
+- **Monorepo**: typed React Query hooks come from `@<root-package-name>/api-client/generated/api/<tag>/<tag>` (auto-emitted by orval from the API's OpenAPI snapshot). Hand-written hooks under
+  `src/hooks/api/` are thin wrappers when extra logic is needed.
 - **Multirepo**: hand-written React Query hooks under `src/hooks/api/` consume a typed fetch wrapper directly.
 - Cookie-based auth with automatic refresh
 - Type-safe end-to-end via shared types + auto-generated client (mono) or shared types alone (multi)
 
 ### 📦 Shared layers (mono vs multi)
 
-This blueprint always carries vendored copies of `src/shared-types/` and `src/shared-validation/` — that's the working source the web bundle compiles against. The full shared landscape diverges by topology:
+This blueprint always carries vendored copies of `src/shared-types/` and `src/shared-validation/` — that's the working source the web bundle compiles against. The full shared landscape diverges by
+topology:
 
 - **In a monorepo** (root has `packages/`):
-  - `src/shared-types/` and `src/shared-validation/` are mirrored from `<root>/packages/shared-{types,validation}/src/` — **edit hand-written files in all three places** (canonical + both apps' mirrors). The SaaSFoundry CLI's drift-guard tests block divergence.
-  - **ShadCN primitives** are not in `src/components/ui/shadcn/` — they live in the workspace package and are imported as `@<root-package-name>/ui-primitives/<name>` (see `package.json`). The Tailwind theme is pulled in via `@import "@<root-package-name>/ui-primitives/theme.css"` in `src/index.css`. App-specific compositions (logos, page-loaders, business widgets) stay under `src/components/`.
+  - `src/shared-types/` and `src/shared-validation/` are mirrored from `<root>/packages/shared-{types,validation}/src/` — **edit hand-written files in all three places** (canonical + both apps'
+    mirrors). The SaaSFoundry CLI's drift-guard tests block divergence.
+  - **ShadCN primitives** are not in `src/components/ui/shadcn/` — they live in the workspace package and are imported as `@<root-package-name>/ui-primitives/<name>` (see `package.json`). The Tailwind
+    theme is pulled in via `@import "@<root-package-name>/ui-primitives/theme.css"` in `src/index.css`. App-specific compositions (logos, page-loaders, business widgets) stay under `src/components/`.
   - **Typed API client**: `@<root-package-name>/api-client/generated/api/<tag>/<tag>` exposes `useXxx` React Query hooks generated from the API's OpenAPI snapshot.
   - **Module-deposited shared constants** (e.g. `STORAGE_LOGO_MAX_BYTES` in `shared-config`) — consume them via the workspace import; don't re-declare locally.
 - **In multirepo** (this app stands alone):
@@ -117,6 +129,7 @@ Run `sf status --claude-friendly --no-network` to confirm topology before changi
 - Husky enforces commit format + pre-push checks
 
 ### Commit Examples
+
 ```bash
 feat(#42): add user profile page
 fix(#43): resolve form validation issue
@@ -152,31 +165,36 @@ This project is pre-configured for AI development with Claude Code.
 Located in `.claude/skills/`:
 
 #### Git Workflows
-- **`/git-commit`** - Quick commit with conventional messages
+
+- **`/sf-git-commit`** - Quick commit with conventional messages
   - Auto-generates commit messages following project conventions
   - Includes ticket number and proper type
 
-- **`/git-fix-pr-comments`** - Implement PR review feedback
+- **`/sf-git-fix-pr-comments`** - Implement PR review feedback
   - Fetches PR comments from GitHub
   - Implements requested changes automatically
   - Creates new commits with fixes
 
 #### Integration grammar
-- **`/sf-integration-rules`** - Integration grammar router. Triggers when adding a page, an API hook, a form, a ShadCN composition, RBAC wiring, or i18n keys. Routes to `backend.md` / `frontend.md` / `topology.md` sub-guides — read first before scaffolding.
+
+- **`/sf-integration-rules`** - Integration grammar router. Triggers when adding a page, an API hook, a form, a ShadCN composition, RBAC wiring, or i18n keys. Routes to `backend.md` / `frontend.md` /
+  `topology.md` sub-guides — read first before scaffolding.
 
 #### Code Quality
-- **`/utils-fix-errors`** - Fix ESLint and TypeScript errors
+
+- **`/sf-utils-fix-errors`** - Fix ESLint and TypeScript errors
   - Parallel processing for fast fixes
   - Respects project conventions
   - Safe refactoring
 
-- **`/utils-fix-grammar`** - Fix grammar and spelling
+- **`/sf-utils-fix-grammar`** - Fix grammar and spelling
   - Preserves code formatting
   - Works on markdown, comments, docs
 
 ### 🎯 Common AI Workflows
 
 #### Implement a new page
+
 ```
 User: "Add a user settings page with form validation"
 Claude:
@@ -188,6 +206,7 @@ Claude:
 ```
 
 #### Fix styling issues
+
 ```
 User: "Make this page responsive for mobile"
 Claude:
@@ -197,6 +216,7 @@ Claude:
 ```
 
 #### Add translations
+
 ```
 User: "Add French translation for the login page"
 Claude:
@@ -208,12 +228,14 @@ Claude:
 ### ✅ Best Practices
 
 **DO**:
+
 - Trust the skills - they respect project conventions
 - Let AI handle repetitive tasks (commits, error fixes, translations)
 - Use ShadCN components for consistency
 - Review UI/UX choices manually
 
 **DON'T**:
+
 - Skip tests - E2E tests validate user flows
 - Bypass git hooks (`--no-verify`)
 - Ignore TypeScript errors
@@ -222,6 +244,7 @@ Claude:
 ### 🔒 Quality Gates
 
 All AI-generated code passes through:
+
 - **ESLint** - Code quality standards (React hooks rules)
 - **TypeScript** - Compile-time type safety
 - **Prettier** - Consistent code formatting
@@ -232,6 +255,7 @@ All AI-generated code passes through:
 ## Routing
 
 ### Protected Routes
+
 ```tsx
 // Requires authentication
 <Route element={<ProtectedLayout />}>
@@ -241,6 +265,7 @@ All AI-generated code passes through:
 ```
 
 ### Public Routes
+
 ```tsx
 // No authentication required
 <Route path="/login" element={<Login />} />
@@ -248,6 +273,7 @@ All AI-generated code passes through:
 ```
 
 ### Lazy Loading
+
 ```tsx
 // Automatic code splitting
 const Dashboard = lazy(() => import('./pages/private/Dashboard'))
@@ -256,6 +282,7 @@ const Dashboard = lazy(() => import('./pages/private/Dashboard'))
 ## Internationalization (i18n)
 
 ### Using Translations
+
 ```tsx
 import { useTranslation } from 'react-i18next'
 
@@ -267,12 +294,13 @@ function LoginPage() {
 ```
 
 ### Translation Files
+
 ```yaml
 # src/locales/en/auth.yml
 login:
-  title: "Sign In"
-  email: "Email Address"
-  password: "Password"
+  title: 'Sign In'
+  email: 'Email Address'
+  password: 'Password'
 ```
 
 ## Environment Variables
@@ -294,6 +322,7 @@ VITE_STORAGE_ENABLED="true"
 ## Testing
 
 ### E2E Tests (Playwright)
+
 ```bash
 npm run test:e2e
 # Tests full user flows in real browser
@@ -301,6 +330,7 @@ npm run test:e2e
 ```
 
 ### Writing Tests
+
 ```typescript
 test('user can login', async ({ page }) => {
   await page.goto('/login')
@@ -313,7 +343,7 @@ test('user can login', async ({ page }) => {
 
 ## Important Notes
 
-- This is a **generated project** from SaaSFoundry v{{VERSION}}
+- This is a **generated project** from SaaSFoundry v1.0.0-beta
 - Check `.saasfoundry.json` for installed modules and configuration
 - Update this CLAUDE.md as your project evolves
 - Add new components to ShadCN collection as needed

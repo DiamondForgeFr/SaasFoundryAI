@@ -249,16 +249,25 @@ const { t: tCommon } = useTranslation('common')
 // tAuth('signin.tk_title_') / tCommon('user.tk_email_')
 ```
 
-**Adding a new namespace is a 3-step change** — namespaces are eagerly registered:
+**Adding a new namespace is normally a 2-step change** — namespaces are **lazy-loaded by default** via `i18next-resources-to-backend`:
 
 1. Create `src/locales/en/<namespace>.yml` and `src/locales/fr/<namespace>.yml` with the same key tree.
-2. Add the namespace name to the `ns` array in `src/i18n.ts`:
+2. Use it in components: `useTranslation('<namespace>')`. The first call triggers the fetch of the YAML file; subsequent renders are cached.
 
-   ```ts
-   ns: ['common', 'nav', 'auth', 'page-errors', 'account', '<namespace>']
-   ```
+**Do not add the namespace to the `ns` array in `src/i18n.ts` by default.** That array is reserved for **universal namespaces** — those rendered on the layout shell or by the global error boundary on every route:
 
-3. Use it in components: `useTranslation('<namespace>')`.
+```ts
+// src/i18n.ts (current canonical set)
+ns: ['common', 'nav', 'page-errors']
+```
+
+Promote a feature namespace into `ns` **only** when it satisfies one of these criteria:
+
+- It is referenced by a layout component that renders on every authenticated/public route (e.g. sidebar, topbar, footer).
+- It is needed by the route guard or the global error boundary itself (otherwise the user sees a flash of `tk_<slug>_` keys before the lazy fetch resolves).
+- Profiling shows the lazy fetch causes a visible flicker on the golden path.
+
+Adding to `ns` costs initial bundle size and request waterfall — keep it minimal.
 
 If a key is missing in `fr/`, the fallback is `en` (`fallbackLng: 'en'`).
 
@@ -372,11 +381,7 @@ example in `backend.md`).
      tk_message_: No invoices yet
    ```
 
-   Register the namespace in `src/i18n.ts`:
-
-   ```ts
-   ns: ['common', 'nav', 'auth', 'page-errors', 'account', 'invoices']
-   ```
+   The namespace is picked up automatically the first time `useTranslation('invoices')` runs — **do not add it to the `ns` array in `src/i18n.ts`** unless the page sits on the layout shell or causes a visible flicker on the golden path (see the i18n section above for the promotion criteria).
 
 2. **Hook** — `src/hooks/api/invoices/queries/useFetchInvoices.ts`:
 
