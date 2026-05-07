@@ -102,7 +102,7 @@ export const useEntityCreate = () => {
       return schemas.response.parse(response)
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['account', variables.accountId, 'entities'] })
+      queryClient.invalidateQueries({ queryKey: ['account', variables.accountId] })
     },
     onError: (error) => {
       console.error(tEntities('errors.tk_createEntityError_'), error)
