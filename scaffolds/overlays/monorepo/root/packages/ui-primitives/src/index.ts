@@ -1,11 +1,11 @@
 /**
- * Public surface of `@{{PROJECT_NAME}}/ui-primitives`.
+ * Public surface of `@ui-rework/ui-primitives`.
  *
  * Two import patterns are supported:
  *   - cherry-pick (recommended for tree-shaking):
- *     `import { Button } from '@{{PROJECT_NAME}}/ui-primitives/button'`
+ *     `import { Button } from '@ui-rework/ui-primitives/button'`
  *   - barrel (utilities, hooks, occasional bulk import):
- *     `import { cn, useIsMobile } from '@{{PROJECT_NAME}}/ui-primitives'`
+ *     `import { cn, useIsMobile } from '@ui-rework/ui-primitives'`
  */
 
 export { cn } from './lib/utils'
