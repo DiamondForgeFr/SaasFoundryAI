@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-import type { Collection, EntityWithOrgRef, OrganizationRef } from '@shared-types/index'
+import type { Collection, EntityWithOrgRef, OrganizationRef, OrganizationType } from '@shared-types/index'
 
 export class OrganizationDto implements OrganizationRef {
   @ApiProperty({
@@ -14,6 +14,14 @@ export class OrganizationDto implements OrganizationRef {
     example: 'ACME Corporation'
   })
   name: string
+
+  @ApiProperty({
+    description: 'Organization type',
+    enum: ['COMPANY', 'ASSOCIATION', 'COMMUNITY'],
+    example: 'COMPANY',
+    required: false
+  })
+  type?: OrganizationType
 }
 
 export class EntityWithOrganizationDto implements EntityWithOrgRef {

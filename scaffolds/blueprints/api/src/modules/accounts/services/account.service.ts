@@ -177,7 +177,8 @@ export class AccountService {
             organization: entityLink.entity.organization
               ? {
                   id: entityLink.entity.organization.id,
-                  name: entityLink.entity.organization.name
+                  name: entityLink.entity.organization.name,
+                  type: entityLink.entity.organization.type
                 }
               : null
           }))
@@ -213,7 +214,8 @@ export class AccountService {
         organization: entity.organization
           ? {
               id: entity.organization.id,
-              name: entity.organization.name
+              name: entity.organization.name,
+              type: entity.organization.type
             }
           : null,
         createdAt: entity.createdAt,
@@ -561,7 +563,8 @@ export class AccountService {
             organization: entityLink.entity.organization
               ? {
                   id: entityLink.entity.organization.id,
-                  name: entityLink.entity.organization.name
+                  name: entityLink.entity.organization.name,
+                  type: entityLink.entity.organization.type
                 }
               : null
           }))
@@ -690,7 +693,8 @@ export class AccountService {
         organization: entity.organization
           ? {
               id: entity.organization.id,
-              name: entity.organization.name
+              name: entity.organization.name,
+              type: entity.organization.type
             }
           : null,
         createdAt: entity.createdAt,
