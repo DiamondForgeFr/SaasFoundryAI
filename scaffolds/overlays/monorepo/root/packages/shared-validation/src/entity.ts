@@ -34,14 +34,24 @@ export const buildInlineOrganizationSchema = (messages: CreateEntityPayloadMessa
         })
         .optional(),
       website: z
-        .union([
-          z.literal(''),
-          z
-            .string()
-            .url({ message: messages.organizationWebsiteInvalid ?? 'Invalid URL — must include http:// or https://' })
-            .max(100, { message: messages.organizationWebsiteMaxLength ?? 'Website must not exceed 100 characters' })
-        ])
+        .string()
+        .max(100, { message: messages.organizationWebsiteMaxLength ?? 'Website must not exceed 100 characters' })
         .optional()
+        .transform((v) => {
+          if (!v) return v
+          return /^https?:\/\//i.test(v) ? v : `https://${v}`
+        })
+        .refine(
+          (v) => {
+            if (!v) return true
+            try {
+              return new URL(v).hostname.includes('.')
+            } catch {
+              return false
+            }
+          },
+          { message: messages.organizationWebsiteInvalid ?? 'Invalid URL — example: example.com' }
+        )
     })
     .strict()
 
