@@ -22,12 +22,10 @@ interface CustomPage extends Page {
  * Setup authenticated user
  */
 async function setupAuthenticatedUser(page: CustomPage, user: 'admin' | 'user') {
-  // First navigate to the app
   await page.goto('/')
 
   const meEndpoint = user === 'admin' ? authTestApi.meAdmin : authTestApi.meUser
 
-  // Mock the user endpoint
   await page.mockRoute(meEndpoint.URL, async (route) => {
     await route.fulfill({
       status: meEndpoint.success.status,
@@ -36,7 +34,6 @@ async function setupAuthenticatedUser(page: CustomPage, user: 'admin' | 'user') 
     })
   })
 
-  // Now set localStorage after the page is loaded
   await page.evaluate((userData) => {
     localStorage.setItem('authMe', JSON.stringify(userData))
   }, meEndpoint.success.body)
@@ -47,10 +44,8 @@ async function setupAuthenticatedUser(page: CustomPage, user: 'admin' | 'user') 
  */
 test.describe('Account Management Flow', () => {
   test.beforeEach(async ({ page }) => {
-    // Setup API interceptor to avoid accidental API calls
     await setupApiInterceptor(page, testApi.interceptorURL)
 
-    // Mock account data by default
     await (page as CustomPage).mockRoute(testApi.account.URL, async (route) => {
       await route.fulfill({
         status: testApi.account.success.status,
@@ -58,55 +53,59 @@ test.describe('Account Management Flow', () => {
         body: JSON.stringify(testApi.account.success.body)
       })
     })
+
+    // Empty invitations by default — overridden in Users describe
+    await (page as CustomPage).mockRoute(testApi.invitations.URL, async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: testApi.invitations.success.status,
+          contentType: 'application/json',
+          body: JSON.stringify(testApi.invitations.success.bodyEmpty)
+        })
+      }
+    })
   })
 
   test('should not display account menu item if user has no permission', async ({ page }) => {
-    // Setup authenticated user
     await setupAuthenticatedUser(page as CustomPage, 'user')
     await page.goto(authSelectors.dashboard.URL)
 
-    // Navigate to the account page
     await page.getByRole('button', authSelectors.dashboard.cta.userMenu).click()
     await expect(page.getByRole('menuitem', authSelectors.dashboard.cta.account)).not.toBeVisible()
 
-    // Check page access
     await page.goto(selectors.URL)
     await expect(page).toHaveURL(authSelectors.dashboard.URL)
   })
 
   test('should display account tabs with overview tab active for admin user', async ({ page }) => {
-    // Setup authenticated user
     await setupAuthenticatedUser(page as CustomPage, 'admin')
     await page.goto(authSelectors.dashboard.URL)
 
-    // Navigate to the account page
     await page.getByRole('button', authSelectors.dashboard.cta.userMenu).click()
     await page.getByRole('menuitem', authSelectors.dashboard.cta.account).click()
 
-    // Check for the success URL
     await expect(page).toHaveURL(selectors.accountOverview.successURL)
 
-    // Check for the overview tab being active
     await expect(page.getByRole('tab', selectors.sectionTabs.overview)).toHaveAttribute('data-state', 'active')
     await expect(page.getByRole('tab', selectors.sectionTabs.entities)).toBeVisible()
     await expect(page.getByRole('tab', selectors.sectionTabs.users)).toBeVisible()
 
-    // Check overview tab content
-    await expect(page.getByTestId(selectors.accountOverview.accountInfo.blockId)).toBeVisible()
-    await expect(page.getByTestId(selectors.accountOverview.statisticsCards.blockId)).toBeVisible()
+    // Overview structural blocks (KPIs + recent users + recent entities + roles)
+    await expect(page.getByTestId(selectors.accountOverview.kpis.blockId)).toBeVisible()
     await expect(page.getByTestId(selectors.accountOverview.recentUsers.blockId)).toBeVisible()
     await expect(page.getByTestId(selectors.accountOverview.recentEntities.blockId)).toBeVisible()
-    await expect(page.getByTestId(selectors.accountOverview.recentRoles.blockId)).toBeVisible()
+    await expect(page.getByTestId(selectors.accountOverview.roles.blockId)).toBeVisible()
   })
 
   test('should not have translation keys in the page', async ({ page }) => {
+    await setupAuthenticatedUser(page as CustomPage, 'admin')
+    await page.goto(selectors.URL)
     const elements = await page.$$('text=/.tk_/')
     expect(elements.length).toBe(0)
   })
 
   test.describe('Account Overview', () => {
     test.beforeEach(async ({ page }) => {
-      // Setup authenticated user
       await setupAuthenticatedUser(page as CustomPage, 'admin')
       await page.goto(selectors.URL)
     })
@@ -115,164 +114,73 @@ test.describe('Account Management Flow', () => {
       const breadcrumb = page.getByLabel(globaleSelectors.breadcrumb.ariaLabel.name)
       const pageDescription = page.getByTestId(globaleSelectors.breadcrumb.blockId)
       await expect(breadcrumb).toBeVisible()
-      await expect(breadcrumb.locator('li')).toHaveCount(3)
-      await expect(breadcrumb.locator('li').nth(0)).toHaveText('Account')
-      await expect(breadcrumb.locator('li').nth(2)).toHaveText('Overview')
+      await expect(breadcrumb.locator('li').first()).toHaveText('Account')
+      await expect(breadcrumb.locator('li').last()).toHaveText('Overview')
       await expect(pageDescription).toHaveText('View and manage your account details')
     })
 
-    test('should not have translation keys in the page', async ({ page }) => {
-      const elements = await page.$$('text=/.tk_/')
-      expect(elements.length).toBe(0)
-    })
+    test('should display KPI row with users / entities / pending', async ({ page }) => {
+      const usersKpi = page.getByTestId(selectors.accountOverview.kpis.users.blockId)
+      const entitiesKpi = page.getByTestId(selectors.accountOverview.kpis.entities.blockId)
+      const pendingKpi = page.getByTestId(selectors.accountOverview.kpis.pending.blockId)
 
-    test('should display account information correctly', async ({ page }) => {
-      const accountBlock = page.getByTestId(selectors.accountOverview.accountInfo.blockId)
+      await expect(usersKpi).toBeVisible()
+      await expect(entitiesKpi).toBeVisible()
+      await expect(pendingKpi).toBeVisible()
 
-      // Check account title
-      await expect(accountBlock.getByText(selectors.accountOverview.accountInfo.title)).toBeVisible()
-
-      // Check account subtitle
-      await expect(accountBlock.getByText(selectors.accountOverview.accountInfo.subtitle)).toBeVisible()
-
-      // Check account name
-      await expect(accountBlock.getByText(testApi.account.success.body.name)).toBeVisible()
-
-      // Check account ID
-      await expect(accountBlock.getByText(testApi.account.success.body.id)).toBeVisible()
-
-      // Check active badge
-      await expect(accountBlock.getByText('Active')).toBeVisible()
-
-      // Check created at
-      const createdAt = new Date(testApi.account.success.body.createdAt).toLocaleString('en-US')
-      await expect(accountBlock.getByText(new RegExp(`Created at\\s*${createdAt}`))).toBeVisible()
-
-      // Check updated at
-      const updatedAt = new Date(testApi.account.success.body.updatedAt).toLocaleString('en-US')
-      await expect(accountBlock.getByText(new RegExp(`Updated at\\s*${updatedAt}`))).toBeVisible()
-    })
-
-    test('should display statistics cards correctly', async ({ page }) => {
-      const statisticsBlock = page.getByTestId(selectors.accountOverview.statisticsCards.blockId)
-
-      // Check statistics title
-      await expect(statisticsBlock.getByText(selectors.accountOverview.statisticsCards.title)).toBeVisible()
-
-      // Check statistics subtitle
-      await expect(statisticsBlock.getByText(selectors.accountOverview.statisticsCards.subtitle)).toBeVisible()
-
-      // Check users count
-      const usersStats = statisticsBlock.getByLabel(selectors.accountOverview.statisticsCards.users.ariaLabel.name)
-      await expect(usersStats.getByText(testApi.account.success.body.users.count.toString())).toBeVisible()
-      await expect(usersStats.getByText(selectors.accountOverview.statisticsCards.users.label)).toBeVisible()
-
-      // Check entities count
-      const entitiesStats = statisticsBlock.getByLabel(selectors.accountOverview.statisticsCards.entities.ariaLabel.name)
-      await expect(entitiesStats.getByText(testApi.account.success.body.entities.count.toString())).toBeVisible()
-      await expect(entitiesStats.getByText(selectors.accountOverview.statisticsCards.entities.label)).toBeVisible()
-
-      // Check roles count
-      const rolesStats = statisticsBlock.getByLabel(selectors.accountOverview.statisticsCards.roles.ariaLabel.name)
-      await expect(rolesStats.getByText(testApi.account.success.body.roles.count.toString())).toBeVisible()
-      await expect(rolesStats.getByText(selectors.accountOverview.statisticsCards.roles.label)).toBeVisible()
+      // The count value is the only "exact" match for the digit (sub-text may contain other digits)
+      await expect(usersKpi.getByText(testApi.account.success.body.users.count.toString(), { exact: true })).toBeVisible()
+      await expect(entitiesKpi.getByText(testApi.account.success.body.entities.count.toString(), { exact: true })).toBeVisible()
+      await expect(pendingKpi.getByText('0', { exact: true })).toBeVisible()
     })
 
     test('should display recent users correctly', async ({ page }) => {
       const recentUsersBlock = page.getByTestId(selectors.accountOverview.recentUsers.blockId)
 
-      // Check users title
       await expect(recentUsersBlock.getByText(selectors.accountOverview.recentUsers.title)).toBeVisible()
 
-      // Check users subtitle
-      await expect(recentUsersBlock.getByText(selectors.accountOverview.recentUsers.subtitle)).toBeVisible()
+      const rows = recentUsersBlock.getByTestId(selectors.accountOverview.recentUsers.rowId)
+      await expect(rows).toHaveCount(testApi.account.success.body.users.values.length)
 
-      // Check that display as many users as the account (because we have 2 users in the account)
-      await expect(recentUsersBlock.locator('li')).toHaveCount(testApi.account.success.body.users.values.length)
-
-      // Check that display correct information in user
       const firstUserApi = testApi.account.success.body.users.values[0]
-      const firstUserUI = recentUsersBlock.locator('li').first()
-      const createdAt = new Date(firstUserApi.createdAt).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric'
-      })
+      const firstUserUI = rows.first()
 
-      await expect(firstUserUI.getByText(new RegExp(firstUserApi.people?.firstname))).toBeVisible()
-      await expect(firstUserUI.getByText(new RegExp(firstUserApi.people?.lastname))).toBeVisible()
-      await expect(firstUserUI.getByText(new RegExp(firstUserApi.email))).toBeVisible()
-      await expect(firstUserUI.getByText(new RegExp(createdAt))).toBeVisible()
+      await expect(firstUserUI.getByText(firstUserApi.email)).toBeVisible()
 
-      // Check "View all users" link
-      await expect(recentUsersBlock.getByRole('link', selectors.accountOverview.recentUsers.cta.viewAll)).toBeVisible()
+      // "View all users" CTA visible when there is at least one user
+      await expect(recentUsersBlock.getByRole('button', selectors.accountOverview.recentUsers.cta.viewAll)).toBeVisible()
     })
 
     test('should display recent entities correctly', async ({ page }) => {
       const recentEntitiesBlock = page.getByTestId(selectors.accountOverview.recentEntities.blockId)
 
-      // Check users title
       await expect(recentEntitiesBlock.getByText(selectors.accountOverview.recentEntities.title)).toBeVisible()
 
-      // Check users subtitle
-      await expect(recentEntitiesBlock.getByText(selectors.accountOverview.recentEntities.subtitle)).toBeVisible()
+      const rows = recentEntitiesBlock.getByTestId(selectors.accountOverview.recentEntities.rowId)
+      await expect(rows).toHaveCount(testApi.account.success.body.entities.values.length)
 
-      // Check that display as many users as the account (because we have 2 users in the account)
-      await expect(recentEntitiesBlock.locator('li')).toHaveCount(testApi.account.success.body.entities.values.length)
-
-      // Check that display correct information in user
       const firstEntityApi = testApi.account.success.body.entities.values[0]
-      const firstEntityUI = recentEntitiesBlock.locator('li').first()
-      const createdAt = new Date(firstEntityApi.createdAt).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric'
-      })
+      await expect(rows.first().getByText(new RegExp(firstEntityApi.name))).toBeVisible()
 
-      await expect(firstEntityUI.getByText(new RegExp(firstEntityApi.name))).toBeVisible()
-      await expect(firstEntityUI.getByText(new RegExp(firstEntityApi.organization?.name))).toBeVisible()
-      await expect(firstEntityUI.getByText(new RegExp(createdAt))).toBeVisible()
-
-      // Check "View all users" link
-      await expect(recentEntitiesBlock.getByRole('link', selectors.accountOverview.recentEntities.cta.viewAll)).toBeVisible()
+      await expect(recentEntitiesBlock.getByRole('button', selectors.accountOverview.recentEntities.cta.viewAll)).toBeVisible()
     })
 
-    test('should display recent roles correctly', async ({ page }) => {
-      const recentRolesBlock = page.getByTestId(selectors.accountOverview.recentRoles.blockId)
+    test('should display roles section with all account roles', async ({ page }) => {
+      const rolesBlock = page.getByTestId(selectors.accountOverview.roles.blockId)
 
-      // Check users title
-      await expect(recentRolesBlock.getByText(selectors.accountOverview.recentRoles.title)).toBeVisible()
+      await expect(rolesBlock.getByText(selectors.accountOverview.roles.title)).toBeVisible()
 
-      // Check users subtitle
-      await expect(recentRolesBlock.getByText(selectors.accountOverview.recentRoles.subtitle)).toBeVisible()
-
-      // Check that display as many users as the account (because we have 2 users in the account)
-      await expect(recentRolesBlock.locator('li')).toHaveCount(testApi.account.success.body.roles.values.length)
-
-      // Check that display correct information in user
-      const firstRoleApi = testApi.account.success.body.roles.values[0]
-      const firstRoleUI = recentRolesBlock.locator('li').first()
-      const createdAt = new Date(firstRoleApi.createdAt).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric'
-      })
-
-      await expect(firstRoleUI.getByText(new RegExp(firstRoleApi.name))).toBeVisible()
-      await expect(firstRoleUI.getByText(new RegExp(firstRoleApi.description))).toBeVisible()
-      await expect(firstRoleUI.getByText(new RegExp(createdAt))).toBeVisible()
+      // RolesCard renders up to 6 roles in a grid (built-in roles get translated labels)
+      const cards = rolesBlock.getByTestId(selectors.accountOverview.roles.cardId)
+      await expect(cards).toHaveCount(testApi.account.success.body.roles.values.length)
     })
   })
 
   test.describe('Account Entities', () => {
     test.beforeEach(async ({ page }) => {
-      // Setup authenticated user
       await setupAuthenticatedUser(page as CustomPage, 'admin')
-
-      // First navigate to the account page
       await page.goto(selectors.URL)
 
-      // Mock entities data by default
       await (page as CustomPage).mockRoute(testApi.entities.URL, async (route) => {
         await route.fulfill({
           status: testApi.entities.success.status,
@@ -281,7 +189,6 @@ test.describe('Account Management Flow', () => {
         })
       })
 
-      // Then click on the entities tab
       await page.getByRole('tab', selectors.sectionTabs.entities).click()
     })
 
@@ -289,9 +196,8 @@ test.describe('Account Management Flow', () => {
       const breadcrumb = page.getByLabel(globaleSelectors.breadcrumb.ariaLabel.name)
       const pageDescription = page.getByTestId(globaleSelectors.breadcrumb.blockId)
       await expect(breadcrumb).toBeVisible()
-      await expect(breadcrumb.locator('li')).toHaveCount(3)
-      await expect(breadcrumb.locator('li').nth(0)).toHaveText('Account')
-      await expect(breadcrumb.locator('li').nth(2)).toHaveText('Entities')
+      await expect(breadcrumb.locator('li').first()).toHaveText('Account')
+      await expect(breadcrumb.locator('li').last()).toHaveText('Entities')
       await expect(pageDescription).toHaveText('Manage your business entities and their settings')
       await expect(page).toHaveURL(selectors.accountEntities.successURL)
     })
@@ -301,85 +207,62 @@ test.describe('Account Management Flow', () => {
       expect(elements.length).toBe(0)
     })
 
-    test('should display filters and action button', async ({ page }) => {
-      // Check search & status filters
+    test('should display filters and create CTA', async ({ page }) => {
       await expect(page.getByTestId(globaleSelectors.filters.search.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.status.blockId)).toBeVisible()
-      // Check create entity button
       await expect(page.getByRole('button', selectors.accountEntities.cta.createEntity)).toBeVisible()
     })
 
-    test('should display table with correct columns', async ({ page }) => {
-      const headers = selectors.accountEntities.table.headers
-      await expect(page.getByRole('columnheader', headers.entity)).toBeVisible()
-      await expect(page.getByRole('columnheader', headers.status)).toBeVisible()
-      await expect(page.getByRole('columnheader', headers.organization)).toBeVisible()
-      await expect(page.getByRole('columnheader', headers.createdAt)).toBeVisible()
-    })
-
-    test('should display correct entity row with all data', async ({ page }) => {
-      const rows = page.locator('tbody tr')
+    test('should display entities table with API data', async ({ page }) => {
+      const rows = page.getByTestId(selectors.accountEntities.table.rowId)
       await expect(rows).toHaveCount(testApi.entities.success.body.items.length)
 
       const firstEntity = testApi.entities.success.body.items[0]
       const firstRow = rows.first()
 
-      // Check entity name (shown as sub-text under organization name)
+      // Organization name is the primary label, entity name is shown as sub-text when different
+      await expect(firstRow.getByText(new RegExp(firstEntity.organization.name))).toBeVisible()
       await expect(firstRow.getByText(new RegExp(firstEntity.name))).toBeVisible()
-
-      // Check status
-      await expect(firstRow.getByText(/Active/i)).toBeVisible()
-
-      // Check organization (appears in both entity name cell and organization column, use .first())
-      await expect(firstRow.getByText(new RegExp(firstEntity.organization.name)).first()).toBeVisible()
-
-      // Check created at
-      const createdAt = new Date(firstEntity.createdAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      })
-      // Check created at format (ex: Jun 2, 2025)
-      await expect(firstRow.getByText(new RegExp(createdAt))).toBeVisible()
+      await expect(firstRow.getByText(/^Active$/i)).toBeVisible()
     })
 
     test.describe('Create entity', () => {
-      test('should display create entity modal', async ({ page }) => {
+      test('should display create entity dialog with organization fields', async ({ page }) => {
         const dialog = page.getByRole('dialog')
         await page.getByRole('button', selectors.accountEntities.cta.createEntity).click()
         await expect(dialog).toBeVisible()
 
-        // Check dialog header
         await expect(dialog.getByText(new RegExp(selectors.accountEntities.newEntityDialog.title.name))).toBeVisible()
         await expect(dialog.getByText(new RegExp(selectors.accountEntities.newEntityDialog.subtitle.name))).toBeVisible()
-        // Check create button
-        await expect(page.getByRole('button', selectors.accountEntities.newEntityDialog.cta.create)).toBeVisible()
-        // Check organization content
+
         const organizationContent = dialog.getByTestId(selectors.accountEntities.newEntityDialog.organization.blockId)
-        await expect(organizationContent.getByText(new RegExp(selectors.accountEntities.newEntityDialog.organization.title.name))).toBeVisible()
+        await expect(organizationContent).toBeVisible()
+
+        // Type cards (Company / Association / Community)
+        await expect(organizationContent.getByRole('button', selectors.accountEntities.newEntityDialog.organization.types.company)).toBeVisible()
+        await expect(organizationContent.getByRole('button', selectors.accountEntities.newEntityDialog.organization.types.association)).toBeVisible()
+        await expect(organizationContent.getByRole('button', selectors.accountEntities.newEntityDialog.organization.types.community)).toBeVisible()
+
+        // Form fields (FloatingLabelInput places the label inside the input wrapper)
         await expect(organizationContent.getByLabel(globaleSelectors.fields.name)).toBeVisible()
         await expect(organizationContent.getByLabel(globaleSelectors.fields.description)).toBeVisible()
-        await expect(organizationContent.getByLabel(globaleSelectors.fields.type)).toBeVisible()
         await expect(organizationContent.getByLabel(globaleSelectors.fields.website)).toBeVisible()
 
-        // Check organization type
-        await organizationContent.getByRole('combobox', selectors.accountEntities.newEntityDialog.organization.types.cta).click()
-        await expect(page.getByRole('listbox').getByText(selectors.accountEntities.newEntityDialog.organization.types.list.name)).toBeVisible()
+        await expect(dialog.getByRole('button', selectors.accountEntities.newEntityDialog.cta.create)).toBeVisible()
       })
 
-      test('should not create entity if form is invalid & rise error messages', async ({ page }) => {
+      test('should not create entity if form is invalid & raise error message', async ({ page }) => {
         const dialog = page.getByRole('dialog')
         await page.getByRole('button', selectors.accountEntities.cta.createEntity).click()
         await expect(dialog).toBeVisible()
 
-        // Check error message
-        dialog.getByRole('button', selectors.accountEntities.newEntityDialog.cta.create).click()
+        await dialog.getByRole('button', selectors.accountEntities.newEntityDialog.cta.create).click()
+
         const organizationContent = dialog.getByTestId(selectors.accountEntities.newEntityDialog.organization.blockId)
         await expect(organizationContent.getByText(globaleSelectors.fields.errors.minLength)).toBeVisible()
       })
 
       test('should create entity with organization', async ({ page }) => {
-        // Mock create organization
         await (page as CustomPage).mockRoute(testApi.createOrganization.URL, async (route) => {
           await route.fulfill({
             status: testApi.createOrganization.success.status,
@@ -388,7 +271,6 @@ test.describe('Account Management Flow', () => {
           })
         })
 
-        // Mock create entity
         await (page as CustomPage).mockRoute(testApi.createEntity.URL, async (route) => {
           await route.fulfill({
             status: testApi.createEntity.success.status,
@@ -397,7 +279,6 @@ test.describe('Account Management Flow', () => {
           })
         })
 
-        // Mock entities data by default
         await (page as CustomPage).mockRoute(testApi.entities.URL, async (route) => {
           await route.fulfill({
             status: testApi.entities.success.status,
@@ -410,17 +291,14 @@ test.describe('Account Management Flow', () => {
         await page.getByRole('button', selectors.accountEntities.cta.createEntity).click()
         await expect(dialog).toBeVisible()
 
-        // Fill Organization form with valid data
         const organizationContent = dialog.getByTestId(selectors.accountEntities.newEntityDialog.organization.blockId)
         await organizationContent.getByLabel(globaleSelectors.fields.name).fill(testData.organizationName2)
         await organizationContent.getByLabel(globaleSelectors.fields.description).fill(testData.organizationDescription2)
 
-        // Click on create button
-        await page.getByRole('button', selectors.accountEntities.newEntityDialog.cta.create).click()
+        await dialog.getByRole('button', selectors.accountEntities.newEntityDialog.cta.create).click()
         await expect(dialog).not.toBeVisible({ timeout: 5000 })
 
-        // Check that the entity is created
-        const rows = page.locator('tbody tr')
+        const rows = page.getByTestId(selectors.accountEntities.table.rowId)
         await expect(rows).toHaveCount(testApi.entities.success.body2.items.length)
       })
     })
@@ -428,13 +306,9 @@ test.describe('Account Management Flow', () => {
 
   test.describe('Account Users', () => {
     test.beforeEach(async ({ page }) => {
-      // Setup authenticated user
       await setupAuthenticatedUser(page as CustomPage, 'admin')
-
-      // First navigate to the account page
       await page.goto(selectors.URL)
 
-      // Mock entities data by default
       await (page as CustomPage).mockRoute(testApi.entities.URL, async (route) => {
         await route.fulfill({
           status: testApi.entities.success.status,
@@ -443,7 +317,6 @@ test.describe('Account Management Flow', () => {
         })
       })
 
-      // Mock roles data for roles filter
       await (page as CustomPage).mockRoute(testApi.roles.URL, async (route) => {
         await route.fulfill({
           status: testApi.roles.success.status,
@@ -452,7 +325,6 @@ test.describe('Account Management Flow', () => {
         })
       })
 
-      // Mock invitations data
       await (page as CustomPage).mockRoute(testApi.invitations.URL, async (route) => {
         if (route.request().method() === 'GET') {
           await route.fulfill({
@@ -463,7 +335,6 @@ test.describe('Account Management Flow', () => {
         }
       })
 
-      // Mock users data by default
       await (page as CustomPage).mockRoute(testApi.users.URL, async (route) => {
         await route.fulfill({
           status: testApi.users.success.status,
@@ -472,7 +343,6 @@ test.describe('Account Management Flow', () => {
         })
       })
 
-      // Then click on the users tab
       await page.getByRole('tab', selectors.sectionTabs.users).click()
     })
 
@@ -480,9 +350,8 @@ test.describe('Account Management Flow', () => {
       const breadcrumb = page.getByLabel(globaleSelectors.breadcrumb.ariaLabel.name)
       const pageDescription = page.getByTestId(globaleSelectors.breadcrumb.blockId)
       await expect(breadcrumb).toBeVisible()
-      await expect(breadcrumb.locator('li')).toHaveCount(3)
-      await expect(breadcrumb.locator('li').nth(0)).toHaveText('Account')
-      await expect(breadcrumb.locator('li').nth(2)).toHaveText('Users')
+      await expect(breadcrumb.locator('li').first()).toHaveText('Account')
+      await expect(breadcrumb.locator('li').last()).toHaveText('Users')
       await expect(pageDescription).toHaveText('Manage your team members and their permissions')
       await expect(page).toHaveURL(selectors.accountUsers.successURL)
     })
@@ -492,102 +361,72 @@ test.describe('Account Management Flow', () => {
       expect(elements.length).toBe(0)
     })
 
-    test('should display filters and action button', async ({ page }) => {
-      // Check search & status filters
+    test('should display filters and invite CTA', async ({ page }) => {
       await expect(page.getByTestId(globaleSelectors.filters.search.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.status.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.entities.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.roles.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.directUsers.blockId)).toBeVisible()
-      // Check create entity button
       await expect(page.getByRole('button', selectors.accountUsers.cta.inviteUser)).toBeVisible()
     })
 
-    test('should display table with correct columns', async ({ page }) => {
-      const headers = selectors.accountUsers.table.headers
-      await expect(page.getByRole('columnheader', headers.user)).toBeVisible()
-      await expect(page.getByRole('columnheader', headers.status)).toBeVisible()
-      await expect(page.getByRole('columnheader', headers.entities)).toBeVisible()
-      await expect(page.getByRole('columnheader', headers.roles)).toBeVisible()
-      await expect(page.getByRole('columnheader', headers.createdAt)).toBeVisible()
-    })
-
-    test('should display correct entity row with all data', async ({ page }) => {
-      const rows = page.locator('tbody tr')
+    test('should display users table with API data', async ({ page }) => {
+      const rows = page.getByTestId(selectors.accountUsers.table.rowId)
       await expect(rows).toHaveCount(testApi.users.success.body.items.length)
 
       const firstUser = testApi.users.success.body.items[0]
       const firstRow = rows.first()
 
-      // Check entity name and description
       await expect(firstRow.getByText(`${firstUser.people.firstname} ${firstUser.people.lastname}`)).toBeVisible()
       await expect(firstRow.getByText(firstUser.email)).toBeVisible()
-
-      // Check status
-      await expect(firstRow.getByText(/Active/i)).toBeVisible()
-
-      // Check entities
-      await expect(firstRow.getByText(new RegExp(firstUser.entities[0].name))).toBeVisible()
-      await expect(firstRow.getByText(new RegExp(firstUser.entities[0].organization.name))).toBeVisible()
-
-      // Check roles
-      await expect(firstRow.getByText(new RegExp(firstUser.roles[0].name))).toBeVisible()
-
-      // Check created at
-      const createdAt = new Date(firstUser.createdAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      })
-      // Check created at format (ex: Jun 2, 2025)
-      await expect(firstRow.getByText(new RegExp(createdAt))).toBeVisible()
+      await expect(firstRow.getByText(/^Active$/i)).toBeVisible()
     })
 
     test.describe('Invite user', () => {
-      test('should display invite user modal', async ({ page }) => {
+      test('should display invite user dialog', async ({ page }) => {
         const dialog = page.getByRole('dialog')
         await page.getByRole('button', selectors.accountUsers.cta.inviteUser).click()
         await expect(dialog).toBeVisible()
 
-        // Check dialog header
         await expect(dialog.getByRole('heading', selectors.accountUsers.inviteUserDialog.title)).toBeVisible()
-        await expect(dialog.getByText(new RegExp(selectors.accountUsers.inviteUserDialog.subtitle.name))).toBeVisible()
-        // Check create button
-        await expect(page.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite)).toBeVisible()
-        // Checkform
+
+        // Section markers (A — Who? / B — Access scope / C — Roles)
+        await expect(dialog.getByText(selectors.accountUsers.inviteUserDialog.sections.who)).toBeVisible()
+        await expect(dialog.getByText(selectors.accountUsers.inviteUserDialog.sections.accessScope)).toBeVisible()
+        await expect(dialog.getByText(selectors.accountUsers.inviteUserDialog.sections.roles)).toBeVisible()
+
+        // Form fields
         await expect(dialog.getByLabel(globaleSelectors.fields.email)).toBeVisible()
         await expect(dialog.getByLabel(globaleSelectors.fields.firstname)).toBeVisible()
         await expect(dialog.getByLabel(globaleSelectors.fields.lastname)).toBeVisible()
 
-        // Check roles and entities filters
-        const rolesFilter = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.roles.blockId)
-        const rolesData = testApi.roles.success.body.items
-        await expect(rolesFilter).toBeVisible()
-        await expect(rolesFilter.locator('li').nth(0)).toHaveText(new RegExp(rolesData[1].name))
-        await expect(rolesFilter.locator('li').nth(1)).toHaveText(new RegExp(rolesData[2].name))
+        // Roles list (built-in `guest` is filtered out in the dialog)
+        const rolesList = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.roles.blockId)
+        await expect(rolesList).toBeVisible()
+        const roleTiles = rolesList.getByTestId(selectors.accountUsers.inviteUserDialog.roles.tileId)
+        const visibleRoles = testApi.roles.success.body.items.filter((r) => r.name.toLowerCase() !== 'guest')
+        await expect(roleTiles).toHaveCount(visibleRoles.length)
 
-        const entitiesFilter = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.entities.blockId)
-        const entitiesData = testApi.entities.success.body.items
-        await expect(entitiesFilter).toBeVisible()
-        await expect(entitiesFilter.locator('li').nth(0)).toHaveText(new RegExp(entitiesData[0].organization.name))
+        // Access scope (account access button + entities list)
+        await expect(dialog.getByTestId(selectors.accountUsers.inviteUserDialog.accessScope.accountAccessId)).toBeVisible()
+        const entityTiles = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.accessScope.entityTileId)
+        await expect(entityTiles).toHaveCount(testApi.entities.success.body.items.length)
+
+        await expect(dialog.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite)).toBeVisible()
       })
 
-      test('should not invite user if form is invalid & rise error messages', async ({ page }) => {
+      test('should not invite user if form is invalid & raise error messages', async ({ page }) => {
         const dialog = page.getByRole('dialog')
-        await page.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite).click()
+        await page.getByRole('button', selectors.accountUsers.cta.inviteUser).click()
         await expect(dialog).toBeVisible()
 
-        // Check error message
-        dialog.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite).click()
-        const emailContent = dialog.getByLabel(globaleSelectors.fields.email)
-        await expect(emailContent.locator('..').getByText(globaleSelectors.fields.errors.minLength)).toBeVisible()
+        await dialog.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite).click()
 
-        const entitiesFilter = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.entities.blockId)
-        await expect(entitiesFilter.locator('..').getByText(globaleSelectors.fields.errors.minOneEntityOrDirectLink)).toBeVisible()
+        // Email field error (minLength on empty input)
+        await expect(dialog.getByText(globaleSelectors.fields.errors.minLength).first()).toBeVisible()
       })
 
       test('should invite user in entity', async ({ page }) => {
-        // Mock create organization
         await (page as CustomPage).mockRoute(testApi.inviteUser.URL, async (route) => {
           if (route.request().method() === 'POST') {
             await route.fulfill({
@@ -595,13 +434,6 @@ test.describe('Account Management Flow', () => {
               contentType: 'application/json',
               body: JSON.stringify(testApi.inviteUser.success.body)
             })
-            if (route.request().method() === 'GET') {
-              await route.fulfill({
-                status: testApi.invitations.success.status,
-                contentType: 'application/json',
-                body: JSON.stringify(testApi.invitations.success.body)
-              })
-            }
           }
         })
 
@@ -609,28 +441,18 @@ test.describe('Account Management Flow', () => {
         await page.getByRole('button', selectors.accountUsers.cta.inviteUser).click()
         await expect(dialog).toBeVisible()
 
-        // Fill email field
-        const emailContent = dialog.getByLabel(globaleSelectors.fields.email)
-        await emailContent.fill(testData.userEmail)
+        await dialog.getByLabel(globaleSelectors.fields.email).fill(testData.userEmail)
+        await dialog.getByLabel(globaleSelectors.fields.firstname).fill(testData.userFirstName)
+        await dialog.getByLabel(globaleSelectors.fields.lastname).fill(testData.userLastName)
 
-        // Fill firstname field
-        const firstnameContent = dialog.getByLabel(globaleSelectors.fields.firstname)
-        await firstnameContent.fill(testData.userFirstName)
+        // Pick first role and first entity
+        const roleTiles = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.roles.tileId)
+        await roleTiles.first().click()
 
-        // Fill lastname field
-        const lastnameContent = dialog.getByLabel(globaleSelectors.fields.lastname)
-        await lastnameContent.fill(testData.userLastName)
+        const entityTiles = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.accessScope.entityTileId)
+        await entityTiles.first().click()
 
-        // Select first role
-        const rolesFilter = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.roles.blockId)
-        await rolesFilter.locator('li').nth(0).click()
-
-        // Select first entity
-        const entitiesFilter = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.entities.blockId)
-        await entitiesFilter.locator('li').nth(0).click()
-
-        // Click on create button
-        await page.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite).click()
+        await dialog.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite).click()
         await expect(dialog).not.toBeVisible({ timeout: 5000 })
       })
     })

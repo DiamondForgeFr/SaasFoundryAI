@@ -89,6 +89,10 @@ const testApi = {
             }
           }
         ],
+        preferences: {
+          locale: 'EN',
+          avatarUrl: null
+        },
         createdAt: new Date().toISOString()
       }
     }

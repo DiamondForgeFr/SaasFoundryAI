@@ -98,7 +98,8 @@ const testApi = {
               isActive: true,
               organization: {
                 id: 'cmb7t9bkc0007t8d32c6kaohe',
-                name: 'Diamondforge'
+                name: 'Diamondforge',
+                type: 'COMPANY'
               },
               createdAt: '2025-05-28T10:37:03.387Z',
               updatedAt: '2025-05-28T10:37:03.387Z'
@@ -166,7 +167,8 @@ const testApi = {
         description: testData.entityDescription2,
         organization: {
           id: 'org-456',
-          name: testData.organizationName2
+          name: testData.organizationName2,
+          type: testData.organizationType
         },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -186,7 +188,8 @@ const testApi = {
             isActive: true,
             organization: {
               id: 'org-123',
-              name: testData.organizationName
+              name: testData.organizationName,
+              type: 'COMPANY'
             },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -210,7 +213,8 @@ const testApi = {
             isActive: true,
             organization: {
               id: 'org-123',
-              name: testData.organizationName
+              name: testData.organizationName,
+              type: 'COMPANY'
             },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -222,7 +226,8 @@ const testApi = {
             isActive: true,
             organization: {
               id: 'org-456',
-              name: testData.organizationName2
+              name: testData.organizationName2,
+              type: 'COMPANY'
             },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -232,9 +237,9 @@ const testApi = {
           pagination: {
             current: 1,
             limit: 10,
-            total: 1
+            total: 2
           },
-          count: 1
+          count: 2
         }
       }
     }
@@ -299,7 +304,7 @@ const testApi = {
           pagination: {
             current: 1,
             limit: 10,
-            total: 1
+            total: 2
           },
           count: 2
         }
@@ -344,7 +349,7 @@ const testApi = {
           pagination: {
             current: 1,
             limit: 10,
-            total: 1
+            total: 3
           },
           count: 3
         }
@@ -402,7 +407,7 @@ const testApi = {
 }
 
 /**
- * Flow Object Selectors - Updated with real translations
+ * Flow Object Selectors — aligned with the reworked UI
  */
 const selectors = {
   URL: '/account',
@@ -411,85 +416,54 @@ const selectors = {
     entities: { name: /^ENTITIES$/i },
     users: { name: /^USERS$/i }
   },
-  accountManagement: {
-    URL: '/account/management',
-    title: { name: /account management/i },
-    sections: {
-      settings: { name: /account settings/i },
-      billing: { name: /billing/i },
-      security: { name: /security/i }
-    }
-  },
   accountOverview: {
     successURL: /.*\/account\?tab=overview/,
-    title: { name: /overview/i },
-    accountInfo: {
-      blockId: 'account-info-section',
-      title: /account information/i,
-      subtitle: /View and manage your account details/i
-    },
-    statisticsCards: {
-      blockId: 'statistics-section',
-      title: /Statistics/i,
-      subtitle: /Overview of your account resources/i,
-      users: {
-        ariaLabel: { name: /Users-count/i },
-        label: 'Users'
-      },
-      entities: {
-        ariaLabel: { name: /Entities-count/i },
-        label: 'Entities'
-      },
-      roles: {
-        ariaLabel: { name: /Roles-count/i },
-        label: 'Roles'
-      }
+    kpis: {
+      blockId: 'overview-kpis',
+      users: { blockId: 'kpi-users', label: /^Users$/i },
+      entities: { blockId: 'kpi-entities', label: /^Entities$/i },
+      pending: { blockId: 'kpi-pending', label: /^Pending$/i }
     },
     recentUsers: {
       blockId: 'recent-users-section',
+      rowId: 'recent-user-row',
       title: /^Recent Users$/i,
-      subtitle: /^The 5 most recent users created or added$/i,
       cta: {
-        viewAll: { name: /^View all users$/i }
+        invite: { name: /^Invite user$/i },
+        viewAll: { name: /View all users/i }
       }
     },
     recentEntities: {
       blockId: 'recent-entities-section',
+      rowId: 'recent-entity-row',
       title: /^Recent Entities$/i,
-      subtitle: /^The 5 most recent entities created$/i,
       cta: {
-        viewAll: { name: /^View all entities$/i }
+        create: { name: /^New entity$/i },
+        viewAll: { name: /View all entities/i }
       }
     },
-    recentRoles: {
-      blockId: 'recent-roles-section',
-      title: /^Recent Roles$/i,
-      subtitle: /^The 5 most recent roles created$/i
+    roles: {
+      blockId: 'roles-section',
+      cardId: 'role-card',
+      title: /^Roles$/i
     }
   },
   accountEntities: {
     successURL: /.*\/account\?tab=entities/,
-    title: { name: /account entities/i },
+    table: { blockId: 'entities-table', rowId: 'entity-row' },
     cta: {
       createEntity: { name: /^New entity$/i }
-    },
-    table: {
-      headers: {
-        entity: { name: /^Entities$/i },
-        status: { name: /^Status$/i },
-        organization: { name: /^Organizations$/i },
-        createdAt: { name: /^Created at$/i }
-      }
     },
     newEntityDialog: {
       title: { name: /^New entity$/i },
       subtitle: { name: /^Create a new entity with its organization$/i },
       organization: {
         blockId: 'organization-details',
-        title: { name: /^Organization details$/i },
         types: {
-          cta: { name: /^Type$/i },
-          list: { name: /^CompanyAssociationCommunity$/i }
+          // Buttons combine label ("Company") and sub-label ("Commercial") in their accessible name
+          company: { name: /Company/i },
+          association: { name: /Association/i },
+          community: { name: /Community/i }
         }
       },
       cta: {
@@ -499,31 +473,26 @@ const selectors = {
   },
   accountUsers: {
     successURL: /.*\/account\?tab=users/,
-    title: { name: /account users/i },
+    table: { rowId: 'user-row' },
     cta: {
       inviteUser: { name: /^Invite user$/i }
     },
-    table: {
-      headers: {
-        user: { name: /^Users$/i },
-        status: { name: /^Status$/i },
-        entities: { name: /^Entities$/i },
-        roles: { name: /^Roles$/i },
-        createdAt: { name: /^Created at$/i }
-      }
-    },
     inviteUserDialog: {
       title: { name: /^Invite user$/i },
-      subtitle: { name: /^Invite a new user to join your account or entities$/i },
-      user: {
-        blockId: 'user-details',
-        title: { name: /^User details$/i }
+      sections: {
+        who: /A — Who\?/i,
+        accessScope: /B — Access scope/i,
+        roles: /C — Roles/i
+      },
+      accessScope: {
+        listBlockId: 'invite-access-scope',
+        accountAccessId: 'invite-account-access',
+        entitiesListId: 'invite-entities-list',
+        entityTileId: 'invite-entity-tile'
       },
       roles: {
-        blockId: 'roles-filter'
-      },
-      entities: {
-        blockId: 'entities-filter'
+        blockId: 'roles-filter',
+        tileId: 'invite-role-tile'
       },
       cta: {
         invite: { name: /^Invite user$/i }
