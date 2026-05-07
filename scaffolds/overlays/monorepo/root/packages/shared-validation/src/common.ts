@@ -22,7 +22,4 @@ export interface LocaleMessages {
  * Shared optional-locale field. Returns a Zod schema fragment that both the API
  * (no i18n messages) and the web (translated messages) can compose into a payload.
  */
-export const buildOptionalLocaleSchema = (messages: LocaleMessages = {}) =>
-  z
-    .enum(LOCALE_VALUES, { message: messages.localeInvalid ?? 'Locale must be one of: EN, FR' })
-    .optional()
+export const buildOptionalLocaleSchema = (messages: LocaleMessages = {}) => z.enum(LOCALE_VALUES, { message: messages.localeInvalid ?? 'Locale must be one of: EN, FR' }).optional()

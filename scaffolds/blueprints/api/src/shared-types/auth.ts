@@ -1,6 +1,7 @@
 import type { AccountSummary } from './account'
 import type { IsoDateString } from './common'
 import type { Entity } from './entity'
+import type { UserPreferences } from './user'
 
 export interface People {
   firstname: string | null
@@ -16,6 +17,7 @@ export interface MeResponse {
   permissions: string[]
   accounts: AccountSummary[]
   entities: Entity[]
+  preferences: UserPreferences
   createdAt: IsoDateString
 }
 
