@@ -7,8 +7,10 @@ Production-ready NestJS API generated with **SaaSFoundry** - An AI-First develop
 Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
 
 1. Read `.saasfoundry.json` — the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
-2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this summary at session start.
-3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead of opening a scope dialogue.
+2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this
+   summary at session start.
+3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead
+   of opening a scope dialogue.
 
 ## Tech Stack
 
@@ -47,6 +49,7 @@ src/
 ## Code Conventions
 
 ### Module Pattern
+
 ```
 module-name/
 ├── module.ts              # NestJS module definition
@@ -62,6 +65,7 @@ module-name/
 ```
 
 ### Path Aliases
+
 - `@modules/*` → `src/modules/*`
 - `@common/*` → `src/common/*`
 - `@configs/*` → `src/configs/*`
@@ -70,6 +74,7 @@ module-name/
 - `@/*` → `src/*`
 
 ### Validation
+
 - **DTOs**: Use Zod schemas via `nestjs-zod`'s `createZodDto`. Schemas are factory functions defined under `src/shared-validation/` and shared with the frontend.
 - **Decorators**: `@ApiProperty()` for OpenAPI docs
 - **Transform**: Use `class-transformer` for type coercion
@@ -78,12 +83,18 @@ module-name/
 
 This blueprint always carries vendored copies of `src/shared-types/` and `src/shared-validation/` — those are the working source the API actually compiles against. The behavior diverges by topology:
 
-- **In a monorepo** (root has `packages/shared-*`): the same files also exist canonically at `<root>/packages/shared-{types,validation}/src/`, plus a non-vendored `<root>/packages/shared-config/`. **Hand-written types/schemas live in all three places** (canonical workspace + both apps' mirrors) and the SaaSFoundry CLI's drift-guard tests block divergence. **Module-deposited types/constants** (e.g. `EmailOptions`, `STORAGE_LOGO_*`) live in the workspace only and the relevant API service is rewired to import them via `@<root-package-name>/shared-{types,config}` — **do not duplicate them into `src/shared-types/`** or you'll have two sources of truth.
-- **In multirepo** (this app stands alone, no `packages/`): only the vendored copies under `src/shared-{types,validation}/` exist; module-shared values that would live in `shared-config` on mono are **inlined** in the consumer here (e.g. `STORAGE_LOGO_MAX_BYTES` in `organization.controller.ts`, `EmailOptions` interface in `mailersend.service.ts`). Keep the inlined values stable — the SaaSFoundry CLI's docker assertions enforce that the multirepo path stays inlined.
+- **In a monorepo** (root has `packages/shared-*`): the same files also exist canonically at `<root>/packages/shared-{types,validation}/src/`, plus a non-vendored `<root>/packages/shared-config/`.
+  **Hand-written types/schemas live in all three places** (canonical workspace + both apps' mirrors) and the SaaSFoundry CLI's drift-guard tests block divergence. **Module-deposited types/constants**
+  (e.g. `EmailOptions`, `STORAGE_LOGO_*`) live in the workspace only and the relevant API service is rewired to import them via `@<root-package-name>/shared-{types,config}` — **do not duplicate them
+  into `src/shared-types/`** or you'll have two sources of truth.
+- **In multirepo** (this app stands alone, no `packages/`): only the vendored copies under `src/shared-{types,validation}/` exist; module-shared values that would live in `shared-config` on mono are
+  **inlined** in the consumer here (e.g. `STORAGE_LOGO_MAX_BYTES` in `organization.controller.ts`, `EmailOptions` interface in `mailersend.service.ts`). Keep the inlined values stable — the
+  SaaSFoundry CLI's docker assertions enforce that the multirepo path stays inlined.
 
 When in doubt, run `sf status --claude-friendly --no-network` to confirm topology before editing shared shapes.
 
 ### Prisma Schema
+
 - Multi-file schemas in `prisma/schema/`
 - Soft deletes with `deletedAt` field
 - Created/updated timestamps on all entities
@@ -99,6 +110,7 @@ When in doubt, run `sf status --claude-friendly --no-network` to confirm topolog
 - Husky enforces commit format + pre-push checks
 
 ### Commit Examples
+
 ```bash
 feat(#42): add user profile endpoint
 fix(#43): resolve JWT token expiration issue
@@ -139,30 +151,35 @@ This project is pre-configured for AI development with Claude Code.
 Located in `.claude/skills/`:
 
 #### Git Workflows
-- **`/git-commit`** - Quick commit with conventional messages
+
+- **`/sf-git-commit`** - Quick commit with conventional messages
   - Auto-generates commit messages following project conventions
   - Includes ticket number and proper type
 
-- **`/git-fix-pr-comments`** - Implement PR review feedback
+- **`/sf-git-fix-pr-comments`** - Implement PR review feedback
   - Fetches PR comments from GitHub
   - Implements requested changes automatically
   - Creates new commits with fixes
 
 #### Integration grammar
-- **`/sf-integration-rules`** - Integration grammar router. Triggers when adding a backend module, an API endpoint, a Prisma model, an RBAC permission, validation, or tests. Routes to `backend.md` / `frontend.md` / `topology.md` sub-guides — read first before scaffolding.
+
+- **`/sf-integration-rules`** - Integration grammar router. Triggers when adding a backend module, an API endpoint, a Prisma model, an RBAC permission, validation, or tests. Routes to `backend.md` /
+  `frontend.md` / `topology.md` sub-guides — read first before scaffolding.
 
 #### Code Quality
-- **`/utils-fix-errors`** - Fix ESLint and TypeScript errors
+
+- **`/sf-utils-fix-errors`** - Fix ESLint and TypeScript errors
   - Parallel processing for fast fixes
   - Respects project conventions
   - Safe refactoring
 
-- **`/utils-fix-grammar`** - Fix grammar and spelling
+- **`/sf-utils-fix-grammar`** - Fix grammar and spelling
   - Preserves code formatting
   - Works on markdown, comments, docs
 
 #### Development Workflows
-- **`/workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate)
+
+- **`/sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate)
   - Systematic feature implementation
   - Parallel agents for exploration
   - Self-validation with tests
@@ -171,6 +188,7 @@ Located in `.claude/skills/`:
 ### 🎯 Common AI Workflows
 
 #### Implement a new feature
+
 ```
 User: "Add a user profile endpoint with avatar upload"
 Claude: Uses /workflow-apex-free
@@ -181,6 +199,7 @@ Claude: Uses /workflow-apex-free
 ```
 
 #### Fix errors after refactoring
+
 ```
 User: "Fix all TypeScript errors"
 Claude: Uses /utils-fix-errors
@@ -190,6 +209,7 @@ Claude: Uses /utils-fix-errors
 ```
 
 #### Create a commit
+
 ```
 User: "Commit these changes"
 Claude: Uses /git-commit
@@ -201,12 +221,14 @@ Claude: Uses /git-commit
 ### ✅ Best Practices
 
 **DO**:
+
 - Trust the skills - they respect project conventions
 - Let AI handle repetitive tasks (commits, error fixes)
 - Use APEX workflow for complex features
 - Review security-critical code manually
 
 **DON'T**:
+
 - Skip tests - AI code must pass all checks
 - Bypass git hooks (`--no-verify`)
 - Ignore TypeScript errors
@@ -215,6 +237,7 @@ Claude: Uses /git-commit
 ### 🔒 Security Gates
 
 All AI-generated code passes through:
+
 - **Zod validation** - Runtime type checking
 - **ESLint** - Code quality standards
 - **TypeScript** - Compile-time safety
@@ -254,6 +277,7 @@ S3_BUCKET="..."
 ## Testing
 
 ### Unit Tests
+
 ```bash
 npm run test:unit
 # Tests business logic in isolation
@@ -261,6 +285,7 @@ npm run test:unit
 ```
 
 ### E2E Tests
+
 ```bash
 npm run test:e2e
 # Tests full HTTP request/response cycle
@@ -269,6 +294,7 @@ npm run test:e2e
 ```
 
 ### Test Database
+
 - Automatically created via `docker-compose.db-test.yml`
 - Uses tmpfs for fast I/O
 - Isolated from development database
@@ -276,7 +302,7 @@ npm run test:e2e
 
 ## Important Notes
 
-- This is a **generated project** from SaaSFoundry v{{VERSION}}
+- This is a **generated project** from SaaSFoundry v1.0.0-beta
 - Check `.saasfoundry.json` for installed modules and configuration
 - Update this CLAUDE.md as your project evolves
 - Prisma schema changes require migration: `npm run db:update:dev`

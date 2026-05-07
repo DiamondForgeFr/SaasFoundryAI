@@ -223,5 +223,5 @@ npx husky
 
 ---
 
-**Generated with SaaSFoundry v{{VERSION}}** - Check `.saasfoundry.json` for configuration and installed modules.
+**Generated with SaaSFoundry v1.0.0-beta** - Check `.saasfoundry.json` for configuration and installed modules.
 
