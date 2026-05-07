@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 /**
  * Dependencies
@@ -20,12 +20,11 @@ import { extractTokenFromUrl } from '@/utils/tokenExtractor'
  */
 import { ThemeToggleButton } from '@/components/theme/theme-toggle-button'
 import { Logo } from '@/components/ui/custom/logo'
-import { PasswordInput } from '@/components/ui/custom/password-input'
+import { FloatingLabelInput, FloatingLabelPasswordInput } from '@/components/ui/custom/floating-label-input'
+import { WaveButton } from '@/components/ui/custom/wave-button'
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert'
-import { Button } from '@/components/ui/shadcn/button'
 import { Card } from '@/components/ui/shadcn/card'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/shadcn/form'
-import { Input } from '@/components/ui/shadcn/input'
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/shadcn/form'
 import { Separator } from '@/components/ui/shadcn/separator'
 
 /**
@@ -43,6 +42,8 @@ import { useSignIn, useSignInSchema, type SignInPayloadDto } from '@/hooks/api/a
  */
 export function SignIn() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const flipClass = (location.state as { flip?: string })?.flip === 'left' ? 'auth-flip-left' : ''
   const { t: tAuth } = useTranslation('auth')
   const { t: tCommon } = useTranslation('common')
   const [authError, setAuthError] = useState<string | null>(null)
@@ -103,21 +104,7 @@ export function SignIn() {
   }
 
   // Reusable form field
-  const renderFormField = ({
-    name,
-    label,
-    placeholder = '',
-    type = 'text',
-    autoComplete = '',
-    tabIndex
-  }: {
-    name: keyof SignInPayloadDto
-    label: string
-    placeholder?: string
-    type?: string
-    autoComplete?: string
-    tabIndex?: number
-  }) => {
+  const renderFormField = ({ name, label, type = 'text', autoComplete = '', tabIndex }: { name: keyof SignInPayloadDto; label: string; type?: string; autoComplete?: string; tabIndex?: number }) => {
     const inputId = `input-${name}`
     return (
       <FormField
@@ -125,25 +112,24 @@ export function SignIn() {
         name={name}
         render={({ field }) => (
           <FormItem>
-            {name === 'password' ? (
-              <div className="flex items-center justify-between">
-                <FormLabel htmlFor={inputId}>{label}</FormLabel>
-                {hasModuleAccess('USER_ACCOUNT_PASSWORD_RECOVERY') && (
-                  <Link to="/reset-password-request" className="text-sm font-medium text-primary hover:text-primary/80">
-                    {tAuth('callToAction.tk_forgotPassword_')}
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <FormLabel htmlFor={inputId}>{label}</FormLabel>
-            )}
             <FormControl>
               {name === 'password' ? (
-                <PasswordInput id={inputId} placeholder={placeholder} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
+                <FloatingLabelPasswordInput id={inputId} label={label} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
               ) : (
-                <Input id={inputId} placeholder={placeholder} type={type} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
+                <FloatingLabelInput id={inputId} label={label} type={type} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
               )}
             </FormControl>
+            {name === 'password' && hasModuleAccess('USER_ACCOUNT_PASSWORD_RECOVERY') && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => navigate('/reset-password-request', { state: { flip: 'up' } })}
+                  className="cursor-pointer text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  {tAuth('callToAction.tk_forgotPassword_')}
+                </button>
+              </div>
+            )}
             <FormMessage />
           </FormItem>
         )}
@@ -152,83 +138,88 @@ export function SignIn() {
   }
 
   return (
-    <div className="flex h-screen flex-col items-center bg-muted">
-      <ThemeToggleButton />
+    <div className="relative flex h-screen flex-col items-center bg-muted">
+      <div className="absolute top-4 right-4">
+        <ThemeToggleButton />
+      </div>
       <Logo isLong className="max-w-xs px-4 py-20" />
-      <Card className="w-full max-w-md p-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">{tAuth('signin.tk_title_')}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{tAuth('signin.tk_description_')}</p>
-        </div>
+      <Card className={`glow-card w-full max-w-md px-8 py-8 ${flipClass}`}>
+        <div className="igw-glow" aria-hidden="true" />
+        <div className="igw-border" aria-hidden="true" />
+        <div className="relative z-10">
+          <div className="text-center mb-6">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">{tAuth('signin.tk_title_')}</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">{tAuth('signin.tk_description_')}</p>
+          </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-6">
-            {(authError || signInMutation.isError) && (
-              <Alert className="bg-destructive/10 text-destructive">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5" />
-                  <AlertDescription>{authError || tAuth('signin.tk_authError_')}</AlertDescription>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+              {(authError || signInMutation.isError) && (
+                <Alert className="bg-destructive/10 text-destructive">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5" />
+                    <AlertDescription>{authError || tAuth('signin.tk_authError_')}</AlertDescription>
+                  </div>
+                </Alert>
+              )}
+
+              {isFirstLogin && confirmAccountToken && (
+                <div className="grid grid-cols-2 gap-4">
+                  {renderFormField({
+                    name: 'firstname',
+                    label: tCommon('user.tk_firstName_'),
+                    tabIndex: 1
+                  })}
+                  {renderFormField({
+                    name: 'lastname',
+                    label: tCommon('user.tk_lastName_'),
+                    tabIndex: 2
+                  })}
                 </div>
-              </Alert>
-            )}
+              )}
 
-            {isFirstLogin && confirmAccountToken && (
-              <div className="grid grid-cols-2 gap-4">
-                {renderFormField({
-                  name: 'firstname',
-                  placeholder: tCommon('user.tk_firstNamePlaceholder_'),
-                  label: tCommon('user.tk_firstName_'),
-                  tabIndex: 1
-                })}
-                {renderFormField({
-                  name: 'lastname',
-                  placeholder: tCommon('user.tk_lastNamePlaceholder_'),
-                  label: tCommon('user.tk_lastName_'),
-                  tabIndex: 2
-                })}
-              </div>
-            )}
+              {renderFormField({
+                name: 'email',
+                label: tCommon('user.tk_email_'),
+                type: 'email',
+                autoComplete: 'email',
+                tabIndex: isFirstLogin ? 3 : 1
+              })}
+              {renderFormField({
+                name: 'password',
+                label: tAuth('fields.tk_password_'),
+                type: 'password',
+                autoComplete: 'current-password',
+                tabIndex: isFirstLogin ? 4 : 2
+              })}
 
-            {renderFormField({
-              name: 'email',
-              label: tCommon('user.tk_email_'),
-              placeholder: tCommon('user.tk_emailPlaceholder_'),
-              type: 'email',
-              autoComplete: 'email',
-              tabIndex: isFirstLogin ? 3 : 1
-            })}
-            {renderFormField({
-              name: 'password',
-              label: tAuth('fields.tk_password_'),
-              type: 'password',
-              autoComplete: 'current-password',
-              tabIndex: isFirstLogin ? 4 : 2
-            })}
+              <WaveButton type="submit" className="mt-7" disabled={signInMutation.isLoading} tabIndex={isFirstLogin ? 5 : 3}>
+                {signInMutation.isLoading ? tCommon('loading.tk_loadingSignin_') : tAuth('callToAction.tk_signin_')}
+              </WaveButton>
 
-            <Button type="submit" className="w-full" disabled={signInMutation.isLoading} tabIndex={isFirstLogin ? 5 : 3}>
-              {signInMutation.isLoading ? tCommon('loading.tk_loadingSignin_') : tAuth('callToAction.tk_signin_')}
-            </Button>
+              {hasModuleAccess('USER_ACCOUNT_CREATION') && (
+                <>
+                  <div className="flex items-center gap-3 my-4">
+                    <Separator className="flex-1" />
+                    <span className="text-xs text-muted-foreground">{tCommon('other.tk_or_')}</span>
+                    <Separator className="flex-1" />
+                  </div>
 
-            {hasModuleAccess('USER_ACCOUNT_CREATION') && (
-              <>
-                <div className="flex items-center justify-center">
-                  <Separator className="w-1/3" />
-                  <span className="mx-4 text-sm text-muted-foreground">{tCommon('other.tk_or_')}</span>
-                  <Separator className="w-1/3" />
-                </div>
-
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    {tAuth('signin.tk_noAccount_')}{' '}
-                    <Link to="/signup" className="font-medium text-primary hover:text-primary/80">
+                  <p className="text-center text-sm text-muted-foreground">
+                    New here?{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/signup', { state: { flip: 'right' } })}
+                      className="cursor-pointer font-semibold text-primary hover:text-primary/80 transition-colors"
+                    >
                       {tAuth('callToAction.tk_signup_')}
-                    </Link>
+                    </button>
                   </p>
-                </div>
-              </>
-            )}
-          </form>
-        </Form>
+                </>
+              )}
+            </form>
+          </Form>
+        </div>
       </Card>
     </div>
   )
