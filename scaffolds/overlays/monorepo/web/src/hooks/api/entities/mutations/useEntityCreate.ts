@@ -42,7 +42,8 @@ export const useEntityCreateSchema = () => {
     organization: z
       .object({
         id: z.string(),
-        name: z.string()
+        name: z.string(),
+        type: z.enum(['COMPANY', 'ASSOCIATION', 'COMMUNITY']).nullish()
       })
       .optional(),
     users: z

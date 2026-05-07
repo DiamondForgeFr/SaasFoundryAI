@@ -25,7 +25,8 @@ export const useAccountSchema = () => {
 
   const organizationSchema = z.object({
     id: z.string(),
-    name: z.string()
+    name: z.string(),
+    type: z.enum(['COMPANY', 'ASSOCIATION', 'COMMUNITY']).nullish()
   })
 
   const entityWithOrganizationSchema = z.object({

@@ -39,6 +39,11 @@ export const useMeSchema = () => {
     organization: organizationSchema.nullable()
   })
 
+  const preferencesSchema = z.object({
+    locale: z.enum(['EN', 'FR']),
+    avatarUrl: z.string().nullable()
+  })
+
   const response = z
     .object({
       userId: z.string(),
@@ -49,6 +54,7 @@ export const useMeSchema = () => {
       permissions: z.array(z.string()).nonempty(),
       accounts: z.array(accountSchema),
       entities: z.array(entitySchema),
+      preferences: preferencesSchema,
       createdAt: z.string()
     })
     .refine((data) => data.accounts.length > 0 || data.entities.length > 0, {

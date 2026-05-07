@@ -18,7 +18,8 @@ const tAccounts = (key: string) => i18next.t(key, { ns: 'accounts' })
 export const useAccountEntitiesSchema = () => {
   const organizationSchema = z.object({
     id: z.string(),
-    name: z.string()
+    name: z.string(),
+    type: z.enum(['COMPANY', 'ASSOCIATION', 'COMMUNITY']).nullish()
   })
 
   const entitySchema = z.object({
