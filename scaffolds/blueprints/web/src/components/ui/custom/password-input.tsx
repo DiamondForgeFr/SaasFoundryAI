@@ -15,7 +15,8 @@ export function PasswordInput({ id, ...props }: PasswordInputProps) {
       <Input id={id} type={showPassword ? 'text' : 'password'} {...props} />
       <button
         type="button"
-        className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground focus:outline-hidden"
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground focus:outline-hidden z-10"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setShowPassword(!showPassword)}
         tabIndex={-1}
       >
