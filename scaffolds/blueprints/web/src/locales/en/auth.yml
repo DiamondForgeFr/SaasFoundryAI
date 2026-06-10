@@ -13,8 +13,14 @@ signup:
 signin:
   tk_title_: Sign in
   tk_description_: Access your account
+  tk_activateTitle_: Activate your account
+  tk_activateDescription_: Fill in your details to finish activation.
+  tk_bootstrapTitle_: Welcome
+  tk_bootstrapDescription_: Set up the first platform administrator.
   tk_noAccount_: Don't have an account?
   tk_authError_: The provided credentials do not match any account.
+  tk_account-name_: Account name
+  tk_account-name-hint_: Auto-suggested from your identity. You can change it now or rename the account later.
 
 userInvitation:
   tk_title_: Accept invitation

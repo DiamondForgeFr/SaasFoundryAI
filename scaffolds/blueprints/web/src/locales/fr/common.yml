@@ -45,6 +45,7 @@ actions:
   tk_activate_: Activer
   tk_deactivate_: Désactiver
   tk_cancel_: Annuler
+  tk_confirm_: Confirmer
   tk_send_: Envoyer
   tk_resend_: Renvoyer
 

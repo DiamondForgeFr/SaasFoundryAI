@@ -17,6 +17,9 @@ sections:
     tk_meta-many_: '{{accounts}} comptes · {{entities}} entités'
     tk_accounts_: Comptes
     tk_entities_: Entités
+    tk_account-copy_: Copier le numéro
+    tk_account-copied_: Numéro copié
+    tk_account-indirect_: Indirect
   preferences:
     tk_title_: Préférences
     tk_meta_: Paramètres personnels

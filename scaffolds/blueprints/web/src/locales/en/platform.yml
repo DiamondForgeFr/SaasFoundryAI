@@ -1,0 +1,46 @@
+breadcrumb:
+  tk_platform_: Platform
+
+modules:
+  tk_title_: Modules
+  tk_description_: Activate or deactivate platform modules. A deactivated module is hidden from every user's permission set.
+  tk_subtitle_: '{{active}} of {{total}} modules active'
+  tk_platform-only_: Platform admin
+  tk_search-placeholder_: Search modules or permissions…
+  tk_empty_: No modules match the current filter
+  tk_active_: Active
+  tk_inactive_: Inactive
+  tk_activate_: Activate this module
+  tk_deactivate_: Deactivate this module
+  tk_permissions_: permissions
+  tk_sub-modules_: sub-modules
+  tk_no-permissions_: No permissions defined for this module.
+  tk_locked_: Locked
+  tk_locked-tooltip_: This module cannot be deactivated — disabling it would lock platform-admins out of this page.
+  tk_view_: View
+  detail:
+    tk_overview_: Module overview
+    tk_module-permissions_: Module permissions
+    tk_module-permissions-hint_: Permissions granted directly by the module, independent of any sub-module.
+    tk_sub-modules_: Sub-modules
+    tk_hidden_: Hidden
+    tk_search-placeholder_: Search permissions or sub-modules…
+    tk_no-results_: No match
+    tk_close_: Close
+    tk_inactive-hint_: This sub-module is deactivated — it and its permissions are hidden from every user''s permission set.
+    tk_sub-locked-tooltip_: Platform-console sub-modules cannot be deactivated — disabling one would lock platform-admins out.
+  kpi:
+    tk_total_: Total modules
+    tk_total-sub_: '{{permissions}} permissions in catalog'
+    tk_active_: Active
+    tk_inactive_: Inactive
+    tk_inactive-none_: All modules are live
+    tk_inactive-some_: Hidden from every user's permission set
+  filters:
+    tk_all_: All
+    tk_status-all_: All
+    tk_status-active_: Active
+    tk_status-inactive_: Inactive
+    tk_type-placeholder_: Filter by type
+    tk_type-selected_: Types
+    tk_type-empty_: No type matches
