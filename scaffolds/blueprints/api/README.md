@@ -47,7 +47,7 @@ cp .env.test .env
 docker network create saasfoundry-network
 docker-compose -f ../db/docker-compose.db-dev.yml up -d
 
-# 5. Initialize database
+# 5. Initialize database (migration-free: db push --force-reset + apply prisma/sql/*)
 npm run db:setup:dev
 
 # 6. Launch the application
@@ -136,8 +136,6 @@ src/
 - Git hooks for quality
 - Integrated Swagger documentation
 
-
-
 ## 🏷️ Version & Deployment Management
 
 ### Tag Manager
@@ -190,18 +188,15 @@ The project includes a comprehensive GitHub Actions workflow for automated deplo
 #### Deployment Steps
 
 1. **Test Verification**
-
    - Checks if tests have passed
    - Blocks deployment if tests fail
 
 2. **Version Tag Creation**
-
    - Automatically creates version tags based on `package.json`
    - Handles version bump commits
    - Manages tag updates and conflicts
 
 3. **Docker Image Management**
-
    - Builds and pushes to GitHub Container Registry (GHCR)
    - Tags images with:
      - Version number
@@ -226,13 +221,11 @@ The deployment process automatically sets up:
 ### Best Practices
 
 1. **Version Management**
-
    - Always use release candidate branches for version updates
    - Follow semantic versioning principles
    - Use pre-release tags for testing
 
 2. **Deployment**
-
    - Ensure all tests pass before deployment
    - Monitor deployment logs for issues
    - Use the provided health checks

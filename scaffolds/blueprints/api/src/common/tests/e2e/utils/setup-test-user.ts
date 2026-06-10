@@ -88,36 +88,45 @@ export async function setupTestUser(prisma: PrismaService, config: TestUserConfi
   // Hash password
   const hashedPassword = await bcrypt.hash(config.password, 10)
 
-  // Create user with roles
+  // Create the account first — ACCOUNT-scoped role assignments reference its id as their scope
+  // target, so it must exist before the user's nested roleAssignments are created.
+  const account = await prisma.account.create({
+    data: {
+      name: `Test Account for ${config.firstname} ${config.lastname}`,
+      description: 'Test account created for E2E testing',
+      isActive: true
+    }
+  })
+
+  // Build scoped role-assignment rows. The `check_role_assignment_scope` trigger enforces:
+  //   PLATFORM ⇒ no target · ACCOUNT ⇒ accountId set · ENTITY ⇒ entityId set.
+  // This helper seeds PLATFORM/ACCOUNT roles only; ENTITY-scoped roles need an explicit entity
+  // context and must be assigned by the dedicated entity test setup instead.
+  const assignmentRows = roles.filter(Boolean).map((role) => {
+    if (role!.scope === 'PLATFORM') return { roleId: role!.id }
+    if (role!.scope === 'ACCOUNT') return { roleId: role!.id, accountId: account.id }
+    throw new Error(`setupTestUser does not support ENTITY-scoped role "${role!.name}" — provide an entity context`)
+  })
+
+  // Create user with people + preference + account link + scoped role assignments
   const user = await prisma.user.create({
     data: {
       email: config.email,
       password: hashedPassword,
       isActive: true,
-      peopleId: people.id,
+      people: { connect: { id: people.id } },
       preference: {
         create: {
           locale: 'FR'
         }
       },
-      rolesLinked: {
-        create: roles.filter(Boolean).map((role) => ({
-          roleId: role!.id
-        }))
-      }
-    }
-  })
-
-  // Create account for the user
-  const account = await prisma.account.create({
-    data: {
-      name: `Test Account for ${config.firstname} ${config.lastname}`,
-      description: 'Test account created for E2E testing',
-      isActive: true,
-      usersLinked: {
+      accountsLinked: {
         create: {
-          userId: user.id
+          accountId: account.id
         }
+      },
+      roleAssignments: {
+        create: assignmentRows
       }
     }
   })
@@ -186,6 +195,23 @@ async function ensureRolesHavePermissions(prisma: PrismaService, roles: { id: nu
               moduleId: module.id
             }
           }))
+
+        // RBAC v2 integrity trigger requires the role to hold the permission's prerequisites before
+        // the link is inserted: the parent module, and — when the permission is attached to a
+        // sub-module — that sub-module too. Grant them idempotently first.
+        await prisma.roleModuleLink.upsert({
+          where: { roleId_moduleId: { roleId: role.id, moduleId: permission.moduleId } },
+          update: {},
+          create: { roleId: role.id, moduleId: permission.moduleId }
+        })
+
+        if (permission.subModuleId) {
+          await prisma.roleSubModuleLink.upsert({
+            where: { roleId_subModuleId: { roleId: role.id, subModuleId: permission.subModuleId } },
+            update: {},
+            create: { roleId: role.id, subModuleId: permission.subModuleId }
+          })
+        }
 
         // Link permission to role
         await prisma.rolePermissionLink.create({

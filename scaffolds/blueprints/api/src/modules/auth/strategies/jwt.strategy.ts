@@ -40,7 +40,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: {
-        rolesLinked: {
+        roleAssignments: {
           where: {
             role: {
               isActive: true
@@ -57,6 +57,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                   },
                   include: {
                     module: true
+                  }
+                },
+                subModulesLinked: {
+                  where: {
+                    subModule: {
+                      isActive: true
+                    }
+                  },
+                  include: {
+                    subModule: true
                   }
                 },
                 permissionsLinked: {

@@ -36,7 +36,7 @@
     "format": "prettier --write .",
     "dev": "nest start --watch",
     "debug": "nest start --debug --watch",
-    "prod": "node dist/main",
+    "prod": "node dist/src/main",
     "lint": "eslint --config eslint.config.mjs .",
     "lint:fix": "eslint --config eslint.config.mjs . --fix",
     "type-check": "tsc --noEmit",

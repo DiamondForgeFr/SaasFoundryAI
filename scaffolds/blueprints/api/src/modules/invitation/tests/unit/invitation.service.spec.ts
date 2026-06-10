@@ -128,9 +128,16 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
           firstname: 'Inviter',
           lastname: 'Admin'
         },
-        rolesLinked: [
+        roleAssignments: [
           {
+            id: 'assignment-1',
+            accountId: mockAccount.id,
+            entityId: null,
             role: {
+              id: 1,
+              name: 'account-admin',
+              scope: 'ACCOUNT',
+              isSystem: true,
               permissionsLinked: [
                 {
                   permission: { name: 'USER_ACCOUNTS_INVITATION' }
@@ -141,7 +148,8 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
                 {
                   permission: { name: 'USER_ROLE_ALLOCATION' }
                 }
-              ]
+              ],
+              subModulesLinked: []
             }
           }
         ],
@@ -191,6 +199,8 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
           prismaServiceAny.invitationAccountLink.createMany.mockResolvedValue({ count: 1 })
           prismaServiceAny.invitationEntityLink.createMany.mockResolvedValue({ count: 1 })
           prismaServiceAny.invitationRoleLink.createMany.mockResolvedValue({ count: 1 })
+          // Scoped-RBAC: roleIds are resolved to their scope/name for the platform-vs-account checks.
+          prismaServiceAny.role.findMany.mockResolvedValue([{ id: 1, name: 'account-admin', scope: 'ACCOUNT' }])
 
           this.jwtService.sign.mockReturnValue(mockInvitationToken)
           this.envConfig.get.mockImplementation((key) => {
@@ -320,6 +330,12 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
 
       describe('when errors occur', () => {
         it('should throw BadRequestException if no account or entity IDs are provided', async () => {
+          // Arrange — inviter resolves but the invitation has no targets and no platform-scoped role,
+          // so it is treated as an account-owner invitation. With pre-assigned roles this is rejected.
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.user.findUnique.mockResolvedValueOnce(mockInviter)
+          prismaServiceAny.role.findMany.mockResolvedValue([{ id: 1, name: 'account-admin', scope: 'ACCOUNT' }])
+
           // Act & Assert
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], entityIds: [] }), BadRequestException)
         })
@@ -337,16 +353,25 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
           // Arrange
           const inviterWithoutPermissions = {
             ...mockInviter,
-            rolesLinked: [
+            roleAssignments: [
               {
+                id: 'assignment-1',
+                accountId: mockAccount.id,
+                entityId: null,
                 role: {
-                  permissionsLinked: []
+                  id: 1,
+                  name: 'viewer',
+                  scope: 'ACCOUNT',
+                  isSystem: false,
+                  permissionsLinked: [],
+                  subModulesLinked: []
                 }
               }
             ]
           }
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.user.findUnique.mockResolvedValueOnce(inviterWithoutPermissions)
+          prismaServiceAny.role.findMany.mockResolvedValue([{ id: 1, name: 'account-admin', scope: 'ACCOUNT' }])
 
           // Act & Assert
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, createInvitationDto), UnauthorizedException)
@@ -360,6 +385,7 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
           }
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.user.findUnique.mockResolvedValueOnce(inviterWithLimitedAccess)
+          prismaServiceAny.role.findMany.mockResolvedValue([{ id: 1, name: 'account-admin', scope: 'ACCOUNT' }])
 
           // Act & Assert
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, createInvitationDto), UnauthorizedException)
@@ -444,6 +470,8 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
             }
           })
           prismaServiceAny.invitation.findFirst.mockResolvedValue(mockInvitation)
+          // Scoped-RBAC: role scopes are resolved both in acceptInvitation and activateInvitedUserAccount.
+          prismaServiceAny.role.findMany.mockResolvedValue([{ id: 1, scope: 'ACCOUNT' }])
           prismaServiceAny.user.findUnique.mockResolvedValue({
             id: '2',
             email: mockTokenPayload.email,
@@ -727,7 +755,7 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
                 },
                 entitiesLinked: {
                   include: {
-                    entity: true
+                    entity: { include: { organization: true } }
                   }
                 },
                 rolesLinked: {
@@ -787,7 +815,7 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
                 },
                 entitiesLinked: {
                   include: {
-                    entity: true
+                    entity: { include: { organization: true } }
                   }
                 },
                 rolesLinked: {

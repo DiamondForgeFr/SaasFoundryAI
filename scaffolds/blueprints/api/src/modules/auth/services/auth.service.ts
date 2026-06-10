@@ -118,7 +118,7 @@ export class AuthService {
   }
 
   public async signIn(signInDto: SignInDto): Promise<SignInResponseDto & AuthTokens> {
-    const { email, password, confirmAccountToken, firstname, lastname, locale } = signInDto
+    const { email, password, confirmAccountToken, firstname, lastname, locale, accountName } = signInDto
 
     this.logger.debug(`Sign-in attempt for ${email}`, 'signIn')
 
@@ -139,7 +139,7 @@ export class AuthService {
         throw new BadRequestException('First name and last name are required for account activation')
       }
 
-      await this.validateTokenAndActivateUser(user.id, email, confirmAccountToken, firstname, lastname, locale || UserDefaults.preferences.locale)
+      await this.validateTokenAndActivateUser(user.id, email, confirmAccountToken, firstname, lastname, locale || UserDefaults.preferences.locale, accountName)
     }
 
     // Generate tokens
@@ -156,7 +156,6 @@ export class AuthService {
   }
 
   public async signOut(userId: string): Promise<SignOutResponseDto> {
-
     this.logger.debug(`Logging out user with ID: ${userId}`, 'signout')
 
     // Delete refresh tokens from the database
@@ -184,7 +183,7 @@ export class AuthService {
       where: { email },
       include: {
         people: true,
-        rolesLinked: {
+        roleAssignments: {
           include: {
             role: {
               include: {
@@ -211,7 +210,7 @@ export class AuthService {
     })
 
     // If the user does not exist or does not have the permissions, still return a success message
-    if (!user || !user.rolesLinked.some((userRole) => userRole.role.modulesLinked.length > 0) || !user.rolesLinked.some((userRole) => userRole.role.permissionsLinked.length > 0)) {
+    if (!user || !user.roleAssignments.some((assignment) => assignment.role.modulesLinked.length > 0) || !user.roleAssignments.some((assignment) => assignment.role.permissionsLinked.length > 0)) {
       this.logger.warn(`Password reset requested for non-existent user or without permissions: ${email}`, 'requestPasswordReset')
       return response
     }
@@ -265,7 +264,7 @@ export class AuthService {
       include: {
         user: {
           include: {
-            rolesLinked: {
+            roleAssignments: {
               include: {
                 role: {
                   include: {
@@ -298,8 +297,8 @@ export class AuthService {
     }
 
     // Check if user has access to password reset
-    const hasModuleAccess = tokenRecord.user.rolesLinked.some((userRole) => userRole.role.modulesLinked.length > 0)
-    const hasPermission = tokenRecord.user.rolesLinked.some((userRole) => userRole.role.permissionsLinked.length > 0)
+    const hasModuleAccess = tokenRecord.user.roleAssignments.some((assignment) => assignment.role.modulesLinked.length > 0)
+    const hasPermission = tokenRecord.user.roleAssignments.some((assignment) => assignment.role.permissionsLinked.length > 0)
 
     if (!hasModuleAccess || !hasPermission) {
       this.logger.warn(`User ${payload.email} does not have access to password reset`, 'resetPassword')
@@ -334,7 +333,7 @@ export class AuthService {
         include: {
           people: true,
           preference: true,
-          rolesLinked: {
+          roleAssignments: {
             include: {
               role: {
                 include: {
@@ -343,11 +342,17 @@ export class AuthService {
                       module: true
                     }
                   },
+                  subModulesLinked: {
+                    include: {
+                      subModule: true
+                    }
+                  },
                   permissionsLinked: {
                     include: {
                       permission: {
                         include: {
-                          module: true
+                          module: true,
+                          subModule: true
                         }
                       }
                     }
@@ -365,7 +370,8 @@ export class AuthService {
             include: {
               entity: {
                 include: {
-                  organization: true
+                  organization: true,
+                  account: true
                 }
               }
             }
@@ -378,35 +384,70 @@ export class AuthService {
         throw new NotFoundException('User not found')
       }
 
-      // Extract roles from user roles (names only)
-      const roles = user.rolesLinked.map((userRole) => userRole.role.name)
+      // Per-assignment view (each assignment carries its scope target + the modules/permissions it grants).
+      // Effective-set gating: a module/sub-module must be active; a permission is effective only if its
+      // module is active AND (it carries no sub-module OR that sub-module is active). Deactivating a
+      // sub-module thus hides the sub-module name and all its permissions, mirroring module deactivation.
+      const roleAssignments = user.roleAssignments.map((assignment) => {
+        const moduleNames = assignment.role.modulesLinked.filter((moduleLink) => moduleLink.module.isActive).map((moduleLink) => moduleLink.module.name)
+        const subModuleNames = assignment.role.subModulesLinked.filter((subModuleLink) => subModuleLink.subModule.isActive).map((subModuleLink) => subModuleLink.subModule.name)
+        const permissionNames = assignment.role.permissionsLinked
+          .filter((permissionLink) => permissionLink.permission.module?.isActive && (!permissionLink.permission.subModuleId || permissionLink.permission.subModule?.isActive))
+          .map((permissionLink) => permissionLink.permission.name)
+        return {
+          id: assignment.id,
+          roleId: assignment.role.id,
+          roleName: assignment.role.name,
+          scope: assignment.role.scope as 'PLATFORM' | 'ACCOUNT' | 'ENTITY',
+          accountId: assignment.accountId,
+          entityId: assignment.entityId,
+          modules: [...new Set(moduleNames)],
+          subModules: [...new Set(subModuleNames)],
+          permissions: [...new Set(permissionNames)]
+        }
+      })
 
-      // Extract modules from active roles (modules attached and active)
-      const modules = user.rolesLinked
-        .flatMap((userRole) => userRole.role.modulesLinked.filter((moduleLink) => moduleLink.module.isActive).map((moduleLink) => moduleLink.module.name))
-        .filter((value, index, self) => self.indexOf(value) === index) // Remove possible duplicates
+      // Server-elected default scope: prefer PLATFORM > ACCOUNT > ENTITY > (fallback) PLATFORM with null id.
+      // The frontend can switch locally via the scope selector.
+      const platformAssignment = roleAssignments.find((a) => a.scope === 'PLATFORM')
+      const accountAssignment = roleAssignments.find((a) => a.scope === 'ACCOUNT')
+      const entityAssignment = roleAssignments.find((a) => a.scope === 'ENTITY')
+      const currentScope = platformAssignment
+        ? { kind: 'PLATFORM' as const, id: null }
+        : accountAssignment
+          ? { kind: 'ACCOUNT' as const, id: accountAssignment.accountId }
+          : entityAssignment
+            ? { kind: 'ENTITY' as const, id: entityAssignment.entityId }
+            : { kind: 'PLATFORM' as const, id: null }
 
-      // Extract permissions from active roles (permissions attached to active roles and modules)
-      const permissions = user.rolesLinked
-        .flatMap((userRole) => userRole.role.permissionsLinked.filter((permissionLink) => permissionLink.permission.module?.isActive).map((permissionLink) => permissionLink.permission.name))
-        .filter((value, index, self) => self.indexOf(value) === index) // Remove possible duplicates
+      // Legacy flat unions (kept while UI transitions; deprecated path).
+      const roles = [...new Set(roleAssignments.map((a) => a.roleName))]
+      const modules = [...new Set(roleAssignments.flatMap((a) => a.modules))]
+      const subModules = [...new Set(roleAssignments.flatMap((a) => a.subModules))]
+      const permissions = [...new Set(roleAssignments.flatMap((a) => a.permissions))]
 
       // Transform user.accountsLinked into AccountDto objects
       const accounts: AccountDto[] = user.accountsLinked.map((link) => ({
         id: link.account.id,
         name: link.account.name,
         description: link.account.description,
-        isActive: link.account.isActive
+        isActive: link.account.isActive,
+        deactivatedByScope: link.account.deactivatedByScope as 'PLATFORM' | 'ACCOUNT_OWNER' | null
       }))
 
       // Extract user.entitiesLinked into EntityDto objects
       const entities = user.entitiesLinked.map((link) => {
         const entityData: EntityDto = {
           id: link.entity.id,
-          name: link.entity.name,
+          name: link.entity.organization?.name ?? '',
           isActive: link.entity.isActive,
           accountId: link.entity.accountId,
-          organization: null
+          organization: null,
+          account: {
+            id: link.entity.account.id,
+            name: link.entity.account.name,
+            isActive: link.entity.account.isActive
+          }
         }
 
         // Only set organization if it exists
@@ -427,8 +468,11 @@ export class AuthService {
           firstname: user.people?.firstname || null,
           lastname: user.people?.lastname || null
         },
+        roleAssignments,
+        currentScope,
         roles,
         modules,
+        subModules,
         permissions,
         accounts,
         entities,
@@ -453,6 +497,14 @@ export class AuthService {
   public async getGuest(): Promise<GuestResponseDto> {
     this.logger.debug('Getting guest user information', 'getGuest')
 
+    // Bootstrap signal for the front: true while no platform-admin exists, so the
+    // first-login UI can adapt (skip the account-name field, label the flow as setup).
+    // The actual role promotion stays server-side (see createAndActivateUserProfile).
+    const existingPlatformAdmins = await this.prisma.userRoleAssignment.count({
+      where: { role: { name: UserDefaults.roles.platformAdmin } }
+    })
+    const awaitsPlatformAdmin = existingPlatformAdmins === 0
+
     // Get guest role with modules and permissions
     const guestRole = await this.prisma.role.findFirst({
       where: { name: 'guest', isActive: true },
@@ -471,7 +523,8 @@ export class AuthService {
           include: {
             permission: {
               include: {
-                module: true
+                module: true,
+                subModule: true
               }
             }
           }
@@ -485,20 +538,24 @@ export class AuthService {
       return {
         roles: ['guest'],
         modules: [],
-        permissions: []
+        permissions: [],
+        awaitsPlatformAdmin
       }
     }
 
     // Extract modules from active roles (modules attached and active)
     const modules = guestRole.modulesLinked.filter((moduleLink) => moduleLink.module.isActive).map((moduleLink) => moduleLink.module.name)
 
-    // Extract permissions from active roles (permissions attached to active roles and modules)
-    const permissions = guestRole.permissionsLinked.filter((permissionLink) => permissionLink.permission.module?.isActive).map((permissionLink) => permissionLink.permission.name)
+    // Extract permissions from active roles (permission's module active AND its sub-module — if any — active)
+    const permissions = guestRole.permissionsLinked
+      .filter((permissionLink) => permissionLink.permission.module?.isActive && (!permissionLink.permission.subModuleId || permissionLink.permission.subModule?.isActive))
+      .map((permissionLink) => permissionLink.permission.name)
 
     return {
       roles: ['guest'],
       modules,
-      permissions
+      permissions,
+      awaitsPlatformAdmin
     }
   }
 
@@ -522,7 +579,7 @@ export class AuthService {
     return user
   }
 
-  private async validateTokenAndActivateUser(userId: string, email: string, confirmAccountToken: string, firstname: string, lastname: string, locale?: Locale): Promise<User> {
+  private async validateTokenAndActivateUser(userId: string, email: string, confirmAccountToken: string, firstname: string, lastname: string, locale?: Locale, accountName?: string): Promise<User> {
     await this.verifyToken(confirmAccountToken, this.env.get('JWT_SECRET_CONFIRM_ACCOUNT'))
 
     // Find the token record
@@ -539,10 +596,12 @@ export class AuthService {
       throw new NotFoundException('Invalid confirmation token')
     }
 
-    // Activate the user profile
+    // Activate the user profile (carries the user-supplied accountName through to the
+    // default-account creation, so the new account gets a meaningful searchable name).
     const updatedUser = await this.createAndActivateUserProfile(userId, email, firstname, lastname, {
       locale,
-      createDefaultAccount: true
+      createDefaultAccount: true,
+      accountName
     })
 
     // Delete the token after activation
@@ -692,15 +751,24 @@ export class AuthService {
       roleIds?: number[]
       locale?: Locale
       createDefaultAccount?: boolean
+      /** Override the default account name when `createDefaultAccount=true`. */
+      accountName?: string
     } = {}
   ): Promise<User> {
-    const { accountIds = [], entityIds = [], roleIds = [], locale, createDefaultAccount = false } = options
+    const { accountIds = [], entityIds = [], roleIds = [], locale, createDefaultAccount = false, accountName } = options
 
     try {
       this.logger.debug(`Creating profile for user ${email}`, 'createAndActivateUserProfile')
 
       // Use a single transaction to ensure consistency for all operations
       return await this.prisma.$transaction(async (tx) => {
+        // Bootstrap rule: if no platform-admin exists yet, this user becomes platform-admin.
+        // Idempotent — runs only once on a fresh deployment.
+        const existingPlatformAdmins = await tx.userRoleAssignment.count({
+          where: { role: { name: UserDefaults.roles.platformAdmin } }
+        })
+        const awaitsPlatformAdmin = existingPlatformAdmins === 0
+
         // Create People record
         const person = await tx.people.create({
           data: {
@@ -712,9 +780,9 @@ export class AuthService {
 
         // Create a default Account if needed and none specified
         let defaultAccountId: string | undefined = undefined
-        if (createDefaultAccount && accountIds.length === 0 && entityIds.length === 0) {
+        if (!awaitsPlatformAdmin && createDefaultAccount && accountIds.length === 0 && entityIds.length === 0) {
           const defaultAccount = await tx.account.create({
-            data: {}
+            data: accountName?.trim() ? { name: accountName.trim() } : {}
           })
           defaultAccountId = defaultAccount.id
         }
@@ -756,27 +824,28 @@ export class AuthService {
           })
         }
 
-        // Add the specified roles or the default role
-        if (roleIds.length > 0) {
-          await tx.userRoleLink.createMany({
-            data: roleIds.map((roleId) => ({
-              userId,
-              roleId
-            }))
-          })
-        } else {
-          // Resolve the role by name instead of using hardcoded IDs
-          const roleName = defaultAccountId ? UserDefaults.roles.admin : UserDefaults.roles.default
-          const role = await tx.role.findFirst({ where: { name: roleName } })
-          if (!role) throw new BadRequestException(`Default role '${roleName}' not found`)
+        // Resolve the role(s) to assign and write scoped UserRoleAssignment rows.
+        // Each assignment must satisfy the DB scope-check trigger:
+        //   PLATFORM ⇒ no accountId, no entityId
+        //   ACCOUNT  ⇒ accountId set, entityId NULL
+        //   ENTITY   ⇒ entityId set, accountId NULL
+        const rolesToAssign = await this.resolveRolesToAssign(tx, {
+          awaitsPlatformAdmin,
+          providedRoleIds: roleIds,
+          hasDefaultAccount: Boolean(defaultAccountId)
+        })
 
-          await tx.userRoleLink.create({
-            data: {
-              userId,
-              roleId: role.id
-            }
-          })
+        const assignmentRows = this.buildAssignmentRows(userId, rolesToAssign, {
+          accountIds,
+          entityIds,
+          defaultAccountId
+        })
+
+        if (assignmentRows.length === 0) {
+          throw new BadRequestException('No valid role assignment could be derived from the provided scope context')
         }
+
+        await tx.userRoleAssignment.createMany({ data: assignmentRows })
 
         return updatedUser
       })
@@ -784,5 +853,68 @@ export class AuthService {
       this.logger.error(`Failed to create profile for ${email}: ${error.message}`, 'createAndActivateUserProfile')
       throw new BadRequestException(`Failed to create user profile: ${error.message}`)
     }
+  }
+
+  /**
+   * Resolve the roles that should be assigned to a freshly activated user.
+   *
+   * - On platform bootstrap (no platform-admin yet), force the platform-admin role.
+   * - Otherwise, honor the explicit roleIds if any.
+   * - Otherwise, fall back to admin (when a default account is provisioned) or the default user role.
+   */
+  private async resolveRolesToAssign(
+    tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
+    ctx: { awaitsPlatformAdmin: boolean; providedRoleIds: number[]; hasDefaultAccount: boolean }
+  ): Promise<{ id: number; scope: 'PLATFORM' | 'ACCOUNT' | 'ENTITY' }[]> {
+    if (ctx.awaitsPlatformAdmin) {
+      const platformAdmin = await tx.role.findFirst({
+        where: { name: UserDefaults.roles.platformAdmin, isSystem: true, accountId: null }
+      })
+      if (!platformAdmin) throw new BadRequestException(`Platform bootstrap role '${UserDefaults.roles.platformAdmin}' not found`)
+      return [{ id: platformAdmin.id, scope: platformAdmin.scope as 'PLATFORM' | 'ACCOUNT' | 'ENTITY' }]
+    }
+
+    if (ctx.providedRoleIds.length > 0) {
+      const roles = await tx.role.findMany({ where: { id: { in: ctx.providedRoleIds } } })
+      if (roles.length !== ctx.providedRoleIds.length) {
+        throw new BadRequestException('One or more provided role ids could not be resolved')
+      }
+      return roles.map((r) => ({ id: r.id, scope: r.scope as 'PLATFORM' | 'ACCOUNT' | 'ENTITY' }))
+    }
+
+    const fallbackName = ctx.hasDefaultAccount ? UserDefaults.roles.admin : UserDefaults.roles.default
+    const role = await tx.role.findFirst({
+      where: { name: fallbackName, isSystem: true, accountId: null }
+    })
+    if (!role) throw new BadRequestException(`Default role '${fallbackName}' not found`)
+    return [{ id: role.id, scope: role.scope as 'PLATFORM' | 'ACCOUNT' | 'ENTITY' }]
+  }
+
+  /**
+   * Build the raw UserRoleAssignment rows from a list of resolved roles and the available scope targets.
+   * The DB trigger validates scope coherence on insert; this builder keeps the call-site logic readable.
+   */
+  private buildAssignmentRows(
+    userId: string,
+    roles: { id: number; scope: 'PLATFORM' | 'ACCOUNT' | 'ENTITY' }[],
+    targets: { accountIds: string[]; entityIds: string[]; defaultAccountId?: string }
+  ): { userId: string; roleId: number; accountId?: string; entityId?: string }[] {
+    const rows: { userId: string; roleId: number; accountId?: string; entityId?: string }[] = []
+    const accountTargets = targets.accountIds.length > 0 ? targets.accountIds : targets.defaultAccountId ? [targets.defaultAccountId] : []
+
+    for (const role of roles) {
+      if (role.scope === 'PLATFORM') {
+        rows.push({ userId, roleId: role.id })
+        continue
+      }
+      if (role.scope === 'ACCOUNT') {
+        for (const accountId of accountTargets) rows.push({ userId, roleId: role.id, accountId })
+        continue
+      }
+      if (role.scope === 'ENTITY') {
+        for (const entityId of targets.entityIds) rows.push({ userId, roleId: role.id, entityId })
+      }
+    }
+    return rows
   }
 }

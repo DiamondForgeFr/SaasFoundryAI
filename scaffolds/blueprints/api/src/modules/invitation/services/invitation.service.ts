@@ -39,6 +39,8 @@ export interface InvitationTokenPayload extends TokenPayload {
   firstname?: string
   lastname?: string
   locale?: Locale
+  /** Suggested account name (account-owner invitations) — pre-fills the form at acceptance. */
+  accountName?: string
 }
 
 /**
@@ -64,27 +66,34 @@ export class InvitationService {
       message: 'Invitation sent successfully. The user will receive an email with instructions to join.'
     }
 
-    const { email, roleIds, accountIds = [], entityIds = [] } = createInvitationDto
+    const { email, roleIds, accountIds = [], entityIds = [], accountName } = createInvitationDto
     let { firstname, lastname, locale } = createInvitationDto
 
     this.logger.debug(`Creating invitation for ${email} by user ${inviterId}`, 'createInvitation')
 
     try {
-      // Check if there is at least one account or entity ID
-      if (accountIds.length === 0 && entityIds.length === 0) throw new BadRequestException('At least one account or entity ID must be provided')
+      // Check if there is at least one account or entity ID — OR the inviter is creating an
+      // invitation for someone to **own a brand-new account** (platform-admin flow). The latter
+      // is detected later via the ACCOUNT_INVITE_OWNER permission check.
+      const isAccountOwnerInvitation = accountIds.length === 0 && entityIds.length === 0
 
       // Get inviter with their roles, permissions, accounts and entities in a single query
       const inviter = await this.prisma.user.findUnique({
         where: { id: inviterId },
         include: {
           people: true,
-          rolesLinked: {
+          roleAssignments: {
             include: {
               role: {
                 include: {
                   permissionsLinked: {
                     include: {
                       permission: true
+                    }
+                  },
+                  subModulesLinked: {
+                    include: {
+                      subModule: true
                     }
                   }
                 }
@@ -134,7 +143,7 @@ export class InvitationService {
       if (!inviter) throw new NotFoundException('Inviter user not found')
 
       // Extract user permissions
-      const userPermissions = inviter.rolesLinked.flatMap((userRole) => userRole.role.permissionsLinked.map((permissionLink) => permissionLink.permission.name))
+      const userPermissions = inviter.roleAssignments.flatMap((assignment) => assignment.role.permissionsLinked.map((permissionLink) => permissionLink.permission.name))
 
       // Remove duplicates
       const uniquePermissions = [...new Set(userPermissions)]
@@ -143,6 +152,36 @@ export class InvitationService {
       const hasAccountInvitePermission = uniquePermissions.includes('USER_ACCOUNTS_INVITATION')
       const hasEntityInvitePermission = uniquePermissions.includes('USER_ENTITIES_INVITATION')
       const hasRoleAllocationPermission = uniquePermissions.includes('USER_ROLE_ALLOCATION')
+      const hasAccountOwnerInvitePermission = uniquePermissions.includes('ACCOUNT_INVITE_OWNER')
+      // Platform-reach actor identifier: holding the PLATFORM_ACCOUNTS sub-module (the all-accounts
+      // list, granted to platform roles) is the canonical marker of platform reach. Used below to
+      // (1) bypass the per-account/-entity accessibility check (a platform actor sees every account)
+      // and (2) gate the assignment of PLATFORM-scoped roles to invitees (so a regular admin cannot
+      // promote someone to platform admin).
+      const uniqueSubModules = [...new Set(inviter.roleAssignments.flatMap((assignment) => assignment.role.subModulesLinked.map((subModuleLink) => subModuleLink.subModule.name)))]
+      const isPlatformAdminActor = uniqueSubModules.includes('PLATFORM_ACCOUNTS')
+
+      // Pre-resolve role scopes when roleIds are provided — needed to distinguish a "platform
+      // admin" invitation (no account/entity targets but PLATFORM-scoped role) from the legacy
+      // "account-owner" invitation (no targets, no roles, spins a fresh account on acceptance).
+      const targetRoleIds = roleIds ?? []
+      const targetRoles = targetRoleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: targetRoleIds } }, select: { id: true, name: true, scope: true } }) : []
+      const hasPlatformScopedRole = targetRoles.some((r) => r.scope === 'PLATFORM')
+      // A platform-admin invitation: no account/entity targets, but at least one PLATFORM-scoped
+      // role provided. The invitee will become a platform admin (or carry that role) on acceptance.
+      const isPlatformInvitation = accountIds.length === 0 && entityIds.length === 0 && hasPlatformScopedRole
+
+      // "Account-owner invitation" mode: no account/entity targets AND no platform-scoped role —
+      // the invitee will create their own account at acceptance time.
+      const isOwnerOnlyInvitation = isAccountOwnerInvitation && !isPlatformInvitation
+      if (isOwnerOnlyInvitation) {
+        if (!hasAccountOwnerInvitePermission) {
+          throw new BadRequestException('At least one account or entity ID must be provided')
+        }
+        if (roleIds && roleIds.length > 0) {
+          throw new BadRequestException('Account-owner invitations cannot pre-assign roles — the new owner is auto-promoted to admin of their fresh account')
+        }
+      }
 
       // Extract all accessible account IDs
       const accessibleAccountIds = inviter.accountsLinked.map((link) => link.account.id)
@@ -164,9 +203,12 @@ export class InvitationService {
         // Check if user has account invitation permission
         if (!hasAccountInvitePermission) throw new UnauthorizedException('You do not have permission to invite users to accounts')
 
-        // Verify that all provided account IDs are accessible
-        const invalidAccountIds = accountIds.filter((id) => !accessibleAccountIds.includes(id))
-        if (invalidAccountIds.length > 0) throw new UnauthorizedException(`You do not have access to these accounts: ${invalidAccountIds.join(', ')}`)
+        // Platform admins have ACCOUNT_LIST_ALL and may invite into ANY account; regular admins
+        // are still restricted to the accounts they themselves belong to.
+        if (!isPlatformAdminActor) {
+          const invalidAccountIds = accountIds.filter((id) => !accessibleAccountIds.includes(id))
+          if (invalidAccountIds.length > 0) throw new UnauthorizedException(`You do not have access to these accounts: ${invalidAccountIds.join(', ')}`)
+        }
       }
 
       // Validate entity IDs
@@ -174,25 +216,32 @@ export class InvitationService {
         // Check if user has entity invitation permission
         if (!hasEntityInvitePermission) throw new UnauthorizedException('You do not have permission to invite users to entities')
 
-        // Verify that all provided entity IDs are accessible
-        const invalidEntityIds = entityIds.filter((id) => !accessibleEntityIds.includes(id))
-        if (invalidEntityIds.length > 0) throw new UnauthorizedException(`You do not have access to these entities: ${invalidEntityIds.join(', ')}`)
+        // Same platform-admin bypass as for accounts.
+        if (!isPlatformAdminActor) {
+          const invalidEntityIds = entityIds.filter((id) => !accessibleEntityIds.includes(id))
+          if (invalidEntityIds.length > 0) throw new UnauthorizedException(`You do not have access to these entities: ${invalidEntityIds.join(', ')}`)
+        }
       }
 
       // Check role assignment permission if roleIds are provided
       if (roleIds && roleIds.length > 0) {
         if (!hasRoleAllocationPermission) throw new UnauthorizedException('You do not have permission to assign roles')
 
-        // Check if any of the roles is 'guest'
-        const guestRole = await this.prisma.role.findFirst({
-          where: {
-            id: { in: roleIds },
-            name: 'guest'
-          }
-        })
+        // Only platform admins can assign PLATFORM-scoped roles (e.g. platform-admin). Without this
+        // gate any account admin with USER_ROLE_ALLOCATION could promote a user to platform admin.
+        if (hasPlatformScopedRole && !isPlatformAdminActor) {
+          throw new UnauthorizedException('Only platform admins can assign PLATFORM-scoped roles')
+        }
 
-        if (guestRole) {
+        // Reject the technical `guest` role — it is reserved for the system anonymous user.
+        if (targetRoles.some((r) => r.name === 'guest')) {
           throw new BadRequestException('The guest role cannot be assigned to users')
+        }
+
+        // Mixing PLATFORM and ACCOUNT/ENTITY scopes in a single invitation makes no sense per the
+        // business rule "a user cannot be a platform admin AND linked to accounts at the same time".
+        if (hasPlatformScopedRole && (accountIds.length > 0 || entityIds.length > 0)) {
+          throw new BadRequestException('A platform-scoped role cannot be combined with account or entity targets')
         }
       }
 
@@ -271,13 +320,16 @@ export class InvitationService {
         })
       }
 
-      // Generate the invitation token with only essential information
+      // Generate the invitation token with only essential information.
+      // For account-owner invitations, the suggested accountName flows through the token so it can
+      // pre-fill the acceptance form even if the invitee never reads the inviter's email.
       const invitationPayload: InvitationTokenPayload = {
         email: user.email,
         sub: user.id,
         firstname,
         lastname,
-        locale
+        locale,
+        accountName: isOwnerOnlyInvitation ? accountName?.trim() || undefined : undefined
       }
 
       const invitationToken = this.jwtService.sign(invitationPayload, {
@@ -311,10 +363,14 @@ export class InvitationService {
           }
         })
 
-        // Create the invitation
+        // Create the invitation — bind `inviteeUserId` to the (just-created or pre-existing) inactive
+        // user row so the `receivedInvitations` relation resolves. Without this, an invited user has
+        // no linked invitation and gets miscounted as a self-signup (pendingSignups) and mislabeled
+        // in the users list; the invitation row itself is also counted in pendingInvitations → double.
         const invitation = await tx.invitation.create({
           data: {
             inviterUserId: inviterId,
+            inviteeUserId: user.id,
             inviteeUserEmail: email,
             status: InvitationStatus.SENT
           }
@@ -412,11 +468,13 @@ export class InvitationService {
       const entityIds = invitation.entitiesLinked.map((link) => link.entityId)
       const roleIds = invitation.rolesLinked.map((link) => link.roleId)
 
-      // Verify that invitation contains at least one accountId or entityId
-      if (accountIds.length === 0 && entityIds.length === 0) {
-        this.logger.warn(`Invalid invitation: missing accountIds and entityIds`, 'acceptInvitation')
-        throw new BadRequestException('The invitation is invalid: it must contain at least one account or entity')
-      }
+      // Distinguish three invitation shapes by inspecting role scopes:
+      //   - PLATFORM-scoped role(s) AND no targets → platform-admin invitation (no fresh account)
+      //   - Zero targets AND no roles              → account-owner invitation (spin up new account)
+      //   - Otherwise                              → regular targeted invitation
+      const invitationRoleScopes = roleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: roleIds } }, select: { scope: true } }) : []
+      const isPlatformInvitation = accountIds.length === 0 && entityIds.length === 0 && invitationRoleScopes.some((r) => r.scope === 'PLATFORM')
+      const isAccountOwnerInvitation = accountIds.length === 0 && entityIds.length === 0 && !isPlatformInvitation
 
       // Hash the password
       const hashedPassword = await bcrypt.hash(password, 10)
@@ -432,8 +490,10 @@ export class InvitationService {
       const lastname = userLastname || payload.lastname || ''
       const locale = userLocale || payload.locale
 
-      // Activate the user account with the information from the DTO, token, and database
-      await this.activateInvitedUserAccount(tokenRecord.user.id, tokenRecord.user.email, firstname, lastname, accountIds, entityIds, roleIds, locale)
+      // Activate the user account with the information from the DTO, token, and database.
+      // For account-owner invitations we let createAndActivateUserProfile spin up the new account itself,
+      // using the inviter's suggested accountName (carried in the JWT) when present.
+      await this.activateInvitedUserAccount(tokenRecord.user.id, tokenRecord.user.email, firstname, lastname, accountIds, entityIds, roleIds, locale, isAccountOwnerInvitation, payload.accountName)
 
       // Mark the invitation as accepted
       await this.prisma.invitation.update({
@@ -470,6 +530,47 @@ export class InvitationService {
   }
 
   /**
+   * Cancel a pending invitation. Only the inviter can cancel their own invitation.
+   * Already-accepted or already-canceled invitations are no-ops (idempotent).
+   */
+  async cancelInvitation(userId: string, invitationId: string): Promise<{ id: string; status: InvitationStatus }> {
+    this.logger.debug(`Cancelling invitation ${invitationId} by user ${userId}`, 'cancelInvitation')
+    try {
+      const invitation = await this.prisma.invitation.findUnique({ where: { id: invitationId } })
+      if (!invitation) throw new NotFoundException('Invitation not found')
+      if (invitation.inviterUserId !== userId) {
+        throw new UnauthorizedException('Only the inviter can cancel this invitation')
+      }
+
+      // Idempotent: already accepted or canceled — return the current status without erroring out.
+      if (invitation.status === InvitationStatus.ACCEPTED || invitation.status === InvitationStatus.CANCELED) {
+        return { id: invitation.id, status: invitation.status }
+      }
+
+      // Update status and revoke the underlying invitation token (if any) so the link stops working.
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const next = await tx.invitation.update({
+          where: { id: invitationId },
+          data: { status: InvitationStatus.CANCELED }
+        })
+        await tx.userToken.deleteMany({ where: { userId: invitation.inviteeUserId ?? '__none__', type: TokenType.INVITATION } })
+        // Best-effort by email too in case inviteeUserId was never bound
+        if (invitation.inviteeUserEmail) {
+          const stranded = await tx.user.findUnique({ where: { email: invitation.inviteeUserEmail } })
+          if (stranded) await tx.userToken.deleteMany({ where: { userId: stranded.id, type: TokenType.INVITATION } })
+        }
+        return next
+      })
+
+      return { id: updated.id, status: updated.status }
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException) throw error
+      this.logger.error(`Failed to cancel invitation: ${error.message}`, 'cancelInvitation')
+      throw new BadRequestException('Failed to cancel invitation')
+    }
+  }
+
+  /**
    * Get all invitations sent by a user
    */
   async getUserInvitations(userId: string): Promise<ListInvitationsResponseDto> {
@@ -489,7 +590,7 @@ export class InvitationService {
         },
         entitiesLinked: {
           include: {
-            entity: true
+            entity: { include: { organization: true } }
           }
         },
         rolesLinked: {
@@ -519,12 +620,51 @@ export class InvitationService {
         })),
         entities: invitation.entitiesLinked.map((link) => ({
           id: link.entity.id,
-          name: link.entity.name
+          name: link.entity.organization?.name ?? ''
         })),
         roles: invitation.rolesLinked.map((link) => ({
           id: link.role.id,
           name: link.role.name
         }))
+      }))
+    }
+  }
+
+  /**
+   * Platform-admin: list every PENDING (SENT or EXPIRED) account-owner invitation across the
+   * platform — those are invitations with zero account/entity targets, where acceptance triggers
+   * a new account spin-up. Drives the "Pending account owner invitations" panel on the Accounts
+   * tab so a platform-admin can see / resend / cancel them regardless of who originally sent them.
+   *
+   * Authorization is enforced at the controller (ACCOUNT_LIST_ALL).
+   */
+  async getPlatformAccountOwnerInvitations(): Promise<ListInvitationsResponseDto> {
+    const invitations = await this.prisma.invitation.findMany({
+      where: {
+        status: { in: [InvitationStatus.SENT, InvitationStatus.EXPIRED] },
+        accountsLinked: { none: {} },
+        entitiesLinked: { none: {} }
+      },
+      include: {
+        accountsLinked: { include: { account: true } },
+        entitiesLinked: { include: { entity: { include: { organization: true } } } },
+        rolesLinked: { include: { role: true } }
+      },
+      orderBy: { invitedAt: 'desc' }
+    })
+
+    return {
+      invitations: invitations.map((invitation) => ({
+        id: invitation.id,
+        inviterUserId: invitation.inviterUserId,
+        inviteeUserId: invitation.inviteeUserId || undefined,
+        inviteeUserEmail: invitation.inviteeUserEmail,
+        status: invitation.status,
+        invitedAt: invitation.invitedAt,
+        acceptedAt: invitation.acceptedAt || undefined,
+        accounts: invitation.accountsLinked.map((link) => ({ id: link.account.id, name: link.account.name })),
+        entities: invitation.entitiesLinked.map((link) => ({ id: link.entity.id, name: link.entity.organization?.name ?? '' })),
+        roles: invitation.rolesLinked.map((link) => ({ id: link.role.id, name: link.role.name }))
       }))
     }
   }
@@ -540,22 +680,30 @@ export class InvitationService {
     accountIds: string[],
     entityIds: string[],
     roleIds: number[],
-    locale?: Locale
+    locale?: Locale,
+    createNewAccount = false,
+    accountName?: string
   ): Promise<User> {
     try {
       this.logger.debug(`Activating account for invited user ${email}`, 'activateInvitedUserAccount')
 
-      // At this point, we should have at least one account or entity ID
-      // since we validate this in acceptInvitation
-      if (accountIds.length === 0 && entityIds.length === 0) throw new BadRequestException('At least one account or entity ID must be provided')
+      // Platform-admin invitations carry PLATFORM-scoped roles with no account/entity targets —
+      // resolveRolesToAssign / buildAssignmentRows downstream create the PLATFORM assignment
+      // (accountId NULL, entityId NULL), so we only refuse the *truly* empty case.
+      const roleScopes = roleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: roleIds } }, select: { scope: true } }) : []
+      const hasPlatformRole = roleScopes.some((r) => r.scope === 'PLATFORM')
+      if (!createNewAccount && !hasPlatformRole && accountIds.length === 0 && entityIds.length === 0) {
+        throw new BadRequestException('At least one account or entity ID must be provided')
+      }
 
-      // Use the shared user profile activation method
       return await this.authService.createAndActivateUserProfile(userId, email, firstname, lastname, {
         accountIds,
         entityIds,
         roleIds,
         locale,
-        createDefaultAccount: false // Important: do not create default account for invitations
+        // Account-owner invitations: spin up a brand-new account and assign the invitee as its admin.
+        createDefaultAccount: createNewAccount,
+        accountName
       })
     } catch (error) {
       this.logger.error(`Failed to activate invited user account for ${email}: ${error.message}`, 'activateInvitedUserAccount')

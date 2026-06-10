@@ -123,8 +123,9 @@ docs(#44): update API documentation
 # Development
 npm run dev                 # Start in watch mode
 
-# Database
-npm run db:setup:dev        # (Re)build the dev DB: db push --force-reset + functions/triggers/datasets (DESTRUCTIVE)
+# Database (migration-free — the schema + prisma/sql/* ARE the source of truth)
+npm run db:setup:dev        # (Re)build the dev DB: db push --force-reset + apply functions/triggers/datasets (DESTRUCTIVE)
+npx prisma db push          # Sync a schema change into the dev DB without re-seeding (non-destructive)
 npm run db:studio           # Open Prisma Studio
 
 # Testing

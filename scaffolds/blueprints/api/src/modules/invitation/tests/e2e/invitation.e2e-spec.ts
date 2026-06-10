@@ -75,7 +75,7 @@ describe('Invitation Module (e2e)', () => {
       password: 'TestPassword123',
       firstname: 'Invitation',
       lastname: 'Manager',
-      roles: ['admin'],
+      roles: ['account-admin'],
       permissions: ['USER_ACCOUNTS_INVITATION', 'USER_ENTITIES_INVITATION', 'USER_ROLE_ALLOCATION']
     })
 

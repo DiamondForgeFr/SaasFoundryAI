@@ -37,7 +37,6 @@ export const mockEntity = {
   description: 'Test Entity Description',
   isActive: true,
   accountId: mockAccount.id,
-  organizationId: mockOrganization.id,
   createdAt: new Date(),
   updatedAt: new Date()
 }

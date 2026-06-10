@@ -261,8 +261,11 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
             peopleId: '2'
           })
           prismaServiceAny.userAccountLink = { createMany: jest.fn().mockResolvedValue({}) }
-          prismaServiceAny.role = { findFirst: jest.fn().mockResolvedValue({ id: 1, name: 'admin' }) }
-          prismaServiceAny.userRoleLink = { create: jest.fn().mockResolvedValue({}) }
+          // A platform-admin already exists, so the activated user takes the default ACCOUNT-scoped
+          // admin role attached to the freshly provisioned default account.
+          prismaServiceAny.userRoleAssignment.count.mockResolvedValue(1)
+          prismaServiceAny.userRoleAssignment.createMany.mockResolvedValue({ count: 1 })
+          prismaServiceAny.role = { findFirst: jest.fn().mockResolvedValue({ id: 1, name: 'account-admin', scope: 'ACCOUNT', isSystem: true, accountId: null }) }
           prismaServiceAny.$transaction = jest.fn().mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb(prismaServiceAny))
         })
 
@@ -336,20 +339,21 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
 
       describe('when successful', () => {
         const successScenario = TestScenario.create('successful password reset request', async () => {
-          const mockUser = TestDataFactory.user().withEmail(requestPasswordResetDto.email).build()
-
-          // Add roles structure manually since UserBuilder doesn't have withRoles
-          const userWithRoles = {
-            ...mockUser,
-            rolesLinked: [
+          // Scoped RBAC shape: the service reads user.roleAssignments[].role.{modulesLinked,permissionsLinked}.
+          // The Prisma include filters modulesLinked/permissionsLinked by name, so a granting assignment
+          // is represented by a non-empty modulesLinked + permissionsLinked.
+          const userWithRoles = TestDataFactory.user()
+            .withEmail(requestPasswordResetDto.email)
+            .withRoleAssignments([
               {
                 role: {
-                  modulesLinked: [{ module: { name: 'USER_ACCOUNT_PASSWORD_RECOVERY' } }],
-                  permissionsLinked: [{ permission: { name: 'PASSWORD_RECOVERY_LINK_REQUEST_OWN' } }]
+                  name: 'USER',
+                  modulesLinked: [{ module: { name: 'USER_ACCOUNT_PASSWORD_RECOVERY', isActive: true } }],
+                  permissionsLinked: [{ permission: { name: 'PASSWORD_RECOVERY_LINK_REQUEST_OWN', module: { isActive: true } } }]
                 }
               }
-            ]
-          }
+            ])
+            .build()
 
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.user.findUnique.mockResolvedValue(userWithRoles)
@@ -372,20 +376,19 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
 
       describe('when user has no permission', () => {
         const noPermissionScenario = TestScenario.create('user without permission', async () => {
-          const mockUser = TestDataFactory.user().withEmail(requestPasswordResetDto.email).build()
-
-          // Add roles structure manually
-          const userWithoutPermissions = {
-            ...mockUser,
-            rolesLinked: [
+          // Assignment exists but the name-filtered include returns no granting modules/permissions.
+          const userWithoutPermissions = TestDataFactory.user()
+            .withEmail(requestPasswordResetDto.email)
+            .withRoleAssignments([
               {
                 role: {
+                  name: 'USER',
                   modulesLinked: [],
                   permissionsLinked: []
                 }
               }
-            ]
-          }
+            ])
+            .build()
 
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.user.findUnique.mockResolvedValue(userWithoutPermissions)
@@ -421,18 +424,18 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
         const successScenario = TestScenario.create('successful password reset', async () => {
           const mockUser = TestDataFactory.user().build()
 
-          // Add roles structure manually
-          const userWithPermissions = {
-            ...mockUser,
-            rolesLinked: [
+          // Scoped RBAC shape on the token's related user (service reads tokenRecord.user.roleAssignments).
+          const userWithPermissions = TestDataFactory.user()
+            .withRoleAssignments([
               {
                 role: {
-                  modulesLinked: [{ module: { name: 'USER_ACCOUNT_PASSWORD_RECOVERY' } }],
-                  permissionsLinked: [{ permission: { name: 'PASSWORD_RECOVERY_RESET_OWN' } }]
+                  name: 'USER',
+                  modulesLinked: [{ module: { name: 'USER_ACCOUNT_PASSWORD_RECOVERY', isActive: true } }],
+                  permissionsLinked: [{ permission: { name: 'PASSWORD_RECOVERY_RESET_OWN', module: { isActive: true } } }]
                 }
               }
-            ]
-          }
+            ])
+            .build()
 
           const mockTokenRecord = {
             id: '1',
@@ -471,18 +474,18 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
         const noPermissionScenario = TestScenario.create('user without reset permission', async () => {
           const mockUser = TestDataFactory.user().build()
 
-          // Add roles structure manually without permissions
-          const userWithoutPermissions = {
-            ...mockUser,
-            rolesLinked: [
+          // Assignment with no granting modules/permissions after the name-filtered include.
+          const userWithoutPermissions = TestDataFactory.user()
+            .withRoleAssignments([
               {
                 role: {
+                  name: 'USER',
                   modulesLinked: [],
                   permissionsLinked: []
                 }
               }
-            ]
-          }
+            ])
+            .build()
 
           const mockTokenRecord = {
             id: '1',
@@ -514,11 +517,23 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
       describe('when successful', () => {
         const successScenario = TestScenario.create('successful getMe', async () => {
           const mockAccount = TestDataFactory.account().build()
-          const mockUser = TestDataFactory.user().build()
 
-          // Create complete user structure manually that matches what Prisma returns
+          // Scoped RBAC shape: roleAssignments carry the scope target plus the modules/permissions
+          // they grant. getMe maps active modules/permissions and derives roles/modules/permissions unions.
           const userWithCompleteData = {
-            ...mockUser,
+            ...TestDataFactory.user()
+              .withRoleAssignments([
+                {
+                  role: {
+                    name: 'USER',
+                    scope: 'PLATFORM',
+                    modulesLinked: [{ module: { name: 'USER_ACCOUNT', isActive: true } }],
+                    subModulesLinked: [{ subModule: { name: 'OVERVIEW', isActive: true } }],
+                    permissionsLinked: [{ permission: { name: 'READ_OWN_PROFILE', module: { isActive: true } } }]
+                  }
+                }
+              ])
+              .build(),
             people: {
               id: '2',
               firstname: 'Bruce',
@@ -527,38 +542,15 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
               createdAt: new Date(),
               updatedAt: new Date()
             },
-            rolesLinked: [
-              {
-                role: {
-                  name: 'USER',
-                  modulesLinked: [
-                    {
-                      module: {
-                        name: 'USER_ACCOUNT',
-                        isActive: true
-                      }
-                    }
-                  ],
-                  permissionsLinked: [
-                    {
-                      permission: {
-                        name: 'READ_OWN_PROFILE',
-                        module: {
-                          isActive: true
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ],
+            preference: null,
             accountsLinked: [
               {
                 account: {
                   id: mockAccount.id,
                   name: mockAccount.name,
                   description: mockAccount.description,
-                  isActive: mockAccount.isActive
+                  isActive: mockAccount.isActive,
+                  deactivatedByScope: null
                 }
               }
             ],
@@ -580,6 +572,7 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
             expect(result).toHaveProperty('people')
             expect(result).toHaveProperty('roles')
             expect(result).toHaveProperty('modules')
+            expect(result).toHaveProperty('subModules')
             expect(result).toHaveProperty('permissions')
             expect(result).toHaveProperty('accounts')
             expect(result).toHaveProperty('entities')
@@ -588,8 +581,47 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
             // Additional specific assertions
             expect(result.roles).toEqual(['USER'])
             expect(result.modules).toEqual(['USER_ACCOUNT'])
+            expect(result.subModules).toEqual(['OVERVIEW'])
             expect(result.permissions).toEqual(['READ_OWN_PROFILE'])
+            expect(result.roleAssignments[0].subModules).toEqual(['OVERVIEW'])
           })
+        })
+
+        it('hides a deactivated sub-module and the permissions bound to it', async () => {
+          const userWithInactiveSubModule = {
+            ...TestDataFactory.user()
+              .withRoleAssignments([
+                {
+                  role: {
+                    name: 'ACCOUNT_ADMIN',
+                    scope: 'ACCOUNT',
+                    modulesLinked: [{ module: { name: 'ACCOUNT_ADMINISTRATION', isActive: true } }],
+                    subModulesLinked: [
+                      { subModule: { name: 'OVERVIEW', isActive: true } },
+                      { subModule: { name: 'USERS', isActive: false } } // deactivated → must be hidden
+                    ],
+                    permissionsLinked: [
+                      { permission: { name: 'ACCOUNT_UPDATE', module: { isActive: true }, subModuleId: null } }, // module-level → kept
+                      { permission: { name: 'ACCOUNT_USER_MANAGEMENT', module: { isActive: true }, subModuleId: 2, subModule: { isActive: false } } } // bound to inactive sub-module → dropped
+                    ]
+                  }
+                }
+              ])
+              .build(),
+            people: { id: '2', firstname: 'Bruce', lastname: 'Wayne', email: 'test@example.com', createdAt: new Date(), updatedAt: new Date() },
+            preference: null,
+            accountsLinked: [],
+            entitiesLinked: []
+          }
+
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.user.findUnique.mockResolvedValue(userWithInactiveSubModule)
+
+          const result = await this.service.getMe('1')
+
+          expect(result.subModules).toEqual(['OVERVIEW'])
+          expect(result.permissions).toEqual(['ACCOUNT_UPDATE'])
+          expect(result.permissions).not.toContain('ACCOUNT_USER_MANAGEMENT')
         })
       })
 
@@ -639,6 +671,8 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
           }
 
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          // A platform-admin already exists, so the bootstrap signal is false.
+          prismaServiceAny.userRoleAssignment.count.mockResolvedValue(1)
           prismaServiceAny.role.findFirst.mockResolvedValue(mockGuestRole)
         })
 
@@ -651,11 +685,13 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
             expect(result).toHaveProperty('roles')
             expect(result).toHaveProperty('modules')
             expect(result).toHaveProperty('permissions')
+            expect(result).toHaveProperty('awaitsPlatformAdmin')
 
             // Additional specific assertions
             expect(result.roles).toEqual(['guest'])
             expect(result.modules).toEqual(['USER_ACCOUNT_CREATION'])
             expect(result.permissions).toEqual(['USER_ACCOUNT_CREATE_OWN'])
+            expect(result.awaitsPlatformAdmin).toBe(false)
           })
         })
       })
@@ -663,6 +699,8 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
       describe('when guest role not found', () => {
         const notFoundScenario = TestScenario.create('guest role not found', async () => {
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          // No platform-admin yet: bootstrap signal is true.
+          prismaServiceAny.userRoleAssignment.count.mockResolvedValue(0)
           prismaServiceAny.role.findFirst.mockResolvedValue(null)
         })
 
@@ -675,7 +713,8 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
             expect(result).toEqual({
               roles: ['guest'],
               modules: [],
-              permissions: []
+              permissions: [],
+              awaitsPlatformAdmin: true
             })
           })
         })
@@ -705,6 +744,7 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
           }
 
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.userRoleAssignment.count.mockResolvedValue(1)
           prismaServiceAny.role.findFirst.mockResolvedValue(mockGuestRole)
 
           // Act
@@ -742,6 +782,7 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
           }
 
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.userRoleAssignment.count.mockResolvedValue(1)
           prismaServiceAny.role.findFirst.mockResolvedValue(mockGuestRole)
 
           // Act

@@ -47,8 +47,11 @@ describe('Accounts Module (e2e)', () => {
   let app: INestApplication
   let prismaService: PrismaService
   let agent: ReturnType<typeof request.agent>
+  let readOnlyAgent: ReturnType<typeof request.agent>
+  let entityAdminAgent: ReturnType<typeof request.agent>
   let testUser: TestUser
   let testUser2: TestUser
+  let entityAdminUser: { id: string; email: string; accountId: string; entityId: string }
   let accountId: string
   let entityId: string
 
@@ -71,7 +74,10 @@ describe('Accounts Module (e2e)', () => {
       password: 'TestPassword123',
       firstname: 'Account',
       lastname: 'Manager',
-      roles: ['user', 'admin']
+      roles: ['account-user', 'account-admin'],
+      // ROLE_CUSTOM_MANAGEMENT is opt-in (not granted to account-admin by default) — the custom-role
+      // builder tests below need it. The helper grants it RBAC v2-correctly (module + ROLES sub-module first).
+      permissions: ['ROLE_CUSTOM_MANAGEMENT']
     })
 
     // Set up second test user
@@ -80,22 +86,31 @@ describe('Accounts Module (e2e)', () => {
       password: 'TestPassword123',
       firstname: 'Test',
       lastname: 'User',
-      roles: ['user']
+      roles: ['account-user']
     })
 
     // Store account ID
     accountId = testUser.accountId
 
-    // Create a test entity for entity tests
+    // Create a test entity for entity tests. The entity's human identity (name/description) is
+    // resolved from its typed profile (D-ENT-6), so attach an Organization profile via the inverted FK.
     const entity = await prismaService.entity.create({
       data: {
-        name: 'Test Entity',
-        description: 'Test entity for e2e tests',
         accountId,
         isActive: true
       }
     })
     entityId = entity.id
+
+    const entityProfile = await prismaService.organization.create({
+      data: {
+        name: 'Test Entity',
+        type: 'COMPANY',
+        description: 'Test entity for e2e tests',
+        entityId: entity.id
+      }
+    })
+    await prismaService.organizationAccountLink.create({ data: { organizationId: entityProfile.id, accountId } })
 
     // Get a role for role tests (using an existing role)
     await prismaService.role.findFirst({
@@ -114,9 +129,44 @@ describe('Accounts Module (e2e)', () => {
     if (!loginSuccess) {
       throw new Error('Failed to login with test user')
     }
+
+    // RBAC v2: a read-only account-user can READ its own account screen but cannot manage it.
+    readOnlyAgent = request.agent(app.getHttpServer())
+    const readOnlyLogin = await loginTestUser(readOnlyAgent, testUser2.email, 'TestPassword123')
+    if (!readOnlyLogin) {
+      throw new Error('Failed to login with read-only test user')
+    }
+
+    // RBAC v2: an entity-admin holds OVERVIEW/USERS/ROLES but NOT the ENTITIES sub-module (D5).
+    // setupTestUser does not support ENTITY scope, so wire the entity-admin assignment by hand.
+    const entityAdminRole = await prismaService.role.findFirstOrThrow({ where: { name: 'entity-admin' } })
+    const bcrypt = await import('bcrypt')
+    const eaPeople = await prismaService.people.create({ data: { firstname: 'Entity', lastname: 'Admin', email: 'entityadmin@saasfoundry.test' } })
+    const eaUser = await prismaService.user.create({
+      data: {
+        email: 'entityadmin@saasfoundry.test',
+        password: await bcrypt.hash('TestPassword123', 10),
+        isActive: true,
+        people: { connect: { id: eaPeople.id } },
+        preference: { create: { locale: 'FR' } },
+        entitiesLinked: { create: { entityId } },
+        roleAssignments: { create: { roleId: entityAdminRole.id, entityId } }
+      }
+    })
+    entityAdminUser = { id: eaUser.id, email: eaUser.email, accountId, entityId }
+    entityAdminAgent = request.agent(app.getHttpServer())
+    const eaLogin = await loginTestUser(entityAdminAgent, entityAdminUser.email, 'TestPassword123')
+    if (!eaLogin) {
+      throw new Error('Failed to login with entity-admin test user')
+    }
   })
 
   afterAll(async () => {
+    // Clean up the hand-wired entity-admin user (linked via entity, not account).
+    if (entityAdminUser?.id) {
+      await prismaService.user.delete({ where: { id: entityAdminUser.id } }).catch(() => {})
+    }
+
     // Clean up test entity
     if (entityId) {
       await prismaService.entity
@@ -157,6 +207,14 @@ describe('Accounts Module (e2e)', () => {
         where: { id: accountId }
       })
       expect(account?.isActive).toBe(newState)
+
+      // Restore the account to its initial (active) state. The users/entities/roles routes below
+      // reject disabled accounts (validateUserAccountAccess without allowDisabled), so leaving the
+      // account deactivated here would surface as 401s in the subsequent authenticated requests.
+      await prismaService.account.update({
+        where: { id: accountId },
+        data: { isActive: initialStatus, deactivatedAt: null, deactivatedByUserId: null, deactivatedByScope: null }
+      })
     })
 
     it('should reject updates without authentication', async () => {
@@ -414,6 +472,127 @@ describe('Accounts Module (e2e)', () => {
 
       it('should reject fetching account roles without authentication', async () => {
         await request(app.getHttpServer()).get(`/api/accounts/${accountId}/roles`).expect(401)
+      })
+    })
+
+    // RBAC v2: a custom role is built from sub-modules (read-only sections) + permissions (actions).
+    // Granting a permission that belongs to a sub-module MUST auto-include that sub-module, otherwise
+    // the check_role_grants integrity trigger rejects the permission link. These tests assert both the
+    // managed-permission path and the pure read-only-section path.
+    describe('Custom Role Creation (RBAC v2 sub-modules)', () => {
+      const createdRoleIds: number[] = []
+
+      afterAll(async () => {
+        if (createdRoleIds.length > 0) {
+          await prismaService.role.deleteMany({ where: { id: { in: createdRoleIds } } }).catch(() => {})
+        }
+      })
+
+      it('creates an ACCOUNT role granting a managed permission and auto-includes its sub-module (trigger satisfied)', async () => {
+        // ACCOUNT_USER_MANAGEMENT lives under the USERS sub-module of ACCOUNT_ADMINISTRATION.
+        const perm = await prismaService.modulePermission.findFirstOrThrow({ where: { name: 'ACCOUNT_USER_MANAGEMENT' } })
+
+        const created = await agent
+          .post(`/api/accounts/${accountId}/roles`)
+          .send({ name: 'rbac-v2-mgmt', description: 'managed perm role', scope: 'ACCOUNT', permissionIds: [perm.id] })
+          .expect(201)
+        createdRoleIds.push(created.body.id)
+
+        expect(created.body).toMatchObject({ id: expect.any(Number), name: 'rbac-v2-mgmt', scope: 'ACCOUNT' })
+
+        // The role comes back from the listing with the USERS sub-module + the permission.
+        const list = await agent.get(`/api/accounts/${accountId}/roles?search=rbac-v2-mgmt`).expect(200)
+        const role = list.body.items.find((r) => r.id === created.body.id)
+        expect(role).toBeDefined()
+        expect(role.subModules).toEqual(expect.arrayContaining(['USERS']))
+        expect(role.permissions).toEqual(expect.arrayContaining(['ACCOUNT_USER_MANAGEMENT']))
+        expect(role.modules).toEqual(expect.arrayContaining(['ACCOUNT_ADMINISTRATION']))
+      })
+
+      it('creates a read-only-section role (sub-module granted, no permission under it)', async () => {
+        const subModule = await prismaService.subModule.findFirstOrThrow({
+          where: { name: 'USERS', module: { name: 'ACCOUNT_ADMINISTRATION' } }
+        })
+
+        const created = await agent
+          .post(`/api/accounts/${accountId}/roles`)
+          .send({ name: 'rbac-v2-readonly', description: 'read-only section', scope: 'ACCOUNT', subModuleIds: [subModule.id], permissionIds: [] })
+          .expect(201)
+        createdRoleIds.push(created.body.id)
+
+        const list = await agent.get(`/api/accounts/${accountId}/roles?search=rbac-v2-readonly`).expect(200)
+        const role = list.body.items.find((r) => r.id === created.body.id)
+        expect(role).toBeDefined()
+        expect(role.subModules).toEqual(expect.arrayContaining(['USERS']))
+        expect(role.permissions).toEqual([])
+        expect(role.modules).toEqual(expect.arrayContaining(['ACCOUNT_ADMINISTRATION']))
+      })
+
+      it('updates a custom role to swap its grants (rewrites module/sub-module/permission in order)', async () => {
+        const perm = await prismaService.modulePermission.findFirstOrThrow({ where: { name: 'ACCOUNT_USER_MANAGEMENT' } })
+        const created = await agent
+          .post(`/api/accounts/${accountId}/roles`)
+          .send({ name: 'rbac-v2-update', scope: 'ACCOUNT', permissionIds: [perm.id] })
+          .expect(201)
+        createdRoleIds.push(created.body.id)
+
+        // Rewrite to a read-only ROLES section (no permission).
+        const rolesSubModule = await prismaService.subModule.findFirstOrThrow({ where: { name: 'ROLES', module: { name: 'ACCOUNT_ADMINISTRATION' } } })
+        await agent
+          .patch(`/api/accounts/roles/${created.body.id}`)
+          .send({ subModuleIds: [rolesSubModule.id], permissionIds: [] })
+          .expect(200)
+
+        const list = await agent.get(`/api/accounts/${accountId}/roles?search=rbac-v2-update`).expect(200)
+        const role = list.body.items.find((r) => r.id === created.body.id)
+        expect(role.subModules).toEqual(['ROLES'])
+        expect(role.permissions).toEqual([])
+      })
+
+      it('catalog groups sub-modules with their permissions and exposes standalone permissions', async () => {
+        const res = await agent.get('/api/accounts/permissions/catalog').expect(200)
+        const accountModule = res.body.find((m) => m.moduleName === 'ACCOUNT_ADMINISTRATION')
+        expect(accountModule).toBeDefined()
+        const usersSection = accountModule.subModules.find((sm) => sm.name === 'USERS')
+        expect(usersSection).toBeDefined()
+        expect(usersSection.permissions.map((p) => p.name)).toEqual(expect.arrayContaining(['ACCOUNT_USER_MANAGEMENT']))
+        // A simple module (no sub-modules) carries its permissions as standalone.
+        const profileModule = res.body.find((m) => m.moduleName === 'PROFILE_ADMINISTRATION')
+        if (profileModule) {
+          expect(profileModule.subModules).toEqual([])
+          expect(profileModule.standalonePermissions.length).toBeGreaterThan(0)
+        }
+      })
+    })
+
+    // RBAC v2 behavioural semantics: module/sub-module grants READ; permission grants WRITE;
+    // authenticated-but-unauthorised yields 403 (D7); unauthenticated yields 401.
+    describe('RBAC v2 read-only & 403 semantics', () => {
+      it('account-user can READ its own account sections (overview/users/roles)', async () => {
+        const ownAccountId = testUser2.accountId
+        await readOnlyAgent.get(`/api/accounts/${ownAccountId}`).expect(200)
+        await readOnlyAgent.get(`/api/accounts/${ownAccountId}/users`).expect(200)
+        await readOnlyAgent.get(`/api/accounts/${ownAccountId}/roles`).expect(200)
+      })
+
+      it('account-user is FORBIDDEN (403) from managing account users (no write permission)', async () => {
+        await readOnlyAgent
+          .patch(`/api/accounts/${testUser2.accountId}/users`)
+          .send({ userIds: [testUser2.id] })
+          .expect(403)
+      })
+
+      it('account-user is FORBIDDEN (403) from toggling account status (no ACCOUNT_UPDATE)', async () => {
+        await readOnlyAgent.patch(`/api/accounts/${testUser2.accountId}/status`).send({ isActive: false }).expect(403)
+      })
+
+      it('entity-admin can READ the account users/roles sections', async () => {
+        await entityAdminAgent.get(`/api/accounts/${accountId}/users`).expect(200)
+        await entityAdminAgent.get(`/api/accounts/${accountId}/roles`).expect(200)
+      })
+
+      it('entity-admin is FORBIDDEN (403) from the ENTITIES section (no ENTITIES sub-module, per D5)', async () => {
+        await entityAdminAgent.get(`/api/accounts/${accountId}/entities`).expect(403)
       })
     })
   })

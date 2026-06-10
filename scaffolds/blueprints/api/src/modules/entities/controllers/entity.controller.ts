@@ -48,6 +48,46 @@ export class EntitiesController {
     return this.entityService.createEntity(req.user.id, createEntityDto)
   }
 
+  @Post('own')
+  @RequirePermissions(['ENTITY_OWN_CREATE'], 'MULTI_ENTITY_MANAGEMENT')
+  @UseGuards(PermissionsGuard)
+  /** Start -- Documentation */
+  @ApiOperation({
+    summary: 'Create an additional entity owned by the current user',
+    description: 'Multi-entity feature — an entity-admin with ENTITY_OWN_CREATE creates a brand-new entity inside the same parent account, becoming entity-admin of it.'
+  })
+  @ApiResponse({ status: 201, description: 'The entity has been successfully created', type: CreateEntityResponseDto })
+  /** End -- Documentation */
+  async createOwnEntity(@Req() req: AuthenticatedRequest, @Body() createEntityDto: CreateEntityDto): Promise<CreateEntityResponseDto> {
+    return this.entityService.createOwnEntity(req.user.id, createEntityDto)
+  }
+
+  @Patch(':id')
+  @RequirePermissions(['ACCOUNT_ENTITY_MANAGEMENT'], 'ACCOUNT_ADMINISTRATION')
+  @UseGuards(PermissionsGuard)
+  /** Start -- Documentation */
+  @ApiOperation({ summary: 'Update entity', description: 'Update an entity name/description/isActive and its profile organization fields.' })
+  @ApiParam({ name: 'id', description: 'Entity ID' })
+  /** End -- Documentation */
+  async updateEntity(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') entityId: string,
+    @Body()
+    body: {
+      name?: string
+      description?: string | null
+      isActive?: boolean
+      organization?: {
+        name?: string
+        type?: 'COMPANY' | 'ASSOCIATION' | 'COMMUNITY'
+        description?: string | null
+        website?: string | null
+      }
+    }
+  ) {
+    return this.entityService.updateEntity(req.user.id, entityId, body)
+  }
+
   @Patch(':id/users')
   @RequirePermissions(['ENTITY_USER_MANAGEMENT'], 'ACCOUNT_ADMINISTRATION')
   @UseGuards(PermissionsGuard)
