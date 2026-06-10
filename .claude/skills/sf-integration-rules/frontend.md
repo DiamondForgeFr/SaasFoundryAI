@@ -254,7 +254,8 @@ const { t: tCommon } = useTranslation('common')
 1. Create `src/locales/en/<namespace>.yml` and `src/locales/fr/<namespace>.yml` with the same key tree.
 2. Use it in components: `useTranslation('<namespace>')`. The first call triggers the fetch of the YAML file; subsequent renders are cached.
 
-**Do not add the namespace to the `ns` array in `src/i18n.ts` by default.** That array is reserved for **universal namespaces** — those rendered on the layout shell or by the global error boundary on every route:
+**Do not add the namespace to the `ns` array in `src/i18n.ts` by default.** That array is reserved for **universal namespaces** — those rendered on the layout shell or by the global error boundary on
+every route:
 
 ```ts
 // src/i18n.ts (current canonical set)
@@ -381,7 +382,8 @@ example in `backend.md`).
      tk_message_: No invoices yet
    ```
 
-   The namespace is picked up automatically the first time `useTranslation('invoices')` runs — **do not add it to the `ns` array in `src/i18n.ts`** unless the page sits on the layout shell or causes a visible flicker on the golden path (see the i18n section above for the promotion criteria).
+   The namespace is picked up automatically the first time `useTranslation('invoices')` runs — **do not add it to the `ns` array in `src/i18n.ts`** unless the page sits on the layout shell or causes a
+   visible flicker on the golden path (see the i18n section above for the promotion criteria).
 
 2. **Hook** — `src/hooks/api/invoices/queries/useFetchInvoices.ts`:
 
