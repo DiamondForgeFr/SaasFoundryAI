@@ -4,7 +4,8 @@ Headless ShadCN/Radix UI primitives + Tailwind v4 theme tokens shared by every f
 
 ## Why this package exists
 
-In a monorepo, multiple frontends share the same brand language: identical buttons, dialogs, theme tokens, dark-mode behavior. Vendoring those primitives once here removes drift, lets the design system evolve in one place, and keeps every consumer pixel-aligned.
+In a monorepo, multiple frontends share the same brand language: identical buttons, dialogs, theme tokens, dark-mode behavior. Vendoring those primitives once here removes drift, lets the design
+system evolve in one place, and keeps every consumer pixel-aligned.
 
 ## What goes here
 
@@ -43,15 +44,18 @@ import { cn } from '@{{PROJECT_NAME}}/ui-primitives'
 
 1. Add `src/<name>.tsx` (must follow the ShadCN convention — `forwardRef`, `displayName`, variants via `cva`).
 2. Export it from `src/index.ts` if it's a top-level building block. Sub-paths (`./button`, `./dialog`) are auto-resolved by the `exports` field.
-3. Mirror the file byte-for-byte (modulo the `cn` import path) into `scaffolds/blueprints/web/src/components/ui/shadcn/<name>.tsx` so the multirepo topology keeps working. The drift-guard test enforces parity.
+3. Mirror the file byte-for-byte (modulo the `cn` import path) into `scaffolds/blueprints/web/src/components/ui/shadcn/<name>.tsx` so the multirepo topology keeps working. The drift-guard test
+   enforces parity.
 4. Add new external deps to this package's `dependencies`, not `apps/web`.
 
 ## Package shape
 
-- **Source-only** — like `api-client` and the `shared-*` packages, this package ships its `.ts/.tsx` directly via the `exports` field. No `dist/`, no build step. Vite + TypeScript pick up the source through workspace symlinks.
+- **Source-only** — like `api-client` and the `shared-*` packages, this package ships its `.ts/.tsx` directly via the `exports` field. No `dist/`, no build step. Vite + TypeScript pick up the source
+  through workspace symlinks.
 - **`peerDependencies`** for `react`, `react-dom`, `react-hook-form` — the consuming app owns the version.
 - **`dependencies`** for Radix, `lucide-react`, `cva`, `cmdk`, `clsx`, `tailwind-merge` — these belong to the design system, not the app.
 
 ## Multirepo note
 
-`scaffolds/blueprints/web/src/components/ui/shadcn/` keeps a vendored mirror of these primitives so the multirepo topology remains stand-alone (no monorepo-only imports leak into the blueprint). The drift-guard Jest test in `src/__tests__/integration/skill/ui-primitives-drift.spec.ts` enforces that the canonical source here and the vendored copy stay byte-equal (modulo the `cn` import line).
+`scaffolds/blueprints/web/src/components/ui/shadcn/` keeps a vendored mirror of these primitives so the multirepo topology remains stand-alone (no monorepo-only imports leak into the blueprint). The
+drift-guard Jest test in `src/__tests__/integration/skill/ui-primitives-drift.spec.ts` enforces that the canonical source here and the vendored copy stay byte-equal (modulo the `cn` import line).

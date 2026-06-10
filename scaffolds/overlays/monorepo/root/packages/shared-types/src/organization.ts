@@ -6,6 +6,7 @@ export interface OrganizationRef {
   id: string
   name: string
   type?: OrganizationType
+  logoUrl?: string | null
 }
 
 export interface Organization {

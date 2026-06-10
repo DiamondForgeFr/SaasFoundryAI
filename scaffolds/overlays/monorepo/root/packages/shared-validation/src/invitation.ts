@@ -29,6 +29,9 @@ export const buildCreateInvitationPayloadSchema = (messages: CreateInvitationPay
       roleIds: z.array(z.number()).optional(),
       accountIds: z.array(z.string()).optional(),
       entityIds: z.array(z.string()).optional(),
+      // Suggested account name when this is an account-owner invitation (no targets).
+      // Stored in the invitation token and used as the default value at acceptance time.
+      accountName: z.string().max(100).optional(),
       locale: buildOptionalLocaleSchema(messages)
     })
     .strict()
@@ -54,9 +57,7 @@ export const buildAcceptInvitationPayloadSchema = (messages: AcceptInvitationPay
         .min(8, { message: messages.passwordMinLength ?? 'Password must be at least 8 characters long' })
         .max(40, { message: messages.passwordMaxLength ?? 'Password must not exceed 40 characters' })
         .regex(PASSWORD_REGEX, {
-          message:
-            messages.passwordComplexity ??
-            'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'
+          message: messages.passwordComplexity ?? 'Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number'
         }),
       firstname: z
         .string()

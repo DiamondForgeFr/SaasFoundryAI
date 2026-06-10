@@ -21,19 +21,47 @@ const DialogOverlay = React.forwardRef<React.ElementRef<typeof DialogPrimitive.O
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
-const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>>(({ className, children, ...props }, ref) => (
+/**
+ * DialogContent — wraps every dialog with the same `glow-card` halo so the modal frame is
+ * visually consistent across the app. The two `igw-glow` / `igw-border` divs are the layers
+ * the `glow-card` CSS hooks into; `relative z-10` lifts the actual content above them.
+ *
+ * Children are rendered inside a `relative z-10` wrapper to sit above the glow layers — they
+ * lose the outer `grid gap-4` between siblings, so callers should use their own vertical
+ * spacing (space-y-* or margin) on the body. Existing dialogs already do this.
+ *
+ * Callers can opt out by passing `glow={false}` (e.g. micro-prompts where the halo would
+ * feel heavy), but the default carries the affordance everywhere.
+ *
+ * `tone="destructive"` swaps the rotating halo colour from primary (orange) to destructive
+ * (red) — used by ConfirmDialog when the action is irreversible (deactivation, deletion).
+ */
+const DialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { glow?: boolean; tone?: 'default' | 'destructive' }
+>(({ className, children, glow = true, tone = 'default', ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
         'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-top-[20%] data-[state=open]:slide-in-from-top-[20%] sm:rounded-lg',
+        glow && 'glow-card overflow-visible',
+        glow && tone === 'destructive' && 'glow-card--destructive',
         className
       )}
       {...props}
     >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-border focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+      {glow ? (
+        <>
+          <div className="igw-glow" aria-hidden="true" />
+          <div className="igw-border" aria-hidden="true" />
+          <div className="relative z-10 flex flex-col gap-4">{children}</div>
+        </>
+      ) : (
+        children
+      )}
+      <DialogPrimitive.Close className="absolute right-4 top-4 z-20 cursor-pointer rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-border focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>

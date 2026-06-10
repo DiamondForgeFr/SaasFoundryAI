@@ -15,7 +15,6 @@
   },
   "scripts": {
     "type-check": "tsc --noEmit",
-    "lint": "eslint .",
     "format": "prettier --write ."
   },
   "peerDependencies": {
