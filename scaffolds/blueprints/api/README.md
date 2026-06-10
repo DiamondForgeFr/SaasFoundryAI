@@ -48,7 +48,7 @@ docker network create saasfoundry-network
 docker-compose -f ../db/docker-compose.db-dev.yml up -d
 
 # 5. Initialize database
-npm run db:update:dev init_data_base_config -- --wf --wt --wds
+npm run db:setup:dev
 
 # 6. Launch the application
 npm run dev

@@ -234,7 +234,7 @@ bits land**.
 3. **Backend module** — under `apps/api/src/modules/invoices/` exactly as `backend.md` describes. The DTOs import from `@shared-validation/invoice` (path alias resolves into the api app's mirror;
    behaviour is identical to importing from `@<project>/shared-validation`).
 
-4. **Apply schema + RBAC seed** — `npm run db:update:dev` in `apps/api/`.
+4. **Apply schema + RBAC seed** — `npm run db:setup:dev` in `apps/api/` (migration-free: db push --force-reset + apply prisma/sql/\*).
 
 5. **Regenerate the API client**:
 
@@ -272,7 +272,7 @@ bits land**.
 
 3. **Backend module** — under `apps/api/src/modules/invoices/` exactly as `backend.md` describes (no monorepo divergence here).
 
-4. **Apply schema + RBAC seed** — `npm run db:update:dev` in `apps/api/`.
+4. **Apply schema + RBAC seed** — `npm run db:setup:dev` in `apps/api/` (migration-free: db push --force-reset + apply prisma/sql/\*).
 
 5. **No codegen.** Hand-write the API client hook under `apps/web/src/hooks/api/invoices/queries/useFetchInvoices.ts` using `apiClient.get<FetchInvoicesResponseDto>('/invoices?accountId=...')` — see
    `frontend.md`.

@@ -41,9 +41,10 @@ export async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'c
 
   spinner.text = 'Configuring database...'
   const nvm = getNvmPrefix()
-  const migrateResult = run(`${nvm}npm run db:update:dev -- init_data_base_config --wf --wt --wds`, { cwd: apiPath, silent: false })
-  if (migrateResult.code !== 0) {
-    throw new Error(`Failed to apply initial migrations (exit ${migrateResult.code}). Check the output above for details.`)
+  // Migration-free setup: prisma db push + apply prisma/sql/{functions,triggers,datasets}
+  const setupResult = run(`${nvm}npm run db:setup:dev`, { cwd: apiPath, silent: false })
+  if (setupResult.code !== 0) {
+    throw new Error(`Failed to set up the database (exit ${setupResult.code}). Check the output above for details.`)
   }
 
   return true
