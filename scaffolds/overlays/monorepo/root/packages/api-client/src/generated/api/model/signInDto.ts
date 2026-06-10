@@ -21,5 +21,7 @@ export interface SignInDto {
   confirmAccountToken?: string
   firstname?: string
   lastname?: string
+  /** @maxLength 100 */
+  accountName?: string
   locale?: SignInDtoLocale
 }

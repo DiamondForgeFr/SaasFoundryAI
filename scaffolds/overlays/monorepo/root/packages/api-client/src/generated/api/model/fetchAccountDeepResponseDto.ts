@@ -23,6 +23,10 @@ export interface FetchAccountDeepResponseDto {
   createdAt: string
   /** Last update date */
   updatedAt: string
+  /** Count of pending invitations awaiting signup (SENT/EXPIRED invitations targeting this account or its entities). */
+  pendingInvitations: number
+  /** Count of pending self-signups awaiting email confirmation (inactive users linked to this account with no pending received invitation). */
+  pendingSignups: number
   /** Account users */
   users: CollectionResponseDto
   /** Account entities */

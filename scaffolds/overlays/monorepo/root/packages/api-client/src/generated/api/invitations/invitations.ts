@@ -31,13 +31,7 @@ import type { ErrorType, BodyType } from '../../../http-client'
  * @summary Create invitation
  */
 export const invitationControllerCreateInvitation = (createInvitationDto: BodyType<CreateInvitationDto>, signal?: AbortSignal) => {
-  return apiClientMutator<InvitationResponseDto | InvitationResponseDto>({
-    url: `/api/invitations`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    data: createInvitationDto,
-    signal
-  })
+  return apiClientMutator<InvitationResponseDto>({ url: `/api/invitations`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: createInvitationDto, signal })
 }
 
 export const getInvitationControllerCreateInvitationMutationOptions = <TError = ErrorType<void | void | void>, TContext = unknown>(options?: {
@@ -137,11 +131,134 @@ export function useInvitationControllerGetUserInvitations<TData = Awaited<Return
 }
 
 /**
+ * Returns every PENDING (SENT or EXPIRED) account-owner invitation on the platform — invitations with zero account/entity targets that, on acceptance, spin up a new account. Restricted to platform-admins.
+ * @summary List platform-wide account-owner invitations
+ */
+export const invitationControllerGetPlatformAccountOwnerInvitations = (signal?: AbortSignal) => {
+  return apiClientMutator<ListInvitationsResponseDto>({ url: `/api/invitations/platform/account-owners`, method: 'GET', signal })
+}
+
+export const getInvitationControllerGetPlatformAccountOwnerInvitationsQueryKey = () => {
+  return [`/api/invitations/platform/account-owners`] as const
+}
+
+export const getInvitationControllerGetPlatformAccountOwnerInvitationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>,
+  TError = ErrorType<unknown>
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getInvitationControllerGetPlatformAccountOwnerInvitationsQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>> = ({ signal }) => invitationControllerGetPlatformAccountOwnerInvitations(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+}
+
+export type InvitationControllerGetPlatformAccountOwnerInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>>
+export type InvitationControllerGetPlatformAccountOwnerInvitationsQueryError = ErrorType<unknown>
+
+export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>,
+          TError,
+          Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>,
+          TError,
+          Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List platform-wide account-owner invitations
+ */
+
+export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getInvitationControllerGetPlatformAccountOwnerInvitationsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Cancel a pending invitation. Only the inviter can cancel their own invitation. Idempotent for already-finalized invitations.
+ * @summary Cancel invitation
+ */
+export const invitationControllerCancelInvitation = (id: string) => {
+  return apiClientMutator<void>({ url: `/api/invitations/${id}`, method: 'DELETE' })
+}
+
+export const getInvitationControllerCancelInvitationMutationOptions = <TError = ErrorType<void | void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof invitationControllerCancelInvitation>>, TError, { id: string }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof invitationControllerCancelInvitation>>, TError, { id: string }, TContext> => {
+  const mutationKey = ['invitationControllerCancelInvitation']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof invitationControllerCancelInvitation>>, { id: string }> = (props) => {
+    const { id } = props ?? {}
+
+    return invitationControllerCancelInvitation(id)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type InvitationControllerCancelInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof invitationControllerCancelInvitation>>>
+
+export type InvitationControllerCancelInvitationMutationError = ErrorType<void | void>
+
+/**
+ * @summary Cancel invitation
+ */
+export const useInvitationControllerCancelInvitation = <TError = ErrorType<void | void>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof invitationControllerCancelInvitation>>, TError, { id: string }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof invitationControllerCancelInvitation>>, TError, { id: string }, TContext> => {
+  const mutationOptions = getInvitationControllerCancelInvitationMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
  * Accept an invitation and complete account setup.
  * @summary Accept invitation
  */
 export const invitationControllerAcceptInvitation = (acceptInvitationDto: BodyType<AcceptInvitationDto>, signal?: AbortSignal) => {
-  return apiClientMutator<SignInResponseDto | SignInResponseDto>({ url: `/api/invitations/accept`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: acceptInvitationDto, signal })
+  return apiClientMutator<SignInResponseDto>({ url: `/api/invitations/accept`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: acceptInvitationDto, signal })
 }
 
 export const getInvitationControllerAcceptInvitationMutationOptions = <TError = ErrorType<void | void>, TContext = unknown>(options?: {

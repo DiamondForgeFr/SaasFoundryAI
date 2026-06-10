@@ -187,13 +187,7 @@ export const organizationControllerUploadLogo = (id: string, organizationControl
   const formData = new FormData()
   formData.append(`file`, organizationControllerUploadLogoBody.file)
 
-  return apiClientMutator<FetchOrganizationResponseDto | FetchOrganizationResponseDto>({
-    url: `/api/organizations/${id}/logo`,
-    method: 'POST',
-    headers: { 'Content-Type': 'multipart/form-data' },
-    data: formData,
-    signal
-  })
+  return apiClientMutator<FetchOrganizationResponseDto>({ url: `/api/organizations/${id}/logo`, method: 'POST', headers: { 'Content-Type': 'multipart/form-data' }, data: formData, signal })
 }
 
 export const getOrganizationControllerUploadLogoMutationOptions = <TError = ErrorType<void>, TContext = unknown>(options?: {

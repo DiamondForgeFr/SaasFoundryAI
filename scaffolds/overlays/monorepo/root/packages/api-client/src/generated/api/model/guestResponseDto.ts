@@ -10,4 +10,6 @@ export interface GuestResponseDto {
   roles: string[][]
   modules: string[][]
   permissions: string[][]
+  /** True while no platform-admin exists yet. Lets the front adapt the first-login UI (e.g. skip the account-name field). The actual role promotion stays server-side. */
+  awaitsPlatformAdmin: boolean
 }

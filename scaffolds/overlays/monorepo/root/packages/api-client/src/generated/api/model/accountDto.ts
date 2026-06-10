@@ -5,6 +5,7 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
+import type { AccountDtoDeactivatedByScope } from './accountDtoDeactivatedByScope'
 
 export interface AccountDto {
   /** Account unique identifier */
@@ -18,4 +19,9 @@ export interface AccountDto {
   description?: string | null
   /** Account active status */
   isActive: boolean
+  /**
+   * When inactive, indicates whether platform-admin or the account-owner disabled the account
+   * @nullable
+   */
+  deactivatedByScope: AccountDtoDeactivatedByScope
 }

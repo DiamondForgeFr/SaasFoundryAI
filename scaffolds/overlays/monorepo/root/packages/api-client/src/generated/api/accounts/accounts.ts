@@ -25,6 +25,11 @@ import type {
   AccountControllerFetchAccountEntitiesParams,
   AccountControllerFetchAccountRolesParams,
   AccountControllerFetchAccountUsersParams,
+  AccountControllerFetchAllAccountsParams,
+  AccountControllerFetchLatestReactivationRequest200,
+  AccountControllerFetchPlatformReactivationRequestsParams,
+  AccountControllerFetchPlatformUsersParams,
+  AccountControllerFetchSystemRolesParams,
   FetchAccountDeepResponseDto,
   FetchAccountEntitiesResponseDto,
   FetchAccountRolesResponseDto,
@@ -38,6 +43,684 @@ import type {
 import { apiClientMutator } from '../../../http-client'
 import type { ErrorType, BodyType } from '../../../http-client'
 
+/**
+ * Paginated, searchable list of every account on the platform. Restricted to users holding the PLATFORM_ACCOUNTS section.
+ * @summary List all accounts (platform reach)
+ */
+export const accountControllerFetchAllAccounts = (params?: AccountControllerFetchAllAccountsParams, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts`, method: 'GET', params, signal })
+}
+
+export const getAccountControllerFetchAllAccountsQueryKey = (params?: AccountControllerFetchAllAccountsParams) => {
+  return [`/api/accounts`, ...(params ? [params] : [])] as const
+}
+
+export const getAccountControllerFetchAllAccountsQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
+  params?: AccountControllerFetchAllAccountsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData>> }
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchAllAccountsQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>> = ({ signal }) => accountControllerFetchAllAccounts(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AccountControllerFetchAllAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>>
+export type AccountControllerFetchAllAccountsQueryError = ErrorType<void>
+
+export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
+  params: undefined | AccountControllerFetchAllAccountsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
+  params?: AccountControllerFetchAllAccountsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
+  params?: AccountControllerFetchAllAccountsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List all accounts (platform reach)
+ */
+
+export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
+  params?: AccountControllerFetchAllAccountsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchAllAccountsQueryOptions(params, options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Drives the role-builder UI: returns every module + its permissions with their applicable scopes.
+ * @summary List the permissions catalog grouped by module
+ */
+export const accountControllerFetchPermissionsCatalog = (signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/permissions/catalog`, method: 'GET', signal })
+}
+
+export const getAccountControllerFetchPermissionsCatalogQueryKey = () => {
+  return [`/api/accounts/permissions/catalog`] as const
+}
+
+export const getAccountControllerFetchPermissionsCatalogQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchPermissionsCatalogQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>> = ({ signal }) => accountControllerFetchPermissionsCatalog(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AccountControllerFetchPermissionsCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>>
+export type AccountControllerFetchPermissionsCatalogQueryError = ErrorType<unknown>
+
+export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>>,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List the permissions catalog grouped by module
+ */
+
+export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchPermissionsCatalogQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Returns roles whose accountId is NULL — the system templates available to every account. Used by the platform-admin browsing the Roles tab without a specific account selected.
+ * @summary List platform-wide system roles
+ */
+export const accountControllerFetchSystemRoles = (params?: AccountControllerFetchSystemRolesParams, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/system/roles`, method: 'GET', params, signal })
+}
+
+export const getAccountControllerFetchSystemRolesQueryKey = (params?: AccountControllerFetchSystemRolesParams) => {
+  return [`/api/accounts/system/roles`, ...(params ? [params] : [])] as const
+}
+
+export const getAccountControllerFetchSystemRolesQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchSystemRolesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData>> }
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchSystemRolesQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>> = ({ signal }) => accountControllerFetchSystemRoles(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AccountControllerFetchSystemRolesQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>>
+export type AccountControllerFetchSystemRolesQueryError = ErrorType<unknown>
+
+export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
+  params: undefined | AccountControllerFetchSystemRolesParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchSystemRolesParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchSystemRolesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List platform-wide system roles
+ */
+
+export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchSystemRolesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchSystemRolesQueryOptions(params, options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Aggregated KPIs + recent users / entities across every account, plus the system roles catalog.
+ * @summary Platform-wide overview
+ */
+export const accountControllerFetchPlatformOverview = (signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/overview`, method: 'GET', signal })
+}
+
+export const getAccountControllerFetchPlatformOverviewQueryKey = () => {
+  return [`/api/accounts/platform/overview`] as const
+}
+
+export const getAccountControllerFetchPlatformOverviewQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchPlatformOverviewQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>> = ({ signal }) => accountControllerFetchPlatformOverview(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AccountControllerFetchPlatformOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>>
+export type AccountControllerFetchPlatformOverviewQueryError = ErrorType<unknown>
+
+export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Platform-wide overview
+ */
+
+export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchPlatformOverviewQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Cross-account user listing — each user appears once with their aggregated account/entity attachments. Supports search, status filter and a multi-account-only flag.
+ * @summary Platform-wide users (deduplicated)
+ */
+export const accountControllerFetchPlatformUsers = (params?: AccountControllerFetchPlatformUsersParams, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/users`, method: 'GET', params, signal })
+}
+
+export const getAccountControllerFetchPlatformUsersQueryKey = (params?: AccountControllerFetchPlatformUsersParams) => {
+  return [`/api/accounts/platform/users`, ...(params ? [params] : [])] as const
+}
+
+export const getAccountControllerFetchPlatformUsersQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformUsersParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData>> }
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchPlatformUsersQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>> = ({ signal }) => accountControllerFetchPlatformUsers(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AccountControllerFetchPlatformUsersQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>>
+export type AccountControllerFetchPlatformUsersQueryError = ErrorType<unknown>
+
+export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
+  params: undefined | AccountControllerFetchPlatformUsersParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformUsersParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformUsersParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Platform-wide users (deduplicated)
+ */
+
+export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformUsersParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchPlatformUsersQueryOptions(params, options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary List every platform module with its permissions and activation status
+ */
+export const accountControllerFetchPlatformModules = (signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/modules`, method: 'GET', signal })
+}
+
+export const getAccountControllerFetchPlatformModulesQueryKey = () => {
+  return [`/api/accounts/platform/modules`] as const
+}
+
+export const getAccountControllerFetchPlatformModulesQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchPlatformModulesQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>> = ({ signal }) => accountControllerFetchPlatformModules(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AccountControllerFetchPlatformModulesQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>>
+export type AccountControllerFetchPlatformModulesQueryError = ErrorType<unknown>
+
+export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>>, 'initialData'>
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List every platform module with its permissions and activation status
+ */
+
+export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchPlatformModulesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Defaults to PENDING. Use ?status=APPROVED|REJECTED to view archived requests.
+ * @summary List reactivation requests (platform-admin)
+ */
+export const accountControllerFetchPlatformReactivationRequests = (params?: AccountControllerFetchPlatformReactivationRequestsParams, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/reactivation-requests`, method: 'GET', params, signal })
+}
+
+export const getAccountControllerFetchPlatformReactivationRequestsQueryKey = (params?: AccountControllerFetchPlatformReactivationRequestsParams) => {
+  return [`/api/accounts/platform/reactivation-requests`, ...(params ? [params] : [])] as const
+}
+
+export const getAccountControllerFetchPlatformReactivationRequestsQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformReactivationRequestsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData>> }
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchPlatformReactivationRequestsQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>> = ({ signal }) => accountControllerFetchPlatformReactivationRequests(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+}
+
+export type AccountControllerFetchPlatformReactivationRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>>
+export type AccountControllerFetchPlatformReactivationRequestsQueryError = ErrorType<unknown>
+
+export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
+  params: undefined | AccountControllerFetchPlatformReactivationRequestsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>,
+          TError,
+          Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformReactivationRequestsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>,
+          TError,
+          Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformReactivationRequestsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List reactivation requests (platform-admin)
+ */
+
+export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
+  params?: AccountControllerFetchPlatformReactivationRequestsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchPlatformReactivationRequestsQueryOptions(params, options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Re-enables the account in the same transaction and clears the deactivation provenance.
+ * @summary Approve a reactivation request
+ */
+export const accountControllerApproveReactivationRequest = (requestId: string, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/reactivation-requests/${requestId}/approve`, method: 'POST', signal })
+}
+
+export const getAccountControllerApproveReactivationRequestMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerApproveReactivationRequest>>, TError, { requestId: string }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerApproveReactivationRequest>>, TError, { requestId: string }, TContext> => {
+  const mutationKey = ['accountControllerApproveReactivationRequest']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerApproveReactivationRequest>>, { requestId: string }> = (props) => {
+    const { requestId } = props ?? {}
+
+    return accountControllerApproveReactivationRequest(requestId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerApproveReactivationRequestMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerApproveReactivationRequest>>>
+
+export type AccountControllerApproveReactivationRequestMutationError = ErrorType<unknown>
+
+/**
+ * @summary Approve a reactivation request
+ */
+export const useAccountControllerApproveReactivationRequest = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerApproveReactivationRequest>>, TError, { requestId: string }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerApproveReactivationRequest>>, TError, { requestId: string }, TContext> => {
+  const mutationOptions = getAccountControllerApproveReactivationRequestMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * Account stays disabled. A note explaining the decision is required.
+ * @summary Reject a reactivation request
+ */
+export const accountControllerRejectReactivationRequest = (requestId: string, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/reactivation-requests/${requestId}/reject`, method: 'POST', signal })
+}
+
+export const getAccountControllerRejectReactivationRequestMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerRejectReactivationRequest>>, TError, { requestId: string }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerRejectReactivationRequest>>, TError, { requestId: string }, TContext> => {
+  const mutationKey = ['accountControllerRejectReactivationRequest']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerRejectReactivationRequest>>, { requestId: string }> = (props) => {
+    const { requestId } = props ?? {}
+
+    return accountControllerRejectReactivationRequest(requestId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerRejectReactivationRequestMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerRejectReactivationRequest>>>
+
+export type AccountControllerRejectReactivationRequestMutationError = ErrorType<unknown>
+
+/**
+ * @summary Reject a reactivation request
+ */
+export const useAccountControllerRejectReactivationRequest = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerRejectReactivationRequest>>, TError, { requestId: string }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerRejectReactivationRequest>>, TError, { requestId: string }, TContext> => {
+  const mutationOptions = getAccountControllerRejectReactivationRequestMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * @summary Toggle a module activation status (platform-admin only)
+ */
+export const accountControllerTogglePlatformModule = (moduleId: number) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/modules/${moduleId}`, method: 'PATCH' })
+}
+
+export const getAccountControllerTogglePlatformModuleMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerTogglePlatformModule>>, TError, { moduleId: number }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerTogglePlatformModule>>, TError, { moduleId: number }, TContext> => {
+  const mutationKey = ['accountControllerTogglePlatformModule']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerTogglePlatformModule>>, { moduleId: number }> = (props) => {
+    const { moduleId } = props ?? {}
+
+    return accountControllerTogglePlatformModule(moduleId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerTogglePlatformModuleMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerTogglePlatformModule>>>
+
+export type AccountControllerTogglePlatformModuleMutationError = ErrorType<unknown>
+
+/**
+ * @summary Toggle a module activation status (platform-admin only)
+ */
+export const useAccountControllerTogglePlatformModule = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerTogglePlatformModule>>, TError, { moduleId: number }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerTogglePlatformModule>>, TError, { moduleId: number }, TContext> => {
+  const mutationOptions = getAccountControllerTogglePlatformModuleMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * @summary Toggle a sub-module activation status (platform-admin only)
+ */
+export const accountControllerToggleSubModule = (moduleId: number, subModuleId: number) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/modules/${moduleId}/sub-modules/${subModuleId}`, method: 'PATCH' })
+}
+
+export const getAccountControllerToggleSubModuleMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerToggleSubModule>>, TError, { moduleId: number; subModuleId: number }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerToggleSubModule>>, TError, { moduleId: number; subModuleId: number }, TContext> => {
+  const mutationKey = ['accountControllerToggleSubModule']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerToggleSubModule>>, { moduleId: number; subModuleId: number }> = (props) => {
+    const { moduleId, subModuleId } = props ?? {}
+
+    return accountControllerToggleSubModule(moduleId, subModuleId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerToggleSubModuleMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerToggleSubModule>>>
+
+export type AccountControllerToggleSubModuleMutationError = ErrorType<unknown>
+
+/**
+ * @summary Toggle a sub-module activation status (platform-admin only)
+ */
+export const useAccountControllerToggleSubModule = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerToggleSubModule>>, TError, { moduleId: number; subModuleId: number }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerToggleSubModule>>, TError, { moduleId: number; subModuleId: number }, TContext> => {
+  const mutationOptions = getAccountControllerToggleSubModuleMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * Multi-account feature — an account admin with ACCOUNT_OWN_CREATE creates a brand-new account they automatically become admin of. Independent account (no parent/child).
+ * @summary Create an additional account owned by the current user
+ */
+export const accountControllerCreateOwnAccount = (signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/own`, method: 'POST', signal })
+}
+
+export const getAccountControllerCreateOwnAccountMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateOwnAccount>>, TError, void, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateOwnAccount>>, TError, void, TContext> => {
+  const mutationKey = ['accountControllerCreateOwnAccount']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerCreateOwnAccount>>, void> = () => {
+    return accountControllerCreateOwnAccount()
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerCreateOwnAccountMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerCreateOwnAccount>>>
+
+export type AccountControllerCreateOwnAccountMutationError = ErrorType<unknown>
+
+/**
+ * @summary Create an additional account owned by the current user
+ */
+export const useAccountControllerCreateOwnAccount = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateOwnAccount>>, TError, void, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerCreateOwnAccount>>, TError, void, TContext> => {
+  const mutationOptions = getAccountControllerCreateOwnAccountMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
 /**
  * Fetch detailed account information including the 5 most recent users, entities, and roles with counts.
  * @summary Fetch account details
@@ -372,6 +1055,212 @@ export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType
 }
 
 /**
+ * Create a non-system role attached to the given account. Permissions must be compatible with the chosen scope.
+ * @summary Create a custom role
+ */
+export const accountControllerCreateCustomRole = (id: string, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/${id}/roles`, method: 'POST', signal })
+}
+
+export const getAccountControllerCreateCustomRoleMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateCustomRole>>, TError, { id: string }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateCustomRole>>, TError, { id: string }, TContext> => {
+  const mutationKey = ['accountControllerCreateCustomRole']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerCreateCustomRole>>, { id: string }> = (props) => {
+    const { id } = props ?? {}
+
+    return accountControllerCreateCustomRole(id)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerCreateCustomRoleMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerCreateCustomRole>>>
+
+export type AccountControllerCreateCustomRoleMutationError = ErrorType<unknown>
+
+/**
+ * @summary Create a custom role
+ */
+export const useAccountControllerCreateCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateCustomRole>>, TError, { id: string }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerCreateCustomRole>>, TError, { id: string }, TContext> => {
+  const mutationOptions = getAccountControllerCreateCustomRoleMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * Creates a non-system role visible to every account on the platform — alongside the seeded system templates. Body scope can be PLATFORM, ACCOUNT or ENTITY: the resulting role is a reusable template at that scope tier.
+ * @summary Create a global template role (platform-admin only)
+ */
+export const accountControllerCreatePlatformCustomRole = (signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/platform/roles`, method: 'POST', signal })
+}
+
+export const getAccountControllerCreatePlatformCustomRoleMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreatePlatformCustomRole>>, TError, void, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreatePlatformCustomRole>>, TError, void, TContext> => {
+  const mutationKey = ['accountControllerCreatePlatformCustomRole']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerCreatePlatformCustomRole>>, void> = () => {
+    return accountControllerCreatePlatformCustomRole()
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerCreatePlatformCustomRoleMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerCreatePlatformCustomRole>>>
+
+export type AccountControllerCreatePlatformCustomRoleMutationError = ErrorType<unknown>
+
+/**
+ * @summary Create a global template role (platform-admin only)
+ */
+export const useAccountControllerCreatePlatformCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreatePlatformCustomRole>>, TError, void, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerCreatePlatformCustomRole>>, TError, void, TContext> => {
+  const mutationOptions = getAccountControllerCreatePlatformCustomRoleMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * @summary Update a custom role
+ */
+export const accountControllerUpdateCustomRole = (roleId: number) => {
+  return apiClientMutator<void>({ url: `/api/accounts/roles/${roleId}`, method: 'PATCH' })
+}
+
+export const getAccountControllerUpdateCustomRoleMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerUpdateCustomRole>>, TError, { roleId: number }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerUpdateCustomRole>>, TError, { roleId: number }, TContext> => {
+  const mutationKey = ['accountControllerUpdateCustomRole']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerUpdateCustomRole>>, { roleId: number }> = (props) => {
+    const { roleId } = props ?? {}
+
+    return accountControllerUpdateCustomRole(roleId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerUpdateCustomRoleMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerUpdateCustomRole>>>
+
+export type AccountControllerUpdateCustomRoleMutationError = ErrorType<unknown>
+
+/**
+ * @summary Update a custom role
+ */
+export const useAccountControllerUpdateCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerUpdateCustomRole>>, TError, { roleId: number }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerUpdateCustomRole>>, TError, { roleId: number }, TContext> => {
+  const mutationOptions = getAccountControllerUpdateCustomRoleMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * @summary Delete a custom role
+ */
+export const accountControllerDeleteCustomRole = (roleId: number) => {
+  return apiClientMutator<void>({ url: `/api/accounts/roles/${roleId}`, method: 'DELETE' })
+}
+
+export const getAccountControllerDeleteCustomRoleMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerDeleteCustomRole>>, TError, { roleId: number }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerDeleteCustomRole>>, TError, { roleId: number }, TContext> => {
+  const mutationKey = ['accountControllerDeleteCustomRole']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerDeleteCustomRole>>, { roleId: number }> = (props) => {
+    const { roleId } = props ?? {}
+
+    return accountControllerDeleteCustomRole(roleId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerDeleteCustomRoleMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerDeleteCustomRole>>>
+
+export type AccountControllerDeleteCustomRoleMutationError = ErrorType<unknown>
+
+/**
+ * @summary Delete a custom role
+ */
+export const useAccountControllerDeleteCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerDeleteCustomRole>>, TError, { roleId: number }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerDeleteCustomRole>>, TError, { roleId: number }, TContext> => {
+  const mutationOptions = getAccountControllerDeleteCustomRoleMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * Service-layer enforces the matrix: platform-admin can toggle any role except platform-admin (self-lockout); account-admin can toggle only their own custom roles.
+ * @summary Activate / deactivate a role
+ */
+export const accountControllerToggleRoleStatus = (roleId: number) => {
+  return apiClientMutator<void>({ url: `/api/accounts/roles/${roleId}/status`, method: 'PATCH' })
+}
+
+export const getAccountControllerToggleRoleStatusMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerToggleRoleStatus>>, TError, { roleId: number }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerToggleRoleStatus>>, TError, { roleId: number }, TContext> => {
+  const mutationKey = ['accountControllerToggleRoleStatus']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerToggleRoleStatus>>, { roleId: number }> = (props) => {
+    const { roleId } = props ?? {}
+
+    return accountControllerToggleRoleStatus(roleId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerToggleRoleStatusMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerToggleRoleStatus>>>
+
+export type AccountControllerToggleRoleStatusMutationError = ErrorType<unknown>
+
+/**
+ * @summary Activate / deactivate a role
+ */
+export const useAccountControllerToggleRoleStatus = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerToggleRoleStatus>>, TError, { roleId: number }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerToggleRoleStatus>>, TError, { roleId: number }, TContext> => {
+  const mutationOptions = getAccountControllerToggleRoleStatusMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
  * Activate or deactivate an account that the user has access to.
  * @summary Update account status
  */
@@ -410,6 +1299,165 @@ export const useAccountControllerUpdateAccountStatus = <TError = ErrorType<void 
   queryClient?: QueryClient
 ): UseMutationResult<Awaited<ReturnType<typeof accountControllerUpdateAccountStatus>>, TError, { id: string; data: BodyType<UpdateAccountStatusDto> }, TContext> => {
   const mutationOptions = getAccountControllerUpdateAccountStatusMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * Returns the most recent request (any status), or null. Used by the disabled-account banner.
+ * @summary Latest reactivation request for this account
+ */
+export const accountControllerFetchLatestReactivationRequest = (id: string, signal?: AbortSignal) => {
+  return apiClientMutator<AccountControllerFetchLatestReactivationRequest200>({ url: `/api/accounts/${id}/reactivation-requests/latest`, method: 'GET', signal })
+}
+
+export const getAccountControllerFetchLatestReactivationRequestQueryKey = (id?: string) => {
+  return [`/api/accounts/${id}/reactivation-requests/latest`] as const
+}
+
+export const getAccountControllerFetchLatestReactivationRequestQueryOptions = <TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
+  id: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData>> }
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getAccountControllerFetchLatestReactivationRequestQueryKey(id)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>> = ({ signal }) => accountControllerFetchLatestReactivationRequest(id, signal)
+
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+}
+
+export type AccountControllerFetchLatestReactivationRequestQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>>
+export type AccountControllerFetchLatestReactivationRequestQueryError = ErrorType<unknown>
+
+export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
+  id: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>>,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
+  id: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>>,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
+  id: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Latest reactivation request for this account
+ */
+
+export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
+  id: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData>> },
+  queryClient?: QueryClient
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAccountControllerFetchLatestReactivationRequestQueryOptions(id, options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * Account-admin of a self-deactivated account asks a platform-admin to re-enable it. Body must include a justification message.
+ * @summary Submit a reactivation request
+ */
+export const accountControllerCreateReactivationRequest = (id: string, signal?: AbortSignal) => {
+  return apiClientMutator<void>({ url: `/api/accounts/${id}/reactivation-requests`, method: 'POST', signal })
+}
+
+export const getAccountControllerCreateReactivationRequestMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateReactivationRequest>>, TError, { id: string }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateReactivationRequest>>, TError, { id: string }, TContext> => {
+  const mutationKey = ['accountControllerCreateReactivationRequest']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerCreateReactivationRequest>>, { id: string }> = (props) => {
+    const { id } = props ?? {}
+
+    return accountControllerCreateReactivationRequest(id)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerCreateReactivationRequestMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerCreateReactivationRequest>>>
+
+export type AccountControllerCreateReactivationRequestMutationError = ErrorType<unknown>
+
+/**
+ * @summary Submit a reactivation request
+ */
+export const useAccountControllerCreateReactivationRequest = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerCreateReactivationRequest>>, TError, { id: string }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerCreateReactivationRequest>>, TError, { id: string }, TContext> => {
+  const mutationOptions = getAccountControllerCreateReactivationRequestMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+/**
+ * Update a user attached to this account: their isActive flag and/or their scoped role assignments.
+ * @summary Update account user
+ */
+export const accountControllerUpdateAccountUser = (id: string, userId: string) => {
+  return apiClientMutator<void>({ url: `/api/accounts/${id}/users/${userId}`, method: 'PATCH' })
+}
+
+export const getAccountControllerUpdateAccountUserMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerUpdateAccountUser>>, TError, { id: string; userId: string }, TContext>
+}): UseMutationOptions<Awaited<ReturnType<typeof accountControllerUpdateAccountUser>>, TError, { id: string; userId: string }, TContext> => {
+  const mutationKey = ['accountControllerUpdateAccountUser']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof accountControllerUpdateAccountUser>>, { id: string; userId: string }> = (props) => {
+    const { id, userId } = props ?? {}
+
+    return accountControllerUpdateAccountUser(id, userId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AccountControllerUpdateAccountUserMutationResult = NonNullable<Awaited<ReturnType<typeof accountControllerUpdateAccountUser>>>
+
+export type AccountControllerUpdateAccountUserMutationError = ErrorType<unknown>
+
+/**
+ * @summary Update account user
+ */
+export const useAccountControllerUpdateAccountUser = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerUpdateAccountUser>>, TError, { id: string; userId: string }, TContext> },
+  queryClient?: QueryClient
+): UseMutationResult<Awaited<ReturnType<typeof accountControllerUpdateAccountUser>>, TError, { id: string; userId: string }, TContext> => {
+  const mutationOptions = getAccountControllerUpdateAccountUserMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
 }
