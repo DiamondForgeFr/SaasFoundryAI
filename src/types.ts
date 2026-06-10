@@ -220,6 +220,10 @@ export interface SaaSFoundryManifest {
   generatedAt: string
   structure: 'monorepo' | 'multirepo' | 'cli'
   projectName: string
+  // Git main branch chosen at `sf new` (main/master). Optional: manifests
+  // written before this field exists omit it — read sites must fall back
+  // (no migration; see .claude/docs/migration-framework.md "When NOT to add").
+  mainBranch?: string
   modules?: {
     // Email module — versioned shape introduced in manifestVersion 2.
     // `provider` replaces the old flat `emailService` field; `version` is

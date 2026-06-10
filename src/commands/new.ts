@@ -251,6 +251,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       generatedAt: new Date().toISOString(),
       structure: startProjectAnswers.isMonorepo ? 'monorepo' : 'multirepo',
       projectName: startProjectAnswers.projectName,
+      mainBranch: startProjectAnswers.mainBranch,
       modules: {
         email: { provider: startProjectAnswers.emailService, version: 1 },
         s3Setup: startProjectAnswers.s3Setup,

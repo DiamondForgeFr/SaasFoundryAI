@@ -44,7 +44,9 @@ describe('SaaSFoundryManifest drift-guard', () => {
     }
     expect(snapshot).toEqual({
       targetVersion: 2,
-      keys: ['$schema', 'manifestVersion', 'version', 'generatedAt', 'structure', 'projectName', 'modules', 'skillsAccounts', 'fileHashes', 'workflow', 'aiRules', 'tools']
+      // mainBranch added without a version bump: new OPTIONAL field with read-site
+      // fallback — the "no migration needed" case of migration-framework.md.
+      keys: ['$schema', 'manifestVersion', 'version', 'generatedAt', 'structure', 'projectName', 'mainBranch', 'modules', 'skillsAccounts', 'fileHashes', 'workflow', 'aiRules', 'tools']
     })
   })
 })

@@ -34,6 +34,10 @@
       "type": "string",
       "minLength": 1
     },
+    "mainBranch": {
+      "type": "string",
+      "description": "Git main branch chosen at sf new (main/master). Absent on manifests written before this field existed — readers must fall back."
+    },
     "modules": {
       "type": "object",
       "required": ["email", "s3Setup", "dbSetup", "includeAnalytics", "advancedSkills"],

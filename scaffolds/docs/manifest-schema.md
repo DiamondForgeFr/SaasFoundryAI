@@ -48,6 +48,7 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
   "version": "x.y.z",
   "projectName": "my-saas-app",
   "structure": "multirepo | monorepo | cli",
+  "mainBranch": "main | master", // git main branch chosen at sf new; absent on older manifests — fall back when reading
   "workflow": {
     "tool": "github-projects",
     "template": "SaaSFoundry AI",
