@@ -193,7 +193,8 @@ The `.saasfoundry.json` manifest is rewritten at the end of a successful `sf upd
 Be clear about the boundaries:
 
 - **It does not run `npm install` or `prisma generate` for you.** Module addition flows may install dependencies; straight template updates do not. Run them yourself after reviewing the diff.
-- **It does not migrate your database.** Prisma schema changes in the template are propagated as files only. You run `npm run db:update:dev` (or your migration of choice) separately.
+- **It does not migrate your database.** Prisma schema changes in the template are propagated as files only. You run `npx prisma db push` (schema sync) or `npm run db:setup:dev` (full rebuild +
+  re-seed, destructive) separately.
 - **It does not touch your git history.** No commits are created. The tree is left dirty for you to review and commit.
 - **It does not upgrade your installed npm packages.** `package.json` is three-way merged like any other file; `package-lock.json` is usually excluded. If the template bumps a dependency, you'll see
   it as an `update` or `conflict` on `package.json`.

@@ -172,7 +172,7 @@ apps/api/src/modules/email/
 
 1. Create `locales/es.ts` (or whichever locale) alongside `en.ts` and `fr.ts`.
 2. Import it in `translation.service.ts` and extend the dispatch map.
-3. Add the locale to the Prisma `Locale` enum in `prisma/schema/user.prisma`, then run `npm run db:update:dev`.
+3. Add the locale to the Prisma `Locale` enum in `prisma/schema/user.prisma`, then run `npx prisma db push` to sync the enum into the dev DB.
 
 ## Local development without MailerSend
 

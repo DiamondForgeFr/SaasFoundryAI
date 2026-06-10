@@ -283,7 +283,7 @@ export const envSchema = z.object({
     "build": "nest build",
     "test:unit": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "db:update:dev": "prisma migrate dev",
+    "db:setup:dev": "./scripts/setup-db-dev.sh",
     "db:studio": "prisma studio"
   }
 }

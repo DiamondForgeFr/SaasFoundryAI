@@ -161,7 +161,7 @@ To add a new permission key:
    ```
 
 2. If the module itself is new, also `INSERT INTO public.modules` with the matching `module_types` FK.
-3. Re-run `npm run db:update:dev` so the seed re-applies.
+3. Re-run `npm run db:setup:dev` so the seed re-applies (migration-free: db push --force-reset + re-seed).
 4. Reference the new key from the controller: `@RequirePermissions(['INVOICE_CREATION'], 'INVOICE_ADMINISTRATION')`.
 
 **`PermissionsGuard` is wired per-route** (via `@UseGuards(PermissionsGuard)`), not globally. Route-level opt-in keeps purely-authenticated endpoints (e.g. `/me`) cheap. There is no
@@ -206,7 +206,7 @@ model Organization {
 After editing the schema or adding a new model:
 
 ```bash
-npm run db:update:dev          # apply migration + regenerate the client
+npx prisma db push             # sync the schema into the dev DB (migration-free) + regenerate the client
 ```
 
 If the model needs default rows, extend `prisma/sql/datasets/default_user_modules_roles.sql` (or add a new dataset file under `prisma/sql/datasets/` and reference it from the seed runner).
@@ -294,7 +294,7 @@ Goal: introduce a new `Invoice` aggregate with `create` and `fetch` endpoints, R
    }
    ```
 
-2. **Apply** — `npm run db:update:dev` regenerates `@prisma/client`.
+2. **Apply** — `npx prisma db push` syncs the schema and regenerates `@prisma/client`.
 
 3. **Validation** — `src/shared-validation/invoice.ts` (factory schema). Mirror `organization.ts`:
 
@@ -359,7 +359,7 @@ Goal: introduce a new `Invoice` aggregate with `create` and `fetch` endpoints, R
 8. **Module** — `src/modules/invoices/invoices.module.ts` declares the controller + service. Register in `src/app.module.ts`.
 
 9. **RBAC seed** — `prisma/sql/datasets/default_user_modules_roles.sql`: add an `INSERT` for the new module (`INVOICE_ADMINISTRATION`) and its permissions (`INVOICE_CREATION`, …). Re-run
-   `npm run db:update:dev`.
+   `npm run db:setup:dev`.
 
 10. **Tests** — `tests/unit/invoice.service.spec.ts` (mocked Prisma) + `tests/e2e/invoice.e2e-spec.ts` (supertest, login a user with `INVOICE_CREATION` permission). Run `npm run test:full`.
 

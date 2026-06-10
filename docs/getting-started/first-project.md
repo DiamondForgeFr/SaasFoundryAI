@@ -160,7 +160,7 @@ You should see `saasfoundry-db-dev` and `saasfoundry-s3-dev` (plus `saasfoundry-
 ### Initialize Database
 
 ```bash
-npm run db:update:dev
+npm run db:setup:dev
 ```
 
 This runs Prisma migrations to create database tables.
@@ -268,7 +268,7 @@ model User {
 Apply the migration:
 
 ```bash
-npm run db:update:dev
+npm run db:setup:dev
 ```
 
 This regenerates the Prisma client at `apps/api/src/generated/prisma/` — the scaffold reads Prisma types from there, not from `@prisma/client`.
@@ -644,7 +644,7 @@ Congratulations! 🎉 You've successfully:
 
 - **Check services are up**: `docker ps` should list `saasfoundry-db-dev` (and `saasfoundry-s3-dev` if you chose MinIO).
 - **Check database logs**: `docker logs saasfoundry-db-dev`
-- **Restart from scratch**: `npm run services:reset` (down + up), then `npm run db:update:dev`.
+- **Restart from scratch**: `npm run services:reset` (down + up), then `npm run db:setup:dev`.
 
 ### Frontend Won't Start
 
@@ -657,7 +657,7 @@ Congratulations! 🎉 You've successfully:
 
 ```bash
 npm run services:reset
-npm run db:update:dev
+npm run db:setup:dev
 ```
 
 ### Port Already in Use

@@ -124,7 +124,7 @@ docs(#44): update API documentation
 npm run dev                 # Start in watch mode
 
 # Database
-npm run db:update:dev       # Update dev database schema
+npm run db:setup:dev        # (Re)build the dev DB: db push --force-reset + functions/triggers/datasets (DESTRUCTIVE)
 npm run db:studio           # Open Prisma Studio
 
 # Testing
@@ -305,7 +305,7 @@ npm run test:e2e
 - This is a **generated project** from SaaSFoundry v1.0.0-beta
 - Check `.saasfoundry.json` for installed modules and configuration
 - Update this CLAUDE.md as your project evolves
-- Prisma schema changes require migration: `npm run db:update:dev`
+- No migration history — the DB is base setup: edit `prisma/schema` + `prisma/sql/*`, then `npx prisma db push` (schema sync) or `npm run db:setup:dev` (full rebuild + re-seed)
 
 ---
 
