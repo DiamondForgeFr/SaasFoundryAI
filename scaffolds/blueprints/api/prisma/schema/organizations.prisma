@@ -13,18 +13,18 @@ enum OrganizationType {
  * Table : Organization
  */
 model Organization {
-  id          String        @id @default(cuid())
-  name        String        @db.VarChar(100)
+  id          String           @id @default(cuid())
+  name        String           @db.VarChar(100)
   type        OrganizationType
-  description String?       @db.VarChar(255)
-  website     String?       @db.VarChar(100)
-  logoUrl     String?       @db.VarChar(500)         @map("logo_url")
-  createdAt   DateTime      @default(now())          @map("created_at")
-  updatedAt   DateTime      @updatedAt               @map("updated_at")
+  description String?          @db.VarChar(255)
+  website     String?          @db.VarChar(100)
+  logoUrl     String?          @map("logo_url") @db.VarChar(500)
+  entityId    String?          @unique @map("entity_id")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
 
-  entity  Entity?    @relation("EntityProfile")
+  entity Entity? @relation("EntityProfile", fields: [entityId], references: [id], onDelete: Cascade)
 
-  entitiesLinked OrganizationEntityLink[]
   accountsLinked OrganizationAccountLink[]
 
   @@map("organizations")
@@ -34,26 +34,29 @@ model Organization {
  * Table : Entity
  */
 model Entity {
-  id                  String    @id @default(cuid())
-  name                String    @db.VarChar(100)
-  description         String?   @db.VarChar(255)
-  accountId           String
-  organizationId      String?   @unique @map("organization_id")
-  isActive            Boolean   @default(true)            @map("is_active")
-  createdAt           DateTime  @default(now())           @map("created_at")
-  updatedAt           DateTime  @updatedAt                @map("updated_at")
+  id             String   @id @default(cuid())
+  // NO name / description — human identity is resolved from the typed profile (D-ENT-6, §3.4).
+  accountId      String
+  parentEntityId String?  @map("parent_entity_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  account             Account        @relation("EntityAccount",fields: [accountId], references: [id], onDelete: Cascade)
-  organization        Organization?  @relation("EntityProfile", fields: [organizationId], references: [id], onDelete: SetNull)
+  account      Account       @relation("EntityAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  organization Organization? @relation("EntityProfile")
 
-  users               UserEntityLink[]
-  roles               EntityRoleLink[]
-  peoples             PeopleEntityLink[]
-  organizationsLinked OrganizationEntityLink[]
-  invitationsLinked   InvitationEntityLink[]
+  // Recursive entity tree (adjacency list): null parent = root entity (direct child of the account).
+  // A child may be of a different type than its parent (type is derived from its attached profile).
+  parent   Entity?  @relation("EntityTree", fields: [parentEntityId], references: [id], onDelete: Cascade)
+  children Entity[] @relation("EntityTree")
 
-  @@index([organizationId])
+  users             UserEntityLink[]
+  roleAssignments   UserRoleAssignment[] @relation("EntityRoleAssignments")
+  peoples           PeopleEntityLink[]
+  invitationsLinked InvitationEntityLink[]
+
   @@index([accountId])
+  @@index([parentEntityId])
   @@index([isActive])
   @@map("entities")
 }
@@ -63,13 +66,13 @@ model Entity {
  * This establishes a many-to-many relationship between users and entities
  */
 model UserEntityLink {
-  userId      String                              @map("user_id")
-  entityId    String                              @map("entity_id")
-  createdAt   DateTime  @default(now())           @map("created_at")
-  updatedAt   DateTime  @updatedAt                @map("updated_at")
+  userId    String   @map("user_id")
+  entityId  String   @map("entity_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entity      Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@id([userId, entityId])
   @@index([userId])
@@ -78,42 +81,20 @@ model UserEntityLink {
 }
 
 /**
- * Table : Relation Entity - Role
- * This establishes a many-to-many relationship between entities and roles
+ * Table : EntityType
+ * Registry of the profile tables eligible to be an entity type. The concrete kind of an entity
+ * (Organization, Team, …) is derived from which registered profile row carries its entityId.
  */
-model EntityRoleLink {
-  entityId    String                              @map("entity_id")
-  roleId      Int                                 @map("role_id")
-  createdAt   DateTime  @default(now())           @map("created_at")
-  updatedAt   DateTime  @updatedAt                @map("updated_at")
+model EntityType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(50)
+  tableName String   @map("table_name") @db.VarChar(63)
+  label     String   @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  entity      Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  role        Role      @relation(fields: [roleId], references: [id])
-
-  @@id([entityId, roleId])
-  @@index([entityId])
-  @@index([roleId])
-  @@map("entities_roles_links")
-}
-
-/**
- * Table : Relation Organization - Entity
- * This establishes a many-to-many relationship between organizations and entities
- * which allows entities to be related to multiple organizations beyond their primary one (Profile organization)
- */
-model OrganizationEntityLink {
-  organizationId  String                            @map("organization_id")
-  entityId        String                            @map("entity_id")
-  createdAt       DateTime  @default(now())         @map("created_at")
-  updatedAt       DateTime  @updatedAt              @map("updated_at")
-
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  entity          Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
-
-  @@id([organizationId, entityId])
-  @@index([organizationId])
-  @@index([entityId])
-  @@map("organizations_entities_links")
+  @@map("entity_types")
 }
 
 /**
@@ -121,13 +102,13 @@ model OrganizationEntityLink {
  * This establishes a many-to-many relationship between organizations and accounts
  */
 model OrganizationAccountLink {
-  organizationId  String                              @map("organization_id")
-  accountId       String                              @map("account_id")
-  createdAt       DateTime  @default(now())           @map("created_at")
-  updatedAt       DateTime  @updatedAt                @map("updated_at")
+  organizationId String   @map("organization_id")
+  accountId      String   @map("account_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  account         Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@id([organizationId, accountId])
   @@index([organizationId])
@@ -140,8 +121,8 @@ model OrganizationAccountLink {
  * This establishes a many-to-many relationship between entities and people
  */
 model PeopleEntityLink {
-  peopleId String @map("people_id")
-  entityId String @map("entity_id")
+  peopleId  String   @map("people_id")
+  entityId  String   @map("entity_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

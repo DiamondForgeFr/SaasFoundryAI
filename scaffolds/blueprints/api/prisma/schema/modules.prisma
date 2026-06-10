@@ -8,7 +8,7 @@ model ModuleType {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  modules     Module[]
+  modules Module[]
 
   @@map("module_types")
 }
@@ -17,19 +17,20 @@ model ModuleType {
  * Table : Module
  */
 model Module {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique @db.VarChar(50)
-  version     String     @db.VarChar(10)
-  description String     @db.VarChar(255)
-  typeId      Int        @map("type_id")
-  isActive    Boolean    @default(false) @map("is_active")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  version     String   @db.VarChar(10)
+  description String   @db.VarChar(255)
+  typeId      Int      @map("type_id")
+  isActive    Boolean  @default(false) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  type         ModuleType         @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  type ModuleType @relation(fields: [typeId], references: [id], onDelete: Cascade)
 
-  rolesLinked  RoleModuleLink[]
-  permissions  ModulePermission[]
+  rolesLinked RoleModuleLink[]
+  permissions ModulePermission[]
+  subModules  SubModule[]
 
   @@unique([name, version])
   @@index([isActive])
@@ -39,31 +40,84 @@ model Module {
 
 /**
  * Table : Permissions by Module
+ * applicableScopes lists the role scopes (PLATFORM/ACCOUNT/ENTITY) at which this
+ * permission is meaningful. Used by the frontend role-builder UI to filter the
+ * permission list per scope, and by the backend to reject incompatible bindings.
  */
 model ModulePermission {
-  id          Int       @id @default(autoincrement())
-  moduleId    Int       @map("module_id")
-  name        String    @unique @db.VarChar(50)
-  description String    @db.VarChar(255)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id               Int         @id @default(autoincrement())
+  moduleId         Int         @map("module_id")
+  subModuleId      Int?        @map("sub_module_id")
+  name             String      @unique @db.VarChar(50)
+  description      String      @db.VarChar(255)
+  applicableScopes RoleScope[] @map("applicable_scopes")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
 
-  module      Module                @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  module    Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  subModule SubModule? @relation(fields: [subModuleId], references: [id], onDelete: Cascade)
 
   rolesLinked RolePermissionLink[]
 
   @@unique([moduleId, name])
   @@index([moduleId])
+  @@index([subModuleId])
   @@map("module_permissions")
+}
+
+/**
+ * Table : Sub-module (optional section inside a complex module)
+ * A module MAY declare sub-modules (e.g. ACCOUNT_ADMINISTRATION → USERS/ENTITIES/ROLES…).
+ * A role that holds the parent module may hold only a SUBSET of its sub-modules — that subset
+ * drives which sections/tabs are VISIBLE (read). Permissions attached to a sub-module gate the
+ * ACTIONS inside it. Simple modules have no sub-modules and carry permissions directly.
+ */
+model SubModule {
+  id          Int      @id @default(autoincrement())
+  moduleId    Int      @map("module_id")
+  name        String   @db.VarChar(50)
+  description String   @db.VarChar(255)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  module      Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  permissions ModulePermission[]
+  rolesLinked RoleSubModuleLink[]
+
+  @@unique([moduleId, name])
+  @@index([moduleId])
+  @@index([isActive])
+  @@map("sub_modules")
+}
+
+/**
+ * Table : Relation Roles - Sub-modules
+ * Grants a role the VISIBILITY (read) of a section. Integrity (role must hold the parent module,
+ * permissions must stay within held sub-modules) is enforced by the check_role_grants trigger.
+ */
+model RoleSubModuleLink {
+  roleId      Int      @map("role_id")
+  subModuleId Int      @map("sub_module_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  subModule SubModule @relation(fields: [subModuleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, subModuleId])
+  @@index([roleId])
+  @@index([subModuleId])
+  @@map("roles_sub_modules_links")
 }
 
 /**
  * Table : Relation Roles - Modules
  */
 model RoleModuleLink {
-  roleId    Int                                      @map("role_id")
-  moduleId  Int                                      @map("module_id")
-  createdAt DateTime @default(now())                 @map("created_at")
+  roleId    Int      @map("role_id")
+  moduleId  Int      @map("module_id")
+  createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -79,13 +133,13 @@ model RoleModuleLink {
  * Table : Relation Roles - Permissions
  */
 model RolePermissionLink {
-  roleId        Int       @map("role_id")
-  permissionId  Int       @map("permission_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  roleId       Int      @map("role_id")
+  permissionId Int      @map("permission_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  role        Role               @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission  ModulePermission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission ModulePermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
   @@index([roleId])
