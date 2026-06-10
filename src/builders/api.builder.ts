@@ -176,6 +176,10 @@ export async function createApiApp({
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
 
+  // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
+  const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')
+  await substitutePlaceholdersInFiles([`${apiPath}/.github/workflows/test.yml`, deploymentYmlPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
+
   // Initialize Git repository
   if (!isMonorepo) {
     await exec(`git init ${apiPath} > /dev/null 2>&1`)

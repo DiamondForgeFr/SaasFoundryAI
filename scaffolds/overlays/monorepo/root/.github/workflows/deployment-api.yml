@@ -2,7 +2,7 @@ name: Deployment API
 
 on:
   push:
-    branches: [master, main]
+    branches: [{{MAIN_BRANCH}}]
     paths:
       - 'apps/api/**'
       - 'packages/**'
@@ -37,7 +37,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             # Check if tests have passed for this specific commit
-            gh run list --workflow=test.yml --branch=master --status=success --limit=1 --commit=${{ github.sha }}
+            gh run list --workflow=test.yml --branch={{MAIN_BRANCH}} --status=success --limit=1 --commit=${{ github.sha }}
             if [ $? -ne 0 ]; then
               echo "Tests have not passed for commit ${{ github.sha }}. Deployment blocked."
               exit 1
@@ -125,12 +125,12 @@ jobs:
           git tag -a "api-v${{ steps.package-version.outputs.version }}" -m "API release version ${{ steps.package-version.outputs.version }}"
           echo "Created tag api-v${{ steps.package-version.outputs.version }}"
 
-      - name: Push current master to tag
+      - name: Push current {{MAIN_BRANCH}} to tag
         if: steps.check-is-version-bump.outputs.is_version_bump == 'true'
         run: |
           if [ "${{ steps.check-tag.outputs.tag_exists }}" == "true" ]; then
             git push origin HEAD:refs/tags/api-v${{ steps.package-version.outputs.version }} -f
-            echo "Updated existing tag api-v${{ steps.package-version.outputs.version }} with current master"
+            echo "Updated existing tag api-v${{ steps.package-version.outputs.version }} with current {{MAIN_BRANCH}}"
           else
             git push origin "api-v${{ steps.package-version.outputs.version }}"
             echo "Pushed new tag api-v${{ steps.package-version.outputs.version }}"

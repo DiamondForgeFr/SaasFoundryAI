@@ -71,6 +71,10 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
     await writeFile(deployWebPath, content)
   }
 
+  // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
+  const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')
+  await substitutePlaceholdersInFiles(['.github/workflows/test.yml', deployApiPath, deployWebPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
+
   // Replay shared-config / shared-types deposits for any module the API
   // installer activated before the workspace existed. `installStorageModule`
   // and `installEmailModule` run during `createApiApp` (i.e. before this

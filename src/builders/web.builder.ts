@@ -95,6 +95,10 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
 
+  // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
+  const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')
+  await substitutePlaceholdersInFiles([`${webPath}/.github/workflows/test.yml`, deploymentYmlPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
+
   // Update storage enabled flag in .env
   if (s3Setup !== 'manual') {
     const webEnvPath = `${webPath}/.env`
