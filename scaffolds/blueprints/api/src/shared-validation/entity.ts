@@ -2,8 +2,6 @@ import { z } from 'zod'
 import { ORGANIZATION_TYPE_VALUES } from './organization'
 
 export interface CreateEntityPayloadMessages {
-  nameMaxLength?: string
-  descriptionMaxLength?: string
   accountIdRequired?: string
   organizationIdRequired?: string
   organizationNameRequired?: string
@@ -55,18 +53,16 @@ export const buildInlineOrganizationSchema = (messages: CreateEntityPayloadMessa
     })
     .strict()
 
+// An entity carries no name/description of its own — its human identity is resolved from its typed
+// profile (D-ENT-6). On create, the profile (inline `organization` or an existing `organizationId`)
+// is the single source of name/description, so no redundant top-level fields here.
 export const buildCreateEntityPayloadSchema = (messages: CreateEntityPayloadMessages = {}) =>
   z
     .object({
-      name: z
-        .string()
-        .max(100, { message: messages.nameMaxLength ?? 'Name must not exceed 100 characters' })
-        .optional(),
-      description: z
-        .string()
-        .max(255, { message: messages.descriptionMaxLength ?? 'Description must not exceed 255 characters' })
-        .optional(),
       accountId: z.string().min(1, { message: messages.accountIdRequired ?? 'Account is required' }),
+      // Optional parent entity — omitted/undefined creates a root entity (direct child of the account).
+      // When set, the entity is nested under the given parent (B3a); the parent must belong to the same account.
+      parentEntityId: z.string().optional(),
       organizationId: z.string().optional(),
       organization: buildInlineOrganizationSchema(messages).optional()
     })

@@ -194,6 +194,21 @@
       0 0 18px 0 hsl(var(--primary) / 0.15);
   }
 
+  /* Destructive variant — same wave animation, red background. Used for irreversible actions
+     (deactivation confirmations, deletions). */
+  .wave-btn--destructive {
+    background: hsl(var(--destructive));
+    box-shadow:
+      0 0 6px 0 hsl(var(--destructive) / 0.18),
+      0 0 14px 0 hsl(var(--destructive) / 0.25);
+  }
+
+  .wave-btn--destructive:hover {
+    box-shadow:
+      0 0 8px 0 hsl(var(--destructive) / 0.22),
+      0 0 18px 0 hsl(var(--destructive) / 0.28);
+  }
+
   .wave-btn > span {
     position: relative;
     z-index: 1;
@@ -307,7 +322,9 @@
     z-index: 1;
   }
 
-  /* Rotating conic — clipped by overflow:hidden */
+  /* Rotating conic — clipped by overflow:hidden.
+     Uses CSS custom properties so a parent can swap the highlight colour by setting
+     `--igw-color`. Defaults to --primary; the destructive variant below points it at --destructive. */
   .glow-card .igw-border::before,
   .glow-card .igw-glow::before {
     content: '';
@@ -318,8 +335,14 @@
     transform: translate(-50%, -50%) rotate(0deg);
     width: 99999px;
     height: 99999px;
-    background: conic-gradient(transparent 0%, transparent 78%, hsl(var(--primary) / 0.3) 88%, hsl(var(--primary) / 0.7) 96%, transparent 100%);
+    background: conic-gradient(transparent 0%, transparent 78%, hsl(var(--igw-color, var(--primary)) / 0.3) 88%, hsl(var(--igw-color, var(--primary)) / 0.7) 96%, transparent 100%);
     animation: igw-rotate 14s linear infinite;
+  }
+
+  /* Destructive variant — opt-in via `glow-card--destructive` modifier. The rotating halo
+     swaps from primary (orange) to destructive (red), keeping every other glow-card geometry. */
+  .glow-card--destructive {
+    --igw-color: var(--destructive);
   }
 
   /* Inner fill — masks center, leaves only border visible */

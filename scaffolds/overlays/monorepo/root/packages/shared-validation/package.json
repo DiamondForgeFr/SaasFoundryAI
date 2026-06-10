@@ -9,6 +9,8 @@
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "clean": "rm -rf dist"
   },
   "dependencies": {

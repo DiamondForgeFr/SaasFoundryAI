@@ -22,8 +22,7 @@
   },
   "scripts": {
     "codegen": "orval --config ./orval.config.ts",
-    "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx"
+    "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
