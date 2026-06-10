@@ -1,12 +1,12 @@
 {
-  "name": "saasfoundry-web",
+  "name": "{{PROJECT_NAME}}-web",
   "version": "1.0.0",
-  "description": "SaaSFoundry: Our new SaaS frontend application",
+  "description": "{{PROJECT_NAME}} is just an amazing SaaSFoundry project",
   "type": "module",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/agachet/saasfoundry/apps/web"
+    "url": "https://github.com/agachet/saasfoundry.git"
   },
   "homepage": "https://github.com/agachet/saasfoundry/#readme",
   "bugs": {
@@ -29,13 +29,15 @@
     }
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "wait-on -t 60000 tcp:3500 && vite",
     "build": "tsc -b && vite build",
     "format": "prettier --write .",
     "lint": "eslint .",
     "preview": "vite preview",
     "type-check": "tsc -b",
     "type-check:watch": "tsc -b --watch",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "E2E_DEBUG=true playwright test --ui",
     "test:e2e:debug": "E2E_DEBUG=true playwright test --project=chromium --debug",
@@ -45,8 +47,8 @@
     "postinstall": "if [ \"$CI\" = \"true\" ]; then npx playwright install --with-deps; else npx playwright install; fi"
   },
   "keywords": [
+    "{{PROJECT_NAME}}",
     "saasfoundry",
-    "open-source",
     "frontend",
     "react",
     "vite"
@@ -54,6 +56,11 @@
   "author": "Your Name <anthony.gachet@diamondforge.fr> (https://agachet.diamondforge.fr)",
   "dependencies": {
     "@hookform/resolvers": "5.2.2",
+    "@{{PROJECT_NAME}}/api-client": "*",
+    "@{{PROJECT_NAME}}/shared-config": "*",
+    "@{{PROJECT_NAME}}/shared-types": "*",
+    "@{{PROJECT_NAME}}/shared-validation": "*",
+    "@{{PROJECT_NAME}}/ui-primitives": "*",
     "@tanstack/react-query": "5.100.8",
     "i18next": "26.0.8",
     "i18next-browser-languagedetector": "8.2.1",
@@ -67,17 +74,14 @@
     "react-router-dom": "7.14.2",
     "tailwindcss": "4.2.4",
     "yaml": "2.8.4",
-    "zod": "4.4.2",
-    "@{{PROJECT_NAME}}/api-client": "*",
-    "@{{PROJECT_NAME}}/shared-config": "*",
-    "@{{PROJECT_NAME}}/shared-types": "*",
-    "@{{PROJECT_NAME}}/shared-validation": "*",
-    "@{{PROJECT_NAME}}/ui-primitives": "*"
+    "zod": "4.4.2"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.59.1",
     "@tailwindcss/vite": "4.2.4",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.2",
     "@types/js-cookie": "3.0.6",
     "@types/js-yaml": "4.0.9",
     "@types/node": "25.6.0",
@@ -91,10 +95,13 @@
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.2",
     "globals": "17.6.0",
+    "jsdom": "29.1.1",
     "prettier-plugin-tailwindcss": "0.8.0",
     "terser": "5.46.2",
     "typescript": "6.0.3",
     "typescript-eslint": "8.59.1",
-    "vite": "8.0.10"
+    "vite": "8.0.10",
+    "vitest": "4.1.8",
+    "wait-on": "9.0.5"
   }
 }

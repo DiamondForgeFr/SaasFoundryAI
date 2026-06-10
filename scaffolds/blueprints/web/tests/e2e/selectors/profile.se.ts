@@ -31,15 +31,31 @@ const testApi = {
           firstname: testData.firstName,
           lastname: testData.lastName
         },
-        roles: ['admin'],
-        modules: ['ACCOUNT_ADMINISTRATION', 'ORGANIZATION_ADMINISTRATION', 'USER_ACCOUNT_PASSWORD_RECOVERY'],
-        permissions: ['PASSWORD_RECOVERY_LINK_REQUEST_OWN', 'PASSWORD_RECOVERY_RESET_OWN', 'ACCOUNT_UPDATE'],
+        roleAssignments: [
+          {
+            id: 'ra-admin-account',
+            roleId: 3,
+            roleName: 'account-admin',
+            scope: 'ACCOUNT',
+            accountId: testData.accountId,
+            entityId: null,
+            modules: ['PROFILE_ADMINISTRATION', 'ACCOUNT_ADMINISTRATION', 'ORGANIZATION_ADMINISTRATION', 'USER_ACCOUNT_PASSWORD_RECOVERY'],
+            subModules: ['OVERVIEW', 'USERS', 'ENTITIES', 'ROLES', 'SETTINGS'],
+            permissions: ['PROFILE_UPDATE_OWN', 'PASSWORD_RECOVERY_LINK_REQUEST_OWN', 'PASSWORD_RECOVERY_RESET_OWN', 'ACCOUNT_UPDATE']
+          }
+        ],
+        currentScope: { kind: 'ACCOUNT', id: testData.accountId },
+        roles: ['account-admin'],
+        modules: ['PROFILE_ADMINISTRATION', 'ACCOUNT_ADMINISTRATION', 'ORGANIZATION_ADMINISTRATION', 'USER_ACCOUNT_PASSWORD_RECOVERY'],
+        subModules: ['OVERVIEW', 'USERS', 'ENTITIES', 'ROLES', 'SETTINGS'],
+        permissions: ['PROFILE_UPDATE_OWN', 'PASSWORD_RECOVERY_LINK_REQUEST_OWN', 'PASSWORD_RECOVERY_RESET_OWN', 'ACCOUNT_UPDATE'],
         accounts: [
           {
             id: testData.accountId,
             name: testData.accountName,
             description: 'Default account for testing',
-            isActive: true
+            isActive: true,
+            deactivatedByScope: null
           }
         ],
         entities: [
