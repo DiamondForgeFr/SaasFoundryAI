@@ -183,6 +183,9 @@ export async function createApiApp({
     if (backendRepoUrl) await exec(`git -C ${apiPath} remote add origin ${backendRepoUrl} > /dev/null 2>&1`)
     await exec(`git -C ${apiPath} add . > /dev/null 2>&1`)
     await exec(`git -C ${apiPath} commit -m "Initial commit" > /dev/null 2>&1`)
+    // Develop-first: create the declared working branch so the repo matches its docs.
+    const workingBranch = workflow?.workingBranch
+    if (workingBranch && workingBranch !== mainBranch) await exec(`git -C ${apiPath} checkout -b ${workingBranch} > /dev/null 2>&1`)
   }
 
   return true
