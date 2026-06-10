@@ -9,6 +9,10 @@ tabs:
   tk_users-description_: Gérez les membres de votre équipe et leurs permissions
   tk_entities_: Entités
   tk_entities-description_: Gérez vos entités et leurs paramètres
+  tk_roles_: Rôles
+  tk_roles-description_: Parcourez les rôles système et créez des rôles personnalisés pour votre compte
+  tk_accounts_: Comptes
+  tk_accounts-description_: Gérez tous les comptes de la plateforme
 
 overview:
   accountInfo:
@@ -24,12 +28,23 @@ overview:
   kpi:
     tk_users_: Utilisateurs
     tk_entities_: Entités
-    tk_pending_: En attente
+    tk_accounts_: Comptes
+    tk_pending_: Invitations / inscriptions en attente
     tk_users-sub_: '{{accountLinked}} liés au compte · {{entityLinked}} liés à une entité'
+    tk_users-platform-sub_: Tous comptes confondus
     tk_entities-sub_: '{{active}} actives · {{disabled}} désactivées'
-    tk_pending-none_: Aucune en attente
+    tk_entities-platform-sub_: Tous comptes confondus
+    tk_accounts-sub_: Tenants actifs sur la plateforme
+    tk_pending-none_: Aucune invitation ni inscription en attente
     tk_pending-one_: Invitation en attente
     tk_pending-many_: Invitations en attente
+    tk_pending-breakdown_: '{{invitations}} invitation(s) · {{signups}} inscription(s) en attente'
+    tk_pending-reactivation_: Demandes de réactivation
+    tk_pending-reactivation-none_: Aucun compte en attente de réactivation
+    tk_pending-reactivation-some_: Propriétaires de compte qui demandent à revenir
+    tk_pending-invitation_: Invitations / inscriptions en attente
+    tk_pending-invitation-none_: Aucune invitation ni inscription en attente
+    tk_pending-invitation-some_: Invitations de propriétaire de compte en attente d''acceptation
   recentUsers:
     tk_title_: Utilisateurs récents
     tk_description_: Les 5 utilisateurs créés ou ajoutés récemment
@@ -38,6 +53,7 @@ overview:
     tk_invite-cta_: Inviter
     tk_view-all-users_: Voir tous les utilisateurs
     tk_no-users_: Aucun utilisateur
+    tk_role-tooltip_: 'Rôle : {{role}}'
   recentEntities:
     tk_title_: Entités récentes
     tk_description_: Les 5 entités créées récemment
@@ -47,6 +63,19 @@ overview:
     tk_no-entity_: Ce compte n'a pas d'entité
     tk_no-entities-yet_: Aucune entité
     tk_view-all-entities_: Voir toutes les entités
+  recentAccounts:
+    tk_title_: Comptes récents
+    tk_description_: Tous les comptes de la plateforme
+    tk_meta-total_: '{{count}} au total'
+    tk_search-placeholder_: Rechercher un compte…
+    tk_state-all_: TOUS
+    tk_state-scoped_: Filtré sur {{name}}
+    tk_reset-filter_: Tout afficher
+    tk_view-all-accounts_: Voir tous les comptes
+    tk_no-accounts_: Aucun compte
+    tk_select-account_: Ouvrir le contexte de ce compte
+    tk_open-context_: Ouvrir le contexte
+    tk_invite-owner_: Inviter un propriétaire
   recentRoles:
     tk_title_: Rôles récents
     tk_description_: Les 5 rôles créés récemment
@@ -55,6 +84,7 @@ overview:
     tk_title_: Rôles
     tk_meta-defined_: '{{count}} définis'
     tk_no-roles_: Aucun rôle
+    tk_view-all-roles_: Voir tous les rôles
 
 users:
   tk_title_: Utilisateurs du compte
@@ -70,6 +100,9 @@ users:
   tk_no-results-filtered_: Aucun utilisateur ne correspond aux filtres
   tk_no-users-yet_: Aucun utilisateur
   tk_invite-user-cta_: Inviter un utilisateur
+  tk_edit-cta_: Modifier
+  tk_last-platform-admin_: Impossible de désactiver le dernier administrateur plateforme actif. Promouvez un autre utilisateur d'abord.
+  tk_last-account-admin_: Impossible de désactiver le dernier administrateur actif de ce compte. Désactivez plutôt le compte entier.
   kpi:
     tk_total_: Total
     tk_account-linked_: Lié au compte
@@ -93,14 +126,78 @@ users:
     tk_status_: Statut
     tk_created_: Créé le
     tk_access-account_: Compte
+    tk_scope-account_: Compte
+    tk_scope-entity_: Entité
+    tk_awaiting-signup_: Invitation en attente
+    tk_awaiting-signup-tooltip_: Invitation envoyée — en attente que l'utilisateur s'inscrive et accepte
+    tk_awaiting-confirmation_: Inscription en attente
+    tk_awaiting-confirmation-tooltip_: Inscription spontanée — en attente que l'utilisateur confirme son adresse e-mail
+    tk_no-roles_: Aucun rôle
     tk_status-active_: Actif
     tk_status-inactive_: Inactif
+    tk_name-fallback_: Utilisateur invité
+    tk_never-logged-in_: Jamais connecté
+  edit:
+    tk_action_: Modifier l'utilisateur
+    tk_title_: "Modifier l'utilisateur · {{name}}"
+    tk_description_: Mettez à jour le statut de cet utilisateur et ses rôles scopés sur ce compte.
+    tk_section-status_: 'A — Statut'
+    tk_section-account-roles_: 'B — Rôles au scope compte'
+    tk_section-entity-roles_: 'C — Rôles au scope entité'
+    tk_active-on_: L'utilisateur est actif
+    tk_active-off_: L'utilisateur est inactif — il ne peut pas se connecter
+    tk_toggle-on_: Actif
+    tk_toggle-off_: Inactif
+    tk_assigned_: Attribué
+    tk_assign_: Attribuer
+    tk_selected_: sélectionnés
+    tk_no-roles-available_: Aucun rôle disponible pour ce scope.
+    tk_submit_: Enregistrer
   pending:
     tk_title_: Invitations en attente
     tk_status-pending_: En attente
     tk_status-expired_: Expirée
     tk_resend_: Renvoyer
     tk_sent-prefix_: Envoyée le
+    tk_cancel_: Annuler l'invitation
+    tk_cancel-confirm_: Annuler cette invitation ? Le destinataire ne pourra plus l'accepter.
+    tk_no-invitations_: Aucune invitation en attente
+
+platformUsers:
+  tk_no-users_: Aucun utilisateur sur la plateforme pour le moment
+  tk_no-results-filtered_: Aucun utilisateur ne correspond à vos filtres
+  kpi:
+    tk_total_: Utilisateurs au total
+    tk_total-sub_: Hors administrateurs de plateforme
+    tk_multi_: Multi-compte
+    tk_multi-none_: Chaque utilisateur appartient à un seul compte
+    tk_multi-some_: Utilisateurs rattachés à plusieurs comptes
+    tk_mono_: Mono-compte
+    tk_mono-sub_: Utilisateurs rattachés à un seul compte
+    tk_platform_: Plateforme
+    tk_platform-sub_: Utilisateurs avec privilèges plateforme
+  filters:
+    tk_search-placeholder_: Rechercher par nom ou email...
+    tk_select-accounts_: Comptes
+    tk_selected-accounts_: Comptes sélectionnés
+  table:
+    tk_account-count_: 'Sur'
+    tk_accounts_: Comptes
+  row:
+    tk_multi-account-tooltip_: 'Rattaché à {{count}} comptes'
+    tk_platform-badge_: Plateforme
+    tk_view_: Voir
+    tk_awaiting-signup_: Invitation en attente
+    tk_awaiting-signup-tooltip_: Invitation envoyée — en attente que l'utilisateur s'inscrive et accepte
+    tk_awaiting-confirmation_: Inscription en attente
+    tk_awaiting-confirmation-tooltip_: Inscription spontanée — en attente que l'utilisateur confirme son adresse e-mail
+  sheet:
+    tk_accounts_: Comptes
+    tk_no-accounts_: Cet utilisateur n''est rattaché à aucun compte.
+    tk_roles_: Rôles
+    tk_no-roles_: Aucun rôle assigné.
+    tk_created_: Créé le
+    tk_updated_: Dernière mise à jour
 
 entities:
   tk_title_: Entités du compte
@@ -112,6 +209,24 @@ entities:
   tk_create-entity-description_: Créez une nouvelle entité avec son organisation
   tk_no-results-filtered_: Aucune entité ne correspond aux filtres
   tk_no-entities-yet_: Aucune entité
+  tk_edit-title_: Modifier l'entité
+  tk_edit-cta_: Modifier
+  tk_edit-description_: Mettez à jour cette entité et son organisation.
+  tk_users-short_: utilisateurs
+  edit:
+    tk_section-entity_: 'A — Entité'
+    tk_section-organization_: 'B — Organisation'
+    tk_name_: Nom de l'entité
+    tk_description-placeholder_: Description (optionnel)
+    tk_active_: Statut
+    tk_active-on_: Cette entité est active
+    tk_active-off_: Cette entité est désactivée — ses membres sont exclus des comptes actifs
+    tk_toggle-on_: Active
+    tk_toggle-off_: Désactivée
+    tk_org-name_: Nom de l'organisation
+    tk_org-website_: Site web
+    tk_org-description-placeholder_: Description de l'organisation (optionnel)
+    tk_submit_: Enregistrer
   kpi:
     tk_total_: Total
     tk_active_: Actives
@@ -134,6 +249,33 @@ entities:
     tk_status-active_: Active
     tk_status-disabled_: Désactivée
 
+accounts:
+  tk_no-accounts_: Aucun compte sur la plateforme
+  tk_no-results-filtered_: Aucun compte ne correspond aux filtres
+  kpi:
+    tk_total_: Comptes au total
+    tk_total-sub_: Tous les tenants de la plateforme
+    tk_active_: Actifs
+    tk_active-sub_: Actuellement utilisables
+    tk_disabled_: Désactivés
+    tk_disabled-none_: Aucun désactivé
+    tk_disabled-some_: Actuellement inactifs
+    tk_pending_: En attente
+    tk_pending-none_: Aucune demande en attente
+    tk_pending-some_: En attente de revue
+  filters:
+    tk_search-placeholder_: Rechercher (nom, description, id)…
+  table:
+    tk_account_: Compte
+    tk_users_: Utilisateurs
+    tk_entities_: Entités
+    tk_status_: Statut
+    tk_created_: Créé le
+  row:
+    tk_pending-tooltip_: Cliquer pour examiner la demande de réactivation
+    tk_open-context-tooltip_: Cliquer pour entrer dans le contexte de ce compte
+    tk_review-request_: Examiner la demande
+
 organizations:
   tk_organization-details_: Détails de l'organisation
   tk_type-company_: Entreprise
@@ -144,6 +286,8 @@ organizations:
   tk_type-community-sub_: Groupe ouvert
   tk_logo_: Logo
   tk_logo-upload_: Téléverser le logo
+  tk_logo-replace_: Remplacer
+  tk_logo-remove_: Retirer
   tk_logo-dropzone_: Déposez un logo ou cliquez pour parcourir
   tk_logo-formats_: 'JPEG, PNG, WebP · Max 2 Mo'
 
@@ -153,20 +297,113 @@ roles:
   tk_filters-description_: Filtrez vos rôles par statut, nom, etc.
   tk_filters-search-placeholder_: Rechercher des rôles...
   tk_table-no-roles_: Aucun rôle trouvé
+  tk_search-placeholder_: Rechercher un rôle…
+  tk_create_: Nouveau rôle
+  tk_create-description_: Définissez un rôle personnalisé avec les permissions dont votre compte a besoin.
+  tk_create-comingsoon-tooltip_: Création de rôles personnalisés bientôt disponible
+  tk_empty_: Aucun rôle ne correspond aux filtres
+  tk_no-account-selected_: Sélectionnez un compte dans l'en-tête pour parcourir ses rôles.
+  tk_system_: Système
+  tk_delete_: Supprimer le rôle
+  tk_delete-confirm_: Supprimer ce rôle personnalisé ? Les attributions existantes seront retirées.
+  tk_edit_: Modifier le rôle
+  tk_modules_: Modules
+  tk_modules-empty_: Aucun module attaché.
+  tk_permissions_: Permissions
+  tk_permissions-empty_: Aucune permission accordée.
+  tk_summary-counts_: '{{modules}} modules · {{permissions}} permissions'
+  edit:
+    tk_title-system_: Modifier les permissions du rôle système
+    tk_title-custom_: Modifier le rôle personnalisé
+    tk_description-system_: Les rôles système ne peuvent pas être renommés ni reclassés — seules leurs permissions sont modifiables.
+    tk_description-custom_: Mettez à jour le nom, la description et les permissions de ce rôle.
+    tk_system-locked-hint_: Rôle système — nom et description verrouillés.
+    tk_platform-scope-note_: Les rôles à scope plateforme couvrent toujours toute la plateforme.
+    tk_scope-locked-note_: Le scope d'un rôle est figé après création — seules les permissions sont modifiables.
+    tk_submit_: Enregistrer
+    tk_action-system_: Modifier les permissions
+    tk_action-custom_: Modifier le rôle
+  create:
+    tk_section-identity_: 'A — Identité'
+    tk_section-scope_: 'B — Scope'
+    tk_section-permissions_: 'C — Accès'
+    tk_selected_: sélectionné(s)
+    tk_name-placeholder_: 'Nom du rôle (ex : Lecteur seul)'
+    tk_description-placeholder_: Brève description (optionnel)
+    tk_scope-platform_: Toute la plateforme
+    tk_scope-platform-sub_: Modèle réutilisable visible depuis tous les comptes de la plateforme.
+    tk_scope-account_: Compte entier
+    tk_scope-account-sub_: S'applique au compte et à toutes ses entités.
+    tk_scope-entity_: Limité à une entité
+    tk_scope-entity-sub_: S'applique uniquement à l'intérieur d'une entité.
+    tk_no-permissions-for-scope_: Aucune section ou permission n'est applicable à ce scope.
+    tk_error-name-min_: Le nom doit contenir au moins 2 caractères.
+    tk_error-name-max_: Le nom doit contenir 30 caractères ou moins.
+    tk_error-permissions-empty_: Sélectionnez au moins une section ou une permission.
+    tk_submit_: Créer le rôle
+  filters:
+    tk_all_: Tous
+    tk_account_: Compte
+    tk_entity_: Entité
+    tk_platform_: Plateforme
+    tk_origin-all_: Toute origine
+    tk_origin-system_: Système
+    tk_origin-custom_: Custom
+  kpi:
+    tk_total_: Total rôles
+    tk_total-sub_: "{{permissions}} permissions sur l'ensemble"
+    tk_system_: Système
+    tk_system-sub_: Templates intégrés · permissions modifiables
+    tk_custom_: Custom
+    tk_custom-sub_: Rôles définis par le compte
+    tk_custom-sub-empty_: Aucun défini pour l''instant
+  tk_modules-short_: modules
+  tk_permissions-short_: perms
+  tk_view_: Voir
+  tk_custom_: Custom
+  tk_status-active_: Actif
+  tk_status-inactive_: Inactif
+  tk_status-deactivate-tooltip_: Désactiver ce rôle — il ne pourra plus être assigné
+  tk_status-reactivate-tooltip_: Réactiver ce rôle
   builtin:
     tk_guest_: Invité
     tk_guest-description_: Utilisateur non authentifié
-    tk_user_: Utilisateur
-    tk_user-description_: Utilisateur authentifié de base
-    tk_admin_: Administrateur
-    tk_admin-description_: Utilisateur administrateur
+    tk_account_user_: Utilisateur
+    tk_account_user-description_: Utilisateur authentifié de base
+    tk_account_admin_: Administrateur
+    tk_account_admin-description_: Administrateur du compte
+    tk_entity_admin_: Admin d'entité
+    tk_entity_admin-description_: Administrateur d'entité
+    tk_entity_user_: Utilisateur d'entité
+    tk_entity_user-description_: Utilisateur de base d'une entité
+    tk_platform_admin_: Admin plateforme
+    tk_platform_admin-description_: Administrateur de toute la plateforme (super-utilisateur)
+    tk_platform_user_: Utilisateur plateforme
+    tk_platform_user-description_: Utilisateur plateforme (profil et mot de passe uniquement)
 
 scopeHeader:
   tk_account-fallback_: Compte
   tk_my-entities-fallback_: Mes entités
   tk_role-account-admin_: Admin du compte
   tk_role-entity-admin_: Admin d'entité
+  tk_role-platform-admin_: Admin plateforme
+  tk_all-accounts_: Tous les comptes
+  tk_platform-overview-hint_: Vue plateforme · choisissez un compte pour scoper la vue
   tk_status-active_: Actif
+  tk_status-disabled_: Désactivé
+  tk_status-deactivate_: Cliquez pour désactiver ce compte
+  tk_status-reactivate_: Cliquez pour réactiver ce compte
+  tk_status-deactivate-confirm_: 'Désactiver "{{name}}" ? Ses utilisateurs perdront l''accès jusqu''à réactivation.'
+  tk_status-reactivate-confirm_: 'Réactiver "{{name}}" ? Les utilisateurs liés retrouvent l''accès immédiatement.'
+  tk_status-deactivate-title_: 'Désactiver "{{name}}" ?'
+  tk_status-reactivate-title_: 'Réactiver "{{name}}" ?'
+  tk_status-deactivate-desc_: Les utilisateurs liés perdront l'accès jusqu'à la réactivation du compte.
+  tk_status-deactivate-self-desc_:
+    "Attention : une fois votre propre compte désactivé, vous ne pourrez pas le réactiver vous-même. Pour rétablir l'accès, vous devrez soumettre une demande de réactivation à un administrateur de
+    plateforme."
+  tk_status-reactivate-desc_: Les utilisateurs liés retrouvent l'accès immédiatement.
+  tk_status-deactivate-cta_: Désactiver
+  tk_status-reactivate-cta_: Réactiver
   tk_id_: ID
   tk_created_: Créé le
   tk_updated_: Mis à jour le
@@ -174,19 +411,47 @@ scopeHeader:
   tk_switch-account_: Changer de compte
   tk_switch-entity_: Changer d'entité
   tk_your-accounts_: Vos comptes
+  tk_your-entities_: Vos entités
+  tk_entity-fallback_: Entité
+  tk_create-own-account_: Créer un nouveau compte
+  tk_create-own-account-sub_: Démarrez un compte que vous possédez
+  tk_create-own-entity_: Créer une nouvelle entité
+  tk_create-own-entity-sub_: Ajoutez une autre entité dans ce compte
+  tk_pick-context_: Choisir un contexte
+  tk_all-accounts-sub_: Vue plateforme globale
+  tk_account-context-sub_: Naviguer dans ce compte
+  tk_search-placeholder_: Rechercher un compte…
+  tk_search-entity-placeholder_: Rechercher une entité…
+  tk_no-match_: Aucun compte ne correspond
 
 dialogs:
+  inviteOwner:
+    tk_title_: Inviter un propriétaire de compte
+    tk_description_: Envoyez une invitation pour permettre à quelqu'un de créer son propre compte sur la plateforme.
+    tk_hint_: Lorsque la personne accepte, un nouveau compte est provisionné et elle en devient l'admin.
+    tk_account-name_: Nom de compte suggéré
+    tk_account-name-hint_: Suggéré automatiquement à partir des infos de l'invité. Modifiable au moment de l'acceptation.
+    tk_submit_: Envoyer l'invitation
   inviteUser:
     tk_section-who_: 'A — Qui ?'
     tk_section-access-scope_: "B — Périmètre d'accès"
     tk_section-roles_: 'C — Rôles'
     tk_section-summary_: 'D — Récapitulatif'
+    tk_description-platform_: Inviter un nouvel utilisateur en tant qu'admin plateforme, ou le rattacher à un ou plusieurs comptes existants.
     tk_search-entities_: Rechercher des entités…
+    tk_search-accounts_: Rechercher des comptes…
     tk_search-roles_: Rechercher des rôles…
     tk_account-access_: Accès au compte
     tk_account-access-sub_: Lien direct · accès à toutes les entités
+    tk_entity-access-sub_: Lien à l'entité · accès aux sous-entités
+    tk_platform-access_: Accès plateforme
+    tk_platform-access-sub_: Aucun lien compte · rôle admin plateforme
+    tk_account-target-sub_: Rattacher l'utilisateur à ce compte
+    tk_no-accounts-match_: 'Aucun compte ne correspond à “{{search}}”. Essayez un autre mot-clé.'
     tk_at-least-one-access_: Au moins un type d'accès est requis.
     tk_roles-account-scoped_: Les rôles sont liés au compte et s'appliquent à toutes les entités rattachées.
+    tk_roles-scope-hint_: Chaque rôle a un scope — ACCOUNT exige l'accès au compte, ENTITY exige au moins une entité sélectionnée.
+    tk_pick-scope-first_: Choisissez d'abord un périmètre d'accès pour voir les rôles compatibles.
     tk_will-be-linked-to_: Sera rattaché à
     tk_inviting_: 'Invitation de :'
     tk_access-prefix_: 'Accès :'
@@ -198,3 +463,68 @@ dialogs:
     tk_n-selected_: '{{count}} sélectionnés'
   createEntity:
     tk_logo-label_: Logo
+  createOwnAccount:
+    tk_title_: Créer un nouveau compte
+    tk_description_: Démarrez un compte que vous possédez. Vous en deviendrez administrateur et serez automatiquement basculé dessus.
+    tk_name-label_: Nom du compte
+    tk_description-label_: Description (optionnelle)
+    tk_submit_: Créer le compte
+    tk_name-required_: Le nom du compte est requis.
+    tk_name-too-long_: Le nom du compte ne doit pas dépasser 100 caractères.
+    tk_submit-error_: Impossible de créer le compte. Veuillez réessayer.
+
+reactivation:
+  tk_breadcrumb_: Réactivation du compte
+  tk_breadcrumb-description_: Votre compte est actuellement désactivé
+  tk_title_: '"{{name}}" est désactivé'
+  tk_subtitle_: Tant que le compte est désactivé, ses fonctionnalités sont inaccessibles. Le bouton ci-dessous permet de demander à un administrateur de plateforme de le réactiver.
+  tk_min-message_: Merci d'écrire au moins une justification (10 caractères minimum).
+  tk_submit-error_: Impossible d'envoyer votre demande. Veuillez réessayer.
+  tk_your-message_: Votre message
+  platform:
+    tk_title_: Désactivé par un administrateur de plateforme
+    tk_description_:
+      Un administrateur de plateforme a désactivé ce compte. Vous pouvez tout de même soumettre une demande de réactivation ci-dessous — expliquez la situation et un administrateur l'examinera.
+  pending:
+    tk_title_: Demande en attente
+    tk_description_: Soumise le {{date}}. Un administrateur de plateforme va l'examiner sous peu.
+  rejected:
+    tk_title_: Demande précédente refusée
+    tk_description_: Examinée le {{date}}. Vous pouvez soumettre une nouvelle demande ci-dessous.
+    tk_review-note_: Motif du refus
+  approved:
+    tk_title_: Réactivation approuvée
+    tk_description_: Votre compte est en cours de réactivation. Rafraîchissez la page dans quelques secondes pour retrouver l'accès.
+  form:
+    tk_label_: Justification
+    tk_help_: Expliquez brièvement pourquoi ce compte doit être réactivé. L'administrateur de plateforme verra ce message tel quel.
+    tk_placeholder_: ex. La période de pause est terminée et nous sommes prêts à reprendre l'activité…
+    tk_char-count_: '{{count}} / 2000 caractères'
+    tk_min-hint_: 10 caractères minimum
+    tk_submit_: Envoyer la demande de réactivation
+
+platformInvitations:
+  tk_title_: Invitations propriétaire de compte en attente
+  tk_status-pending_: En attente
+  tk_status-expired_: Expirée
+  tk_resend_: Renvoyer
+  tk_sent-prefix_: Envoyée le
+  tk_cancel_: Annuler l'invitation
+  tk_cancel-confirm_: Annuler cette invitation ? Le destinataire ne pourra plus l'accepter.
+
+platformReactivation:
+  tk_pending-title_: 'Demandes de réactivation en attente ({{count}})'
+  tk_requested-by_: 'par {{name}} ({{email}}) le {{date}}'
+  tk_approve_: Approuver
+  tk_reject_: Refuser
+  sheet:
+    tk_subtitle_: Demande de réactivation en attente de votre revue
+    tk_requested-by_: Demandeur
+    tk_submitted-at_: 'Soumise le {{date}}'
+    tk_message_: Message de justification
+  reject:
+    tk_title_: 'Refuser la réactivation de "{{name}}" ?'
+    tk_description_: Indiquez au demandeur pourquoi sa demande est refusée. Cette note sera visible sur sa page de réactivation.
+    tk_placeholder_: ex. Audit en cours, merci de re-soumettre après la revue sécurité…
+    tk_min-hint_: 5 caractères minimum
+    tk_submit_: Refuser la demande

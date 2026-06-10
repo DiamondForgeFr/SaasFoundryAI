@@ -41,6 +41,7 @@ actions:
   tk_activate_: Activate
   tk_deactivate_: Deactivate
   tk_cancel_: Cancel
+  tk_confirm_: Confirm
   tk_send_: Send
   tk_resend_: Resend
   tk_loading_: 'In progress...'

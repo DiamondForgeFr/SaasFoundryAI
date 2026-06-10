@@ -17,6 +17,9 @@ sections:
     tk_meta-many_: '{{accounts}} accounts · {{entities}} entities'
     tk_accounts_: Accounts
     tk_entities_: Entities
+    tk_account-copy_: Copy ID
+    tk_account-copied_: ID copied
+    tk_account-indirect_: Indirect
   preferences:
     tk_title_: Preferences
     tk_meta_: Personal settings

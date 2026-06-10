@@ -14,8 +14,14 @@ signup:
 signin:
   tk_title_: Connexion
   tk_description_: Accédez à votre compte
+  tk_activateTitle_: Activez votre compte
+  tk_activateDescription_: Complétez vos informations pour terminer l'activation.
+  tk_bootstrapTitle_: Bienvenue
+  tk_bootstrapDescription_: Configurez le premier administrateur de la plateforme.
   tk_noAccount_: Vous n'avez pas de compte ?
   tk_authError_: Les informations fournies ne permettent pas de retrouver votre compte.
+  tk_account-name_: Nom du compte
+  tk_account-name-hint_: Suggéré automatiquement à partir de vos infos. Modifiable maintenant ou plus tard depuis les réglages.
 
 userInvitation:
   tk_title_: Accepter l'invitation
