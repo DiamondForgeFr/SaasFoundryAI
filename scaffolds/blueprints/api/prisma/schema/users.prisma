@@ -17,18 +17,26 @@ enum TokenType {
   @@map("token_type")
 }
 
+enum RoleScope {
+  PLATFORM
+  ACCOUNT
+  ENTITY
+
+  @@map("role_scope")
+}
+
 /**
  * Table : People
  */
 model People {
-  id          String    @id @default(cuid())
-  firstname   String?   @db.VarChar(80)
-  lastname    String?   @db.VarChar(80)
-  email       String?   @db.VarChar(100)
-  createdAt   DateTime  @default(now())               @map("created_at")
-  updatedAt   DateTime  @updatedAt                    @map("updated_at")
+  id        String   @id @default(cuid())
+  firstname String?  @db.VarChar(80)
+  lastname  String?  @db.VarChar(80)
+  email     String?  @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user        User?     @relation("UserProfile")
+  user User? @relation("UserProfile")
 
   accountsLinked PeopleAccountLink[]
   entitiesLinked PeopleEntityLink[]
@@ -40,27 +48,30 @@ model People {
  * Table : User
  */
 model User {
-  id             String    @id @default(cuid())
-  isActive       Boolean   @default(false)               @map("is_active")
-  peopleId       String?   @unique                       @map("people_id")
-  email          String    @unique @db.VarChar(100)
-  password       String    @db.VarChar(255)
-  lastLoginAt    DateTime?                               @map("last_login_at")
-  createdAt      DateTime  @default(now())               @map("created_at")
-  updatedAt      DateTime  @updatedAt                    @map("updated_at")
+  id          String    @id @default(cuid())
+  isActive    Boolean   @default(false) @map("is_active")
+  peopleId    String?   @unique @map("people_id")
+  email       String    @unique @db.VarChar(100)
+  password    String    @db.VarChar(255)
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  preference UserPreference? @relation("UserPreference")
+  people     People?         @relation("UserProfile", fields: [peopleId], references: [id])
 
-  preference     UserPreference?   @relation("UserPreference")
-  people         People?           @relation("UserProfile", fields: [peopleId], references: [id])
+  tokens UserToken[] @relation("UserToken")
 
-  tokens         UserToken[]       @relation("UserToken")
-
-  rolesLinked    UserRoleLink[]
-  accountsLinked UserAccountLink[]
-  entitiesLinked UserEntityLink[]
+  roleAssignments UserRoleAssignment[]
+  accountsLinked  UserAccountLink[]
+  entitiesLinked  UserEntityLink[]
 
   sentInvitations     Invitation[] @relation("SentInvitations")
   receivedInvitations Invitation[] @relation("ReceivedInvitations")
+
+  deactivatedAccounts          Account[]                    @relation("AccountDeactivatedBy")
+  reactivationRequestsSent     AccountReactivationRequest[] @relation("ReactivationRequestedBy")
+  reactivationRequestsReviewed AccountReactivationRequest[] @relation("ReactivationReviewedBy")
 
   @@index([isActive])
   @@map("users")
@@ -70,15 +81,15 @@ model User {
  * Table : User Token
  */
 model UserToken {
-  id          String    @id @default(cuid())
-  userId      String    @map("user_id")
-  token       String    @db.VarChar(500)
-  type        TokenType
-  expiresAt   DateTime? @map("expires_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  token     String    @db.VarChar(500)
+  type      TokenType
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
-  user        User     @relation("UserToken", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserToken", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type])
   @@index([userId])
@@ -88,60 +99,78 @@ model UserToken {
 
 /**
  * Table : Role
+ * scope    : level at which this role can be assigned (PLATFORM/ACCOUNT/ENTITY)
+ * isSystem : protects seeded built-in roles from being edited or deleted
+ * accountId: NULL for system templates, set for custom roles owned by a specific account
  */
 model Role {
-  id                Int      @id @default(autoincrement())
-  name              String   @db.VarChar(30)
-  description       String?  @db.VarChar(255)
-  isActive          Boolean  @default(false)                  @map("is_active")
-  accountId         String?                                   @map("account_id")
-  createdAt         DateTime @default(now())                  @map("created_at")
-  updatedAt         DateTime @updatedAt                       @map("updated_at")
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(30)
+  description String?   @db.VarChar(255)
+  scope       RoleScope @default(ACCOUNT)
+  isSystem    Boolean   @default(false) @map("is_system")
+  isActive    Boolean   @default(false) @map("is_active")
+  accountId   String?   @map("account_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  account           Account? @relation("RoleAccount", fields: [accountId], references: [id], onDelete: SetNull)
+  account Account? @relation("RoleAccount", fields: [accountId], references: [id], onDelete: SetNull)
 
-  usersLinked       UserRoleLink[]
+  assignments       UserRoleAssignment[]
   modulesLinked     RoleModuleLink[]
+  subModulesLinked  RoleSubModuleLink[]
   permissionsLinked RolePermissionLink[]
-  entitiesLinked    EntityRoleLink[]
   invitationsLinked InvitationRoleLink[]
 
   @@unique([name, accountId])
   @@index([isActive])
   @@index([accountId])
+  @@index([scope])
   @@map("roles")
 }
-
 
 /**
  * Table : User Preferences
  */
 model UserPreference {
-  id        Int     @id @default(autoincrement())
-  userId    String  @unique                           @map("user_id")
-  avatarUrl String? @db.VarChar(255)                  @map("avatar_url")
-  updatedAt DateTime @updatedAt                       @map("updated_at")
-  locale    Locale  @default(FR)
+  id        Int      @id @default(autoincrement())
+  userId    String   @unique @map("user_id")
+  avatarUrl String?  @map("avatar_url") @db.VarChar(255)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  locale    Locale   @default(FR)
 
-  user      User    @relation("UserPreference", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserPreference", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_preferences")
 }
 
 /**
- * Table : Relation User - Roles
+ * Table : User Role Assignment (scoped)
+ * Replaces the previous flat UserRoleLink: a role is now attached to a user
+ * within a specific scope (PLATFORM = no target, ACCOUNT = accountId, ENTITY = entityId).
+ * Integrity is enforced by the trigger `check_role_assignment_scope.sql`:
+ * role.scope = PLATFORM ⇒ accountId IS NULL AND entityId IS NULL
+ * role.scope = ACCOUNT  ⇒ accountId IS NOT NULL AND entityId IS NULL
+ * role.scope = ENTITY   ⇒ accountId IS NULL AND entityId IS NOT NULL
  */
-model UserRoleLink {
-  userId    String                                    @map("user_id")
-  roleId    Int                                       @map("role_id")
-  createdAt DateTime @default(now())                  @map("created_at")
-  updatedAt DateTime @updatedAt                       @map("updated_at")
+model UserRoleAssignment {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  roleId    Int      @map("role_id")
+  accountId String?  @map("account_id")
+  entityId  String?  @map("entity_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role     @relation(fields: [roleId], references: [id])
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role    Role     @relation(fields: [roleId], references: [id])
+  account Account? @relation("AccountRoleAssignments", fields: [accountId], references: [id], onDelete: Cascade)
+  entity  Entity?  @relation("EntityRoleAssignments", fields: [entityId], references: [id], onDelete: Cascade)
 
-  @@id([userId, roleId])
+  @@unique([userId, roleId, accountId, entityId])
   @@index([userId])
   @@index([roleId])
-  @@map("users_roles_links")
+  @@index([accountId])
+  @@index([entityId])
+  @@map("users_roles_assignments")
 }

@@ -16,18 +16,18 @@ BEGIN
 
   IF NEW.is_active = false THEN
 
-    -- Deactivate only users who have NO other active role
+    -- Deactivate only users who have NO other active role assignment
     UPDATE public.users
     SET is_active = false, updated_at = NOW()
     WHERE id IN (
-      SELECT url.user_id
-      FROM public.users_roles_links url
-      WHERE url.role_id = NEW.id
-      AND url.user_id NOT IN (
-        SELECT url2.user_id
-        FROM public.users_roles_links url2
-        INNER JOIN public.roles r ON r.id = url2.role_id
-        WHERE r.is_active = TRUE AND url2.role_id != NEW.id
+      SELECT ura.user_id
+      FROM public.users_roles_assignments ura
+      WHERE ura.role_id = NEW.id
+      AND ura.user_id NOT IN (
+        SELECT ura2.user_id
+        FROM public.users_roles_assignments ura2
+        INNER JOIN public.roles r ON r.id = ura2.role_id
+        WHERE r.is_active = TRUE AND ura2.role_id != NEW.id
       )
     );
 

@@ -1,24 +1,80 @@
 /**
  * Table : Account
+ *
+ * `deactivated_by_scope` records WHO triggered the deactivation:
+ *   - PLATFORM      : a platform-admin disabled the account → they can also re-enable it directly.
+ *   - ACCOUNT_OWNER : an account-admin disabled their own account → reactivation requires a
+ *                     formal request to a platform-admin (see AccountReactivationRequest).
+ * NULL = the account has never been deactivated (or was reactivated and the trace was cleared).
  */
 model Account {
-  id          String    @id @default(cuid())
-  name        String    @default("Main account") @db.VarChar(100)
-  description String?   @db.VarChar(255)
-  isActive    Boolean   @default(true)            @map("is_active")
-  createdAt   DateTime  @default(now())           @map("created_at")
-  updatedAt   DateTime  @updatedAt                @map("updated_at")
+  id                  String              @id @default(cuid())
+  name                String              @default("Main account") @db.VarChar(100)
+  description         String?             @db.VarChar(255)
+  isActive            Boolean             @default(true) @map("is_active")
+  deactivatedAt       DateTime?           @map("deactivated_at")
+  deactivatedByUserId String?             @map("deactivated_by_user_id")
+  deactivatedByScope  AccountDeactivationScope? @map("deactivated_by_scope")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
 
-  organizationsLinked OrganizationAccountLink[]
-  invitationsLinked   InvitationAccountLink[]
-  usersLinked         UserAccountLink[]
-  peopleLinked        PeopleAccountLink[]
+  organizationsLinked  OrganizationAccountLink[]
+  invitationsLinked    InvitationAccountLink[]
+  usersLinked          UserAccountLink[]
+  peopleLinked         PeopleAccountLink[]
+  roleAssignments      UserRoleAssignment[]      @relation("AccountRoleAssignments")
+  reactivationRequests AccountReactivationRequest[]
 
-  entities Entity[]   @relation("EntityAccount")
-  roles    Role[]     @relation("RoleAccount")
+  deactivatedBy User? @relation("AccountDeactivatedBy", fields: [deactivatedByUserId], references: [id], onDelete: SetNull)
+
+  entities Entity[] @relation("EntityAccount")
+  roles    Role[]   @relation("RoleAccount")
 
   @@index([isActive])
   @@map("accounts")
+}
+
+enum AccountDeactivationScope {
+  PLATFORM
+  ACCOUNT_OWNER
+  @@map("account_deactivation_scope")
+}
+
+enum AccountReactivationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  @@map("account_reactivation_request_status")
+}
+
+/**
+ * Table : Account reactivation request
+ *
+ * Created by an account-admin whose account was disabled by themselves (scope = ACCOUNT_OWNER).
+ * A platform-admin then approves (re-enables the account, archives the request) or rejects
+ * (archives with a reason). At most one PENDING request per account at a time — enforced via
+ * a partial unique index in the migration.
+ */
+model AccountReactivationRequest {
+  id            String                            @id @default(cuid())
+  accountId     String                            @map("account_id")
+  requestedById String                            @map("requested_by_id")
+  message       String                            @db.VarChar(2000)
+  status        AccountReactivationRequestStatus  @default(PENDING)
+  reviewedById  String?                           @map("reviewed_by_id")
+  reviewNote    String?                           @map("review_note") @db.VarChar(2000)
+  reviewedAt    DateTime?                         @map("reviewed_at")
+  createdAt     DateTime                          @default(now()) @map("created_at")
+  updatedAt     DateTime                          @updatedAt @map("updated_at")
+
+  account     Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  requestedBy User    @relation("ReactivationRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy  User?   @relation("ReactivationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([accountId])
+  @@index([status])
+  @@index([requestedById])
+  @@map("account_reactivation_requests")
 }
 
 /**
@@ -26,13 +82,13 @@ model Account {
  * This establishes a many-to-many relationship between users and accounts
  */
 model UserAccountLink {
-  userId      String                              @map("user_id")
-  accountId   String                              @map("account_id")
-  createdAt   DateTime  @default(now())           @map("created_at")
-  updatedAt   DateTime  @updatedAt                @map("updated_at")
+  userId    String   @map("user_id")
+  accountId String   @map("account_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@id([userId, accountId])
   @@index([userId])
@@ -45,13 +101,13 @@ model UserAccountLink {
  * This establishes a many-to-many relationship between people and accounts
  */
 model PeopleAccountLink {
-  peopleId    String                              @map("people_id")
-  accountId   String                              @map("account_id")
-  createdAt   DateTime  @default(now())           @map("created_at")
-  updatedAt   DateTime  @updatedAt                @map("updated_at")
+  peopleId  String   @map("people_id")
+  accountId String   @map("account_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  people      People    @relation(fields: [peopleId], references: [id], onDelete: Cascade)
-  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  people  People  @relation(fields: [peopleId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@id([peopleId, accountId])
   @@index([peopleId])

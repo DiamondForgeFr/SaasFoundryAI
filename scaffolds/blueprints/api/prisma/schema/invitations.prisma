@@ -11,18 +11,18 @@ enum InvitationStatus {
 }
 
 model Invitation {
-  id                String           @id @default(cuid())
-  inviterUserId     String           @map("inviter_id")
-  inviteeUserId     String?          @map("invitee_id")
-  inviteeUserEmail  String           @map("invitee_email") @db.VarChar(100)
-  status            InvitationStatus @default(SENT)
-  invitedAt         DateTime         @default(now()) @map("invited_at")
-  acceptedAt        DateTime?        @map("accepted_at")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt      @map("updated_at")
+  id               String           @id @default(cuid())
+  inviterUserId    String           @map("inviter_id")
+  inviteeUserId    String?          @map("invitee_id")
+  inviteeUserEmail String           @map("invitee_email") @db.VarChar(100)
+  status           InvitationStatus @default(SENT)
+  invitedAt        DateTime         @default(now()) @map("invited_at")
+  acceptedAt       DateTime?        @map("accepted_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
 
-  inviter        User             @relation("SentInvitations", fields: [inviterUserId], references: [id], onDelete: Cascade)
-  invitee        User?            @relation("ReceivedInvitations", fields: [inviteeUserId], references: [id], onDelete: SetNull)
+  inviter User  @relation("SentInvitations", fields: [inviterUserId], references: [id], onDelete: Cascade)
+  invitee User? @relation("ReceivedInvitations", fields: [inviteeUserId], references: [id], onDelete: SetNull)
 
   accountsLinked InvitationAccountLink[]
   entitiesLinked InvitationEntityLink[]
@@ -43,8 +43,8 @@ model InvitationAccountLink {
   accountId    String   @map("account_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  invitation   Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
-  account      Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  account    Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@id([invitationId, accountId])
   @@index([invitationId])
@@ -60,8 +60,8 @@ model InvitationEntityLink {
   entityId     String   @map("entity_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  invitation   Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
-  entity       Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  entity     Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@id([invitationId, entityId])
   @@index([invitationId])
@@ -77,12 +77,11 @@ model InvitationRoleLink {
   roleId       Int      @map("role_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  invitation   Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([invitationId, roleId])
   @@index([invitationId])
   @@index([roleId])
   @@map("invitations_roles_links")
 }
-
