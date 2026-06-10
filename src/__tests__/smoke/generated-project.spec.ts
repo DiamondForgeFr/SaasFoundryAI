@@ -53,10 +53,15 @@ describe('generated project smoke tests', () => {
     await mkdir(join(projectDir, 'apps'), { recursive: true })
     process.chdir(projectDir)
 
+    // tool 'none' keeps installWorkflowSkill out of the way while still exercising
+    // the workingBranch-aware CI substitution
+    const workflow = { tool: 'none' as const, workingBranch: 'develop', prTargetBranch: 'develop' }
+
     await createApiApp(
       apiParams({
         isMonorepo: config.isMonorepo,
         projectName: config.projectName,
+        workflow,
         emailService: config.emailService,
         s3Setup: config.s3Setup,
         mailersendApiKey: config.emailService === 'mailersend' ? 'ms-key' : undefined,
@@ -82,12 +87,13 @@ describe('generated project smoke tests', () => {
         isMonorepo: config.isMonorepo,
         projectName: config.projectName,
         s3Setup: config.s3Setup,
-        includeAnalytics: config.includeAnalytics
+        includeAnalytics: config.includeAnalytics,
+        workflow
       })
     )
 
     if (config.isMonorepo) {
-      await createMonorepoRoot(monorepoRootParams({ projectName: config.projectName }))
+      await createMonorepoRoot(monorepoRootParams({ projectName: config.projectName, workflow }))
     }
 
     const skillsApiPath = config.isMonorepo ? 'apps/api' : `apps/${config.projectName}-api`
@@ -218,6 +224,18 @@ describe('generated project smoke tests', () => {
       await assertNoUnreplacedPlaceholders(join(paths.webPath, 'CLAUDE.md'))
     })
 
+    it('should substitute branch placeholders in CI workflows', async () => {
+      const testYml = await readFile(join(paths.apiPath, '.github/workflows/test.yml'), 'utf8')
+      const deployYml = await readFile(join(paths.apiPath, '.github/workflows/deployment.yml'), 'utf8')
+      expect(testYml).toContain('branches: [develop, main]')
+      expect(deployYml).toContain('branches: [main]')
+      expect(deployYml).toContain('--branch=main')
+      for (const content of [testYml, deployYml]) {
+        expect(content).not.toContain('{{MAIN_BRANCH}}')
+        expect(content).not.toContain('{{CI_PR_BRANCHES}}')
+      }
+    })
+
     it('should have activated email module (no mailer-service-active TODO markers)', async () => {
       await assertNoBrokenTodoMarkers(join(paths.apiPath, 'src/modules/auth/services/auth.service.ts'))
       await assertNoBrokenTodoMarkers(join(paths.apiPath, 'src/modules/email/services/email.service.ts'))
@@ -266,6 +284,18 @@ describe('generated project smoke tests', () => {
 
     it('should have all critical API files in apps/api', async () => {
       await assertApiCriticalFiles(paths.apiPath)
+    })
+
+    it('should substitute branch placeholders in root CI workflows', async () => {
+      const testYml = await readFile(join(paths.projectDir, '.github/workflows/test.yml'), 'utf8')
+      const deployApiYml = await readFile(join(paths.projectDir, '.github/workflows/deployment-api.yml'), 'utf8')
+      expect(testYml).toContain('branches: [develop, main]')
+      expect(deployApiYml).toContain('branches: [main]')
+      expect(deployApiYml).toContain('--branch=main')
+      for (const content of [testYml, deployApiYml]) {
+        expect(content).not.toContain('{{MAIN_BRANCH}}')
+        expect(content).not.toContain('{{CI_PR_BRANCHES}}')
+      }
     })
 
     it('should have all critical Web files in apps/web', async () => {
