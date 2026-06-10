@@ -102,7 +102,7 @@ When in doubt, run `sf status --claude-friendly --no-network` to confirm topolog
 
 ## Git Workflow
 
-- Main branch: `master`
+- Main branch: `{{MAIN_BRANCH}}`
 - **ALWAYS** use conventional commits: `<type>(#<ticket>): <description>`
 - Types: feat, fix, docs, style, refactor, perf, test, chore
 - Scope (ticket number) is required
@@ -110,6 +110,8 @@ When in doubt, run `sf status --claude-friendly --no-network` to confirm topolog
 - Husky enforces commit format + pre-push checks
 
 ### Commit Examples
+
+_Ticket numbers below are illustrative — always use the number of the ticket you are working on._
 
 ```bash
 feat(#42): add user profile endpoint

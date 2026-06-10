@@ -70,7 +70,7 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       projectDescription: '',
       backendRepoUrl: '',
       dbCredentials: { host: 'localhost', port: '5435', user: 'user', password: 'pass', database: 'db', dbType: 'postgresql' },
-      mainBranch: 'main',
+      mainBranch: manifest.mainBranch ?? 'main', // pre-mainBranch manifests: backfill deferred (#424 step 6)
       emailService: manifest.modules.email.provider,
       mailersendApiKey: manifest.modules.email.provider === 'mailersend' ? 'dummy-key' : undefined,
       mailersendSenderEmail: manifest.modules.email.provider === 'mailersend' ? 'noreply@example.com' : undefined,
@@ -98,7 +98,7 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       projectName: manifest.projectName,
       projectDescription: '',
       frontendRepoUrl: '',
-      mainBranch: 'main',
+      mainBranch: manifest.mainBranch ?? 'main',
       s3Setup: manifest.modules.s3Setup,
       includeAnalytics: manifest.modules.includeAnalytics,
       advancedSkills: manifest.modules.advancedSkills || []
@@ -109,7 +109,7 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       await createMonorepoRoot({
         projectName: manifest.projectName,
         projectDescription: '',
-        mainBranch: 'main'
+        mainBranch: manifest.mainBranch ?? 'main'
       })
     }
 
@@ -122,6 +122,7 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       webPath,
       projectName: manifest.projectName,
       version: cliVersion,
+      mainBranch: manifest.mainBranch,
       advancedSkills: manifest.modules.advancedSkills || []
     })
 
@@ -691,6 +692,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
         webPath,
         projectName: manifest.projectName,
         version: cliVersion,
+        mainBranch: manifest.mainBranch,
         advancedSkills: [...(manifest.modules!.advancedSkills || []), ...skillsToAdd],
         ...skillsCredentials
       })
