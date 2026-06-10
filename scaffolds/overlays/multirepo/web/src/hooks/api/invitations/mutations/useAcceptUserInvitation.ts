@@ -26,8 +26,14 @@ export const useAcceptUserInvitationSchema = () => {
     passwordComplexity: tAuth('fields.tk_passwordComplexityError_'),
     localeInvalid: tCommon('fields.tk_localeError_')
   }).extend({
-    firstname: z.string().min(1, { message: tAuth('fields.tk_firstNameError_') }).max(30),
-    lastname: z.string().min(1, { message: tAuth('fields.tk_lastNameError_') }).max(30)
+    firstname: z
+      .string()
+      .min(1, { message: tAuth('fields.tk_firstNameError_') })
+      .max(30),
+    lastname: z
+      .string()
+      .min(1, { message: tAuth('fields.tk_lastNameError_') })
+      .max(30)
   })
 
   const response = z.object({

@@ -17,7 +17,11 @@ const tAccounts = (key: string) => i18next.t(key, { ns: 'accounts' })
 export const useAccountEntitiesSchema = () => {
   const organizationSchema = z.object({
     id: z.string(),
-    name: z.string()
+    name: z.string(),
+    type: z.enum(['COMPANY', 'ASSOCIATION', 'COMMUNITY']).nullish(),
+    logoUrl: z.string().nullish(),
+    description: z.string().nullish(),
+    website: z.string().nullish()
   })
 
   const entitySchema = z.object({
@@ -26,6 +30,7 @@ export const useAccountEntitiesSchema = () => {
     description: z.string().nullable(),
     isActive: z.boolean(),
     organization: organizationSchema.nullable(),
+    userCount: z.number().int().nonnegative(),
     createdAt: z.string().transform((str) => new Date(str)),
     updatedAt: z.string().transform((str) => new Date(str))
   })

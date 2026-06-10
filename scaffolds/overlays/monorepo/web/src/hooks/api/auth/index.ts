@@ -7,4 +7,4 @@ export { useSignIn, useSignInSchema, type SignInPayloadDto, type SignInResponseD
 export { useSignOut, useSignOutSchema, type SignOutResponseDto } from './mutations/useSignOut'
 export { useSignUp, useSignUpSchema, type SignUpPayloadDto, type SignUpResponseDto } from './mutations/useSignUp'
 export { useGuest, useGuestSchema, type GuestResponseDto } from './queries/useGuest'
-export { useMe, useMeSchema, type MeResponseDto } from './queries/useMe'
+export { useMe, useMeSchema, type MeResponseDto, type RoleScope } from './queries/useMe'

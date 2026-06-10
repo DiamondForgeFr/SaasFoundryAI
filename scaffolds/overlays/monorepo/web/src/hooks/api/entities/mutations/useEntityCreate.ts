@@ -87,9 +87,8 @@ export const useEntityCreate = () => {
 
   const mutation = useMutation({
     mutationFn: async (data: EntityCreatePayloadDto) => {
+      // The entity carries no name/description of its own (D-ENT-6) — its identity is the org profile.
       const response = await entitiesControllerCreateEntity({
-        name: data.name,
-        description: data.description,
         accountId: data.accountId,
         organization: {
           name: data.organization.name,

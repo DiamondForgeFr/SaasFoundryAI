@@ -75,3 +75,25 @@ export const useInvitedUsers = () => {
     refetchOnWindowFocus: true
   })
 }
+
+/**
+ * Platform-admin: every account-owner invitation across the platform (SENT + EXPIRED),
+ * regardless of who originally sent them. Drives the "Pending account owner invitations"
+ * panel on the Accounts tab.
+ */
+export const usePlatformAccountOwnerInvitations = (params: { enabled?: boolean } = {}) => {
+  const schemas = useInvitedUsersSchema()
+  const { enabled = true } = params
+
+  return useQuery({
+    queryKey: ['invitations', 'platform', 'account-owners'],
+    queryFn: async () => {
+      const raw = await apiClient.get('/invitations/platform/account-owners')
+      return schemas.response.parse(raw)
+    },
+    enabled,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    retry: false
+  })
+}

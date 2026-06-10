@@ -67,9 +67,14 @@ const apiClient = {
           localStorage.removeItem('authMe')
         }
 
-        // Get error message from API if available
+        // Get error message from API if available. Expose `status`/`body` on the thrown error
+        // (same shape as the monorepo api-client mutator) so callers like persistAuthMe can
+        // distinguish session-invalidating statuses (401/403/404) from transient failures.
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `HTTP Error ${response.status}`)
+        const error = new Error(errorData.message || `HTTP Error ${response.status}`) as Error & { status: number; body: unknown }
+        error.status = response.status
+        error.body = errorData
+        throw error
       }
 
       // Check if response is empty
@@ -125,7 +130,10 @@ const apiClient = {
           localStorage.removeItem('authMe')
         }
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `HTTP Error ${response.status}`)
+        const error = new Error(errorData.message || `HTTP Error ${response.status}`) as Error & { status: number; body: unknown }
+        error.status = response.status
+        error.body = errorData
+        throw error
       }
 
       const contentType = response.headers.get('content-type')
