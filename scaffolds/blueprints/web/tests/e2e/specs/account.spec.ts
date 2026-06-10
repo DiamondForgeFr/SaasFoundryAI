@@ -131,7 +131,9 @@ test.describe('Account Management Flow', () => {
       // The count value is the only "exact" match for the digit (sub-text may contain other digits)
       await expect(usersKpi.getByText(testApi.account.success.body.users.count.toString(), { exact: true })).toBeVisible()
       await expect(entitiesKpi.getByText(testApi.account.success.body.entities.count.toString(), { exact: true })).toBeVisible()
-      await expect(pendingKpi.getByText('0', { exact: true })).toBeVisible()
+      // Pending card now shows two numbers — invitations · sign-ups (both 0 in the fixture).
+      await expect(pendingKpi.getByText('0', { exact: true })).toHaveCount(2)
+      await expect(pendingKpi.getByText(/no invitation or sign-up awaiting/i)).toBeVisible()
     })
 
     test('should display recent users correctly', async ({ page }) => {
@@ -361,12 +363,14 @@ test.describe('Account Management Flow', () => {
       expect(elements.length).toBe(0)
     })
 
+    // Reworked Users page: the legacy `directUsers` switch filter was replaced by the
+    // "account-linked" KPI filter card. The search / status / entities / roles filters and the
+    // invite CTA stay; assert those plus the KPI filter row that took the switch's place.
     test('should display filters and invite CTA', async ({ page }) => {
       await expect(page.getByTestId(globaleSelectors.filters.search.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.status.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.entities.blockId)).toBeVisible()
       await expect(page.getByTestId(globaleSelectors.filters.roles.blockId)).toBeVisible()
-      await expect(page.getByTestId(globaleSelectors.filters.directUsers.blockId)).toBeVisible()
       await expect(page.getByRole('button', selectors.accountUsers.cta.inviteUser)).toBeVisible()
     })
 
@@ -400,17 +404,21 @@ test.describe('Account Management Flow', () => {
         await expect(dialog.getByLabel(globaleSelectors.fields.firstname)).toBeVisible()
         await expect(dialog.getByLabel(globaleSelectors.fields.lastname)).toBeVisible()
 
-        // Roles list (built-in `guest` is filtered out in the dialog)
-        const rolesList = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.roles.blockId)
-        await expect(rolesList).toBeVisible()
-        const roleTiles = rolesList.getByTestId(selectors.accountUsers.inviteUserDialog.roles.tileId)
-        const visibleRoles = testApi.roles.success.body.items.filter((r) => r.name.toLowerCase() !== 'guest')
-        await expect(roleTiles).toHaveCount(visibleRoles.length)
-
-        // Access scope (account access button + entities list)
+        // Access scope: account access tile + entities list (entity-scope role gating drives the
+        // role tiles below — the account-admin flow shows the "Account access" tile + per-account entities).
         await expect(dialog.getByTestId(selectors.accountUsers.inviteUserDialog.accessScope.accountAccessId)).toBeVisible()
         const entityTiles = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.accessScope.entityTileId)
         await expect(entityTiles).toHaveCount(testApi.entities.success.body.items.length)
+
+        // Roles list block is always present; the reworked dialog only reveals role tiles once a
+        // scope is picked. Selecting "Account access" surfaces the ACCOUNT-scoped roles
+        // (guest is filtered out, PLATFORM-scoped roles are not offered in the account flow).
+        const rolesList = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.roles.blockId)
+        await expect(rolesList).toBeVisible()
+        await dialog.getByTestId(selectors.accountUsers.inviteUserDialog.accessScope.accountAccessId).click()
+        const roleTiles = rolesList.getByTestId(selectors.accountUsers.inviteUserDialog.roles.tileId)
+        const accountScopedRoles = testApi.roles.success.body.items.filter((r) => r.name.toLowerCase() !== 'guest' && r.scope === 'ACCOUNT')
+        await expect(roleTiles).toHaveCount(accountScopedRoles.length)
 
         await expect(dialog.getByRole('button', selectors.accountUsers.inviteUserDialog.cta.invite)).toBeVisible()
       })
@@ -426,6 +434,9 @@ test.describe('Account Management Flow', () => {
         await expect(dialog.getByText(globaleSelectors.fields.errors.minLength).first()).toBeVisible()
       })
 
+      // Reworked invite flow: the access scope is picked first (an entity tile here), which is
+      // sufficient to submit — roles are optional in the payload and ENTITY-scoped roles only
+      // surface once an entity is selected. Picking the entity then submitting closes the dialog.
       test('should invite user in entity', async ({ page }) => {
         await (page as CustomPage).mockRoute(testApi.inviteUser.URL, async (route) => {
           if (route.request().method() === 'POST') {
@@ -445,10 +456,7 @@ test.describe('Account Management Flow', () => {
         await dialog.getByLabel(globaleSelectors.fields.firstname).fill(testData.userFirstName)
         await dialog.getByLabel(globaleSelectors.fields.lastname).fill(testData.userLastName)
 
-        // Pick first role and first entity
-        const roleTiles = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.roles.tileId)
-        await roleTiles.first().click()
-
+        // Pick the first entity tile — defines the access scope for the invitation.
         const entityTiles = dialog.getByTestId(selectors.accountUsers.inviteUserDialog.accessScope.entityTileId)
         await entityTiles.first().click()
 

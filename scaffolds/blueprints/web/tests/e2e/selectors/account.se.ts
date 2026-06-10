@@ -34,6 +34,8 @@ const testApi = {
         isActive: true,
         createdAt: '2025-05-28T10:31:59.149Z',
         updatedAt: '2025-05-28T10:31:59.149Z',
+        pendingInvitations: 0,
+        pendingSignups: 0,
         users: {
           count: 2,
           values: [
@@ -49,7 +51,7 @@ const testApi = {
               roles: [
                 {
                   id: 2,
-                  name: 'user'
+                  name: 'account-user'
                 }
               ],
               entities: [
@@ -63,6 +65,7 @@ const testApi = {
                 }
               ],
               isDirectlyLinked: false,
+              lastLoginAt: null,
               createdAt: '2025-05-28T10:37:47.633Z',
               updatedAt: '2025-05-28T10:42:38.038Z'
             },
@@ -78,11 +81,12 @@ const testApi = {
               roles: [
                 {
                   id: 3,
-                  name: 'admin'
+                  name: 'account-admin'
                 }
               ],
               entities: [],
               isDirectlyLinked: true,
+              lastLoginAt: null,
               createdAt: '2025-05-28T10:30:25.266Z',
               updatedAt: '2025-05-30T17:06:29.351Z'
             }
@@ -107,32 +111,31 @@ const testApi = {
           ]
         },
         roles: {
-          count: 3,
+          count: 2,
           values: [
             {
-              id: 1,
-              name: 'guest',
-              description: 'Non-authenticated user',
-              isActive: true,
-              isGlobal: true,
-              createdAt: '2025-05-28T10:29:45.435Z',
-              updatedAt: '2025-05-28T10:29:45.435Z'
-            },
-            {
               id: 2,
-              name: 'user',
+              name: 'account-user',
               description: 'Basic authenticated user',
+              scope: 'ACCOUNT',
+              isSystem: true,
               isActive: true,
               isGlobal: true,
+              modules: [],
+              permissions: [],
               createdAt: '2025-05-28T10:29:45.435Z',
               updatedAt: '2025-05-28T10:29:45.435Z'
             },
             {
               id: 3,
-              name: 'admin',
+              name: 'account-admin',
               description: 'Administrator user',
+              scope: 'ACCOUNT',
+              isSystem: true,
               isActive: true,
               isGlobal: true,
+              modules: [],
+              permissions: [],
               createdAt: '2025-05-28T10:29:45.435Z',
               updatedAt: '2025-05-28T10:29:45.435Z'
             }
@@ -191,6 +194,7 @@ const testApi = {
               name: testData.organizationName,
               type: 'COMPANY'
             },
+            userCount: 1,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           }
@@ -216,6 +220,7 @@ const testApi = {
               name: testData.organizationName,
               type: 'COMPANY'
             },
+            userCount: 1,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           },
@@ -229,6 +234,7 @@ const testApi = {
               name: testData.organizationName2,
               type: 'COMPANY'
             },
+            userCount: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           }
@@ -262,7 +268,7 @@ const testApi = {
             roles: [
               {
                 id: 2,
-                name: 'user'
+                name: 'account-user'
               }
             ],
             entities: [
@@ -276,6 +282,7 @@ const testApi = {
               }
             ],
             isDirectlyLinked: false,
+            lastLoginAt: null,
             createdAt: '2025-05-28T10:37:47.633Z',
             updatedAt: '2025-05-28T10:42:38.038Z'
           },
@@ -291,11 +298,12 @@ const testApi = {
             roles: [
               {
                 id: 3,
-                name: 'admin'
+                name: 'account-admin'
               }
             ],
             entities: [],
             isDirectlyLinked: true,
+            lastLoginAt: null,
             createdAt: '2025-05-28T10:30:25.266Z',
             updatedAt: '2025-05-30T17:06:29.351Z'
           }
@@ -321,26 +329,38 @@ const testApi = {
             id: 1,
             name: 'guest',
             description: 'Non-authenticated user',
+            scope: 'PLATFORM',
+            isSystem: true,
             isActive: true,
             isGlobal: true,
+            modules: [],
+            permissions: [],
             createdAt: '2025-05-28T10:29:45.435Z',
             updatedAt: '2025-05-28T10:29:45.435Z'
           },
           {
             id: 2,
-            name: 'user',
+            name: 'account-user',
             description: 'Basic authenticated user',
+            scope: 'ACCOUNT',
+            isSystem: true,
             isActive: true,
             isGlobal: true,
+            modules: [],
+            permissions: [],
             createdAt: '2025-05-28T10:29:45.435Z',
             updatedAt: '2025-05-28T10:29:45.435Z'
           },
           {
             id: 3,
-            name: 'admin',
+            name: 'account-admin',
             description: 'Administrator user',
+            scope: 'ACCOUNT',
+            isSystem: true,
             isActive: true,
             isGlobal: true,
+            modules: [],
+            permissions: [],
             createdAt: '2025-05-28T10:29:45.435Z',
             updatedAt: '2025-05-28T10:29:45.435Z'
           }
@@ -384,7 +404,7 @@ const testApi = {
             roles: [
               {
                 id: 2,
-                name: 'user'
+                name: 'account-user'
               }
             ]
           }
@@ -422,7 +442,7 @@ const selectors = {
       blockId: 'overview-kpis',
       users: { blockId: 'kpi-users', label: /^Users$/i },
       entities: { blockId: 'kpi-entities', label: /^Entities$/i },
-      pending: { blockId: 'kpi-pending', label: /^Pending$/i }
+      pending: { blockId: 'kpi-pending', label: /Pending invitations \/ sign-ups/i }
     },
     recentUsers: {
       blockId: 'recent-users-section',

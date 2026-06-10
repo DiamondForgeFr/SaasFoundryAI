@@ -448,4 +448,26 @@ test.describe('Authentication Flow', () => {
     expect(guestAccess).toBeTruthy()
     expect(JSON.parse(guestAccess!)).toEqual(testApi.guest.success.body)
   })
+
+  test('should clear a stale session and redirect to /signin when /me is no longer valid', async ({ page }) => {
+    // Simulate a login left in localStorage by a previous run (e.g. before a DB reset): the
+    // snapshot is present, but the server no longer recognises the session.
+    await page.addInitScript((staleMe) => {
+      localStorage.setItem('authMe', JSON.stringify(staleMe))
+    }, testApi.meAdmin.success.body)
+
+    // /me now reports the session is gone (bad token / deleted user or account).
+    await (page as CustomPage).mockRoute(testApi.meAdmin.URL, async (route) => {
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Unauthorized' }) })
+    })
+
+    // Hitting a protected route must NOT keep the phantom session alive.
+    await page.goto(selectors.dashboard.URL)
+
+    // The guards bounce to /signin once the stale snapshot is purged…
+    await expect(page).toHaveURL(/.*\/signin/, { timeout: 5000 })
+    // …and the stale snapshot is gone from localStorage.
+    const authMe = await page.evaluate(() => localStorage.getItem('authMe'))
+    expect(authMe).toBeNull()
+  })
 })
