@@ -30,9 +30,12 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     // Substitute {{PROJECT_NAME}} in shared-* wiring (workspace deps + wiring proof imports)
     await substitutePlaceholdersInFiles([`${webPath}/package.json`, `${webPath}/src/shared-wiring.ts`, `${webPath}/src/index.css`], { PROJECT_NAME: projectName })
 
-    // Substitute {{PROJECT_NAME}} across the api-client-aware hooks tree (monorepo only — those hooks import from `@<name>/api-client/...`)
-    const monorepoHookFiles = glob.sync(`${webPath}/src/hooks/api/**/*.ts`)
-    if (monorepoHookFiles.length > 0) await substitutePlaceholdersInFiles(monorepoHookFiles, { PROJECT_NAME: projectName })
+    // Substitute {{PROJECT_NAME}} across the whole monorepo src tree — api-client-aware hooks
+    // import from `@<name>/api-client/...`, and overlay files outside hooks/ (e.g. the
+    // query-provider wiring setUnauthorizedHandler) carry the placeholder too. No-op on
+    // files without the placeholder.
+    const monorepoSrcTsFiles = glob.sync(`${webPath}/src/**/*.{ts,tsx}`, { ignore: `${webPath}/node_modules/**` })
+    if (monorepoSrcTsFiles.length > 0) await substitutePlaceholdersInFiles(monorepoSrcTsFiles, { PROJECT_NAME: projectName })
 
     // Drop the vendored shadcn copy + cn/useIsMobile — primitives now live in
     // @<projectName>/ui-primitives. Multirepo keeps the blueprint copies (no

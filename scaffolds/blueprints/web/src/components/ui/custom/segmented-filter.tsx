@@ -26,7 +26,9 @@ export function SegmentedFilter<T extends string>({ value, onChange, options, da
           onClick={() => onChange(o.value)}
           className={cn(
             'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-sm px-3 text-[10px] font-bold tracking-widest uppercase transition-colors',
-            value === o.value ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+            // Active segment uses the same mustard `accent` token as the KPI filter cards and
+            // the Switch-account button — one shared "selected" affordance everywhere.
+            value === o.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {o.icon}

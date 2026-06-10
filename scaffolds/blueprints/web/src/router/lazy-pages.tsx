@@ -31,6 +31,10 @@ export const Dashboard = lazy(() => import('@/pages/private/dashboard').then((mo
 
 // --- account ---
 export const AccountManagement = lazy(() => import('@/pages/private/account').then((module) => ({ default: module.AccountManagement })))
+export const AccountReactivation = lazy(() => import('@/pages/private/account/account-reactivation').then((module) => ({ default: module.AccountReactivation })))
 
 // --- profile ---
 export const ProfileManagement = lazy(() => import('@/pages/private/profile').then((module) => ({ default: module.ProfileManagement })))
+
+// --- platform (platform-admin only) ---
+export const PlatformModules = lazy(() => import('@/pages/private/platform').then((module) => ({ default: module.PlatformModules })))

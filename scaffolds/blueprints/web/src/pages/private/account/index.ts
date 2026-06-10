@@ -1,4 +1,7 @@
+export { AccountAccounts } from './account-accounts'
 export { AccountEntities } from './account-entities'
 export { AccountManagement } from './account-management'
 export { AccountOverview } from './account-overview'
+export { AccountPlatformUsers } from './account-platform-users'
+export { AccountRoles } from './account-roles'
 export { AccountUsers } from './account-users'

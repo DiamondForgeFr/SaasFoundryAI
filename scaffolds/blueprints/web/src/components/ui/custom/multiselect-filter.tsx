@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/shadcn/badge'
 import { cn } from '@/utils/ui'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover'
 import { Skeleton } from '@/components/ui/shadcn/skeleton'
-import { SearchIcon } from 'lucide-react'
+import { SearchIcon, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 
 export type MultiSelectFilterItem = {
@@ -46,6 +46,10 @@ export function MultiSelectFilter({
   const [open, setOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const hasSelection = selected.length > 0
+  // Active affordance kicks in either when the dropdown is open OR when at least one item is
+  // selected — the chip stays mustard so the user has a persistent "this filter is narrowing
+  // the list" cue, even after closing the popover.
+  const isActive = open || hasSelection
 
   const handleSelect = (id: string | number) => {
     if (selected.includes(id)) {
@@ -67,25 +71,51 @@ export function MultiSelectFilter({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'flex h-9 w-[300px] cursor-pointer items-center justify-start gap-2 rounded-sm border px-3 text-sm text-foreground transition-colors focus:outline-none',
-            open
-              ? 'border-accent bg-accent text-accent-foreground'
-              : hasSelection
-                ? 'border-border bg-card hover:border-primary/40'
-                : 'border-border bg-muted-foreground/5 hover:border-primary/40 hover:bg-card',
+            'flex h-9 w-[300px] cursor-pointer items-center justify-start gap-2 rounded-sm border px-3 text-sm transition-colors focus:outline-none',
+            isActive ? 'border-accent bg-accent text-accent-foreground' : 'border-border bg-muted-foreground/5 text-foreground hover:border-primary/40 hover:bg-card',
             className
           )}
         >
-          {icon && <span className={open ? 'text-accent-foreground' : 'text-muted-foreground'}>{icon}</span>}
+          {icon && <span className={isActive ? 'text-accent-foreground' : 'text-muted-foreground'}>{icon}</span>}
           {hasSelection ? (
             <div className="flex flex-1 items-center justify-between gap-1">
               <span className="truncate">{selectedLabel}</span>
-              <Badge variant="outline" className={`${badgeBg} border-none`}>
-                <span className={badgeText}>{selected.length}</span>
-              </Badge>
+              <div className="flex items-center gap-1">
+                <Badge variant="outline" className={`${badgeBg} border-none`}>
+                  <span className={badgeText}>{selected.length}</span>
+                </Badge>
+                {/*
+                  Clear-all affordance — visible only when there's a selection.
+                  Stops propagation so clicking it doesn't open the popover.
+                  Rendered as a span+role to stay inside the trigger button without nesting <button>s.
+                */}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Clear selection"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onChange([])
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onChange([])
+                    }
+                  }}
+                  className={cn(
+                    'inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full transition-colors',
+                    isActive ? 'text-accent-foreground hover:bg-accent-foreground/15' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              </div>
             </div>
           ) : (
-            <span className={open ? 'text-accent-foreground' : 'text-muted-foreground'}>{placeholder}</span>
+            <span className={isActive ? 'text-accent-foreground' : 'text-muted-foreground'}>{placeholder}</span>
           )}
         </button>
       </PopoverTrigger>

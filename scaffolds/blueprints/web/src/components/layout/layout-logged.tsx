@@ -18,7 +18,24 @@ import { useBreadcrumb } from '@/hooks/ui/useBreadcrumb'
 import { LayoutSidebar } from '@/components/layout/layout-sidebar'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/shadcn/breadcrumb'
 import { Separator } from '@/components/ui/shadcn/separator'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/shadcn/sidebar'
+import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/shadcn/sidebar'
+
+/**
+ * Brand wordmark shown in the top bar only while the sidebar is collapsed — the sidebar header
+ * already carries it when expanded, so this keeps "SaaSFoundry" visible right next to the toggle.
+ */
+const HeaderBrand = () => {
+  const { state } = useSidebar()
+  if (state !== 'collapsed') return null
+  return (
+    <>
+      <span className="font-display text-sm font-bold tracking-tight text-foreground select-none">
+        SaaSFoundry<span className="text-primary">AI</span>
+      </span>
+      <Separator orientation="vertical" className="mr-2 h-4" />
+    </>
+  )
+}
 
 /**
  * React declaration
@@ -50,6 +67,7 @@ const LayoutLoggedContent = () => {
       <div className="flex items-center gap-2 px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
+        <HeaderBrand />
         <Breadcrumb>{renderBreadcrumbItems()}</Breadcrumb>
       </div>
       {items.length > 0 && items[items.length - 1].description && (
@@ -61,7 +79,7 @@ const LayoutLoggedContent = () => {
   )
 
   return (
-    <SidebarProvider style={{ '--sidebar-width': '14rem' } as React.CSSProperties}>
+    <SidebarProvider defaultOpen={false} style={{ '--sidebar-width': '14rem' } as React.CSSProperties}>
       <LayoutSidebar />
       <SidebarInset>
         {renderHeader()}
