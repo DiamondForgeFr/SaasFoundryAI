@@ -27,12 +27,12 @@
     "type-check": {
       "dependsOn": ["^build"],
       "outputs": [],
-      "inputs": ["src/**", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json"]
+      "inputs": ["src/**", "tsconfig*.json"]
     },
     "test:unit": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"],
-      "inputs": ["src/**", "jest.config.js"]
+      "outputs": [],
+      "inputs": ["src/**", "jest.config.js", "vitest.config.ts"]
     },
     "test:e2e": {
       "dependsOn": ["^build"],

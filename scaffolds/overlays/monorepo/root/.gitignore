@@ -24,11 +24,13 @@ lerna-debug.log*
 
 # Tests
 /coverage
+coverage/
+coverage-e2e/
 /.nyc_output
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # IDEs and editors
 /.idea
