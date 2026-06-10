@@ -10,6 +10,8 @@ module.exports = {
     '^@modules/(.*)$': '<rootDir>/src/modules/$1',
     '^@configs/(.*)$': '<rootDir>/src/configs/$1',
     '^@common/(.*)$': '<rootDir>/src/common/$1',
+    '^@shared-types/(.*)$': '<rootDir>/src/shared-types/$1',
+    '^@shared-validation/(.*)$': '<rootDir>/src/shared-validation/$1',
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   globalSetup: '<rootDir>/src/configs/test/e2e-environment.ts',

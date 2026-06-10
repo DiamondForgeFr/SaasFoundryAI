@@ -82,7 +82,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') implements OnModuleInit {
         const user = await this.prismaService.user.findUnique({
           where: { id: payload.sub },
           include: {
-            rolesLinked: {
+            roleAssignments: {
               where: {
                 role: {
                   isActive: true

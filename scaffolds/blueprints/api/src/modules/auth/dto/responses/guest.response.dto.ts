@@ -23,4 +23,10 @@ export class GuestResponseDto implements GuestResponse {
     isArray: true
   })
   permissions: string[]
+
+  @ApiProperty({
+    description: 'True while no platform-admin exists yet. Lets the front adapt the first-login UI (e.g. skip the account-name field). The actual role promotion stays server-side.',
+    example: false
+  })
+  awaitsPlatformAdmin: boolean
 }

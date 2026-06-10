@@ -1,13 +1,13 @@
 /**
  * Resources
  */
-import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common'
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 /**
  * Dependencies
  */
-import { RequirePermissions } from '@common/decorators/require-permissions.decorator'
+import { RequireAccess, RequirePermissions } from '@common/decorators/require-permissions.decorator'
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard'
 import { PermissionsGuard } from '@modules/auth/guards/permissions.guard'
 import { AuthService } from '@modules/auth/services/auth.service'
@@ -62,6 +62,33 @@ export class InvitationController {
   /** End -- Documentation */
   async getUserInvitations(@Req() req: AuthenticatedRequest): Promise<ListInvitationsResponseDto> {
     return this.invitationService.getUserInvitations(req.user.id)
+  }
+
+  @Get('platform/account-owners')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequireAccess({ module: 'PLATFORM_ADMINISTRATION', subModule: 'PLATFORM_ACCOUNTS' })
+  /** Start -- Documentation */
+  @ApiOperation({
+    summary: 'List platform-wide account-owner invitations',
+    description:
+      'Returns every PENDING (SENT or EXPIRED) account-owner invitation on the platform — invitations with zero account/entity targets that, on acceptance, spin up a new account. Restricted to platform-admins.'
+  })
+  /** End -- Documentation */
+  async getPlatformAccountOwnerInvitations(): Promise<ListInvitationsResponseDto> {
+    return this.invitationService.getPlatformAccountOwnerInvitations()
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(['USER_ACCOUNTS_INVITATION', 'USER_ENTITIES_INVITATION'], 'ACCOUNT_ADMINISTRATION', { requireAll: false })
+  /** Start -- Documentation */
+  @ApiOperation({ summary: 'Cancel invitation', description: 'Cancel a pending invitation. Only the inviter can cancel their own invitation. Idempotent for already-finalized invitations.' })
+  @ApiResponse({ status: 200, description: 'Invitation canceled' })
+  @ApiResponse({ status: 401, description: 'Unauthorized — not the inviter' })
+  @ApiResponse({ status: 404, description: 'Invitation not found' })
+  /** End -- Documentation */
+  async cancelInvitation(@Req() req: AuthenticatedRequest, @Param('id') invitationId: string) {
+    return this.invitationService.cancelInvitation(req.user.id, invitationId)
   }
 
   @Post('accept')

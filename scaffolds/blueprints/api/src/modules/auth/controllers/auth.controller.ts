@@ -105,7 +105,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   /** Start -- Documentation */
-  @ApiOperation({ summary: 'Get current user', description: 'Retrieve the profile of the currently authenticated user. Requires USER_ACCOUNT_MANAGEMENT module and USER_PROFILE_VIEW_OWN permission.' })
+  @ApiOperation({
+    summary: 'Get current user',
+    description: 'Retrieve the profile of the currently authenticated user. Requires a valid session; an authenticated user may always view their own profile.'
+  })
   @ApiOkResponse({ type: MeResponseDto })
   @ApiUnauthorizedResponse({ description: 'Unauthorized - Invalid or missing token.' })
   /** End -- Documentation */
