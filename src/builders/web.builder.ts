@@ -132,6 +132,9 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     if (frontendRepoUrl) await exec(`git -C ${webPath} remote add origin ${frontendRepoUrl} > /dev/null 2>&1`)
     await exec(`git -C ${webPath} add . > /dev/null 2>&1`)
     await exec(`git -C ${webPath} commit -m "Initial commit" > /dev/null 2>&1`)
+    // Develop-first: create the declared working branch so the repo matches its docs.
+    const workingBranch = workflow?.workingBranch
+    if (workingBranch && workingBranch !== mainBranch) await exec(`git -C ${webPath} checkout -b ${workingBranch} > /dev/null 2>&1`)
   }
 
   return true

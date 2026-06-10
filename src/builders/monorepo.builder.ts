@@ -108,6 +108,10 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   if (monorepoUrl) await exec(`git remote add origin ${monorepoUrl} > /dev/null 2>&1`)
   await exec(`git add . > /dev/null 2>&1`)
   await exec(`git commit -m "Initial commit" > /dev/null 2>&1`)
+  // Develop-first: the manifest declares workflow.workingBranch as the AI's work
+  // branch — create it and stay on it so the repo matches its own documentation.
+  const workingBranch = workflow?.workingBranch
+  if (workingBranch && workingBranch !== mainBranch) await exec(`git checkout -b ${workingBranch} > /dev/null 2>&1`)
 
   return true
 }
