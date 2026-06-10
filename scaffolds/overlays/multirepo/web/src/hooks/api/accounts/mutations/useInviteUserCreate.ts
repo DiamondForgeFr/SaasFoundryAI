@@ -59,6 +59,9 @@ export const useInviteUser = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
+      // The platform overview KPI counts pending account-owner invitations — refresh it so
+      // the card reflects a freshly sent invitation immediately.
+      queryClient.invalidateQueries({ queryKey: ['platformOverview'] })
     },
     onError: (error) => {
       console.error(tAccounts('errors.tk_inviteUserError_'), error)

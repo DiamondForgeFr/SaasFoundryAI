@@ -16,7 +16,8 @@ export const useGuestSchema = () => {
   const response = z.object({
     roles: z.array(z.string()),
     modules: z.array(z.string()),
-    permissions: z.array(z.string())
+    permissions: z.array(z.string()),
+    awaitsPlatformAdmin: z.boolean()
   })
 
   return { response }

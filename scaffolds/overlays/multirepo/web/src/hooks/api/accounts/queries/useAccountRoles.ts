@@ -19,7 +19,13 @@ export const useAccountRolesSchema = () => {
     id: z.number(),
     name: z.string(),
     description: z.string().nullable(),
+    scope: z.enum(['PLATFORM', 'ACCOUNT', 'ENTITY']),
+    isSystem: z.boolean(),
     isActive: z.boolean(),
+    isGlobal: z.boolean().optional(),
+    modules: z.array(z.string()).default([]),
+    subModules: z.array(z.string()).default([]),
+    permissions: z.array(z.string()).default([]),
     createdAt: z.string().transform((str) => new Date(str)),
     updatedAt: z.string().transform((str) => new Date(str))
   })

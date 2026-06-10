@@ -18,7 +18,8 @@ export const useMeSchema = () => {
     id: z.string(),
     name: z.string(),
     description: z.string().nullable(),
-    isActive: z.boolean()
+    isActive: z.boolean(),
+    deactivatedByScope: z.enum(['PLATFORM', 'ACCOUNT_OWNER']).nullable()
   })
 
   const organizationSchema = z.object({
@@ -31,12 +32,19 @@ export const useMeSchema = () => {
     lastname: z.string().nullable()
   })
 
+  const entityAccountRefSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    isActive: z.boolean()
+  })
+
   const entitySchema = z.object({
     id: z.string(),
     name: z.string(),
     isActive: z.boolean(),
     accountId: z.string(),
-    organization: organizationSchema.nullable()
+    organization: organizationSchema.nullable(),
+    account: entityAccountRefSchema.nullable().optional()
   })
 
   const preferencesSchema = z.object({
@@ -44,26 +52,52 @@ export const useMeSchema = () => {
     avatarUrl: z.string().nullable()
   })
 
+  const roleScopeSchema = z.enum(['PLATFORM', 'ACCOUNT', 'ENTITY'])
+
+  const roleAssignmentSchema = z.object({
+    id: z.string(),
+    roleId: z.number(),
+    roleName: z.string(),
+    scope: roleScopeSchema,
+    accountId: z.string().nullable(),
+    entityId: z.string().nullable(),
+    modules: z.array(z.string()),
+    subModules: z.array(z.string()),
+    permissions: z.array(z.string())
+  })
+
+  const currentScopeSchema = z.object({
+    kind: roleScopeSchema,
+    id: z.string().nullable()
+  })
+
   const response = z
     .object({
       userId: z.string(),
       email: z.string(),
       people: peopleSchema,
-      roles: z.array(z.string()).nonempty(),
-      modules: z.array(z.string()).nonempty(),
-      permissions: z.array(z.string()).nonempty(),
+      roleAssignments: z.array(roleAssignmentSchema),
+      currentScope: currentScopeSchema,
+      // legacy unions kept while UI transitions
+      roles: z.array(z.string()),
+      modules: z.array(z.string()),
+      subModules: z.array(z.string()),
+      permissions: z.array(z.string()),
       accounts: z.array(accountSchema),
       entities: z.array(entitySchema),
       preferences: preferencesSchema,
       createdAt: z.string()
     })
-    .refine((data) => data.accounts.length > 0 || data.entities.length > 0, {
-      message: 'Either accounts or entities must be non-empty',
-      path: ['accounts', 'entities']
+    // A platform-admin has no account/entity links yet — they only have a PLATFORM assignment.
+    .refine((data) => data.roleAssignments.length > 0, {
+      message: 'User must have at least one role assignment',
+      path: ['roleAssignments']
     })
 
   return { response }
 }
+
+export type RoleScope = 'PLATFORM' | 'ACCOUNT' | 'ENTITY'
 
 export type MeResponseDto = z.infer<ReturnType<typeof useMeSchema>['response']>
 

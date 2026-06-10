@@ -50,7 +50,15 @@ export const useAccountSchema = () => {
     roles: z.array(userRoleSchema),
     entities: z.array(entityWithOrganizationSchema),
     isDirectlyLinked: z.boolean(),
+    // Pending discrimination derived backend-side: 'invited' (awaiting signup) | 'awaiting-confirmation'
+    // (self-signup awaiting email confirmation) | null (active). Nullish-tolerant so the deep-overview
+    // rows (which send null) still parse.
+    pendingKind: z.enum(['invited', 'awaiting-confirmation']).nullish(),
     createdAt: z.string().transform((str) => new Date(str)),
+    lastLoginAt: z
+      .string()
+      .nullable()
+      .transform((str) => (str ? new Date(str) : null)),
     updatedAt: z.string().transform((str) => new Date(str))
   })
 
@@ -58,8 +66,12 @@ export const useAccountSchema = () => {
     id: z.number(),
     name: z.string(),
     description: z.string().nullable(),
+    scope: z.enum(['PLATFORM', 'ACCOUNT', 'ENTITY']),
+    isSystem: z.boolean(),
     isActive: z.boolean(),
     isGlobal: z.boolean(),
+    modules: z.array(z.string()).default([]),
+    permissions: z.array(z.string()).default([]),
     createdAt: z.string().transform((str) => new Date(str)),
     updatedAt: z.string().transform((str) => new Date(str))
   })
@@ -77,6 +89,9 @@ export const useAccountSchema = () => {
     isActive: z.boolean(),
     createdAt: z.string().transform((str) => new Date(str)),
     updatedAt: z.string().transform((str) => new Date(str)),
+    // Two pending counters for the overview "Pending invitations / sign-ups" block.
+    pendingInvitations: z.number().default(0),
+    pendingSignups: z.number().default(0),
     users: collectionResponseSchema(accountUserSchema),
     entities: collectionResponseSchema(entitySchema),
     roles: collectionResponseSchema(accountRoleSchema)
