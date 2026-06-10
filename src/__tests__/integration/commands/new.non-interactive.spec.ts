@@ -178,6 +178,7 @@ describe('newCommand (non-interactive integration)', () => {
     expect(manifest).toMatchObject({
       projectName: 'acme',
       structure: 'monorepo',
+      mainBranch: 'main',
       modules: {
         email: { provider: 'none', version: 1 },
         s3Setup: 'manual',
