@@ -1,5 +1,5 @@
 import { copy } from 'fs-extra'
-import { mkdir, readFile, rm } from 'fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join, resolve } from 'path'
 import { tmpdir } from 'os'
 
@@ -93,23 +93,22 @@ describe('installSkills (integration)', () => {
       await expectFileExists(join(webPath, '.claude/skills/sf-tool-context7'))
     })
 
-    it('should replace CLAUDE.md placeholders with project name and version', async () => {
+    it('should replace CLAUDE.md placeholders with project name, version and main branch', async () => {
+      await writeFile(join(apiPath, 'CLAUDE.md'), '# {{PROJECT_NAME}} v{{VERSION}}\n- Main branch: `{{MAIN_BRANCH}}`\n')
+
       await installSkills({
         isMonorepo: false,
         apiPath,
         webPath,
         projectName: 'my-app',
-        version: '2.0.0'
+        version: '2.0.0',
+        mainBranch: 'master'
       })
 
-      // Read CLAUDE.md if it exists
-      try {
-        const apiClaudeMd = await readFile(join(apiPath, 'CLAUDE.md'), 'utf8')
-        expect(apiClaudeMd).not.toContain('{{PROJECT_NAME}}')
-        expect(apiClaudeMd).not.toContain('{{VERSION}}')
-      } catch {
-        // CLAUDE.md might not exist in the blueprint, which is fine
-      }
+      const apiClaudeMd = await readFile(join(apiPath, 'CLAUDE.md'), 'utf8')
+      expect(apiClaudeMd).toContain('# my-app v2.0.0')
+      expect(apiClaudeMd).toContain('- Main branch: `master`')
+      expect(apiClaudeMd).not.toContain('{{')
     })
 
     it('should not install optional skills when none selected', async () => {

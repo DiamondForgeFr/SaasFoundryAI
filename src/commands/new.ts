@@ -182,6 +182,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       webPath,
       projectName: startProjectAnswers.projectName,
       version: cliVersion,
+      mainBranch: startProjectAnswers.mainBranch,
       advancedSkills: startProjectAnswers.advancedSkills,
       context7ApiKey: startProjectAnswers.context7ApiKey,
       atlassianEmail: startProjectAnswers.atlassianEmail,

@@ -18,6 +18,7 @@ interface InstallSkillsParams {
   webPath: string
   projectName: string
   version: string
+  mainBranch?: string
   advancedSkills?: string[]
   context7ApiKey?: string
   atlassianEmail?: string
@@ -42,7 +43,7 @@ interface InstallSkillsParams {
  *
  * Used by both `sf new` (during initial project generation) and `sf update` (when adding skills later).
  */
-export async function installSkills({ isMonorepo, apiPath, webPath, projectName, version, advancedSkills = [] }: InstallSkillsParams) {
+export async function installSkills({ isMonorepo, apiPath, webPath, projectName, version, mainBranch = 'main', advancedSkills = [] }: InstallSkillsParams) {
   if (isMonorepo) {
     // Monorepo: Install skills at root (centralized)
     await installCoreSkills({ targetPath: '.' })
@@ -56,9 +57,9 @@ export async function installSkills({ isMonorepo, apiPath, webPath, projectName,
     }
 
     // Update CLAUDE.md placeholders at root + per-app (blueprints copy CLAUDE.md with placeholders)
-    await updateClaudeMdPlaceholders({ targetPath: '.', projectName, version })
-    await updateClaudeMdPlaceholders({ targetPath: apiPath, projectName, version })
-    await updateClaudeMdPlaceholders({ targetPath: webPath, projectName, version })
+    await updateClaudeMdPlaceholders({ targetPath: '.', projectName, version, mainBranch })
+    await updateClaudeMdPlaceholders({ targetPath: apiPath, projectName, version, mainBranch })
+    await updateClaudeMdPlaceholders({ targetPath: webPath, projectName, version, mainBranch })
 
     // Copy README.md to .claude/
     await copyClaudeReadme({ targetPath: '.' })
@@ -82,8 +83,8 @@ export async function installSkills({ isMonorepo, apiPath, webPath, projectName,
     }
 
     // Update CLAUDE.md placeholders
-    await updateClaudeMdPlaceholders({ targetPath: apiPath, projectName, version })
-    await updateClaudeMdPlaceholders({ targetPath: webPath, projectName, version })
+    await updateClaudeMdPlaceholders({ targetPath: apiPath, projectName, version, mainBranch })
+    await updateClaudeMdPlaceholders({ targetPath: webPath, projectName, version, mainBranch })
 
     // Copy README.md
     await copyClaudeReadme({ targetPath: apiPath })
@@ -92,14 +93,17 @@ export async function installSkills({ isMonorepo, apiPath, webPath, projectName,
 }
 
 /**
- * Update CLAUDE.md placeholders ({{PROJECT_NAME}}, {{VERSION}})
+ * Update CLAUDE.md placeholders ({{PROJECT_NAME}}, {{VERSION}}, {{MAIN_BRANCH}})
  */
-async function updateClaudeMdPlaceholders({ targetPath, projectName, version }: { targetPath: string; projectName: string; version: string }) {
+async function updateClaudeMdPlaceholders({ targetPath, projectName, version, mainBranch }: { targetPath: string; projectName: string; version: string; mainBranch: string }) {
   const claudeMdPath = targetPath === '.' ? 'CLAUDE.md' : `${targetPath}/CLAUDE.md`
 
   if (await fileExists(claudeMdPath)) {
     let claudeMdContent = await readFile(claudeMdPath, 'utf8')
-    claudeMdContent = claudeMdContent.replace(/\{\{PROJECT_NAME\}\}/g, projectName).replace(/\{\{VERSION\}\}/g, version)
+    claudeMdContent = claudeMdContent
+      .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
+      .replace(/\{\{VERSION\}\}/g, version)
+      .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
     await writeFile(claudeMdPath, claudeMdContent)
   }
 }
