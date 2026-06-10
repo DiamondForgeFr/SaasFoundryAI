@@ -6,8 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { PeopleDto } from './peopleDto'
+import type { RoleAssignmentDto } from './roleAssignmentDto'
+import type { CurrentScopeDto } from './currentScopeDto'
 import type { AccountDto } from './accountDto'
 import type { EntityDto } from './entityDto'
+import type { UserPreferencesSummaryDto } from './userPreferencesSummaryDto'
 
 export interface MeResponseDto {
   /** User unique identifier */
@@ -16,13 +19,20 @@ export interface MeResponseDto {
   email: string
   /** User personal information */
   people: PeopleDto
+  /** Scoped role assignments */
+  roleAssignments: RoleAssignmentDto[]
+  /** Server-elected default scope (clients may switch) */
+  currentScope: CurrentScopeDto
   roles: string[][]
   modules: string[][]
+  subModules: string[][]
   permissions: string[][]
   /** User accounts */
   accounts: AccountDto[]
   /** User entities */
   entities: EntityDto[]
+  /** User preferences (locale, avatar URL) */
+  preferences: UserPreferencesSummaryDto
   /** Account creation date */
   createdAt: string
 }

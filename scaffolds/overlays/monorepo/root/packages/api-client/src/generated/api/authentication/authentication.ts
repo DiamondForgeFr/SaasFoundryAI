@@ -253,7 +253,7 @@ export const useAuthControllerResetPassword = <TError = ErrorType<void>, TContex
   return useMutation(mutationOptions, queryClient)
 }
 /**
- * Retrieve the profile of the currently authenticated user. Requires USER_ACCOUNT_MANAGEMENT module and USER_PROFILE_VIEW_OWN permission.
+ * Retrieve the profile of the currently authenticated user. Requires a valid session; an authenticated user may always view their own profile.
  * @summary Get current user
  */
 export const authControllerGetMe = (signal?: AbortSignal) => {

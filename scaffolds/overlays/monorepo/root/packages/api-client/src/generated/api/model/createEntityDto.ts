@@ -8,12 +8,9 @@
 import type { CreateEntityDtoOrganization } from './createEntityDtoOrganization'
 
 export interface CreateEntityDto {
-  /** @maxLength 100 */
-  name?: string
-  /** @maxLength 255 */
-  description?: string
   /** @minLength 1 */
   accountId: string
+  parentEntityId?: string
   organizationId?: string
   organization?: CreateEntityDtoOrganization
 }

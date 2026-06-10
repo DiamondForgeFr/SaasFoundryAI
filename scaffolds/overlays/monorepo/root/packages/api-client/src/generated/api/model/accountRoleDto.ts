@@ -5,6 +5,7 @@
  * An open-source solution for managing clients, invoices, and financial tasks.
  * OpenAPI spec version: 1.0.0
  */
+import type { AccountRoleDtoScope } from './accountRoleDtoScope'
 
 export interface AccountRoleDto {
   /** Role ID */
@@ -16,10 +17,20 @@ export interface AccountRoleDto {
    * @nullable
    */
   description?: string | null
+  /** Scope at which this role can be assigned */
+  scope: AccountRoleDtoScope
+  /** Whether the role is a system template (cannot be edited or deleted) */
+  isSystem: boolean
   /** Role active status */
   isActive: boolean
-  /** Whether the role is global */
+  /** Whether the role is a global template (accountId NULL) */
   isGlobal: boolean
+  /** Names of the modules this role grants access to */
+  modules: string[]
+  /** Names of the sub-modules (read-visibility sections) this role grants */
+  subModules: string[]
+  /** Names of the permissions granted by this role */
+  permissions: string[]
   /** Creation date */
   createdAt: string
   /** Last update date */

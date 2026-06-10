@@ -8,6 +8,7 @@
 import type { AccountUserDtoPeople } from './accountUserDtoPeople'
 import type { AccountUserDtoRolesItem } from './accountUserDtoRolesItem'
 import type { EntityWithOrganizationDto } from './entityWithOrganizationDto'
+import type { AccountUserDtoPendingKind } from './accountUserDtoPendingKind'
 
 export interface AccountUserDto {
   /** User ID */
@@ -22,8 +23,18 @@ export interface AccountUserDto {
   entities: EntityWithOrganizationDto[]
   /** Whether the user is directly linked to the account */
   isDirectlyLinked: boolean
+  /**
+   * Pending state, derived from data: "invited" = inactive with a pending received invitation (awaiting signup); "awaiting-confirmation" = inactive self-signup with no invitation (awaiting email confirmation); null = active.
+   * @nullable
+   */
+  pendingKind?: AccountUserDtoPendingKind
   /** Creation date */
   createdAt: string
+  /**
+   * Last login date — null when the user has never logged in (e.g. just-invited).
+   * @nullable
+   */
+  lastLoginAt?: string | null
   /** Last update date */
   updatedAt: string
 }

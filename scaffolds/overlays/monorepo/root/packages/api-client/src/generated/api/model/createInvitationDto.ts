@@ -21,5 +21,7 @@ export interface CreateInvitationDto {
   roleIds?: number[]
   accountIds?: string[]
   entityIds?: string[]
+  /** @maxLength 100 */
+  accountName?: string
   locale?: CreateInvitationDtoLocale
 }

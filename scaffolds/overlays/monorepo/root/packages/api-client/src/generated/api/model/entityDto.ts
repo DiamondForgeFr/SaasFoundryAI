@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { EntityDtoOrganization } from './entityDtoOrganization'
+import type { EntityDtoAccount } from './entityDtoAccount'
 
 export interface EntityDto {
   /** Entity unique identifier */
@@ -21,4 +22,9 @@ export interface EntityDto {
    * @nullable
    */
   organization: EntityDtoOrganization
+  /**
+   * Parent account summary (id, name, active state) — lets the UI surface the account a user is indirectly linked to through this entity
+   * @nullable
+   */
+  account?: EntityDtoAccount
 }
