@@ -29,6 +29,9 @@ export default [
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/incompatible-library': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // Honour the `_`-prefix convention used across the codebase for intentionally-unused
+      // bindings (e.g. destructuring `{ accountId: _accountId, ...body }` to strip a key).
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }],
       'no-trailing-spaces': 'error',
       'prettier/prettier': [
         'error',

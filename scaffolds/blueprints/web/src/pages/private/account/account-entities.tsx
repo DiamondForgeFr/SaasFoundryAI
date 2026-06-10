@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next'
  */
 import { useAccount } from '@/hooks/api/accounts'
 import { EntityOrderBy, useAccountEntities } from '@/hooks/api/accounts/queries/useAccountEntities'
+import { useEntityUpdate } from '@/hooks/api/entities/mutations/useEntityUpdate'
+import { useAdminScope } from '@/hooks/auth/useAdminScope'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
 import { useDebounce } from '@/hooks/ui/useDebounce'
 
@@ -18,13 +20,14 @@ import { useDebounce } from '@/hooks/ui/useDebounce'
  * Components
  */
 import { CreateEntityDialog } from '@/components/dialogs/create-entity-dialog'
+import { EditEntityDialog, type EditEntityTarget } from '@/components/dialogs/edit-entity-dialog'
 import { KpiCard } from '@/components/ui/custom/kpi-card'
 import { SegmentedFilter, type SegmentedOption } from '@/components/ui/custom/segmented-filter'
 import { WaveButton } from '@/components/ui/custom/wave-button'
+import { cn } from '@/utils/ui'
 import { Input } from '@/components/ui/shadcn/input'
 import { Skeleton } from '@/components/ui/shadcn/skeleton'
-
-import { formatDateShort } from '@/utils/format'
+import { Switch } from '@/components/ui/shadcn/switch'
 
 /**
  * Types
@@ -105,36 +108,112 @@ function FilterBar({
   )
 }
 
-/* ─────────────── ENTITY ROW ─────────────── */
+/* ─────────────── ENTITY CARD ─────────────── */
 
-function EntityRowItem({ entity }: { entity: EntityRow }) {
+function EntityCard({
+  entity,
+  onEdit,
+  canEdit,
+  canToggle,
+  isToggling,
+  onToggle
+}: {
+  entity: EntityRow
+  onEdit: (e: EntityRow) => void
+  canEdit: boolean
+  canToggle: boolean
+  isToggling: boolean
+  onToggle: (next: boolean) => void
+}) {
   const { t: tAccount } = useTranslation('account')
   const orgType = entity.organization?.type ?? null
   const Icon = (orgType && ORG_TYPE_ICON[orgType]) || Building2
+  const logoUrl = entity.organization?.logoUrl ?? null
   const showSubName = entity.organization && entity.name !== entity.organization.name
+  const handleClick = () => canEdit && onEdit(entity)
+  const dimmed = !entity.isActive
+
   return (
-    <div data-testid="entity-row" className="grid grid-cols-[auto_1fr_120px_120px_120px] items-center gap-3.5 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted transition-colors">
-      <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-muted border border-border text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[13px] font-semibold text-foreground leading-tight truncate">{entity.organization?.name || entity.name}</div>
-        {showSubName && <div className="text-[11px] text-muted-foreground leading-tight truncate">{entity.name}</div>}
-      </div>
-      {orgType ? (
-        <span className="inline-flex items-center w-fit px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-muted text-muted-foreground whitespace-nowrap">
-          {orgType.toLowerCase()}
-        </span>
-      ) : (
-        <span className="text-[11px] text-muted-foreground">—</span>
+    <div
+      data-testid="entity-row"
+      role={canEdit ? 'button' : undefined}
+      onClick={handleClick}
+      className={cn(
+        'group rounded-sm border bg-card p-4 transition-all',
+        'hover:border-primary/40 hover:shadow-[0_0_0_1px_var(--primary)/15]',
+        dimmed ? 'border-border/60 bg-muted/30' : 'border-border',
+        canEdit && 'cursor-pointer'
       )}
-      <span className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
-        <span className={`h-1.5 w-1.5 rounded-full ${entity.isActive ? 'bg-emerald-500' : 'bg-muted-foreground/60'}`} />
-        <span className={entity.isActive ? 'text-foreground' : 'text-muted-foreground'}>
-          {entity.isActive ? tAccount('entities.table.tk_status-active_') : tAccount('entities.table.tk_status-disabled_')}
+      title={canEdit ? tAccount('entities.tk_edit-title_') : undefined}
+    >
+      {/* Top row: logo (or org-type icon) + name + type badge + status switch */}
+      <div className="flex items-start gap-3">
+        <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-muted text-muted-foreground', dimmed && 'opacity-60')}>
+          {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : <Icon className="h-4 w-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-1.5 flex-wrap">
+            <span className={cn('font-bold text-sm truncate flex-1 min-w-0', dimmed ? 'text-muted-foreground' : 'text-foreground')}>{entity.organization?.name || entity.name}</span>
+            {orgType && (
+              <span
+                className={cn(
+                  'flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border-border bg-muted text-muted-foreground',
+                  dimmed && 'opacity-70'
+                )}
+              >
+                {orgType.toLowerCase()}
+              </span>
+            )}
+            {/* Status switch — same affordance as role/account cards. Falls back to a display-only
+                pill when the actor cannot toggle this entity (no ACCOUNT_ENTITY_MANAGEMENT). */}
+            {canToggle ? (
+              <label
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  entity.isActive
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                    : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
+                  isToggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                )}
+              >
+                <Switch
+                  checked={entity.isActive}
+                  disabled={isToggling}
+                  onCheckedChange={onToggle}
+                  className={cn(
+                    '!h-3 !w-6 [&>span]:!h-2 [&>span]:!w-2 [&>span]:data-[state=checked]:!translate-x-3 [&>span]:data-[state=unchecked]:!translate-x-0',
+                    entity.isActive ? 'data-[state=checked]:!bg-emerald-500' : 'data-[state=unchecked]:!bg-muted-foreground/40'
+                  )}
+                />
+                <span>{tAccount(entity.isActive ? 'entities.table.tk_status-active_' : 'entities.table.tk_status-disabled_')}</span>
+              </label>
+            ) : (
+              <span
+                className={cn(
+                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  entity.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', entity.isActive ? 'bg-emerald-500 shadow-[0_0_6px] shadow-emerald-500' : 'bg-muted-foreground/60')} />
+                {tAccount(entity.isActive ? 'entities.table.tk_status-active_' : 'entities.table.tk_status-disabled_')}
+              </span>
+            )}
+          </div>
+          {showSubName && <div className={cn('text-[11px] leading-tight truncate mt-0.5', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')}>{entity.name}</div>}
+          {entity.description && <div className={cn('text-[12px] mt-1 line-clamp-2 leading-snug', dimmed ? 'text-muted-foreground/70' : 'text-foreground/80')}>{entity.description}</div>}
+        </div>
+      </div>
+
+      {/* Footer: user count (left) + EDIT cta (right) — same shape as role cards */}
+      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60 text-[11px]">
+        <span className="inline-flex items-center gap-1">
+          <Users className="h-3 w-3 text-muted-foreground" />
+          <span className="font-medium text-foreground tabular-nums">{entity.userCount}</span>
+          <span className="text-muted-foreground">{tAccount('entities.tk_users-short_')}</span>
         </span>
-      </span>
-      <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{formatDateShort(entity.createdAt)}</span>
+        {canEdit && <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors">{tAccount('entities.tk_edit-cta_')} →</span>}
+      </div>
     </div>
   )
 }
@@ -173,6 +252,7 @@ function MiniPagination({ page, totalPages, onPage }: { page: number; totalPages
 export function AccountEntities() {
   const queryClient = useQueryClient()
   const { hasPermission } = useModuleAccess()
+  const { currentScope } = useAdminScope()
   const { t: tAccount } = useTranslation('account')
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearch = useDebounce(searchInput)
@@ -180,10 +260,12 @@ export function AccountEntities() {
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 10
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<EditEntityTarget | null>(null)
 
-  const authMe = queryClient.getQueryData<MeResponseDto>(['authMe'])!
-  const activeAccount = authMe.accounts.find((acc) => acc.isActive)
-  const accountId = activeAccount?.id
+  const authMe = queryClient.getQueryData<MeResponseDto>(['authMe'])
+  const accountIdFromScope = currentScope.kind === 'ACCOUNT' || (currentScope.kind === 'PLATFORM' && currentScope.id) ? currentScope.id : null
+  const activeAccount = authMe?.accounts.find((acc) => acc.isActive)
+  const accountId = accountIdFromScope ?? activeAccount?.id ?? authMe?.entities.find((e) => e.isActive)?.accountId
 
   const isActive = status === 'all' ? undefined : status === 'active'
 
@@ -211,7 +293,44 @@ export function AccountEntities() {
   }, [account])
 
   const canCreate = hasPermission('ENTITY_CREATION')
+  const canEdit = hasPermission('ACCOUNT_ENTITY_MANAGEMENT')
   const isFiltered = debouncedSearch.length > 0 || status !== 'all'
+
+  const entityUpdateMutation = useEntityUpdate()
+  // Track WHICH entity is being toggled so only that switch shows the wait state.
+  const [togglingEntityId, setTogglingEntityId] = useState<string | null>(null)
+  const handleToggleEntity = async (entity: EntityRow, next: boolean) => {
+    if (!accountId) return
+    setTogglingEntityId(entity.id)
+    try {
+      await entityUpdateMutation.mutateAsync({ entityId: entity.id, accountId, isActive: next })
+    } catch (e) {
+      console.error('Failed to toggle entity status', e)
+    } finally {
+      setTogglingEntityId(null)
+    }
+  }
+
+  const handleEdit = (entity: EntityRow) => {
+    if (!accountId) return
+    setEditTarget({
+      id: entity.id,
+      accountId,
+      name: entity.name,
+      description: entity.description,
+      isActive: entity.isActive,
+      organization: entity.organization
+        ? {
+            id: entity.organization.id,
+            name: entity.organization.name,
+            type: entity.organization.type as 'COMPANY' | 'ASSOCIATION' | 'COMMUNITY',
+            description: entity.organization.description ?? null,
+            website: entity.organization.website ?? null,
+            logoUrl: entity.organization.logoUrl ?? null
+          }
+        : null
+    })
+  }
 
   const handleSearch = (v: string) => {
     setSearchInput(v)
@@ -228,42 +347,32 @@ export function AccountEntities() {
 
       <FilterBar search={searchInput} onSearch={handleSearch} status={status} onStatus={handleStatus} onCreate={() => setIsCreateDialogOpen(true)} canCreate={canCreate} />
 
-      <div data-testid="entities-table" className="rounded-sm border border-border bg-card overflow-hidden">
-        <div className="grid grid-cols-[auto_1fr_120px_120px_120px] gap-3.5 px-4 py-2.5 border-b border-border bg-muted/40">
-          <span className="w-8" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('entities.table.tk_entity_')}</span>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('entities.table.tk_type_')}</span>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('entities.table.tk_status_')}</span>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('entities.table.tk_created_')}</span>
-        </div>
+      <div data-testid="entities-table">
         {isLoading ? (
-          <div className="flex flex-col">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="grid grid-cols-[auto_1fr_120px_120px_120px] items-center gap-3.5 px-4 py-3 border-b border-border last:border-b-0">
-                <Skeleton className="skeleton-shimmer-orange h-8 w-8 rounded-sm" />
-                <Skeleton className="skeleton-shimmer-orange h-4 w-3/4" />
-                <Skeleton className="skeleton-shimmer-orange h-4 w-20" />
-                <Skeleton className="skeleton-shimmer-orange h-4 w-16" />
-                <Skeleton className="skeleton-shimmer-orange h-4 w-16" />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="skeleton-shimmer-orange h-32 w-full rounded-sm" />
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 px-4 py-12 text-xs text-muted-foreground">
-            <Building2 className="h-4 w-4 opacity-40" />
-            {isFiltered ? tAccount('entities.tk_no-results-filtered_') : tAccount('entities.tk_no-entities-yet_')}
+          <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
+            <Building2 className="h-5 w-5 text-muted-foreground/60" />
+            <span className="text-sm text-muted-foreground">{isFiltered ? tAccount('entities.tk_no-results-filtered_') : tAccount('entities.tk_no-entities-yet_')}</span>
           </div>
         ) : (
-          <div className="flex flex-col">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {items.map((e) => (
-              <EntityRowItem key={e.id} entity={e} />
+              <EntityCard key={e.id} entity={e} onEdit={handleEdit} canEdit={canEdit} canToggle={canEdit} isToggling={togglingEntityId === e.id} onToggle={(next) => handleToggleEntity(e, next)} />
             ))}
           </div>
         )}
-        <MiniPagination page={currentPage} totalPages={totalPages} onPage={setCurrentPage} />
+        <div className="mt-3">
+          <MiniPagination page={currentPage} totalPages={totalPages} onPage={setCurrentPage} />
+        </div>
       </div>
 
       {canCreate && isCreateDialogOpen && <CreateEntityDialog isOpen={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />}
+      <EditEntityDialog isOpen={editTarget !== null} onOpenChange={(open) => !open && setEditTarget(null)} entity={editTarget} />
     </div>
   )
 }

@@ -70,7 +70,7 @@ export const NavSection = ({ section }: NavSectionProps) => {
 
   const renderSimpleItem = (item: NavSectionItem) => (
     <SidebarMenuItem key={item.title} className="relative">
-      <SidebarMenuButton asChild>
+      <SidebarMenuButton asChild tooltip={tNav(item.title)}>
         <a href={item.url}>
           {item.icon && <item.icon />}
           <span>{tNav(item.title)}</span>

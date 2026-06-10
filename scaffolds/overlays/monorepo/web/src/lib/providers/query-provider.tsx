@@ -2,6 +2,7 @@
  * Resources
  */
 import { queryClient } from '@/lib/react-query/query-client'
+import { setUnauthorizedHandler } from '@{{PROJECT_NAME}}/api-client/http-client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 
@@ -9,7 +10,7 @@ import { ReactNode } from 'react'
  * Dependencies
  */
 import { useGuest } from '@/hooks/api/auth'
-import { persistAuthMe } from '@/hooks/api/auth/utils/persistAuthMe'
+import { clearAuthSession, persistAuthMe } from '@/hooks/api/auth/utils/persistAuthMe'
 
 /**
  * TS Types
@@ -27,6 +28,11 @@ interface QueryProviderProps {
  * `useMe` is declared with `enabled: false`, so without this background refresh the cache
  * would live indefinitely on whatever state the localStorage snapshot was last written in.
  */
+// Centralised auth-failure handling for generated api-client calls: any 401 tears the session
+// down (cache + localStorage + scope override) so a stale/phantom login can't survive — the route
+// guards then redirect to /signin.
+setUnauthorizedHandler(() => clearAuthSession(queryClient))
+
 const cachedMe = localStorage.getItem('authMe')
 if (cachedMe) {
   queryClient.setQueryData(['authMe'], JSON.parse(cachedMe))

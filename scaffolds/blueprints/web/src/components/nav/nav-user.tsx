@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadgeCheck, ChevronsUpDown, LogOut, UserCircle } from 'lucide-react'
+import { BadgeCheck, ChevronsUpDown, Layers, LogOut, UserCircle } from 'lucide-react'
 
 /**
  * Theme
@@ -22,7 +22,15 @@ import { Link } from 'react-router-dom'
  * Components
  */
 import { Avatar } from '@/components/ui/custom/avatar'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/shadcn/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/shadcn/dropdown-menu'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/shadcn/sidebar'
 
 /**
@@ -75,17 +83,27 @@ export function NavUser() {
               </>
             )}
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild className="cursor-pointer">
-                <Link to="/profile">
-                  <UserCircle className="mr-2 size-5" />
-                  {tNav('user-navigation.tk_profile-management_')}
-                </Link>
-              </DropdownMenuItem>
+              {hasModuleAccess('PROFILE_ADMINISTRATION') && (
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link to="/profile">
+                    <UserCircle className="mr-2 size-5" />
+                    {tNav('user-navigation.tk_profile-management_')}
+                  </Link>
+                </DropdownMenuItem>
+              )}
               {hasModuleAccess('ACCOUNT_ADMINISTRATION') && (
                 <DropdownMenuItem asChild className="cursor-pointer">
                   <Link to="/account?tab=overview">
                     <BadgeCheck className="mr-2 size-5" />
                     {tNav('user-navigation.tk_account-management_')}
+                  </Link>
+                </DropdownMenuItem>
+              )}
+              {hasModuleAccess('PLATFORM_ADMINISTRATION') && (
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link to="/platform/modules">
+                    <Layers className="mr-2 size-5" />
+                    {tNav('user-navigation.tk_platform-modules_')}
                   </Link>
                 </DropdownMenuItem>
               )}

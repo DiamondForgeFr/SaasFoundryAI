@@ -38,6 +38,32 @@ import { AlertCircle } from 'lucide-react'
 import { useSignIn, useSignInSchema, type SignInPayloadDto } from '@/hooks/api/auth'
 
 /**
+ * Helpers
+ */
+function capitalize(s: string) {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/**
+ * Live default for the account name shown during first-login. Falls back through
+ * firstname+lastname → firstname → email user-part → "Main account".
+ */
+function suggestAccountName(firstname?: string, lastname?: string, email?: string): string {
+  const fn = firstname?.trim()
+  const ln = lastname?.trim()
+  if (fn && ln) return `${capitalize(fn)} ${capitalize(ln)}'s account`
+  if (fn) return `${capitalize(fn)}'s account`
+  const e = email?.trim()
+  if (e && e.includes('@')) {
+    const userPart = e.split('@')[0].split('+')[0]
+    const firstToken = userPart.split(/[._-]/)[0]
+    if (firstToken) return `${capitalize(firstToken)}'s account`
+  }
+  return 'Main account'
+}
+
+/**
  * React declaration
  */
 export function SignIn() {
@@ -56,7 +82,7 @@ export function SignIn() {
   // React Query mutation
   const signInMutation = useSignIn()
   const { isSessionActive } = useIsSessionActive()
-  const { hasModuleAccess } = useModuleAccess()
+  const { hasModuleAccess, awaitsPlatformAdmin } = useModuleAccess()
 
   // Create form with schema
   const schemas = useSignInSchema()
@@ -66,9 +92,24 @@ export function SignIn() {
       email: tokenData?.email || '',
       password: '',
       firstname: tokenData?.firstname || '',
-      lastname: tokenData?.lastname || ''
+      lastname: tokenData?.lastname || '',
+      accountName: ''
     }
   })
+
+  // Auto-suggest the account name based on the user's identity, but only on the first-login
+  // step (where the new account is provisioned). Skipped during platform bootstrap — the first
+  // user becomes platform-admin with no account, so the field is hidden and any value would
+  // be discarded server-side anyway.
+  const watchedFirstname = form.watch('firstname')
+  const watchedLastname = form.watch('lastname')
+  const watchedEmail = form.watch('email')
+  useEffect(() => {
+    if (!isFirstLogin || awaitsPlatformAdmin) return
+    if (form.formState.dirtyFields.accountName) return
+    const suggested = suggestAccountName(watchedFirstname, watchedLastname, watchedEmail)
+    form.setValue('accountName', suggested, { shouldDirty: false })
+  }, [isFirstLogin, awaitsPlatformAdmin, watchedFirstname, watchedLastname, watchedEmail, form])
 
   // Redirect on successful login
   useEffect(() => {
@@ -92,6 +133,12 @@ export function SignIn() {
       if (isFirstLogin && values.firstname && values.lastname) {
         payload.firstname = values.firstname
         payload.lastname = values.lastname
+      }
+      // Carry the (auto-suggested or user-edited) account name through to the activation
+      // so the freshly-provisioned account gets a meaningful, searchable identity. Skipped
+      // during platform bootstrap — no account is created in that flow.
+      if (isFirstLogin && !awaitsPlatformAdmin && values.accountName?.trim()) {
+        payload.accountName = values.accountName.trim()
       }
     }
 
@@ -148,8 +195,12 @@ export function SignIn() {
         <div className="igw-border" aria-hidden="true" />
         <div className="relative z-10">
           <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{tAuth('signin.tk_title_')}</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">{tAuth('signin.tk_description_')}</p>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">
+              {tAuth(isFirstLogin ? (awaitsPlatformAdmin ? 'signin.tk_bootstrapTitle_' : 'signin.tk_activateTitle_') : 'signin.tk_title_')}
+            </h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {tAuth(isFirstLogin ? (awaitsPlatformAdmin ? 'signin.tk_bootstrapDescription_' : 'signin.tk_activateDescription_') : 'signin.tk_description_')}
+            </p>
           </div>
 
           <Form {...form}>
@@ -164,18 +215,44 @@ export function SignIn() {
               )}
 
               {isFirstLogin && confirmAccountToken && (
-                <div className="grid grid-cols-2 gap-4">
-                  {renderFormField({
-                    name: 'firstname',
-                    label: tCommon('user.tk_firstName_'),
-                    tabIndex: 1
-                  })}
-                  {renderFormField({
-                    name: 'lastname',
-                    label: tCommon('user.tk_lastName_'),
-                    tabIndex: 2
-                  })}
-                </div>
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    {renderFormField({
+                      name: 'firstname',
+                      label: tCommon('user.tk_firstName_'),
+                      tabIndex: 1
+                    })}
+                    {renderFormField({
+                      name: 'lastname',
+                      label: tCommon('user.tk_lastName_'),
+                      tabIndex: 2
+                    })}
+                  </div>
+                  {!awaitsPlatformAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="accountName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <FloatingLabelInput
+                              id="input-accountName"
+                              label={tAuth('signin.tk_account-name_')}
+                              tabIndex={3}
+                              {...field}
+                              onChange={(e) => {
+                                // Mark dirty so the auto-suggest stops overwriting once the user edits.
+                                form.setValue('accountName', e.target.value, { shouldDirty: true })
+                              }}
+                            />
+                          </FormControl>
+                          <p className="text-[11px] text-muted-foreground">{tAuth('signin.tk_account-name-hint_')}</p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </>
               )}
 
               {renderFormField({
@@ -183,17 +260,17 @@ export function SignIn() {
                 label: tCommon('user.tk_email_'),
                 type: 'email',
                 autoComplete: 'email',
-                tabIndex: isFirstLogin ? 3 : 1
+                tabIndex: isFirstLogin ? 4 : 1
               })}
               {renderFormField({
                 name: 'password',
                 label: tAuth('fields.tk_password_'),
                 type: 'password',
                 autoComplete: 'current-password',
-                tabIndex: isFirstLogin ? 4 : 2
+                tabIndex: isFirstLogin ? 5 : 2
               })}
 
-              <WaveButton type="submit" className="mt-7" disabled={signInMutation.isLoading} tabIndex={isFirstLogin ? 5 : 3}>
+              <WaveButton type="submit" className="mt-7" disabled={signInMutation.isLoading} tabIndex={isFirstLogin ? 6 : 3}>
                 {signInMutation.isLoading ? tCommon('loading.tk_loadingSignin_') : tAuth('callToAction.tk_signin_')}
               </WaveButton>
 

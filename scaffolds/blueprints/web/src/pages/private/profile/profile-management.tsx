@@ -1,9 +1,9 @@
 /**
  * Resources
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Building2, Calendar, Globe, Mail, Moon, Shield, Sun, User as UserIcon, Users } from 'lucide-react'
+import { Building2, Calendar, Check, Copy, Globe, Mail, Moon, Shield, Sun, User as UserIcon, Users } from 'lucide-react'
 
 /**
  * Dependencies
@@ -19,6 +19,7 @@ import { formatDateLong, getInitials } from '@/utils/format'
  */
 import { SegmentedFilter } from '@/components/ui/custom/segmented-filter'
 import { Skeleton } from '@/components/ui/shadcn/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/shadcn/tooltip'
 
 /* ─────────────── HEADER ─────────────── */
 
@@ -57,6 +58,62 @@ function Section({ icon, title, meta, children, dataTestid }: { icon: React.Reac
   )
 }
 
+/* ─────────────── ACCOUNT CHIP (with copy-to-clipboard tooltip) ─────────────── */
+
+function AccountChip({
+  id,
+  name,
+  isActive,
+  indirect,
+  copyLabel,
+  copiedLabel,
+  indirectLabel
+}: {
+  id: string
+  name: string
+  isActive: boolean
+  indirect: boolean
+  copyLabel: string
+  copiedLabel: string
+  indirectLabel: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(id)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard unavailable — silently ignore */
+    }
+  }
+
+  return (
+    <Tooltip open={copied ? true : undefined}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className={`group inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[11px] border bg-muted text-foreground/80 transition-colors hover:border-primary/60 hover:bg-primary/8 ${indirect ? 'border-dashed border-border/70' : 'border-border'}`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
+          <span>{name}</span>
+          {indirect && (
+            <span className="ml-0.5 inline-flex items-center px-1 py-px rounded-[3px] text-[9px] font-bold uppercase tracking-wider border border-border/70 text-muted-foreground">
+              {indirectLabel}
+            </span>
+          )}
+          {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100" />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="font-mono text-[10px]">
+        {copied ? copiedLabel : `${copyLabel} · ${id}`}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 /* ─────────────── INFO ROW ─────────────── */
 
 function InfoRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
@@ -78,7 +135,15 @@ export function ProfileManagement() {
   const { data: user, isLoading } = useMe()
   const { theme, setTheme } = useTheme()
   const { i18n, t: tProfile } = useTranslation('profile')
+  const { t: tAccount } = useTranslation('account')
   const { submit: updatePreferences, isLoading: isUpdatingPrefs } = useUpdateMyPreferences()
+
+  // Resolve a role name to its built-in i18n label (falls back to the raw name for custom roles).
+  const knownRoles = ['guest', 'account-user', 'account-admin', 'entity-admin', 'entity-user', 'platform-admin', 'platform-user']
+  const roleDisplay = (name: string) => {
+    const key = name.toLowerCase()
+    return knownRoles.includes(key) ? tAccount(`roles.builtin.tk_${key.replace('-', '_')}_`) : name.replace(/_/g, ' ').toLowerCase()
+  }
 
   useEffect(() => {
     setBreadcrumb([{ label: tProfile('tk_title_') }, { label: tProfile('tk_breadcrumb-settings_'), description: tProfile('tk_breadcrumb-description_') }])
@@ -97,8 +162,24 @@ export function ProfileManagement() {
   const fullName = `${user.people?.firstname ?? ''} ${user.people?.lastname ?? ''}`.trim() || user.email
   const initials = getInitials(user.people?.firstname ?? user.email[0], user.people?.lastname ?? '')
   const primaryRole = user.roles.find((r) => r.toLowerCase() !== 'guest') ?? user.roles[0]
-  const roleLabel = primaryRole ? primaryRole.replace(/_/g, ' ').toLowerCase() : ''
-  const accountsCount = user.accounts.length
+  const roleLabel = primaryRole ? roleDisplay(primaryRole) : ''
+
+  // Platform-only users have no account/entity link; hide the memberships block entirely.
+  const isPlatformOnly = user.roleAssignments.length > 0 && user.roleAssignments.every((r) => r.scope === 'PLATFORM')
+
+  // Merge direct accounts + accounts inferred from entities (parent of an entity the user is linked to).
+  // A directly linked account always wins (its chip won't be flagged "indirect" even if it also appears via an entity).
+  const directAccountIds = new Set(user.accounts.map((a) => a.id))
+  const indirectAccountsMap = new Map<string, { id: string; name: string; isActive: boolean }>()
+  for (const entity of user.entities) {
+    if (entity.account && !directAccountIds.has(entity.account.id) && !indirectAccountsMap.has(entity.account.id)) {
+      indirectAccountsMap.set(entity.account.id, entity.account)
+    }
+  }
+  const directAccounts = user.accounts.map((a) => ({ id: a.id, name: a.name, isActive: a.isActive, indirect: false }))
+  const indirectAccounts = Array.from(indirectAccountsMap.values()).map((a) => ({ ...a, indirect: true }))
+  const displayedAccounts = [...directAccounts, ...indirectAccounts]
+  const accountsCount = displayedAccounts.length
   const entitiesCount = user.entities.length
 
   const currentLang = (user.preferences?.locale ?? 'EN').toLowerCase() as 'en' | 'fr'
@@ -144,7 +225,7 @@ export function ProfileManagement() {
                       key={r}
                       className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80 whitespace-nowrap"
                     >
-                      {r.replace(/_/g, ' ').toLowerCase()}
+                      {roleDisplay(r)}
                     </span>
                   ))}
                 </span>
@@ -154,49 +235,59 @@ export function ProfileManagement() {
           <InfoRow icon={<Calendar className="h-3 w-3 text-primary" />} label={tProfile('sections.profileInfo.tk_member-since_')} value={formatDateLong(user.createdAt)} />
         </Section>
 
-        <Section
-          dataTestid="memberships-section"
-          icon={<Building2 className="h-3.5 w-3.5" />}
-          title={tProfile('sections.memberships.tk_title_')}
-          meta={tProfile(accountsCount > 1 || entitiesCount > 1 ? 'sections.memberships.tk_meta-many_' : 'sections.memberships.tk_meta-one_', { accounts: accountsCount, entities: entitiesCount })}
-        >
-          <InfoRow
-            icon={<Users className="h-3 w-3 text-primary" />}
-            label={tProfile('sections.memberships.tk_accounts_')}
-            value={
-              user.accounts.length === 0 ? (
-                <span className="text-muted-foreground">—</span>
-              ) : (
-                <span className="flex flex-wrap gap-1.5">
-                  {user.accounts.map((a) => (
-                    <span key={a.id} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[11px] border border-border bg-muted text-foreground/80">
-                      <span className={`h-1.5 w-1.5 rounded-full ${a.isActive ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
-                      {a.name}
+        {!isPlatformOnly && (
+          <TooltipProvider delayDuration={150}>
+            <Section
+              dataTestid="memberships-section"
+              icon={<Building2 className="h-3.5 w-3.5" />}
+              title={tProfile('sections.memberships.tk_title_')}
+              meta={tProfile(accountsCount > 1 || entitiesCount > 1 ? 'sections.memberships.tk_meta-many_' : 'sections.memberships.tk_meta-one_', { accounts: accountsCount, entities: entitiesCount })}
+            >
+              <InfoRow
+                icon={<Users className="h-3 w-3 text-primary" />}
+                label={tProfile('sections.memberships.tk_accounts_')}
+                value={
+                  displayedAccounts.length === 0 ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <span className="flex flex-wrap gap-1.5">
+                      {displayedAccounts.map((a) => (
+                        <AccountChip
+                          key={a.id}
+                          id={a.id}
+                          name={a.name}
+                          isActive={a.isActive}
+                          indirect={a.indirect}
+                          copyLabel={tProfile('sections.memberships.tk_account-copy_')}
+                          copiedLabel={tProfile('sections.memberships.tk_account-copied_')}
+                          indirectLabel={tProfile('sections.memberships.tk_account-indirect_')}
+                        />
+                      ))}
                     </span>
-                  ))}
-                </span>
-              )
-            }
-          />
-          <InfoRow
-            icon={<Building2 className="h-3 w-3 text-primary" />}
-            label={tProfile('sections.memberships.tk_entities_')}
-            value={
-              user.entities.length === 0 ? (
-                <span className="text-muted-foreground">—</span>
-              ) : (
-                <span className="flex flex-wrap gap-1.5">
-                  {user.entities.map((e) => (
-                    <span key={e.id} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[11px] border border-border bg-muted text-foreground/80">
-                      <span className={`h-1.5 w-1.5 rounded-full ${e.isActive ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
-                      {e.organization?.name ? `${e.organization.name} · ${e.name}` : e.name}
+                  )
+                }
+              />
+              <InfoRow
+                icon={<Building2 className="h-3 w-3 text-primary" />}
+                label={tProfile('sections.memberships.tk_entities_')}
+                value={
+                  user.entities.length === 0 ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <span className="flex flex-wrap gap-1.5">
+                      {user.entities.map((e) => (
+                        <span key={e.id} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[11px] border border-border bg-muted text-foreground/80">
+                          <span className={`h-1.5 w-1.5 rounded-full ${e.isActive ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
+                          {e.organization?.name ? `${e.organization.name} · ${e.name}` : e.name}
+                        </span>
+                      ))}
                     </span>
-                  ))}
-                </span>
-              )
-            }
-          />
-        </Section>
+                  )
+                }
+              />
+            </Section>
+          </TooltipProvider>
+        )}
 
         <Section dataTestid="preferences-section" icon={<Sun className="h-3.5 w-3.5" />} title={tProfile('sections.preferences.tk_title_')} meta={tProfile('sections.preferences.tk_meta_')}>
           <InfoRow

@@ -10,7 +10,7 @@ type KpiCardProps = {
 
 export function KpiCard({ icon, label, value, sub, alert }: KpiCardProps) {
   return (
-    <div className="border-border border-t-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-t-2 px-4 py-2.5">
+    <div className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
       <div className="flex items-center justify-between">
         <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
           {icon}
