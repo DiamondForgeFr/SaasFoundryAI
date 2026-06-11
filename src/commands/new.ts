@@ -41,6 +41,12 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   // everything below this line is pure execution on the validated config.
   const { config: startProjectAnswers } = await runConfigSession({ renderer: inquirerRenderer, prefill, nonInteractive })
 
+  // Harness execution (standalone installer on an existing project) ships
+  // with the dedicated installer story — stop before any filesystem mutation.
+  if (startProjectAnswers.profile === 'harness') {
+    throw new Error('The harness profile is not executable yet — the standalone harness installer is coming in an upcoming release. No files were created.')
+  }
+
   // Set default values for database credentials
   if (startProjectAnswers.dbCredentials) startProjectAnswers.dbCredentials = setDefaultDbCredentials(startProjectAnswers.dbCredentials)
 
