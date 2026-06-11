@@ -777,17 +777,24 @@ cmd_create_pr() {
 
   git push -u origin "$CURRENT_BRANCH"
 
-  PR_URL=$(gh pr create \
+  # `|| status=$?` keeps `set -e` from killing the script mid-assignment — that
+  # silently swallowed gh's error message (captured in the substitution, never
+  # printed). Success requires exit 0 AND a real PR URL: gh error output often
+  # contains URLs (compare/doc links), so a bare `grep http` false-positives (#435).
+  PR_CREATE_STATUS=0
+  PR_OUTPUT=$(gh pr create \
     --title "[#${TICKET_NUMBER}] $ISSUE_TITLE" \
     --body "Resolves #${TICKET_NUMBER}" \
-    --base "$WORKING_BRANCH" 2>&1)
+    --base "$WORKING_BRANCH" 2>&1) || PR_CREATE_STATUS=$?
 
-  if echo "$PR_URL" | grep -q "http"; then
+  PR_URL=$(echo "$PR_OUTPUT" | grep -oE 'https://[^[:space:]]+/pull/[0-9]+' | head -n 1 || true)
+
+  if [ "$PR_CREATE_STATUS" -eq 0 ] && [ -n "$PR_URL" ]; then
     echo -e "${GREEN}✓ Pull request created${NC}"
     echo "$PR_URL"
   else
-    echo -e "${RED}Error creating PR:${NC}"
-    echo "$PR_URL"
+    echo -e "${RED}Error creating PR (gh exit ${PR_CREATE_STATUS}):${NC}"
+    echo "$PR_OUTPUT"
     exit 1
   fi
 }
