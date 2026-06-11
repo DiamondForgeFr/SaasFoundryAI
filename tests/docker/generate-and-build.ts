@@ -566,13 +566,19 @@ async function main() {
 
   const results: { name: string; passed: boolean }[] = []
 
-  for (const scenario of scenarios) {
+  for (const [index, scenario] of scenarios.entries()) {
+    // [sf-progress] markers are the greppable progress contract for agent
+    // harnesses streaming this run (tail -f | grep) — see workflow SKILL.md
+    // "ANNOUNCE + STREAM LONG COMMANDS" (#436). Keep the format stable.
+    console.log(`[sf-progress] scenario ${index + 1}/${scenarios.length} ${scenario.name} — started`)
     try {
       const passed = await runScenario(scenario)
       results.push({ name: scenario.name, passed })
+      console.log(`[sf-progress] scenario ${index + 1}/${scenarios.length} ${scenario.name} — ${passed ? 'passed' : 'failed'}`)
     } catch (error) {
       console.error(`\nScenario "${scenario.name}" crashed:`, error instanceof Error ? error.message : error)
       results.push({ name: scenario.name, passed: false })
+      console.log(`[sf-progress] scenario ${index + 1}/${scenarios.length} ${scenario.name} — crashed`)
     }
   }
 
