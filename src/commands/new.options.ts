@@ -71,7 +71,7 @@ export interface NewCommandOptions {
 
 /**
  * Convert Commander-parsed options into a `Partial<Answers>` prefill
- * consumable by `getUserStartProjectInputs`.
+ * consumable by the config-engine session (`runConfigSession`).
  *
  * Only fields that were explicitly passed end up in the prefill, so the
  * interactive prompt still asks for anything the user didn't specify.

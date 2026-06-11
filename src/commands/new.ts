@@ -9,9 +9,10 @@ import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
 import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
+import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
+import { runConfigSession } from '../config-engine/session'
 import { installSkills } from '../installers/skills.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
-import { getUserStartProjectInputs } from '../prompts/project.prompts'
 import { initAndStartDb } from '../runners/database.runner'
 import { initAndStartS3 } from '../runners/s3.runner'
 import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '../runners/server.runner'
@@ -36,8 +37,9 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   const prefill = buildPrefillFromOptions(opts)
   const nonInteractive = opts.nonInteractive === true
 
-  // Chat with user
-  const startProjectAnswers = await getUserStartProjectInputs({ prefill, nonInteractive })
+  // Chat with user — collection runs through the config-engine session;
+  // everything below this line is pure execution on the validated config.
+  const { config: startProjectAnswers } = await runConfigSession({ renderer: inquirerRenderer, prefill, nonInteractive })
 
   // Set default values for database credentials
   if (startProjectAnswers.dbCredentials) startProjectAnswers.dbCredentials = setDefaultDbCredentials(startProjectAnswers.dbCredentials)

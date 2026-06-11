@@ -10,7 +10,7 @@ import { StepDefinition } from './types'
 /**
  * Ordered list of the steps composing the `sf new` collection session —
  * order is the user-facing question order, so changes here are behaviour
- * changes (mirrors the historical batch order of project.prompts.ts).
+ * changes.
  */
 export const configSteps: StepDefinition[] = [projectStep, emailCredentialsStep, storageStep, analyticsStep, workflowStep, skillsStep, srsStep]
 

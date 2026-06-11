@@ -48,7 +48,6 @@ module.exports = {
     // Exclude interactive-only code (prompts, runners, CLI entrypoint, command orchestrators)
     '!src/index.ts',
     '!src/runners/**',
-    '!src/prompts/project.prompts.ts',
     '!src/prompts/workflow.prompts.ts',
     '!src/prompts/skills.prompts.ts',
     '!src/commands/new.ts',
