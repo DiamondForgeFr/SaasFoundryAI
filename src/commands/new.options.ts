@@ -3,6 +3,9 @@ import { Answers, DbCredentials, S3Credentials } from '../types'
 export interface NewCommandOptions {
   nonInteractive?: boolean
 
+  // Intent profile (what to install)
+  profile?: 'full' | 'harness' | 'stack'
+
   // Project basics
   projectName?: string
   projectDescription?: string
@@ -78,6 +81,11 @@ export interface NewCommandOptions {
  */
 export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answers> {
   const prefill: Partial<Answers> = {}
+
+  // Intent profile is opt-in; in --non-interactive mode default to `full` so
+  // existing flag-driven invocations keep today's behaviour without a new flag.
+  if (opts.profile !== undefined) prefill.profile = opts.profile
+  else if (opts.nonInteractive === true) prefill.profile = 'full'
 
   if (opts.projectName !== undefined) prefill.projectName = opts.projectName
   if (opts.projectDescription !== undefined) prefill.projectDescription = opts.projectDescription

@@ -4,6 +4,7 @@ import { StepDefinition } from '../types'
 export const analyticsStep: StepDefinition = {
   id: 'analytics',
   title: 'Analytics',
+  appliesTo: (state) => state.profile !== 'harness',
   fields: [
     {
       type: 'confirm',

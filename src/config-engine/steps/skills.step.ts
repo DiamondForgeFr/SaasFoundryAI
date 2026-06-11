@@ -10,6 +10,7 @@ export const skillsStep: StepDefinition = {
   id: 'skills',
   title: 'Advanced skills',
   effects: ['May open credential pages (Atlassian, Notion, Figma) in the default browser (interactive mode)'],
+  appliesTo: (state) => state.profile !== 'stack',
   collect: async ({ prefill, nonInteractive, derived }) => {
     const advancedSkills = await promptAdvancedSkills(derived.workflowTool, { prefill, nonInteractive })
     const skillsCredentials = await collectAdvancedSkillsCredentials(advancedSkills, { prefill, nonInteractive })

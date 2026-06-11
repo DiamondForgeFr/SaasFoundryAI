@@ -18,6 +18,7 @@ export interface S3Credentials {
 }
 
 export interface Answers {
+  profile?: 'full' | 'harness' | 'stack'
   projectName: string
   projectDescription: string
   isMonorepo: boolean

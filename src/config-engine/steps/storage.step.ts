@@ -7,6 +7,7 @@ import { StepDefinition } from '../types'
 export const storageStep: StepDefinition = {
   id: 'storage',
   title: 'Object storage (S3)',
+  appliesTo: (state) => state.profile !== 'harness',
   fields: [
     {
       type: 'list',

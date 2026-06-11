@@ -7,6 +7,7 @@ import { StepDefinition } from '../types'
 export const projectStep: StepDefinition = {
   id: 'project',
   title: 'Project basics',
+  appliesTo: (state) => state.profile !== 'harness',
   fields: [
     {
       type: 'input',

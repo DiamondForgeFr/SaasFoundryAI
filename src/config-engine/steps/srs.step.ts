@@ -8,6 +8,7 @@ import { StepDefinition } from '../types'
 export const srsStep: StepDefinition = {
   id: 'srs',
   title: 'SRS workspace',
+  appliesTo: (state) => state.profile !== 'stack',
   collect: async ({ state, prefill, nonInteractive }) => {
     const options = { prefill, nonInteractive }
     const srsAnswers = await promptSrsConfiguration(state, options)
