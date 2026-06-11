@@ -203,6 +203,8 @@ When `tools.srs.enabled = true`, Claude must interject during conversation turns
 7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket is `In Progress` / `AI Testing` / `Human Testing` / `In Review`, drive it to `Done` before claiming or starting another. The only override is an explicit developer request to pause.
 8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody`. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section above. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
 
+9. **ANNOUNCE + STREAM LONG COMMANDS** — before any command expected to take more than ~5 seconds (test suites, builds, commit/push hooks, Docker scenarios), announce in one sentence what runs and the expected duration. Over ~60 seconds, run it in the background and stream its progress markers to the user as they appear (e.g. `tail -f <log> | grep -E --line-buffered "PASS|FAIL|\[sf-progress\]"`) — never block silently. Report the outcome with numbers, and relay the ▶ AI / ⏳ Dev banner printed by `update-status` after every transition.
+
 ## Implementation
 
 The status descriptions are in the `statuses/` directory:

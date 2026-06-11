@@ -98,9 +98,7 @@ describe('workflow-cli update-status expectations banner (#436)', () => {
   it('prints no banner when the tool CLI fails the transition', async () => {
     const sandbox = await buildSandbox({ toolExitCode: 1 })
     try {
-      await expect(
-        execFileP(BASH, [CLI, 'update-status', '277', 'In progress'], { env: sandbox.env, cwd: sandbox.dir })
-      ).rejects.toMatchObject({
+      await expect(execFileP(BASH, [CLI, 'update-status', '277', 'In progress'], { env: sandbox.env, cwd: sandbox.dir })).rejects.toMatchObject({
         stdout: expect.not.stringContaining('▶ AI:')
       })
     } finally {
@@ -109,7 +107,7 @@ describe('workflow-cli update-status expectations banner (#436)', () => {
   })
 
   it('every status file carries both banner_ai and banner_human fields', () => {
-    const files = readdirSync(STATUSES_DIR).filter(f => f.endsWith('.md'))
+    const files = readdirSync(STATUSES_DIR).filter((f) => f.endsWith('.md'))
     expect(files.length).toBeGreaterThanOrEqual(10)
     for (const f of files) {
       const content = readFileSync(path.join(STATUSES_DIR, f), 'utf8')
@@ -120,11 +118,9 @@ describe('workflow-cli update-status expectations banner (#436)', () => {
 
   it('status files are byte-identical between the live skill and the scaffolded template', () => {
     const templateDir = path.resolve(REPO_ROOT, 'scaffolds/skills-templates/workflow/statuses')
-    for (const f of readdirSync(STATUSES_DIR).filter(f => f.endsWith('.md'))) {
+    for (const f of readdirSync(STATUSES_DIR).filter((f) => f.endsWith('.md'))) {
       expect(readFileSync(path.join(STATUSES_DIR, f), 'utf8')).toBe(readFileSync(path.join(templateDir, f), 'utf8'))
     }
-    expect(readFileSync(CLI, 'utf8')).toBe(
-      readFileSync(path.resolve(REPO_ROOT, 'scaffolds/skills-templates/workflow/workflow-cli.sh'), 'utf8')
-    )
+    expect(readFileSync(CLI, 'utf8')).toBe(readFileSync(path.resolve(REPO_ROOT, 'scaffolds/skills-templates/workflow/workflow-cli.sh'), 'utf8'))
   })
 })

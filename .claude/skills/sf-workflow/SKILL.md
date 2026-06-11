@@ -256,6 +256,8 @@ see its `## Conversational eval hook (SUB-10)` section. This skill only referenc
    installer's `migrations` array for module file-set changes). Inline manifest mutations and "let users fix it manually" shortcuts are forbidden by `CLAUDE.md`'s "Migration framework — NEVER bypass"
    section. Read `.claude/docs/migration-framework.md` before approving the transition.
 
+10. **ANNOUNCE + STREAM LONG COMMANDS** — before any command expected to take more than ~5 seconds (test suites, builds, commit/push hooks, Docker scenarios), announce in one sentence what runs and the expected duration. Over ~60 seconds, run it in the background and stream its progress markers to the user as they appear (e.g. `tail -f <log> | grep -E --line-buffered "PASS|FAIL|\[sf-progress\]"`) — never block silently. Report the outcome with numbers, and relay the ▶ AI / ⏳ Dev banner printed by `update-status` after every transition.
+
 ## Implementation
 
 The status descriptions are in the `statuses/` directory:
