@@ -1,5 +1,7 @@
 ---
 status: Human Review (drafting lifecycle — board column stays "In progress")
+banner_ai: Waiting — apply your review feedback to the draft pages
+banner_human: Review the SRS pages and approve, or request changes on the ticket
 complexity_profiles: [srs-drafting, srs-update, srs-new]
 entry_conditions:
   - `3a-ai-drafting.md` complete — `srs-cli.sh draft` exited 0

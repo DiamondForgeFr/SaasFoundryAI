@@ -1,5 +1,7 @@
 ---
 status: In Review
+banner_ai: Monitor CI until green, answer review comments, implement requested changes
+banner_human: Review + merge the PR — your merge is what triggers Done
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - One of:

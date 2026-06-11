@@ -1,5 +1,7 @@
 ---
 status: AI Drafting (drafting lifecycle — board column stays "In progress")
+banner_ai: Run the drafter against the configured SRS backend and post the draft page links on the ticket
+banner_human: Wait for the draft — your review comes next (human-review phase)
 complexity_profiles: [srs-drafting, srs-update, srs-new]
 entry_conditions:
   - Ticket board status is `In progress`

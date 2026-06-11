@@ -1,5 +1,7 @@
 ---
 status: Spawning (drafting lifecycle — board column stays "In progress" → "Done" on transition-drafting done)
+banner_ai: Spawn child tickets from the approved FR pages, then close the drafting ticket
+banner_human: Nothing — children land in Backlog for later prioritization
 complexity_profiles: [srs-drafting, srs-update, srs-new]
 entry_conditions:
   - `3b-human-review.md` complete — owner approval signalled
