@@ -85,6 +85,14 @@ Edit these files like any other shared file once they exist — they're just can
 
 SaaSFoundry skills are located in `.claude/` at the repository root and are optimized for this monorepo structure.
 
+## 📣 Long-running commands (announce + stream)
+
+The screen must never freeze silently. For any command expected to take more than ~5 seconds (test suites, builds, commit/push hooks, Docker scenarios):
+
+1. **Announce before running** — one sentence: what runs and the expected duration (e.g. "pre-commit hook ~40s: format + lint + build + tests").
+2. **Over ~60 seconds: stream progress** — run the command in the background and surface its progress markers to the user as they appear (e.g. `tail -f <log> | grep -E --line-buffered "PASS|FAIL|\[sf-progress\]"`). Never block silently.
+3. **Report the outcome with numbers** — suites passed/failed, duration — not just "done".
+
 ## 📦 Tech Stack
 
 ### Backend (apps/api/)
