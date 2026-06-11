@@ -1,11 +1,18 @@
+import { analyticsStep } from './steps/analytics.step'
+import { emailCredentialsStep } from './steps/email-credentials.step'
+import { projectStep } from './steps/project.step'
+import { skillsStep } from './steps/skills.step'
+import { srsStep } from './steps/srs.step'
+import { storageStep } from './steps/storage.step'
+import { workflowStep } from './steps/workflow.step'
 import { StepDefinition } from './types'
 
 /**
- * Ordered list of the steps composing the `sf new` collection session.
- * Populated by the step modules (see `steps/`) — order is the user-facing
- * question order, so changes here are behaviour changes.
+ * Ordered list of the steps composing the `sf new` collection session —
+ * order is the user-facing question order, so changes here are behaviour
+ * changes (mirrors the historical batch order of project.prompts.ts).
  */
-export const configSteps: StepDefinition[] = []
+export const configSteps: StepDefinition[] = [projectStep, emailCredentialsStep, storageStep, analyticsStep, workflowStep, skillsStep, srsStep]
 
 /**
  * Structural sanity checks, same spirit as the manifest-migration registry

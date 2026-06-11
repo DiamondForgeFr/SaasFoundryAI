@@ -1,0 +1,54 @@
+import chalk from 'chalk'
+
+import { promptWorkflowConfiguration } from '../../prompts/workflow.prompts'
+import { StepDefinition } from '../types'
+
+/**
+ * Workflow configuration batch, moved verbatim from
+ * `src/prompts/project.prompts.ts`.
+ *
+ * `promptWorkflowConfiguration` is a wrapped legacy flow: it prompts on its
+ * own AND triggers external side effects (GitHub Project auto-creation via
+ * `gh api graphql`). Extracting those effects out of the collection phase is
+ * owned by FR-CONFIG-ENGINE-04 — this step only declares them.
+ */
+export const workflowStep: StepDefinition = {
+  id: 'workflow',
+  title: 'AI workflow',
+  effects: ['May create a GitHub Project (4 GraphQL calls through the gh CLI) during collection', 'May save a workflow template to ~/.claude/workflows/'],
+  collect: async ({ state, prefill, nonInteractive, render }) => {
+    // Non-interactive: use prefilled workflow if provided, otherwise skip (tool = 'none')
+    if (nonInteractive) {
+      if (prefill.workflow) {
+        return { workflow: prefill.workflow, aiRules: prefill.aiRules }
+      }
+      return {}
+    }
+
+    console.log()
+    console.log(chalk.cyan('🔧 AI Workflow Configuration (Optional)'))
+    console.log(chalk.gray('Configure project management tools for AI collaboration (GitHub Projects, Jira, Notion, Linear)'))
+    console.log()
+
+    const { configureWorkflow } = (await render([
+      {
+        type: 'confirm',
+        name: 'configureWorkflow',
+        message: 'Do you want to configure an AI workflow tool now?',
+        default: true
+      }
+    ])) as unknown as { configureWorkflow?: boolean }
+
+    if (configureWorkflow) {
+      // Pass repository URL if available (for GitHub Project creation)
+      const repositoryUrl = state.monorepoUrl || state.backendRepoUrl || state.frontendRepoUrl
+
+      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl)
+      return { workflow, aiRules }
+    }
+
+    console.log(chalk.gray('You can configure workflow later with: sf workflow create\n'))
+    return {}
+  },
+  decisions: (collected) => (collected.workflow ? [{ stepId: 'workflow', name: 'workflow', value: collected.workflow.tool }] : [{ stepId: 'workflow', name: 'workflow', value: 'none' }])
+}
