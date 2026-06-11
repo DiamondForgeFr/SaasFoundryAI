@@ -38,8 +38,8 @@ describe('configSteps registry', () => {
     expect(() => assertStepRegistry(configSteps)).not.toThrow()
   })
 
-  it('keeps the historical batch order of sf new', () => {
-    expect(configSteps.map((s) => s.id)).toEqual(['project', 'email-credentials', 'storage', 'analytics', 'workflow', 'skills', 'srs'])
+  it('keeps the historical batch order of sf new, profile first', () => {
+    expect(configSteps.map((s) => s.id)).toEqual(['profile', 'project', 'harness-project', 'email-credentials', 'storage', 'analytics', 'workflow', 'skills', 'srs'])
   })
 
   it('declares effects on every step wrapping an external side effect', () => {

@@ -16,6 +16,7 @@ export const workflowStep: StepDefinition = {
   id: 'workflow',
   title: 'AI workflow',
   effects: ['May create a GitHub Project (4 GraphQL calls through the gh CLI) during collection', 'May save a workflow template to ~/.claude/workflows/'],
+  appliesTo: (state) => state.profile !== 'stack',
   collect: async ({ state, prefill, nonInteractive, render }) => {
     // Non-interactive: use prefilled workflow if provided, otherwise skip (tool = 'none')
     if (nonInteractive) {
