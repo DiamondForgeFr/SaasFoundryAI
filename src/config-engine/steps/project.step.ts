@@ -1,8 +1,7 @@
 import { StepDefinition } from '../types'
 
 /**
- * Batch 1 of the historical `sf new` interrogation, moved verbatim from
- * `src/prompts/project.prompts.ts`: project identity, repository layout,
+ * Opening questions of `sf new`: project identity, repository layout,
  * database setup and email service choice.
  */
 export const projectStep: StepDefinition = {

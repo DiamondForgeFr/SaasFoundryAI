@@ -2,10 +2,9 @@ import { collectAdvancedSkillsCredentials, promptAdvancedSkills } from '../../pr
 import { StepDefinition } from '../types'
 
 /**
- * Advanced-skills selection + credential collection, moved verbatim from
- * `src/prompts/project.prompts.ts`. The workflow tool driving the
- * pre-selection comes from the session derivations (rule `workflow-tool`)
- * instead of an ad-hoc local variable.
+ * Advanced-skills selection + credential collection. The workflow tool
+ * driving the pre-selection comes from the session derivations (rule
+ * `workflow-tool`).
  */
 export const skillsStep: StepDefinition = {
   id: 'skills',

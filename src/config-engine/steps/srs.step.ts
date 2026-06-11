@@ -2,8 +2,7 @@ import { promptSrsConfiguration, promptSrsIngestion } from '../../prompts/srs.pr
 import { StepDefinition } from '../types'
 
 /**
- * SRS bootstrap + ingestion opt-ins, moved verbatim from
- * `src/prompts/project.prompts.ts`. `promptSrsConfiguration` receives the
+ * SRS bootstrap + ingestion opt-ins. `promptSrsConfiguration` receives the
  * accumulated state so an already-collected Notion token is not asked twice.
  */
 export const srsStep: StepDefinition = {

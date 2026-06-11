@@ -1,6 +1,6 @@
 import { StepDefinition } from '../types'
 
-/** Analytics opt-in, moved verbatim from `src/prompts/project.prompts.ts`. */
+/** Anonymous-analytics (Umami) opt-in. */
 export const analyticsStep: StepDefinition = {
   id: 'analytics',
   title: 'Analytics',

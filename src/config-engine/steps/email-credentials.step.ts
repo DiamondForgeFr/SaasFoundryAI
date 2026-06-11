@@ -4,9 +4,9 @@ import { exec } from 'shelljs'
 import { FieldDefinition, StepDefinition } from '../types'
 
 /**
- * MailerSend credential collection, moved verbatim from
- * `src/prompts/project.prompts.ts` (the post-batch-1 conditional block).
- * Runs only when the user picked MailerSend in the project step.
+ * MailerSend credential collection — runs only when the user picked
+ * MailerSend in the project step. In interactive mode without prefilled
+ * credentials, walks the user through account creation first.
  */
 const mailersendFields = (projectName: string): FieldDefinition[] => [
   {

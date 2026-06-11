@@ -1,9 +1,8 @@
 import { StepDefinition } from '../types'
 
 /**
- * S3 object-storage batch, moved verbatim from `src/prompts/project.prompts.ts`.
- * The bucket default reads the accumulated `projectName` (the session merges
- * earlier answers into the prompt run, matching the historical closure).
+ * S3 object-storage setup. The bucket default reads the accumulated
+ * `projectName` — the session merges earlier answers into the prompt run.
  */
 export const storageStep: StepDefinition = {
   id: 'storage',
