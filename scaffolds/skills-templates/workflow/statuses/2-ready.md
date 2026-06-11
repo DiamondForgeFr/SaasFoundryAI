@@ -1,5 +1,7 @@
 ---
 status: Ready
+banner_ai: Nothing — Ready is a waiting queue
+banner_human: Assign the ticket or confirm pickup to start development
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - Specs validated in Backlog

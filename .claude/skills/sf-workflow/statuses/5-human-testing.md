@@ -1,5 +1,7 @@
 ---
 status: Human Testing
+banner_ai: Waiting — supporting reproduction and fixing whatever you report
+banner_human: Execute the manual test plan and report pass/fail on the ticket
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - All AI Testing steps passed

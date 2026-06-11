@@ -1,5 +1,7 @@
 ---
 status: Backlog
+banner_ai: Detect + persist the complexity label, analyze and plan per complexity, challenge the specs
+banner_human: Validate specs + plan (→ Ready), then confirm pickup priority (→ In progress)
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - Developer mentions a new idea / feature / bug

@@ -1,5 +1,7 @@
 ---
 status: AI Testing
+banner_ai: Post the test plan, run automated + manual tests, fix on red, post the report
+banner_human: Nothing yet — get ready to test manually (user-facing) or review the PR (internal)
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - All subtasks completed in In Progress

@@ -1,5 +1,7 @@
 ---
 status: Done
+banner_ai: Cleanup: checkout workingBranch, rebase-pull, delete the feature branch, rebase other in-progress branches
+banner_human: Nothing — cycle complete
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - One of:

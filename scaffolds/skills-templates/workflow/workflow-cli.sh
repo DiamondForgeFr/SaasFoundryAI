@@ -97,6 +97,41 @@ get_current_status() {
 }
 
 # Function to display status description
+# Post-transition expectations banner (#436): one line for the AI, one for the
+# developer, read from the target status file's `banner_ai:` / `banner_human:`
+# frontmatter fields. Lives here (not in the tool CLIs) so every board tool
+# (github-projects, jira, notion, linear) gets it for free. Never fails the
+# transition: missing file/fields just skip the banner.
+print_status_banner() {
+  local status=$1
+  local status_file=""
+
+  case "$status" in
+    "Backlog") status_file="1-backlog.md" ;;
+    "Ready") status_file="2-ready.md" ;;
+    "In Progress" | "In progress") status_file="3-in-progress.md" ;;
+    "AI Testing" | "AI testing") status_file="4-ai-testing.md" ;;
+    "Human Testing" | "Human testing") status_file="5-human-testing.md" ;;
+    "In Review" | "In review") status_file="6-in-review.md" ;;
+    "Done") status_file="7-done.md" ;;
+    "drafting:ai-draft") status_file="3a-ai-drafting.md" ;;
+    "drafting:human-review") status_file="3b-human-review.md" ;;
+    "drafting:spawning") status_file="3c-spawning.md" ;;
+    *) return 0 ;;
+  esac
+
+  local file_path="$SKILL_DIR/statuses/$status_file"
+  [[ -f "$file_path" ]] || return 0
+
+  local banner_ai banner_human
+  banner_ai=$(sed -n 's/^banner_ai: *//p' "$file_path" | head -n 1)
+  banner_human=$(sed -n 's/^banner_human: *//p' "$file_path" | head -n 1)
+
+  [[ -n "$banner_ai" ]] && echo -e "${BLUE}▶ AI:${NC} ${banner_ai}"
+  [[ -n "$banner_human" ]] && echo -e "${YELLOW}⏳ Dev:${NC} ${banner_human}"
+  return 0
+}
+
 show_status_description() {
   local status=$1
   local status_file=""
@@ -633,7 +668,8 @@ case "$COMMAND" in
     if ! check_pr_merged_guard "$TICKET" "$TARGET"; then
       exit 2
     fi
-    route_to_tool "$WORKFLOW_TOOL" update-status "$@"
+    route_to_tool "$WORKFLOW_TOOL" update-status "$@" || exit $?
+    print_status_banner "$TARGET"
     ;;
 
   create-subtask|create-pr|list|get-labels)
@@ -694,13 +730,15 @@ case "$COMMAND" in
           echo -e "${RED}✗ Expected ${SRS_CLI} to be executable. Run the SRS skill install first.${NC}" >&2
           exit 2
         fi
-        "$SRS_CLI" draft --ticket "$TICKET"
+        "$SRS_CLI" draft --ticket "$TICKET" || exit $?
+        print_status_banner "drafting:ai-draft"
         ;;
       human-review)
         echo -e "${BLUE}→ Human review phase for #${TICKET}${NC}"
         echo "  Post a review checklist comment on the ticket and wait for the owner's approval."
         echo "  The Notion page URL should already be in the ticket (posted by the AI draft phase)."
         echo "  No automated action — this phase is driven by the human reviewer."
+        print_status_banner "drafting:human-review"
         ;;
       spawning)
         echo -e "${BLUE}→ Spawning phase for #${TICKET}${NC}"
@@ -708,11 +746,13 @@ case "$COMMAND" in
           echo -e "${RED}✗ Expected ${SRS_CLI} to be executable. Run the SRS skill install first.${NC}" >&2
           exit 2
         fi
-        "$SRS_CLI" spawn --ticket "$TICKET"
+        "$SRS_CLI" spawn --ticket "$TICKET" || exit $?
+        print_status_banner "drafting:spawning"
         ;;
       done)
         echo -e "${BLUE}→ Closing drafting ticket #${TICKET}${NC}"
-        SF_WORKFLOW_BYPASS_SRS_GUARD=1 route_to_tool "$WORKFLOW_TOOL" update-status "$TICKET" "Done"
+        SF_WORKFLOW_BYPASS_SRS_GUARD=1 route_to_tool "$WORKFLOW_TOOL" update-status "$TICKET" "Done" || exit $?
+        print_status_banner "Done"
         ;;
       *)
         echo -e "${RED}✗ Unknown phase '${PHASE}'${NC}" >&2

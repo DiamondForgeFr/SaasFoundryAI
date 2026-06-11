@@ -1,5 +1,7 @@
 ---
 status: In Progress
+banner_ai: Branch from workingBranch, one commit per subtask, validate (build/lint/tests), push
+banner_human: Nothing yet — next involvement at Human Testing (or PR review for nature:internal)
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - Assignment or confirmation received in Ready
