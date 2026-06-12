@@ -19,13 +19,23 @@ export const harnessInstallerMeta: ModuleInstaller = {
 }
 
 /**
- * Directories owned by the harness deposits — the scope of the hash tracking
- * that drives the conflict-aware refresh in `sf update`. CLAUDE.md and
- * .claude/settings.json are deliberately NOT tracked: both are user-owned and
- * managed through targeted merges (section re-injection / hook merging), never
- * through the file sweep.
+ * Scope of the harness hash tracking that drives the conflict-aware refresh
+ * in `sf update`:
+ * - `.claude/docs/**` — entirely deposit-owned
+ * - `.claude/skills/sf-*` — the `sf-` prefix is reserved for SaaSFoundry
+ *   deposits; user-authored skills outside that prefix are never tracked,
+ *   never touched
+ * CLAUDE.md and .claude/settings.json are deliberately NOT tracked: both are
+ * user-owned and managed through targeted merges (section re-injection /
+ * hook merging), never through the file sweep.
  */
-export const HARNESS_TRACKED_DIRS = ['.claude/skills', '.claude/docs'] as const
+export const HARNESS_SKILL_PREFIX = 'sf-'
+
+/** Is this project-root-relative path inside the harness-tracked scope? */
+export function isHarnessTrackedPath(relPath: string): boolean {
+  if (relPath.startsWith('.claude/docs/')) return true
+  return relPath.startsWith(`.claude/skills/${HARNESS_SKILL_PREFIX}`)
+}
 
 /**
  * Hash every file of the harness deposits, keyed by project-root-relative
@@ -35,12 +45,13 @@ export const HARNESS_TRACKED_DIRS = ['.claude/skills', '.claude/docs'] as const
  */
 export async function computeHarnessFileHashes(targetPath: string): Promise<Record<string, string>> {
   const hashes: Record<string, string> = {}
-  for (const dir of HARNESS_TRACKED_DIRS) {
+  for (const dir of ['.claude/skills', '.claude/docs']) {
     const dirPath = join(targetPath, dir)
     if (!(await fileExists(dirPath))) continue
     const dirHashes = await computeFileHashes(dirPath)
     for (const [relPath, hash] of Object.entries(dirHashes)) {
-      hashes[`${dir}/${relPath}`] = hash
+      const projectRelPath = `${dir}/${relPath}`
+      if (isHarnessTrackedPath(projectRelPath)) hashes[projectRelPath] = hash
     }
   }
   return hashes

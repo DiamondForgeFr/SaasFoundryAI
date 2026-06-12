@@ -10,6 +10,7 @@ import shelljs from 'shelljs'
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installEmailModule } from '../installers/email.installer'
 import { installSkills } from '../installers/skills.installer'
+import { computeHarnessFileHashes, harnessInstallerMeta, installHarness, isHarnessTrackedPath } from '../installers/harness.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { createApiApp } from '../builders/api.builder'
@@ -260,6 +261,147 @@ export async function applyFileUpdates(
 }
 
 /**
+ * Deposit the current CLI's harness artefacts into a temp dir — the `target`
+ * side of the FLOW 1b three-way merge. CLAUDE.md / settings.json land in the
+ * temp dir too but are outside the tracked scope (merge-managed, never swept).
+ */
+async function depositHarnessInTempDir(manifest: SaaSFoundryManifest): Promise<{ tempDir: string; hashes: Record<string, string> }> {
+  const tempDir = join(tmpdir(), `saasfoundry-harness-refresh-${Date.now()}`)
+  await mkdir(tempDir, { recursive: true })
+
+  await installHarness({
+    targetPath: tempDir,
+    projectName: manifest.projectName,
+    version: cliVersion,
+    mainBranch: manifest.mainBranch,
+    workflow: manifest.workflow,
+    advancedSkills: manifest.modules?.advancedSkills ?? []
+  })
+  if (manifest.tools?.srs?.enabled) {
+    await installSrsSkill({ targetPath: tempDir })
+  }
+
+  return { tempDir, hashes: await computeHarnessFileHashes(tempDir) }
+}
+
+interface RefreshHarnessOptions {
+  dryRun: boolean
+  nonInteractive: boolean
+  conflictStrategy: ConflictStrategy
+  dryRunReport: UpdateDryRunReport | null
+}
+
+/**
+ * FLOW 1b — refresh the harness deposits of a non-scaffold project.
+ *
+ * Same three-way merge as the FLOW 1 template update (base = tracked hashes,
+ * current = disk, target = fresh deposit), scoped to the harness paths:
+ * unchanged files update in place, user-edited files follow the conflict
+ * strategy (sidecar by default), `remove` actions are never auto-applied
+ * (deposit removals ship as explicit module migrations).
+ *
+ * Adoption path: a project whose deposits predate version tracking (no
+ * `modules.harness` stamp) is adopted on explicit confirmation — its current
+ * files become the baseline and every change lands as a conflict (sidecar),
+ * because nothing can distinguish old templates from user edits.
+ */
+async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPath: string, { dryRun, nonInteractive, conflictStrategy, dryRunReport }: RefreshHarnessOptions): Promise<void> {
+  const currentHashes = await computeHarnessFileHashes('.')
+  const hasDeposits = Object.keys(currentHashes).length > 0
+  const tracked = manifest.modules?.harness !== undefined
+
+  if (!hasDeposits && !tracked) return
+
+  const adoption = !tracked && hasDeposits
+  if (!adoption && manifest.version === cliVersion) {
+    console.log(chalk.green('  Your AI harness is up to date with the current CLI version.\n'))
+    return
+  }
+
+  if (adoption) {
+    console.log(chalk.yellow('  Harness deposits found without version tracking (installed by an older CLI).'))
+    if (nonInteractive) {
+      console.log(chalk.yellow('  Re-run interactively (or with up-to-date tracking) to adopt and refresh them. Skipping.\n'))
+      if (dryRunReport) dryRunReport.harnessRefresh = { status: 'adoption-needed' }
+      return
+    }
+    if (!dryRun) {
+      const { adoptHarness } = await promptWithPrefill<{ adoptHarness: boolean }>(
+        [{ type: 'confirm', name: 'adoptHarness', message: 'Adopt these deposits (changed files will land as .saasfoundry.new sidecars, nothing overwritten)?', default: true }],
+        { nonInteractive }
+      )
+      if (!adoptHarness) {
+        console.log(chalk.gray('  Harness adoption skipped.\n'))
+        return
+      }
+    }
+  }
+
+  console.log(chalk.yellow(`  Harness refresh: v${manifest.version} → v${cliVersion}`))
+  const spinner = ora('Comparing harness deposits with the current CLI...').start()
+  let tempDir: string | null = null
+
+  try {
+    const baseHashes = adoption ? currentHashes : Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => isHarnessTrackedPath(p)))
+
+    const deposit = await depositHarnessInTempDir(manifest)
+    tempDir = deposit.tempDir
+
+    let updates = computeFileUpdates(baseHashes, currentHashes, deposit.hashes).filter((u) => u.action !== 'remove')
+    if (adoption) {
+      // Nothing distinguishes old templates from user edits — be conservative.
+      updates = updates.map((u) => (u.action === 'update' ? { ...u, action: 'conflict' as const } : u))
+    }
+
+    if (updates.length === 0) {
+      spinner.succeed(chalk.green('Harness deposits already match the current CLI.'))
+    } else if (dryRun) {
+      spinner.succeed('Harness refresh analysis complete (dry run).')
+      if (dryRunReport) {
+        dryRunReport.harnessRefresh = {
+          status: 'would-apply',
+          update: updates.filter((u) => u.action === 'update').map((u) => u.path),
+          add: updates.filter((u) => u.action === 'add').map((u) => u.path),
+          conflict: updates.filter((u) => u.action === 'conflict').map((u) => u.path)
+        }
+      }
+    } else {
+      spinner.start('Refreshing harness deposits...')
+      const { applied, conflicts, added } = await applyFileUpdates(updates, tempDir, spinner, conflictStrategy)
+      spinner.succeed(chalk.green('Harness refresh complete.'))
+
+      if (applied.length > 0) console.log(chalk.green(`  ${applied.length} file(s) updated in place`))
+      if (added.length > 0) console.log(chalk.green(`  ${added.length} new file(s) added`))
+      if (conflicts.length > 0) {
+        console.log(chalk.red(`  ${conflicts.length} file(s) you edited — handled with strategy '${conflictStrategy}':`))
+        for (const f of conflicts) {
+          console.log(chalk.red(`    ! ${f.path}${conflictStrategy === 'save-new' ? ` → review ${f.path}.saasfoundry.new` : ''}`))
+        }
+      }
+    }
+
+    if (!dryRun) {
+      // Baseline moves to the freshly deposited target; non-harness hash
+      // entries (none expected on these manifests) are preserved untouched.
+      const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
+      manifest.fileHashes = { ...untracked, ...(await computeHarnessFileHashes('.')) }
+      manifest.modules = { ...(manifest.modules ?? {}), harness: { version: harnessInstallerMeta.currentVersion } }
+      manifest.version = cliVersion
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+    }
+  } catch (error) {
+    spinner.fail(chalk.red('Failed to refresh the harness deposits'))
+    console.error(error)
+  } finally {
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  console.log()
+}
+
+/**
  * Update command — Update templates and add modules to an existing SaaSFoundry project.
  *
  * This command handles two flows:
@@ -473,6 +615,13 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
       console.log()
     }
+  } else if (!isScaffoldManifest(manifest)) {
+    // ─── FLOW 1b: Harness-only refresh ───
+    // Non-scaffold projects (harness profile, pre-#451 manual installs) have
+    // no templates to regenerate, but their harness deposits (.claude/skills/
+    // sf-*, .claude/docs) follow the CLI version through the same three-way
+    // merge as FLOW 1, scoped to the deposit paths.
+    await refreshHarnessDeposits(manifest, manifestPath, { dryRun, nonInteractive, conflictStrategy, dryRunReport })
   } else {
     console.log(chalk.green('  Your project is up to date with the current CLI version.\n'))
   }
