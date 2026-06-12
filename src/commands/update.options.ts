@@ -78,6 +78,7 @@ export interface UpdateDryRunReport {
   moduleAddition: {
     available: string[]
     selected: string[]
+    harness?: { workflowConfigured: boolean; skills: string[] }
     email?: { configured: boolean }
     storage?: { s3Setup: 'docker' | 'credentials'; credentialsProvided: boolean }
     skills: string[]
