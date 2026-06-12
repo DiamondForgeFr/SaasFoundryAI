@@ -107,3 +107,37 @@ describe('harness installer', () => {
     })
   })
 })
+
+describe('computeHarnessFileHashes', () => {
+  let dir: string
+
+  beforeEach(async () => {
+    dir = join(tmpdir(), `sf-harness-hash-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    await mkdir(dir, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
+  })
+
+  it('hashes only the deposit dirs, keyed by project-root-relative path', async () => {
+    await installHarness({ targetPath: dir, projectName: 'acme', version: '1.0.0', workflow: { tool: 'github-projects', statuses: [{ name: 'Backlog' }, { name: 'Done' }] } })
+    await writeFile(join(dir, 'src-user-file.ts'), 'user code')
+
+    const { computeHarnessFileHashes } = await import('../../../installers/harness.installer')
+    const hashes = await computeHarnessFileHashes(dir)
+
+    const keys = Object.keys(hashes)
+    expect(keys.length).toBeGreaterThan(0)
+    expect(keys.every((k) => k.startsWith('.claude/skills/') || k.startsWith('.claude/docs/'))).toBe(true)
+    expect(keys).not.toContain('CLAUDE.md')
+    expect(keys).not.toContain('.claude/settings.json')
+    expect(keys).not.toContain('src-user-file.ts')
+    expect(keys.some((k) => k.startsWith('.claude/skills/sf-workflow/'))).toBe(true)
+  })
+
+  it('returns an empty map on a repo without deposits', async () => {
+    const { computeHarnessFileHashes } = await import('../../../installers/harness.installer')
+    expect(await computeHarnessFileHashes(dir)).toEqual({})
+  })
+})

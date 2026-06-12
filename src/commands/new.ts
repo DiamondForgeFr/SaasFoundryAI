@@ -11,7 +11,7 @@ import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
-import { installHarness } from '../installers/harness.installer'
+import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
 import { installSkills } from '../installers/skills.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { initAndStartDb } from '../runners/database.runner'
@@ -225,7 +225,11 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         s3Setup: startProjectAnswers.s3Setup,
         dbSetup: startProjectAnswers.dbSetup,
         includeAnalytics: startProjectAnswers.includeAnalytics,
-        advancedSkills: startProjectAnswers.advancedSkills || []
+        advancedSkills: startProjectAnswers.advancedSkills || [],
+        // Every scaffolded profile deposits harness artefacts (core skills +
+        // docs at minimum — stack profile included) — track them so sf update
+        // can refresh the deposits on any profile.
+        harness: { version: harnessInstallerMeta.currentVersion }
       },
       workflow: startProjectAnswers.workflow,
       aiRules: startProjectAnswers.aiRules,
@@ -573,6 +577,10 @@ async function runHarnessInstall(config: Answers): Promise<void> {
       structure: 'cli',
       projectName: config.projectName,
       mainBranch: config.mainBranch,
+      // Harness deposits are versioned + hash-tracked (scoped to .claude/skills
+      // and .claude/docs) so `sf update` can refresh them conflict-aware.
+      modules: { harness: { version: harnessInstallerMeta.currentVersion } },
+      fileHashes: await computeHarnessFileHashes('.'),
       workflow: config.workflow,
       aiRules: config.aiRules,
       tools: srsTools ? { srs: srsTools } : undefined
