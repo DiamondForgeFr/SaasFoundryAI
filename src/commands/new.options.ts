@@ -154,6 +154,13 @@ export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answer
   else if (opts.nonInteractive === true) prefill.srsIngestEnable = false
   if (opts.srsIngestParentInput !== undefined) prefill.srsIngestParentInput = opts.srsIngestParentInput
 
+  // `--workflow <preset>` preselects a workflow preset for the interactive
+  // flow ('none'/false keep their skip semantics — see shouldSkipWorkflow).
+  if (typeof opts.workflow === 'string') {
+    const preset = opts.workflow.toLowerCase()
+    if (preset === 'solo' || preset === 'saasfoundry') prefill.workflowPreset = preset
+  }
+
   return prefill
 }
 
