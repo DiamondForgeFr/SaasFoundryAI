@@ -379,6 +379,96 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
   }
 }
 
+/**
+ * Align an EXISTING GitHub Project's Status field with a preset's statuses
+ * (in-place preset upgrade, e.g. solo → team). Options are rebuilt in the
+ * preset's order; existing options that the preset doesn't know (custom
+ * columns) are preserved at the end. Best-effort: returns false (with a
+ * warning) instead of throwing — a board misalignment must never block the
+ * manifest/skill upgrade.
+ */
+export async function updateGitHubProjectStatuses(projectUrl: string, statuses: WorkflowStatus[]): Promise<boolean> {
+  try {
+    if (!checkGhAuth()) {
+      console.log(chalk.yellow('⚠️  gh CLI not authenticated — update the GitHub Project Status field manually (Project settings → Status).'))
+      return false
+    }
+
+    const match = projectUrl.match(/github\.com\/(orgs|users)\/([^/]+)\/projects\/(\d+)/)
+    if (!match) {
+      console.log(chalk.yellow(`⚠️  Unrecognized GitHub Project URL (${projectUrl}) — Status field not updated.`))
+      return false
+    }
+    const [, kind, owner, number] = match
+    const ownerField = kind === 'orgs' ? 'organization' : 'user'
+
+    const projectQuery = `
+      query {
+        ${ownerField}(login: "${owner}") {
+          projectV2(number: ${number}) {
+            field(name: "Status") {
+              ... on ProjectV2SingleSelectField {
+                id
+                options { name color description }
+              }
+            }
+          }
+        }
+      }
+    `
+    const fieldResult = execSync(`gh api graphql -f query='${projectQuery.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
+    const statusField = JSON.parse(fieldResult).data[ownerField]?.projectV2?.field
+    if (!statusField) {
+      console.log(chalk.yellow('⚠️  Status field not found on the project — not updated.'))
+      return false
+    }
+
+    type ExistingOption = { name: string; color?: string; description?: string }
+    const existing: ExistingOption[] = statusField.options ?? []
+    const presetNames = statuses.map((s) => s.name.toLowerCase())
+    const missing = statuses.filter((s) => !existing.some((o) => o.name.toLowerCase() === s.name.toLowerCase()))
+    const extras = existing.filter((o) => !presetNames.includes(o.name.toLowerCase()))
+
+    if (missing.length === 0) {
+      return true
+    }
+
+    // Preset order first (reusing existing descriptions/colors when the
+    // option already exists keeps the board familiar), custom columns last.
+    const merged = [
+      ...statuses.map((s) => {
+        const current = existing.find((o) => o.name.toLowerCase() === s.name.toLowerCase())
+        return { name: current?.name ?? s.name, color: current?.color || s.color || 'GRAY', description: current?.description || s.description || '' }
+      }),
+      ...extras.map((o) => ({ name: o.name, color: o.color || 'GRAY', description: o.description || '' }))
+    ]
+
+    const optionsJson = merged.map((o) => `{ name: "${o.name.replace(/"/g, '\\"')}", color: ${o.color}, description: "${o.description.replace(/"/g, '\\"')}" }`).join(', ')
+
+    const updateFieldMutation = `
+      mutation {
+        updateProjectV2Field(input: {
+          fieldId: "${statusField.id}"
+          singleSelectOptions: [${optionsJson}]
+        }) {
+          projectV2Field {
+            ... on ProjectV2SingleSelectField { id name }
+          }
+        }
+      }
+    `
+    execSync(`gh api graphql -f query='${updateFieldMutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
+
+    console.log(chalk.green(`✅ GitHub Project Status field updated (${missing.length} status(es) added: ${missing.map((s) => s.name).join(', ')})`))
+    return true
+  } catch (error) {
+    const err = error as Error
+    console.log(chalk.yellow(`⚠️  Could not update the GitHub Project Status field: ${err.message}`))
+    console.log(chalk.gray('   Update it manually: Project settings → Status → add the missing statuses.'))
+    return false
+  }
+}
+
 // Default configurations for each tool (backward compatibility)
 export const DEFAULT_STATUSES = {
   'github-projects': WORKFLOW_PRESETS.saasfoundry.statuses,
