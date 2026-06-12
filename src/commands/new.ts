@@ -579,7 +579,7 @@ async function runHarnessInstall(config: Answers): Promise<void> {
       mainBranch: config.mainBranch,
       // Harness deposits are versioned + hash-tracked (scoped to .claude/skills
       // and .claude/docs) so `sf update` can refresh them conflict-aware.
-      modules: { harness: { version: harnessInstallerMeta.currentVersion } },
+      modules: { harness: { version: harnessInstallerMeta.currentVersion }, advancedSkills: config.advancedSkills ?? [] },
       fileHashes: await computeHarnessFileHashes('.'),
       workflow: config.workflow,
       aiRules: config.aiRules,

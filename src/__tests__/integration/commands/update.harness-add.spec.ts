@@ -92,14 +92,33 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(Object.keys(manifest.fileHashes).some((p: string) => p.startsWith('.claude/skills/sf-workflow/'))).toBe(true)
   })
 
-  it('does not offer harness when a workflow is already configured', async () => {
-    await writeFile('.saasfoundry.json', JSON.stringify({ ...stackManifest(), workflow: WORKFLOW }, null, 2))
+  it('does not offer harness when the deposits are already version-tracked', async () => {
+    const tracked = stackManifest()
+    tracked.modules = { ...tracked.modules, harness: { version: 1 } }
+    await writeFile('.saasfoundry.json', JSON.stringify({ ...tracked, workflow: WORKFLOW }, null, 2))
 
     await updateCommand({ nonInteractive: true, addModules: 'harness' })
 
     expect(mockedRunConfigSession).not.toHaveBeenCalled()
+  })
+
+  it('protects user-edited pre-existing deposits with sidecars during late install', async () => {
+    await writeFile('.saasfoundry.json', JSON.stringify(stackManifest(), null, 2))
+    // Stack scaffolds ship core skills — simulate one, edited by the user
+    const editedPath = '.claude/skills/sf-integration-rules/SKILL.md'
+    await mkdir(join(projectDir, '.claude/skills/sf-integration-rules'), { recursive: true })
+    await writeFile(join(projectDir, editedPath), 'my precious user edit\n')
+
+    await updateCommand({ nonInteractive: true, addModules: 'harness' })
+
+    // Edit intact, template landed as a sidecar, deposits tracked
+    expect(await readFile(join(projectDir, editedPath), 'utf8')).toBe('my precious user edit\n')
+    expect(await readFile(join(projectDir, `${editedPath}.saasfoundry.new`), 'utf8')).not.toBe('my precious user edit\n')
     const manifest = await readManifest()
-    expect(manifest.modules.harness).toBeUndefined()
+    expect(manifest.modules.harness.version).toBe(1)
+    // Baseline = deposit target, not the user's edit
+    const { hashFileContent } = jest.requireActual<typeof import('../../../utils')>('../../../utils')
+    expect(manifest.fileHashes[editedPath]).not.toBe(hashFileContent('my precious user edit\n'))
   })
 
   it('works on a harness-only manifest that skipped the workflow step', async () => {

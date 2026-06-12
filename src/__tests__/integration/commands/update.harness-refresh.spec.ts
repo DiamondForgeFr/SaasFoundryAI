@@ -193,3 +193,68 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(manifest.version).toBe(FRESH_VERSION)
   })
 })
+
+// Regression for the examine Critical finding: after a conflicted refresh,
+// the baseline must be the deposit TARGET — never the disk content —
+// otherwise the next refresh classifies the user edit as 'update' and
+// silently overwrites it in place.
+describe('updateCommand — baseline integrity across refresh cycles', () => {
+  let projectDir: string
+  let originalCwd: string
+  let logSpy: jest.SpyInstance
+
+  beforeEach(async () => {
+    projectDir = join(tmpdir(), `sf-harness-cycle-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    originalCwd = process.cwd()
+    await mkdir(projectDir, { recursive: true })
+    process.chdir(projectDir)
+    jest.clearAllMocks()
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(async () => {
+    logSpy.mockRestore()
+    process.chdir(originalCwd)
+    await rm(projectDir, { recursive: true, force: true }).catch(() => {})
+  })
+
+  it('a user edit conflicted at cycle N is still intact after cycle N+1', async () => {
+    await installHarness({ targetPath: projectDir, projectName: 'acme', version: FRESH_VERSION })
+    const { computeHarnessFileHashes } = jest.requireActual<typeof import('../../../installers/harness.installer')>('../../../installers/harness.installer')
+    const hashes = await computeHarnessFileHashes(projectDir)
+
+    // Cycle N: baseline = old template, disk = user edit, target = current
+    const editedPath = '.claude/skills/sf-integration-rules/SKILL.md'
+    hashes[editedPath] = hashFileContent('old template content\n')
+    await writeFile(join(projectDir, editedPath), 'my precious user edit\n')
+    await writeFile(
+      join(projectDir, '.saasfoundry.json'),
+      JSON.stringify(
+        {
+          $schema: manifestSchemaUrl,
+          manifestVersion: 2,
+          version: FRESH_VERSION,
+          generatedAt: 'x',
+          structure: 'cli',
+          projectName: 'acme',
+          mainBranch: 'main',
+          modules: { harness: { version: 1 } },
+          fileHashes: hashes
+        },
+        null,
+        2
+      )
+    )
+    await updateCommand({ nonInteractive: true })
+    expect(await readFile(join(projectDir, editedPath), 'utf8')).toBe('my precious user edit\n')
+
+    // Cycle N+1: force another version mismatch and re-run
+    const afterCycle1 = JSON.parse(await readFile(join(projectDir, '.saasfoundry.json'), 'utf8'))
+    afterCycle1.version = FRESH_VERSION
+    await writeFile(join(projectDir, '.saasfoundry.json'), JSON.stringify(afterCycle1, null, 2))
+    await updateCommand({ nonInteractive: true })
+
+    // The edit must survive — the poisoned-baseline bug overwrote it here
+    expect(await readFile(join(projectDir, editedPath), 'utf8')).toBe('my precious user edit\n')
+  })
+})

@@ -9,14 +9,16 @@ import { DbCredentials, SaaSFoundryManifest } from './types'
  * Patterns to ignore when computing file hashes for the manifest.
  * These files are either auto-generated, contain secrets, or are not managed by SaaSFoundry.
  */
-const HASH_IGNORE_PATTERNS = ['node_modules', '.git', 'dist', 'build', '.next', '.turbo', 'coverage', '.env', '.env.test', 'package-lock.json', '.saasfoundry.json', '.DS_Store']
+const HASH_IGNORE_PATTERNS = ['node_modules', '.git', 'dist', 'build', '.next', '.turbo', 'coverage', '.env', '.env.test', 'package-lock.json', '.saasfoundry.json', '.DS_Store', '.saasfoundry.new']
 
 /**
  * Check if a file path should be ignored for hash computation.
  */
 function shouldIgnore(filePath: string): boolean {
   const parts = filePath.split(path.sep)
-  return parts.some((part) => HASH_IGNORE_PATTERNS.includes(part))
+  // `.saasfoundry.new` sidecars are conflict artifacts, never templates —
+  // hashing them would pollute the baseline after a conflicted update.
+  return parts.some((part) => HASH_IGNORE_PATTERNS.includes(part) || part.endsWith('.saasfoundry.new'))
 }
 
 /**
