@@ -97,6 +97,58 @@ get_current_status() {
 }
 
 # Function to display status description
+# ───────────────────────────────────────────────────────────────────────────
+# Manifest-driven status resolution
+# ───────────────────────────────────────────────────────────────────────────
+#
+# The status set is owned by `.saasfoundry.json` (workflow.statuses) — presets
+# differ (team = 7 statuses, solo = 5), so nothing here may hardcode a
+# sequence. Status docs are resolved by SLUG (`statuses/<n>-<slug>.md`), which
+# makes the lookup independent of the per-preset numbering.
+
+status_slug() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}' | tr ' ' '-'
+}
+
+resolve_status_file() {
+  local status=$1
+
+  # Drafting phases are lifecycle docs, not board columns — resolve by suffix.
+  case "$status" in
+    "drafting:ai-draft") ls "$SKILL_DIR"/statuses/*-ai-drafting.md 2>/dev/null | head -n 1; return 0 ;;
+    "drafting:human-review") ls "$SKILL_DIR"/statuses/*-human-review.md 2>/dev/null | head -n 1; return 0 ;;
+    "drafting:spawning") ls "$SKILL_DIR"/statuses/*-spawning.md 2>/dev/null | head -n 1; return 0 ;;
+  esac
+
+  local slug
+  slug=$(status_slug "$status")
+  ls "$SKILL_DIR"/statuses/[0-9]*-"$slug".md 2>/dev/null | head -n 1
+  return 0
+}
+
+# Print the configured status names, one per line (empty output when the
+# manifest or jq is unavailable — callers fall back to legacy behaviour).
+manifest_statuses() {
+  command -v jq >/dev/null 2>&1 || return 0
+  [[ -f ".saasfoundry.json" ]] || return 0
+  jq -r '.workflow.statuses[]?.name // empty' .saasfoundry.json 2>/dev/null
+}
+
+# Does the configured sequence contain this status (case-insensitive)?
+# Fail-open: with no readable manifest, every status is assumed to exist so
+# the legacy 7-status behaviour is preserved.
+status_in_sequence() {
+  local wanted
+  wanted=$(status_slug "$1")
+  local sequence
+  sequence=$(manifest_statuses)
+  [[ -z "$sequence" ]] && return 0
+  while IFS= read -r name; do
+    [[ "$(status_slug "$name")" == "$wanted" ]] && return 0
+  done <<< "$sequence"
+  return 1
+}
+
 # Post-transition expectations banner (#436): one line for the AI, one for the
 # developer, read from the target status file's `banner_ai:` / `banner_human:`
 # frontmatter fields. Lives here (not in the tool CLIs) so every board tool
@@ -104,24 +156,9 @@ get_current_status() {
 # transition: missing file/fields just skip the banner.
 print_status_banner() {
   local status=$1
-  local status_file=""
-
-  case "$status" in
-    "Backlog") status_file="1-backlog.md" ;;
-    "Ready") status_file="2-ready.md" ;;
-    "In Progress" | "In progress") status_file="3-in-progress.md" ;;
-    "AI Testing" | "AI testing") status_file="4-ai-testing.md" ;;
-    "Human Testing" | "Human testing") status_file="5-human-testing.md" ;;
-    "In Review" | "In review") status_file="6-in-review.md" ;;
-    "Done") status_file="7-done.md" ;;
-    "drafting:ai-draft") status_file="3a-ai-drafting.md" ;;
-    "drafting:human-review") status_file="3b-human-review.md" ;;
-    "drafting:spawning") status_file="3c-spawning.md" ;;
-    *) return 0 ;;
-  esac
-
-  local file_path="$SKILL_DIR/statuses/$status_file"
-  [[ -f "$file_path" ]] || return 0
+  local file_path
+  file_path=$(resolve_status_file "$status")
+  [[ -n "$file_path" && -f "$file_path" ]] || return 0
 
   local banner_ai banner_human
   banner_ai=$(sed -n 's/^banner_ai: *//p' "$file_path" | head -n 1)
@@ -134,31 +171,22 @@ print_status_banner() {
 
 show_status_description() {
   local status=$1
-  local status_file=""
+  local file_path
+  file_path=$(resolve_status_file "$status")
 
-  # Map status names to files
-  case "$status" in
-    "Backlog") status_file="1-backlog.md" ;;
-    "Ready") status_file="2-ready.md" ;;
-    "In Progress"|"In progress") status_file="3-in-progress.md" ;;
-    "AI Testing"|"AI testing") status_file="4-ai-testing.md" ;;
-    "Human Testing"|"Human testing") status_file="5-human-testing.md" ;;
-    "In Review"|"In review") status_file="6-in-review.md" ;;
-    "Done") status_file="7-done.md" ;;
-    *)
-      echo "Unknown status: $status" >&2
-      echo "Available statuses: Backlog, Ready, In Progress, AI Testing, Human Testing, In Review, Done"
-      return 1
-      ;;
-  esac
-
-  local file_path="$SKILL_DIR/statuses/$status_file"
-  if [[ -f "$file_path" ]]; then
-    cat "$file_path"
-  else
-    echo "Error: Status description file not found: $status_file" >&2
+  if [[ -z "$file_path" || ! -f "$file_path" ]]; then
+    echo "Unknown status: $status" >&2
+    local configured
+    configured=$(manifest_statuses | paste -sd ', ' -)
+    if [[ -n "$configured" ]]; then
+      echo "Available statuses: $configured"
+    else
+      echo "Available statuses: see .saasfoundry.json (workflow.statuses)"
+    fi
     return 1
   fi
+
+  cat "$file_path"
 }
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -336,6 +364,17 @@ check_nature_guard() {
   nature=$(get_ticket_nature_label "$ticket") || return 0   # fail-open on fetch error
 
   if is_in_review_target "$target"; then
+    # Solo-style workflows have no Human Testing status — AI Testing → In
+    # Review is the standard route there and needs no nature label (the PR
+    # review is the human gate).
+    if ! status_in_sequence "Human Testing"; then
+      if [[ "$nature" == "bundled-pr" ]]; then
+        echo -e "${RED}✗ Ticket #${ticket} is 'nature:bundled-pr' — cannot enter 'In Review'.${NC}" >&2
+        echo "  Bundled-PR tickets go AI Testing → Done directly (PR at the parent Epic)." >&2
+        return 1
+      fi
+      return 0
+    fi
     if [[ "$nature" == "internal" ]]; then
       return 0
     fi
@@ -495,32 +534,53 @@ show_next_status() {
   local current_status=$1
   local ticket=${2:-}
 
-  case "$current_status" in
-    "Backlog") echo "Next: Ready" ;;
-    "Ready") echo "Next: In Progress" ;;
-    "In Progress"|"In progress") echo "Next: AI Testing" ;;
-    "AI Testing"|"AI testing")
-      # Nature-aware: internal tickets skip Human Testing; bundled-pr subs
-      # skip both Human Testing and In Review (PR is at the parent Epic level).
-      if [[ -n "$ticket" ]]; then
-        local nature
-        nature=$(get_ticket_nature_label "$ticket" 2>/dev/null || true)
-        if [[ "$nature" == "bundled-pr" ]]; then
-          echo "Next: Done (nature:bundled-pr — Human Testing + In Review skipped, PR bundled at parent Epic)"
-          return
-        fi
-        if [[ "$nature" == "internal" ]]; then
-          echo "Next: In Review (nature:internal — Human Testing skipped)"
-          return
-        fi
-      fi
-      echo "Next: Human Testing"
-      ;;
-    "Human Testing"|"Human testing") echo "Next: In Review" ;;
-    "In Review"|"In review") echo "Next: Done" ;;
-    "Done") echo "Workflow complete - no next status" ;;
-    *) echo "Unknown status: $current_status" ;;
-  esac
+  local current_slug
+  current_slug=$(status_slug "$current_status")
+
+  # Build the configured sequence (manifest-driven; falls back to the team
+  # preset when no manifest is readable so the command still answers).
+  local sequence
+  sequence=$(manifest_statuses)
+  if [[ -z "$sequence" ]]; then
+    sequence=$(printf '%s\n' "Backlog" "Ready" "In Progress" "AI Testing" "Human Testing" "In Review" "Done")
+  fi
+
+  local -a names=()
+  while IFS= read -r name; do names+=("$name"); done <<< "$sequence"
+
+  local idx=-1 i
+  for i in "${!names[@]}"; do
+    [[ "$(status_slug "${names[$i]}")" == "$current_slug" ]] && idx=$i && break
+  done
+
+  if [[ $idx -lt 0 ]]; then
+    echo "Unknown status: $current_status"
+    return
+  fi
+
+  if [[ $idx -ge $((${#names[@]} - 1)) ]]; then
+    echo "Workflow complete - no next status"
+    return
+  fi
+
+  local next="${names[$((idx + 1))]}"
+
+  # Nature-aware branching from AI Testing: bundled-pr subs skip straight to
+  # Done; internal tickets skip Human Testing when the sequence contains it.
+  if [[ "$current_slug" == "ai-testing" && -n "$ticket" ]]; then
+    local nature
+    nature=$(get_ticket_nature_label "$ticket" 2>/dev/null || true)
+    if [[ "$nature" == "bundled-pr" ]]; then
+      echo "Next: Done (nature:bundled-pr — no individual PR, merge happens at the parent Epic)"
+      return
+    fi
+    if [[ "$(status_slug "$next")" == "human-testing" && "$nature" == "internal" ]]; then
+      echo "Next: In Review (nature:internal — Human Testing skipped)"
+      return
+    fi
+  fi
+
+  echo "Next: $next"
 }
 
 # Main command dispatcher
@@ -633,7 +693,7 @@ case "$COMMAND" in
       echo "Usage: workflow-cli.sh test <ticket-number> [complexity]" >&2
       exit 1
     fi
-    echo -e "${BLUE}AI TESTING PHASE: In Progress → AI Testing → Human Testing${NC}"
+    echo -e "${BLUE}AI TESTING PHASE: In Progress → AI Testing → next status (see \`next\`)${NC}"
     echo ""
     if [[ "$COMPLEXITY" == "complex" ]]; then
       echo "Running adversarial review (complex ticket)..."
