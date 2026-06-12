@@ -43,6 +43,8 @@ jest.mock('terminal-link', () => ({
 import { newCommand } from '../../../commands/new'
 import { createApiApp } from '../../../builders/api.builder'
 import { createWebApp } from '../../../builders/web.builder'
+import { collectStatus } from '../../../status/collect'
+import { evaluatePreconditions } from '../../../status/preconditions'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
 const mockedCreateApiApp = createApiApp as jest.MockedFunction<typeof createApiApp>
@@ -107,20 +109,49 @@ describe('newCommand (--profile integration)', () => {
     expect(askedNames).not.toContain('configureWorkflow')
   })
 
-  it('harness profile stops cleanly before any filesystem mutation', async () => {
+  it('harness profile installs the AI harness onto the existing repo without scaffolding', async () => {
+    await newCommand({
+      nonInteractive: true,
+      profile: 'harness',
+      projectName: 'acme',
+      mainBranch: 'main'
+    })
+
+    expect(mockedCreateApiApp).not.toHaveBeenCalled()
+    expect(mockedCreateWebApp).not.toHaveBeenCalled()
+
+    // Minimal manifest: structure cli, no scaffold-only fields
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest).toMatchObject({ structure: 'cli', projectName: 'acme', mainBranch: 'main' })
+    expect(manifest.modules).toBeUndefined()
+    expect(manifest.fileHashes).toBeUndefined()
+
+    // Harness deposits, no scaffold directories
+    expect(await readFile('CLAUDE.md', 'utf8')).toContain('# acme')
+    const settings = JSON.parse(await readFile(join(tempDir, '.claude', 'settings.json'), 'utf8'))
+    expect(JSON.stringify(settings.hooks.SessionStart)).toContain('sf status --claude-friendly --no-network')
+    expect(await readdir(tempDir)).not.toContain('apps')
+
+    // TC-1: sf status preconditions all pass on the harness install
+    const report = await collectStatus(tempDir, { checkNetwork: false })
+    const failing = evaluatePreconditions(report).filter((p) => p.status === 'fail')
+    expect(failing).toEqual([])
+  })
+
+  it('harness profile refuses to run when a manifest already exists', async () => {
+    const { writeFile: write } = jest.requireActual<typeof import('fs/promises')>('fs/promises')
+    await write(join(tempDir, '.saasfoundry.json'), '{"structure":"cli","projectName":"x","version":"1.0.0"}')
+
     await expect(
       newCommand({
         nonInteractive: true,
         profile: 'harness',
         projectName: 'acme',
-        mainBranch: 'main',
-        workflow: 'none'
+        mainBranch: 'main'
       })
-    ).rejects.toThrow(/harness profile is not executable yet/)
+    ).rejects.toThrow(/already has a \.saasfoundry\.json/)
 
     expect(mockedCreateApiApp).not.toHaveBeenCalled()
-    expect(mockedCreateWebApp).not.toHaveBeenCalled()
-    expect(await readdir(tempDir)).toEqual([])
   })
 
   it('defaults to the full profile in non-interactive mode without --profile (regression guard)', async () => {

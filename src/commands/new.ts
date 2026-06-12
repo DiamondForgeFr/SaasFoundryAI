@@ -11,6 +11,7 @@ import { createMonorepoRoot } from '../builders/monorepo.builder'
 import { createWebApp } from '../builders/web.builder'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
+import { installHarness } from '../installers/harness.installer'
 import { installSkills } from '../installers/skills.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { initAndStartDb } from '../runners/database.runner'
@@ -20,10 +21,10 @@ import { bootstrapSrs } from '../runners/srs.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
 import { targetManifestVersion } from '../migrations/manifest/registry'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
-import { manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
+import { Answers, manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
 import { ensureGitignorePatterns } from '../utils/gitignore'
-import { checkNodeVersion, computeFileHashes, setDefaultDbCredentials } from '../utils'
+import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 
@@ -41,10 +42,11 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   // everything below this line is pure execution on the validated config.
   const { config: startProjectAnswers } = await runConfigSession({ renderer: inquirerRenderer, prefill, nonInteractive })
 
-  // Harness execution (standalone installer on an existing project) ships
-  // with the dedicated installer story — stop before any filesystem mutation.
+  // Harness profile: install the AI harness onto the existing repository and
+  // stop — no scaffold, no project directory, no post-setup services.
   if (startProjectAnswers.profile === 'harness') {
-    throw new Error('The harness profile is not executable yet — the standalone harness installer is coming in an upcoming release. No files were created.')
+    await runHarnessInstall(startProjectAnswers)
+    return
   }
 
   // Set default values for database credentials
@@ -203,52 +205,9 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     })
 
     // SRS bootstrap (skill install + Notion pages creation) — opt-in
-    let srsTools: SrsToolConfig | undefined
-    if (startProjectAnswers.srsEnable) {
-      const missing: string[] = []
-      if (!startProjectAnswers.srsBackend) missing.push('srsBackend (--srs-backend)')
-      if (!startProjectAnswers.srsParentPageInput) missing.push('srsParentPageInput (--srs-parent-page-input)')
-      if (!startProjectAnswers.notionApiToken) missing.push('notionApiToken (--notion-api-token)')
-      if (startProjectAnswers.srsIngestEnable && !startProjectAnswers.srsIngestParentInput) {
-        missing.push('srsIngestParentInput (--srs-ingest-parent-input)')
-      }
-      if (missing.length > 0) {
-        throw new Error(`SRS bootstrap was enabled but the following values are missing: ${missing.join(', ')}. Either provide them or pass --no-srs-enable.`)
-      }
-      spinner.text = 'Bootstrapping SRS workspace...'
-      await installSrsSkill({ targetPath: '.' })
-      const adapter = new NotionSrsAdapter({
-        apiToken: startProjectAnswers.notionApiToken!,
-        notionVersion: startProjectAnswers.notionApiVersion
-      })
-      const result = await bootstrapSrs({
-        projectName: startProjectAnswers.projectName,
-        parentInput: startProjectAnswers.srsParentPageInput!,
-        adapter
-      })
-      srsTools = {
-        enabled: true,
-        backend: startProjectAnswers.srsBackend!,
-        rootPage: result.rootPage
-      }
-
-      // Optional ingestion flag — resolve the source parent and record pendingIngestion.
-      if (startProjectAnswers.srsIngestEnable) {
-        spinner.text = 'Resolving SRS ingestion source page...'
-        const sourceParent = await adapter.resolveParent(startProjectAnswers.srsIngestParentInput!)
-        srsTools.pendingIngestion = {
-          sourceBackend: 'notion',
-          sourceParent: { id: sourceParent.id, url: sourceParent.url ?? '', name: sourceParent.name },
-          createdAt: new Date().toISOString()
-        }
-      }
-
-      upsertEnvKey('.env', 'NOTION_API_TOKEN', startProjectAnswers.notionApiToken!)
-      if (startProjectAnswers.notionApiVersion) {
-        upsertEnvKey('.env', 'NOTION_API_VERSION', startProjectAnswers.notionApiVersion)
-      }
-      ensureGitignorePatterns('.gitignore', ['.env', '.env.local', '.env*.local'])
-    }
+    const srsTools = await bootstrapSrsWorkspace(startProjectAnswers, (text) => {
+      spinner.text = text
+    })
 
     // Generate .saasfoundry.json manifest with file hashes
     spinner.text = 'Computing file hashes for update tracking...'
@@ -519,4 +478,120 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   console.log('\n')
   console.log(chalk.green('='.repeat(80)))
   console.log('\n')
+}
+
+/**
+ * SRS workspace bootstrap shared by the scaffold and harness install paths:
+ * skill deposit, Notion root page creation, optional pending-ingestion stamp,
+ * token persistence to .env (gitignored).
+ */
+async function bootstrapSrsWorkspace(startProjectAnswers: Answers, onProgress: (text: string) => void): Promise<SrsToolConfig | undefined> {
+  if (!startProjectAnswers.srsEnable) return undefined
+
+  const missing: string[] = []
+  if (!startProjectAnswers.srsBackend) missing.push('srsBackend (--srs-backend)')
+  if (!startProjectAnswers.srsParentPageInput) missing.push('srsParentPageInput (--srs-parent-page-input)')
+  if (!startProjectAnswers.notionApiToken) missing.push('notionApiToken (--notion-api-token)')
+  if (startProjectAnswers.srsIngestEnable && !startProjectAnswers.srsIngestParentInput) {
+    missing.push('srsIngestParentInput (--srs-ingest-parent-input)')
+  }
+  if (missing.length > 0) {
+    throw new Error(`SRS bootstrap was enabled but the following values are missing: ${missing.join(', ')}. Either provide them or pass --no-srs-enable.`)
+  }
+
+  onProgress('Bootstrapping SRS workspace...')
+  await installSrsSkill({ targetPath: '.' })
+  const adapter = new NotionSrsAdapter({
+    apiToken: startProjectAnswers.notionApiToken!,
+    notionVersion: startProjectAnswers.notionApiVersion
+  })
+  const result = await bootstrapSrs({
+    projectName: startProjectAnswers.projectName,
+    parentInput: startProjectAnswers.srsParentPageInput!,
+    adapter
+  })
+  const srsTools: SrsToolConfig = {
+    enabled: true,
+    backend: startProjectAnswers.srsBackend!,
+    rootPage: result.rootPage
+  }
+
+  // Optional ingestion flag — resolve the source parent and record pendingIngestion.
+  if (startProjectAnswers.srsIngestEnable) {
+    onProgress('Resolving SRS ingestion source page...')
+    const sourceParent = await adapter.resolveParent(startProjectAnswers.srsIngestParentInput!)
+    srsTools.pendingIngestion = {
+      sourceBackend: 'notion',
+      sourceParent: { id: sourceParent.id, url: sourceParent.url ?? '', name: sourceParent.name },
+      createdAt: new Date().toISOString()
+    }
+  }
+
+  upsertEnvKey('.env', 'NOTION_API_TOKEN', startProjectAnswers.notionApiToken!)
+  if (startProjectAnswers.notionApiVersion) {
+    upsertEnvKey('.env', 'NOTION_API_VERSION', startProjectAnswers.notionApiVersion)
+  }
+  ensureGitignorePatterns('.gitignore', ['.env', '.env.local', '.env*.local'])
+
+  return srsTools
+}
+
+/**
+ * Harness-profile execution: deposit the AI harness onto the existing
+ * repository (cwd) and write a minimal manifest — structure 'cli', no
+ * modules block, no fileHashes (both are scaffold concerns; their absence is
+ * what tells `sf update` to skip template regeneration).
+ */
+async function runHarnessInstall(config: Answers): Promise<void> {
+  if (await fileExists('.saasfoundry.json')) {
+    throw new Error('This project already has a .saasfoundry.json — use `sf update` to add modules or `sf workflow` to adjust the workflow configuration.')
+  }
+
+  const spinner = ora({ text: 'Installing the AI harness...', spinner: 'dots' }).start()
+
+  try {
+    spinner.text = 'Installing skills and workflow artefacts...'
+    await installHarness({
+      targetPath: '.',
+      projectName: config.projectName,
+      version: cliVersion,
+      mainBranch: config.mainBranch,
+      workflow: config.workflow,
+      advancedSkills: config.advancedSkills
+    })
+
+    const srsTools = await bootstrapSrsWorkspace(config, (text) => {
+      spinner.text = text
+    })
+
+    spinner.text = 'Writing .saasfoundry.json...'
+    const manifest: SaaSFoundryManifest = {
+      $schema: manifestSchemaUrl,
+      manifestVersion: targetManifestVersion(),
+      version: cliVersion,
+      generatedAt: new Date().toISOString(),
+      structure: 'cli',
+      projectName: config.projectName,
+      mainBranch: config.mainBranch,
+      workflow: config.workflow,
+      aiRules: config.aiRules,
+      tools: srsTools ? { srs: srsTools } : undefined
+    }
+    await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
+
+    spinner.succeed(chalk.green('AI harness installed'))
+  } catch (error) {
+    spinner.fail(chalk.red('Failed to install the AI harness'))
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
+
+  console.log()
+  console.log(chalk.cyan('Next steps:'))
+  console.log(chalk.gray('  • sf status --claude-friendly          — verify preconditions'))
+  console.log(chalk.gray('  • open the project in Claude Code      — the SessionStart hook loads the project state'))
+  if (config.workflow && config.workflow.tool !== 'none') {
+    console.log(chalk.gray('  • .claude/skills/sf-workflow/SKILL.md  — workflow documentation'))
+  }
+  console.log()
 }
