@@ -1,8 +1,8 @@
 import chalk from 'chalk'
 import { copy } from 'fs-extra'
-import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import ora from 'ora'
 import { exec } from 'shelljs'
 import shelljs from 'shelljs'
@@ -11,7 +11,7 @@ import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installEmailModule } from '../installers/email.installer'
 import { installOptionalSkills } from '../installers/optional-skills.installer'
 import { installSkills } from '../installers/skills.installer'
-import { computeHarnessFileHashes, harnessInstallerMeta, installHarness, isHarnessTrackedPath } from '../installers/harness.installer'
+import { computeHarnessFileHashes, harnessInstallerMeta, installHarness, isHarnessTrackedPath, mergeHarnessUserFiles } from '../installers/harness.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { createApiApp } from '../builders/api.builder'
@@ -84,7 +84,9 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       mailersendSenderName: manifest.modules.email.provider === 'mailersend' ? 'App' : undefined,
       s3Setup: manifest.modules.s3Setup,
       s3Credentials: manifest.modules.s3Setup === 'credentials' ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' } : undefined,
-      advancedSkills: manifest.modules.advancedSkills || []
+      advancedSkills: manifest.modules.advancedSkills || [],
+      workflow: manifest.workflow,
+      aiRules: manifest.aiRules
     })
 
     // Re-run dev services builder if needed
@@ -108,7 +110,9 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       mainBranch: manifest.mainBranch ?? 'main',
       s3Setup: manifest.modules.s3Setup,
       includeAnalytics: manifest.modules.includeAnalytics,
-      advancedSkills: manifest.modules.advancedSkills || []
+      advancedSkills: manifest.modules.advancedSkills || [],
+      workflow: manifest.workflow,
+      aiRules: manifest.aiRules
     })
 
     // Re-run monorepo root builder if applicable
@@ -116,7 +120,9 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       await createMonorepoRoot({
         projectName: manifest.projectName,
         projectDescription: '',
-        mainBranch: manifest.mainBranch ?? 'main'
+        mainBranch: manifest.mainBranch ?? 'main',
+        workflow: manifest.workflow,
+        aiRules: manifest.aiRules
       })
     }
 
@@ -228,6 +234,9 @@ export async function applyFileUpdates(
       case 'update': {
         spinner.text = `Updating ${update.path}...`
         const content = await readFile(sourcePath, 'utf8')
+        // The user may have deleted the containing directory — recreate it
+        // rather than crashing the whole update midway.
+        await mkdir(dirname(destPath), { recursive: true })
         await writeFile(destPath, content)
         applied.push(update)
         break
@@ -270,20 +279,29 @@ export async function applyFileUpdates(
  * side of the FLOW 1b three-way merge. CLAUDE.md / settings.json land in the
  * temp dir too but are outside the tracked scope (merge-managed, never swept).
  */
-async function depositHarnessInTempDir(manifest: SaaSFoundryManifest): Promise<{ tempDir: string; hashes: Record<string, string> }> {
-  const tempDir = join(tmpdir(), `saasfoundry-harness-refresh-${Date.now()}`)
-  await mkdir(tempDir, { recursive: true })
+async function depositHarnessInTempDir(
+  manifest: SaaSFoundryManifest,
+  overrides?: { workflow?: SaaSFoundryManifest['workflow']; advancedSkills?: string[] }
+): Promise<{ tempDir: string; hashes: Record<string, string> }> {
+  // mkdtemp: unpredictable name, fails on collision — never reuse a
+  // pre-existing (possibly attacker-created) directory on shared /tmp.
+  const tempDir = await mkdtemp(join(tmpdir(), 'saasfoundry-harness-refresh-'))
 
-  await installHarness({
-    targetPath: tempDir,
-    projectName: manifest.projectName,
-    version: cliVersion,
-    mainBranch: manifest.mainBranch,
-    workflow: manifest.workflow,
-    advancedSkills: manifest.modules?.advancedSkills ?? []
-  })
-  if (manifest.tools?.srs?.enabled) {
-    await installSrsSkill({ targetPath: tempDir })
+  try {
+    await installHarness({
+      targetPath: tempDir,
+      projectName: manifest.projectName,
+      version: cliVersion,
+      mainBranch: manifest.mainBranch,
+      workflow: overrides?.workflow ?? manifest.workflow,
+      advancedSkills: overrides?.advancedSkills ?? manifest.modules?.advancedSkills ?? []
+    })
+    if (manifest.tools?.srs?.enabled) {
+      await installSrsSkill({ targetPath: tempDir })
+    }
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    throw error
   }
 
   return { tempDir, hashes: await computeHarnessFileHashes(tempDir) }
@@ -326,7 +344,7 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
   if (adoption) {
     console.log(chalk.yellow('  Harness deposits found without version tracking (installed by an older CLI).'))
     if (nonInteractive) {
-      console.log(chalk.yellow('  Re-run interactively (or with up-to-date tracking) to adopt and refresh them. Skipping.\n'))
+      console.log(chalk.yellow('  Run `sf update` without --non-interactive once to confirm their adoption. Skipping.\n'))
       if (dryRunReport) dryRunReport.harnessRefresh = { status: 'adoption-needed' }
       return
     }
@@ -357,6 +375,9 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
       // Nothing distinguishes old templates from user edits — be conservative.
       updates = updates.map((u) => (u.action === 'update' ? { ...u, action: 'conflict' as const } : u))
     }
+    // The adoption prompt promises "nothing overwritten" — honour it whatever
+    // the global strategy says.
+    const effectiveStrategy: ConflictStrategy = adoption ? 'save-new' : conflictStrategy
 
     if (updates.length === 0) {
       spinner.succeed(chalk.green('Harness deposits already match the current CLI.'))
@@ -372,24 +393,27 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
       }
     } else {
       spinner.start('Refreshing harness deposits...')
-      const { applied, conflicts, added } = await applyFileUpdates(updates, tempDir, spinner, conflictStrategy)
+      const { applied, conflicts, added } = await applyFileUpdates(updates, tempDir, spinner, effectiveStrategy)
       spinner.succeed(chalk.green('Harness refresh complete.'))
 
       if (applied.length > 0) console.log(chalk.green(`  ${applied.length} file(s) updated in place`))
       if (added.length > 0) console.log(chalk.green(`  ${added.length} new file(s) added`))
       if (conflicts.length > 0) {
-        console.log(chalk.red(`  ${conflicts.length} file(s) you edited — handled with strategy '${conflictStrategy}':`))
+        console.log(chalk.red(`  ${conflicts.length} file(s) you edited — handled with strategy '${effectiveStrategy}':`))
         for (const f of conflicts) {
-          console.log(chalk.red(`    ! ${f.path}${conflictStrategy === 'save-new' ? ` → review ${f.path}.saasfoundry.new` : ''}`))
+          console.log(chalk.red(`    ! ${f.path}${effectiveStrategy === 'save-new' ? ` → review ${f.path}.saasfoundry.new` : ''}`))
         }
       }
     }
 
     if (!dryRun) {
-      // Baseline moves to the freshly deposited target; non-harness hash
-      // entries (none expected on these manifests) are preserved untouched.
+      // Baseline = the deposit TARGET hashes, never a disk re-sweep: a
+      // conflicted (sidecar'd) user edit must stay different from the
+      // baseline so the next refresh re-conflicts instead of silently
+      // overwriting it in place. This also keeps user-authored files out of
+      // the tracking entirely.
       const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
-      manifest.fileHashes = { ...untracked, ...(await computeHarnessFileHashes('.')) }
+      manifest.fileHashes = { ...untracked, ...deposit.hashes }
       manifest.modules = { ...(manifest.modules ?? {}), harness: { version: harnessInstallerMeta.currentVersion } }
       manifest.version = cliVersion
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
@@ -397,6 +421,9 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
   } catch (error) {
     spinner.fail(chalk.red('Failed to refresh the harness deposits'))
     console.error(error)
+    // Surface the failure to scripts/CI without aborting FLOW 2; the version
+    // was not bumped, so the next run retries the refresh.
+    process.exitCode = 1
   } finally {
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {})
@@ -711,7 +738,9 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   // Harness addition: collect the workflow + skills decisions through the
   // config-engine session (same steps as `sf new`), before any spinner runs.
   let harnessConfig: Answers | null = null
-  if (selectedModules.includes('harness')) {
+  if (selectedModules.includes('harness') && !dryRun) {
+    // Not in dry-run: the workflow step may create a GitHub Project during
+    // collection (legacy side effect, cleanup owned by FR-CONFIG-ENGINE-04).
     const { config } = await runConfigSession({
       renderer: inquirerRenderer,
       steps: [workflowStep, skillsStep],
@@ -789,16 +818,52 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       throw new Error('Stack modules require a scaffolded SaaS project (generated by sf new)')
     }
 
+    let harnessTargetHashes: Record<string, string> | null = null
     if (selectedModules.includes('harness') && harnessConfig) {
       moduleSpinner.text = 'Installing the AI harness...'
-      await installHarness({
-        targetPath: '.',
-        projectName: manifest.projectName,
-        version: cliVersion,
-        mainBranch: manifest.mainBranch,
-        workflow: harnessConfig.workflow,
-        advancedSkills: harnessConfig.advancedSkills
-      })
+      const preExisting = await computeHarnessFileHashes('.')
+
+      if (Object.keys(preExisting).length === 0) {
+        // No prior deposits — plain install.
+        await installHarness({
+          targetPath: '.',
+          projectName: manifest.projectName,
+          version: cliVersion,
+          mainBranch: manifest.mainBranch,
+          workflow: harnessConfig.workflow,
+          advancedSkills: harnessConfig.advancedSkills
+        })
+        harnessTargetHashes = await computeHarnessFileHashes('.')
+        manifest.fileHashes = { ...(manifest.fileHashes ?? {}), ...harnessTargetHashes }
+      } else {
+        // Deposits already exist (stack scaffolds ship core skills; earlier
+        // manual installs): a blind copy would clobber user edits. Run the
+        // same three-way machinery as FLOW 1b — tracked baseline when
+        // available, conservative current-disk baseline otherwise.
+        const deposit = await depositHarnessInTempDir(manifest, { workflow: harnessConfig.workflow, advancedSkills: harnessConfig.advancedSkills })
+        try {
+          const tracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => isHarnessTrackedPath(p)))
+          const conservative = Object.keys(tracked).length === 0
+          let updates = computeFileUpdates(conservative ? preExisting : tracked, preExisting, deposit.hashes).filter((u) => u.action !== 'remove')
+          if (conservative) {
+            updates = updates.map((u) => (u.action === 'update' ? { ...u, action: 'conflict' as const } : u))
+          }
+          await applyFileUpdates(updates, deposit.tempDir, moduleSpinner, conservative ? 'save-new' : conflictStrategy)
+          await mergeHarnessUserFiles({
+            targetPath: '.',
+            projectName: manifest.projectName,
+            version: cliVersion,
+            mainBranch: manifest.mainBranch,
+            workflow: harnessConfig.workflow
+          })
+          const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
+          harnessTargetHashes = deposit.hashes
+          manifest.fileHashes = { ...untracked, ...deposit.hashes }
+        } finally {
+          await rm(deposit.tempDir, { recursive: true, force: true }).catch(() => {})
+        }
+      }
+
       manifest.workflow = harnessConfig.workflow ?? manifest.workflow
       manifest.aiRules = harnessConfig.aiRules ?? manifest.aiRules
       manifest.modules = {
@@ -806,8 +871,6 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
         harness: { version: harnessInstallerMeta.currentVersion },
         advancedSkills: [...new Set([...(manifest.modules?.advancedSkills ?? []), ...(harnessConfig.advancedSkills ?? [])])]
       }
-      // Hash-track the deposits so FLOW 1b can refresh them conflict-aware.
-      manifest.fileHashes = { ...(manifest.fileHashes ?? {}), ...(await computeHarnessFileHashes('.')) }
     }
 
     if (selectedModules.includes('email') && emailCredentials) {
@@ -924,6 +987,12 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     moduleSpinner.text = 'Updating project manifest...'
     if (isScaffoldManifest(manifest)) {
       manifest.fileHashes = await computeFileHashes('.')
+      if (harnessTargetHashes) {
+        // Harness deposits keep their TARGET baseline — the disk sweep would
+        // re-absorb a conflicted (sidecar'd) user edit and silently overwrite
+        // it on the next refresh.
+        for (const [p, h] of Object.entries(harnessTargetHashes)) manifest.fileHashes[p] = h
+      }
     }
     await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
 

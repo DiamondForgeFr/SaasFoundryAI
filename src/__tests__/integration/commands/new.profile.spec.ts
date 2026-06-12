@@ -124,7 +124,7 @@ describe('newCommand (--profile integration)', () => {
     // (scoped to the deposit dirs only — never the user's own code)
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
     expect(manifest).toMatchObject({ structure: 'cli', projectName: 'acme', mainBranch: 'main' })
-    expect(manifest.modules).toEqual({ harness: { version: 1 } })
+    expect(manifest.modules).toEqual({ harness: { version: 1 }, advancedSkills: [] })
     // computeFileHashes is mocked to {} in this spec — the field wiring is
     // asserted here, real hash content is covered by the installer unit spec.
     expect(manifest.fileHashes).toBeDefined()

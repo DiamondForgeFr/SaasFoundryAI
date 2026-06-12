@@ -78,7 +78,7 @@ export async function installWorkflowSkill({ targetPath, workflow, projectUrl }:
 /**
  * Generate and inject workflow section into CLAUDE.md
  */
-async function injectWorkflowSection({ targetPath, workflow, projectUrl }: InstallWorkflowSkillParams) {
+export async function injectWorkflowSection({ targetPath, workflow, projectUrl }: InstallWorkflowSkillParams) {
   const claudeMdPath = `${targetPath}/CLAUDE.md`
 
   if (!(await fileExists(claudeMdPath))) {

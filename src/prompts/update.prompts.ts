@@ -2,7 +2,7 @@ import chalk from 'chalk'
 import { exec } from 'shelljs'
 
 import { CATALOGUE } from '../catalogue/modules'
-import { Answers, SaaSFoundryManifest } from '../types'
+import { Answers, SaaSFoundryManifest, isScaffoldManifest } from '../types'
 import { PromptOptions, promptWithPrefill } from './helpers'
 import { AdvancedSkillCredentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from './skills.prompts'
 
@@ -24,16 +24,17 @@ function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): b
     case 'email':
       return modules?.email?.provider === 'none'
     case 'storage':
-      return modules !== undefined && modules.s3Setup === 'manual'
+      return isScaffoldManifest(manifest) && modules?.s3Setup === 'manual'
     case 'analytics':
-      return modules !== undefined && !modules.includeAnalytics
+      return isScaffoldManifest(manifest) && !modules?.includeAnalytics
     case 'srs':
       return !(manifest.tools?.srs?.enabled === true)
     case 'harness':
-      // Addable when no AI workflow is configured yet (stack-only projects,
-      // or harness installs that skipped the workflow step). Available on any
-      // structure — the harness never needs the scaffold.
-      return manifest.workflow === undefined || manifest.workflow.tool === 'none'
+      // Addable while the deposits are not version-tracked yet — any
+      // structure, the harness never needs the scaffold. A tracked project
+      // missing only the workflow config is routed to `sf workflow use`,
+      // not to a re-install.
+      return modules?.harness === undefined
     case 'sf-skill-context7':
     case 'sf-skill-atlassian':
     case 'sf-skill-notion':

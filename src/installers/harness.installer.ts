@@ -1,12 +1,12 @@
 import { copy } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
-import { join, resolve } from 'path'
+import { join, resolve, sep } from 'path'
 
 import { installClaudeDocs } from './claude-docs.installer'
 import { installCoreSkills } from './core-skills.installer'
 import { installOptionalSkills } from './optional-skills.installer'
 import { installToolSkill } from './tool-skill.installer'
-import { installWorkflowSkill } from './workflow-skill.installer'
+import { injectWorkflowSection, installWorkflowSkill } from './workflow-skill.installer'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { WorkflowConfig, skillsTemplatesPath } from '../types'
 import { ClaudeHooksConfig, mergeClaudeSettingsHooks } from '../utils/claude-settings'
@@ -50,7 +50,9 @@ export async function computeHarnessFileHashes(targetPath: string): Promise<Reco
     if (!(await fileExists(dirPath))) continue
     const dirHashes = await computeFileHashes(dirPath)
     for (const [relPath, hash] of Object.entries(dirHashes)) {
-      const projectRelPath = `${dir}/${relPath}`
+      // Normalize to forward slashes so baselines committed from Windows
+      // still match on POSIX (and vice versa).
+      const projectRelPath = `${dir}/${relPath.split(sep).join('/')}`
       if (isHarnessTrackedPath(projectRelPath)) hashes[projectRelPath] = hash
     }
   }
@@ -95,6 +97,42 @@ export interface InstallHarnessParams {
 const HARNESS_HOOKS: ClaudeHooksConfig = {
   SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }],
   UserPromptSubmit: [{ hooks: [{ type: 'command', command: '.claude/skills/sf-srs/scripts/srs-intent-hook.sh' }] }]
+}
+
+export interface MergeHarnessUserFilesParams {
+  targetPath: string
+  projectName: string
+  version: string
+  mainBranch?: string
+  workflow?: WorkflowConfig
+}
+
+/**
+ * The merge-managed (non-swept) side of a harness install: CLAUDE.md
+ * (template deposited only when absent, placeholders resolved, workflow
+ * section re-injected idempotently) and the Claude Code hooks. Used by the
+ * conflict-safe install path of `sf update` after the three-way deposit
+ * merge, which by design never touches these user-owned files.
+ */
+export async function mergeHarnessUserFiles({ targetPath, projectName, version, mainBranch = 'main', workflow }: MergeHarnessUserFilesParams): Promise<void> {
+  const claudeMdPath = join(targetPath, 'CLAUDE.md')
+  const depositedClaudeMd = !(await fileExists(claudeMdPath))
+
+  if (depositedClaudeMd) {
+    await copy(resolve(skillsTemplatesPath, 'harness', 'CLAUDE.md'), claudeMdPath)
+    let content = await readFile(claudeMdPath, 'utf8')
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
+      .replace(/\{\{VERSION\}\}/g, version)
+      .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
+    await writeFile(claudeMdPath, content)
+  }
+
+  if (workflow && workflow.tool !== 'none') {
+    await injectWorkflowSection({ targetPath, workflow, projectUrl: workflow.projectUrl })
+  }
+
+  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
 }
 
 /**
