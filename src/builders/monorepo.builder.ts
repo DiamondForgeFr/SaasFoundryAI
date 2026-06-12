@@ -5,8 +5,7 @@ import { exec } from 'shelljs'
 
 import { depositEmailSharedTypes } from '../installers/email.installer'
 import { depositStorageSharedConfig } from '../installers/storage.installer'
-import { installToolSkill } from '../installers/tool-skill.installer'
-import { installWorkflowSkill } from '../installers/workflow-skill.installer'
+import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 
@@ -91,20 +90,8 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   // Generate Prisma client from the API workspace
   await exec(`${nvm}cd apps/api && npx prisma generate > /dev/null 2>&1`)
 
-  // Install workflow skill at root (if workflow is configured)
-  if (workflow && workflow.tool !== 'none') {
-    await installWorkflowSkill({
-      targetPath: '.',
-      workflow,
-      projectUrl: workflow.projectUrl
-    })
-
-    // Install tool-specific skill for the workflow
-    await installToolSkill({
-      targetPath: '.',
-      tool: workflow.tool as 'github-projects' | 'jira' | 'notion' | 'linear'
-    })
-  }
+  // Install workflow artefacts (skill + tool skill) when a workflow is configured
+  await installWorkflowArtifacts({ targetPath: '.', workflow })
 
   // Initialize Git repository at root level
   await exec(`git init > /dev/null 2>&1`)

@@ -5,8 +5,7 @@ import { exec } from 'shelljs'
 
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
-import { installToolSkill } from '../installers/tool-skill.installer'
-import { installWorkflowSkill } from '../installers/workflow-skill.installer'
+import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { fileExists, generateJwtSecret, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 
@@ -134,20 +133,8 @@ export async function createApiApp({
     })
   }
 
-  // Install workflow skill (if workflow is configured)
-  if (workflow && workflow.tool !== 'none') {
-    await installWorkflowSkill({
-      targetPath: apiPath,
-      workflow,
-      projectUrl: workflow.projectUrl
-    })
-
-    // Install tool-specific skill for the workflow
-    await installToolSkill({
-      targetPath: apiPath,
-      tool: workflow.tool as 'github-projects' | 'jira' | 'notion' | 'linear'
-    })
-  }
+  // Install workflow artefacts (skill + tool skill) when a workflow is configured
+  await installWorkflowArtifacts({ targetPath: apiPath, workflow })
 
   // Install optional skills (if selected)
   // TODO: Add optional skills selection to CreateApiAppParams and call installOptionalSkills

@@ -1,6 +1,7 @@
 import { analyticsInstallerMeta } from './analytics.installer'
 import { coreSkillsInstallerMeta } from './core-skills.installer'
 import { emailInstallerMeta } from './email.installer'
+import { harnessInstallerMeta } from './harness.installer'
 import { skillsInstallerMeta } from './skills.installer'
 import { srsSkillInstallerMeta } from './srs-skill.installer'
 import { storageInstallerMeta } from './storage.installer'
@@ -28,7 +29,8 @@ export const moduleInstallers: ModuleInstaller[] = [
   skillsInstallerMeta,
   coreSkillsInstallerMeta,
   toolSkillInstallerMeta,
-  workflowSkillInstallerMeta
+  workflowSkillInstallerMeta,
+  harnessInstallerMeta
 ]
 
 export function getModuleInstaller(name: string): ModuleInstaller | undefined {

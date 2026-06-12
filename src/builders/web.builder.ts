@@ -5,8 +5,7 @@ import { exec } from 'shelljs'
 import glob from 'glob'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
-import { installToolSkill } from '../installers/tool-skill.installer'
-import { installWorkflowSkill } from '../installers/workflow-skill.installer'
+import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 
@@ -114,20 +113,8 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     await installAnalyticsModule({ webPath })
   }
 
-  // Install workflow skill (if workflow is configured)
-  if (workflow && workflow.tool !== 'none') {
-    await installWorkflowSkill({
-      targetPath: webPath,
-      workflow,
-      projectUrl: workflow.projectUrl
-    })
-
-    // Install tool-specific skill for the workflow
-    await installToolSkill({
-      targetPath: webPath,
-      tool: workflow.tool as 'github-projects' | 'jira' | 'notion' | 'linear'
-    })
-  }
+  // Install workflow artefacts (skill + tool skill) when a workflow is configured
+  await installWorkflowArtifacts({ targetPath: webPath, workflow })
 
   // Initialize Git repository
   if (!isMonorepo) {
