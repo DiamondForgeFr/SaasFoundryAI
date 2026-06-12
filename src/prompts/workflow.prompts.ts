@@ -11,7 +11,7 @@ const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
 const CREDENTIALS_DIR = path.join(os.homedir(), '.claude', 'credentials')
 
 // Workflow Presets
-const WORKFLOW_PRESETS = {
+export const WORKFLOW_PRESETS = {
   saasfoundry: {
     name: 'SaaSFoundry AI Workflow',
     description: '7-status workflow with AI and Human testing phases (recommended for AI-assisted development)',
@@ -56,6 +56,47 @@ const WORKFLOW_PRESETS = {
         name: 'Done',
         description:
           'Feature completed and merged to main branch. Code is deployed or ready for deployment. Close the ticket, archive subtasks, and update any related documentation. Celebrate the win!',
+        color: 'GREEN' as GitHubProjectColor
+      }
+    ],
+    issueTypes: [
+      { name: 'sf-epic', description: 'Grouper for related sf-stories/sf-tasks (no PR, no branch)', color: 'PURPLE' as GitHubProjectColor },
+      { name: 'sf-story', description: 'Delivers user-observable value', color: 'BLUE' as GitHubProjectColor },
+      { name: 'sf-task', description: 'Delivers a technical action (refactor, infra, tooling)', color: 'GRAY' as GitHubProjectColor },
+      { name: 'sf-issue', description: 'Defect or unexpected behavior to investigate and fix', color: 'RED' as GitHubProjectColor }
+    ]
+  },
+  solo: {
+    name: 'SaaSFoundry Solo',
+    description: '5-status workflow for solo developers — same rigor and guards, less ceremony (PR review is the human gate); upgradable in place to the team workflow',
+    statuses: [
+      {
+        name: 'Backlog',
+        description:
+          'Raw ideas and specs waiting to be challenged. AI must challenge the ticket with the developer to clarify requirements, identify edge cases, and validate approach before starting. Complexity label is mandatory before leaving Backlog.',
+        color: 'GRAY' as GitHubProjectColor
+      },
+      {
+        name: 'In Progress',
+        description:
+          'Task currently being worked on by AI after the developer confirmed pickup. One commit per subtask. When all subtasks are done: run existing tests (unit, E2E, lint, TypeScript), commit and push all changes, then move to AI Testing and generate a test plan.',
+        color: 'BLUE' as GitHubProjectColor
+      },
+      {
+        name: 'AI Testing',
+        description:
+          'Validation phase. Execute the generated test plan step by step, document findings in ticket comments, fix and re-test on failure. When all tests pass: post the test report, create the pull request and move to In Review — the PR review is where the developer validates.',
+        color: 'PURPLE' as GitHubProjectColor
+      },
+      {
+        name: 'In Review',
+        description:
+          'Pull request open — this is the human gate of the solo workflow. The developer reviews the changes (and tests manually if needed); AI monitors CI and review comments and addresses feedback. The developer merging the PR is what moves the ticket to Done.',
+        color: 'PINK' as GitHubProjectColor
+      },
+      {
+        name: 'Done',
+        description: 'PR merged to the working branch. Close the ticket, clean up local branches, and update any related documentation.',
         color: 'GREEN' as GitHubProjectColor
       }
     ],
@@ -372,7 +413,13 @@ export const DEFAULT_AI_RULES: AIRules = {
  * Prompt user to select a workflow preset or create custom
  * @returns Selected workflow statuses
  */
-async function promptWorkflowPreset(): Promise<{ statuses: WorkflowStatus[]; isPreconfigured: boolean }> {
+async function promptWorkflowPreset(preselected?: keyof typeof WORKFLOW_PRESETS): Promise<{ statuses: WorkflowStatus[]; isPreconfigured: boolean; presetKey?: keyof typeof WORKFLOW_PRESETS }> {
+  if (preselected && WORKFLOW_PRESETS[preselected]) {
+    const chosen = WORKFLOW_PRESETS[preselected]
+    console.log(chalk.green(`\n✅ Using ${chosen.name} (preset passed via --workflow) with ${chosen.statuses.length} statuses.`))
+    return { statuses: chosen.statuses, isPreconfigured: true, presetKey: preselected }
+  }
+
   const { preset } = await inquirer.prompt([
     {
       type: 'list',
@@ -380,8 +427,12 @@ async function promptWorkflowPreset(): Promise<{ statuses: WorkflowStatus[]; isP
       message: 'Choose your workflow configuration:',
       choices: [
         {
-          name: `${chalk.cyan('SaaSFoundry AI Workflow')} - 7 statuses with AI/Human testing phases ${chalk.gray('(recommended)')}`,
+          name: `${chalk.cyan('SaaSFoundry AI Workflow')} - 7 statuses with AI/Human testing phases ${chalk.gray('(recommended for teams)')}`,
           value: 'saasfoundry'
+        },
+        {
+          name: `${chalk.cyan('SaaSFoundry Solo')} - 5 statuses, PR review as the human gate ${chalk.gray('(solo developers — upgradable to the team workflow)')}`,
+          value: 'solo'
         },
         {
           name: `${chalk.yellow('Custom Workflow')} - Define your own statuses`,
@@ -425,7 +476,8 @@ async function promptWorkflowPreset(): Promise<{ statuses: WorkflowStatus[]; isP
 
   return {
     statuses: selectedPreset.statuses,
-    isPreconfigured: true
+    isPreconfigured: true,
+    presetKey: preset as keyof typeof WORKFLOW_PRESETS
   }
 }
 
@@ -522,7 +574,8 @@ async function promptCustomWorkflow(): Promise<WorkflowStatus[]> {
  */
 export async function promptWorkflowConfiguration(
   projectName?: string,
-  repositoryUrl?: string
+  repositoryUrl?: string,
+  presetOverride?: keyof typeof WORKFLOW_PRESETS
 ): Promise<{
   workflow: WorkflowConfig
   aiRules: AIRules
@@ -748,6 +801,7 @@ export async function promptWorkflowConfiguration(
   let projectUrl = ''
   let workflowStatuses: WorkflowStatus[] = []
   let isPreconfiguredWorkflow = false
+  let selectedPresetKey: keyof typeof WORKFLOW_PRESETS | undefined
 
   if (tool === 'github-projects') {
     // Offer auto-creation if gh is authenticated
@@ -763,9 +817,10 @@ export async function promptWorkflowConfiguration(
 
       if (createNew) {
         // Step 4a: Choose workflow preset
-        const presetResult = await promptWorkflowPreset()
+        const presetResult = await promptWorkflowPreset(presetOverride)
         workflowStatuses = presetResult.statuses
         isPreconfiguredWorkflow = presetResult.isPreconfigured
+        selectedPresetKey = presetResult.presetKey
 
         // Step 4b: Enter project name (use passed projectName as default)
         const { ghProjectName } = await inquirer.prompt([
@@ -802,9 +857,10 @@ export async function promptWorkflowConfiguration(
         }
       } else {
         // Manual URL entry - still ask for workflow preset
-        const presetResult = await promptWorkflowPreset()
+        const presetResult = await promptWorkflowPreset(presetOverride)
         workflowStatuses = presetResult.statuses
         isPreconfiguredWorkflow = presetResult.isPreconfigured
+        selectedPresetKey = presetResult.presetKey
 
         const { url } = await inquirer.prompt([
           {
@@ -824,9 +880,10 @@ export async function promptWorkflowConfiguration(
       }
     } else {
       // Not authenticated - manual URL only, but still configure workflow
-      const presetResult = await promptWorkflowPreset()
+      const presetResult = await promptWorkflowPreset(presetOverride)
       workflowStatuses = presetResult.statuses
       isPreconfiguredWorkflow = presetResult.isPreconfigured
+      selectedPresetKey = presetResult.presetKey
 
       console.log(chalk.yellow('\n💡 Tip: Run "gh auth login" to enable auto-creation of GitHub Projects\n'))
       const { url } = await inquirer.prompt([
@@ -981,6 +1038,7 @@ export async function promptWorkflowConfiguration(
     workingBranch,
     prTargetBranch,
     requireCodeReview,
+    template: selectedPresetKey ? WORKFLOW_PRESETS[selectedPresetKey].name : undefined,
     statuses: workflowStatuses.length > 0 ? workflowStatuses : DEFAULT_STATUSES[tool as keyof typeof DEFAULT_STATUSES],
     issueTypes: tool === 'github-projects' ? DEFAULT_ISSUE_TYPES : undefined,
     branchNaming: DEFAULT_BRANCH_NAMING,

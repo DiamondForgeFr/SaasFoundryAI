@@ -53,6 +53,8 @@ export interface Answers {
   srsIngestEnable?: boolean
   srsIngestParentInput?: string
   workflow?: WorkflowConfig
+  /** Collection-only preset preselection from `--workflow <preset>`; never persisted. */
+  workflowPreset?: 'saasfoundry' | 'solo'
   aiRules?: AIRules
 }
 

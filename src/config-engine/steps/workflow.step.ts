@@ -44,7 +44,7 @@ export const workflowStep: StepDefinition = {
       // Pass repository URL if available (for GitHub Project creation)
       const repositoryUrl = state.monorepoUrl || state.backendRepoUrl || state.frontendRepoUrl
 
-      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl)
+      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset)
       return { workflow, aiRules }
     }
 

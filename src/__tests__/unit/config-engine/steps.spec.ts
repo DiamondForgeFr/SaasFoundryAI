@@ -153,7 +153,7 @@ describe('workflowStep', () => {
 
     const result = await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://git/acme' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme')
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined)
     expect(result).toMatchObject({ workflow: { tool: 'github-projects' } })
     logSpy.mockRestore()
   })
