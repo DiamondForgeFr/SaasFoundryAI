@@ -1,4 +1,4 @@
-import { copy } from 'fs-extra'
+import { copy, move, remove } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
@@ -35,8 +35,22 @@ export async function installWorkflowSkill({ targetPath, workflow, projectUrl }:
   const templatePath = resolve(skillsTemplatesPath, 'workflow')
   const targetSkillPath = `${targetPath}/.claude/skills/sf-workflow`
 
+  // Re-installs (e.g. `sf workflow use` preset upgrades) must not leave stale
+  // docs from the previous preset behind.
+  await remove(targetSkillPath)
+
   // Copy entire skill template
   await copy(templatePath, targetSkillPath)
+
+  // Keep only the status docs of the configured preset — a 5-status solo
+  // project must never ship orphan Human Testing / Ready docs.
+  const soloPreset = workflow.template === 'SaaSFoundry Solo'
+  if (soloPreset) {
+    await remove(`${targetSkillPath}/statuses`)
+    await move(`${targetSkillPath}/statuses-solo`, `${targetSkillPath}/statuses`)
+  } else {
+    await remove(`${targetSkillPath}/statuses-solo`)
+  }
 
   // Replace placeholders in SKILL.md
   const skillMdPath = `${targetSkillPath}/SKILL.md`
@@ -76,11 +90,16 @@ async function injectWorkflowSection({ targetPath, workflow, projectUrl }: Insta
   // Generate workflow section
   const workflowSection = generateWorkflowSection(workflow, projectUrl)
 
-  // Inject after Git Workflow section (or at the end if not found)
+  const sectionMarker = '## Workflow System'
   const gitWorkflowMarker = '## Git Workflow'
   const developmentCommandsMarker = '## Development Commands'
 
-  if (claudeMdContent.includes(gitWorkflowMarker) && claudeMdContent.includes(developmentCommandsMarker)) {
+  if (claudeMdContent.includes(sectionMarker)) {
+    // Idempotent re-install (preset upgrade): replace the existing section,
+    // which spans from its heading to the next top-level heading (or EOF).
+    const sectionRegex = /## Workflow System[\s\S]*?(?=\n## |$)/
+    claudeMdContent = claudeMdContent.replace(sectionRegex, `${workflowSection}\n`)
+  } else if (claudeMdContent.includes(gitWorkflowMarker) && claudeMdContent.includes(developmentCommandsMarker)) {
     // Inject between Git Workflow and Development Commands
     claudeMdContent = claudeMdContent.replace(developmentCommandsMarker, `${workflowSection}\n\n${developmentCommandsMarker}`)
   } else {

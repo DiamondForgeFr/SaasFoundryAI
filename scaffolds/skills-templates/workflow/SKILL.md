@@ -44,8 +44,8 @@ An Epic's board status is **computed from its children**, never set directly.
 
 | Direction | Rule | Intuition |
 | --- | --- | --- |
-| **Ascent** (Backlog → Ready → In progress) | Epic = **earliest** status among children | As soon as one child advances, the Epic moves with it |
-| **Descent** (In progress → AI testing → Human testing → In review → Done) | Epic = **latest** status among children | The Epic reaches a later stage only when **all** children have reached it |
+| **Ascent** (Backlog → … → In progress) | Epic = **earliest** status among children | As soon as one child advances, the Epic moves with it |
+| **Descent** (In progress → … → Done) | Epic = **latest** status among children | The Epic reaches a later stage only when **all** children have reached it |
 
 **Consequence** — an Epic at `Done` is a strong contract: every child is merged. Example: children at `{In progress, Ready, Backlog}` ⇒ Epic = `Ready` (earliest). Children at `{Done, In review, In review}` ⇒ Epic = `In review` (latest).
 
@@ -163,7 +163,7 @@ Each phase is documented in detail:
 - `statuses/3b-human-review.md` — spec owner reviews and approves
 - `statuses/3c-spawning.md` — children land in Backlog, drafting ticket closes
 
-**Guard** — `update-status <ticket> "AI testing|Human testing|In review"` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
+**Guard** — `update-status <ticket> <any testing/review status>` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
 
 ### Rule 8 — spawning Stories from SRS
 
@@ -200,7 +200,7 @@ When `tools.srs.enabled = true`, Claude must interject during conversation turns
 4. **ASK if uncertain** - don't assume or guess
 5. **CLOSE CHILD TICKETS AS THEY LAND** — after a child Story/Task/Issue's final commit is merged, immediately run `workflow-cli.sh update-status <child> Done` and verify `gh issue view <child> --json state` prints `CLOSED` before starting the next sibling. Never batch closures at the end of an Epic. (A true Subtask is a commit, not a {{TOOL}} issue — there is no status to close.)
 6. **EPIC STATUS FOLLOWS CHILDREN** — an Epic's board status is derived from its children (earliest for ascent Backlog→In progress, latest for descent In progress→Done — see "Epic status derivation rule" above). Before advancing an Epic, run `gh issue list --state open --search "parent #<N>"` and confirm the target status is consistent with all children. An Epic can only reach `Done` when every child is `Done`.
-7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket is `In Progress` / `AI Testing` / `Human Testing` / `In Review`, drive it to `Done` before claiming or starting another. The only override is an explicit developer request to pause.
+7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket sits in any status between `In Progress` and `Done` (see the Workflow Statuses section above), drive it to `Done` before claiming or starting another. The only override is an explicit developer request to pause.
 8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody`. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section above. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
 
 9. **ANNOUNCE + STREAM LONG COMMANDS** — before any command expected to take more than ~5 seconds (test suites, builds, commit/push hooks, Docker scenarios), announce in one sentence what runs and the expected duration. Over ~60 seconds, run it in the background and stream its progress markers to the user as they appear (e.g. `tail -f <log> | grep -E --line-buffered "PASS|FAIL|\[sf-progress\]"`) — never block silently. Report the outcome with numbers, and relay the ▶ AI / ⏳ Dev banner printed by `update-status` after every transition.
