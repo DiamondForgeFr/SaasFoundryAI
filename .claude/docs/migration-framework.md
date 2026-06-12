@@ -128,6 +128,21 @@ If the user has hand-edited `mailersend.service.ts`, both writes land as `.saasf
 
 ---
 
+## Harness refresh vs module migrations (#451)
+
+Harness deposits (`.claude/skills/sf-*`, `.claude/docs`) follow the CLI version through **FLOW 1b of `sf update`** — a three-way merge (baseline = `manifest.fileHashes` harness subset, current = disk,
+target = fresh deposit) scoped to the tracked paths. Routine template improvements (rewording a SKILL.md, adding a doc) ship through this refresh automatically: **no migration needed**.
+
+Reserve `ModuleMigration`s on `harnessInstallerMeta` for **structural** changes to the deposits: renaming a skill directory, splitting a script, removing a file (the refresh never auto-deletes —
+`remove` actions are intentionally dropped). Those migrations use `writeMigratedFile` like any module and bump `modules.harness.version`.
+
+Boundaries to respect:
+
+- The `sf-` prefix under `.claude/skills/` is reserved for deposits — user-authored skills outside it are never tracked nor touched.
+- `CLAUDE.md` and `.claude/settings.json` are user-owned: managed through targeted merges (workflow-section re-injection, hook merging), never the file sweep.
+- Scaffolded projects refresh their harness through FLOW 1 (full template regen) — FLOW 1b only runs on non-scaffold manifests (`isScaffoldManifest()` is the gate; the marker is `modules.email`, never
+  the mere presence of the `modules` block).
+
 ## When NOT to add a migration
 
 - **Adding a new optional field to the manifest with a sensible default** — the JSON schema keeps validating older manifests; no migration needed.
