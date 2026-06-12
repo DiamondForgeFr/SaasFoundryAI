@@ -1,0 +1,97 @@
+import { copy } from 'fs-extra'
+import { readFile, writeFile } from 'fs/promises'
+import { join, resolve } from 'path'
+
+import { installClaudeDocs } from './claude-docs.installer'
+import { installCoreSkills } from './core-skills.installer'
+import { installOptionalSkills } from './optional-skills.installer'
+import { installToolSkill } from './tool-skill.installer'
+import { installWorkflowSkill } from './workflow-skill.installer'
+import type { ModuleInstaller } from '../migrations/module/types'
+import { WorkflowConfig, skillsTemplatesPath } from '../types'
+import { ClaudeHooksConfig, mergeClaudeSettingsHooks } from '../utils/claude-settings'
+import { fileExists } from '../utils'
+
+export const harnessInstallerMeta: ModuleInstaller = {
+  name: 'harness',
+  currentVersion: 1,
+  migrations: []
+}
+
+export interface InstallWorkflowArtifactsParams {
+  targetPath: string
+  workflow?: WorkflowConfig
+}
+
+/**
+ * Workflow-related deposits shared by every install path: the sf-workflow
+ * skill (with CLAUDE.md section injection) and the tool-specific skill.
+ * Builders (full profile) and the standalone harness install both delegate
+ * here, so the deposited files stay identical across profiles.
+ */
+export async function installWorkflowArtifacts({ targetPath, workflow }: InstallWorkflowArtifactsParams): Promise<void> {
+  if (!workflow || workflow.tool === 'none') return
+
+  await installWorkflowSkill({
+    targetPath,
+    workflow,
+    projectUrl: workflow.projectUrl
+  })
+
+  await installToolSkill({
+    targetPath,
+    tool: workflow.tool as 'github-projects' | 'jira' | 'notion' | 'linear'
+  })
+}
+
+export interface InstallHarnessParams {
+  targetPath: string
+  projectName: string
+  version: string
+  mainBranch?: string
+  workflow?: WorkflowConfig
+  advancedSkills?: string[]
+}
+
+const HARNESS_HOOKS: ClaudeHooksConfig = {
+  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }],
+  UserPromptSubmit: [{ hooks: [{ type: 'command', command: '.claude/skills/sf-srs/scripts/srs-intent-hook.sh' }] }]
+}
+
+/**
+ * Install the AI harness onto an EXISTING repository (harness profile):
+ * core skills, shared docs, optional tool skills, workflow artefacts,
+ * Claude Code hooks and a minimal CLAUDE.md when the repo has none.
+ *
+ * The user's files are respected: an existing CLAUDE.md is only appended to
+ * (workflow section injection), and .claude/settings.json is merged, never
+ * overwritten.
+ */
+export async function installHarness({ targetPath, projectName, version, mainBranch = 'main', workflow, advancedSkills = [] }: InstallHarnessParams): Promise<void> {
+  const claudeMdPath = join(targetPath, 'CLAUDE.md')
+  const depositedClaudeMd = !(await fileExists(claudeMdPath))
+
+  if (depositedClaudeMd) {
+    await copy(resolve(skillsTemplatesPath, 'harness', 'CLAUDE.md'), claudeMdPath)
+  }
+
+  await installCoreSkills({ targetPath })
+  await installClaudeDocs({ targetPath })
+
+  if (advancedSkills.length > 0) {
+    await installOptionalSkills({ targetPath, selectedSkills: advancedSkills })
+  }
+
+  await installWorkflowArtifacts({ targetPath, workflow })
+
+  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
+
+  if (depositedClaudeMd) {
+    let content = await readFile(claudeMdPath, 'utf8')
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
+      .replace(/\{\{VERSION\}\}/g, version)
+      .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
+    await writeFile(claudeMdPath, content)
+  }
+}
