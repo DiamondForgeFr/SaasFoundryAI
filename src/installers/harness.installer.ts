@@ -10,12 +10,40 @@ import { installWorkflowSkill } from './workflow-skill.installer'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { WorkflowConfig, skillsTemplatesPath } from '../types'
 import { ClaudeHooksConfig, mergeClaudeSettingsHooks } from '../utils/claude-settings'
-import { fileExists } from '../utils'
+import { computeFileHashes, fileExists } from '../utils'
 
 export const harnessInstallerMeta: ModuleInstaller = {
   name: 'harness',
   currentVersion: 1,
   migrations: []
+}
+
+/**
+ * Directories owned by the harness deposits — the scope of the hash tracking
+ * that drives the conflict-aware refresh in `sf update`. CLAUDE.md and
+ * .claude/settings.json are deliberately NOT tracked: both are user-owned and
+ * managed through targeted merges (section re-injection / hook merging), never
+ * through the file sweep.
+ */
+export const HARNESS_TRACKED_DIRS = ['.claude/skills', '.claude/docs'] as const
+
+/**
+ * Hash every file of the harness deposits, keyed by project-root-relative
+ * path — the entries `installHarness` and the `sf update` refresh store in
+ * `manifest.fileHashes` so user edits are detected (same mechanism as the
+ * scaffold template tracking and `writeMigratedFile`).
+ */
+export async function computeHarnessFileHashes(targetPath: string): Promise<Record<string, string>> {
+  const hashes: Record<string, string> = {}
+  for (const dir of HARNESS_TRACKED_DIRS) {
+    const dirPath = join(targetPath, dir)
+    if (!(await fileExists(dirPath))) continue
+    const dirHashes = await computeFileHashes(dirPath)
+    for (const [relPath, hash] of Object.entries(dirHashes)) {
+      hashes[`${dir}/${relPath}`] = hash
+    }
+  }
+  return hashes
 }
 
 export interface InstallWorkflowArtifactsParams {

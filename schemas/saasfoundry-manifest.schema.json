@@ -40,7 +40,7 @@
     },
     "modules": {
       "type": "object",
-      "required": ["email", "s3Setup", "dbSetup", "includeAnalytics", "advancedSkills"],
+      "description": "Every key optional: scaffolded projects carry the five stack keys, harness-only projects carry just `harness`. Scaffold-only tooling must gate on the presence of `email`, not on the modules block itself.",
       "additionalProperties": false,
       "properties": {
         "email": {
@@ -59,6 +59,15 @@
         "advancedSkills": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "harness": {
+          "type": "object",
+          "required": ["version"],
+          "additionalProperties": false,
+          "description": "AI harness deposits (skills, docs, workflow artefacts) — versioned so sf update can refresh them and module migrations can target them.",
+          "properties": {
+            "version": { "type": "integer", "minimum": 0 }
+          }
         }
       }
     },

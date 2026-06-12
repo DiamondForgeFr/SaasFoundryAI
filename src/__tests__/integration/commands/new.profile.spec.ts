@@ -120,11 +120,17 @@ describe('newCommand (--profile integration)', () => {
     expect(mockedCreateApiApp).not.toHaveBeenCalled()
     expect(mockedCreateWebApp).not.toHaveBeenCalled()
 
-    // Minimal manifest: structure cli, no scaffold-only fields
+    // Minimal manifest: structure cli, harness deposits version+hash-tracked
+    // (scoped to the deposit dirs only — never the user's own code)
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
     expect(manifest).toMatchObject({ structure: 'cli', projectName: 'acme', mainBranch: 'main' })
-    expect(manifest.modules).toBeUndefined()
-    expect(manifest.fileHashes).toBeUndefined()
+    expect(manifest.modules).toEqual({ harness: { version: 1 } })
+    // computeFileHashes is mocked to {} in this spec — the field wiring is
+    // asserted here, real hash content is covered by the installer unit spec.
+    expect(manifest.fileHashes).toBeDefined()
+    for (const trackedPath of Object.keys(manifest.fileHashes)) {
+      expect(trackedPath).toMatch(/^\.claude\/(skills|docs)\//)
+    }
 
     // Harness deposits, no scaffold directories
     expect(await readFile('CLAUDE.md', 'utf8')).toContain('# acme')
