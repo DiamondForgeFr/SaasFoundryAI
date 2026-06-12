@@ -115,3 +115,75 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(manifest.modules.harness.version).toBe(1)
   })
 })
+
+// #451 AC3: adding skills via sf update no longer crashes on a manifest
+// without the scaffold modules block — deposits land at the repo root.
+describe('updateCommand — skills add on a harness manifest', () => {
+  let projectDir: string
+  let originalCwd: string
+  let logSpy: jest.SpyInstance
+
+  beforeEach(async () => {
+    projectDir = join(tmpdir(), `sf-skills-cli-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    originalCwd = process.cwd()
+    await mkdir(projectDir, { recursive: true })
+    process.chdir(projectDir)
+    jest.clearAllMocks()
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(async () => {
+    logSpy.mockRestore()
+    process.chdir(originalCwd)
+    await rm(projectDir, { recursive: true, force: true }).catch(() => {})
+  })
+
+  it('installs an advanced skill at the repo root and tracks it', async () => {
+    await writeFile(
+      '.saasfoundry.json',
+      JSON.stringify(
+        {
+          $schema: manifestSchemaUrl,
+          manifestVersion: 2,
+          version: cliVersion,
+          generatedAt: 'x',
+          structure: 'cli',
+          projectName: 'acme',
+          mainBranch: 'main',
+          workflow: { tool: 'github-projects' },
+          modules: { harness: { version: 1 } }
+        },
+        null,
+        2
+      )
+    )
+
+    await updateCommand({ nonInteractive: true, addModules: 'sf-skill-context7' })
+
+    const skillMd = await readFile(join(projectDir, '.claude/skills/sf-tool-context7/SKILL.md'), 'utf8')
+    expect(skillMd).toBeTruthy()
+    const manifest = JSON.parse(await readFile(join(projectDir, '.saasfoundry.json'), 'utf8'))
+    expect(manifest.modules.advancedSkills).toEqual(['context7'])
+    expect(manifest.modules.harness.version).toBe(1)
+    expect(Object.keys(manifest.fileHashes ?? {}).some((p: string) => p.startsWith('.claude/skills/sf-tool-context7/'))).toBe(true)
+  })
+
+  it('still refuses stack modules on a non-scaffold manifest', async () => {
+    await writeFile(
+      '.saasfoundry.json',
+      JSON.stringify(
+        { $schema: manifestSchemaUrl, manifestVersion: 2, version: cliVersion, generatedAt: 'x', structure: 'cli', projectName: 'acme', mainBranch: 'main', workflow: { tool: 'github-projects' } },
+        null,
+        2
+      )
+    )
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    await updateCommand({ nonInteractive: true, addModules: 'email' })
+    errorSpy.mockRestore()
+
+    // email is filtered by availability (not offered), so nothing was installed
+    const manifest = JSON.parse(await readFile(join(projectDir, '.saasfoundry.json'), 'utf8'))
+    expect(manifest.modules?.email).toBeUndefined()
+  })
+})
