@@ -15,9 +15,11 @@ describe('getAvailableModules', () => {
 
     const available = getAvailableModules(manifest)
 
-    // 4 modules (email, storage, analytics, srs) + 4 skills = 8 total
-    expect(available).toHaveLength(8)
-    expect(available.map((m) => m.value)).toEqual(expect.arrayContaining(['email', 'storage', 'analytics', 'srs', 'sf-skill-context7', 'sf-skill-atlassian', 'sf-skill-notion', 'sf-skill-figma']))
+    // 5 modules (email, storage, analytics, srs, harness) + 4 skills = 9 total
+    expect(available).toHaveLength(9)
+    expect(available.map((m) => m.value)).toEqual(
+      expect.arrayContaining(['email', 'storage', 'analytics', 'srs', 'harness', 'sf-skill-context7', 'sf-skill-atlassian', 'sf-skill-notion', 'sf-skill-figma'])
+    )
   })
 
   it('should exclude email when mailersend is already installed', () => {
@@ -127,8 +129,10 @@ describe('getAvailableModules', () => {
         s3Setup: 'docker',
         dbSetup: 'docker',
         includeAnalytics: true,
-        advancedSkills: ['context7', 'atlassian', 'notion', 'figma']
+        advancedSkills: ['context7', 'atlassian', 'notion', 'figma'],
+        harness: { version: 1 }
       },
+      workflow: { tool: 'github-projects' },
       tools: { srs: { enabled: true, backend: 'notion' } }
     })
 

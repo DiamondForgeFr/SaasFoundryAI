@@ -162,6 +162,26 @@ export const CATALOGUE: ModuleDefinition[] = [
     dependencies: []
   },
   {
+    name: 'harness',
+    displayName: 'AI Harness (Workflow + Skills)',
+    description:
+      'SaaSFoundry AI collaboration layer for a project generated without it: AI workflow configuration (GitHub Projects/Jira/Notion/Linear), Claude Code skills, CLAUDE.md guidance and session hooks. Pair with `srs` for requirements centralisation.',
+    category: 'module',
+    keywords: ['harness', 'ai', 'workflow', 'skills', 'claude', 'agent', 'board', 'github-projects'],
+    provides: [
+      'sf-workflow skill + board integration',
+      'Core Claude Code skills (.claude/skills/sf-*)',
+      'CLAUDE.md workflow section',
+      'Claude Code hooks (SessionStart, UserPromptSubmit)',
+      '.saasfoundry.json → modules.harness version tracking'
+    ],
+    alternatives: ['manual .claude configuration'],
+    introducedInVersion: '1.0.0-beta',
+    minCliVersion: '1.0.0-beta',
+    filesAffected: ['.claude/skills/', '.claude/docs/', '.claude/settings.json', 'CLAUDE.md', '.saasfoundry.json'],
+    dependencies: []
+  },
+  {
     name: 'auth',
     displayName: 'Authentication & Authorization',
     description: 'JWT auth with email/password, roles, permissions, sessions, and invitation flow (shipped with sf new)',

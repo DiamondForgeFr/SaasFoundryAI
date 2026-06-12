@@ -29,6 +29,11 @@ function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): b
       return modules !== undefined && !modules.includeAnalytics
     case 'srs':
       return !(manifest.tools?.srs?.enabled === true)
+    case 'harness':
+      // Addable when no AI workflow is configured yet (stack-only projects,
+      // or harness installs that skipped the workflow step). Available on any
+      // structure — the harness never needs the scaffold.
+      return manifest.workflow === undefined || manifest.workflow.tool === 'none'
     case 'sf-skill-context7':
     case 'sf-skill-atlassian':
     case 'sf-skill-notion':
