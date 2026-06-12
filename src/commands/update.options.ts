@@ -67,6 +67,14 @@ export interface UpdateDryRunReport {
         conflict: string[]
         remove: string[]
       }
+  harnessRefresh?:
+    | { status: 'adoption-needed' }
+    | {
+        status: 'would-apply'
+        update: string[]
+        add: string[]
+        conflict: string[]
+      }
   moduleAddition: {
     available: string[]
     selected: string[]
