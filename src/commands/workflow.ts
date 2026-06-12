@@ -4,7 +4,8 @@ import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
-import { promptWorkflowConfiguration, listGlobalWorkflows, loadGlobalWorkflow, saveGlobalWorkflow } from '../prompts/workflow.prompts'
+import { promptWorkflowConfiguration, listGlobalWorkflows, loadGlobalWorkflow, saveGlobalWorkflow, updateGitHubProjectStatuses, WORKFLOW_PRESETS } from '../prompts/workflow.prompts'
+import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { readManifest, writeManifest } from '../utils'
 import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
 
@@ -155,11 +156,34 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
     process.exit(1)
   }
 
-  const template = await loadGlobalWorkflow(templateName)
+  // Saved templates first, then built-in presets (saasfoundry | solo) — the
+  // preset path is the in-place upgrade/downgrade between team and solo:
+  // tool, URLs and branch config come from the current manifest, only the
+  // status set (and docs) change. Tickets, issue types and labels stay valid.
+  let template = await loadGlobalWorkflow(templateName)
+
+  if (!template) {
+    const presetKey = templateName.toLowerCase() as keyof typeof WORKFLOW_PRESETS
+    const preset = WORKFLOW_PRESETS[presetKey]
+    if (preset) {
+      template = {
+        name: preset.name,
+        tool: manifest.workflow?.tool ?? 'none',
+        workingBranch: manifest.workflow?.workingBranch,
+        prTargetBranch: manifest.workflow?.prTargetBranch,
+        requireCodeReview: manifest.workflow?.requireCodeReview,
+        statuses: preset.statuses,
+        issueTypes: preset.issueTypes,
+        branchNaming: manifest.workflow?.branchNaming,
+        commitFormat: manifest.workflow?.commitFormat,
+        aiRules: manifest.aiRules
+      }
+    }
+  }
 
   if (!template) {
     console.error(chalk.red(`\n❌ Template "${templateName}" not found\n`))
-    console.log('Run: sf workflow list\n')
+    console.log('Run: sf workflow list (or use a built-in preset: saasfoundry | solo)\n')
     process.exit(1)
   }
 
@@ -177,7 +201,7 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
 
   // Apply template to project
   manifest.workflow = {
-    template: templateName,
+    template: template.name ?? templateName,
     tool: template.tool,
     projectUrl: answers.projectUrl,
     workingBranch: template.workingBranch,
@@ -194,6 +218,19 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
 
   await writeManifest(process.cwd(), manifest)
   await updateWorkflowHistory(templateName)
+
+  // Regenerate the workflow skill so SKILL.md and the statuses/ docs match
+  // the new status set — without this, an in-place preset upgrade leaves the
+  // agent documentation describing the previous workflow.
+  if (manifest.workflow.tool !== 'none') {
+    await installWorkflowSkill({ targetPath: process.cwd(), workflow: manifest.workflow, projectUrl: manifest.workflow.projectUrl })
+    console.log(chalk.green('✅ Workflow skill regenerated (SKILL.md + statuses docs)'))
+  }
+
+  // Align the GitHub Project board with the new status set (best-effort).
+  if (manifest.workflow.tool === 'github-projects' && manifest.workflow.projectUrl && manifest.workflow.statuses?.length) {
+    await updateGitHubProjectStatuses(manifest.workflow.projectUrl, manifest.workflow.statuses)
+  }
 
   console.log(chalk.green(`\n✅ Workflow template "${templateName}" applied\n`))
 }
