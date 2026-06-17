@@ -42,9 +42,12 @@ function runHook(prompt: string, opts: { cwd?: string; env?: NodeJS.ProcessEnv }
       resolve({ stdout, stderr, code: code ?? -1, ms })
     })
     // Hook reads a JSON envelope on stdin. Use null prompt to simulate the
-    // "missing prompt" path.
+    // "missing prompt" path. Opt-out paths (e.g. SF_DISABLE_SRS_HOOK=1) exit
+    // before reading stdin, so the write is best-effort: swallow the EPIPE
+    // that races with the child closing its stdin (#461).
     const envelope = prompt === null ? '{}' : JSON.stringify({ prompt })
-    child.stdin.write(envelope)
+    child.stdin.on('error', () => {})
+    child.stdin.write(envelope, () => {})
     child.stdin.end()
   })
 }
