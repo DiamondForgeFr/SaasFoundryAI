@@ -26,6 +26,7 @@ import { upsertEnvKey } from '../utils/env-file'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
+import { buildManifestTools } from './new.manifest-tools'
 import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 
 /**
@@ -234,7 +235,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       workflow: startProjectAnswers.workflow,
       aiRules: startProjectAnswers.aiRules,
       fileHashes,
-      tools: srsTools ? { srs: srsTools } : undefined
+      tools: buildManifestTools(srsTools, startProjectAnswers)
     }
     await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
 
@@ -583,7 +584,7 @@ async function runHarnessInstall(config: Answers): Promise<void> {
       fileHashes: await computeHarnessFileHashes('.'),
       workflow: config.workflow,
       aiRules: config.aiRules,
-      tools: srsTools ? { srs: srsTools } : undefined
+      tools: buildManifestTools(srsTools, config)
     }
     await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
 

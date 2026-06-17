@@ -64,6 +64,14 @@ export interface NewCommandOptions {
   srsIngestEnable?: boolean
   srsIngestParentInput?: string
 
+  // Tools-first selection (FR-CONFIG-ENGINE-04). Tracker/docs take one tool;
+  // design takes a comma-separated list. `--no-network` makes Commander set
+  // `network = false`, degrading the connection checks to presence only.
+  tracker?: string
+  docs?: string
+  design?: string
+  network?: boolean
+
   // Workflow (flag allows skipping; full config still goes through `sf workflow` or interactive)
   workflow?: string | boolean
 
@@ -153,6 +161,23 @@ export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answer
   if (opts.srsIngestEnable !== undefined) prefill.srsIngestEnable = opts.srsIngestEnable
   else if (opts.nonInteractive === true) prefill.srsIngestEnable = false
   if (opts.srsIngestParentInput !== undefined) prefill.srsIngestParentInput = opts.srsIngestParentInput
+
+  // Tools-first selections → manifest.tools registry (FR-CONFIG-ENGINE-04).
+  const toolSelections: NonNullable<Answers['toolSelections']> = {}
+  if (opts.tracker !== undefined) toolSelections.tracker = { name: opts.tracker }
+  if (opts.docs !== undefined) toolSelections.docs = { name: opts.docs }
+  if (opts.design !== undefined) {
+    const design = opts.design
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((name) => ({ name }))
+    if (design.length > 0) toolSelections.design = design
+  }
+  if (Object.keys(toolSelections).length > 0) prefill.toolSelections = toolSelections
+
+  // `--no-network` (Commander → network === false) degrades checks to presence.
+  if (opts.network === false) prefill.toolsNoNetwork = true
 
   // `--workflow <preset>` preselects a workflow preset for the interactive
   // flow ('none'/false keep their skip semantics — see shouldSkipWorkflow).

@@ -74,6 +74,11 @@ program
   .option('--srs-ingest-enable', 'Enable ingestion of existing notes into the SRS after bootstrap')
   .option('--no-srs-ingest-enable', 'Skip existing-notes ingestion')
   .option('--srs-ingest-parent-input <urlOrId>', 'URL or ID of the Notion parent page that contains the existing notes to ingest')
+  // Tools-first selection (FR-CONFIG-ENGINE-04)
+  .option('--tracker <tool>', 'Issue/project tracker: github-projects, jira, notion, or linear')
+  .option('--docs <tool>', 'Docs/SRS backend: notion, confluence, or local-markdown')
+  .option('--design <tools>', 'Comma-separated design tools (figma,miro)')
+  .option('--no-network', 'Skip live connection checks; verify credential presence only')
   // Workflow
   .option('--workflow <config>', 'Workflow preset or "none" to skip')
   .option('--no-workflow', 'Skip workflow configuration entirely')
