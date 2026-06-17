@@ -19,10 +19,12 @@ jest.mock('../../../prompts/srs.prompts', () => ({
   promptSrsConfiguration: jest.fn().mockResolvedValue({ srsEnable: false }),
   promptSrsIngestion: jest.fn()
 }))
+jest.mock('../../../utils/git-info', () => ({ getRemoteUrl: jest.fn() }))
 
 import { promptWorkflowConfiguration } from '../../../prompts/workflow.prompts'
 import { collectAdvancedSkillsCredentials, promptAdvancedSkills } from '../../../prompts/skills.prompts'
 import { promptSrsConfiguration, promptSrsIngestion } from '../../../prompts/srs.prompts'
+import { getRemoteUrl } from '../../../utils/git-info'
 
 const stepContext = (overrides: Partial<StepContext> = {}): StepContext => ({
   state: {},
@@ -130,7 +132,10 @@ describe('storageStep', () => {
 })
 
 describe('workflowStep', () => {
-  beforeEach(() => jest.clearAllMocks())
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ;(getRemoteUrl as jest.Mock).mockReturnValue(undefined)
+  })
 
   it('non-interactive: returns the prefilled workflow as-is', async () => {
     const workflow = { tool: 'github-projects' as const }
@@ -155,6 +160,28 @@ describe('workflowStep', () => {
 
     expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined)
     expect(result).toMatchObject({ workflow: { tool: 'github-projects' } })
+    logSpy.mockRestore()
+  })
+
+  it('interactive: falls back to the detected git remote when state carries no repo URL (#463 finding 3, harness profile)', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    ;(getRemoteUrl as jest.Mock).mockReturnValue('https://github.com/acme/notulia.git')
+    const render = jest.fn(async () => ({ configureWorkflow: true }) as unknown as ConfigState)
+
+    await workflowStep.collect?.(stepContext({ state: { projectName: 'notulia' }, render }))
+
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('notulia', 'https://github.com/acme/notulia.git', undefined, undefined)
+    logSpy.mockRestore()
+  })
+
+  it('interactive: prefers an explicit state repo URL over the git-remote fallback', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    ;(getRemoteUrl as jest.Mock).mockReturnValue('https://github.com/acme/from-remote.git')
+    const render = jest.fn(async () => ({ configureWorkflow: true }) as unknown as ConfigState)
+
+    await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://github.com/acme/explicit.git' }, render }))
+
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://github.com/acme/explicit.git', undefined, undefined)
     logSpy.mockRestore()
   })
 

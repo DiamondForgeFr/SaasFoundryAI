@@ -2,6 +2,7 @@ import chalk from 'chalk'
 
 import { promptWorkflowConfiguration } from '../../prompts/workflow.prompts'
 import { WorkflowConfig } from '../../types'
+import { getRemoteUrl } from '../../utils/git-info'
 import { StepDefinition } from '../types'
 
 const WORKFLOW_TOOLS = new Set<WorkflowConfig['tool']>(['github-projects', 'jira', 'notion', 'linear', 'none'])
@@ -50,8 +51,11 @@ export const workflowStep: StepDefinition = {
     ])) as unknown as { configureWorkflow?: boolean }
 
     if (configureWorkflow) {
-      // Pass repository URL if available (for GitHub Project creation)
-      const repositoryUrl = state.monorepoUrl || state.backendRepoUrl || state.frontendRepoUrl
+      // Pass repository URL if available (for GitHub Project creation). The
+      // harness profile collects no *RepoUrl (those belong to the stack flow),
+      // so fall back to the detected git remote — otherwise auto-creation runs
+      // with no owner hint and can't target the right account (#463 finding 3).
+      const repositoryUrl = state.monorepoUrl || state.backendRepoUrl || state.frontendRepoUrl || getRemoteUrl()
 
       const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset, asWorkflowTool(derived.selectedTracker))
       return { workflow, aiRules }
