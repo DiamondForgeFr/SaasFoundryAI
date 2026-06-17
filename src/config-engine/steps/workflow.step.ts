@@ -2,6 +2,7 @@ import chalk from 'chalk'
 
 import { promptWorkflowConfiguration } from '../../prompts/workflow.prompts'
 import { WorkflowConfig } from '../../types'
+import { readManifest } from '../../utils'
 import { getRemoteUrl } from '../../utils/git-info'
 import { StepDefinition } from '../types'
 
@@ -57,7 +58,13 @@ export const workflowStep: StepDefinition = {
       // with no owner hint and can't target the right account (#463 finding 3).
       const repositoryUrl = state.monorepoUrl || state.backendRepoUrl || state.frontendRepoUrl || getRemoteUrl()
 
-      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset, asWorkflowTool(derived.selectedTracker))
+      // Detect an already-configured board so a re-run reuses it instead of
+      // creating a duplicate (#463 finding 5). Best-effort: a fresh project
+      // has no manifest yet, so this is undefined and the flow is unchanged.
+      const existingManifest = await readManifest(process.cwd())
+      const existingProjectUrl = existingManifest?.workflow?.projectUrl
+
+      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset, asWorkflowTool(derived.selectedTracker), existingProjectUrl)
       return { workflow, aiRules }
     }
 
