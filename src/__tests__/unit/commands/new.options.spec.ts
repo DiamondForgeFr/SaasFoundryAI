@@ -134,6 +134,28 @@ describe('buildPrefillFromOptions', () => {
     })
   })
 
+  describe('tools-first flags', () => {
+    it('maps --tracker / --docs into single selections', () => {
+      const prefill = buildPrefillFromOptions({ tracker: 'github-projects', docs: 'notion' })
+      expect(prefill.toolSelections).toEqual({ tracker: { name: 'github-projects' }, docs: { name: 'notion' } })
+    })
+
+    it('parses --design CSV into a list of selections, trimming and dropping blanks', () => {
+      const prefill = buildPrefillFromOptions({ design: 'figma, ,miro,' })
+      expect(prefill.toolSelections).toEqual({ design: [{ name: 'figma' }, { name: 'miro' }] })
+    })
+
+    it('maps --no-network (network=false) to toolsNoNetwork', () => {
+      expect(buildPrefillFromOptions({ network: false }).toolsNoNetwork).toBe(true)
+    })
+
+    it('leaves the tools registry untouched when no tools flags are passed (byte-identical parity)', () => {
+      const prefill = buildPrefillFromOptions({ projectName: 'acme', nonInteractive: true })
+      expect(prefill.toolSelections).toBeUndefined()
+      expect(prefill.toolsNoNetwork).toBeUndefined()
+    })
+  })
+
   describe('SRS + ingestion flags', () => {
     it('maps --srs-enable / --srs-backend / --srs-parent-page-input to prefill', () => {
       const prefill = buildPrefillFromOptions({
