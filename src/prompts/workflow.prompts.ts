@@ -180,6 +180,57 @@ export async function detectAvailableTools(): Promise<{
  * @param repositoryUrl - Optional repository URL to extract owner from (for sf new before git init)
  * @returns Project URL if successful, or null if failed
  */
+/**
+ * Interactive owner picker used when no owner could be auto-detected (or the
+ * user declined the detected one). Returns the resolved owner or null on
+ * failure / missing access.
+ */
+async function promptOwnerSelection(): Promise<{ owner: string; isOrg: boolean } | null> {
+  console.log(chalk.blue('\n📍 Where should the GitHub Project be created?\n'))
+
+  const { ownerType } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'ownerType',
+      message: 'Create project in:',
+      choices: [
+        { name: 'Personal account (your GitHub user)', value: 'user' },
+        { name: 'Organization', value: 'org' }
+      ]
+    }
+  ])
+
+  if (ownerType === 'org') {
+    const { orgName } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'orgName',
+        message: 'Organization name:',
+        validate: (input: string) => {
+          if (!input || input.trim().length === 0) return 'Organization name is required'
+          return true
+        }
+      }
+    ])
+    const owner = orgName.trim()
+    try {
+      execSync(`gh api orgs/${owner}`, { stdio: 'ignore' })
+    } catch {
+      console.log(chalk.yellow(`\n⚠️  Organization "${owner}" not found or you don't have access\n`))
+      return null
+    }
+    return { owner, isOrg: true }
+  }
+
+  try {
+    const owner = execSync('gh api user --jq .login', { encoding: 'utf-8' }).trim()
+    return { owner, isOrg: false }
+  } catch {
+    console.log(chalk.yellow('\n⚠️  Could not get authenticated user\n'))
+    return null
+  }
+}
+
 export async function setupGitHubProjectWithAutoCreation(projectName: string, statuses: WorkflowStatus[], repositoryUrl?: string): Promise<string | null> {
   try {
     // Check gh auth
@@ -188,19 +239,19 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
       return null
     }
 
-    // Get owner info
-    let repoOwner: string
+    // Resolve the owner (user or org) + repo the project belongs to.
+    let repoOwner: string | undefined
+    let repoName: string | undefined
     let isOrg = false
 
-    // Try to detect from repository URL first (for sf new)
+    // 1) From an explicit repository URL (sf new with a known remote)
     if (repositoryUrl) {
-      // Extract owner from URL (https://github.com/owner/repo or https://github.com/orgs/owner/...)
-      const urlMatch = repositoryUrl.match(/github\.com\/(orgs\/)?([^/]+)/)
+      // https://github.com/owner/repo(.git) or https://github.com/orgs/owner/...
+      const urlMatch = repositoryUrl.match(/github\.com\/(orgs\/)?([^/]+)(?:\/([^/.]+))?/)
       if (urlMatch) {
         repoOwner = urlMatch[2]
-        isOrg = !!urlMatch[1] // If URL contains 'orgs/', it's an organization
-
-        // Verify owner exists and get type
+        repoName = urlMatch[3]
+        // Verify owner exists and get its type
         try {
           const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8' }).trim()
           isOrg = ownerType === 'Organization'
@@ -213,65 +264,43 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
         return null
       }
     } else {
-      // Try to detect from current git repository (for existing repos)
+      // 2) From the current git repository (existing repos)
       try {
         const repoInfo = execSync('gh repo view --json owner,name', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
         const repo = JSON.parse(repoInfo)
         repoOwner = repo.owner.login
-
-        // Check if owner is an organization
+        repoName = repo.name
         const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
         isOrg = ownerType === 'Organization'
       } catch {
-        // Not in a git repository - ask user where to create the project
-        console.log(chalk.blue('\n📍 Where should the GitHub Project be created?\n'))
-
-        const { ownerType } = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'ownerType',
-            message: 'Create project in:',
-            choices: [
-              { name: 'Personal account (your GitHub user)', value: 'user' },
-              { name: 'Organization', value: 'org' }
-            ]
-          }
-        ])
-
-        if (ownerType === 'org') {
-          const { orgName } = await inquirer.prompt([
-            {
-              type: 'input',
-              name: 'orgName',
-              message: 'Organization name:',
-              validate: (input: string) => {
-                if (!input || input.trim().length === 0) return 'Organization name is required'
-                return true
-              }
-            }
-          ])
-
-          repoOwner = orgName.trim()
-          isOrg = true
-
-          // Verify org exists
-          try {
-            execSync(`gh api orgs/${repoOwner}`, { stdio: 'ignore' })
-          } catch {
-            console.log(chalk.yellow(`\n⚠️  Organization "${repoOwner}" not found or you don't have access\n`))
-            return null
-          }
-        } else {
-          // Get authenticated user
-          try {
-            repoOwner = execSync('gh api user --jq .login', { encoding: 'utf-8' }).trim()
-            isOrg = false
-          } catch {
-            console.log(chalk.yellow('\n⚠️  Could not get authenticated user\n'))
-            return null
-          }
-        }
+        // Not in a git repo — fall through to the manual picker below.
       }
+    }
+
+    // Confirm the auto-detected owner before creating — the board lands under
+    // this account and picking the wrong one is painful to undo (#463 finding 1).
+    if (repoOwner) {
+      const { confirmOwner } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirmOwner',
+          message: `Create the GitHub Project under ${isOrg ? 'organization' : 'user'} "${repoOwner}"?`,
+          default: true
+        }
+      ])
+      if (!confirmOwner) {
+        repoOwner = undefined
+        repoName = undefined
+      }
+    }
+
+    // Nothing detected, or the user declined — pick the owner explicitly.
+    if (!repoOwner) {
+      const selected = await promptOwnerSelection()
+      if (!selected) return null
+      repoOwner = selected.owner
+      isOrg = selected.isOrg
+      repoName = undefined // manual path: no specific repo to link to
     }
 
     console.log(chalk.blue(`\n🔨 Creating GitHub Project "${projectName}"...\n`))
@@ -303,6 +332,17 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     const projectId = projectData.id
 
     console.log(chalk.green(`✅ Project created: ${projectData.url}`))
+
+    // Link the board to the repository so it surfaces under the repo's
+    // Projects tab — best-effort, never fail creation on it (#463 finding 2).
+    if (repoName) {
+      try {
+        execSync(`gh project link ${projectData.number} --owner ${repoOwner} --repo ${repoOwner}/${repoName}`, { stdio: 'ignore' })
+        console.log(chalk.green(`✅ Linked the project to ${repoOwner}/${repoName}`))
+      } catch {
+        console.log(chalk.yellow(`⚠️  Could not link the project to ${repoOwner}/${repoName} — link it manually from the repo's Projects tab.`))
+      }
+    }
 
     // Configure Status field
     console.log(chalk.blue(`🔧 Configuring Status field with ${statuses.length} states...\n`))
