@@ -90,4 +90,29 @@ describe('evaluatePreconditions', () => {
     const gh = evaluatePreconditions(report).find((p) => p.name === 'gh')
     expect(gh?.status).toBe('skip')
   })
+
+  // FR-CONFIG-ENGINE-07 (#448) AC1: a harness-profile manifest (structure 'cli',
+  // modules.harness, configured workflow + SRS) reports OK preconditions — no
+  // stack-specific check trips on the absence of email/db/s3 modules.
+  it('reports ok preconditions on a harness-profile manifest', () => {
+    const report = makeReport({
+      git: { available: true, branch: 'develop', isClean: true },
+      manifest: {
+        version: '1.0.0-beta',
+        generatedAt: '2026-06-17T00:00:00Z',
+        structure: 'cli',
+        projectName: 'notulia',
+        modules: { harness: { version: 1 } },
+        workflow: { tool: 'github-projects' },
+        tools: { srs: { enabled: true, backend: 'notion', rootPage: { id: 'a', url: 'b', name: 'Root' } } }
+      }
+    })
+
+    const preconditions = evaluatePreconditions(report)
+    expect(preconditions.some((p) => p.status === 'fail')).toBe(false)
+    expect(preconditions.find((p) => p.name === 'manifest')?.status).toBe('ok')
+    expect(preconditions.find((p) => p.name === 'workflow')?.status).toBe('ok')
+    expect(preconditions.find((p) => p.name === 'srs')?.status).toBe('ok')
+    expect(preconditions.find((p) => p.name === 'git')?.status).toBe('ok')
+  })
 })
