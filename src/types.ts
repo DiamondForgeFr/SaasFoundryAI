@@ -56,6 +56,16 @@ export interface Answers {
   /** Collection-only preset preselection from `--workflow <preset>`; never persisted. */
   workflowPreset?: 'saasfoundry' | 'solo'
   aiRules?: AIRules
+  /**
+   * Tools-first step selections (FR-CONFIG-ENGINE-04), persisted into
+   * `manifest.tools.{tracker,docs,design}`. Connection status is intentionally
+   * ephemeral (shown ok/warn in-session, recomputed live by `sf status`).
+   */
+  toolSelections?: {
+    tracker?: ToolSelection
+    docs?: ToolSelection
+    design?: ToolSelection[]
+  }
 }
 
 export interface CreateApiAppParams {
@@ -210,8 +220,27 @@ export interface SrsToolConfig {
   scan?: SrsScanConfig
 }
 
+/**
+ * One selected entry-point tool in the category registry. `name` is the
+ * canonical catalogue id (see `src/tools/catalogue.ts`); `account` is the
+ * `~/.claude/credentials/<bucket>/<account>.env` name when one was chosen.
+ */
+export interface ToolSelection {
+  name: string
+  account?: string
+}
+
 export interface ToolsConfig {
   srs?: SrsToolConfig
+  // Tools-first selection registry (FR-CONFIG-ENGINE-04), grouped by category.
+  // Additive and optional: a manifest written before this field omits it, and
+  // readers fall back to the legacy fields (`workflow.tool` for the tracker,
+  // `tools.srs.backend` for docs). No migration — see migration-framework.md
+  // "When NOT to add a migration". Deep unification (folding workflow/srs into
+  // these blocks) is a dedicated follow-up Epic that ships its own migration.
+  tracker?: ToolSelection
+  docs?: ToolSelection
+  design?: ToolSelection[]
 }
 
 export interface SaaSFoundryManifest {
