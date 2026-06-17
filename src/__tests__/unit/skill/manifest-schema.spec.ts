@@ -88,6 +88,23 @@ describe('saasfoundry-manifest.schema.json — canonical shapes', () => {
       expect(validate({ ...baseManifest, workflow: { tool } })).toBe(true)
     }
   })
+
+  it('accepts the tools-first selection registry (tracker/docs/design)', () => {
+    const manifest = {
+      ...baseManifest,
+      tools: {
+        srs: { enabled: true, backend: 'notion' },
+        tracker: { name: 'github-projects' },
+        docs: { name: 'notion', account: 'default' },
+        design: [{ name: 'figma', account: 'work' }, { name: 'miro' }]
+      }
+    }
+    expect(validate(manifest)).toBe(true)
+  })
+
+  it('still validates a manifest that omits the tools registry (backward compat)', () => {
+    expect(validate({ ...baseManifest, tools: { srs: { enabled: false, backend: 'notion' } } })).toBe(true)
+  })
 })
 
 describe('saasfoundry-manifest.schema.json — rejection cases', () => {
@@ -124,5 +141,17 @@ describe('saasfoundry-manifest.schema.json — rejection cases', () => {
 
   it('rejects a typo in a top-level field (additionalProperties: false)', () => {
     expect(validate({ ...baseManifest, structuer: 'cli' })).toBe(false)
+  })
+
+  it('rejects a tools.tracker selection missing the required name field', () => {
+    expect(validate({ ...baseManifest, tools: { tracker: { account: 'default' } } })).toBe(false)
+  })
+
+  it('rejects an unknown property on a tool selection (additionalProperties: false)', () => {
+    expect(validate({ ...baseManifest, tools: { docs: { name: 'notion', connection: 'ok' } } })).toBe(false)
+  })
+
+  it('rejects tools.design when it is not an array of selections', () => {
+    expect(validate({ ...baseManifest, tools: { design: { name: 'figma' } } })).toBe(false)
   })
 })

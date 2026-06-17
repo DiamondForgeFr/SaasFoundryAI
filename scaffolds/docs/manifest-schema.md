@@ -88,10 +88,16 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
       "backend": "notion",
       "rootPage": { "id": "<uuid>", "url": "https://...", "name": "<human-name>" },
       "scan": { "exclude": ["scaffolds/", "docs/"] }
-    }
+    },
+    "tracker": { "name": "github-projects" },
+    "docs": { "name": "notion", "account": "default" },
+    "design": [{ "name": "figma", "account": "work" }]
   }
 }
 ```
+
+> `tools.{tracker,docs,design}` is the tools-first selection registry (FR-CONFIG-ENGINE-04): one selected entry-point tool per category (`design` is a list). Additive and optional — readers fall back
+> to `workflow.tool` (tracker) and `tools.srs.backend` (docs) when the registry is absent. Connection status (ok/warn) is recomputed live by `sf status`, never persisted here.
 
 ## Contract
 

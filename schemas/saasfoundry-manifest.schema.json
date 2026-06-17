@@ -174,7 +174,22 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "srs": { "$ref": "#/definitions/srsToolConfig" }
+        "srs": { "$ref": "#/definitions/srsToolConfig" },
+        "tracker": { "$ref": "#/definitions/toolSelection" },
+        "docs": { "$ref": "#/definitions/toolSelection" },
+        "design": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/toolSelection" }
+        }
+      }
+    },
+    "toolSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "account": { "type": "string" }
       }
     },
     "srsToolConfig": {
