@@ -182,8 +182,6 @@ export async function detectAvailableTools(): Promise<{
  */
 export async function setupGitHubProjectWithAutoCreation(projectName: string, statuses: WorkflowStatus[], repositoryUrl?: string): Promise<string | null> {
   try {
-    console.log(chalk.gray(`[DEBUG] setupGitHubProjectWithAutoCreation called with repositoryUrl: ${repositoryUrl || 'undefined'}`))
-
     // Check gh auth
     if (!checkGhAuth()) {
       console.log(chalk.yellow('\n⚠️  GitHub CLI not authenticated. Run: gh auth login\n'))
@@ -374,7 +372,6 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
   } catch (error) {
     const err = error as Error
     console.log(chalk.red(`\n❌ Failed to create GitHub Project: ${err.message}\n`))
-    console.log(chalk.gray(`[DEBUG] Full error: ${err.stack || err}\n`))
     return null
   }
 }
