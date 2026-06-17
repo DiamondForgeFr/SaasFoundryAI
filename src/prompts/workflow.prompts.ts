@@ -703,7 +703,8 @@ export async function promptWorkflowConfiguration(
   projectName?: string,
   repositoryUrl?: string,
   presetOverride?: keyof typeof WORKFLOW_PRESETS,
-  preselectedTool?: WorkflowConfig['tool']
+  preselectedTool?: WorkflowConfig['tool'],
+  existingProjectUrl?: string
 ): Promise<{
   workflow: WorkflowConfig
   aiRules: AIRules
@@ -941,8 +942,31 @@ export async function promptWorkflowConfiguration(
   let selectedPresetKey: keyof typeof WORKFLOW_PRESETS | undefined
 
   if (tool === 'github-projects') {
+    // Reuse an already-configured board instead of silently creating a
+    // duplicate when re-running config on a project that already has one
+    // (#463 finding 5).
+    let reused = false
+    if (existingProjectUrl) {
+      const { reuse } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'reuse',
+          message: `This project already references a GitHub Project board:\n  ${existingProjectUrl}\nReuse it (no new board will be created)?`,
+          default: true
+        }
+      ])
+      if (reuse) {
+        const presetResult = await promptWorkflowPreset(presetOverride)
+        workflowStatuses = presetResult.statuses
+        isPreconfiguredWorkflow = presetResult.isPreconfigured
+        selectedPresetKey = presetResult.presetKey
+        projectUrl = existingProjectUrl
+        reused = true
+      }
+    }
+
     // Offer auto-creation if gh is authenticated
-    if (available.includes('github-projects')) {
+    if (!reused && available.includes('github-projects')) {
       const { createNew } = await inquirer.prompt([
         {
           type: 'confirm',
@@ -1015,7 +1039,7 @@ export async function promptWorkflowConfiguration(
         ])
         projectUrl = url
       }
-    } else {
+    } else if (!reused) {
       // Not authenticated - manual URL only, but still configure workflow
       const presetResult = await promptWorkflowPreset(presetOverride)
       workflowStatuses = presetResult.statuses

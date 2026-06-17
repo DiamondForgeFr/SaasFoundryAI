@@ -20,11 +20,13 @@ jest.mock('../../../prompts/srs.prompts', () => ({
   promptSrsIngestion: jest.fn()
 }))
 jest.mock('../../../utils/git-info', () => ({ getRemoteUrl: jest.fn() }))
+jest.mock('../../../utils', () => ({ ...jest.requireActual('../../../utils'), readManifest: jest.fn() }))
 
 import { promptWorkflowConfiguration } from '../../../prompts/workflow.prompts'
 import { collectAdvancedSkillsCredentials, promptAdvancedSkills } from '../../../prompts/skills.prompts'
 import { promptSrsConfiguration, promptSrsIngestion } from '../../../prompts/srs.prompts'
 import { getRemoteUrl } from '../../../utils/git-info'
+import { readManifest } from '../../../utils'
 
 const stepContext = (overrides: Partial<StepContext> = {}): StepContext => ({
   state: {},
@@ -135,6 +137,7 @@ describe('workflowStep', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(getRemoteUrl as jest.Mock).mockReturnValue(undefined)
+    ;(readManifest as jest.Mock).mockResolvedValue(null)
   })
 
   it('non-interactive: returns the prefilled workflow as-is', async () => {
@@ -158,7 +161,7 @@ describe('workflowStep', () => {
 
     const result = await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://git/acme' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined, undefined)
     expect(result).toMatchObject({ workflow: { tool: 'github-projects' } })
     logSpy.mockRestore()
   })
@@ -170,7 +173,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'notulia' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('notulia', 'https://github.com/acme/notulia.git', undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('notulia', 'https://github.com/acme/notulia.git', undefined, undefined, undefined)
     logSpy.mockRestore()
   })
 
@@ -181,7 +184,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://github.com/acme/explicit.git' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://github.com/acme/explicit.git', undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://github.com/acme/explicit.git', undefined, undefined, undefined)
     logSpy.mockRestore()
   })
 
@@ -192,7 +195,18 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, derived, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, 'jira')
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, 'jira', undefined)
+    logSpy.mockRestore()
+  })
+
+  it('interactive: threads an existing board URL from a prior manifest so a re-run can reuse it (#463 finding 5)', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    ;(readManifest as jest.Mock).mockResolvedValue({ workflow: { tool: 'github-projects', projectUrl: 'https://github.com/orgs/acme/projects/7' } })
+    const render = jest.fn(async () => ({ configureWorkflow: true }) as unknown as ConfigState)
+
+    await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, render }))
+
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, undefined, 'https://github.com/orgs/acme/projects/7')
     logSpy.mockRestore()
   })
 
