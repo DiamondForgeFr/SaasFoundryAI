@@ -19,13 +19,27 @@ export const derivationRules: DerivationRule[] = [
     apply: (state) => ({ workflowTool: state.workflow?.tool ?? 'none' })
   },
   {
-    id: 'workflow-tool-to-skills',
-    description: 'Pre-select the advanced skill matching the chosen workflow tool (jira → atlassian, notion → notion)',
+    id: 'selected-tools',
+    description: 'Expose the tools-first selections (tracker/docs/design) so downstream steps drive off them instead of re-asking which tool',
+    apply: (state) => ({
+      selectedTracker: state.toolSelections?.tracker?.name,
+      selectedDocs: state.toolSelections?.docs?.name,
+      selectedDesign: (state.toolSelections?.design ?? []).map((d) => d.name)
+    })
+  },
+  {
+    id: 'suggested-skills',
+    description: 'Pre-select advanced skills from the chosen workflow tool (jira → atlassian, notion → notion) and the design tools selected in the tools-first step (figma, miro)',
     apply: (state) => {
+      const skills = new Set<string>()
       const tool = state.workflow?.tool
-      if (tool === 'jira') return { suggestedSkills: ['atlassian'] }
-      if (tool === 'notion') return { suggestedSkills: ['notion'] }
-      return { suggestedSkills: [] }
+      if (tool === 'jira') skills.add('atlassian')
+      if (tool === 'notion') skills.add('notion')
+      for (const design of state.toolSelections?.design ?? []) {
+        if (design.name === 'figma') skills.add('figma')
+        if (design.name === 'miro') skills.add('miro')
+      }
+      return { suggestedSkills: [...skills] }
     }
   }
 ]

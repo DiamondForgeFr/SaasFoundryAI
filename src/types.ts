@@ -55,6 +55,8 @@ export interface Answers {
   workflow?: WorkflowConfig
   /** Collection-only preset preselection from `--workflow <preset>`; never persisted. */
   workflowPreset?: 'saasfoundry' | 'solo'
+  /** Collection-only flag from `--no-network`: tools-first checks degrade to presence only; never persisted. */
+  toolsNoNetwork?: boolean
   aiRules?: AIRules
   /**
    * Tools-first step selections (FR-CONFIG-ENGINE-04), persisted into
