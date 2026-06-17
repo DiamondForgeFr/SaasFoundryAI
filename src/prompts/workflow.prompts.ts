@@ -665,7 +665,8 @@ async function promptCustomWorkflow(): Promise<WorkflowStatus[]> {
 export async function promptWorkflowConfiguration(
   projectName?: string,
   repositoryUrl?: string,
-  presetOverride?: keyof typeof WORKFLOW_PRESETS
+  presetOverride?: keyof typeof WORKFLOW_PRESETS,
+  preselectedTool?: WorkflowConfig['tool']
 ): Promise<{
   workflow: WorkflowConfig
   aiRules: AIRules
@@ -862,15 +863,24 @@ export async function promptWorkflowConfiguration(
     { name: 'None (no project management integration)', value: 'none' }
   ]
 
-  const { tool } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'tool',
-      message: 'Choose your project management tool:',
-      choices,
-      default: recommended !== 'none' ? recommended : 'github-projects'
-    }
-  ])
+  // Tracker already chosen in the tools-first step (FR-CONFIG-ENGINE-04) —
+  // honour it instead of re-asking. Falls back to the interactive prompt when
+  // no preselection was threaded through.
+  let tool: WorkflowConfig['tool']
+  if (preselectedTool) {
+    tool = preselectedTool
+    console.log(chalk.gray(`Using the tracker selected earlier: ${preselectedTool}\n`))
+  } else {
+    ;({ tool } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'tool',
+        message: 'Choose your project management tool:',
+        choices,
+        default: recommended !== 'none' ? recommended : 'github-projects'
+      }
+    ]))
+  }
 
   if (tool === 'none') {
     return {

@@ -42,8 +42,14 @@ export interface FieldDefinition {
 export interface DerivedContext {
   /** Workflow tool driving downstream behaviour (`'none'` when no workflow was configured). */
   workflowTool?: string
-  /** Advanced skills to pre-select based on the chosen workflow tool. */
+  /** Advanced skills to pre-select based on the chosen workflow tool and design tools. */
   suggestedSkills?: string[]
+  /** Tracker chosen in the tools-first step — drives the workflow step (no re-ask). */
+  selectedTracker?: string
+  /** Docs/SRS backend chosen in the tools-first step. */
+  selectedDocs?: string
+  /** Design tools chosen in the tools-first step. */
+  selectedDesign?: string[]
 }
 
 export interface SessionContext {

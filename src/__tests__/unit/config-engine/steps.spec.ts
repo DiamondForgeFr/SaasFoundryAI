@@ -38,8 +38,8 @@ describe('configSteps registry', () => {
     expect(() => assertStepRegistry(configSteps)).not.toThrow()
   })
 
-  it('keeps the historical batch order of sf new, profile first', () => {
-    expect(configSteps.map((s) => s.id)).toEqual(['profile', 'project', 'harness-project', 'email-credentials', 'storage', 'analytics', 'workflow', 'skills', 'srs'])
+  it('keeps the batch order of sf new (profile first; tools-first ahead of workflow/skills/srs)', () => {
+    expect(configSteps.map((s) => s.id)).toEqual(['profile', 'project', 'harness-project', 'email-credentials', 'storage', 'analytics', 'tools', 'workflow', 'skills', 'srs'])
   })
 
   it('declares effects on every step wrapping an external side effect', () => {
@@ -153,8 +153,19 @@ describe('workflowStep', () => {
 
     const result = await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://git/acme' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined)
     expect(result).toMatchObject({ workflow: { tool: 'github-projects' } })
+    logSpy.mockRestore()
+  })
+
+  it('interactive: threads the tracker chosen in the tools-first step (no re-ask)', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    const render = jest.fn(async () => ({ configureWorkflow: true }) as unknown as ConfigState)
+    const derived = computeDerivations({ toolSelections: { tracker: { name: 'jira' } } })
+
+    await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, derived, render }))
+
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, 'jira')
     logSpy.mockRestore()
   })
 

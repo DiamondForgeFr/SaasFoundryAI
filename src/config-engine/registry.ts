@@ -6,6 +6,7 @@ import { projectStep } from './steps/project.step'
 import { skillsStep } from './steps/skills.step'
 import { srsStep } from './steps/srs.step'
 import { storageStep } from './steps/storage.step'
+import { toolsStep } from './steps/tools.step'
 import { workflowStep } from './steps/workflow.step'
 import { StepDefinition } from './types'
 
@@ -14,7 +15,7 @@ import { StepDefinition } from './types'
  * order is the user-facing question order, so changes here are behaviour
  * changes.
  */
-export const configSteps: StepDefinition[] = [profileStep, projectStep, harnessProjectStep, emailCredentialsStep, storageStep, analyticsStep, workflowStep, skillsStep, srsStep]
+export const configSteps: StepDefinition[] = [profileStep, projectStep, harnessProjectStep, emailCredentialsStep, storageStep, analyticsStep, toolsStep, workflowStep, skillsStep, srsStep]
 
 /**
  * Structural sanity checks, same spirit as the manifest-migration registry

@@ -36,11 +36,11 @@ describe('profile gating across steps', () => {
   const applicable = (state: ConfigState): string[] => configSteps.filter((s) => !s.appliesTo || s.appliesTo(state, sessionCtx)).map((s) => s.id)
 
   it('full keeps every step', () => {
-    expect(applicable({ profile: 'full', emailService: 'mailersend' })).toEqual(['profile', 'project', 'email-credentials', 'storage', 'analytics', 'workflow', 'skills', 'srs'])
+    expect(applicable({ profile: 'full', emailService: 'mailersend' })).toEqual(['profile', 'project', 'email-credentials', 'storage', 'analytics', 'tools', 'workflow', 'skills', 'srs'])
   })
 
   it('harness skips the stack steps and swaps in the detection step (emailService is never collected)', () => {
-    expect(applicable({ profile: 'harness' })).toEqual(['profile', 'harness-project', 'workflow', 'skills', 'srs'])
+    expect(applicable({ profile: 'harness' })).toEqual(['profile', 'harness-project', 'tools', 'workflow', 'skills', 'srs'])
   })
 
   it('stack skips the AI-harness steps', () => {

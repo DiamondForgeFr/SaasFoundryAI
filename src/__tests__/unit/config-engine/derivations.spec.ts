@@ -34,4 +34,29 @@ describe('computeDerivations', () => {
     expect(computeDerivations({ workflow: workflowWith('github-projects') }).suggestedSkills).toEqual([])
     expect(computeDerivations({ workflow: workflowWith('linear') }).suggestedSkills).toEqual([])
   })
+
+  it('exposes the tools-first selections (tracker/docs/design)', () => {
+    const derived = computeDerivations({
+      toolSelections: { tracker: { name: 'github-projects' }, docs: { name: 'notion' }, design: [{ name: 'figma' }, { name: 'miro' }] }
+    })
+    expect(derived.selectedTracker).toBe('github-projects')
+    expect(derived.selectedDocs).toBe('notion')
+    expect(derived.selectedDesign).toEqual(['figma', 'miro'])
+  })
+
+  it('defaults design selections to an empty list and tracker/docs to undefined', () => {
+    const derived = computeDerivations({})
+    expect(derived.selectedTracker).toBeUndefined()
+    expect(derived.selectedDocs).toBeUndefined()
+    expect(derived.selectedDesign).toEqual([])
+  })
+
+  it('suggests design skills (figma/miro) from the tools-first selection', () => {
+    expect(computeDerivations({ toolSelections: { design: [{ name: 'figma' }] } }).suggestedSkills).toEqual(['figma'])
+  })
+
+  it('merges workflow-tool and design skill suggestions without duplicates', () => {
+    const derived = computeDerivations({ workflow: workflowWith('jira'), toolSelections: { design: [{ name: 'figma' }, { name: 'miro' }] } })
+    expect(derived.suggestedSkills).toEqual(['atlassian', 'figma', 'miro'])
+  })
 })

@@ -1,7 +1,15 @@
 import chalk from 'chalk'
 
 import { promptWorkflowConfiguration } from '../../prompts/workflow.prompts'
+import { WorkflowConfig } from '../../types'
 import { StepDefinition } from '../types'
+
+const WORKFLOW_TOOLS = new Set<WorkflowConfig['tool']>(['github-projects', 'jira', 'notion', 'linear', 'none'])
+
+/** A tracker chosen in the tools-first step, when it maps to a workflow tool. */
+function asWorkflowTool(tracker?: string): WorkflowConfig['tool'] | undefined {
+  return tracker && WORKFLOW_TOOLS.has(tracker as WorkflowConfig['tool']) ? (tracker as WorkflowConfig['tool']) : undefined
+}
 
 /**
  * Workflow configuration batch, moved verbatim from
@@ -9,15 +17,16 @@ import { StepDefinition } from '../types'
  *
  * `promptWorkflowConfiguration` is a wrapped legacy flow: it prompts on its
  * own AND triggers external side effects (GitHub Project auto-creation via
- * `gh api graphql`). Extracting those effects out of the collection phase is
- * owned by FR-CONFIG-ENGINE-04 — this step only declares them.
+ * `gh api graphql`). The tracker is now chosen once in the tools-first step
+ * (FR-CONFIG-ENGINE-04) and threaded here as `preselectedTool`, so the
+ * "which tool" question is no longer re-asked.
  */
 export const workflowStep: StepDefinition = {
   id: 'workflow',
   title: 'AI workflow',
   effects: ['May create a GitHub Project (4 GraphQL calls through the gh CLI) during collection', 'May save a workflow template to ~/.claude/workflows/'],
   appliesTo: (state) => state.profile !== 'stack',
-  collect: async ({ state, prefill, nonInteractive, render }) => {
+  collect: async ({ state, prefill, nonInteractive, derived, render }) => {
     // Non-interactive: use prefilled workflow if provided, otherwise skip (tool = 'none')
     if (nonInteractive) {
       if (prefill.workflow) {
@@ -44,7 +53,7 @@ export const workflowStep: StepDefinition = {
       // Pass repository URL if available (for GitHub Project creation)
       const repositoryUrl = state.monorepoUrl || state.backendRepoUrl || state.frontendRepoUrl
 
-      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset)
+      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset, asWorkflowTool(derived.selectedTracker))
       return { workflow, aiRules }
     }
 
