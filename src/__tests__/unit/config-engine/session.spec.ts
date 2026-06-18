@@ -181,6 +181,96 @@ describe('runConfigSession', () => {
     expect(recap).toEqual([{ stepId: 'custom', name: 'analytics', value: false }])
   })
 
+  // Recap loop (FR-CONFIG-ENGINE-06). A renderer that scripts the recap choices
+  // (by `__recapChoice`) and otherwise answers fields from the canned map.
+  const recapScriptRenderer = (cannedAnswers: Record<string, unknown>, recapChoices: string[]) => {
+    const calls: { fields: FieldDefinition[]; prefill: ConfigState }[] = []
+    let recapIdx = 0
+    const renderer: Renderer = {
+      async render(fields, { prefill }) {
+        calls.push({ fields: fields as FieldDefinition[], prefill })
+        if (fields.length === 1 && fields[0].name === '__recapChoice') {
+          return { __recapChoice: recapChoices[recapIdx++] ?? '__recap_confirm__' } as unknown as ConfigState
+        }
+        const out: Record<string, unknown> = { ...(prefill as Record<string, unknown>) }
+        for (const field of fields) {
+          if (out[field.name] === undefined && cannedAnswers[field.name] !== undefined) out[field.name] = cannedAnswers[field.name]
+        }
+        return out as ConfigState
+      }
+    }
+    return Object.assign(renderer, { calls })
+  }
+
+  it('lists every step decision in the recap (AC1)', async () => {
+    const steps: StepDefinition[] = [
+      { id: 'profile', title: 'profile', collect: async () => ({ profile: 'full' }) as ConfigState, decisions: () => [{ stepId: 'profile', name: 'profile', value: 'full' }] },
+      { id: 'tools', title: 'tools', collect: async () => ({}), decisions: () => [{ stepId: 'tools', name: 'tracker', value: 'github-projects' }] }
+    ]
+    let recapChoices: { name: string; value: string }[] = []
+    const renderer: Renderer = {
+      async render(fields) {
+        if (fields[0]?.name === '__recapChoice') {
+          recapChoices = (fields[0].choices ?? []) as { name: string; value: string }[]
+          return { __recapChoice: '__recap_confirm__' } as unknown as ConfigState
+        }
+        return {}
+      }
+    }
+
+    await runConfigSession({ renderer, steps })
+
+    const labels = recapChoices.map((c) => c.name)
+    expect(labels).toEqual(expect.arrayContaining(['profile: full', 'tracker: github-projects']))
+    expect(labels[labels.length - 1]).toContain('Confirm')
+  })
+
+  it('recap edit jumps back to the owning step, preserving other answers and re-running it (AC2)', async () => {
+    let oneRuns = 0
+    let twoRuns = 0
+    const steps: StepDefinition[] = [
+      {
+        id: 'one',
+        title: 'one',
+        collect: async () => {
+          oneRuns++
+          return { projectName: 'acme' } as ConfigState
+        },
+        decisions: (c) => [{ stepId: 'one', name: 'projectName', value: c.projectName }]
+      },
+      {
+        id: 'two',
+        title: 'two',
+        collect: async () => {
+          twoRuns++
+          return { includeAnalytics: true } as ConfigState
+        },
+        decisions: (c) => [{ stepId: 'two', name: 'analytics', value: c.includeAnalytics }]
+      }
+    ]
+    // recap = [projectName(idx 0), analytics(idx 1)]; edit step 'one' once, then confirm.
+    const renderer = recapScriptRenderer({}, ['0', '__recap_confirm__'])
+
+    const { config, recap } = await runConfigSession({ renderer, steps })
+
+    expect(oneRuns).toBe(2) // initial collection + recap edit
+    expect(twoRuns).toBe(1) // untouched
+    expect(config).toMatchObject({ projectName: 'acme', includeAnalytics: true })
+    expect(recap).toEqual([
+      { stepId: 'one', name: 'projectName', value: 'acme' },
+      { stepId: 'two', name: 'analytics', value: true }
+    ])
+  })
+
+  it('skips the recap loop entirely in non-interactive mode', async () => {
+    const steps: StepDefinition[] = [{ id: 'one', title: 'one', fields: [inputField('projectName')] }]
+    const renderer = cannedRenderer({})
+
+    await runConfigSession({ renderer, steps, prefill: { projectName: 'acme' }, nonInteractive: true })
+
+    expect(renderer.calls.some((c) => c.fields[0]?.name === '__recapChoice')).toBe(false)
+  })
+
   it('validates the step registry before running', async () => {
     const steps: StepDefinition[] = [
       { id: 'dup', title: 'a', fields: [inputField('x')] },
