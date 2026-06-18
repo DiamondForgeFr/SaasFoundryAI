@@ -16,10 +16,15 @@ export interface ConfigSessionResult {
   recap: RecapDecision[]
 }
 
+/** Sentinel value returned by the recap prompt when the user confirms. */
+const RECAP_CONFIRM = '__recap_confirm__'
+
 /**
  * Run the collection session: iterate the step registry, gate each step on
  * its applicability, expose derivations from earlier answers, render fields
- * through the given renderer and accumulate one state object.
+ * through the given renderer and accumulate one state object. Interactive
+ * sessions then enter an editable recap loop (FR-CONFIG-ENGINE-06) before the
+ * validated config is handed to execution.
  *
  * The renderer is the only component allowed to talk to the user — the
  * session itself is medium-agnostic, and in non-interactive mode the renderer
@@ -31,15 +36,26 @@ export async function runConfigSession(options: ConfigSessionOptions): Promise<C
   assertStepRegistry(steps)
 
   const state: ConfigState = {}
-  const recap: RecapDecision[] = []
+  // Per-step collected answers, kept so the recap can be recomputed after an
+  // edit re-runs a single step. Insertion order = recap display order.
+  const collectedByStep = new Map<string, ConfigState>()
 
-  for (const step of steps) {
+  /**
+   * Run one step: gate on applicability, render its fields + collect, and
+   * record the result. In `editMode` the step's own questions are re-asked
+   * (the accumulated state would otherwise satisfy the prefill and skip them).
+   */
+  async function collectStep(step: StepDefinition, editMode = false): Promise<void> {
     const derived = computeDerivations(state)
     const sessionCtx = { prefill, nonInteractive, derived }
 
-    if (step.appliesTo && !step.appliesTo(state, sessionCtx)) continue
+    if (step.appliesTo && !step.appliesTo(state, sessionCtx)) {
+      collectedByStep.delete(step.id)
+      return
+    }
 
-    const render = (fields: Parameters<Renderer['render']>[0]) => renderer.render(fields, { prefill: { ...prefill, ...state }, nonInteractive })
+    const renderPrefill = editMode ? { ...prefill } : { ...prefill, ...state }
+    const render = (fields: Parameters<Renderer['render']>[0]) => renderer.render(fields, { prefill: renderPrefill, nonInteractive })
 
     let collected: ConfigState = {}
     if (step.fields?.length) {
@@ -50,10 +66,68 @@ export async function runConfigSession(options: ConfigSessionOptions): Promise<C
     }
 
     Object.assign(state, collected)
-    recap.push(...(step.decisions ? step.decisions(collected, state) : defaultDecisions(step, collected)))
+    collectedByStep.set(step.id, collected)
   }
 
-  return { config: state as ValidatedConfig, recap }
+  const buildRecap = (): RecapDecision[] => {
+    const out: RecapDecision[] = []
+    for (const [stepId, collected] of collectedByStep) {
+      const step = steps.find((s) => s.id === stepId)
+      if (!step) continue
+      out.push(...(step.decisions ? step.decisions(collected, state) : defaultDecisions(step, collected)))
+    }
+    return out
+  }
+
+  // Collection pass.
+  for (const step of steps) {
+    await collectStep(step)
+  }
+
+  // Interactive recap loop — list every decision, jump back to the owning step
+  // on edit (answers preserved, derivations re-run), proceed on confirm.
+  if (!nonInteractive) {
+    await runRecapLoop(renderer, buildRecap, async (stepId) => {
+      const step = steps.find((s) => s.id === stepId)
+      if (step) await collectStep(step, true)
+    })
+  }
+
+  return { config: state as ValidatedConfig, recap: buildRecap() }
+}
+
+/**
+ * Render the recap, let the user edit a line or confirm, looping until they
+ * confirm. Editing re-runs the owning step through `editStep`, after which the
+ * recap is rebuilt (so derivation-driven values refresh).
+ */
+async function runRecapLoop(renderer: Renderer, buildRecap: () => RecapDecision[], editStep: (stepId: string) => Promise<void>): Promise<void> {
+  for (;;) {
+    const recap = buildRecap()
+    const choices = [
+      ...recap.map((decision, index) => ({ name: `${decision.name}: ${formatRecapValue(decision.value)}`, value: String(index) })),
+      { name: '✅ Confirm and continue', value: RECAP_CONFIRM }
+    ]
+
+    const answer = (await renderer.render([{ type: 'list', name: '__recapChoice', message: 'Review your configuration — select a line to change it, or confirm:', choices, default: RECAP_CONFIRM }], {
+      prefill: {},
+      nonInteractive: false
+    })) as Record<string, unknown>
+
+    const choice = answer.__recapChoice as string | undefined
+    if (!choice || choice === RECAP_CONFIRM) return
+
+    const decision = recap[Number(choice)]
+    if (decision) await editStep(decision.stepId)
+  }
+}
+
+/** Human-readable rendering of a recap value for the selection list. */
+function formatRecapValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '—'
+  if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '—'
+  if (typeof value === 'object') return '[configured]'
+  return String(value)
 }
 
 /**
