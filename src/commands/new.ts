@@ -12,6 +12,7 @@ import { createWebApp } from '../builders/web.builder'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
+import { ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug } from '../installers/harness-provisioning'
 import { installSkills } from '../installers/skills.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { initAndStartDb } from '../runners/database.runner'
@@ -554,6 +555,9 @@ async function runHarnessInstall(config: Answers): Promise<void> {
 
   const spinner = ora({ text: 'Installing the AI harness...', spinner: 'dots' }).start()
 
+  // Best-effort provisioning notes, surfaced after the spinner stops.
+  const provisioning: string[] = []
+
   try {
     spinner.text = 'Installing skills and workflow artefacts...'
     await installHarness({
@@ -588,11 +592,45 @@ async function runHarnessInstall(config: Answers): Promise<void> {
     }
     await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
 
+    // Provision the workflow's prerequisites on the existing repo so it's
+    // immediately runnable: the declared working branch and the guard labels
+    // (#474). Both are best-effort — a git/gh hiccup must not fail the install.
+    if (manifest.workflow && manifest.workflow.tool !== 'none') {
+      spinner.text = 'Provisioning workflow branch + labels...'
+
+      const branch = ensureWorkingBranch({ workingBranch: manifest.workflow.workingBranch, mainBranch: manifest.mainBranch })
+      if (branch.action === 'created') {
+        provisioning.push(
+          branch.pushed
+            ? chalk.green(`✓ Created and pushed working branch "${branch.branch}"`)
+            : chalk.yellow(`⚠️  Created working branch "${branch.branch}" locally — push it manually (${branch.reason === 'no-remote' ? 'no remote configured' : 'push failed'})`)
+        )
+      } else if (branch.action === 'skipped' && branch.reason === 'not-a-git-repo') {
+        provisioning.push(chalk.yellow('⚠️  Not a git repository — skipped working-branch creation'))
+      }
+
+      if (manifest.workflow.tool === 'github-projects') {
+        const slug = resolveRepoSlug()
+        if (slug) {
+          const labels = ensureWorkflowLabels(slug, { srs: Boolean(manifest.tools?.srs?.enabled) })
+          if (labels.created.length > 0) provisioning.push(chalk.green(`✓ Created ${labels.created.length} workflow label${labels.created.length > 1 ? 's' : ''} on ${slug}`))
+          if (labels.failed.length > 0) provisioning.push(chalk.yellow(`⚠️  ${labels.failed.length} label(s) could not be created on ${slug} — check 'gh auth status' (repo scope)`))
+        } else {
+          provisioning.push(chalk.yellow("⚠️  Could not resolve the GitHub repo — skipped label creation (run 'gh auth login')"))
+        }
+      }
+    }
+
     spinner.succeed(chalk.green('AI harness installed'))
   } catch (error) {
     spinner.fail(chalk.red('Failed to install the AI harness'))
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
+  }
+
+  if (provisioning.length > 0) {
+    console.log()
+    for (const line of provisioning) console.log(`  ${line}`)
   }
 
   console.log()
