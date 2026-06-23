@@ -6,6 +6,7 @@ import os from 'os'
 import { execSync } from 'child_process'
 import type { WorkflowConfig, AIRules, WorkflowTemplate, WorkflowStatus, GitHubProjectColor } from '../types'
 import { fileExists } from '../utils'
+import { configureBoardView } from './workflow.board-view'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
 const CREDENTIALS_DIR = path.join(os.homedir(), '.claude', 'credentials')
@@ -407,6 +408,25 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
 
     // Display concise confirmation (full descriptions already shown when selecting the workflow)
     console.log(chalk.green(`✅ Status field configured with ${statuses.length} states`))
+
+    // Add a Board-layout view with the team's default visible fields. The REST
+    // view endpoint is create-only, so the default Table view stays — surface
+    // that so the user knows they can drop it in the UI. Best-effort (#478).
+    let userId: number | undefined
+    if (!isOrg) {
+      try {
+        userId = Number(execSync(`gh api users/${repoOwner} --jq .id`, { encoding: 'utf-8' }).trim())
+      } catch {
+        // fall through — configureBoardView reports the failure as best-effort
+      }
+    }
+    const view = configureBoardView({ owner: repoOwner, isOrg, userId, projectNumber: projectData.number })
+    if (view.created) {
+      console.log(chalk.green(`✅ Added a Board view (${view.visible.length} fields)`) + chalk.gray(' — the default Table view remains; remove it from the board if you prefer.'))
+      if (view.missing.length > 0) console.log(chalk.gray(`   Skipped fields not exposed by the API: ${view.missing.join(', ')}`))
+    } else {
+      console.log(chalk.yellow('⚠️  Could not add the Board view — configure the layout + fields manually from the board (Views → New view → Board).'))
+    }
 
     return projectData.url
   } catch (error) {
