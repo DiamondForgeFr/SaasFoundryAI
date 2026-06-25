@@ -9,6 +9,11 @@
 > `UserToken`, endpoints `/auth/signup` `/auth/signin` `/auth/signout`). Every DS / TC / NFR seeding pattern documented in `SKILL.md` is demonstrated here. The machine-readable source lives alongside
 > as `example-epic.spec.json`.
 >
+> **The stack here is illustrative, not prescriptive.** This example happens to use NestJS + Prisma + React because that is SaaSFoundry's default scaffold — but the `EpicSpec` format is stack-neutral.
+> The `endpoint` field on an FR accepts ANY operation boundary (`POST /auth/signin`, a `login` Tauri command, a `auth login` CLI command, an `AuthService.SignIn` gRPC method); DS items describe any
+> data model (Prisma, raw SQL, a Rust struct, a protobuf message); NFR signals match capabilities, not frameworks. When drafting for a Rust/Tauri, Go, Python, or mobile project, keep this shape and
+> swap the stack-specific wording — see `data/clustering-rules.json` for the agnostic mapping.
+>
 > **Intentionally scoped down.** The real scaffolded auth module exposes additional endpoints (`/auth/request-password-reset`, `/auth/reset-password`, `/auth/me`, `/auth/guest`) — this example focuses
 > on the core signup/signin/signout loop so the five-category shape stays readable. When drafting a real Epic, enumerate every endpoint your scanner surfaces.
 
