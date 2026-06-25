@@ -537,9 +537,14 @@ export const DEFAULT_STATUSES = {
 
 export const DEFAULT_ISSUE_TYPES = WORKFLOW_PRESETS.saasfoundry.issueTypes
 
+// The {N} ticket prefix is load-bearing, not cosmetic: sf-workflow's
+// get_open_pr_for_ticket() resolves a ticket's PR via `^(feature|fix)/<ticket>(-|$)`.
+// A branch without the ticket prefix (e.g. `fix/name`) never matches, so the
+// In-Review / Done PR guards mis-fire and force SF_WORKFLOW_BYPASS_* on every
+// ticket. Keep these patterns ticket-prefixed and in sync with that regex.
 export const DEFAULT_BRANCH_NAMING = {
-  feature: 'feature/{name}',
-  fix: 'fix/{name}',
+  feature: 'feature/{N}-{description}',
+  fix: 'fix/{N}-{description}',
   release: 'rc-{version}'
 }
 
