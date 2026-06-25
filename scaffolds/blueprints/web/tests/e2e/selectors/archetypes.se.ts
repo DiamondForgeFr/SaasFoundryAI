@@ -586,7 +586,8 @@ const testApi = {
           isActive: true,
           createdAt: '2025-05-28T10:29:45.435Z',
           updatedAt: '2025-05-28T10:29:45.435Z',
-          permissions: [{ id: 1, name: 'MODULE_MANAGEMENT', description: 'Toggle modules', applicableScopes: ['PLATFORM'] }]
+          permissions: [{ id: 1, name: 'MODULE_MANAGEMENT', description: 'Toggle modules', subModuleId: null, applicableScopes: ['PLATFORM'] }],
+          subModules: []
         },
         {
           id: 2,
@@ -598,7 +599,8 @@ const testApi = {
           isActive: true,
           createdAt: '2025-05-28T10:29:45.435Z',
           updatedAt: '2025-05-28T10:29:45.435Z',
-          permissions: [{ id: 2, name: 'ACCOUNT_UPDATE', description: 'Update account', applicableScopes: ['ACCOUNT'] }]
+          permissions: [{ id: 2, name: 'ACCOUNT_UPDATE', description: 'Update account', subModuleId: null, applicableScopes: ['ACCOUNT'] }],
+          subModules: []
         }
       ]
     }
