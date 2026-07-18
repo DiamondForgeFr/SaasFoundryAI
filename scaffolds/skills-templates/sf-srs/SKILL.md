@@ -218,6 +218,11 @@ FRs reference their parent Epic via one of two fields :
 - `parentEpicId` — a **logical ID** that matches the `epic.id` of an Epic appearing earlier in the same batch. `write-srs` resolves it on the fly by building a logical-id → page-id map as Epics are
   created.
 
+> **An epic candidate alone creates ONE page and zero FR child pages.** The epic's inline `frs[]` — like `urs`/`dsItems`/`tcItems`/`nfrItems` — is only rendered into the Epic page body (FR table
+> included). The FR child pages that `spawn` enumerates to create tickets come exclusively from `kind: 'fr'` candidates. To write an Epic and its FR pages in one pass, ship one `fr` candidate per FR
+> alongside the epic candidate (example below) — an epic candidate alone yields a single page with nothing to spawn. Note that `templates/examples/example-epic.spec.json` is a bare `EpicSpec` kept as
+> a page-shape reference: it is NOT a valid `--spec` payload (`--spec` takes a `DraftCandidate[]`).
+
 Example mixed spec (a single `write` call creates both Epic and FRs, no intermediate page-id collection) :
 
 ```json

@@ -7,7 +7,9 @@
 
 > [!NOTE] This file is the canonical reference example shipped with the `sf-srs` skill. It shows what a complete Epic page looks like for the built-in SaaSFoundry auth module (`User` + polymorphic
 > `UserToken`, endpoints `/auth/signup` `/auth/signin` `/auth/signout`). Every DS / TC / NFR seeding pattern documented in `SKILL.md` is demonstrated here. The machine-readable source lives alongside
-> as `example-epic.spec.json`.
+> as `example-epic.spec.json`. ⚠️ That spec file is a bare `EpicSpec` — a page-shape reference, **not** a valid `sf srs write --spec` payload: `--spec` takes a `DraftCandidate[]`, and an epic
+> candidate's inline `frs[]` only renders the FR table on the Epic page. The FR child pages that `spawn` needs are created only by separate `kind: 'fr'` candidates — see SKILL.md, section "Single-pass
+> Epic + FR writes".
 >
 > **The stack here is illustrative, not prescriptive.** This example happens to use NestJS + Prisma + React because that is SaaSFoundry's default scaffold — but the `EpicSpec` format is stack-neutral.
 > The `endpoint` field on an FR accepts ANY operation boundary (`POST /auth/signin`, a `login` Tauri command, a `auth login` CLI command, an `AuthService.SignIn` gRPC method); DS items describe any
