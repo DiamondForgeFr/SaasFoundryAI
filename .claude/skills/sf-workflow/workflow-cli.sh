@@ -442,6 +442,15 @@ is_done_target() {
   [[ "$normalized" == "done" ]]
 }
 
+# SANITY — this regex and `.saasfoundry.json` → workflow.branchNaming must stay
+# in lock-step. The match below REQUIRES a ticket number right after the prefix
+# (`feature/<ticket>-…` / `fix/<ticket>-…`). The generated branchNaming defaults
+# are therefore `feature/{N}-{description}` / `fix/{N}-{description}` (DEFAULT_BRANCH_NAMING
+# in src/prompts/workflow.prompts.ts). If you ever drop the `{N}` ticket prefix from
+# branchNaming, this guard stops matching and silently forces SF_WORKFLOW_BYPASS_*
+# on every ticket. A non-regression test locks both sides together
+# (src/__tests__/unit/skill/branch-naming-pr-regex.spec.ts). Do NOT change the regex
+# to "fix" a mismatch — realign branchNaming instead.
 get_open_pr_for_ticket() {
   # Prints the PR number of the FIRST open PR whose head branch matches
   # `feature/<ticket>-…` or `fix/<ticket>-…` (the conventions enforced by

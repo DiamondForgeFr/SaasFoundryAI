@@ -218,6 +218,11 @@ FRs reference their parent Epic via one of two fields :
 - `parentEpicId` — a **logical ID** that matches the `epic.id` of an Epic appearing earlier in the same batch. `write-srs` resolves it on the fly by building a logical-id → page-id map as Epics are
   created.
 
+> **An epic candidate alone creates ONE page and zero FR child pages.** The epic's inline `frs[]` — like `urs`/`dsItems`/`tcItems`/`nfrItems` — is only rendered into the Epic page body (FR table
+> included). The FR child pages that `spawn` enumerates to create tickets come exclusively from `kind: 'fr'` candidates. To write an Epic and its FR pages in one pass, ship one `fr` candidate per FR
+> alongside the epic candidate (example below) — an epic candidate alone yields a single page with nothing to spawn. Note that `templates/examples/example-epic.spec.json` is a bare `EpicSpec` kept as
+> a page-shape reference: it is NOT a valid `--spec` payload (`--spec` takes a `DraftCandidate[]`).
+
 Example mixed spec (a single `write` call creates both Epic and FRs, no intermediate page-id collection) :
 
 ```json
@@ -267,6 +272,13 @@ Every TS entrypoint under `src/srs/bin/` honours the same contract. The skill mu
 
 For projects where the codebase already exists and Notion is empty (or sparse), `srs-cli.sh draft --from codebase` scans the repo and emits structured `ScannerFinding[]` that Claude clusters into
 `DraftCandidate[]` conversationally with the user. The CLI never calls an LLM — it only surfaces what it can prove from the source tree.
+
+> **Stack coverage — the scanner is best-effort, the agent is the backstop.** The deterministic scanner parses a SUBSET of stacks today (NestJS controllers, React pages, Prisma models, Jest/Vitest
+> tests). On any other stack — Rust/Tauri, Go, Python/FastAPI, Rails, mobile, raw SQL — it returns sparse or empty `endpoint`/`entity` findings. **That is not evidence the surface is empty.** When the
+> findings look thin for a non-parsed stack, the agent MUST read the project's own operation/model registry directly (a Tauri `generate_handler!` list, a Go/Express router, a FastAPI app, SQL
+> migrations, a gRPC service) and synthesise the findings itself before clustering. The finding `kind`s are concepts, not frameworks — `endpoint` is any invocable operation (HTTP route, RPC/command,
+> CLI command, queue handler), `entity` is any persistent record (any ORM, raw DDL, a struct, a protobuf message), `ui-flow` is any user-facing view (web/native/TUI/CLI). See
+> `data/clustering-rules.json` for the full stack-neutral mapping.
 
 ### When to trigger `--from codebase`
 
@@ -335,8 +347,11 @@ Read that file once per drafting session — it is the source of truth. The JSON
 
 Operational quick-reference (full detail in the JSON):
 
-- **Five scanner kinds** (`endpoint`, `ui-flow`, `entity`, `test`, `doc-context`) — see `docs/srs/scanner-findings.md` for the JSON shape.
-- **Clustering**: work Epic-by-Epic, then FR-by-FR. Group by `area`, one Epic per coherent area, one FR per endpoint (or tight endpoint cluster).
+- **Five scanner kinds** (`endpoint`, `ui-flow`, `entity`, `test`, `doc-context`) — see `docs/srs/scanner-findings.md` for the JSON shape. These are stack-neutral concepts (see
+  `data/clustering-rules.json`): `endpoint` = any invocable operation (HTTP route, RPC/Tauri command, CLI command, queue handler), not just a NestJS controller; `entity` = any persistent record, not
+  just a Prisma model; `ui-flow` = any user-facing view, not just a React page.
+- **Clustering**: work Epic-by-Epic, then FR-by-FR. Group by `area` — whatever structural unit the project uses (module, package, crate, feature folder), not a fixed `src/modules/` path. One Epic per
+  coherent area, one FR per operation (or tight operation cluster).
 - **Five-category seeding** (UR + FR + DS + TC + NFR): scanners surface raw material, the agent synthesises, the user validates before write. NFRs are always marked `priority: P3` and
   `target: '<proposed — needs human validation>'` until the reviewer accepts.
 - **Untested endpoints** emit a TODO TC item so drift is auditable — never silently drop them.
