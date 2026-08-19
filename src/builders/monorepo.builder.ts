@@ -48,8 +48,12 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   packageJson.description = projectDescription
   packageJson.repository.url = monorepoUrl || 'https://github.com/agachet/saasfoundry.git'
   packageJson.keywords = [projectName, 'saasfoundry', 'monorepo', 'turborepo']
-  const npmVersion = exec(`${nvm}npm --version`, { silent: true }).stdout.trim()
-  packageJson.packageManager = `npm@${npmVersion}`
+  // `packageManager` deliberately keeps the value pinned in the template. It used to be stamped
+  // with the *generating machine's* npm version, which made generation non-deterministic: the
+  // scaffold's package manager depended on whoever ran `sf new`. Docker (npm 10.9.x) therefore
+  // baked a broken npm into every generated monorepo — the whole npm 10 line crashes on this
+  // workspace peer graph with "Cannot read properties of null (reading 'edgesOut')" (arborist
+  // #loadPeerSet). npm 11+ resolves it. Keep the pin in the template, not the host's version.
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
 
   // Update deployment workflow references with project-specific names

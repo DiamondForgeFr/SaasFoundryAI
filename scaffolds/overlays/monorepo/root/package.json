@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "{{PROJECT_NAME}} is just an amazing SaaSFoundry project",
   "private": true,
-  "packageManager": "npm@10.9.7",
+  "packageManager": "npm@11.19.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -18,7 +18,7 @@
   },
   "engines": {
     "node": ">=22.13.0",
-    "npm": ">=10.0.0"
+    "npm": ">=11.0.0"
   },
   "devEngines": {
     "runtime": {
@@ -28,7 +28,7 @@
     },
     "packageManager": {
       "name": "npm",
-      "version": ">=10.0.0",
+      "version": ">=11.0.0",
       "onFail": "error"
     }
   },
