@@ -50,3 +50,10 @@ Finalization and cleanup after merge.
 
 `workflow-cli.sh update-status <N> Done` exits non-zero if `gh pr list --state open` finds a PR whose head branch matches `feature/<N>-…` or `fix/<N>-…`. Escape hatch (rare, e.g. force-closed PR
 re-opened by mistake): `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`.
+
+> [!note] Convention sanity check
+>
+> This guard — and the `→ In Review` PR-existence guard — only match when branches carry the ticket number, exactly the convention declared in `.saasfoundry.json` → `workflow.branchNaming`
+> (`feature/{N}-{description}`, `fix/{N}-{description}`). The two must stay in lock-step. Quick check (should print `ok`):
+> `echo "fix/32-detection-dropdown" | grep -Eq '^(feature|fix)/32(-|$)' && echo ok`. A branch missing the `{N}` ticket prefix (e.g. `fix/some-name`) silently fails the guard and forces
+> `SF_WORKFLOW_BYPASS_*` on every ticket — realign `branchNaming`, never "fix" the regex. A non-regression test locks both sides together: `src/__tests__/unit/skill/branch-naming-pr-regex.spec.ts`.
