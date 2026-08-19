@@ -8,6 +8,7 @@ import { nestjsScanner } from '../scanners/nestjs.scanner'
 import { resolveScannerRoots } from '../scanners/paths'
 import { prismaScanner } from '../scanners/prisma.scanner'
 import { reactScanner } from '../scanners/react.scanner'
+import { cliScanner } from '../scanners/cli.scanner'
 import { testsScanner } from '../scanners/tests.scanner'
 import { CodebaseScanner, CodebaseScannerContext, ScannerFinding } from '../scanners/types'
 
@@ -15,7 +16,7 @@ const HARD_EXCLUDE_DIRS = new Set(['node_modules', 'dist', 'coverage', '.git', '
 const HARD_EXCLUDE_DIR_SEGMENTS = ['node_modules', 'dist', 'coverage', '.git']
 const HARD_EXCLUDE_PATH_FRAGMENTS = ['.vitepress/cache']
 
-const SCANNERS: CodebaseScanner[] = [nestjsScanner, reactScanner, prismaScanner, testsScanner, docsScanner]
+const SCANNERS: CodebaseScanner[] = [nestjsScanner, reactScanner, prismaScanner, cliScanner, testsScanner, docsScanner]
 
 export interface ScanExclusions {
   exclude?: string[]
