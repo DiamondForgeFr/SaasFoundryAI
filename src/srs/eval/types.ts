@@ -5,6 +5,7 @@ export type DriftKind =
   | 'code-without-fr' // scanner finding has no matching FR page
   | 'fr-untested' // FR matched to endpoint(s) but none have tests
   | 'orphan-area' // scanner area carries endpoints but no FR page exists for it
+  | 'unparsed-fr-page' // page sits under an Epic but its title yields no FR id — it is NOT scored
 
 export interface DriftFinding {
   kind: DriftKind
@@ -41,6 +42,10 @@ export interface SrsInventory {
   // (tables come back empty on fetchPage). Captured for the report so the
   // human output is explicit about what is measured vs. what is not.
   unsupportedCategories: Array<'UR' | 'DS' | 'TC' | 'NFR'>
+  // Pages found under an Epic whose title does not parse as an FR id. They are
+  // excluded from every score, so they must be reported — a silently dropped page
+  // is indistinguishable from one that does not exist.
+  unparsedPages?: Array<{ pageId: string; title: string; epicTitle: string }>
 }
 
 export interface CategoryScore {

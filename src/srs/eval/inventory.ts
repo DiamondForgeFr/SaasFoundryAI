@@ -6,7 +6,13 @@ import { SrsFrEntry, SrsInventory } from './types'
 // U+2014) produced by `renderFrPage`. The parser accepts the canonical
 // separator and tolerates colon or hyphen as fallbacks for resilience against
 // manual edits in Notion.
-const FR_ID_RE = /^(FR-([A-Z0-9]+)(?:-\d+)+)/i
+// The area may span several hyphen-separated segments (`FR-CONFIG-ENGINE-01`), so each
+// segment is required to carry at least one letter. That is what keeps the trailing
+// numeric group (`-01`, `-01-02`) out of the area. The previous pattern accepted a single
+// alphanumeric segment, so every multi-segment id failed to parse and its page was
+// dropped from the inventory without a word — silently deflating every FR total.
+const FR_AREA_SEGMENT = '[A-Z0-9]*[A-Z][A-Z0-9]*'
+const FR_ID_RE = new RegExp(`^(FR-(${FR_AREA_SEGMENT}(?:-${FR_AREA_SEGMENT})*)(?:-\\d+)+)`, 'i')
 const CANONICAL_SEP_CHAR = FR_TITLE_SEPARATOR.trim()
 const SEPARATOR_RE = new RegExp(`^\\s*[${CANONICAL_SEP_CHAR}:\\-]\\s*`)
 
@@ -31,11 +37,15 @@ export async function buildSrsInventory(adapter: SrsAdapter, rootPageId: string)
   const epicRefs = await adapter.listChildren(rootPageId)
   const epics = epicRefs.map((ref) => ({ pageId: ref.id, title: ref.title }))
   const frs: SrsFrEntry[] = []
+  const unparsedPages: Array<{ pageId: string; title: string; epicTitle: string }> = []
   for (const epic of epics) {
     const children: PageRef[] = await adapter.listChildren(epic.pageId)
     for (const child of children) {
       const parsed = parseFrPageTitle(child.title)
-      if (!parsed) continue
+      if (!parsed) {
+        unparsedPages.push({ pageId: child.id, title: child.title, epicTitle: epic.title })
+        continue
+      }
       frs.push({
         id: parsed.id,
         area: parsed.area,
@@ -50,6 +60,7 @@ export async function buildSrsInventory(adapter: SrsAdapter, rootPageId: string)
     rootPageId,
     epics,
     frs,
-    unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
+    unsupportedCategories: ['UR', 'DS', 'TC', 'NFR'],
+    unparsedPages
   }
 }
