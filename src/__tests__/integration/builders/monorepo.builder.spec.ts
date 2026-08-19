@@ -45,11 +45,19 @@ describe('createMonorepoRoot (integration)', () => {
     expect(pkg.name).toBe('my-saas')
   })
 
-  it('should set packageManager version from npm --version', async () => {
+  // Non-regression: `packageManager` must come from the template, never from the generating
+  // machine. It used to be stamped with the host's `npm --version`, so a Docker image (or any
+  // contributor) running npm 10.x baked a broken npm into every generated monorepo — the whole
+  // npm 10 line crashes this workspace's peer graph with "Cannot read properties of null
+  // (reading 'edgesOut')". The shelljs mock above reports 10.0.0 on purpose: if that value ever
+  // reappears here, the host-version leak is back.
+  it('should pin packageManager from the template, not from the host npm', async () => {
     await createMonorepoRoot(monorepoRootParams())
 
     const pkg = JSON.parse(await readFile(join(tempDir, 'package.json'), 'utf8'))
-    expect(pkg.packageManager).toBe('npm@10.0.0')
+    expect(pkg.packageManager).not.toBe('npm@10.0.0')
+    expect(pkg.packageManager).toMatch(/^npm@(1[1-9]|[2-9]\d)\./)
+    expect(pkg.engines.npm).toBe('>=11.0.0')
   })
 
   it('should call npm install at root level', async () => {

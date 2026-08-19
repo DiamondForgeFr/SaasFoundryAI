@@ -16,7 +16,7 @@
   },
   "engines": {
     "node": ">=22.13.0",
-    "npm": ">=10.0.0"
+    "npm": ">=11.0.0"
   },
   "devEngines": {
     "runtime": {
@@ -26,7 +26,7 @@
     },
     "packageManager": {
       "name": "npm",
-      "version": ">=10.0.0",
+      "version": ">=11.0.0",
       "onFail": "error"
     }
   },
