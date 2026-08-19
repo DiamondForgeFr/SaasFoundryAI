@@ -95,6 +95,18 @@ export function matchSrsAgainstScanners(inventory: SrsInventory, findings: Scann
   const matchedFrIds = new Set<string>()
   const matchedImplFiles = new Set<string>()
 
+  // A page that sits under an Epic but whose title yields no FR id is excluded from every
+  // score. Report it: a silently dropped page looks exactly like a page that never existed,
+  // which is how 8 FR-CONFIG-ENGINE-* pages stayed invisible for two months.
+  for (const page of inventory.unparsedPages ?? []) {
+    driftFindings.push({
+      kind: 'unparsed-fr-page',
+      severity: 'warn',
+      message: `Page "${page.title}" under Epic "${page.epicTitle}" does not parse as an FR id — it is excluded from the freshness score`,
+      frTitle: page.title
+    })
+  }
+
   for (const fr of inventory.frs) {
     const matches = findings.filter((f) => findingMatchesFr(f, fr) && findingKindMatchesHint(f, fr.implementationKind))
     if (matches.length > 0) {
