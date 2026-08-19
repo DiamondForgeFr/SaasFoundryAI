@@ -28,6 +28,37 @@ function inventory(frs: Array<{ id: string; area: string; title: string }>): Srs
 }
 
 describe('matchSrsAgainstScanners', () => {
+  // Area-token bridging. Scanner areas are structural names carrying their qualifier in a
+  // separate segment ("new-command", "api.builder"); FR area tokens are the bare concept
+  // ("commands", "builders"). The old prefix-only tolerance could not bridge a suffix mismatch,
+  // which produced 15 false `fr-without-code` on this very repo — all 8 FR-COMMANDS-* and all
+  // 7 FR-BUILDERS-*, while the scanner had in fact found that code.
+  describe('area matching', () => {
+    const matches = (frArea: string, findingArea: string): boolean => {
+      const inv = inventory([{ id: 'FR-X-01', area: frArea, title: 't' }])
+      return matchSrsAgainstScanners(inv, [entity(findingArea, 'M')]).counts.frMatched === 1
+    }
+
+    it.each([
+      ['commands', 'new-command'],
+      ['builders', 'api.builder'],
+      ['modules', 'module-registry'],
+      ['config-engine', 'config-engine.step'],
+      ['accounts', 'account']
+    ])('matches FR area "%s" against scanner area "%s"', (frArea, findingArea) => {
+      expect(matches(frArea, findingArea)).toBe(true)
+    })
+
+    // Guard against the opposite failure: matching so loosely that the score becomes meaningless.
+    it.each([
+      ['auth', 'author', 'a substring is not a segment — the old prefix rule matched this'],
+      ['config-engine', 'config-only', 'a multi-segment token requires every one of its segments'],
+      ['commands', 'builders', 'unrelated areas stay unrelated']
+    ])('does NOT match FR area "%s" against scanner area "%s" (%s)', (frArea, findingArea) => {
+      expect(matches(frArea, findingArea)).toBe(false)
+    })
+  })
+
   it('reports fr-without-code when an FR has no matching endpoint area', () => {
     const inv = inventory([{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in' }])
     const report = matchSrsAgainstScanners(inv, [])
