@@ -45,6 +45,32 @@ describe('extractCaseTitles (pure)', () => {
 })
 
 describe('extractTestAreaFromPath (pure)', () => {
+  // Regression: outside the NestJS/React conventions the area fell back to the FILE STEM, which
+  // is the wrong key in both directions. `config-engine` scattered across seven areas (session,
+  // steps, registry, derivations, ...) so its 8 FRs could never match, while three unrelated
+  // subsystems shipping a `registry.spec.ts` collapsed onto a single `registry` area.
+  describe('non-NestJS/React trees derive the area from the module directory', () => {
+    it('keys a CLI subsystem on its directory, not the spec file stem', () => {
+      expect(extractTestAreaFromPath('src/__tests__/unit/config-engine/registry.spec.ts')).toBe('config-engine')
+    })
+
+    it('keeps unrelated subsystems apart even when the spec file names collide', () => {
+      const a = extractTestAreaFromPath('src/__tests__/unit/config-engine/registry.spec.ts')
+      const b = extractTestAreaFromPath('src/__tests__/unit/installers/registry.spec.ts')
+      const c = extractTestAreaFromPath('src/__tests__/unit/migrations/registry.spec.ts')
+      expect(new Set([a, b, c]).size).toBe(3)
+    })
+
+    it('groups a subsystem the same way from the source tree and the test mirror', () => {
+      expect(extractTestAreaFromPath('src/config-engine/session.spec.ts')).toBe('config-engine')
+      expect(extractTestAreaFromPath('src/__tests__/integration/config-engine/session.spec.ts')).toBe('config-engine')
+    })
+
+    it('keeps nested subsystems qualified', () => {
+      expect(extractTestAreaFromPath('src/__tests__/unit/srs/eval/inventory.spec.ts')).toBe('srs/eval')
+    })
+  })
+
   it('derives area from src/modules/<area>/', () => {
     expect(extractTestAreaFromPath('api/src/modules/auth/tests/unit/auth.service.spec.ts')).toBe('auth')
   })
