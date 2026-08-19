@@ -1,7 +1,7 @@
 {
   "name": "saasfoundry-api",
   "version": "1.0.0",
-  "description": "Backend API for SaaSFoundry",
+  "description": "Backend API for SaaSFoundryAI",
   "private": true,
   "prisma": {
     "schema": "prisma/schema"

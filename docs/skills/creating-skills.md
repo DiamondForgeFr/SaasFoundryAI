@@ -1,10 +1,10 @@
 # Creating Skills
 
-SaaSFoundry ships a curated catalogue (see [Core Skills](/skills/core-skills), [Tool Skills](/skills/tool-skills)), but your project will have conventions unique to it — domain language, a custom
+SaaSFoundryAI ships a curated catalogue (see [Core Skills](/skills/core-skills), [Tool Skills](/skills/tool-skills)), but your project will have conventions unique to it — domain language, a custom
 release script, a deployment checklist that only makes sense for your infrastructure. Write a **custom skill** to teach Claude those conventions so every contributor (human or AI) follows them
 identically.
 
-This page walks through building a skill **inside your project**. For contributing a skill back to SaaSFoundry itself, see [Contributing](/contributing/development).
+This page walks through building a skill **inside your project**. For contributing a skill back to SaaSFoundryAI itself, see [Contributing](/contributing/development).
 
 ## What is a skill, in 20 seconds
 
@@ -27,7 +27,7 @@ For a multirepo project, place it under the app that owns the behaviour (`apps/a
 mkdir -p .claude/skills/sf-deploy-preview
 ```
 
-Note the `sf-` prefix — keep it consistent with SaaSFoundry's convention to avoid collisions with globally installed skills.
+Note the `sf-` prefix — keep it consistent with SaaSFoundryAI's convention to avoid collisions with globally installed skills.
 
 ### 2. Write `SKILL.md`
 
@@ -88,7 +88,7 @@ Then the `## Workflow` section of `SKILL.md` points at the script:
 1. Run `bash .claude/skills/sf-deploy-preview/deploy-preview.sh $BRANCH`
 ```
 
-This is the pattern used by `sf-tool-github-projects`, `sf-tool-atlassian`, and all SaaSFoundry-shipped tool skills.
+This is the pattern used by `sf-tool-github-projects`, `sf-tool-atlassian`, and all SaaSFoundryAI-shipped tool skills.
 
 ### 4. Test by invocation
 
@@ -117,7 +117,7 @@ The skill is now part of the project. Anyone who clones the repo — human or AI
 
 ## Writing a good `SKILL.md`
 
-A few patterns from the SaaSFoundry-shipped skills that make them work reliably:
+A few patterns from the SaaSFoundryAI-shipped skills that make them work reliably:
 
 ### Front-matter: be specific in `description`
 
@@ -149,7 +149,7 @@ State what must be true before the skill runs. This lets Claude bail out cleanly
 - Ticket is in Human testing
 ```
 
-The SaaSFoundry 7-status workflow is enforced exactly this way.
+The SaaSFoundryAI 7-status workflow is enforced exactly this way.
 
 ### Body: explicit `## Workflow` steps
 
@@ -186,7 +186,7 @@ Your custom skill is a normal file in the repo. That means:
 
 - **Git tracks it.** Anyone who pulls the branch gets the skill.
 - **Code review catches it.** Teammates can comment on a skill like any other file.
-- **`sf update` preserves it.** It's outside the scaffold's file-hash map, so SaaSFoundry never proposes to overwrite it.
+- **`sf update` preserves it.** It's outside the scaffold's file-hash map, so SaaSFoundryAI never proposes to overwrite it.
 
 For a monorepo, you can share one skill across both `apps/api` and `apps/web` by placing it in the root `.claude/skills/` — both apps pick it up.
 
@@ -205,9 +205,9 @@ To do that, **do not edit `sf-workflow` directly** — `sf update` will overwrit
 
 This keeps your customisations isolated from the scaffold code that `sf update` manages. Look at the shipped `hooks/` directory — it contains a commented example.
 
-## Graduating a custom skill into SaaSFoundry
+## Graduating a custom skill into SaaSFoundryAI
 
-If a custom skill ends up useful across multiple projects you own, consider opening a PR to promote it into the SaaSFoundry catalogue. That way it ships with every new project, not just the one you
+If a custom skill ends up useful across multiple projects you own, consider opening a PR to promote it into the SaaSFoundryAI catalogue. That way it ships with every new project, not just the one you
 built it in.
 
 See [Contributing](/contributing/development) for the PR checklist (duplicate into `scaffolds/blueprints/api/.claude/skills/`, `scaffolds/blueprints/web/.claude/skills/`,

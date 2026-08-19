@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json",
+  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json",
   "manifestVersion": 1,
   "version": "1.0.0-beta",
   "generatedAt": "2026-04-01T00:00:00.000Z",

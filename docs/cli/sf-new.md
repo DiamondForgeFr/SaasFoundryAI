@@ -1,6 +1,6 @@
 # sf new
 
-Create a new SaaSFoundry project with interactive prompts, or scripted scaffolding via flags.
+Create a new SaaSFoundryAI project with interactive prompts, or scripted scaffolding via flags.
 
 ## Usage
 

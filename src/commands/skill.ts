@@ -63,7 +63,7 @@ export async function skillCommand(subcommand?: string, ...args: string[]) {
 }
 
 function showHelp() {
-  console.log(chalk.blue('\n  SaaSFoundry Skill - Lifecycle management for the tool-saasfoundry skill'))
+  console.log(chalk.blue('\n  SaaSFoundryAI Skill - Lifecycle management for the tool-saasfoundry skill'))
   console.log(chalk.blue('  ' + '─'.repeat(60)))
   console.log(chalk.white('\n  Usage: sf skill <subcommand> [options]\n'))
   console.log(chalk.white('  Subcommands:'))
@@ -212,12 +212,12 @@ async function maybeOfferGlobalCliInstall(opts: ParsedArgs) {
     {
       type: 'confirm',
       name: 'installGlobal',
-      message: 'You ran this via npx. Install saasfoundry-cli globally so `sf` works everywhere?',
+      message: 'You ran this via npx. Install saasfoundryai-cli globally so `sf` works everywhere?',
       default: false
     }
   ])
   if (installGlobal) {
-    console.log(chalk.gray('    Run: npm install -g saasfoundry-cli'))
+    console.log(chalk.gray('    Run: npm install -g saasfoundryai-cli'))
     await updatePreferences({ cliGlobalInstalled: true })
   } else {
     await updatePreferences({ cliGlobalInstalled: false })

@@ -65,10 +65,10 @@ the matching SrsAdapter. See .claude/skills/sf-srs/SKILL.md for the contract.
 EOF
 }
 
-# Locate the SaaSFoundry project root (where src/srs/ lives).
+# Locate the SaaSFoundryAI project root (where src/srs/ lives).
 # In the dogfood repo, the root is the nearest ancestor with a `src/srs` dir.
 # In a generated project consuming sf-srs from a pre-built distribution, the
-# dispatch library ships under node_modules/saasfoundry-cli/dist/srs — SUB-14.4
+# dispatch library ships under node_modules/saasfoundryai-cli/dist/srs — SUB-14.4
 # will bind that path ; for now we walk up from SCRIPT_DIR.
 find_project_root() {
   local dir="$SCRIPT_DIR"
@@ -105,7 +105,7 @@ run_bin() {
     (cd "$project_root" && npx --no-install tsx "src/srs/bin/$bin.ts" "$@")
   else
     echo "sf-srs $bin: neither dist/srs/bin/$bin.js nor src/srs/bin/$bin.ts found under $project_root." >&2
-    echo "Run `npm run build` in the SaaSFoundry checkout, or install sf-srs via `sf skill install sf-srs` (SUB-14.4)." >&2
+    echo "Run `npm run build` in the SaaSFoundryAI checkout, or install sf-srs via `sf skill install sf-srs` (SUB-14.4)." >&2
     exit 1
   fi
 }

@@ -1,6 +1,6 @@
 # sf status
 
-Report the current SaaSFoundry project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI).
+Report the current SaaSFoundryAI project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI).
 
 ## Usage
 

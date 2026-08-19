@@ -1,9 +1,9 @@
 <div align="center">
 
-[![Open Source](https://img.shields.io/badge/Open%20Source-2D3748?style=for-the-badge&logo=github&logoColor=white)](https://github.com/DiamondForgeFr/SaaSFoundry)
+[![Open Source](https://img.shields.io/badge/Open%20Source-2D3748?style=for-the-badge&logo=github&logoColor=white)](https://github.com/DiamondForgeFr/SaaSFoundryAI)
 [![License](https://img.shields.io/badge/License-MIT-2D3748?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
-[![npm version](https://img.shields.io/npm/v/saasfoundry-cli?style=for-the-badge&logo=npm&label=CLI&color=CB3837)](https://www.npmjs.com/package/saasfoundry-cli)
-[![codecov](https://img.shields.io/codecov/c/github/DiamondForgeFr/SaaSFoundry?style=for-the-badge&logo=codecov&logoColor=white&label=Coverage)](https://codecov.io/gh/DiamondForgeFr/SaaSFoundry)
+[![npm version](https://img.shields.io/npm/v/saasfoundryai-cli?style=for-the-badge&logo=npm&label=CLI&color=CB3837)](https://www.npmjs.com/package/saasfoundryai-cli)
+[![codecov](https://img.shields.io/codecov/c/github/DiamondForgeFr/SaaSFoundryAI?style=for-the-badge&logo=codecov&logoColor=white&label=Coverage)](https://codecov.io/gh/DiamondForgeFr/SaaSFoundryAI)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -14,13 +14,13 @@
 
 <div align="center">
   <br /><br />
-  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundry Logo" width="300"/>
+  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundryAI Logo" width="300"/>
   <br /><br />
 </div>
 
-# 🌟 What is SaaSFoundry?
+# 🌟 What is SaaSFoundryAI?
 
-SaaSFoundry is a comprehensive, production-ready CLI for building modern SaaS applications. Far beyond a simple boilerplate, it's a complete ecosystem with modular architecture, automated workflows,
+SaaSFoundryAI is a comprehensive, production-ready CLI for building modern SaaS applications. Far beyond a simple boilerplate, it's a complete ecosystem with modular architecture, automated workflows,
 and integrated best practices. This open-source project provides a robust foundation for startups, freelancers, and developers looking to create scalable, secure, and maintainable SaaS solutions with
 TypeScript full-stack development.
 
@@ -76,7 +76,7 @@ TypeScript full-stack development.
 
 ## 🔧 Prerequisites
 
-To fully leverage SaaSFoundry's capabilities, the following tools are strongly recommended:
+To fully leverage SaaSFoundryAI's capabilities, the following tools are strongly recommended:
 
 ### 🐳 Docker
 
@@ -136,7 +136,7 @@ Peacock is a Visual Studio Code extension that helps identify and distinguish pr
 
 This extension is particularly useful when working with multiple repositories simultaneously, offering visual differentiation between frontend and backend workspaces.
 
-After installing these tools, you'll be ready to fully utilize all SaaSFoundry features, including containerized development environments and proper Node.js version management across projects.
+After installing these tools, you'll be ready to fully utilize all SaaSFoundryAI features, including containerized development environments and proper Node.js version management across projects.
 
 ## 🚀 Quick Start
 
@@ -144,10 +144,10 @@ After installing these tools, you'll be ready to fully utilize all SaaSFoundry f
 
 ```bash
 # Execute directly (no global install needed)
-npx saasfoundry-cli@beta new
+npx saasfoundryai-cli@beta new
 
 # OR install the CLI globally
-npm install -g saasfoundry-cli@beta
+npm install -g saasfoundryai-cli@beta
 sf new       # or: saasfoundry new
 ```
 
@@ -163,7 +163,7 @@ The CLI will guide you through:
 ### Adding Modules to Existing Projects
 
 ```bash
-# Add modules to an existing SaaSFoundry project
+# Add modules to an existing SaaSFoundryAI project
 cd your-project
 sf update
 
@@ -286,7 +286,7 @@ yourproject/
 
 ## 🧩 Optional Modules
 
-SaaSFoundry includes optional modules that can be added during project creation or later with `sf update`:
+SaaSFoundryAI includes optional modules that can be added during project creation or later with `sf update`:
 
 ### 📧 Email Service (MailerSend)
 
@@ -339,7 +339,7 @@ When running `sf update`:
 
 This ensures your customizations are never lost during updates.
 
-## 💡 Why SaaSFoundry?
+## 💡 Why SaaSFoundryAI?
 
 ### For Startups
 
@@ -361,12 +361,12 @@ This ensures your customizations are never lost during updates.
 
 ## 🤖 AI-First Development
 
-SaaSFoundry is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects come pre-configured for both traditional team
+SaaSFoundryAI is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects come pre-configured for both traditional team
 development and AI-powered coding with Claude Code.
 
 ### ✨ Built for Claude Code
 
-Every SaaSFoundry project includes:
+Every SaaSFoundryAI project includes:
 
 #### 📝 CLAUDE.md Context Files
 
@@ -392,7 +392,7 @@ Every SaaSFoundry project includes:
 
 ### 🎯 Claude Code Skills System
 
-SaaSFoundry projects come with a **skills library** that teaches Claude Code the project's conventions, workflows, and integrations. Skills are plain files shipped under `.claude/skills/` — no MCP
+SaaSFoundryAI projects come with a **skills library** that teaches Claude Code the project's conventions, workflows, and integrations. Skills are plain files shipped under `.claude/skills/` — no MCP
 server required. Add skills after scaffold time with `sf skill install <name>` (project- or user-scope).
 
 #### 🎯 SRS auto-suggestion (when the SRS module is enabled)
@@ -440,7 +440,7 @@ Added during `sf new` or later with `sf update`:
 - **`sf-tool-notion`** (advanced) — Notion pages, databases, views, comments across a full workspace, beyond ticketing
 - **`sf-tool-figma`** — Figma files, components, FigJam boards, design-to-code
 
-#### 🧰 SaaSFoundry Meta-Skill
+#### 🧰 SaaSFoundryAI Meta-Skill
 
 - **`tool-saasfoundry`** — Teaches Claude to drive the `sf` CLI itself: scaffold new projects, add or remove modules, read project state from `.saasfoundry.json`, file module requests, report CLI or
   scaffold bugs, and vote on community proposals. Install with `sf skill install` (project or user scope).
@@ -556,7 +556,7 @@ code .  # or cursor .
 
 ### 📚 AI + Traditional Dev Harmony
 
-SaaSFoundry ensures AI assistance **enhances** rather than replaces professional practices:
+SaaSFoundryAI ensures AI assistance **enhances** rather than replaces professional practices:
 
 | Traditional Practice | AI Enhancement                                        |
 | -------------------- | ----------------------------------------------------- |
@@ -628,7 +628,7 @@ Examples: `feat(#317): SRS intent-detector calibration`, `fix(#292): apply prett
 
 Detailed documentation is available at [saasfoundry.diamondforge.fr](https://saasfoundry.diamondforge.fr) — getting started, CLI reference, modules, SRS, workflow skills, troubleshooting.
 
-📦 Available on npm: [saasfoundry-cli](https://www.npmjs.com/package/saasfoundry-cli)
+📦 Available on npm: [saasfoundryai-cli](https://www.npmjs.com/package/saasfoundryai-cli)
 
 ## 📄 License
 
@@ -643,5 +643,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-  Made with ❤️ by the SaaSFoundry Team
+  Made with ❤️ by the SaaSFoundryAI Team
 </div>

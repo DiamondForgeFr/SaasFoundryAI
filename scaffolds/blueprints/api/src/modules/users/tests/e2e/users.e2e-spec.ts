@@ -60,7 +60,7 @@ describe('Users Module (e2e)', () => {
     prismaService = moduleRef.get<PrismaService>(PrismaService)
 
     testUser = await setupTestUser(prismaService, {
-      email: 'preferences@SaaSFoundry.test',
+      email: 'preferences@SaaSFoundryAI.test',
       password,
       firstname: 'Pref',
       lastname: 'User',

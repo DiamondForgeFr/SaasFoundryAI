@@ -1,7 +1,7 @@
 # Frontend integration grammar (apps/web)
 
-How to extend the React frontend of a SaaSFoundry-generated project. **The canonical reference page is `apps/web/src/pages/private/account/`** — when in doubt, mirror its component layout, hooks, and
-i18n usage. The signin form (`src/pages/public/auth/signin.tsx`) is the canonical reference for forms.
+How to extend the React frontend of a SaaSFoundryAI-generated project. **The canonical reference page is `apps/web/src/pages/private/account/`** — when in doubt, mirror its component layout, hooks,
+and i18n usage. The signin form (`src/pages/public/auth/signin.tsx`) is the canonical reference for forms.
 
 > Topology note. This guide describes patterns shared by monorepo and multirepo. Where API hooks come from (generated `@<project>/api-client` package vs hand-written `src/hooks/api/`) and where UI
 > primitives live (workspace `@<project>/ui-primitives` vs vendored `src/components/ui/shadcn/`) is covered by `topology.md`. Always run `sf status --claude-friendly --no-network` to confirm topology

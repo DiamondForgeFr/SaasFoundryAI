@@ -1,6 +1,6 @@
 # Workflow System
 
-SaaSFoundry includes a powerful workflow system that integrates with GitHub Projects, Jira, Notion, and Linear.
+SaaSFoundryAI includes a powerful workflow system that integrates with GitHub Projects, Jira, Notion, and Linear.
 
 ## Overview
 
@@ -48,7 +48,7 @@ Deep dive: [7-Status System](/workflow/7-status-system).
 
 ## Smart Tool Detection
 
-During `sf new`, SaaSFoundry automatically detects which project management tools you have configured:
+During `sf new`, SaaSFoundryAI automatically detects which project management tools you have configured:
 
 ### How it works
 
@@ -184,7 +184,7 @@ All workflow configuration lives in **`.saasfoundry.json`** at the project root.
 
 ## AI Rules
 
-SaaSFoundry ships with non-negotiable rules baked into the generated `CLAUDE.md` and the `sf-workflow` skill. These rules keep the Human + AI loop predictable.
+SaaSFoundryAI ships with non-negotiable rules baked into the generated `CLAUDE.md` and the `sf-workflow` skill. These rules keep the Human + AI loop predictable.
 
 | Rule                                 | What it means                                                                                  |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
@@ -212,7 +212,7 @@ Deep dive: [AI Rules](/workflow/ai-rules) for the rationale behind each rule and
 
 #### Auto-Creation Feature
 
-When you select GitHub Projects during `sf new` and are authenticated with `gh` CLI, SaaSFoundry offers to create a new project automatically:
+When you select GitHub Projects during `sf new` and are authenticated with `gh` CLI, SaaSFoundryAI offers to create a new project automatically:
 
 ```bash
 $ sf new
@@ -240,7 +240,7 @@ $ sf new
 **When to use:**
 
 - ✅ Starting a new project from scratch
-- ✅ Testing SaaSFoundry quickly
+- ✅ Testing SaaSFoundryAI quickly
 - ✅ Creating isolated project boards per repository
 
 **When to use manual URL:**
@@ -272,7 +272,7 @@ $ sf new
 
 ## Validation System
 
-SaaSFoundry includes a workflow validator that ensures your local configuration stays in sync with your remote project board.
+SaaSFoundryAI includes a workflow validator that ensures your local configuration stays in sync with your remote project board.
 
 ### Why validation matters
 

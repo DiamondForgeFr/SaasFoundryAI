@@ -16,7 +16,7 @@ That's it! The documentation will automatically deploy on:
 
 ## URLs
 
-- **Production**: https://diamondforgefr.github.io/SaaSFoundry/
+- **Production**: https://diamondforgefr.github.io/SaaSFoundryAI/
 - **Local dev**: http://localhost:5173 (run `npm run docs:dev`)
 
 ## Custom Domain (Optional)

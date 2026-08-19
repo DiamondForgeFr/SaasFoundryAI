@@ -1,6 +1,6 @@
 # sf update
 
-Add modules to an existing SaaSFoundry project. Uses a three-way merge to preserve local edits while propagating upstream template evolutions.
+Add modules to an existing SaaSFoundryAI project. Uses a three-way merge to preserve local edits while propagating upstream template evolutions.
 
 ## Usage
 
@@ -56,7 +56,7 @@ sf update --non-interactive \
 
 ## Notes
 
-`sf update` is the mechanism for propagating upstream SaaSFoundry evolutions to projects you have already scaffolded — re-run it after upgrading the CLI to pull newer templates, scripts, and skill
+`sf update` is the mechanism for propagating upstream SaaSFoundryAI evolutions to projects you have already scaffolded — re-run it after upgrading the CLI to pull newer templates, scripts, and skill
 bundles.
 
 ## See Also

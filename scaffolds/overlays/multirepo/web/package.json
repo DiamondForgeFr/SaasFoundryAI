@@ -1,7 +1,7 @@
 {
   "name": "saasfoundry-web",
   "version": "1.0.0",
-  "description": "SaaSFoundry: Our new SaaS frontend application",
+  "description": "SaaSFoundryAI: Our new SaaS frontend application",
   "type": "module",
   "private": true,
   "repository": {

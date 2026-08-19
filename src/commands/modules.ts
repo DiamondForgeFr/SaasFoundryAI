@@ -49,7 +49,7 @@ export async function modulesCommand(subcommand?: string, ...args: string[]) {
 }
 
 function showHelp() {
-  console.log(chalk.blue('\n  SaaSFoundry Modules - Catalogue & intent matching'))
+  console.log(chalk.blue('\n  SaaSFoundryAI Modules - Catalogue & intent matching'))
   console.log(chalk.blue('  ' + '─'.repeat(60)))
   console.log(chalk.white('\n  Usage: sf modules <subcommand> [options]\n'))
   console.log(chalk.white('  Subcommands:'))
@@ -65,7 +65,7 @@ function showHelp() {
 
 /**
  * Try to load the manifest from the current working directory. Returns null
- * when the user is not inside a SaaSFoundry project — all commands are still
+ * when the user is not inside a SaaSFoundryAI project — all commands are still
  * usable (installed state just defaults to `false`).
  */
 async function tryReadManifest(): Promise<SaaSFoundryManifest | null> {
@@ -114,7 +114,7 @@ async function runList(json: boolean) {
     return
   }
 
-  console.log(chalk.blue('\n  SaaSFoundry Module Catalogue'))
+  console.log(chalk.blue('\n  SaaSFoundryAI Module Catalogue'))
   console.log(chalk.blue('  ' + '─'.repeat(60)))
   if (!manifest) {
     console.log(chalk.gray('  (no .saasfoundry.json in cwd — installed state unknown)'))

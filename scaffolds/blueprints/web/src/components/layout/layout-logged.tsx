@@ -22,7 +22,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/com
 
 /**
  * Brand wordmark shown in the top bar only while the sidebar is collapsed — the sidebar header
- * already carries it when expanded, so this keeps "SaaSFoundry" visible right next to the toggle.
+ * already carries it when expanded, so this keeps "SaaSFoundryAI" visible right next to the toggle.
  */
 const HeaderBrand = () => {
   const { state } = useSidebar()
@@ -30,7 +30,7 @@ const HeaderBrand = () => {
   return (
     <>
       <span className="font-display text-sm font-bold tracking-tight text-foreground select-none">
-        SaaSFoundry<span className="text-primary">AI</span>
+        SaaSFoundryAI<span className="text-primary">AI</span>
       </span>
       <Separator orientation="vertical" className="mr-2 h-4" />
     </>

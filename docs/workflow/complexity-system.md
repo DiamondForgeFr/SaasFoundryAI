@@ -1,7 +1,7 @@
 # Complexity System
 
 Not every ticket deserves the same amount of process. A typo fix in a doc shouldn't require an adversarial security review; a payment integration shouldn't ship without one. The complexity system is
-how SaaSFoundry scales ceremony to the actual risk of the change.
+how SaaSFoundryAI scales ceremony to the actual risk of the change.
 
 ## The four levels
 

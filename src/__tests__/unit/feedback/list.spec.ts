@@ -38,9 +38,9 @@ describe('feedback/list', () => {
     mockEnsureGhAuth.mockResolvedValue(undefined)
     mockReadFeedbackRepo.mockResolvedValue({
       owner: 'DiamondForgeFr',
-      repo: 'SaaSFoundry',
-      slug: 'DiamondForgeFr/SaaSFoundry',
-      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundry'
+      repo: 'SaaSFoundryAI',
+      slug: 'DiamondForgeFr/SaaSFoundryAI',
+      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundryAI'
     })
   })
 

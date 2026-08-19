@@ -1,4 +1,4 @@
-# SaaSFoundry
+# SaaSFoundryAI
 
 CLI tool that scaffolds production-ready SaaS projects (NestJS + React + PostgreSQL + Docker).
 
@@ -17,7 +17,7 @@ must come from `.saasfoundry.json`, not from a fresh dialogue.
 
 ## 🚨 Critical Rules (non-negotiable)
 
-**We are dogfooding our own system.** Users of SaaSFoundry will rely on their AI agents to follow the workflows we generate. If we don't follow ours rigorously, we can't guarantee the system works.
+**We are dogfooding our own system.** Users of SaaSFoundryAI will rely on their AI agents to follow the workflows we generate. If we don't follow ours rigorously, we can't guarantee the system works.
 
 ### Workflow — NEVER bypass
 
@@ -90,7 +90,7 @@ scripts/              # Version management (tag-manager.sh)
 
 ## CLI Commands
 
-- `sf new` — Create a new SaaSFoundry project (src/commands/new.ts)
+- `sf new` — Create a new SaaSFoundryAI project (src/commands/new.ts)
 - `sf update` — Add modules to an existing project (src/commands/update.ts)
 - `sf workflow` — Manage workflow configuration and AI rules (src/commands/workflow.ts)
 
@@ -148,5 +148,5 @@ scripts/              # Version management (tag-manager.sh)
 
 - This is a **scaffold/generator** CLI — the code in `scaffolds/` is template code, not application code
 - **NEVER** modify scaffold templates without considering the impact on generated projects
-- Current version: 1.0.0-beta (npm package `saasfoundry-cli`)
+- Current version: 1.0.0-beta (npm package `saasfoundryai-cli`)
 - Node.js >= 22.13.0 required (matches scaffolds + .nvmrc)

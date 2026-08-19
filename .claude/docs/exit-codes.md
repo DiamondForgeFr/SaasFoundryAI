@@ -1,7 +1,7 @@
 # Skill CLI Exit Codes
 
-Every SaaSFoundry skill CLI (`workflow-cli.sh`, `github-projects-cli.sh`, `srs-cli.sh`, and the TS entrypoints they dispatch to) shares a common exit code taxonomy so that agents and CI pipelines can
-react uniformly.
+Every SaaSFoundryAI skill CLI (`workflow-cli.sh`, `github-projects-cli.sh`, `srs-cli.sh`, and the TS entrypoints they dispatch to) shares a common exit code taxonomy so that agents and CI pipelines
+can react uniformly.
 
 ## Canonical codes
 

@@ -7,7 +7,7 @@ import { DbCredentials, SaaSFoundryManifest } from './types'
 
 /**
  * Patterns to ignore when computing file hashes for the manifest.
- * These files are either auto-generated, contain secrets, or are not managed by SaaSFoundry.
+ * These files are either auto-generated, contain secrets, or are not managed by SaaSFoundryAI.
  */
 const HASH_IGNORE_PATTERNS = ['node_modules', '.git', 'dist', 'build', '.next', '.turbo', 'coverage', '.env', '.env.test', 'package-lock.json', '.saasfoundry.json', '.DS_Store', '.saasfoundry.new']
 

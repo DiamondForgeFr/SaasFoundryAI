@@ -132,7 +132,7 @@ Outside of the drafter lifecycle, `tools.srs.enabled = true` turns on a conversa
 or **Test Case**, Claude **interjects**, proposes a diff, and — on accept — applies it through `srs-cli.sh apply-update`.
 
 Detection heuristics (summarised here ; canonical list lives in
-[`sf-srs/SKILL.md § Conversational eval hook`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/skills/sf-srs/SKILL.md)) :
+[`sf-srs/SKILL.md § Conversational eval hook`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md)) :
 
 | Signal                               | Target                             | Example                                                         |
 | ------------------------------------ | ---------------------------------- | --------------------------------------------------------------- |
@@ -193,4 +193,4 @@ is the source of truth. When the Story is picked up, the implementer reads the c
 - [SRS module overview](/modules/srs) — what ships, how to enable
 - [SRS walkthrough](/srs/walkthrough) — a complete end-to-end tutorial
 - [Updating projects → Enable SRS on an existing project](/guide/updating-projects#enable-srs-on-an-existing-project)
-- The canonical skill contract : [`.claude/skills/sf-srs/SKILL.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/skills/sf-srs/SKILL.md)
+- The canonical skill contract : [`.claude/skills/sf-srs/SKILL.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md)

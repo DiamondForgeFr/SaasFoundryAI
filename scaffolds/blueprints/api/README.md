@@ -1,4 +1,4 @@
-# 🚀 SaaSFoundry API
+# 🚀 SaaSFoundryAI API
 
 <div align="center">
 
@@ -11,7 +11,7 @@
 
 ## 📝 Description
 
-SaaSFoundry API is a modular NestJS backend boilerplate, offering a robust and scalable architecture for modern SaaS application development. Built with best practices and cutting-edge technologies.
+SaaSFoundryAI API is a modular NestJS backend boilerplate, offering a robust and scalable architecture for modern SaaS application development. Built with best practices and cutting-edge technologies.
 
 ### 🛠️ Tech Stack
 

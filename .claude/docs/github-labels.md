@@ -1,7 +1,7 @@
 # GitHub Labels — Feedback Loop and SRS Workflow
 
-The SaaSFoundry upstream repository (`DiamondForgeFr/SaaSFoundry`) and every generated project expects the labels below to exist. They're used for issue classification, dedup search, voting filters,
-and to let `sf-srs` detect drafting / update / creation events on the board.
+The SaaSFoundryAI upstream repository (`DiamondForgeFr/SaaSFoundryAI`) and every generated project expects the labels below to exist. They're used for issue classification, dedup search, voting
+filters, and to let `sf-srs` detect drafting / update / creation events on the board.
 
 > **Auto-provisioning** — `sf new --profile harness` creates the workflow guard labels (`complexity:*`, `nature:*`, and `srs:*` when an SRS backend is configured) on the target repo automatically and
 > idempotently, right after writing the manifest. The canonical catalogue lives in `src/installers/harness-provisioning.ts` (`buildWorkflowLabels`); the tables below mirror it. The manual
@@ -33,14 +33,14 @@ Run once, from anywhere (requires `gh auth login`). The `|| true` keeps the scri
 
 ```bash
 # Feedback labels
-gh label create module-request --repo DiamondForgeFr/SaaSFoundry --color 0e8a16 --description "User-filed module request" || true
-gh label create cli-bug        --repo DiamondForgeFr/SaaSFoundry --color b60205 --description "Bug in the sf CLI"         || true
-gh label create scaffold-bug   --repo DiamondForgeFr/SaaSFoundry --color d93f0b --description "Bug in generated code"     || true
+gh label create module-request --repo DiamondForgeFr/SaaSFoundryAI --color 0e8a16 --description "User-filed module request" || true
+gh label create cli-bug        --repo DiamondForgeFr/SaaSFoundryAI --color b60205 --description "Bug in the sf CLI"         || true
+gh label create scaffold-bug   --repo DiamondForgeFr/SaaSFoundryAI --color d93f0b --description "Bug in generated code"     || true
 
 # SRS workflow labels
-gh label create srs:drafting --repo DiamondForgeFr/SaaSFoundry --color 8B5CF6 --description "sf-srs: ticket needs spec drafting / refinement" || true
-gh label create srs:update   --repo DiamondForgeFr/SaaSFoundry --color F97316 --description "sf-srs: existing SRS page must be updated"        || true
-gh label create srs:new      --repo DiamondForgeFr/SaaSFoundry --color 3B82F6 --description "sf-srs: create a new Epic / FR spec from scratch" || true
+gh label create srs:drafting --repo DiamondForgeFr/SaaSFoundryAI --color 8B5CF6 --description "sf-srs: ticket needs spec drafting / refinement" || true
+gh label create srs:update   --repo DiamondForgeFr/SaaSFoundryAI --color F97316 --description "sf-srs: existing SRS page must be updated"        || true
+gh label create srs:new      --repo DiamondForgeFr/SaaSFoundryAI --color 3B82F6 --description "sf-srs: create a new Epic / FR spec from scratch" || true
 ```
 
 ## How the CLI uses these labels
@@ -64,9 +64,9 @@ The Nature axis controls whether a ticket must visit **Human Testing** or can sk
 Create them once with:
 
 ```bash
-gh label create "nature:user-facing" --repo DiamondForgeFr/SaaSFoundry --color "0E8A16" --description "Workflow: ticket has user-visible impact, requires Human Testing" || true
-gh label create "nature:internal"    --repo DiamondForgeFr/SaaSFoundry --color "C5DEF5" --description "Workflow: refactor/scaffolding/non-terminal story, Human Testing optional" || true
-gh label create "nature:bundled-pr"  --repo DiamondForgeFr/SaaSFoundry --color "FBCA04" --description "Workflow: Sub merged via parent Epic's bundled PR, skips In Review" || true
+gh label create "nature:user-facing" --repo DiamondForgeFr/SaaSFoundryAI --color "0E8A16" --description "Workflow: ticket has user-visible impact, requires Human Testing" || true
+gh label create "nature:internal"    --repo DiamondForgeFr/SaaSFoundryAI --color "C5DEF5" --description "Workflow: refactor/scaffolding/non-terminal story, Human Testing optional" || true
+gh label create "nature:bundled-pr"  --repo DiamondForgeFr/SaaSFoundryAI --color "FBCA04" --description "Workflow: Sub merged via parent Epic's bundled PR, skips In Review" || true
 ```
 
 The `workflow-cli.sh update-status` guard enforces the rule — see "Nature guard" in `.claude/skills/sf-workflow/workflow-cli.sh`.

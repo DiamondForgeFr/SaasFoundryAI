@@ -1,6 +1,6 @@
-## Module Architecture (CRITICAL — Read when modifying SaaSFoundry)
+## Module Architecture (CRITICAL — Read when modifying SaaSFoundryAI)
 
-SaaSFoundry uses a **module system** that allows features to be added during initial project generation (`sf new`) OR later via `sf update`. Understanding this architecture is essential when adding
+SaaSFoundryAI uses a **module system** that allows features to be added during initial project generation (`sf new`) OR later via `sf update`. Understanding this architecture is essential when adding
 new modules or modifying existing ones.
 
 ### How Modules Work
@@ -76,7 +76,7 @@ Generated projects carry a `.saasfoundry.json` manifest at the project root:
 }
 ```
 
-- **version**: SaaSFoundry CLI version used to generate the project
+- **version**: SaaSFoundryAI CLI version used to generate the project
 - **structure**: `monorepo` or `multirepo`
 - **modules**: Records which modules are installed and their configuration
 - **fileHashes**: SHA-256 hashes of all generated files (for three-way merge during updates)
@@ -200,7 +200,7 @@ at the root (which calls `turbo run build`) handles the dependency order. A futu
 **Why scoped names** — they avoid collisions with public npm packages and make grep + import autocomplete unambiguous. The convention mirrors how a real organisation would publish internal packages,
 even though we keep them `private: true`.
 
-**Multirepo note** — none of this exists in the multirepo topology. Cross-repo sharing is left to the consumer (npm publish, git submodule, …); SaaSFoundry does not assume an opinion there.
+**Multirepo note** — none of this exists in the multirepo topology. Cross-repo sharing is left to the consumer (npm publish, git submodule, …); SaaSFoundryAI does not assume an opinion there.
 
 ### Generated API Client (Monorepo Only)
 
@@ -241,8 +241,8 @@ Both the snapshot and the generated tree are committed — the rule is "the Open
 The `pre-commit` hook in `.husky/pre-commit` calls `npm run codegen:check` before `npm run test:full`, so a stale client never lands in `develop`.
 
 **Multirepo trade-off** — `api-client` lives only in the monorepo overlay. In multirepo, the OpenAPI snapshot crosses a repo boundary and needs to be published (npm package, GitHub release artefact,
-…) before the web repo can consume it. SaaSFoundry's multirepo topology does not ship this wiring out of the box — it's tracked under #304 and may land as an optional module later. For now, multirepo
-consumers either keep hand-written hooks or roll their own publish-and-pin flow.
+…) before the web repo can consume it. SaaSFoundryAI's multirepo topology does not ship this wiring out of the box — it's tracked under #304 and may land as an optional module later. For now,
+multirepo consumers either keep hand-written hooks or roll their own publish-and-pin flow.
 
 ## Shared UI Primitives — `@<projectName>/ui-primitives`
 
@@ -293,7 +293,7 @@ inverse for multirepo.
 
 ### Adding a New Module — Checklist
 
-When adding a new optional module to SaaSFoundry, follow these steps:
+When adding a new optional module to SaaSFoundryAI, follow these steps:
 
 1. **Create overlay files** in `scaffolds/overlays/modules/<module-name>/`
 
@@ -345,7 +345,7 @@ When adding a new optional module to SaaSFoundry, follow these steps:
 
 ## Naming Convention — Tool-Agnostic Capabilities
 
-Some SaaSFoundry capabilities are **tool-agnostic by design**: the capability is the contract, and the tool behind it is swappable (Notion vs. Confluence, GitHub Projects vs. Linear, MailerSend vs.
+Some SaaSFoundryAI capabilities are **tool-agnostic by design**: the capability is the contract, and the tool behind it is swappable (Notion vs. Confluence, GitHub Projects vs. Linear, MailerSend vs.
 Resend, …). When you add one, follow this pattern so every capability looks the same from the outside.
 
 **Three layers, one name per layer:**

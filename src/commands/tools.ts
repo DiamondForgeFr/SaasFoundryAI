@@ -48,7 +48,7 @@ export async function toolsCommand(subcommand?: string, ...args: string[]) {
 }
 
 function showHelp() {
-  console.log(chalk.blue('\n  SaaSFoundry Tools - Multi-account credential management'))
+  console.log(chalk.blue('\n  SaaSFoundryAI Tools - Multi-account credential management'))
   console.log(chalk.blue('  ' + '─'.repeat(60)))
   console.log(chalk.white('\n  Usage: sf tools <command> [options]\n'))
   console.log(chalk.white('  Commands:'))
@@ -213,11 +213,11 @@ async function useAccount(tool: string, accountName: string) {
     process.exit(1)
   }
 
-  // Check if we're in a SaaSFoundry project
+  // Check if we're in a SaaSFoundryAI project
   const manifestPath = '.saasfoundry.json'
   if (!(await fileExists(manifestPath))) {
-    console.error(chalk.red('\nError: Not in a SaaSFoundry project'))
-    console.log(chalk.gray('This command must be run from the root of a SaaSFoundry project.\n'))
+    console.error(chalk.red('\nError: Not in a SaaSFoundryAI project'))
+    console.log(chalk.gray('This command must be run from the root of a SaaSFoundryAI project.\n'))
     process.exit(1)
   }
 
@@ -243,8 +243,8 @@ async function showCurrent() {
   const manifestPath = '.saasfoundry.json'
 
   if (!(await fileExists(manifestPath))) {
-    console.error(chalk.red('\nError: Not in a SaaSFoundry project'))
-    console.log(chalk.gray('This command must be run from the root of a SaaSFoundry project.\n'))
+    console.error(chalk.red('\nError: Not in a SaaSFoundryAI project'))
+    console.log(chalk.gray('This command must be run from the root of a SaaSFoundryAI project.\n'))
     process.exit(1)
   }
 

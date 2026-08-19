@@ -1,36 +1,36 @@
 ---
 name: tool-saasfoundry
 description: >-
-  Use when the user wants to scaffold a new SaaSFoundry project, add or remove
-  modules in an existing SaaSFoundry project, check project state or installed
+  Use when the user wants to scaffold a new SaaSFoundryAI project, add or remove
+  modules in an existing SaaSFoundryAI project, check project state or installed
   modules, file a module request, report a CLI or scaffold bug, or vote on
   community proposals. Triggers on keywords and phrases like "saasfoundry",
   "sf new", "sf update", "scaffold a SaaS", "add a module", "update my
-  SaaSFoundry project", ".saasfoundry.json", "file a SaaSFoundry bug", or
-  "vote on SaaSFoundry modules". Always orchestrates the `sf` CLI in
+  SaaSFoundryAI project", ".saasfoundry.json", "file a SaaSFoundryAI bug", or
+  "vote on SaaSFoundryAI modules". Always orchestrates the `sf` CLI in
   non-interactive mode — never runs the interactive Inquirer prompts itself.
 ---
 
 # tool-saasfoundry
 
-Help the user scaffold, evolve, and give feedback on SaaSFoundry projects by orchestrating the `sf` CLI. Never bypass the CLI with direct file generation — it is the source of truth for blueprints, overlays, modules, and workflow configuration.
+Help the user scaffold, evolve, and give feedback on SaaSFoundryAI projects by orchestrating the `sf` CLI. Never bypass the CLI with direct file generation — it is the source of truth for blueprints, overlays, modules, and workflow configuration.
 
 ## When to activate
 
-Activate on explicit SaaSFoundry intent:
+Activate on explicit SaaSFoundryAI intent:
 
 - "scaffold a SaaS / SaaS project / Node+React stack with postgres"
-- "I want to start a new SaaSFoundry project"
+- "I want to start a new SaaSFoundryAI project"
 - "add the email / storage / analytics module"
-- "update my SaaSFoundry project"
+- "update my SaaSFoundryAI project"
 - "what modules do I have?" / "am I up to date?" / "what's in `.saasfoundry.json`?"
-- "file a module request" / "report a SaaSFoundry bug" / "vote on roadmap"
-- **Add/build/implement verbs inside a SaaSFoundry project** — "I want to add file uploads", "let's build an email flow", "I need to track usage" → the skill runs the anti-reinvention guardrail (see below) *before* letting the user custom-code.
+- "file a module request" / "report a SaaSFoundryAI bug" / "vote on roadmap"
+- **Add/build/implement verbs inside a SaaSFoundryAI project** — "I want to add file uploads", "let's build an email flow", "I need to track usage" → the skill runs the anti-reinvention guardrail (see below) *before* letting the user custom-code.
 - **Explicit feedback intent** — "file a module request for X", "I want to request Y", "this should be a first-party module" → the skill runs the Feedback — Module Request scorecard (see below) *before* calling `sf feedback request`.
 
 Do NOT activate on:
 
-- Generic Node.js / React / NestJS questions unrelated to SaaSFoundry
+- Generic Node.js / React / NestJS questions unrelated to SaaSFoundryAI
 - Unrelated scaffolding tools (`create-next-app`, `degit`, `nx`, …)
 - Questions about someone else's generated project where no `.saasfoundry.json` can be found
 
@@ -62,13 +62,13 @@ Before mutating, always prefer `--dry-run` where available (notably `sf update -
 
 ## Bootstrap
 
-Before running user-facing SaaSFoundry commands, the skill verifies the environment using bundled helper scripts under `~/.claude/skills/tool-saasfoundry/scripts/`:
+Before running user-facing SaaSFoundryAI commands, the skill verifies the environment using bundled helper scripts under `~/.claude/skills/tool-saasfoundry/scripts/`:
 
 | Script | When to invoke | Contract |
 | --- | --- | --- |
-| `detect-env.sh` | Once per session, or whenever the skill needs to choose between `sf` and `npx saasfoundry-cli` | Prints a JSON snapshot on stdout (`os`, `nodeVersion`, `ghInstalled`, `ghAuthed`, `sfGlobalInstalled`). Always exits 0. |
+| `detect-env.sh` | Once per session, or whenever the skill needs to choose between `sf` and `npx saasfoundryai-cli` | Prints a JSON snapshot on stdout (`os`, `nodeVersion`, `ghInstalled`, `ghAuthed`, `sfGlobalInstalled`). Always exits 0. |
 | `bootstrap-gh.sh` | Before any GitHub-dependent command (`sf feedback …`, voting, issue listing) | Exits 0 silently when `gh` is installed and authenticated. Exits 1 with guided install/login instructions on stderr otherwise. |
-| `bootstrap-cli.sh` | Before any `sf` invocation | Prints the exact command token to use (`sf`, `saasfoundry-cli`, or `npx saasfoundry-cli`) on stdout. Always exits 0. |
+| `bootstrap-cli.sh` | Before any `sf` invocation | Prints the exact command token to use (`sf`, `saasfoundryai-cli`, or `npx saasfoundryai-cli`) on stdout. Always exits 0. |
 
 Guidelines:
 
@@ -78,7 +78,7 @@ Guidelines:
 
 ## Discovery: `sf new`
 
-When the user wants to start a new SaaSFoundry project, the skill replaces the CLI's Inquirer prompts with a conversational discovery flow. The goal is to produce a complete **intent** object that `plan-new.sh` can translate into a single `sf new --non-interactive …` command. The intent schema and flag mapping are documented in `reference/new-flags.json` — consult it before inventing field names.
+When the user wants to start a new SaaSFoundryAI project, the skill replaces the CLI's Inquirer prompts with a conversational discovery flow. The goal is to produce a complete **intent** object that `plan-new.sh` can translate into a single `sf new --non-interactive …` command. The intent schema and flag mapping are documented in `reference/new-flags.json` — consult it before inventing field names.
 
 ### Three discovery modes
 
@@ -92,7 +92,7 @@ Pick the mode from the user's first message, not from a menu:
 
 ### Discovery workflow
 
-1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundry-cli`). Cache for the rest of the turn.
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundryai-cli`). Cache for the rest of the turn.
 2. **Gather intent** — build a JSON object matching the `fields` in `reference/new-flags.json`. Only include fields the user has either stated or confirmed via a recommendation.
 3. **Materialize the plan** — pipe the intent JSON into `scripts/plan-new.sh`. It returns the full command on stdout or exits non-zero with a validation message on stderr.
 4. **Present the plan** — show the command *and* a short human summary built from the intent (structure, database, modules, post-setup apps). Never run the command yet.
@@ -131,7 +131,7 @@ The full rationale for each recommendation is in the `recommendations` block of 
 
 ## Discovery: `sf update`
 
-When the user wants to evolve an existing SaaSFoundry project (add a module, apply template updates), the skill replaces the CLI's Inquirer prompts with the same conversational flow pattern as `sf new`. The intent is produced as a JSON object, materialized into a single `sf update --non-interactive …` command via `plan-update.sh`. The intent schema is documented in `reference/update-flags.json`.
+When the user wants to evolve an existing SaaSFoundryAI project (add a module, apply template updates), the skill replaces the CLI's Inquirer prompts with the same conversational flow pattern as `sf new`. The intent is produced as a JSON object, materialized into a single `sf update --non-interactive …` command via `plan-update.sh`. The intent schema is documented in `reference/update-flags.json`.
 
 > **Scope note** — `sf update` is **add-only** today. Module removal is not yet supported by the CLI; if the user asks to remove a module, point them at `sf feedback request` to track the request and keep the conversation unblocked.
 
@@ -182,13 +182,13 @@ Full specification: `reference/update-flags.json`. Essentials:
 
 ## Project Awareness
 
-Project Awareness is the read-only surface of the skill. When the user asks a question about the *current* state of their SaaSFoundry project, the skill answers from a consolidated snapshot — it never writes, never installs, never mutates anything.
+Project Awareness is the read-only surface of the skill. When the user asks a question about the *current* state of their SaaSFoundryAI project, the skill answers from a consolidated snapshot — it never writes, never installs, never mutates anything.
 
 ### Supported questions
 
 | User asks | How the skill answers |
 | --- | --- |
-| "What's my SaaSFoundry version? Am I up to date?" | `report.project.cliVersion` + `report.upToDate`. If `false`, list `report.modules.obsolete` with their `minCliVersion` and recommend `sf skill update` + `sf update`. |
+| "What's my SaaSFoundryAI version? Am I up to date?" | `report.project.cliVersion` + `report.upToDate`. If `false`, list `report.modules.obsolete` with their `minCliVersion` and recommend `sf skill update` + `sf update`. |
 | "What modules do I have?" | `report.modules.installed` — read verbatim. If the user wants details on a specific one, run `sf modules info <slug> --json`. |
 | "What would `sf update` do right now?" | Do **not** answer from the snapshot alone. Run `sf update --dry-run --non-interactive` and show the plan (this is a CLI call, not a mutation). |
 | "Are there new modules since my install?" | `report.modules.newlyAvailable` — list with one-line descriptions from the catalogue (`sf modules info <name> --json` for the `description` field). |
@@ -196,7 +196,7 @@ Project Awareness is the read-only surface of the skill. When the user asks a qu
 
 ### Workflow
 
-1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundry-cli`).
+1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundryai-cli`).
 2. **Gather snapshot** — run `scripts/read-project.sh` from the project root. It reads `.saasfoundry.json`, calls `sf modules list --json`, and emits a consolidated JSON report on stdout.
 3. **Answer from the report** — never invent facts about the project; if a field is missing in the report, tell the user you don't know rather than guessing.
 4. **Stay read-only** — if the user's follow-up becomes "add X", "remove Y", "upgrade Z", route through Phase 2D's `plan-update.sh`. Never let a "tell me about…" thread slip into a mutation without explicit intent.
@@ -225,13 +225,13 @@ Project Awareness is the read-only surface of the skill. When the user asks a qu
 
 ## Anti-Reinvention Guardrail
 
-When the user expresses intent to build, add, or implement a capability **inside a SaaSFoundry project**, the skill MUST check the catalogue first. The guardrail exists because users often reach for custom code out of reflex when an opinionated SaaSFoundry module would ship faster, stay maintained upstream, and keep the generated project on the paved path.
+When the user expresses intent to build, add, or implement a capability **inside a SaaSFoundryAI project**, the skill MUST check the catalogue first. The guardrail exists because users often reach for custom code out of reflex when an opinionated SaaSFoundryAI module would ship faster, stay maintained upstream, and keep the generated project on the paved path.
 
 ### When the guardrail triggers
 
 - Verbs: "add", "build", "implement", "setup", "integrate", "plug in", "need to" + any feature.
 - Nouns that commonly map to catalogue modules: email, transactional mail, file upload, object storage, S3, analytics, usage tracking, telemetry, plus every `sf-skill-*` tool integration.
-- Triggers only when a `.saasfoundry.json` is present (i.e. the user is inside a SaaSFoundry project). Outside a project, treat the intent normally.
+- Triggers only when a `.saasfoundry.json` is present (i.e. the user is inside a SaaSFoundryAI project). Outside a project, treat the intent normally.
 
 ### Workflow
 
@@ -272,7 +272,7 @@ When the user wants to file a module request — either because the anti-reinven
 ### When this flow triggers
 
 - Anti-reinvention guardrail returned `LOW` or `NONE` tier and the user wants to push for catalogue inclusion.
-- User says explicitly: "file a module request", "request this as a module", "submit this to SaaSFoundry", etc.
+- User says explicitly: "file a module request", "request this as a module", "submit this to SaaSFoundryAI", etc.
 - **Does NOT trigger** on bug reports (that's Phase 3C) or voting (Pillar 6 — `sf feedback vote --list`).
 
 ### The 5-criterion scorecard
@@ -284,7 +284,7 @@ Ask each criterion as a natural question during the conversation — don't hand 
 | `scopeFit` | "Is this something every SaaS eventually wants?" | The feature belongs to the SaaS baseline (auth, billing, email, storage, observability, comms, admin tooling). |
 | `reusability` | "Would 3+ unrelated projects plausibly want this?" | Broad SaaS relevance, not specific to one product or industry. |
 | `notAlreadySolvable` | "Can't this already be done cleanly with existing modules or a small custom impl?" | Existing modules don't cover it, and a hand-rolled version would be non-trivial (>2 days work). |
-| `opinionOwnership` | "Is there a clear opinionated 'right way' to do this in SaaSFoundry?" | You can name the stack, the vendor(s), the integration surface without hedging. |
+| `opinionOwnership` | "Is there a clear opinionated 'right way' to do this in SaaSFoundryAI?" | You can name the stack, the vendor(s), the integration surface without hedging. |
 | `maintenanceRealism` | "Can this be maintained long-term?" | Stable deps, non-fragile upstream, vendor is unlikely to pivot/shutter within 2 years. |
 
 If any criterion is `no` or `unclear`, the skill **refuses** the filing and explains which criteria blocked it. The refusal is not a snub — it's the skill protecting the catalogue from scope creep. Explain the red flag, and suggest alternatives (custom code, existing module, wait-and-see).

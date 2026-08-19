@@ -2,11 +2,11 @@ import { parseGitHubUrl, readFeedbackRepo } from '../../../feedback/repo'
 
 describe('feedback/repo.parseGitHubUrl', () => {
   it.each([
-    ['git+https://github.com/DiamondForgeFr/SaaSFoundry.git', 'DiamondForgeFr', 'SaaSFoundry'],
-    ['https://github.com/DiamondForgeFr/SaaSFoundry.git', 'DiamondForgeFr', 'SaaSFoundry'],
-    ['https://github.com/DiamondForgeFr/SaaSFoundry', 'DiamondForgeFr', 'SaaSFoundry'],
-    ['git@github.com:DiamondForgeFr/SaaSFoundry.git', 'DiamondForgeFr', 'SaaSFoundry'],
-    ['DiamondForgeFr/SaaSFoundry', 'DiamondForgeFr', 'SaaSFoundry']
+    ['git+https://github.com/DiamondForgeFr/SaaSFoundryAI.git', 'DiamondForgeFr', 'SaaSFoundryAI'],
+    ['https://github.com/DiamondForgeFr/SaaSFoundryAI.git', 'DiamondForgeFr', 'SaaSFoundryAI'],
+    ['https://github.com/DiamondForgeFr/SaaSFoundryAI', 'DiamondForgeFr', 'SaaSFoundryAI'],
+    ['git@github.com:DiamondForgeFr/SaaSFoundryAI.git', 'DiamondForgeFr', 'SaaSFoundryAI'],
+    ['DiamondForgeFr/SaaSFoundryAI', 'DiamondForgeFr', 'SaaSFoundryAI']
   ])('parses %s', (input, owner, repo) => {
     const result = parseGitHubUrl(input)
     expect(result).not.toBeNull()
@@ -27,8 +27,8 @@ describe('feedback/repo.readFeedbackRepo', () => {
   it('reads the CLI package.json#repository.url', async () => {
     const repo = await readFeedbackRepo()
     expect(repo.owner).toBe('DiamondForgeFr')
-    expect(repo.repo).toBe('SaaSFoundry')
-    expect(repo.slug).toBe('DiamondForgeFr/SaaSFoundry')
-    expect(repo.httpsUrl).toBe('https://github.com/DiamondForgeFr/SaaSFoundry')
+    expect(repo.repo).toBe('SaaSFoundryAI')
+    expect(repo.slug).toBe('DiamondForgeFr/SaaSFoundryAI')
+    expect(repo.httpsUrl).toBe('https://github.com/DiamondForgeFr/SaaSFoundryAI')
   })
 })

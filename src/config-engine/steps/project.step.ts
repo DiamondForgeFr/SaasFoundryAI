@@ -25,7 +25,7 @@ export const projectStep: StepDefinition = {
       type: 'input',
       name: 'projectDescription',
       message: 'What is the description of your project?',
-      default: (current: { projectName?: string }) => `${current.projectName} is just an amazing SaaSFoundry project`
+      default: (current: { projectName?: string }) => `${current.projectName} is just an amazing SaaSFoundryAI project`
     },
     {
       type: 'list',

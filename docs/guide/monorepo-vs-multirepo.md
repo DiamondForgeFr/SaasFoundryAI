@@ -1,6 +1,6 @@
 # Monorepo vs Multirepo
 
-SaaSFoundry supports both monorepo and multirepo project structures.
+SaaSFoundryAI supports both monorepo and multirepo project structures.
 
 ## Monorepo (Recommended)
 

@@ -1,6 +1,6 @@
 # sf uninstall
 
-Fully remove SaaSFoundry artefacts from the machine — the skill at both scopes plus `~/.saasfoundry/` preferences. Requires `--all`.
+Fully remove SaaSFoundryAI artefacts from the machine — the skill at both scopes plus `~/.saasfoundry/` preferences. Requires `--all`.
 
 ## Usage
 
@@ -18,7 +18,7 @@ sf uninstall --all [--yes]
 ## Examples
 
 ```bash
-# Fully uninstall SaaSFoundry artefacts
+# Fully uninstall SaaSFoundryAI artefacts
 sf uninstall --all
 ```
 
@@ -29,7 +29,7 @@ sf uninstall --all --yes
 
 ## Notes
 
-For per-scope removal, use `sf skill uninstall` instead. `sf uninstall` leaves the npm package itself installed — remove it with `npm uninstall -g saasfoundry-cli`.
+For per-scope removal, use `sf skill uninstall` instead. `sf uninstall` leaves the npm package itself installed — remove it with `npm uninstall -g saasfoundryai-cli`.
 
 ## See Also
 

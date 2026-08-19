@@ -27,12 +27,12 @@ export function renderHuman(payload: RenderPayload): string {
   const { report, preconditions } = payload
   const lines: string[] = []
 
-  lines.push(chalk.bold('SaaSFoundry — Project Status'))
+  lines.push(chalk.bold('SaaSFoundryAI — Project Status'))
   lines.push('')
   if (report.manifest) {
     lines.push(`${chalk.gray('Project:')} ${report.manifest.projectName} (${report.manifest.structure}) — v${report.manifest.version}`)
   } else {
-    lines.push(chalk.red('Not a SaaSFoundry project (no .saasfoundry.json)'))
+    lines.push(chalk.red('Not a SaaSFoundryAI project (no .saasfoundry.json)'))
   }
   if (report.git.available) {
     const dirty = report.git.isClean === false ? chalk.yellow(' (dirty)') : ''
@@ -86,7 +86,7 @@ export function renderJson(payload: RenderPayload): string {
 export function renderClaudeFriendly(payload: RenderPayload): string {
   const { report, preconditions } = payload
   const lines: string[] = []
-  lines.push('# SaaSFoundry project status')
+  lines.push('# SaaSFoundryAI project status')
   lines.push('')
   if (report.manifest) {
     lines.push(`- project: ${report.manifest.projectName} (${report.manifest.structure}, v${report.manifest.version})`)
@@ -94,7 +94,7 @@ export function renderClaudeFriendly(payload: RenderPayload): string {
     const srs = report.manifest.tools?.srs
     lines.push(`- srs: ${srs?.enabled ? `${srs.backend} — ${srs.rootPage?.name ?? 'no root page'}` : 'not installed'}`)
   } else {
-    lines.push('- project: NOT a SaaSFoundry project (no .saasfoundry.json)')
+    lines.push('- project: NOT a SaaSFoundryAI project (no .saasfoundry.json)')
   }
   if (report.git.available) {
     const state = report.git.isClean === false ? 'dirty' : 'clean'

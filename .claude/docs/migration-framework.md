@@ -2,7 +2,7 @@
 
 > Where: `src/migrations/`. Owner: anyone shipping a breaking change. Status: ships in v2.0.0 (Epic #310). Closes release objective C4.
 
-SaaSFoundry runs `sf update` against projects that may be many CLI versions behind. Two things have to migrate together:
+SaaSFoundryAI runs `sf update` against projects that may be many CLI versions behind. Two things have to migrate together:
 
 1. **Manifest shape** — the `.saasfoundry.json` schema (e.g. renaming a field, restructuring a sub-block).
 2. **Module on-disk shape** — files inside the user's project that an installer originally laid down (e.g. renaming a service file, adding a new env var).

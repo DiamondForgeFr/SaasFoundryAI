@@ -87,13 +87,13 @@ export async function createApiApp({
 
   if (await fileExists(enLocalePath)) {
     let enLocaleContent = await readFile(enLocalePath, 'utf8')
-    enLocaleContent = enLocaleContent.replace(/SaaSFoundry/g, projectName.toUpperCase())
+    enLocaleContent = enLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase())
     await writeFile(enLocalePath, enLocaleContent)
   }
 
   if (await fileExists(frLocalePath)) {
     let frLocaleContent = await readFile(frLocalePath, 'utf8')
-    frLocaleContent = frLocaleContent.replace(/SaaSFoundry/g, projectName.toUpperCase())
+    frLocaleContent = frLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase())
     await writeFile(frLocalePath, frLocaleContent)
   }
 

@@ -434,7 +434,7 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
 }
 
 /**
- * Update command — Update templates and add modules to an existing SaaSFoundry project.
+ * Update command — Update templates and add modules to an existing SaaSFoundryAI project.
  *
  * This command handles two flows:
  * 1. Template updates: When CLI version differs from project version, regenerate templates
@@ -455,7 +455,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   const manifestPath = '.saasfoundry.json'
   if (!(await fileExists(manifestPath))) {
     console.error(chalk.red('No .saasfoundry.json found in the current directory.'))
-    console.error(chalk.red('This command must be run from the root of a SaaSFoundry project.'))
+    console.error(chalk.red('This command must be run from the root of a SaaSFoundryAI project.'))
     console.error(chalk.yellow('If this project was generated before manifest support, you can create one manually.'))
     process.exit(1)
   }
@@ -508,7 +508,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     : null
 
   // Display project info
-  console.log(chalk.blue('\n  SaaSFoundry Project Update'))
+  console.log(chalk.blue('\n  SaaSFoundryAI Project Update'))
   console.log(chalk.blue('  ' + '─'.repeat(40)))
   console.log(chalk.white(`  Project:         ${manifest.projectName}`))
   console.log(chalk.white(`  Structure:       ${manifest.structure}`))
@@ -524,7 +524,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   // for their deposits) but have no generated app to regenerate.
   if (manifest.version !== cliVersion && isScaffoldManifest(manifest)) {
     if (!manifest.fileHashes) {
-      console.log(chalk.yellow(`  Your project was generated with SaaSFoundry v${manifest.version} (before hash tracking).`))
+      console.log(chalk.yellow(`  Your project was generated with SaaSFoundryAI v${manifest.version} (before hash tracking).`))
       console.log(chalk.yellow('  Template updates require file hashes. Skipping template update.\n'))
       console.log(chalk.yellow('  To enable template updates, regenerate your project or manually add fileHashes to .saasfoundry.json.\n'))
       if (dryRunReport) dryRunReport.templateUpdate = { status: 'skipped-no-hashes' }
@@ -613,7 +613,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
             }
 
             if (conflicts.length > 0) {
-              const header = `  ${conflicts.length} conflict(s) — both you and SaaSFoundry modified these files:`
+              const header = `  ${conflicts.length} conflict(s) — both you and SaaSFoundryAI modified these files:`
               console.log(chalk.red(`\n${header}`))
               for (const f of conflicts) {
                 console.log(chalk.red(`    ! ${f.path}`))
@@ -983,7 +983,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     // A full sweep of fileHashes only makes sense for scaffolded SaaS
     // projects (template-drift tracking). Harness-only manifests track just
     // their deposited files — sweeping the whole user repo would treat the
-    // user's own code as SaaSFoundry templates.
+    // user's own code as SaaSFoundryAI templates.
     moduleSpinner.text = 'Updating project manifest...'
     if (isScaffoldManifest(manifest)) {
       manifest.fileHashes = await computeFileHashes('.')

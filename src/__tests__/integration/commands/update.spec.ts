@@ -130,7 +130,7 @@ describe('updateCommand (integration)', () => {
   // user-customized $schema (e.g. someone forking the schema for a private
   // CLI build).
   describe('$schema migration (#290)', () => {
-    const SCHEMA_URL = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json'
+    const SCHEMA_URL = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json'
 
     it('stamps $schema on a legacy manifest even when the run hits the early-return', async () => {
       mockedGetModuleSelections.mockResolvedValue([])
@@ -460,7 +460,7 @@ describe('updateCommand (integration)', () => {
       version: cliVersion,
       generatedAt: '2026-01-01T00:00:00.000Z',
       structure: 'cli',
-      projectName: 'saasfoundry-cli'
+      projectName: 'saasfoundryai-cli'
     })
 
     it('enables SRS without writing fileHashes when manifest has no modules block', async () => {

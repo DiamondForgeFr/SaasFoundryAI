@@ -92,8 +92,8 @@ sure way to avoid cross-contamination is to fully close one ticket before openin
 
 ## Why these rules are not negotiable
 
-The SaaSFoundry workflow is dogfooded: the same rules that govern how we build SaaSFoundry are the rules that govern how our users build their projects. Every bug in our workflow ships to every user.
-Every shortcut we take is a shortcut users will inherit.
+The SaaSFoundryAI workflow is dogfooded: the same rules that govern how we build SaaSFoundryAI are the rules that govern how our users build their projects. Every bug in our workflow ships to every
+user. Every shortcut we take is a shortcut users will inherit.
 
 The rules exist because we have already felt the pain of each one being violated:
 

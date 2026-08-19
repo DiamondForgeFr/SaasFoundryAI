@@ -1,6 +1,6 @@
 # Development
 
-How to contribute to the SaaSFoundry CLI itself — set up the repo locally, run the test matrix, and stay in line with the conventions Husky enforces on every commit.
+How to contribute to the SaaSFoundryAI CLI itself — set up the repo locally, run the test matrix, and stay in line with the conventions Husky enforces on every commit.
 
 If you only want to use the CLI on a generated project, the page you want is [Quick start](/getting-started/quick-start). This page is for people changing the **scaffold engine** (the templates,
 installers, and migrations that generate user projects).
@@ -15,7 +15,7 @@ installers, and migrations that generate user projects).
 
 ## Repository layout
 
-The high-level shape is documented in [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/CLAUDE.md) — the same file Claude Code reads at session start. Key directories:
+The high-level shape is documented in [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/CLAUDE.md) — the same file Claude Code reads at session start. Key directories:
 
 | Path                          | Purpose                                                                                                    |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -40,8 +40,8 @@ For deeper guidance on how to add or modify a module or skill, read the architec
 
 ```bash
 # 1. Clone
-git clone https://github.com/DiamondForgeFr/SaaSFoundry.git
-cd SaaSFoundry
+git clone https://github.com/DiamondForgeFr/SaaSFoundryAI.git
+cd SaaSFoundryAI
 
 # 2. Install
 nvm use         # reads .nvmrc → Node 22.13+
@@ -62,7 +62,7 @@ cd /tmp
 sf new --project-name local-test --structure monorepo
 ```
 
-`npm unlink -g saasfoundry-cli` reverts to whatever you had installed globally before.
+`npm unlink -g saasfoundryai-cli` reverts to whatever you had installed globally before.
 
 ## Build, test, format, lint
 
@@ -135,7 +135,7 @@ shortcuts reintroduce exactly the cross-version drift the framework was built to
   installer's `currentVersion` in `<name>.installer.ts` AND ship a `ModuleMigration` on its `migrations` array. Use `writeMigratedFile` from `src/migrations/module/conflict.ts` so user-edited files
   fall back to a `.saasfoundry.new` sidecar.
 
-Read [`.claude/docs/migration-framework.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/docs/migration-framework.md) before editing `src/types.ts`,
+Read [`.claude/docs/migration-framework.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/migration-framework.md) before editing `src/types.ts`,
 `schemas/saasfoundry-manifest.schema.json`, any installer's deposited templates, or anything under `src/migrations/`. It covers the registry pattern, the file-naming convention, the conflict-aware
 writer, and worked examples for both manifest renames and module file splits.
 
@@ -153,15 +153,15 @@ Backlog → Ready → In progress → AI testing → Human testing → In review
 - Subtasks are real GitHub issues, not checkboxes. Create them via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`.
 - Bundled PRs (one PR closing several tightly-coupled subs) are explicitly supported via `nature:bundled-pr` — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis".
 
-Full guidance: [Workflow skill SKILL.md](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/skills/sf-workflow/SKILL.md).
+Full guidance: [Workflow skill SKILL.md](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/skills/sf-workflow/SKILL.md).
 
 ## Adding a module or a skill
 
 These flows are documented in dedicated reference docs because they have their own constraints (drift-guard for skills, blueprint markers + overlay files + installer for modules):
 
-- **Adding a new module** — read [`.claude/docs/architecture-modules.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/docs/architecture-modules.md). Cover the markers, the
+- **Adding a new module** — read [`.claude/docs/architecture-modules.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/architecture-modules.md). Cover the markers, the
   overlay layout, the installer's `currentVersion` + `migrations`, the manifest delta, and the Docker scenario you'll add to `tests/docker/`.
-- **Adding or editing a skill** — read [`.claude/docs/architecture-skills.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/docs/architecture-skills.md). Cover the
+- **Adding or editing a skill** — read [`.claude/docs/architecture-skills.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/architecture-skills.md). Cover the
   `scaffolds/skills-templates/<name>/` source tree, the drift-guard test that pins it byte-equal to `.claude/skills/<name>/`, and the SKILL.md / scripts split.
 
 ## Releasing
@@ -170,10 +170,10 @@ Releases run from `master`. The flow is automated through RC branches:
 
 1. From `develop`, branch `rc-X.Y.Z` (e.g. `rc-2.0.0`).
 2. Merge into `master` once the RC is green. Husky's `tag-manager.sh` script handles versioning.
-3. CI publishes `saasfoundry-cli@X.Y.Z` to npm.
+3. CI publishes `saasfoundryai-cli@X.Y.Z` to npm.
 4. Tag both branches and update `CHANGELOG.md`.
 
-For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/docs/release-objectives.md).
+For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/release-objectives.md).
 
 ## Reporting bugs and proposing features
 
@@ -183,9 +183,9 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 
 ## See also
 
-- [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/CLAUDE.md) — the agent's session prompt; mirrors most of this page in operational form
+- [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/CLAUDE.md) — the agent's session prompt; mirrors most of this page in operational form
 - [Workflow skill](/skills/workflow-skill) — full reference for the workflow CLI and status transitions
 - [Module system](/guide/module-system) — user-facing view (what modules are and how to add them to a project)
-- [Architecture: modules](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/docs/architecture-modules.md) — internal reference for adding new modules
-- [Architecture: skills](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/docs/architecture-skills.md) — internal reference for adding new skills
-- [Migration framework](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/docs/migration-framework.md) — required reading before any breaking change
+- [Architecture: modules](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/architecture-modules.md) — internal reference for adding new modules
+- [Architecture: skills](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/architecture-skills.md) — internal reference for adding new skills
+- [Migration framework](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/migration-framework.md) — required reading before any breaking change

@@ -52,7 +52,7 @@ export const emailCredentialsStep: StepDefinition = {
 
     if (!allCredsProvided && !nonInteractive) {
       console.log(chalk.yellow('\nYou need to create an account on MailerSend to get your API key.'))
-      console.log(chalk.yellow('Note: The following link is an affiliate link. We appreciate your support of the SaaSFoundry project by signing up through this link.'))
+      console.log(chalk.yellow('Note: The following link is an affiliate link. We appreciate your support of the SaaSFoundryAI project by signing up through this link.'))
       console.log(chalk.yellow('Opening https://www.mailersend.com?ref=52o9lkySkTka in your browser in few seconds...'))
 
       // Wait a few seconds before opening the URL

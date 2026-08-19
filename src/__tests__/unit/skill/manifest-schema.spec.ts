@@ -17,7 +17,7 @@ addFormats(ajv)
 const validate = ajv.compile(schema)
 
 const baseManifest = {
-  $schema: 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json',
+  $schema: 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json',
   version: '1.0.0-beta',
   generatedAt: '2026-04-25T00:00:00.000Z',
   structure: 'multirepo',

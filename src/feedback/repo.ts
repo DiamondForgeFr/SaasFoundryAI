@@ -25,9 +25,9 @@ export async function readFeedbackRepo(): Promise<FeedbackRepo> {
   const raw = await readFile(pkgPath, 'utf8')
   const pkg = JSON.parse(raw) as { repository?: unknown }
   const url = extractRepositoryUrl(pkg.repository)
-  if (!url) throw new Error(`SaaSFoundry feedback: package.json#repository is missing or malformed at ${pkgPath}`)
+  if (!url) throw new Error(`SaaSFoundryAI feedback: package.json#repository is missing or malformed at ${pkgPath}`)
   const parsed = parseGitHubUrl(url)
-  if (!parsed) throw new Error(`SaaSFoundry feedback: could not parse GitHub repo from ${url}`)
+  if (!parsed) throw new Error(`SaaSFoundryAI feedback: could not parse GitHub repo from ${url}`)
   return parsed
 }
 

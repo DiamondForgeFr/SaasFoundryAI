@@ -1,4 +1,4 @@
-# SaaSFoundry — v1.0 Release Objectives
+# SaaSFoundryAI — v1.0 Release Objectives
 
 > **Status:** Captured 2026-04-25 from product owner (AGachet) during release-readiness audit. **Purpose:** Acceptance rubric for the v1.0 stable release. Use this to gate "are we ready?" decisions
 > and to spot scope drift on incoming tickets. **Source of truth:** this file. The mirrored entry in agent memory (`project_release_objectives.md`) exists for AI sessions but defers to this document

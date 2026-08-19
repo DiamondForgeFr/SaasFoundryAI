@@ -1,6 +1,6 @@
 # `.saasfoundry.json` — Manifest Schema
 
-Every SaaSFoundry skill reads its configuration from a single manifest at the project root: **`.saasfoundry.json`**. This file is the project's source of truth — never hardcode branch names, project
+Every SaaSFoundryAI skill reads its configuration from a single manifest at the project root: **`.saasfoundry.json`**. This file is the project's source of truth — never hardcode branch names, project
 URLs, or backend names inside a skill or script.
 
 ## Read snippets (copy-paste for skill scripts)
@@ -101,6 +101,6 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
 
 ## Contract
 
-- **Presence detection** — if `.saasfoundry.json` exists at the working directory root, the repo is a SaaSFoundry-managed project. Skills and agents may branch behavior on that alone.
+- **Presence detection** — if `.saasfoundry.json` exists at the working directory root, the repo is a SaaSFoundryAI-managed project. Skills and agents may branch behavior on that alone.
 - **Single source of truth** — skills must never persist duplicated values; read the manifest, do not cache in `.env` or per-skill config.
 - **Fail closed on missing fields** — scripts exit with a non-zero code and a `jq` `// empty` fallback rather than silently defaulting.

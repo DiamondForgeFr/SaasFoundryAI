@@ -179,7 +179,7 @@ import type { Organization } from '@my-app/shared-types'
 import { buildSignupPayloadSchema } from '@my-app/shared-validation'
 ```
 
-In the SaaSFoundry **scaffold sources** you'll see imports written with a literal `PROJECT_NAME` mustache token — those are templates. **Never** ship a placeholder import to a generated project; the
+In the SaaSFoundryAI **scaffold sources** you'll see imports written with a literal `PROJECT_NAME` mustache token — those are templates. **Never** ship a placeholder import to a generated project; the
 builder must substitute first.
 
 ## Multirepo trade-off (anchor)
@@ -195,7 +195,7 @@ apps/web/src/shared-types/<domain>.ts        # second copy, byte-identical
 
 - ✅ Each app builds without a sibling — useful when api/ and web/ are deployed by different teams or pipelines
 - ✅ No npm workspace plumbing in CI
-- ❌ Type/schema drift is silent until runtime — the SaaSFoundry CLI's docker assertions enforce byte-identity at build-test time, but there's no fast local feedback loop
+- ❌ Type/schema drift is silent until runtime — the SaaSFoundryAI CLI's docker assertions enforce byte-identity at build-test time, but there's no fast local feedback loop
 - ❌ Constants like `STORAGE_LOGO_MAX_BYTES` get inlined per consumer (no `shared-config` equivalent)
 
 When you edit a multirepo type or schema:

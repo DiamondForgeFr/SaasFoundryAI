@@ -1,6 +1,6 @@
 # 7-Status System
 
-Every SaaSFoundry ticket moves through seven statuses. Each status has **mandatory actions** that must be completed before the ticket can transition to the next status, and **exit conditions** that
+Every SaaSFoundryAI ticket moves through seven statuses. Each status has **mandatory actions** that must be completed before the ticket can transition to the next status, and **exit conditions** that
 gate the transition. The AI agent reads the status description file (`.claude/skills/sf-workflow/statuses/<N>-<name>.md`) before taking any action.
 
 ## Overview

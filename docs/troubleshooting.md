@@ -1,7 +1,7 @@
 # Troubleshooting
 
-The most common errors people hit when using SaaSFoundry, with the cause and the fix. If you do not find your symptom here, open an issue at
-[`github.com/DiamondForgeFr/SaaSFoundry/issues`](https://github.com/DiamondForgeFr/SaaSFoundry/issues).
+The most common errors people hit when using SaaSFoundryAI, with the cause and the fix. If you do not find your symptom here, open an issue at
+[`github.com/DiamondForgeFr/SaaSFoundryAI/issues`](https://github.com/DiamondForgeFr/SaaSFoundryAI/issues).
 
 ::: tip Self-diagnose first Run `sf status --no-network` inside your project. It dumps the manifest, the installed modules, and the precondition checks the CLI runs before any command. Most of the
 errors below surface there first. :::
@@ -32,7 +32,7 @@ You only have to do this once per machine. The network persists across reboots.
 
 ```
 npm warn EBADENGINE Unsupported engine {
-  package: 'saasfoundry-cli',
+  package: 'saasfoundryai-cli',
   required: { node: '>=22.0.0', npm: '>=10.0.0' }
 }
 ```
@@ -45,7 +45,7 @@ npm warn EBADENGINE Unsupported engine {
 
 ```bash
 nvm install 22.13   # if you don't have it yet
-nvm use             # reads .nvmrc inside any SaaSFoundry repo or generated project
+nvm use             # reads .nvmrc inside any SaaSFoundryAI repo or generated project
 node --version      # → v22.13.x or higher
 ```
 
@@ -69,7 +69,7 @@ that no longer matches the current schema all surface here.
 2. Open the manifest and compare against the schema. The schema is shipped with the CLI and also published online — your editor can reference `$schema`:
    ```jsonc
    {
-     "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/develop/schemas/saasfoundry-manifest.schema.json",
+     "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/develop/schemas/saasfoundry-manifest.schema.json",
      ...
    }
    ```

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0-beta",
-  "projectName": "saasfoundry-cli",
+  "projectName": "saasfoundryai-cli",
   "structure": "cli",
   "workflow": {
     "tool": "github-projects",

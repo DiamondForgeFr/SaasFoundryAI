@@ -22,7 +22,7 @@ export const harnessInstallerMeta: ModuleInstaller = {
  * Scope of the harness hash tracking that drives the conflict-aware refresh
  * in `sf update`:
  * - `.claude/docs/**` — entirely deposit-owned
- * - `.claude/skills/sf-*` — the `sf-` prefix is reserved for SaaSFoundry
+ * - `.claude/skills/sf-*` — the `sf-` prefix is reserved for SaaSFoundryAI
  *   deposits; user-authored skills outside that prefix are never tracked,
  *   never touched
  * CLAUDE.md and .claude/settings.json are deliberately NOT tracked: both are

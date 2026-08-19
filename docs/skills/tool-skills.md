@@ -1,8 +1,8 @@
 # Tool Skills
 
 **Tool skills** connect your project's AI agent to external services — library docs, ticket systems, design files, workspaces. They are installed on demand (`sf new` or
-`sf update --add-modules <skill>`), and the ones that require authentication use SaaSFoundry's **multi-account credentials system** so you can flip between personal / client / work identities with one
-command.
+`sf update --add-modules <skill>`), and the ones that require authentication use SaaSFoundryAI's **multi-account credentials system** so you can flip between personal / client / work identities with
+one command.
 
 ## Two flavours of tool skill
 
@@ -208,7 +208,7 @@ so the commands you learn today do not change when they land. :::
 These skills are **not opt-in** in the same way as `sf-tool-context7` — they are the plumbing `sf-workflow` relies on to move tickets across statuses, create sub-issues, post test-plan comments, and
 open PRs from the CLI. You do not call them directly; `sf-workflow` calls them for you.
 
-The `sf-tool-github-projects` CLI is worth reading even if you never invoke it yourself — it documents the GraphQL shape SaaSFoundry uses for sub-issue linking, which is the pattern `sf-workflow`
+The `sf-tool-github-projects` CLI is worth reading even if you never invoke it yourself — it documents the GraphQL shape SaaSFoundryAI uses for sub-issue linking, which is the pattern `sf-workflow`
 enforces for the "zero open children before moving the parent" rule.
 
 See [GitHub Integration](/workflow/github-integration) for how the skill talks to Projects V2.

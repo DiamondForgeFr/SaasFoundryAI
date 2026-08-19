@@ -91,7 +91,7 @@ The analytics module integrates Umami analytics into your SaaS application front
    - Domain: `myapp.com`
    - Copy the **Website ID**
 
-4. **Configure SaaSFoundry**:
+4. **Configure SaaSFoundryAI**:
 
    ```bash
    sf new  # or sf update
@@ -111,7 +111,7 @@ The analytics module integrates Umami analytics into your SaaS application front
 1. **Sign up**: https://umami.is/pricing
 2. **Create Website** in dashboard
 3. **Get Website ID** from settings
-4. **Configure SaaSFoundry**:
+4. **Configure SaaSFoundryAI**:
 
    ```bash
    sf new  # or sf update
@@ -440,7 +440,7 @@ To avoid ad-blockers, rename the tracker:
 TRACKER_SCRIPT_NAME="stats.js"  # Instead of script.js
 ```
 
-**SaaSFoundry `.env`**:
+**SaaSFoundryAI `.env`**:
 
 ```env
 VITE_ANALYTICS_URL="https://analytics.myapp.com/stats.js"

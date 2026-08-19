@@ -1,6 +1,6 @@
 # Project Structure
 
-Understanding the structure of a SaaSFoundry project.
+Understanding the structure of a SaaSFoundryAI project.
 
 ## Monorepo Structure
 

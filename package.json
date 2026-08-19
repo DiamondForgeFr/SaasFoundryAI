@@ -1,9 +1,9 @@
 {
-  "name": "saasfoundry-cli",
+  "name": "saasfoundryai-cli",
   "version": "1.0.0-beta",
   "author": "Anthony Gachet <anthony.gachet@diamondforge.fr>",
   "license": "MIT",
-  "description": "CLI for SaaSFoundry - Integrated SaaS Development Platform",
+  "description": "CLI for SaaSFoundryAI - Integrated SaaS Development Platform",
   "main": "dist/index.js",
   "engines": {
     "node": ">=22.0.0",
@@ -23,12 +23,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DiamondForgeFr/SaaSFoundry.git"
+    "url": "git+https://github.com/DiamondForgeFr/SaaSFoundryAI.git"
   },
   "bugs": {
-    "url": "https://github.com/DiamondForgeFr/SaaSFoundry/issues"
+    "url": "https://github.com/DiamondForgeFr/SaaSFoundryAI/issues"
   },
-  "homepage": "https://www.npmjs.com/package/saasfoundry-cli",
+  "homepage": "https://www.npmjs.com/package/saasfoundryai-cli",
   "keywords": [
     "cli",
     "saas",
@@ -45,7 +45,7 @@
   ],
   "bin": {
     "sf": "./bin/sf.js",
-    "saasfoundry": "./bin/sf.js"
+    "saasfoundryai": "./bin/sf.js"
   },
   "scripts": {
     "build": "tsc",
@@ -59,7 +59,7 @@
     "lint": "eslint --config eslint.config.mjs .",
     "prepublishOnly": "rm -rf dist && npm run build",
     "link": "npm link --force",
-    "uninstall": "npm unlink -g saasfoundry-cli && hash -r",
+    "uninstall": "npm unlink -g saasfoundryai-cli && hash -r",
     "prepare": "husky",
     "test:pre-commit": "npm run format && npm run lint && npm run build && npm test",
     "test:pre-push": "npm run test:docker -- --count 2",
@@ -70,7 +70,7 @@
     "test:docker:list": "bash tests/docker/run-docker-tests.sh --list",
     "publish:beta": "npm run build && npm publish --tag beta",
     "publish:latest": "npm run build && npm publish --tag latest",
-    "publish:check": "npm dist-tag ls saasfoundry-cli",
+    "publish:check": "npm dist-tag ls saasfoundryai-cli",
     "version:manage": "./scripts/tag-manager.sh \"$(git symbolic-ref --short HEAD)\"",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",

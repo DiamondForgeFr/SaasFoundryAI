@@ -51,7 +51,7 @@ describe('status command (E2E)', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('emits Claude-friendly markdown on a valid SaaSFoundry project', async () => {
+  it('emits Claude-friendly markdown on a valid SaaSFoundryAI project', async () => {
     const manifest: SaaSFoundryManifest = {
       version: '1.0.0-beta',
       generatedAt: new Date().toISOString(),
@@ -64,7 +64,7 @@ describe('status command (E2E)', () => {
     const cap = captureStdout()
     await statusCommand({ claudeFriendly: true })
     const out = cap.stop()
-    expect(out).toContain('# SaaSFoundry project status')
+    expect(out).toContain('# SaaSFoundryAI project status')
     expect(out).toContain('project: demo')
     expect(out).toContain('workflow: github-projects')
     expect(out).toContain('## How to use this output')

@@ -312,7 +312,7 @@ export function isScaffoldManifest(manifest: SaaSFoundryManifest): manifest is S
 // JSON Schema URL stamped into .saasfoundry.json so IDEs pick up live validation.
 // Points at master on the canonical repo — scaffolded projects don't ship a local
 // copy of the schema; drift is prevented by a Jest guard on the source of truth.
-export const manifestSchemaUrl = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json'
+export const manifestSchemaUrl = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json'
 
 // Paths
 export const blueprintsPath = resolve(__dirname, '../scaffolds/blueprints')

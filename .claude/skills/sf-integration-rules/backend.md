@@ -1,6 +1,6 @@
 # Backend integration grammar (apps/api)
 
-How to extend the NestJS API of a SaaSFoundry-generated project. **The canonical reference module is `apps/api/src/modules/organizations/`** — when in doubt, mirror its file layout, imports, and
+How to extend the NestJS API of a SaaSFoundryAI-generated project. **The canonical reference module is `apps/api/src/modules/organizations/`** — when in doubt, mirror its file layout, imports, and
 decorator order. The `accounts/` module is a useful second reference (it adds `imports: [CommonModule]` to its module declaration and uses class-validator for some DTOs).
 
 > Topology note. This guide describes patterns that are identical on monorepo and multirepo. Where shared code lives (canonical workspace vs vendored mirror) is covered by `topology.md`. Always run

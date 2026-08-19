@@ -60,9 +60,9 @@ describe('feedbackCommand (integration)', () => {
     mockGhCurrentUser.mockReset().mockResolvedValue('octocat')
     mockReadFeedbackRepo.mockReset().mockResolvedValue({
       owner: 'DiamondForgeFr',
-      repo: 'SaaSFoundry',
-      slug: 'DiamondForgeFr/SaaSFoundry',
-      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundry'
+      repo: 'SaaSFoundryAI',
+      slug: 'DiamondForgeFr/SaaSFoundryAI',
+      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundryAI'
     })
   })
 
@@ -84,7 +84,7 @@ describe('feedbackCommand (integration)', () => {
     it('prints help when no subcommand is given', async () => {
       await feedbackCommand()
       const out = allLog()
-      expect(out).toContain('SaaSFoundry Feedback')
+      expect(out).toContain('SaaSFoundryAI Feedback')
       expect(out).toContain('request <name>')
       expect(out).toContain('bug')
       expect(out).toContain('list')
@@ -114,7 +114,7 @@ describe('feedbackCommand (integration)', () => {
       mockGhIssueSearch.mockResolvedValue([])
       mockGhIssueCreate.mockResolvedValue({
         number: 101,
-        url: 'https://github.com/DiamondForgeFr/SaaSFoundry/issues/101',
+        url: 'https://github.com/DiamondForgeFr/SaaSFoundryAI/issues/101',
         title: 'Module request: Stripe',
         state: 'OPEN',
         labels: [{ name: 'module-request' }],
@@ -260,14 +260,14 @@ describe('feedbackCommand (integration)', () => {
 
     it('casts a 👍 reaction and records it in prefs', async () => {
       await feedbackCommand('vote', '42', 'up')
-      expect(mockGhAddReaction).toHaveBeenCalledWith({ repo: 'DiamondForgeFr/SaaSFoundry', issueNumber: 42, content: '+1' })
+      expect(mockGhAddReaction).toHaveBeenCalledWith({ repo: 'DiamondForgeFr/SaaSFoundryAI', issueNumber: 42, content: '+1' })
       const prefs = await readPreferences()
       expect(prefs.votesCast[0]).toMatchObject({ issueNumber: 42, direction: 'up' })
     })
 
     it('posts a comment with --comment', async () => {
       await feedbackCommand('vote', '42', 'comment', '--comment', 'I need this for payroll.')
-      expect(mockGhIssueComment).toHaveBeenCalledWith('DiamondForgeFr/SaaSFoundry', 42, 'I need this for payroll.')
+      expect(mockGhIssueComment).toHaveBeenCalledWith('DiamondForgeFr/SaaSFoundryAI', 42, 'I need this for payroll.')
     })
 
     it('rejects an invalid issue number', async () => {
