@@ -7,6 +7,10 @@ const DESCRIBE_RE = /\bdescribe\s*\(\s*['"`]([^'"`]+)['"`]/g
 const CASE_RE = /\b(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]/g
 const FILE_STEM_RE = /([^/]+?)(?:\.(?:e2e|spec)\.tsx?$)/
 
+// Path segments that describe where a test lives, not what it covers. Dropping them turns
+// `src/__tests__/unit/config-engine/registry.spec.ts` into the area `config-engine`.
+const TEST_SCAFFOLD_SEGMENTS = new Set(['src', 'apps', '__tests__', 'tests', 'test', 'unit', 'integration', 'e2e', 'smoke'])
+
 function normalizeRel(path: string): string {
   return path.split('\\').join('/')
 }
@@ -40,6 +44,21 @@ export function extractTestAreaFromPath(relPath: string): string {
     if (segments.length >= 2) return `${segments[0]}/${segments[1].replace(/\.(spec|test|e2e)\.tsx?$/, '')}`
     if (segments.length === 1) return segments[0].replace(/\.(spec|test|e2e)\.tsx?$/, '')
   }
+  // Neither convention matched — this is not a NestJS/React tree. Derive the area from the
+  // directory holding the spec, NOT from the file stem.
+  //
+  // The stem is the unit under test ("registry"), which is the wrong key in both directions:
+  // three unrelated subsystems here ship a `registry.spec.ts` and collapsed onto one area, while
+  // a single subsystem scattered across as many areas as it has files — `config-engine` split
+  // into session/steps/registry/derivations/... and could therefore never match its FR.
+  // The area an FR names is the structural unit (module, package, feature folder), so that is
+  // what we key on. Scaffolding segments carry no meaning and are dropped.
+  const dirs = norm
+    .split('/')
+    .slice(0, -1)
+    .filter((segment) => segment.length > 0 && !TEST_SCAFFOLD_SEGMENTS.has(segment))
+  if (dirs.length > 0) return dirs.join('/')
+
   const stem = norm.match(FILE_STEM_RE)
   return stem ? stem[1] : 'unknown'
 }
