@@ -107,12 +107,12 @@ export async function feedbackCommand(subcommand?: string, ...args: string[]) {
 }
 
 function showHelp() {
-  console.log(chalk.blue('\n  SaaSFoundry Feedback - File requests, bugs, and vote on proposals'))
+  console.log(chalk.blue('\n  SaaSFoundryAI Feedback - File requests, bugs, and vote on proposals'))
   console.log(chalk.blue('  ' + '─'.repeat(60)))
   console.log(chalk.white('\n  Usage: sf feedback <subcommand> [options]\n'))
   console.log(chalk.white('  Subcommands:'))
   console.log(chalk.gray('    request <name>  [--description <text>] [--force] [--yes]'))
-  console.log(chalk.gray('                    Open a new module-request issue on the SaaSFoundry repo.'))
+  console.log(chalk.gray('                    Open a new module-request issue on the SaaSFoundryAI repo.'))
   console.log(chalk.gray('    bug             [--source cli|scaffold] [--title <t>] [--description <d>]'))
   console.log(chalk.gray('                    [--auto-repro] [--force]'))
   console.log(chalk.gray('                    Open a bug report against the CLI or generated scaffolds.'))

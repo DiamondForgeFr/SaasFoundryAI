@@ -1,4 +1,4 @@
-# ── Stage 1: Build the SaaSFoundry CLI ──────────────────────────
+# ── Stage 1: Build the SaaSFoundryAI CLI ──────────────────────────
 FROM node:24-alpine AS cli-builder
 
 WORKDIR /cli

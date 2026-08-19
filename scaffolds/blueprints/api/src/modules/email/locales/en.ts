@@ -1,16 +1,16 @@
 export const en = {
   accountConfirmation: {
-    subject: 'Confirm your SaaSFoundry account',
-    title: 'Welcome to SaaSFoundry!',
+    subject: 'Confirm your SaaSFoundryAI account',
+    title: 'Welcome to SaaSFoundryAI!',
     greeting: 'Hello',
-    body: 'Thank you for signing up to SaaSFoundry. To activate your account, please click the button below:',
+    body: 'Thank you for signing up to SaaSFoundryAI. To activate your account, please click the button below:',
     button: 'Activate my account',
     fallback: "If the button doesn't work, you can copy and paste the following link into your browser:",
-    ignore: "If you didn't create a SaaSFoundry account, you can ignore this email.",
+    ignore: "If you didn't create a SaaSFoundryAI account, you can ignore this email.",
     footer: 'This email was sent automatically. Please do not reply.'
   },
   passwordReset: {
-    subject: 'Reset your SaaSFoundry password',
+    subject: 'Reset your SaaSFoundryAI password',
     title: 'Password Reset',
     greeting: 'Hello',
     body: 'You have requested to reset your password. Click the button below to create a new one:',
@@ -21,15 +21,15 @@ export const en = {
     footer: 'This email was sent automatically. Please do not reply.'
   },
   invitation: {
-    subject: 'You have been invited to join SaaSFoundry',
-    title: 'You have been invited to join SaaSFoundry',
+    subject: 'You have been invited to join SaaSFoundryAI',
+    title: 'You have been invited to join SaaSFoundryAI',
     greeting: 'Hello',
-    bodyWithName: '{inviterName} has invited you to join the SaaSFoundry platform. Click the button below to accept the invitation and set up your account.',
-    bodyWithoutName: 'An administrator has invited you to join the SaaSFoundry platform. Click the button below to accept the invitation and set up your account.',
+    bodyWithName: '{inviterName} has invited you to join the SaaSFoundryAI platform. Click the button below to accept the invitation and set up your account.',
+    bodyWithoutName: 'An administrator has invited you to join the SaaSFoundryAI platform. Click the button below to accept the invitation and set up your account.',
     button: 'Accept invitation',
     fallback: "If the button doesn't work, you can copy and paste the following link into your browser:",
     expiration: 'This link will expire in 7 days.',
-    ignore: "If you didn't request to join SaaSFoundry, you can ignore this email.",
-    footer: '© {year} SaaSFoundry. All rights reserved.'
+    ignore: "If you didn't request to join SaaSFoundryAI, you can ignore this email.",
+    footer: '© {year} SaaSFoundryAI. All rights reserved.'
   }
 }

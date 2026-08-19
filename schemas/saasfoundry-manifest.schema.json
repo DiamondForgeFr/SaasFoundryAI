@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json",
-  "title": "SaaSFoundry project manifest",
-  "description": "Shape of .saasfoundry.json at the root of every SaaSFoundry-managed project. Mirrors the SaaSFoundryManifest TypeScript type in src/types.ts and the canonical example in .claude/docs/manifest-schema.md.",
+  "$id": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json",
+  "title": "SaaSFoundryAI project manifest",
+  "description": "Shape of .saasfoundry.json at the root of every SaaSFoundryAI-managed project. Mirrors the SaaSFoundryManifest TypeScript type in src/types.ts and the canonical example in .claude/docs/manifest-schema.md.",
   "type": "object",
   "required": ["version", "structure", "projectName"],
   "additionalProperties": false,

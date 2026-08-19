@@ -8,8 +8,8 @@ set -euo pipefail
 #
 # Resolution order:
 #   1. `sf` found on PATH            → prints: sf
-#   2. `saasfoundry-cli` on PATH     → prints: saasfoundry-cli
-#   3. neither available             → prints: npx saasfoundry-cli
+#   2. `saasfoundryai-cli` on PATH     → prints: saasfoundryai-cli
+#   3. neither available             → prints: npx saasfoundryai-cli
 #
 # Intended usage from the skill:
 #     SF_CMD=$(bash scripts/bootstrap-cli.sh)
@@ -20,9 +20,9 @@ if command -v sf >/dev/null 2>&1; then
   exit 0
 fi
 
-if command -v saasfoundry-cli >/dev/null 2>&1; then
-  echo saasfoundry-cli
+if command -v saasfoundryai-cli >/dev/null 2>&1; then
+  echo saasfoundryai-cli
   exit 0
 fi
 
-echo "npx saasfoundry-cli"
+echo "npx saasfoundryai-cli"

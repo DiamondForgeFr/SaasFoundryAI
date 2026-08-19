@@ -57,9 +57,9 @@ describe('feedback/vote', () => {
     mockEnsureGhAuth.mockResolvedValue(undefined)
     mockReadFeedbackRepo.mockResolvedValue({
       owner: 'DiamondForgeFr',
-      repo: 'SaaSFoundry',
-      slug: 'DiamondForgeFr/SaaSFoundry',
-      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundry'
+      repo: 'SaaSFoundryAI',
+      slug: 'DiamondForgeFr/SaaSFoundryAI',
+      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundryAI'
     })
   })
 
@@ -116,7 +116,7 @@ describe('feedback/vote', () => {
   describe('castVote', () => {
     it('adds a +1 reaction for up and records in votesCast', async () => {
       const result = await castVote({ issueNumber: 42, action: 'up' })
-      expect(mockGhAddReaction).toHaveBeenCalledWith({ repo: 'DiamondForgeFr/SaaSFoundry', issueNumber: 42, content: '+1' })
+      expect(mockGhAddReaction).toHaveBeenCalledWith({ repo: 'DiamondForgeFr/SaaSFoundryAI', issueNumber: 42, content: '+1' })
       expect(result.action).toBe('up')
 
       const prefs = await readPreferences()
@@ -127,14 +127,14 @@ describe('feedback/vote', () => {
 
     it('adds a -1 reaction for down and records direction=down', async () => {
       await castVote({ issueNumber: 77, action: 'down' })
-      expect(mockGhAddReaction).toHaveBeenCalledWith({ repo: 'DiamondForgeFr/SaaSFoundry', issueNumber: 77, content: '-1' })
+      expect(mockGhAddReaction).toHaveBeenCalledWith({ repo: 'DiamondForgeFr/SaaSFoundryAI', issueNumber: 77, content: '-1' })
       const prefs = await readPreferences()
       expect(prefs.votesCast[0].direction).toBe('down')
     })
 
     it('posts a comment for action=comment and does NOT touch votesCast', async () => {
       await castVote({ issueNumber: 5, action: 'comment', comment: 'I need this for payroll.' })
-      expect(mockGhIssueComment).toHaveBeenCalledWith('DiamondForgeFr/SaaSFoundry', 5, 'I need this for payroll.')
+      expect(mockGhIssueComment).toHaveBeenCalledWith('DiamondForgeFr/SaaSFoundryAI', 5, 'I need this for payroll.')
       expect(mockGhAddReaction).not.toHaveBeenCalled()
       const prefs = await readPreferences()
       expect(prefs.votesCast).toHaveLength(0)

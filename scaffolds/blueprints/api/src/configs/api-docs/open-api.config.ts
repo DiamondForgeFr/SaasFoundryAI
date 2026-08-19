@@ -1,10 +1,10 @@
 export const openApiConfig = {
-  title: 'SaaSFoundry API',
+  title: 'SaaSFoundryAI API',
   description: 'An open-source solution for managing clients, invoices, and financial tasks.',
   version: process.env.npm_package_version || '1.0.0',
   contact: {
-    name: 'SaaSFoundry Team',
-    url: 'https://github.com/DiamondForgeFr/SaaSFoundry',
+    name: 'SaaSFoundryAI Team',
+    url: 'https://github.com/DiamondForgeFr/SaaSFoundryAI',
     email: 'anthony.gachet@diamondforge.fr'
   },
   license: {

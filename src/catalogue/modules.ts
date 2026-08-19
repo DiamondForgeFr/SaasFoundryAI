@@ -1,5 +1,5 @@
 /**
- * Single source of truth for the SaaSFoundry module catalogue.
+ * Single source of truth for the SaaSFoundryAI module catalogue.
  *
  * Consumed by:
  * - `sf modules list|info|match` (direct)

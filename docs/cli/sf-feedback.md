@@ -12,7 +12,7 @@ sf feedback <subcommand> [options]
 
 | Flag                           | Description                                                       | Default |
 | ------------------------------ | ----------------------------------------------------------------- | ------- |
-| `request <name>`               | Open a new module-request issue on the SaaSFoundry repo           | -       |
+| `request <name>`               | Open a new module-request issue on the SaaSFoundryAI repo         | -       |
 | `bug`                          | Open a bug report against the CLI or generated scaffolds          | -       |
 | `list`                         | List feedback issues (module-requests + cli-bugs + scaffold-bugs) | -       |
 | `vote --list`                  | Show top module requests ranked by 👍 reactions                   | -       |

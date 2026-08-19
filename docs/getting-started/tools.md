@@ -1,10 +1,10 @@
 # Development Tools
 
-SaaSFoundry is designed for **AI-assisted collaborative development**. Here's the recommended toolset for the best experience.
+SaaSFoundryAI is designed for **AI-assisted collaborative development**. Here's the recommended toolset for the best experience.
 
 ## AI Collaboration Model
 
-SaaSFoundry generates projects optimized for Human + AI development:
+SaaSFoundryAI generates projects optimized for Human + AI development:
 
 ```
 ┌─────────────┐
@@ -18,12 +18,12 @@ SaaSFoundry generates projects optimized for Human + AI development:
        │
        ↓
 ┌─────────────┐
-│ SaaSFoundry │ ← Generated project with Claude-powered skills
+│ SaaSFoundryAI │ ← Generated project with Claude-powered skills
 │   Project   │
 └─────────────┘
 ```
 
-**Key Point**: SaaSFoundry is not AI-powered itself. It's a **platform that creates projects optimized for AI collaboration**.
+**Key Point**: SaaSFoundryAI is not AI-powered itself. It's a **platform that creates projects optimized for AI collaboration**.
 
 ## Required Tools
 
@@ -135,8 +135,8 @@ brew install anthropic/tap/claude-code
 # 2. Install cmux
 brew install cmux
 
-# 3. Install SaaSFoundry
-npm install -g saasfoundry-cli
+# 3. Install SaaSFoundryAI
+npm install -g saasfoundryai-cli
 
 # 4. Create project
 sf new
@@ -159,8 +159,8 @@ cmux
 # 1. Install Claude Code
 npm install -g @anthropic-ai/claude-code
 
-# 2. Install SaaSFoundry
-npm install -g saasfoundry-cli
+# 2. Install SaaSFoundryAI
+npm install -g saasfoundryai-cli
 
 # 3. Create project
 sf new
@@ -211,7 +211,7 @@ Claude Code works in any terminal, but can also integrate with IDEs:
 ### Cursor
 
 - Built-in Claude integration
-- Use SaaSFoundry CLI via terminal
+- Use SaaSFoundryAI CLI via terminal
 
 ### Other IDEs
 
@@ -220,7 +220,7 @@ Claude Code works in any terminal, but can also integrate with IDEs:
 
 ## Docker (Development)
 
-SaaSFoundry includes Docker Compose for development services:
+SaaSFoundryAI includes Docker Compose for development services:
 
 ```bash
 # Start PostgreSQL (in-memory for speed)

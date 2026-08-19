@@ -1,6 +1,6 @@
 # Quick Start
 
-Get up and running with SaaSFoundry in 5 minutes.
+Get up and running with SaaSFoundryAI in 5 minutes.
 
 ## Create a Project
 

@@ -8,7 +8,7 @@ set -euo pipefail
 # Env overrides (useful for skill orchestration and tests):
 #   SF_MANIFEST_PATH — path to .saasfoundry.json (default: ./.saasfoundry.json)
 #   SF_CLI           — command token for the saasfoundry CLI (default: sf)
-#                      e.g. "sf", "saasfoundry-cli", or "npx saasfoundry-cli"
+#                      e.g. "sf", "saasfoundryai-cli", or "npx saasfoundryai-cli"
 #
 # Exit codes:
 #   0 — success
@@ -25,7 +25,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 if [ ! -f "${MANIFEST_PATH}" ]; then
-  echo "read-project.sh: manifest not found at ${MANIFEST_PATH} — is this a SaaSFoundry project?" >&2
+  echo "read-project.sh: manifest not found at ${MANIFEST_PATH} — is this a SaaSFoundryAI project?" >&2
   exit 2
 fi
 

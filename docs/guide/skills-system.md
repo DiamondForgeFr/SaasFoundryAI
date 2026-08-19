@@ -1,6 +1,6 @@
 # Skills System
 
-SaaSFoundry includes Claude-powered skills that assist with development tasks.
+SaaSFoundryAI includes Claude-powered skills that assist with development tasks.
 
 ## Overview
 
@@ -13,28 +13,28 @@ Skills are specialized agents that help with:
 
 ## Skill Naming Convention
 
-SaaSFoundry skills use the **`sf-*` prefix** to distinguish them from generic skills:
+SaaSFoundryAI skills use the **`sf-*` prefix** to distinguish them from generic skills:
 
-- **`sf-git-commit`** - SaaSFoundry-specific commit workflow
-- **`sf-utils-fix-errors`** - SaaSFoundry-specific error fixing
+- **`sf-git-commit`** - SaaSFoundryAI-specific commit workflow
+- **`sf-utils-fix-errors`** - SaaSFoundryAI-specific error fixing
 - **`sf-workflow`** - Complexity-adaptive development workflow (unified successor of the former `sf-workflow-apex` / `sf-workflow-apex-free`)
 
 **Why the prefix?**
 
-- ✅ Clearly identifies SaaSFoundry-specific skills
+- ✅ Clearly identifies SaaSFoundryAI-specific skills
 - ✅ Avoids conflicts with generic Claude Code skills
-- ✅ Integrates with SaaSFoundry workflow system (`.saasfoundry.json`)
+- ✅ Integrates with SaaSFoundryAI workflow system (`.saasfoundry.json`)
 - ✅ Follows project conventions and structure
 
-**Generic vs SaaSFoundry Skills:**
+**Generic vs SaaSFoundryAI Skills:**
 
 | Type          | Prefix | Example         | Use Case                     |
 | ------------- | ------ | --------------- | ---------------------------- |
-| SaaSFoundry   | `sf-*` | `sf-git-commit` | SaaSFoundry projects         |
+| SaaSFoundryAI | `sf-*` | `sf-git-commit` | SaaSFoundryAI projects       |
 | Generic       | None   | `git-commit`    | Any Claude Code project      |
 | Tool-specific | `sf-*` | `sf-tool-jira`  | Generated for workflow tools |
 
-**In SaaSFoundry projects, always use `sf-*` skills** - they're configured to work with your project structure and workflow settings.
+**In SaaSFoundryAI projects, always use `sf-*` skills** - they're configured to work with your project structure and workflow settings.
 
 ## Skill Location
 

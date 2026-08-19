@@ -114,7 +114,7 @@ export interface LabelDef {
  * this list (prose copies); this constant is what actually gets created.
  *
  * Feedback labels (`module-request` / `cli-bug` / `scaffold-bug`) are
- * deliberately excluded — they belong to the upstream SaaSFoundry repo, not to
+ * deliberately excluded — they belong to the upstream SaaSFoundryAI repo, not to
  * a consumer project.
  */
 export function buildWorkflowLabels(opts: { srs: boolean }): LabelDef[] {

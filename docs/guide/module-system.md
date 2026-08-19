@@ -1,6 +1,6 @@
 # Module System
 
-SaaSFoundry's module system lets you add features to projects during or after creation.
+SaaSFoundryAI's module system lets you add features to projects during or after creation.
 
 ## Overview
 
@@ -99,7 +99,7 @@ sf update
 
 ### Blueprint + Overlay Pattern
 
-SaaSFoundry uses a two-layer approach:
+SaaSFoundryAI uses a two-layer approach:
 
 1. **Blueprints** - Base project templates with TODO markers
 2. **Overlays** - Module source code that activates markers
@@ -152,7 +152,7 @@ Installed modules are tracked in `.saasfoundry.json`:
 
 ## Module Updates
 
-SaaSFoundry can update module code when the CLI is upgraded:
+SaaSFoundryAI can update module code when the CLI is upgraded:
 
 ```bash
 sf update

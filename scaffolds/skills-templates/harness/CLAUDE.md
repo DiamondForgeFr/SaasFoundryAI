@@ -1,6 +1,6 @@
 # {{PROJECT_NAME}}
 
-AI-assisted workflow harness installed by SaaSFoundry (CLI v{{VERSION}}). This project keeps its own technical stack — SaaSFoundry only manages the AI collaboration layer (workflow, skills, SRS).
+AI-assisted workflow harness installed by SaaSFoundryAI (CLI v{{VERSION}}). This project keeps its own technical stack — SaaSFoundryAI only manages the AI collaboration layer (workflow, skills, SRS).
 
 ## 🧭 Preconditions first (read before asking questions)
 
@@ -19,4 +19,4 @@ Before asking the user anything about scope, workflow, or tooling, **read the ma
 
 ## Development Commands
 
-Document this project's build, test, and lint commands here so the AI can validate its changes — SaaSFoundry does not manage this project's technical stack.
+Document this project's build, test, and lint commands here so the AI can validate its changes — SaaSFoundryAI does not manage this project's technical stack.

@@ -1,6 +1,6 @@
 ## Skills Architecture (CRITICAL — Read when adding/modifying Skills)
 
-SaaSFoundry integrates **Claude Code skills** into generated projects. All skills are prefixed with `sf-` to avoid conflicts with users' global skills.
+SaaSFoundryAI integrates **Claude Code skills** into generated projects. All skills are prefixed with `sf-` to avoid conflicts with users' global skills.
 
 ### Skill Types & Classification
 
@@ -80,7 +80,7 @@ scaffolds/overlays/monorepo/root/.claude/
 
 Each tool skill's CLI script (`{tool}-cli.sh`) loads credentials in this order:
 
-1. Check if in a SaaSFoundry project (`.saasfoundry.json` exists)
+1. Check if in a SaaSFoundryAI project (`.saasfoundry.json` exists)
 2. Read configured account from manifest → `skillsAccounts.{tool}`
 3. Load from `~/.claude/credentials/{tool}/{account}.env`
 4. Fallback to local `.env` file in skill directory
@@ -388,7 +388,7 @@ Generated projects have this note in their CLAUDE.md:
 ```markdown
 ## 🎯 Skills Priority
 
-**IMPORTANT**: Always prefer SaaSFoundry skills (prefix `sf-*`):
+**IMPORTANT**: Always prefer SaaSFoundryAI skills (prefix `sf-*`):
 
 - ✅ Use `sf-git-commit` instead of `git-commit`
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`

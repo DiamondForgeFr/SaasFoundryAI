@@ -80,4 +80,4 @@ Skills are automatically loaded by Claude Code when you open this project. You c
 
 ---
 
-**Note**: These skills are part of SaaSFoundry's AI-First development approach. They work seamlessly with the project's existing tooling (tests, CI/CD, git hooks).
+**Note**: These skills are part of SaaSFoundryAI's AI-First development approach. They work seamlessly with the project's existing tooling (tests, CI/CD, git hooks).

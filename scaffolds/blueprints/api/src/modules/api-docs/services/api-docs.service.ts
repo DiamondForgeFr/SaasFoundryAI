@@ -74,7 +74,7 @@ export class ApiDocsService {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>SaaSFoundry API Documentation</title>
+        <title>SaaSFoundryAI API Documentation</title>
 
         <!-- Stoplight Elements styles -->
         <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">

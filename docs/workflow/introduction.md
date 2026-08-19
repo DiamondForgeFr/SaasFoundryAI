@@ -1,15 +1,15 @@
 # Workflow System
 
-SaaSFoundry's workflow system is a **complexity-adaptive, status-driven lifecycle** designed for Human + AI collaboration. Every ticket moves through the same seven statuses, but the rigor applied at
-each step scales with the ticket's complexity tag.
+SaaSFoundryAI's workflow system is a **complexity-adaptive, status-driven lifecycle** designed for Human + AI collaboration. Every ticket moves through the same seven statuses, but the rigor applied
+at each step scales with the ticket's complexity tag.
 
 ## Philosophy
 
 Traditional Git flows put all the guardrails at the PR stage. That works for small teams where a reviewer can mentally simulate what the author intended. It breaks down when part of the work is done
 by an AI agent that has no memory of prior decisions.
 
-SaaSFoundry inverts the model: **the guardrails live in the workflow itself**. By the time a pull request exists, the code has already been planned, reviewed, tested, and validated by a human. The PR
-becomes a final sanity check, not the first line of defence.
+SaaSFoundryAI inverts the model: **the guardrails live in the workflow itself**. By the time a pull request exists, the code has already been planned, reviewed, tested, and validated by a human. The
+PR becomes a final sanity check, not the first line of defence.
 
 ```text
 ┌────────┐   ┌──────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────────────┐   ┌──────────────┐   ┌──────┐
@@ -35,13 +35,13 @@ The complexity tag lives on the ticket itself (as a GitHub label or equivalent),
 
 ## Dogfooding
 
-SaaSFoundry uses its own workflow to build itself. The `.saasfoundry.json`, `.claude/skills/sf-workflow/`, and `.claude/skills/sf-tool-github-projects/` directories in this repository are the exact
+SaaSFoundryAI uses its own workflow to build itself. The `.saasfoundry.json`, `.claude/skills/sf-workflow/`, and `.claude/skills/sf-tool-github-projects/` directories in this repository are the exact
 same files that get scaffolded into projects created with `sf new`.
 
 This matters because:
 
 - If we bypass our own rules, we cannot guarantee they work for users.
-- Bugs in our workflow reach every project built with SaaSFoundry.
+- Bugs in our workflow reach every project built with SaaSFoundryAI.
 - Usability problems we feel in our own flow are problems our users will feel tenfold.
 
 The workflow is not aspirational. It's the binding contract between the human developer and the AI agent.

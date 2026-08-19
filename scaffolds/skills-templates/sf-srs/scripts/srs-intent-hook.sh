@@ -37,7 +37,7 @@ ENVELOPE=$(cat)
 PROMPT=$(printf '%s' "$ENVELOPE" | jq -r '.prompt // empty' 2>/dev/null || true)
 [[ -z "$PROMPT" ]] && exit 0
 
-# Manifest opt-out — only consult the manifest when in a SaaSFoundry project
+# Manifest opt-out — only consult the manifest when in a SaaSFoundryAI project
 if [[ -f .saasfoundry.json ]]; then
   ENABLED=$(jq -r '
     if .tools.srs.enabled == false then "false"

@@ -24,7 +24,7 @@ set -euo pipefail
 #
 # Env overrides (useful for skill orchestration and tests):
 #   SF_CLI — command token for the saasfoundry CLI (default: sf)
-#            e.g. "sf", "saasfoundry-cli", or "npx saasfoundry-cli"
+#            e.g. "sf", "saasfoundryai-cli", or "npx saasfoundryai-cli"
 #
 # Exit codes:
 #   0 — success

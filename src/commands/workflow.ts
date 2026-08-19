@@ -28,7 +28,7 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
   const manifest = await readManifest(process.cwd())
 
   if (!globalCommands.includes(subcommand) && !manifest) {
-    console.error(chalk.red('\n❌ Not a SaaSFoundry project (no .saasfoundry.json found)\n'))
+    console.error(chalk.red('\n❌ Not a SaaSFoundryAI project (no .saasfoundry.json found)\n'))
     console.log(chalk.gray('Global commands available everywhere:'))
     console.log(chalk.gray('  sf workflow list'))
     console.log(chalk.gray('  sf workflow create <name>'))
@@ -392,7 +392,7 @@ async function validateWorkflowConfig(manifest: SaaSFoundryManifest) {
   } catch {
     console.log(chalk.yellow('\n⚠️  Workflow validator skill not found in project\n'))
     console.log(chalk.gray('The validator skill may not have been generated with your project.'))
-    console.log(chalk.gray('It is available in newer versions of SaaSFoundry.\n'))
+    console.log(chalk.gray('It is available in newer versions of SaaSFoundryAI.\n'))
 
     // Fallback to basic validation
     console.log(chalk.blue('🔍 Running basic validation...\n'))

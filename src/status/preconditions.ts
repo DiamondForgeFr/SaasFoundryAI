@@ -14,10 +14,10 @@ function checkManifest(report: StatusReport): Precondition {
   if (!report.manifest) {
     return {
       name: 'manifest',
-      description: 'Project is a SaaSFoundry project (.saasfoundry.json present)',
+      description: 'Project is a SaaSFoundryAI project (.saasfoundry.json present)',
       status: 'fail',
       details: `No manifest at ${report.manifestPath}`,
-      remediation: 'Run `sf new` to create a new project, or `cd` into an existing SaaSFoundry project.'
+      remediation: 'Run `sf new` to create a new project, or `cd` into an existing SaaSFoundryAI project.'
     }
   }
   return { name: 'manifest', description: 'Manifest present', status: 'ok', details: `version ${report.manifest.version}` }

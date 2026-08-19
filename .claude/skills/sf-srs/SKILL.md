@@ -40,8 +40,8 @@ sf-srs/
 **Authoring guidance** — before drafting a real Epic / Story / Task / Issue body, skim the matching file under [`templates/tickets/examples/`](templates/tickets/examples/). Each example opens with a
 `<!-- Why this example -->` preamble that names the pattern it illustrates and the anti-patterns to avoid. Import the **pattern** (tone, section density, title convention), not the fictional content.
 
-TS entrypoints dispatched by `srs-cli.sh` live alongside the CLI source under `src/srs/bin/` (dogfood) or `node_modules/saasfoundry-cli/dist/srs/bin/` (shipped). They are **not** duplicated inside the
-skill folder — the skill is a thin orchestrator.
+TS entrypoints dispatched by `srs-cli.sh` live alongside the CLI source under `src/srs/bin/` (dogfood) or `node_modules/saasfoundryai-cli/dist/srs/bin/` (shipped). They are **not** duplicated inside
+the skill folder — the skill is a thin orchestrator.
 
 | Action                      | Bin entrypoint (`src/srs/bin/`) | Owner    |
 | --------------------------- | ------------------------------- | -------- |
@@ -307,7 +307,7 @@ or when the SRS module has not yet been installed (route to `sf update --add-mod
 `--path` defaults to the current working directory. The CLI walks the tree (honouring `.gitignore` and excluding `node_modules / dist / coverage / .git / .vitepress/cache`), runs every registered
 scanner, and writes the result to stdout :
 
-**Tuning the scan for noise-heavy repos.** CLI/library/template projects (SaaSFoundry itself, monorepos shipping `scaffolds/`, heavily-documented repos with large `docs/` trees) can drown the signal
+**Tuning the scan for noise-heavy repos.** CLI/library/template projects (SaaSFoundryAI itself, monorepos shipping `scaffolds/`, heavily-documented repos with large `docs/` trees) can drown the signal
 under fixture code the scanners treat as production source. Two ways to opt out:
 
 - **`.srsignore`** — a gitignore-style file at the scan root. Same syntax as `.gitignore`, additive to it.
@@ -421,7 +421,7 @@ Performance budget: ≤250ms p95 in a real shell (mostly classifier regex + jq p
 
 ## Lessons learned — #203 capstone dogfood (2026-04-23)
 
-Running the full `sf srs` chain end-to-end on SaaSFoundry itself surfaced 12 gaps consolidated under parent #235. Key takeaways agents should know about:
+Running the full `sf srs` chain end-to-end on SaaSFoundryAI itself surfaced 12 gaps consolidated under parent #235. Key takeaways agents should know about:
 
 - **Matcher covers all finding kinds (#236 — landed).** `matcher.ts` now counts `endpoint`, `ui-flow`, `entity`, and `test` findings when scoring an FR. Frontend-only, data-only, and test-driven FRs
   no longer score 0 purely because there is no endpoint. FR authors can further steer the match via `implementationKind` / `areaHints` (L2 hints) and the skill gets a `--review-packet` JSON for L3 AI

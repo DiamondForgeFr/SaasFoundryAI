@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'SaaSFoundry',
+  title: 'SaaSFoundryAI',
   description: 'AI-First SaaS Platform Generator',
-  base: '/SaaSFoundry/',
+  base: '/SaaSFoundryAI/',
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
   vite: {
@@ -142,7 +142,7 @@ export default defineConfig({
       ]
     },
 
-    socialLinks: [{ icon: 'github', link: 'https://github.com/DiamondForgeFr/SaaSFoundry' }],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/DiamondForgeFr/SaaSFoundryAI' }],
 
     search: {
       provider: 'local'

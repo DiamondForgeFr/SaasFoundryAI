@@ -368,7 +368,7 @@ describe('utils', () => {
             backend: 'notion',
             rootPage: {
               id: 'abc-123',
-              url: 'https://www.notion.so/SaaSFoundry-abc123',
+              url: 'https://www.notion.so/SaaSFoundryAI-abc123',
               name: 'srs-enabled-srs'
             }
           }

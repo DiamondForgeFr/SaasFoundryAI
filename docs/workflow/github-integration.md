@@ -1,6 +1,6 @@
 # GitHub Integration
 
-The `sf-tool-github-projects` skill is the reference adapter for the SaaSFoundry workflow. It maps the 7-status lifecycle and the complexity system onto GitHub Projects V2 and GitHub Issues —
+The `sf-tool-github-projects` skill is the reference adapter for the SaaSFoundryAI workflow. It maps the 7-status lifecycle and the complexity system onto GitHub Projects V2 and GitHub Issues —
 including sub-issue relationships via the GraphQL `addSubIssue` mutation.
 
 If you pick GitHub as your workflow tool during `sf new`, this is the integration you get.
@@ -175,7 +175,7 @@ Without `addSubIssue`, the zero-open-children gate (AI Rules, rule 7) would fail
 ## Swapping tools
 
 ::: warning Jira / Notion / Linear / ClickUp adapters — on the roadmap The `sf-workflow` orchestration layer is already tool-agnostic, but the only adapter that ships today is
-`sf-tool-github-projects`. The checklist below describes the target behaviour for when the other adapters land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundry/issues).
+`sf-tool-github-projects`. The checklist below describes the target behaviour for when the other adapters land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundryAI/issues).
 :::
 
 If you later migrate to Jira, Notion, Linear, or ClickUp, the checklist will be:

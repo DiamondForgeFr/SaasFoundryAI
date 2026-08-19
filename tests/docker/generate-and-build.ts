@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ── Docker Build Test Harness ──────────────────────────────────
-// Generates real SaaSFoundry projects and validates they build.
+// Generates real SaaSFoundryAI projects and validates they build.
 // Runs inside Docker via `Dockerfile.test`.
 //
 // Usage:
@@ -478,7 +478,7 @@ async function runMigrationScenario(scenario: MigrationScenario): Promise<boolea
   // Read back the manifest and check the dispatcher did its job.
   const after = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
 
-  const expectedSchema = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/saasfoundry-manifest.schema.json'
+  const expectedSchema = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json'
 
   const schemaOk = after.$schema === expectedSchema
   const versionOk = typeof after.manifestVersion === 'number' && after.manifestVersion >= 1
@@ -538,7 +538,7 @@ async function runScenario(scenario: TestScenario): Promise<boolean> {
 // ── Main ───────────────────────────────────────────────────────
 
 async function main() {
-  console.log('SaaSFoundry Docker Build Tests')
+  console.log('SaaSFoundryAI Docker Build Tests')
   console.log('==============================')
 
   // Ensure workspace exists

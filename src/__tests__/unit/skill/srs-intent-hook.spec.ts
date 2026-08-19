@@ -131,7 +131,7 @@ describe('sf-srs intent-detector hook (#316)', () => {
       expect(r.stdout).toContain('<system-reminder>')
     })
 
-    it('no manifest at all does not silence the hook (works outside SaaSFoundry projects too)', async () => {
+    it('no manifest at all does not silence the hook (works outside SaaSFoundryAI projects too)', async () => {
       const r = await runHook('users should be able to reset their password', { cwd })
       expect(r.code).toBe(0)
       expect(r.stdout).toContain('<system-reminder>')

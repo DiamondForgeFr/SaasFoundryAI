@@ -1,6 +1,6 @@
 # Shipping Your First Ticket
 
-A hands-on walkthrough of the SaaSFoundry workflow, from an idea in your backlog to code merged on `master`. You will drive one real ticket through the full 7-status lifecycle — the same lifecycle
+A hands-on walkthrough of the SaaSFoundryAI workflow, from an idea in your backlog to code merged on `master`. You will drive one real ticket through the full 7-status lifecycle — the same lifecycle
 every contributor on your project uses, human or AI.
 
 **Time required**: ~20 minutes **Prerequisites**: a project generated with `sf new` and a GitHub Project board wired to it (or Jira / Notion / Linear — the flow is identical).

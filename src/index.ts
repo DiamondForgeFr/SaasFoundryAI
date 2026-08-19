@@ -16,10 +16,10 @@ void maybeEmitStaleSkillWarning(process.argv, version)
 
 const program = new Command()
 
-program.name('sf').description('SaaSFoundry CLI - Create and manage your SaaS projects').version(version)
+program.name('sf').description('SaaSFoundryAI CLI - Create and manage your SaaS projects').version(version)
 program
   .command('new')
-  .description('Create a new SaaSFoundry project')
+  .description('Create a new SaaSFoundryAI project')
   .option('--non-interactive', 'Fail if any required value is missing instead of prompting')
   // Intent profile
   .option('--profile <profile>', 'What to install: full (stack + AI harness, default), harness (AI workflow/skills/SRS on an existing project), or stack (technical base only)')
@@ -89,7 +89,7 @@ program
   .action((opts) => newCommand(opts))
 program
   .command('update')
-  .description('Add modules to an existing SaaSFoundry project')
+  .description('Add modules to an existing SaaSFoundryAI project')
   .option('--non-interactive', 'Fail if any required value is missing instead of prompting')
   .option('--dry-run', 'Preview changes as JSON without writing files or running installers')
   .option('--accept-template-updates', 'Auto-apply non-conflicting template updates without prompting')
@@ -117,7 +117,7 @@ program
   .action((opts) => updateCommand(opts))
 program
   .command('modules')
-  .description('Browse the SaaSFoundry module catalogue')
+  .description('Browse the SaaSFoundryAI module catalogue')
   .argument('[subcommand]', 'Subcommand to execute (list, info, match)')
   .argument('[args...]', 'Additional arguments for the subcommand (use --json for machine-readable output)')
   .allowUnknownOption()
@@ -158,14 +158,14 @@ program
   .action((subcommand, args) => skillCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
   .command('feedback')
-  .description('File requests, bugs, and vote on SaaSFoundry proposals')
+  .description('File requests, bugs, and vote on SaaSFoundryAI proposals')
   .argument('[subcommand]', 'Subcommand to execute (request, bug, list, vote)')
   .argument('[args...]', 'Additional arguments for the subcommand')
   .allowUnknownOption()
   .action((subcommand, args) => feedbackCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
   .command('uninstall')
-  .description('Fully remove the SaaSFoundry skill and preferences (--all flag required)')
+  .description('Fully remove the SaaSFoundryAI skill and preferences (--all flag required)')
   .option('--all', 'Remove the skill (user + project scope) and wipe ~/.saasfoundry/')
   .option('-y, --yes', 'Skip the confirmation prompt')
   .action(async (opts) => {

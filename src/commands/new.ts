@@ -452,7 +452,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   // Display success message with all useful URLs
   console.log('\n')
   console.log(chalk.green('='.repeat(80)))
-  console.log(chalk.green.bold(`🚀 Congratulations! Your project "${startProjectAnswers.projectName}" has been successfully set up by SaaSFoundry!`))
+  console.log(chalk.green.bold(`🚀 Congratulations! Your project "${startProjectAnswers.projectName}" has been successfully set up by SaaSFoundryAI!`))
   console.log(chalk.green.bold(`🌍 It's now ready to become the next SaaS that will conquer the world!`))
   console.log(chalk.green.bold(`🧠 "What are we going to do tonight, Brain?" "The same thing we do every night, Pinky - try to take over the world!"`))
   console.log(chalk.green('='.repeat(80)))
@@ -461,7 +461,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   // Display all useful URLs (clickable if terminal supports it)
   console.log(chalk.cyan('📚 Documentation & Resources:'))
   console.log(
-    chalk.gray('  • SaaSFoundry Docs: ') +
+    chalk.gray('  • SaaSFoundryAI Docs: ') +
       terminalLink('https://docs.saasfoundry.io', 'https://docs.saasfoundry.io', { fallback: () => chalk.blue('https://docs.saasfoundry.io') }) +
       chalk.gray(' (coming soon)')
   )

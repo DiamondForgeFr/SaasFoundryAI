@@ -1,12 +1,12 @@
 # Installation
 
-## What is SaaSFoundry?
+## What is SaaSFoundryAI?
 
-SaaSFoundry is an **AI-assisted collaborative development platform** that scaffolds production-ready SaaS projects. It's not an AI-powered app itself, but a platform designed for **Human + AI
+SaaSFoundryAI is an **AI-assisted collaborative development platform** that scaffolds production-ready SaaS projects. It's not an AI-powered app itself, but a platform designed for **Human + AI
 collaboration**.
 
-::: info AI Collaboration SaaSFoundry generates projects optimized for development with Claude Code (Anthropic's AI coding assistant). The generated projects include Claude-powered skills that assist
-with git operations, workflow management, and development tasks. :::
+::: info AI Collaboration SaaSFoundryAI generates projects optimized for development with Claude Code (Anthropic's AI coding assistant). The generated projects include Claude-powered skills that
+assist with git operations, workflow management, and development tasks. :::
 
 ## Prerequisites
 
@@ -68,22 +68,22 @@ cmux
 
 See: [cmux Documentation](https://cmux.dev)
 
-## Install SaaSFoundry CLI
+## Install SaaSFoundryAI CLI
 
-Install SaaSFoundry globally using your preferred package manager:
+Install SaaSFoundryAI globally using your preferred package manager:
 
 ::: code-group
 
 ```bash [npm]
-npm install -g saasfoundry-cli
+npm install -g saasfoundryai-cli
 ```
 
 ```bash [yarn]
-yarn global add saasfoundry-cli
+yarn global add saasfoundryai-cli
 ```
 
 ```bash [pnpm]
-pnpm add -g saasfoundry-cli
+pnpm add -g saasfoundryai-cli
 ```
 
 :::
@@ -100,14 +100,14 @@ You should see the version number printed.
 
 ### For macOS Developers
 
-1. **Install all tools**: Node.js, Claude Code, cmux, SaaSFoundry
+1. **Install all tools**: Node.js, Claude Code, cmux, SaaSFoundryAI
 2. **Create project**: `sf new`
 3. **Launch cmux**: `cd my-project && cmux`
 4. **Work with AI**: Use Claude Code in cmux panes for AI-assisted development
 
 ### For Other Platforms
 
-1. **Install tools**: Node.js, Claude Code, SaaSFoundry
+1. **Install tools**: Node.js, Claude Code, SaaSFoundryAI
 2. **Create project**: `sf new`
 3. **Launch Claude Code**: `cd my-project && claude`
 4. **Work with AI**: Use Claude skills for git, workflow, and development tasks

@@ -66,7 +66,7 @@ function generateCommandMarkdown(cmd: CommandDoc): string {
 const commands: CommandDoc[] = [
   {
     name: 'sf new',
-    description: 'Create a new SaaSFoundry project with interactive prompts, or scripted scaffolding via flags.',
+    description: 'Create a new SaaSFoundryAI project with interactive prompts, or scripted scaffolding via flags.',
     usage: 'sf new [options]',
     options: [
       { flags: '--non-interactive', description: 'Fail if any required value is missing instead of prompting' },
@@ -97,7 +97,7 @@ const commands: CommandDoc[] = [
   },
   {
     name: 'sf update',
-    description: 'Add modules to an existing SaaSFoundry project. Uses a three-way merge to preserve local edits while propagating upstream template evolutions.',
+    description: 'Add modules to an existing SaaSFoundryAI project. Uses a three-way merge to preserve local edits while propagating upstream template evolutions.',
     usage: 'sf update [options]',
     options: [
       { flags: '--non-interactive', description: 'Fail if any required value is missing instead of prompting' },
@@ -124,11 +124,11 @@ const commands: CommandDoc[] = [
       '# Scripted: add email + accept upstream template updates\nsf update --non-interactive \\\n  --add-modules email \\\n  --mailersend-api-key $MAILERSEND_KEY \\\n  --accept-template-updates'
     ],
     notes:
-      '`sf update` is the mechanism for propagating upstream SaaSFoundry evolutions to projects you have already scaffolded — re-run it after upgrading the CLI to pull newer templates, scripts, and skill bundles.'
+      '`sf update` is the mechanism for propagating upstream SaaSFoundryAI evolutions to projects you have already scaffolded — re-run it after upgrading the CLI to pull newer templates, scripts, and skill bundles.'
   },
   {
     name: 'sf modules',
-    description: 'Browse the SaaSFoundry module catalogue, inspect module metadata, and rank modules against a natural-language intent.',
+    description: 'Browse the SaaSFoundryAI module catalogue, inspect module metadata, and rank modules against a natural-language intent.',
     usage: 'sf modules <subcommand> [options]',
     options: [
       { flags: 'list', description: 'List all modules with their installed state' },
@@ -169,7 +169,7 @@ const commands: CommandDoc[] = [
     description: 'File module requests, report bugs against the CLI or generated scaffolds, and vote on community-submitted proposals.',
     usage: 'sf feedback <subcommand> [options]',
     options: [
-      { flags: 'request <name>', description: 'Open a new module-request issue on the SaaSFoundry repo' },
+      { flags: 'request <name>', description: 'Open a new module-request issue on the SaaSFoundryAI repo' },
       { flags: 'bug', description: 'Open a bug report against the CLI or generated scaffolds' },
       { flags: 'list', description: 'List feedback issues (module-requests + cli-bugs + scaffold-bugs)' },
       { flags: 'vote --list', description: 'Show top module requests ranked by 👍 reactions' },
@@ -243,14 +243,14 @@ const commands: CommandDoc[] = [
   },
   {
     name: 'sf uninstall',
-    description: 'Fully remove SaaSFoundry artefacts from the machine — the skill at both scopes plus `~/.saasfoundry/` preferences. Requires `--all`.',
+    description: 'Fully remove SaaSFoundryAI artefacts from the machine — the skill at both scopes plus `~/.saasfoundry/` preferences. Requires `--all`.',
     usage: 'sf uninstall --all [--yes]',
     options: [
       { flags: '--all', description: 'Required: remove skill (user + project scope) and wipe `~/.saasfoundry/`' },
       { flags: '--yes, -y', description: 'Skip the confirmation prompt' }
     ],
-    examples: ['# Fully uninstall SaaSFoundry artefacts\nsf uninstall --all', '# CI-mode (no prompt)\nsf uninstall --all --yes'],
-    notes: 'For per-scope removal, use `sf skill uninstall` instead. `sf uninstall` leaves the npm package itself installed — remove it with `npm uninstall -g saasfoundry-cli`.'
+    examples: ['# Fully uninstall SaaSFoundryAI artefacts\nsf uninstall --all', '# CI-mode (no prompt)\nsf uninstall --all --yes'],
+    notes: 'For per-scope removal, use `sf skill uninstall` instead. `sf uninstall` leaves the npm package itself installed — remove it with `npm uninstall -g saasfoundryai-cli`.'
   }
 ]
 

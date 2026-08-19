@@ -1,11 +1,11 @@
 # Skills Overview
 
-SaaSFoundry bundles a catalogue of **Claude Code skills** with every generated project. Skills are short, focused capabilities that Claude picks up automatically (keyword auto-trigger) or that you
+SaaSFoundryAI bundles a catalogue of **Claude Code skills** with every generated project. Skills are short, focused capabilities that Claude picks up automatically (keyword auto-trigger) or that you
 call explicitly (`/skill-name`). They are the primary way the AI stays consistent with your project's conventions.
 
 ## The `sf-` prefix, and why it matters
 
-Every SaaSFoundry skill is prefixed with `sf-`:
+Every SaaSFoundryAI skill is prefixed with `sf-`:
 
 - `sf-git-commit`, not `git-commit`
 - `sf-tool-atlassian`, not `tool-atlassian`

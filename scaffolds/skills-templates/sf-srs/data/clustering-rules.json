@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/clustering-rules.schema.json",
+  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/clustering-rules.schema.json",
   "version": 1,
   "description": "Stack-agnostic clustering & seeding rules consumed by the sf-srs drafting flow (`srs-cli.sh draft --from codebase`). The finding `kind`s below are CONCEPTS, not frameworks: `endpoint` = any invocable operation boundary (HTTP route, RPC/Tauri command, CLI command, gRPC method, queue/event handler, serverless function); `entity` = any persistent record type (SQL DDL/migrations, any ORM model, a struct backing a store, a protobuf message); `ui-flow` = any user-facing view (web/native/TUI/CLI). The deterministic CLI scanner recognises a SUBSET of stacks today (NestJS controllers, React pages, Prisma models, Jest/Vitest tests) and returns sparse findings on others — when that happens the AGENT supplements by reading the project's own operation/model registry directly (e.g. a Tauri `generate_handler!` list, a Go router, a FastAPI app, SQL migrations). SKILL.md points to this file; edit here, not in prose.",
   "finding_kinds": [

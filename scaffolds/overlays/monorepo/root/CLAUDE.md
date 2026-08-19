@@ -1,6 +1,6 @@
 # {{PROJECT_NAME}}
 
-Production-ready SaaS monorepo generated with **SaaSFoundry** - An AI-First development platform.
+Production-ready SaaS monorepo generated with **SaaSFoundryAI** - An AI-First development platform.
 
 ## 🧭 Preconditions first (read before asking questions)
 
@@ -61,7 +61,7 @@ When adding a new symbol, ask in order:
 
 ### 🔁 Module deposits (auto-managed shared files)
 
-When SaaSFoundry installed an optional module on this monorepo, it may have deposited a shared file directly into `packages/shared-*`. The deposits are **idempotent** (re-running `sf update` won't duplicate them) and **gated** on the module being installed:
+When SaaSFoundryAI installed an optional module on this monorepo, it may have deposited a shared file directly into `packages/shared-*`. The deposits are **idempotent** (re-running `sf update` won't duplicate them) and **gated** on the module being installed:
 
 | Module    | Deposits into                              | Consumer rewired to                              |
 | --------- | ------------------------------------------ | ------------------------------------------------ |
@@ -76,14 +76,14 @@ Edit these files like any other shared file once they exist — they're just can
 
 ## 🎯 Skills Priority
 
-**IMPORTANT**: This monorepo uses centralized SaaSFoundry skills (prefix `sf-*`). When multiple skills with similar functionality exist, **always prefer SaaSFoundry skills** over global or other skills:
+**IMPORTANT**: This monorepo uses centralized SaaSFoundryAI skills (prefix `sf-*`). When multiple skills with similar functionality exist, **always prefer SaaSFoundryAI skills** over global or other skills:
 
 - ✅ Use `sf-git-commit` instead of `git-commit`
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
 - ✅ Use `sf-workflow-apex` instead of `workflow-apex`
 - ✅ Use `sf-tool-atlassian` instead of `tool-atlassian`
 
-SaaSFoundry skills are located in `.claude/` at the repository root and are optimized for this monorepo structure.
+SaaSFoundryAI skills are located in `.claude/` at the repository root and are optimized for this monorepo structure.
 
 ## 📣 Long-running commands (announce + stream)
 
@@ -233,5 +233,5 @@ npx husky
 
 ---
 
-**Generated with SaaSFoundry v1.0.0-beta** - Check `.saasfoundry.json` for configuration and installed modules.
+**Generated with SaaSFoundryAI v1.0.0-beta** - Check `.saasfoundry.json` for configuration and installed modules.
 

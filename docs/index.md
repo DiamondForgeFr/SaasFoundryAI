@@ -1,7 +1,7 @@
 ---
 layout: home
 hero:
-  name: SaaSFoundry
+  name: SaaSFoundryAI
   text: Production SaaS, built for human + AI teams.
   tagline: Scaffold a professional NestJS + React + PostgreSQL project in minutes — then ship features with guardrails that keep every contributor, human or AI, on the same workflow.
   actions:
@@ -13,7 +13,7 @@ hero:
       link: /workflow/introduction
     - theme: alt
       text: GitHub
-      link: https://github.com/DiamondForgeFr/SaaSFoundry
+      link: https://github.com/DiamondForgeFr/SaaSFoundryAI
 
 features:
   - icon: 🚀
@@ -54,17 +54,17 @@ features:
 
 ## Built for teams that care about code quality — with or without AI
 
-SaaSFoundry is not an AI wrapper. It is a **professional scaffold + workflow contract** that works perfectly well with a team of humans only, and **scales gracefully when AI agents join the team**.
+SaaSFoundryAI is not an AI wrapper. It is a **professional scaffold + workflow contract** that works perfectly well with a team of humans only, and **scales gracefully when AI agents join the team**.
 
-Whether you are a freelancer starting a new client project, a CTO bootstrapping a product, or a team bringing Claude Code into an existing engineering workflow — SaaSFoundry gives you the same thing:
-a codebase and a process your whole team can trust.
+Whether you are a freelancer starting a new client project, a CTO bootstrapping a product, or a team bringing Claude Code into an existing engineering workflow — SaaSFoundryAI gives you the same
+thing: a codebase and a process your whole team can trust.
 
 ### The core idea
 
 Traditional engineering workflows put all the guardrails at the pull request. That works when a reviewer can mentally simulate what the author intended. It breaks down the moment part of the work is
 done by an AI agent that has no memory of prior decisions.
 
-**SaaSFoundry inverts the model: the guardrails live in the workflow itself.** By the time a pull request exists, the code has already been planned, reviewed, tested, and validated — by both humans
+**SaaSFoundryAI inverts the model: the guardrails live in the workflow itself.** By the time a pull request exists, the code has already been planned, reviewed, tested, and validated — by both humans
 and automation.
 
 ```text
@@ -95,7 +95,7 @@ Your AI agent does not invent its own task tracker. It uses the tool **you** alr
 | ClickUp         | All-in-one PM for ops-heavy teams.                      | On the roadmap  |
 
 ::: info Tool support today The AI workflow currently ships against **GitHub Projects**. Jira, Notion, Linear and ClickUp adapters are next on the roadmap — the workflow engine is already
-tool-agnostic, only the per-board glue needs to land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundry/issues). :::
+tool-agnostic, only the per-board glue needs to land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundryAI/issues). :::
 
 You get human-readable tickets, standard board columns, and a paper trail a non-technical stakeholder can follow. **Your AI agent creates sub-issues, moves statuses, opens PRs and leaves comments —
 exactly like a developer would.** Human checkpoints sit at the natural transitions (Ready, Human testing, In review), so a person always confirms before code leaves the team's hands.
@@ -112,7 +112,7 @@ sf new my-saas          # choose topology, modules, workflow tool
 # 2. Ship your first ticket end-to-end
 sf workflow              # walk through Backlog → Done for a real ticket
 
-# 3. Stay current as SaaSFoundry evolves
+# 3. Stay current as SaaSFoundryAI evolves
 sf update                # receive upstream improvements, add modules, resolve conflicts
 ```
 
@@ -120,11 +120,11 @@ Every command respects the same `.saasfoundry.json` configuration — so the wor
 
 ## Ready to try?
 
-- **[Install SaaSFoundry →](/getting-started/installation)** — two commands, 60 seconds.
+- **[Install SaaSFoundryAI →](/getting-started/installation)** — two commands, 60 seconds.
 - **[Ship your first ticket →](/getting-started/first-project)** — a complete walk-through with a real example.
 - **[Read the philosophy →](/workflow/introduction)** — why this workflow exists and how it stays honest.
 
 ---
 
-::: tip Dogfooded end to end SaaSFoundry is built using its own workflow. Every feature you see here was shipped through the same 7-status lifecycle your generated projects will use. If it breaks for
-us, we notice before it breaks for you. :::
+::: tip Dogfooded end to end SaaSFoundryAI is built using its own workflow. Every feature you see here was shipped through the same 7-status lifecycle your generated projects will use. If it breaks
+for us, we notice before it breaks for you. :::

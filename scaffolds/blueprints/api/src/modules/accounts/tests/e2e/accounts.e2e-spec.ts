@@ -70,7 +70,7 @@ describe('Accounts Module (e2e)', () => {
 
     // Set up test user with necessary roles and permissions
     testUser = await setupTestUser(prismaService, {
-      email: 'accounttest@SaaSFoundry.test',
+      email: 'accounttest@SaaSFoundryAI.test',
       password: 'TestPassword123',
       firstname: 'Account',
       lastname: 'Manager',
@@ -82,7 +82,7 @@ describe('Accounts Module (e2e)', () => {
 
     // Set up second test user
     testUser2 = await setupTestUser(prismaService, {
-      email: 'testuser@SaaSFoundry.test',
+      email: 'testuser@SaaSFoundryAI.test',
       password: 'TestPassword123',
       firstname: 'Test',
       lastname: 'User',

@@ -1,7 +1,7 @@
 {
   "name": "{{PROJECT_NAME}}-web",
   "version": "1.0.0",
-  "description": "{{PROJECT_NAME}} is just an amazing SaaSFoundry project",
+  "description": "{{PROJECT_NAME}} is just an amazing SaaSFoundryAI project",
   "type": "module",
   "private": true,
   "repository": {

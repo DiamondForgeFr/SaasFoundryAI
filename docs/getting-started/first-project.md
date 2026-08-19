@@ -1,12 +1,12 @@
 # First Project
 
-A comprehensive walkthrough of creating your first SaaS project with SaaSFoundry.
+A comprehensive walkthrough of creating your first SaaS project with SaaSFoundryAI.
 
 ## What You'll Build
 
 In this guide, you'll:
 
-1. Create a new SaaSFoundry project
+1. Create a new SaaSFoundryAI project
 2. Understand the generated structure
 3. Run the development environment
 4. Create a custom API endpoint
@@ -37,7 +37,7 @@ Answer the prompts as follows (for this tutorial):
 → my-first-saas
 
 ? What is the description of your project?
-→ My first SaaSFoundry project (press Enter)
+→ My first SaaSFoundryAI project (press Enter)
 
 ? Which main branch name do you prefer?
 → main
@@ -619,7 +619,7 @@ Replace `#1` with the ticket number from your issue tracker. Husky's `commit-msg
 
 Congratulations! 🎉 You've successfully:
 
-- ✅ Created a SaaSFoundry project
+- ✅ Created a SaaSFoundryAI project
 - ✅ Added a custom API endpoint
 - ✅ Built a frontend page
 - ✅ Made your first commit

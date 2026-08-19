@@ -96,7 +96,7 @@ export async function getEmailModuleCredentials(
 
   if (!nonInteractive) {
     console.log(chalk.yellow('\nYou need a MailerSend account to get your API key.'))
-    console.log(chalk.yellow('Note: The following link is an affiliate link. We appreciate your support of the SaaSFoundry project by signing up through this link.'))
+    console.log(chalk.yellow('Note: The following link is an affiliate link. We appreciate your support of the SaaSFoundryAI project by signing up through this link.'))
     console.log(chalk.yellow('Opening https://www.mailersend.com?ref=52o9lkySkTka in your browser in few seconds...'))
 
     await new Promise((resolve) => setTimeout(resolve, 4000))

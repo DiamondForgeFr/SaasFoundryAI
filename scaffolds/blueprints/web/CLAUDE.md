@@ -1,6 +1,6 @@
 # {{PROJECT_NAME}} Web
 
-Production-ready React application generated with **SaaSFoundry** - An AI-First development platform.
+Production-ready React application generated with **SaaSFoundryAI** - An AI-First development platform.
 
 ## 🧭 Preconditions first (read before asking questions)
 
@@ -23,14 +23,14 @@ Before asking the user anything about scope, backend, or module choices, **read 
 
 ## 🎯 Skills Priority
 
-**IMPORTANT**: This project uses SaaSFoundry skills (prefix `sf-*`). When multiple skills with similar functionality exist, **always prefer SaaSFoundry skills** over global or other skills:
+**IMPORTANT**: This project uses SaaSFoundryAI skills (prefix `sf-*`). When multiple skills with similar functionality exist, **always prefer SaaSFoundryAI skills** over global or other skills:
 
 - ✅ Use `sf-git-commit` instead of `git-commit`
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
 - ✅ Use `sf-utils-oneshot` instead of `utils-oneshot`
 - ✅ Use `sf-tool-figma` instead of `tool-figma`
 
-SaaSFoundry skills are specifically optimized for this project's structure, conventions, and workflows.
+SaaSFoundryAI skills are specifically optimized for this project's structure, conventions, and workflows.
 
 ## Project Structure
 
@@ -106,7 +106,7 @@ topology:
 
 - **In a monorepo** (root has `packages/`):
   - `src/shared-types/` and `src/shared-validation/` are mirrored from `<root>/packages/shared-{types,validation}/src/` — **edit hand-written files in all three places** (canonical + both apps'
-    mirrors). The SaaSFoundry CLI's drift-guard tests block divergence.
+    mirrors). The SaaSFoundryAI CLI's drift-guard tests block divergence.
   - **ShadCN primitives** are not in `src/components/ui/shadcn/` — they live in the workspace package and are imported as `@<root-package-name>/ui-primitives/<name>` (see `package.json`). The Tailwind
     theme is pulled in via `@import "@<root-package-name>/ui-primitives/theme.css"` in `src/index.css`. App-specific compositions (logos, page-loaders, business widgets) stay under `src/components/`.
   - **Typed API client**: `@<root-package-name>/api-client/generated/api/<tag>/<tag>` exposes `useXxx` React Query hooks generated from the API's OpenAPI snapshot.
@@ -115,7 +115,7 @@ topology:
   - Vendored `src/shared-{types,validation}/` are the only copies.
   - **ShadCN primitives** live in `src/components/ui/shadcn/` (vendored from the same canonical source as the mono `ui-primitives` package — drift-guarded by the CLI).
   - No generated API client — hand-write React Query hooks under `src/hooks/api/`.
-  - Module-shared values (storage MIME list, email envelope, …) are inlined per side; keep them stable — the SaaSFoundry CLI's docker assertions enforce the inlined shape.
+  - Module-shared values (storage MIME list, email envelope, …) are inlined per side; keep them stable — the SaaSFoundryAI CLI's docker assertions enforce the inlined shape.
 
 Run `sf status --claude-friendly --no-network` to confirm topology before changing shared shapes.
 
@@ -353,11 +353,11 @@ test('user can login', async ({ page }) => {
 
 ## Important Notes
 
-- This is a **generated project** from SaaSFoundry v1.0.0-beta
+- This is a **generated project** from SaaSFoundryAI v1.0.0-beta
 - Check `.saasfoundry.json` for installed modules and configuration
 - Update this CLAUDE.md as your project evolves
 - Add new components to ShadCN collection as needed
 
 ---
 
-**Need help?** Check the [SaaSFoundry documentation](https://github.com/DiamondForgeFr/SaaSFoundry) or use Claude Code skills for assistance.
+**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaaSFoundryAI) or use Claude Code skills for assistance.

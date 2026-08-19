@@ -75,7 +75,7 @@ abc1234").
 A slim, context-aware conflict resolver for the rare cases where `git merge` bails out. It reads the conflict hunks, consults `.saasfoundry.json` for branch semantics (working vs release), and
 proposes resolutions — the user approves before anything is written.
 
-Not intended as a magic merge button. Most merges in a SaaSFoundry project never produce conflicts because the team rebases rather than merges day-to-day. Reach for this skill when rebasing a
+Not intended as a magic merge button. Most merges in a SaaSFoundryAI project never produce conflicts because the team rebases rather than merges day-to-day. Reach for this skill when rebasing a
 long-lived feature branch onto a fast-moving `develop`.
 
 ## `sf-utils-fix-errors`

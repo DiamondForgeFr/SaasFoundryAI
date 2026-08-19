@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundry/master/schemas/detect-eval-signals-rules.schema.json",
+  "$id": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/detect-eval-signals-rules.schema.json",
   "title": "sf-srs detect-eval-signals --rules output",
   "description": "Shape of the JSON emitted by `.claude/skills/sf-srs/scripts/detect-eval-signals.sh --rules`. Pinned by #287 so the conversational eval hook contract is verifiable at commit time.",
   "type": "object",

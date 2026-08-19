@@ -34,7 +34,7 @@ describeIntegration('NotionSrsAdapter (integration, sandbox)', () => {
     cleanupClient = new Client({ auth: apiToken, notionVersion })
 
     epicSpec = {
-      title: `SaaSFoundry integration test Epic ${Date.now()}`,
+      title: `SaaSFoundryAI integration test Epic ${Date.now()}`,
       parentPageId: sandboxParentPageId,
       businessValue: 'Automated sandbox run — safe to archive.',
       scope: 'Exercises create → fetch → list → update → archive path.',

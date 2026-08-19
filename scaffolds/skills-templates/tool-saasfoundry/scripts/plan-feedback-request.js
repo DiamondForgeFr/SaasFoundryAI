@@ -53,10 +53,10 @@ const CRITERIA = ['scopeFit', 'reusability', 'notAlreadySolvable', 'opinionOwner
 const ANSWERS = new Set(['yes', 'no', 'unclear'])
 
 const REFUSAL_REASONS = {
-  scopeFit: 'Out of SaaSFoundry scope — the skill should not file a request for a feature that does not belong in the SaaS baseline.',
+  scopeFit: 'Out of SaaSFoundryAI scope — the skill should not file a request for a feature that does not belong in the SaaS baseline.',
   reusability: 'Low reusability — at least 3 unrelated projects should plausibly want this before it earns a slot in the catalogue.',
   notAlreadySolvable: 'Already solvable — an existing module or a small custom implementation covers this cleanly; no new module warranted.',
-  opinionOwnership: 'No strong opinion — SaaSFoundry modules are opinionated; without a clear "right way" the module would drift.',
+  opinionOwnership: 'No strong opinion — SaaSFoundryAI modules are opinionated; without a clear "right way" the module would drift.',
   maintenanceRealism: 'Maintenance risk — vendor churn, heavy deps, or fragile upstream makes long-term ownership unrealistic.'
 }
 

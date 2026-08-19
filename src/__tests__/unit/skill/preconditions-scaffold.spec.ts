@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 
-// Regression guard for #243: every CLAUDE.md shipped by a SaaSFoundry scaffold
+// Regression guard for #243: every CLAUDE.md shipped by a SaaSFoundryAI scaffold
 // must carry the "Preconditions first" directive, and every scaffolded
 // `.claude/` must ship a `settings.json` wiring a SessionStart hook that calls
 // `sf status --claude-friendly`. If a new blueprint or overlay forgets either,

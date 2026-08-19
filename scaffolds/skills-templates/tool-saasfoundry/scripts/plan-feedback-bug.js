@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 
-// Classifies a passively-observed (or user-initiated) SaaSFoundry failure into
+// Classifies a passively-observed (or user-initiated) SaaSFoundryAI failure into
 // a bug-report intent the skill can speak from. Performs NO mutations and NO
 // network calls — just label routing, stderr redaction, and command planning.
 //

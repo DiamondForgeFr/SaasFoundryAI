@@ -190,7 +190,7 @@
     "s3Setup": {
       "docker": "Default for local development — spins up MinIO via docker-compose.",
       "credentials": "Choose for staging/prod against AWS S3 or an S3-compatible provider (R2, Backblaze, DigitalOcean Spaces).",
-      "manual": "Choose when infra is provisioned outside SaaSFoundry and credentials come from an external secret manager."
+      "manual": "Choose when infra is provisioned outside SaaSFoundryAI and credentials come from an external secret manager."
     },
     "analytics": {
       "true": "Recommend when tracking user activity or business metrics matters early. Installs a privacy-respecting analytics module.",

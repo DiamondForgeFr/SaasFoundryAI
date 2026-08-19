@@ -3,7 +3,7 @@
  *
  * In a multirepo project, the theme tokens (Tailwind v4 @theme + light/dark
  * CSS variables + custom utilities) are inlined directly here. The monorepo
- * variant of SaaSFoundry imports the same content from
+ * variant of SaaSFoundryAI imports the same content from
  * `@<project>/ui-primitives/theme.css` instead.
  *
  * Theme: Warm Editorial · Sora + Mulish · Radius 2px

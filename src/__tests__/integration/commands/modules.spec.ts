@@ -60,7 +60,7 @@ describe('modulesCommand (integration)', () => {
     it('should print the catalogue in human mode', async () => {
       await modulesCommand('list')
       const output = getAllLogOutput()
-      expect(output).toContain('SaaSFoundry Module Catalogue')
+      expect(output).toContain('SaaSFoundryAI Module Catalogue')
       expect(output).toContain('email')
       expect(output).toContain('storage')
       expect(output).toContain('analytics')
@@ -194,7 +194,7 @@ describe('modulesCommand (integration)', () => {
     it('should show help when no subcommand is given', async () => {
       await modulesCommand()
       const output = getAllLogOutput()
-      expect(output).toContain('SaaSFoundry Modules')
+      expect(output).toContain('SaaSFoundryAI Modules')
       expect(output).toContain('Usage:')
     })
 

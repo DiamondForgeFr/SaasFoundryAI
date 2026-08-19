@@ -46,7 +46,7 @@ Per the API contract (`docs/api-errors.md`) and the design of `RegisterForm`, a 
 ## Environment / Configuration
 
 - Affected: `web/` frontend, `RegisterForm.tsx`
-- Versions: `saasfoundry-cli 1.0.0-beta`, generated project uses `react 19.0.0`, `react-hook-form 7.56.0`
+- Versions: `saasfoundryai-cli 1.0.0-beta`, generated project uses `react 19.0.0`, `react-hook-form 7.56.0`
 - Browsers: reproduced on Chrome 133, Firefox 138, Safari 18 — not browser-specific
 - API: NestJS backend, `409 / E_EMAIL_TAKEN` confirmed correct via `curl`
 

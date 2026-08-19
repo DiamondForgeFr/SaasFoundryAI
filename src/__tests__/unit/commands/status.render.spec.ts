@@ -44,7 +44,7 @@ describe('renderJson', () => {
 describe('renderClaudeFriendly', () => {
   it('emits markdown with the usage block and status lines', () => {
     const out = renderClaudeFriendly({ report: makeReport(), preconditions: [okPrecondition, failPrecondition] })
-    expect(out).toContain('# SaaSFoundry project status')
+    expect(out).toContain('# SaaSFoundryAI project status')
     expect(out).toContain('- [ok] Manifest present')
     expect(out).toContain('- [fail] Manifest present')
     expect(out).toContain('remediation: Run sf new')
@@ -53,7 +53,7 @@ describe('renderClaudeFriendly', () => {
 
   it('handles missing manifest gracefully', () => {
     const out = renderClaudeFriendly({ report: makeReport({ manifest: null }), preconditions: [failPrecondition] })
-    expect(out).toContain('NOT a SaaSFoundry project')
+    expect(out).toContain('NOT a SaaSFoundryAI project')
   })
 })
 

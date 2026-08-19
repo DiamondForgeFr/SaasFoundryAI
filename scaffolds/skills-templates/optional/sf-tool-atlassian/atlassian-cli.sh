@@ -13,7 +13,7 @@ load_credentials() {
   local CREDENTIALS_DIR="$HOME/.claude/credentials/$TOOL_NAME"
   local MANIFEST_PATH=".saasfoundry.json"
 
-  # Check if we're in a SaaSFoundry project
+  # Check if we're in a SaaSFoundryAI project
   if [[ -f "$MANIFEST_PATH" ]]; then
     # Read configured account from manifest
     ACCOUNT_NAME=$(python3 -c "

@@ -1,6 +1,6 @@
 # sf modules
 
-Browse the SaaSFoundry module catalogue, inspect module metadata, and rank modules against a natural-language intent.
+Browse the SaaSFoundryAI module catalogue, inspect module metadata, and rank modules against a natural-language intent.
 
 ## Usage
 

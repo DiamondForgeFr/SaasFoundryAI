@@ -14,7 +14,7 @@ The email module wires a production-grade transactional email provider into the 
 
 ## What the module actually ships
 
-Every SaaSFoundry-generated project already contains the scaffolding for transactional email: the `EmailService`, the translation layer, and the six templates (HTML + text for each of the three
+Every SaaSFoundryAI-generated project already contains the scaffolding for transactional email: the `EmailService`, the translation layer, and the six templates (HTML + text for each of the three
 flows). What the module **adds** is the piece that puts bytes on the wire:
 
 - **`MailerSendService`** — a thin wrapper around the `mailersend` npm SDK, wired with your API key and sender identity

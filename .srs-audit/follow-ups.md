@@ -1,6 +1,6 @@
 # SRS Capstone #203 — Follow-ups
 
-Consolidated lessons learned from the SaaSFoundry self-audit. Each entry becomes a sub-issue under a new parent ticket (per #203 exit condition: "Any blocker bugs opened as follow-up tickets under a
+Consolidated lessons learned from the SaaSFoundryAI self-audit. Each entry becomes a sub-issue under a new parent ticket (per #203 exit condition: "Any blocker bugs opened as follow-up tickets under a
 new parent (not #57)").
 
 Generated: 2026-04-23 · audit ran on commit of branch `feature/203-srs-audit-capstone`.
@@ -32,10 +32,10 @@ category served no purpose (single hardcoded key, no extensibility) and conflict
 
 ### 3. Scan defaults ratisse scaffolds/ and docs/ — dominates findings with template code
 
-**Where:** `src/srs/bin/codebase-scan.ts` (walks from CWD) **What:** `draft --from codebase` without `--path` scans the whole repo. In SaaSFoundry, that pulls 291 findings from `scaffolds/` (template
-code shipped to users, not a feature of the CLI) and 1104 `doc-context` findings from `docs/`, `README.md`, `.claude/` — drowning the CLI's own `src/` (83 findings). **Evidence:** full-repo scan =
-1246 findings, 94% noise; `src/`-only scan = 83 findings, all relevant. **Fix direction:** Add a project-aware `.srsignore` (or exclusion rules in `.saasfoundry.json`) so CLI/library projects can
-opt-out of `scaffolds/`, `docs/`, `.claude/` by default. Document the pattern in `sf-srs/SKILL.md`.
+**Where:** `src/srs/bin/codebase-scan.ts` (walks from CWD) **What:** `draft --from codebase` without `--path` scans the whole repo. In SaaSFoundryAI, that pulls 291 findings from `scaffolds/`
+(template code shipped to users, not a feature of the CLI) and 1104 `doc-context` findings from `docs/`, `README.md`, `.claude/` — drowning the CLI's own `src/` (83 findings). **Evidence:** full-repo
+scan = 1246 findings, 94% noise; `src/`-only scan = 83 findings, all relevant. **Fix direction:** Add a project-aware `.srsignore` (or exclusion rules in `.saasfoundry.json`) so CLI/library projects
+can opt-out of `scaffolds/`, `docs/`, `.claude/` by default. Document the pattern in `sf-srs/SKILL.md`.
 
 ---
 

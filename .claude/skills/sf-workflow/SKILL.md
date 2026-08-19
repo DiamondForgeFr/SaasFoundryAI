@@ -49,7 +49,7 @@ integration test on freshly merged `develop`), not on each child. Tag the Epic i
 
 ## 🧩 Ticket Hierarchy (Epic / Story-Task / Subtask)
 
-SaaSFoundry uses a **three-level ticket hierarchy** — Epics produce **no PR**, Subtasks are **not GitHub issues**.
+SaaSFoundryAI uses a **three-level ticket hierarchy** — Epics produce **no PR**, Subtasks are **not GitHub issues**.
 
 ```
 (Epic)          optional grouper

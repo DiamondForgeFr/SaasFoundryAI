@@ -149,7 +149,7 @@ srs-cli.sh eval
 ```
 
 Every action honours a shared exit-code contract (`0` success, `2` bad input, `3` missing backend, `4` unknown backend, `5` runtime, `6` partial write, `7` pendingIngestion clear failed). See the
-skill's [`SKILL.md`](https://github.com/DiamondForgeFr/SaaSFoundry/blob/develop/.claude/skills/sf-srs/SKILL.md) for the full contract.
+skill's [`SKILL.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md) for the full contract.
 
 ### Spec-to-ticket bridge (Rule 8)
 

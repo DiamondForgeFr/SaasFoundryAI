@@ -3,7 +3,7 @@ import path from 'path'
 
 // Drift guard for tool skills whose in-repo dogfooding copy must stay
 // byte-identical with the scaffolded template shipped to new projects.
-// If a developer fixes a bug in one copy and forgets the other, new SaaSFoundry
+// If a developer fixes a bug in one copy and forgets the other, new SaaSFoundryAI
 // users inherit the old broken version — that's exactly the kind of silent
 // regression that sparked the #135 refactor, so we fail loudly at commit time.
 const PAIRS = [

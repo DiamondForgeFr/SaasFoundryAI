@@ -99,10 +99,10 @@ describe('skill/bootstrap-scripts', () => {
   })
 
   describe('bootstrap-cli.sh', () => {
-    it('falls back to `npx saasfoundry-cli` when sf is not on PATH', async () => {
+    it('falls back to `npx saasfoundryai-cli` when sf is not on PATH', async () => {
       const { stdout, code } = await run('bootstrap-cli.sh', { ...process.env, PATH: minimalPath })
       expect(code).toBe(0)
-      expect(stdout.trim()).toBe('npx saasfoundry-cli')
+      expect(stdout.trim()).toBe('npx saasfoundryai-cli')
     })
 
     it('returns a single non-empty line', async () => {

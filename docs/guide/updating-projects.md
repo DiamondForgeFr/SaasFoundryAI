@@ -1,7 +1,7 @@
 # Updating Projects
 
-`sf update` is how a project you generated weeks or months ago stays in sync with SaaSFoundry as the platform evolves. It propagates new templates, scripts, and skill bundles — without overwriting the
-changes you have made to your code.
+`sf update` is how a project you generated weeks or months ago stays in sync with SaaSFoundryAI as the platform evolves. It propagates new templates, scripts, and skill bundles — without overwriting
+the changes you have made to your code.
 
 This page explains **what `sf update` does, what it does not touch, and how to resolve conflicts when they occur**.
 
@@ -17,7 +17,7 @@ Both flows are driven by the manifest, never by guessing. If `.saasfoundry.json`
 
 ## The three-way merge
 
-The template update is the non-trivial part. SaaSFoundry treats your project as a three-way merge:
+The template update is the non-trivial part. SaaSFoundryAI treats your project as a three-way merge:
 
 | Input       | What it is                                                                  | Where it comes from                       |
 | ----------- | --------------------------------------------------------------------------- | ----------------------------------------- |
@@ -67,7 +67,7 @@ sf update --dry-run --add-modules email
 Sample output:
 
 ```text
-  SaaSFoundry Project Update
+  SaaSFoundryAI Project Update
   ────────────────────────────────────────
   Project:         my-saas-app
   Structure:       monorepo
@@ -165,7 +165,7 @@ git checkout -b backup/pre-sf-update
 git checkout -
 
 # 2. Upgrade the CLI
-npm install -g saasfoundry-cli@latest
+npm install -g saasfoundryai-cli@latest
 
 # 3. Preview what would change
 sf update --dry-run
@@ -201,10 +201,10 @@ Be clear about the boundaries:
 
 ## Troubleshooting
 
-### "Your project was generated with SaaSFoundry v{X} (before hash tracking)"
+### "Your project was generated with SaaSFoundryAI v{X} (before hash tracking)"
 
-Projects generated with early SaaSFoundry versions don't have `fileHashes` in their manifest. Template updates are skipped — only the module addition flow runs. To opt back in, regenerate `fileHashes`
-by running `sf new` into a temp directory with the same options, copying the `fileHashes` block over, and committing.
+Projects generated with early SaaSFoundryAI versions don't have `fileHashes` in their manifest. Template updates are skipped — only the module addition flow runs. To opt back in, regenerate
+`fileHashes` by running `sf new` into a temp directory with the same options, copying the `fileHashes` block over, and committing.
 
 ### All my files show up as conflicts
 
