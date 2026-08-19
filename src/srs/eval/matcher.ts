@@ -29,12 +29,38 @@ function normalizeArea(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
+// Conservative singularisation — enough for the plural/singular mismatch between FR area
+// tokens ("commands") and scanner areas ("new-command"), without pulling in a stemmer.
+function singularize(segment: string): string {
+  if (segment.length > 3 && segment.endsWith('ies')) return `${segment.slice(0, -3)}y`
+  if (segment.length > 2 && segment.endsWith('s') && !segment.endsWith('ss')) return segment.slice(0, -1)
+  return segment
+}
+
+// Scanner areas are structural names and carry their qualifier in a separate segment
+// ("new-command", "api.builder", "module-registry"); FR area tokens are the bare concept
+// ("commands", "builders", "modules"). Compare segment sets, not raw strings.
+function areaSegments(raw: string): string[] {
+  return normalizeArea(raw)
+    .split(/[-._/\s]+/)
+    .filter(Boolean)
+    .map(singularize)
+}
+
 function areaMatchesToken(findingArea: string, frToken: string): boolean {
-  if (findingArea === frToken) return true
-  // Prefix tolerance: scanner areas are folder names, FR areas are tokens
-  // embedded in FR IDs — "accounts" / "account" should match either way.
-  if (findingArea.startsWith(frToken) || frToken.startsWith(findingArea)) return true
-  return false
+  if (normalizeArea(findingArea) === normalizeArea(frToken)) return true
+  // Every segment of the FR token must be present in the finding's segments. This bridges
+  // "commands" <-> "new-command" and "builders" <-> "api.builder", while a multi-segment token
+  // like "config-engine" still requires BOTH segments, so it cannot absorb an unrelated area.
+  //
+  // This replaces the previous prefix tolerance, which could not bridge a suffix mismatch at all
+  // (hence 15 false `fr-without-code`) and over-matched in the other direction — "auth" was a
+  // prefix of "author". Singularisation covers the "accounts"/"account" case that tolerance
+  // originally existed for.
+  const findingSegments = new Set(areaSegments(findingArea))
+  const frSegments = areaSegments(frToken)
+  if (frSegments.length === 0) return false
+  return frSegments.every((segment) => findingSegments.has(segment))
 }
 
 function frAreaCandidates(fr: SrsFrEntry): string[] {
