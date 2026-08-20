@@ -144,6 +144,31 @@ describe('newCommand (--profile integration)', () => {
     expect(failing).toEqual([])
   })
 
+  // Covers the S4 scenarios of #514, which were only validated by hand: a fresh
+  // project must carry the block, and the flag must reach all three surfaces.
+  it('writes the language block at English defaults when --language is not passed', async () => {
+    await newCommand({ nonInteractive: true, profile: 'harness', projectName: 'acme', mainBranch: 'main' })
+
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest.language).toEqual({ srs: 'en', tickets: 'en', codeComments: 'en' })
+  })
+
+  it('applies --language to all three surfaces', async () => {
+    await newCommand({ nonInteractive: true, profile: 'harness', projectName: 'acme', mainBranch: 'main', language: 'fr' })
+
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest.language).toEqual({ srs: 'fr', tickets: 'fr', codeComments: 'fr' })
+  })
+
+  // The stack profile never sees the question — its manifest must still carry
+  // the block, or a later `sf update` would be the first to introduce it.
+  it('stack profile carries the block at English defaults despite skipping the step', async () => {
+    await newCommand(stackOpts)
+
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest.language).toEqual({ srs: 'en', tickets: 'en', codeComments: 'en' })
+  })
+
   it('harness profile refuses to run when a manifest already exists', async () => {
     const { writeFile: write } = jest.requireActual<typeof import('fs/promises')>('fs/promises')
     await write(join(tempDir, '.saasfoundry.json'), '{"structure":"cli","projectName":"x","version":"1.0.0"}')
