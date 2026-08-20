@@ -43,6 +43,7 @@ export interface NewCommandOptions {
 
   // Analytics
   analytics?: boolean
+  pwa?: boolean
 
   // Advanced skills
   advancedSkills?: string
@@ -132,6 +133,12 @@ export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answer
   if (Object.keys(s3Creds).length > 0) prefill.s3Credentials = s3Creds as S3Credentials
 
   if (opts.analytics !== undefined) prefill.includeAnalytics = opts.analytics
+  // Default-on module. In --non-interactive the config session throws on any unfilled field
+  // rather than applying the step's `default`, so the default has to be materialised here —
+  // same shape as `profile` above. Without this, every scripted `sf new` would be forced to
+  // pass a flag just to get the documented default behaviour.
+  if (opts.pwa !== undefined) prefill.includePwa = opts.pwa
+  else if (opts.nonInteractive === true) prefill.includePwa = true
 
   if (opts.advancedSkills !== undefined) {
     prefill.advancedSkills = opts.advancedSkills

@@ -36,28 +36,10 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --list)
-      echo "Available scenarios (ordered by priority):"
-      echo ""
-      echo "  #  Name                        Type        Structure"
-      echo "  -- --------------------------  ----------  ----------"
-      echo "   1 multirepo-minimal           generation  multirepo"
-      echo "   2 monorepo-minimal            generation  monorepo"
-      echo "   3 multirepo-full              generation  multirepo"
-      echo "   4 monorepo-full               generation  monorepo"
-      echo "   5 update-add-all-modules      update      monorepo"
-      echo "   6 update-add-email            update      multirepo"
-      echo "   7 ai-multirepo-skills         ai          multirepo"
-      echo "   8 ai-monorepo-skills          ai          monorepo"
-      echo "   9 ai-workflow-config          ai          multirepo"
-      echo "  10 multirepo-email-only        generation  multirepo"
-      echo "  11 multirepo-storage-only      generation  multirepo"
-      echo "  12 multirepo-analytics-only    generation  multirepo"
-      echo "  13 multirepo-email-storage     generation  multirepo"
-      echo "  14 monorepo-email-analytics    generation  monorepo"
-      echo "  15 monorepo-storage-analytics  generation  monorepo"
-      echo "  16 update-add-email-monorepo   update      monorepo"
-      echo "  17 update-add-storage          update      multirepo"
-      echo "  18 update-add-analytics        update      multirepo"
+      # Single source of truth: the list is rendered from scenarios.ts. It used to be 18
+      # hardcoded `echo` lines that silently drifted — the runner executed 19 while --list
+      # advertised 18, hiding a whole scenario from anyone reading the CLI (#426).
+      npx tsx "$SCRIPT_DIR/list-scenarios.ts"
       exit 0
       ;;
     --help)
@@ -69,7 +51,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --list               Show all scenarios with priority order"
       echo ""
       echo "Examples:"
-      echo "  $0                   # All 18 scenarios"
+      echo "  $0                   # All scenarios"
       echo "  $0 --count 2         # Top 2: multirepo-minimal + monorepo-minimal"
       echo "  $0 --count 6         # Top 6: minimals + fulls + key updates"
       echo "  $0 --scenario monorepo-full"

@@ -14,6 +14,7 @@ import { join } from 'path'
 
 import {
   assertApiBuildOutput,
+  assertPwaBuildOutput,
   assertClaudeMdConfigured,
   assertMonorepoBuildOutput,
   assertMonorepoSharedPackages,
@@ -124,7 +125,8 @@ async function generateProject(scenario: GenerationScenario | (UpdateScenario['b
       frontendRepoUrl: 'https://github.com/test/test-web.git',
       mainBranch: 'main',
       s3Setup: scenario.s3Setup,
-      includeAnalytics: scenario.includeAnalytics
+      includeAnalytics: scenario.includeAnalytics,
+      includePwa: scenario.includePwa === true
     })
 
     // Monorepo root
@@ -162,7 +164,8 @@ async function generateProject(scenario: GenerationScenario | (UpdateScenario['b
             s3Setup: scenario.s3Setup,
             dbSetup: scenario.dbSetup,
             includeAnalytics: scenario.includeAnalytics,
-            advancedSkills: []
+            advancedSkills: [],
+            ...(scenario.includePwa === true ? { pwa: { version: 1 } } : {})
           }
         },
         null,
@@ -232,6 +235,13 @@ async function runGenerationScenario(scenario: GenerationScenario): Promise<bool
     results.push(...assertMultirepoUiPrimitivesUntouched(join(projectDir, 'apps', `${scenario.projectName}-web`)))
     if (storageInstalled) results.push(...assertMultirepoStorageInlined(apiPath))
     if (emailInstalled) results.push(...assertMultirepoEmailInlined(apiPath))
+  }
+
+  // The PWA module ships build artefacts, not just source config — assert what actually
+  // reaches dist/, since that is all the browser ever sees.
+  if (scenario.includePwa === true) {
+    const webPath = scenario.isMonorepo ? join(projectDir, 'apps', 'web') : join(projectDir, 'apps', `${scenario.projectName}-web`)
+    results.push(...assertPwaBuildOutput(webPath))
   }
 
   results.push(scanForUnreplacedPlaceholders(projectDir))

@@ -26,6 +26,7 @@ sf new [options]
 | `--email-service <service>`                    | Email service: `none` or `mailersend`                           | -       |
 | `--s3-setup <setup>`                           | S3 storage: `docker`, `credentials`, or `manual`                | -       |
 | `--analytics / --no-analytics`                 | Include (or skip) the analytics module                          | -       |
+| `--pwa / --no-pwa`                             | Make the app installable as a desktop application               | on      |
 | `--advanced-skills <skills>`                   | Comma-separated: `context7,atlassian,notion,figma`              | -       |
 | `--srs-enable / --no-srs-enable`               | Enable the [SRS module](/modules/srs) (pluggable spec system)   | -       |
 | `--srs-backend <backend>`                      | SRS backend: `notion` (Confluence + local-markdown on roadmap)  | -       |
