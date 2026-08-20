@@ -417,9 +417,6 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
       const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
       manifest.fileHashes = { ...untracked, ...deposit.hashes }
       manifest.modules = { ...(manifest.modules ?? {}), harness: { version: harnessInstallerMeta.currentVersion } }
-      // Materialise the language block on projects that predate it, so the knob
-      // is visible rather than merely defaulted. Never overwrites an opt-out.
-      ensureLanguageBlock(manifest)
       manifest.version = cliVersion
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
     }
@@ -498,6 +495,15 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     if (!dryRun) {
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
     }
+  }
+
+  // Materialise the language block on projects that predate it, so the knob is
+  // visible rather than merely defaulted. It belongs here with the migration
+  // chains rather than inside either refresh flow: a project already on the
+  // current CLI version skips the harness/template refresh entirely, and would
+  // otherwise never be offered the setting at all.
+  if (ensureLanguageBlock(manifest) && !dryRun) {
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
   }
 
   // Initialise the dry-run report. We populate it as we walk the two flows and
@@ -636,7 +642,6 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
         if (!dryRun) {
           // Update manifest version and recompute hashes
-          ensureLanguageBlock(manifest)
           manifest.version = cliVersion
           manifest.fileHashes = await computeFileHashes('.')
           await writeFile(manifestPath, JSON.stringify(manifest, null, 2))

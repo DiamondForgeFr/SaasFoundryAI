@@ -177,6 +177,39 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(manifest.version).toBe(cliVersion)
   })
 
+  // Regression: the backfill first sat inside the refresh branch, so a project
+  // already on the current CLI version — the overwhelmingly common case — never
+  // reached it and was never offered the setting at all. It belongs with the
+  // migration chains, which run on every invocation.
+  it('materialises the language block even when the harness needs no refresh', async () => {
+    const hashes = await installTrackedHarness()
+    await writeManifest({ version: cliVersion, modules: { harness: { version: 1 } }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+
+    expect((await readManifest()).language).toEqual({ srs: 'en', tickets: 'en', codeComments: 'en' })
+  })
+
+  it('fills only the missing surfaces, leaving an opt-out intact', async () => {
+    const hashes = await installTrackedHarness()
+    await writeManifest({ version: cliVersion, modules: { harness: { version: 1 } }, fileHashes: hashes, language: { tickets: 'fr' } })
+
+    await updateCommand({ nonInteractive: true })
+
+    expect((await readManifest()).language).toEqual({ srs: 'en', tickets: 'fr', codeComments: 'en' })
+  })
+
+  it('does not write the language block on a dry run', async () => {
+    const hashes = await installTrackedHarness()
+    await writeManifest({ version: cliVersion, modules: { harness: { version: 1 } }, fileHashes: hashes })
+
+    const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    await updateCommand({ nonInteractive: true, dryRun: true })
+    stdoutSpy.mockRestore()
+
+    expect((await readManifest()).language).toBeUndefined()
+  })
+
   it('dry-run reports the refresh without mutating anything', async () => {
     const hashes = await installTrackedHarness()
     const stalePath = '.claude/skills/sf-integration-rules/SKILL.md'
