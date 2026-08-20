@@ -21,6 +21,7 @@ import { initAndStartS3 } from '../runners/s3.runner'
 import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '../runners/server.runner'
 import { bootstrapSrs } from '../runners/srs.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
+import { languageConfigFromAnswers } from '../language'
 import { targetManifestVersion } from '../migrations/manifest/registry'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { Answers, manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
@@ -240,6 +241,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         // dispatcher has nothing to replay. Its presence IS the enabled flag.
         ...((startProjectAnswers.includePwa ?? true) ? { pwa: { version: pwaInstallerMeta.currentVersion } } : {})
       },
+      language: languageConfigFromAnswers(startProjectAnswers),
       workflow: startProjectAnswers.workflow,
       aiRules: startProjectAnswers.aiRules,
       fileHashes,
@@ -592,6 +594,7 @@ async function runHarnessInstall(config: Answers): Promise<void> {
       // Harness deposits are versioned + hash-tracked (scoped to .claude/skills
       // and .claude/docs) so `sf update` can refresh them conflict-aware.
       modules: { harness: { version: harnessInstallerMeta.currentVersion }, advancedSkills: config.advancedSkills ?? [] },
+      language: languageConfigFromAnswers(config),
       fileHashes: await computeHarnessFileHashes('.'),
       workflow: config.workflow,
       aiRules: config.aiRules,

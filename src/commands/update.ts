@@ -24,6 +24,7 @@ import { skillsStep } from '../config-engine/steps/skills.step'
 import { workflowStep } from '../config-engine/steps/workflow.step'
 import { getAvailableModules, getEmailModuleCredentials, getModuleSelections, getStorageModuleConfig, getSkillCredentials } from '../prompts/update.prompts'
 import { promptWithPrefill } from '../prompts/helpers'
+import { ensureLanguageBlock } from '../language'
 import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import { promptSrsConfiguration } from '../prompts/srs.prompts'
 import { bootstrapSrs } from '../runners/srs.runner'
@@ -416,6 +417,9 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
       const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
       manifest.fileHashes = { ...untracked, ...deposit.hashes }
       manifest.modules = { ...(manifest.modules ?? {}), harness: { version: harnessInstallerMeta.currentVersion } }
+      // Materialise the language block on projects that predate it, so the knob
+      // is visible rather than merely defaulted. Never overwrites an opt-out.
+      ensureLanguageBlock(manifest)
       manifest.version = cliVersion
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
     }
@@ -632,6 +636,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
         if (!dryRun) {
           // Update manifest version and recompute hashes
+          ensureLanguageBlock(manifest)
           manifest.version = cliVersion
           manifest.fileHashes = await computeFileHashes('.')
           await writeFile(manifestPath, JSON.stringify(manifest, null, 2))

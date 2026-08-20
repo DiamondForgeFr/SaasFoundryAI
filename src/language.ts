@@ -35,6 +35,26 @@ export function languageLabel(tag: LanguageTag): string {
   return LANGUAGE_LABELS[normalized] ?? tag.trim()
 }
 
+/** Tags offered as choices at `sf new`. Anything else goes through the free-text escape hatch. */
+export const OFFERED_OUTPUT_LANGUAGES: readonly LanguageTag[] = ['en', 'fr', 'es', 'de', 'it', 'pt', 'nl']
+
+/** Sentinel choice revealing the free-text tag input. Never persisted. */
+export const OUTPUT_LANGUAGE_OTHER = 'other'
+
+/**
+ * Fold the collected answers into the manifest block. One question sets all
+ * three surfaces — wanting them to differ is rare enough to be a manifest edit
+ * rather than three questions in an already long session.
+ *
+ * The block is always written, even when it is English on every surface: a knob
+ * nobody can see is a knob nobody uses.
+ */
+export function languageConfigFromAnswers(answers: { outputLanguage?: string; outputLanguageCustom?: string }): LanguageConfig {
+  const chosen = answers.outputLanguage === OUTPUT_LANGUAGE_OTHER ? answers.outputLanguageCustom : answers.outputLanguage
+  const tag = normalize(chosen)
+  return { srs: tag, tickets: tag, codeComments: tag }
+}
+
 function normalize(tag: LanguageTag | undefined): LanguageTag {
   const trimmed = tag?.trim()
   return trimmed !== undefined && trimmed.length > 0 ? trimmed : DEFAULT_OUTPUT_LANGUAGE
@@ -55,6 +75,23 @@ export function resolveOutputLanguages(manifest: Pick<SaaSFoundryManifest, 'lang
     srs: normalize(configured?.srs),
     tickets: normalize(configured?.tickets),
     codeComments: normalize(configured?.codeComments)
+  }
+}
+
+/**
+ * Backfill the block on an existing manifest, in place, filling only what is
+ * missing. Behaviour does not depend on it — `resolveOutputLanguages` already
+ * treats absence as English — but a knob nobody can see is a knob nobody uses,
+ * so `sf update` materialises it the same way `sf new` does.
+ *
+ * Idempotent, and never overwrites a surface the project already opted out of.
+ */
+export function ensureLanguageBlock(manifest: { language?: LanguageConfig }): void {
+  const current = manifest.language ?? {}
+  manifest.language = {
+    srs: normalize(current.srs),
+    tickets: normalize(current.tickets),
+    codeComments: normalize(current.codeComments)
   }
 }
 

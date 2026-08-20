@@ -1,3 +1,4 @@
+import { DEFAULT_OUTPUT_LANGUAGE } from '../language'
 import { Answers, DbCredentials, S3Credentials } from '../types'
 
 export interface NewCommandOptions {
@@ -44,6 +45,9 @@ export interface NewCommandOptions {
   // Analytics
   analytics?: boolean
   pwa?: boolean
+
+  // Output language of AI-produced artefacts (BCP-47 tag). Defaults to English.
+  language?: string
 
   // Advanced skills
   advancedSkills?: string
@@ -139,6 +143,12 @@ export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answer
   // pass a flag just to get the documented default behaviour.
   if (opts.pwa !== undefined) prefill.includePwa = opts.pwa
   else if (opts.nonInteractive === true) prefill.includePwa = true
+
+  // Same non-interactive materialisation as `pwa` above: the session throws on an
+  // unfilled field instead of applying the step default, so a scripted `sf new`
+  // would otherwise be forced to pass a flag just to get English.
+  if (opts.language !== undefined) prefill.outputLanguage = opts.language
+  else if (opts.nonInteractive === true) prefill.outputLanguage = DEFAULT_OUTPUT_LANGUAGE
 
   if (opts.advancedSkills !== undefined) {
     prefill.advancedSkills = opts.advancedSkills
