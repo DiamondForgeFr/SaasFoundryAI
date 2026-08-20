@@ -65,3 +65,43 @@ describe('renderHuman', () => {
     expect(out).toContain('Manifest present')
   })
 })
+
+// The claude-friendly render feeds the SessionStart hook, so it is where an
+// agent learns the rule. It must state the languages every run — including the
+// all-English case, which is precisely the one an agent would otherwise guess
+// wrong when the conversation is in another language.
+describe('output language in the status renders', () => {
+  it('always names the three surfaces in the claude-friendly render', () => {
+    const out = renderClaudeFriendly({ report: makeReport(), preconditions: [okPrecondition] })
+    expect(out).toContain('- output language: srs en, tickets en, code comments en')
+  })
+
+  it('tells the agent the conversation language is not the signal', () => {
+    const out = renderClaudeFriendly({ report: makeReport(), preconditions: [okPrecondition] })
+    expect(out).toContain('The language of the conversation is NOT the signal')
+  })
+
+  it('reports what the project actually configured', () => {
+    const report = makeReport()
+    report.manifest = { ...report.manifest!, language: { srs: 'fr' } }
+    const out = renderClaudeFriendly({ report, preconditions: [okPrecondition] })
+    expect(out).toContain('- output language: srs fr, tickets en, code comments en')
+  })
+
+  it('resolves the block in the JSON render so consumers never re-implement the default', () => {
+    const parsed = JSON.parse(renderJson({ report: makeReport(), preconditions: [okPrecondition] }))
+    expect(parsed.manifest.language).toEqual({ srs: 'en', tickets: 'en', codeComments: 'en' })
+  })
+
+  it('stays quiet in the human render while everything is English', () => {
+    const out = renderHuman({ report: makeReport(), preconditions: [okPrecondition] })
+    expect(out).not.toContain('AI writes in:')
+  })
+
+  it('speaks up in the human render as soon as a surface is opted out', () => {
+    const report = makeReport()
+    report.manifest = { ...report.manifest!, language: { tickets: 'fr' } }
+    const out = renderHuman({ report, preconditions: [okPrecondition] })
+    expect(out).toContain('srs en, tickets fr, code comments en')
+  })
+})
