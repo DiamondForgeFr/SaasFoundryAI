@@ -20,6 +20,11 @@ jq -r '.tools.srs.enabled'            .saasfoundry.json   # true | false
 jq -r '.tools.srs.backend'            .saasfoundry.json   # notion | atlassian | local-markdown
 jq -r '.tools.srs.rootPage.id'        .saasfoundry.json   # root page / parent container ID
 jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patterns
+
+# Output language of AI-produced artefacts — absent means "en"
+jq -r '.language.srs          // "en"' .saasfoundry.json  # SRS pages
+jq -r '.language.tickets      // "en"' .saasfoundry.json  # tickets and their comments
+jq -r '.language.codeComments // "en"' .saasfoundry.json  # code comments and commit messages
 ```
 
 ## Fields read by each skill
@@ -40,6 +45,9 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
 | `sf-srs`                  | `tools.srs.rootPage.id`         | Default root container for drafters / eval                                                                                                                                                                                                  |
 | `sf-srs`                  | `tools.srs.enabled`             | Gates the conversational eval hook                                                                                                                                                                                                          |
 | `sf-srs`                  | `tools.srs.scan.exclude`        | Extra exclusion patterns on top of `.gitignore` + `.srsignore`                                                                                                                                                                              |
+| `sf-srs`                  | `language.srs`                  | Language of the SRS pages it writes — absent means `en`                                                                                                                                                                                     |
+| `sf-workflow`             | `language.tickets`              | Language of ticket bodies and comments — absent means `en`                                                                                                                                                                                  |
+| `sf-workflow`             | `language.codeComments`         | Language of code comments and commit messages — absent means `en`                                                                                                                                                                           |
 
 ## Canonical shape
 
@@ -49,6 +57,14 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
   "projectName": "my-saas-app",
   "structure": "multirepo | monorepo | cli",
   "mainBranch": "main | master", // git main branch chosen at sf new; absent on older manifests — fall back when reading
+  "language": {
+    // Language of what the AI writes, per surface. Optional, and so is every key:
+    // an absent block means English everywhere. Split by surface because a French
+    // SRS can legitimately coexist with English code comments.
+    "srs": "en",
+    "tickets": "en",
+    "codeComments": "en"
+  },
   "workflow": {
     "tool": "github-projects",
     "template": "SaaSFoundry AI",
@@ -104,3 +120,5 @@ jq -r '.tools.srs.scan.exclude[]'     .saasfoundry.json   # gitignore-style patt
 - **Presence detection** — if `.saasfoundry.json` exists at the working directory root, the repo is a SaaSFoundryAI-managed project. Skills and agents may branch behavior on that alone.
 - **Single source of truth** — skills must never persist duplicated values; read the manifest, do not cache in `.env` or per-skill config.
 - **Fail closed on missing fields** — scripts exit with a non-zero code and a `jq` `// empty` fallback rather than silently defaulting.
+- **Write in the project's language, not the conversation's** — everything an agent produces (SRS pages, tickets, code comments, commit messages) follows `language.*`, which defaults to English. The
+  language the user speaks in chat is never the signal: a session held in French still yields English artefacts unless the manifest says otherwise.

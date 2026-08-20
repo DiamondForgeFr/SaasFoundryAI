@@ -247,6 +247,26 @@ export interface ToolsConfig {
   design?: ToolSelection[]
 }
 
+/** BCP-47 language tag for AI-produced artefacts — `en`, `fr`, `pt-BR`… */
+export type LanguageTag = string
+
+/**
+ * Language of what the AI writes, split by surface. Every key is optional and
+ * resolves to English — see `resolveOutputLanguages` in `src/language.ts`.
+ *
+ * The surfaces are separate because they do not always agree: a French-speaking
+ * team may well want a French SRS while keeping code comments and commit
+ * messages in English, because the codebase outlives the team that wrote it.
+ */
+export interface LanguageConfig {
+  /** SRS pages — features, versions, FRs. */
+  srs?: LanguageTag
+  /** Ticket titles, bodies and comments on the board. */
+  tickets?: LanguageTag
+  /** Comments in source files, and commit messages. */
+  codeComments?: LanguageTag
+}
+
 export interface SaaSFoundryManifest {
   $schema?: string
   // Schema-shape version, monotonic integer, bumped by registered manifest migrations.
@@ -289,6 +309,12 @@ export interface SaaSFoundryManifest {
       version: number
     }
   }
+  // Language of AI-produced artefacts, per surface. Optional with an English
+  // default resolved at read time (`resolveOutputLanguages`), so manifests
+  // written before this field keep validating and behave identically — which
+  // is why it ships without a migration (see migration-framework.md,
+  // "When NOT to add a migration").
+  language?: LanguageConfig
   skillsAccounts?: Record<string, string>
   fileHashes?: Record<string, string>
   workflow?: WorkflowConfig
