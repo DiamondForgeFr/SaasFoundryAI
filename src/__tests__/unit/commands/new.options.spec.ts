@@ -206,6 +206,27 @@ describe('buildPrefillFromOptions', () => {
   })
 })
 
+describe('buildPrefillFromOptions — output language', () => {
+  it('maps --language onto the prefill', () => {
+    expect(buildPrefillFromOptions({ language: 'fr' }).outputLanguage).toBe('fr')
+  })
+
+  // The config session throws on an unfilled field rather than applying the step
+  // default, so a scripted `sf new` would otherwise be forced to pass --language
+  // just to get the documented English default. Same pattern as `pwa`.
+  it('materialises English in --non-interactive so no flag is needed for the default', () => {
+    expect(buildPrefillFromOptions({ nonInteractive: true }).outputLanguage).toBe('en')
+  })
+
+  it('lets an explicit --language win over the non-interactive default', () => {
+    expect(buildPrefillFromOptions({ nonInteractive: true, language: 'pt-BR' }).outputLanguage).toBe('pt-BR')
+  })
+
+  it('leaves outputLanguage undefined interactively, so the step still asks', () => {
+    expect(buildPrefillFromOptions({}).outputLanguage).toBeUndefined()
+  })
+})
+
 describe('shouldSkipWorkflow', () => {
   it('returns true when --no-workflow is used (workflow=false)', () => {
     expect(shouldSkipWorkflow({ workflow: false })).toBe(true)

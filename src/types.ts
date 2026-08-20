@@ -39,6 +39,13 @@ export interface Answers {
   s3Credentials?: S3Credentials
   includeAnalytics: boolean
   includePwa: boolean
+  /**
+   * Language the AI writes in, collected once and applied to all three manifest
+   * surfaces (`language.*`). `outputLanguageCustom` carries the free-text tag
+   * when the user picks "Other"; neither is persisted as-is.
+   */
+  outputLanguage?: string
+  outputLanguageCustom?: string
   advancedSkills?: string[]
   context7ApiKey?: string
   atlassianEmail?: string
