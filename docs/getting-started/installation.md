@@ -12,9 +12,24 @@ assist with git operations, workflow management, and development tasks. :::
 
 ### 1. Node.js and Package Manager
 
-- **Node.js** >= 22.13.0
-- **npm**, **yarn**, or **pnpm**
+- **Node.js** >= 22.13.0 — but see the note below: Node 24 is what `.nvmrc` pins
+- **npm** >= 11 (not yarn or pnpm — see below)
 - **Git**
+
+::: warning npm 11 is required, and Node 22 does not ship it Generated projects declare `engines.npm >= 11` and enforce it through `devEngines`. Node 22 bundles npm 10.9.x, so `npm install` in a fresh
+project fails with:
+
+```
+npm error EBADDEVENGINES Invalid semver version ">=11.0.0" does not match "10.9.2"
+```
+
+The whole npm 10 line crashes on the generated workspace graph (`Cannot read properties of null (reading 'edgesOut')`), which is why the floor exists. Generated projects therefore pin `.nvmrc` to
+**24.19.0**, which bundles npm 11.
+
+If you stay on Node 22, upgrade npm yourself: `npm install -g npm@11`. :::
+
+::: tip Why not yarn or pnpm Generated projects ship a `package-lock.json` and declare npm through `devEngines`. yarn and pnpm are not tested against the scaffolds and will not resolve the same tree.
+:::
 
 ### 2. Claude Code (Terminal Version)
 

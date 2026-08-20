@@ -12,6 +12,7 @@ sf new [options]
 
 | Flag                                           | Description                                                     | Default |
 | ---------------------------------------------- | --------------------------------------------------------------- | ------- |
+| `--profile <profile>`                          | What to install: `full`, `harness`, or `stack`                  | `full`  |
 | `--non-interactive`                            | Fail if any required value is missing instead of prompting      | -       |
 | `--project-name <name>`                        | Project name (kebab-case)                                       | -       |
 | `--project-description <description>`          | Project description                                             | -       |
@@ -36,6 +37,21 @@ sf new [options]
 | `--workflow <config> / --no-workflow`          | Workflow preset, `none`, or skip workflow entirely              | -       |
 | `--start-services / --no-start-services`       | Auto-start dev services (DB + MinIO) after setup                | -       |
 | `--start-apps <mode>`                          | Apps to start after setup: `all`, `backend`, `frontend`, `none` | -       |
+
+## Installation profiles
+
+`--profile` decides **what** `sf new` installs. It is the first question the interactive flow asks, and it changes which of the later questions are asked at all.
+
+| Profile   | Installs                                                       | Use when                                                                       |
+| --------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `full`    | Technical stack **and** the AI harness (workflow, skills, SRS) | Starting a new product from scratch — the default                              |
+| `stack`   | The technical stack only                                       | You want the scaffold without the AI collaboration layer                       |
+| `harness` | The AI harness only, onto an existing repository               | You already have a codebase and want the workflow, skills and SRS on top of it |
+
+`harness` never creates a project directory and never touches your technical stack — it deposits the AI layer into the repository you run it from. Stack questions (database, storage, email,
+installable app) are skipped entirely, because there is nothing to scaffold.
+
+In `--non-interactive` mode the profile defaults to `full`, so existing flag-driven invocations keep behaving as they did before profiles existed.
 
 ## Examples
 

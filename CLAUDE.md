@@ -83,7 +83,7 @@ scaffolds/
     ├── multirepo/    # Multirepo-specific overrides (api/, web/)
     └── modules/      # Optional feature modules (email/, storage/, analytics/)
 tests/
-└── docker/           # Docker-based real build tests (18 scenarios)
+└── docker/           # Docker-based real build tests (see `npm run test:docker:list`)
 bin/                  # CLI entrypoint (sf.js)
 scripts/              # Version management (tag-manager.sh)
 ```
@@ -103,7 +103,7 @@ scripts/              # Version management (tag-manager.sh)
 - `npm run test:pre-commit` — Format + Lint + Type-check + Jest tests (runs on pre-commit, ~15s)
 - `npm run test:pre-push` — Top 2 Docker scenarios (runs on pre-push for non-RC branches, ~2-3 min)
 - `npm run test:full` — Alias: `test:pre-commit` + `test:pre-push` (full local validation)
-- `npm run test:docker` — All 18 Docker scenarios (~65 min)
+- `npm run test:docker` — All Docker scenarios (~70 min; `test:docker:list` prints the current set)
 - `npm run test:docker -- --count N` — Top N priority scenarios
 - `npm run test:docker -- --scenario <name>` — Single scenario
 - `npm run test:docker:list` — Show all scenarios

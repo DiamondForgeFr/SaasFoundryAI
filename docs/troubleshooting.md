@@ -265,6 +265,6 @@ If the file was already a symlink (some skills use symlinks instead of copies), 
 ## Where to go next
 
 - **CLI commands** — [`sf new`](/cli/sf-new), [`sf update`](/cli/sf-update), [`sf workflow`](/cli/sf-workflow), [`sf skill install`](/cli/sf-skill)
-- **Workflow questions** — [Workflow skill](/skills/workflow-skill)
+- **Workflow questions** — [Workflow skill](/skills/core-skills)
 - **SRS questions** — [SRS walkthrough](/srs/walkthrough)
 - **Bug report or unhandled error** — open an issue with `sf status --no-network` + `sf --version` output attached

@@ -122,20 +122,6 @@ add-zsh-hook chpwd load-nvmrc
 load-nvmrcexport PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 🌈 Peacock (Optional)
-
-Peacock is a Visual Studio Code extension that helps identify and distinguish projects by colorizing your workspace:
-
-```bash
-# For VS Code
-# Install from VS Code marketplace: "johnpapa.vscode-peacock"
-
-# For other compatible IDEs (like Cursor)
-# Check the respective marketplace for Peacock or similar workspace colorizing extensions
-```
-
-This extension is particularly useful when working with multiple repositories simultaneously, offering visual differentiation between frontend and backend workspaces.
-
 After installing these tools, you'll be ready to fully utilize all SaaSFoundryAI features, including containerized development environments and proper Node.js version management across projects.
 
 ## 🚀 Quick Start
@@ -308,6 +294,13 @@ SaaSFoundryAI includes optional modules that can be added during project creatio
 - Self-hosted or cloud options
 - Pre-integrated in React app
 - GDPR compliant
+
+### 📱 Installable app (PWA)
+
+- Installs as a desktop application from the browser — its own window, no address bar, Dock/taskbar icon
+- Web-standards based (Web App Manifest + service worker), so it also covers mobile home screens
+- On by default, declinable with `--no-pwa`
+- Offline is shell-only: the app starts without a network, API calls always go to the network
 
 ### 🔄 Update System
 

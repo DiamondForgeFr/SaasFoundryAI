@@ -79,7 +79,7 @@ sf new --project-name local-test --structure monorepo
 | `npm run test:pre-commit`                  | `format` + `lint` + `build` + `test` — what Husky runs on every commit (~15s) | Before pushing                                    |
 | `npm run test:pre-push`                    | Top 2 Docker scenarios (`monorepo-minimal` + `multirepo-minimal`, ~2–3 min)   | Before opening a PR — Husky pre-push runs this    |
 | `npm run test:full`                        | `test:pre-commit` + `test:pre-push` — full local validation                   | Before declaring something done                   |
-| `npm run test:docker`                      | All 18 Docker scenarios (~65 min)                                             | When in doubt about a builder or installer change |
+| `npm run test:docker`                      | All Docker scenarios (~70 min, see `--list`)                                  | When in doubt about a builder or installer change |
 | `npm run test:docker:list`                 | Lists every scenario without running them                                     | To pick a specific one                            |
 | `npm run test:docker -- --count N`         | Runs the top N priority scenarios                                             | Selective E2E coverage                            |
 | `npm run test:docker -- --scenario <name>` | Runs a single named scenario                                                  | Targeted reproduction                             |
@@ -184,7 +184,7 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 ## See also
 
 - [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/CLAUDE.md) — the agent's session prompt; mirrors most of this page in operational form
-- [Workflow skill](/skills/workflow-skill) — full reference for the workflow CLI and status transitions
+- [Workflow skill](/skills/core-skills) — full reference for the workflow CLI and status transitions
 - [Module system](/guide/module-system) — user-facing view (what modules are and how to add them to a project)
 - [Architecture: modules](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/architecture-modules.md) — internal reference for adding new modules
 - [Architecture: skills](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/docs/architecture-skills.md) — internal reference for adding new skills
