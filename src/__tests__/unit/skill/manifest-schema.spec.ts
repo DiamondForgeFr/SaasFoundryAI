@@ -44,6 +44,24 @@ describe('saasfoundry-manifest.schema.json — canonical shapes', () => {
     expect(validate({ ...baseManifest, modules: { notAModule: { version: 1 } } })).toBe(false)
   })
 
+  // The manifest is `additionalProperties: false` at the top level, so the language
+  // block has to be declared here or the CLI writes a file its own schema rejects.
+  it('accepts the language block', () => {
+    expect(validate({ ...baseManifest, language: { srs: 'en', tickets: 'en', codeComments: 'fr' } })).toBe(true)
+  })
+
+  it('accepts a partial language block — absent surfaces resolve to English at read time', () => {
+    expect(validate({ ...baseManifest, language: { srs: 'fr' } })).toBe(true)
+  })
+
+  it('accepts a manifest with no language block at all — the shape every existing project is in', () => {
+    expect(validate(baseManifest)).toBe(true)
+  })
+
+  it('rejects an undeclared language surface', () => {
+    expect(validate({ ...baseManifest, language: { readme: 'fr' } })).toBe(false)
+  })
+
   it('accepts the full canonical shape from manifest-schema.md', () => {
     const full = {
       ...baseManifest,

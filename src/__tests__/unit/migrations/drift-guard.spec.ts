@@ -44,9 +44,11 @@ describe('SaaSFoundryManifest drift-guard', () => {
     }
     expect(snapshot).toEqual({
       targetVersion: 2,
-      // mainBranch added without a version bump: new OPTIONAL field with read-site
-      // fallback — the "no migration needed" case of migration-framework.md.
-      keys: ['$schema', 'manifestVersion', 'version', 'generatedAt', 'structure', 'projectName', 'mainBranch', 'modules', 'skillsAccounts', 'fileHashes', 'workflow', 'aiRules', 'tools']
+      // mainBranch and language added without a version bump: new OPTIONAL fields with
+      // read-site fallbacks — the "no migration needed" case of migration-framework.md.
+      // For `language`, an absent block resolves exactly like one pinning "en"
+      // (`resolveOutputLanguages`), so no project can regress by not having it.
+      keys: ['$schema', 'manifestVersion', 'version', 'generatedAt', 'structure', 'projectName', 'mainBranch', 'modules', 'language', 'skillsAccounts', 'fileHashes', 'workflow', 'aiRules', 'tools']
     })
   })
 })
