@@ -48,6 +48,7 @@ export function webParams(overrides: Partial<CreateWebAppParams> = {}): CreateWe
     mainBranch: DEFAULT_MAIN_BRANCH,
     s3Setup: 'manual',
     includeAnalytics: false,
+    includePwa: false,
     ...overrides
   }
 }

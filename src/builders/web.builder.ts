@@ -5,11 +5,12 @@ import { exec } from 'shelljs'
 import glob from 'glob'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
+import { installPwaModule } from '../installers/pwa.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 
-export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, workflow }: CreateWebAppParams) {
+export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, includePwa, workflow }: CreateWebAppParams) {
   validateProjectName(projectName)
 
   // Create the WEB app directory
@@ -111,6 +112,11 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   // Install Umami analytics module (if selected)
   if (includeAnalytics) {
     await installAnalyticsModule({ webPath })
+  }
+
+  // Install the PWA module (if selected) — makes the app installable as a desktop application
+  if (includePwa) {
+    await installPwaModule({ webPath, projectName, projectDescription })
   }
 
   // Install workflow artefacts (skill + tool skill) when a workflow is configured

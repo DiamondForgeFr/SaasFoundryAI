@@ -13,6 +13,7 @@ import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
 import { ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug } from '../installers/harness-provisioning'
+import { pwaInstallerMeta } from '../installers/pwa.installer'
 import { installSkills } from '../installers/skills.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { initAndStartDb } from '../runners/database.runner'
@@ -156,6 +157,9 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       mainBranch: startProjectAnswers.mainBranch,
       s3Setup: startProjectAnswers.s3Setup,
       includeAnalytics: startProjectAnswers.includeAnalytics,
+      // Default-on module: a config session that predates the step (or a prefill that omits it)
+      // must still produce an installable app.
+      includePwa: startProjectAnswers.includePwa ?? true,
       advancedSkills: startProjectAnswers.advancedSkills,
       context7ApiKey: startProjectAnswers.context7ApiKey,
       atlassianEmail: startProjectAnswers.atlassianEmail,
@@ -231,7 +235,10 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         // Every scaffolded profile deposits harness artefacts (core skills +
         // docs at minimum — stack profile included) — track them so sf update
         // can refresh the deposits on any profile.
-        harness: { version: harnessInstallerMeta.currentVersion }
+        harness: { version: harnessInstallerMeta.currentVersion },
+        // Recorded only when installed, so `--no-pwa` leaves no trace and the
+        // dispatcher has nothing to replay. Its presence IS the enabled flag.
+        ...((startProjectAnswers.includePwa ?? true) ? { pwa: { version: pwaInstallerMeta.currentVersion } } : {})
       },
       workflow: startProjectAnswers.workflow,
       aiRules: startProjectAnswers.aiRules,

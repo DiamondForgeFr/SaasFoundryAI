@@ -38,6 +38,7 @@ export interface Answers {
   s3Setup: 'docker' | 'credentials' | 'manual'
   s3Credentials?: S3Credentials
   includeAnalytics: boolean
+  includePwa: boolean
   advancedSkills?: string[]
   context7ApiKey?: string
   atlassianEmail?: string
@@ -104,6 +105,7 @@ export interface CreateWebAppParams {
   mainBranch: string
   s3Setup: 'docker' | 'credentials' | 'manual'
   includeAnalytics: boolean
+  includePwa: boolean
   advancedSkills?: string[]
   context7ApiKey?: string
   atlassianEmail?: string
@@ -280,6 +282,12 @@ export interface SaaSFoundryManifest {
     harness?: {
       version: number
     }
+    // PWA module — makes the generated web app installable as a desktop
+    // application through the browser's own flow. Versioned shape (not the flat
+    // legacy boolean like `includeAnalytics`) so module migrations can target it.
+    pwa?: {
+      version: number
+    }
   }
   skillsAccounts?: Record<string, string>
   fileHashes?: Record<string, string>
@@ -291,6 +299,9 @@ export interface SaaSFoundryManifest {
 /** Modules block of a project scaffolded by `sf new` (full/stack profile) — the five stack keys are guaranteed. */
 export type ScaffoldModules = Required<Pick<NonNullable<SaaSFoundryManifest['modules']>, 'email' | 's3Setup' | 'dbSetup' | 'includeAnalytics' | 'advancedSkills'>> & {
   harness?: { version: number }
+  // Optional, not part of the guaranteed stack keys: projects scaffolded before the module
+  // existed have no `pwa` entry, and `--no-pwa` projects never get one.
+  pwa?: { version: number }
 }
 
 /** Manifest of a scaffolded project — see `isScaffoldManifest`. */
