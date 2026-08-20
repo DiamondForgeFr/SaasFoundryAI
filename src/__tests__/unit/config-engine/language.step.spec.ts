@@ -81,6 +81,16 @@ describe('ensureLanguageBlock', () => {
     expect(manifest.language).toEqual({ srs: 'fr', tickets: 'en', codeComments: 'en' })
   })
 
+  it('reports whether it changed anything, so sf update can skip a pointless write', () => {
+    const fresh: { language?: LanguageConfig } = {}
+    expect(ensureLanguageBlock(fresh)).toBe(true)
+    expect(ensureLanguageBlock(fresh)).toBe(false)
+  })
+
+  it('reports a change when only some surfaces were set', () => {
+    expect(ensureLanguageBlock({ language: { srs: 'fr' } })).toBe(true)
+  })
+
   it('is idempotent — a second sf update changes nothing', () => {
     const manifest: { language?: LanguageConfig } = { language: { tickets: 'fr' } }
     ensureLanguageBlock(manifest)

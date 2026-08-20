@@ -85,14 +85,20 @@ export function resolveOutputLanguages(manifest: Pick<SaaSFoundryManifest, 'lang
  * so `sf update` materialises it the same way `sf new` does.
  *
  * Idempotent, and never overwrites a surface the project already opted out of.
+ *
+ * Returns whether anything changed, so the caller can skip a pointless write on
+ * the overwhelmingly common already-materialised run.
  */
-export function ensureLanguageBlock(manifest: { language?: LanguageConfig }): void {
+export function ensureLanguageBlock(manifest: { language?: LanguageConfig }): boolean {
   const current = manifest.language ?? {}
-  manifest.language = {
+  const next: LanguageConfig = {
     srs: normalize(current.srs),
     tickets: normalize(current.tickets),
     codeComments: normalize(current.codeComments)
   }
+  const changed = current.srs !== next.srs || current.tickets !== next.tickets || current.codeComments !== next.codeComments
+  manifest.language = next
+  return changed
 }
 
 /**
