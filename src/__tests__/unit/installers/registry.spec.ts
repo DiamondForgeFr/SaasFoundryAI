@@ -1,6 +1,6 @@
 import { moduleInstallers, getModuleInstaller } from '../../../installers/registry'
 
-const EXPECTED_INSTALLERS = ['email', 'storage', 'analytics', 'srs-skill', 'skills', 'core-skills', 'tool-skill', 'workflow-skill', 'harness'] as const
+const EXPECTED_INSTALLERS = ['email', 'storage', 'analytics', 'pwa', 'srs-skill', 'skills', 'core-skills', 'tool-skill', 'workflow-skill', 'harness'] as const
 
 describe('moduleInstallers registry', () => {
   it('exposes every installer named by the framework spec', () => {

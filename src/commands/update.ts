@@ -110,6 +110,7 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       mainBranch: manifest.mainBranch ?? 'main',
       s3Setup: manifest.modules.s3Setup,
       includeAnalytics: manifest.modules.includeAnalytics,
+      includePwa: manifest.modules.pwa !== undefined,
       advancedSkills: manifest.modules.advancedSkills || [],
       workflow: manifest.workflow,
       aiRules: manifest.aiRules

@@ -29,6 +29,21 @@ describe('saasfoundry-manifest.schema.json — canonical shapes', () => {
     expect(validate({ version: '1.0.0', structure: 'cli', projectName: 'demo' })).toBe(true)
   })
 
+  // The schema is `additionalProperties: false` on `modules`, so every new module has to be
+  // declared there or a project carrying it stops validating — IDE squiggles on a file the CLI
+  // itself wrote.
+  it('accepts the versioned pwa module', () => {
+    expect(validate({ ...baseManifest, modules: { pwa: { version: 1 } } })).toBe(true)
+  })
+
+  it('rejects a pwa module without its version', () => {
+    expect(validate({ ...baseManifest, modules: { pwa: {} } })).toBe(false)
+  })
+
+  it('rejects an undeclared module key', () => {
+    expect(validate({ ...baseManifest, modules: { notAModule: { version: 1 } } })).toBe(false)
+  })
+
   it('accepts the full canonical shape from manifest-schema.md', () => {
     const full = {
       ...baseManifest,

@@ -36,7 +36,7 @@
     },
     "mainBranch": {
       "type": "string",
-      "description": "Git main branch chosen at sf new (main/master). Absent on manifests written before this field existed — readers must fall back."
+      "description": "Git main branch chosen at sf new (main/master). Absent on manifests written before this field existed \u2014 readers must fall back."
     },
     "modules": {
       "type": "object",
@@ -47,42 +47,83 @@
           "type": "object",
           "required": ["provider", "version"],
           "additionalProperties": false,
-          "description": "Email module — versioned shape introduced in manifestVersion 2 (Epic #310). `provider` replaces the legacy flat `emailService` string; `version` is the per-module installed version, used by module-level migrations.",
+          "description": "Email module \u2014 versioned shape introduced in manifestVersion 2 (Epic #310). `provider` replaces the legacy flat `emailService` string; `version` is the per-module installed version, used by module-level migrations.",
           "properties": {
-            "provider": { "type": "string", "enum": ["none", "mailersend"] },
-            "version": { "type": "integer", "minimum": 0 }
+            "provider": {
+              "type": "string",
+              "enum": ["none", "mailersend"]
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         },
-        "s3Setup": { "type": "string", "enum": ["docker", "credentials", "manual"] },
-        "dbSetup": { "type": "string", "enum": ["docker", "credentials", "manual"] },
-        "includeAnalytics": { "type": "boolean" },
+        "s3Setup": {
+          "type": "string",
+          "enum": ["docker", "credentials", "manual"]
+        },
+        "dbSetup": {
+          "type": "string",
+          "enum": ["docker", "credentials", "manual"]
+        },
+        "includeAnalytics": {
+          "type": "boolean"
+        },
         "advancedSkills": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "harness": {
           "type": "object",
           "required": ["version"],
           "additionalProperties": false,
-          "description": "AI harness deposits (skills, docs, workflow artefacts) — versioned so sf update can refresh them and module migrations can target them.",
+          "description": "AI harness deposits (skills, docs, workflow artefacts) \u2014 versioned so sf update can refresh them and module migrations can target them.",
           "properties": {
-            "version": { "type": "integer", "minimum": 0 }
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "pwa": {
+          "type": "object",
+          "required": ["version"],
+          "additionalProperties": false,
+          "description": "PWA module \u2014 makes the generated web app installable as a desktop application. Versioned so module migrations can target it.",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         }
       }
     },
     "skillsAccounts": {
       "type": "object",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "fileHashes": {
       "type": "object",
-      "description": "Map of relative path → SHA hash used by sf update to detect user edits.",
-      "additionalProperties": { "type": "string" }
+      "description": "Map of relative path \u2192 SHA hash used by sf update to detect user edits.",
+      "additionalProperties": {
+        "type": "string"
+      }
     },
-    "workflow": { "$ref": "#/definitions/workflowConfig" },
-    "aiRules": { "$ref": "#/definitions/aiRules" },
-    "tools": { "$ref": "#/definitions/toolsConfig" }
+    "workflow": {
+      "$ref": "#/definitions/workflowConfig"
+    },
+    "aiRules": {
+      "$ref": "#/definitions/aiRules"
+    },
+    "tools": {
+      "$ref": "#/definitions/toolsConfig"
+    }
   },
   "definitions": {
     "workflowConfig": {
@@ -94,44 +135,78 @@
           "type": "string",
           "enum": ["github-projects", "jira", "notion", "linear", "none"]
         },
-        "template": { "type": "string" },
-        "projectUrl": { "type": "string", "format": "uri" },
-        "workingBranch": { "type": "string" },
-        "prTargetBranch": { "type": "string" },
-        "releaseBranch": { "type": "string" },
-        "requireCodeReview": { "type": "boolean" },
+        "template": {
+          "type": "string"
+        },
+        "projectUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "workingBranch": {
+          "type": "string"
+        },
+        "prTargetBranch": {
+          "type": "string"
+        },
+        "releaseBranch": {
+          "type": "string"
+        },
+        "requireCodeReview": {
+          "type": "boolean"
+        },
         "branchNaming": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "feature": { "type": "string" },
-            "fix": { "type": "string" },
-            "release": { "type": "string" }
+            "feature": {
+              "type": "string"
+            },
+            "fix": {
+              "type": "string"
+            },
+            "release": {
+              "type": "string"
+            }
           }
         },
         "commitFormat": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "pattern": { "type": "string" },
-            "requireTicket": { "type": "boolean" },
+            "pattern": {
+              "type": "string"
+            },
+            "requireTicket": {
+              "type": "boolean"
+            },
             "types": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "uniqueItems": true
             }
           }
         },
         "statuses": {
           "type": "array",
-          "items": { "$ref": "#/definitions/workflowStatus" }
+          "items": {
+            "$ref": "#/definitions/workflowStatus"
+          }
         },
         "issueTypes": {
           "type": "array",
-          "items": { "$ref": "#/definitions/workflowIssueType" }
+          "items": {
+            "$ref": "#/definitions/workflowIssueType"
+          }
         },
-        "validated": { "type": "boolean" },
-        "lastValidated": { "type": "string", "format": "date-time" }
+        "validated": {
+          "type": "boolean"
+        },
+        "lastValidated": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "workflowStatus": {
@@ -139,8 +214,13 @@
       "required": ["name"],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "description": { "type": "string" },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
         "color": {
           "type": "string",
           "enum": ["GRAY", "YELLOW", "BLUE", "PURPLE", "ORANGE", "PINK", "GREEN", "RED"]
@@ -152,8 +232,13 @@
       "required": ["name"],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "description": { "type": "string" },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
         "color": {
           "type": "string",
           "enum": ["GRAY", "YELLOW", "BLUE", "PURPLE", "ORANGE", "PINK", "GREEN", "RED"]
@@ -164,22 +249,38 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "alwaysCreateBranchFromWorking": { "type": "boolean" },
-        "alwaysCreateTicketBeforeCode": { "type": "boolean" },
-        "autoUpdateTicketStatus": { "type": "boolean" },
-        "requireHumanCheckOnPushedBranch": { "type": "boolean" }
+        "alwaysCreateBranchFromWorking": {
+          "type": "boolean"
+        },
+        "alwaysCreateTicketBeforeCode": {
+          "type": "boolean"
+        },
+        "autoUpdateTicketStatus": {
+          "type": "boolean"
+        },
+        "requireHumanCheckOnPushedBranch": {
+          "type": "boolean"
+        }
       }
     },
     "toolsConfig": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "srs": { "$ref": "#/definitions/srsToolConfig" },
-        "tracker": { "$ref": "#/definitions/toolSelection" },
-        "docs": { "$ref": "#/definitions/toolSelection" },
+        "srs": {
+          "$ref": "#/definitions/srsToolConfig"
+        },
+        "tracker": {
+          "$ref": "#/definitions/toolSelection"
+        },
+        "docs": {
+          "$ref": "#/definitions/toolSelection"
+        },
         "design": {
           "type": "array",
-          "items": { "$ref": "#/definitions/toolSelection" }
+          "items": {
+            "$ref": "#/definitions/toolSelection"
+          }
         }
       }
     },
@@ -188,8 +289,12 @@
       "additionalProperties": false,
       "required": ["name"],
       "properties": {
-        "name": { "type": "string" },
-        "account": { "type": "string" }
+        "name": {
+          "type": "string"
+        },
+        "account": {
+          "type": "string"
+        }
       }
     },
     "srsToolConfig": {
@@ -197,17 +302,28 @@
       "required": ["enabled", "backend"],
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "backend": { "type": "string", "const": "notion" },
-        "rootPage": { "$ref": "#/definitions/srsPageRef" },
-        "pendingIngestion": { "$ref": "#/definitions/pendingIngestion" },
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend": {
+          "type": "string",
+          "const": "notion"
+        },
+        "rootPage": {
+          "$ref": "#/definitions/srsPageRef"
+        },
+        "pendingIngestion": {
+          "$ref": "#/definitions/pendingIngestion"
+        },
         "scan": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "exclude": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             }
           }
         }
@@ -218,9 +334,16 @@
       "required": ["id", "url", "name"],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "url": { "type": "string" },
-        "name": { "type": "string" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
       }
     },
     "pendingIngestion": {
@@ -228,9 +351,17 @@
       "required": ["sourceBackend", "sourceParent", "createdAt"],
       "additionalProperties": false,
       "properties": {
-        "sourceBackend": { "type": "string", "const": "notion" },
-        "sourceParent": { "$ref": "#/definitions/srsPageRef" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "sourceBackend": {
+          "type": "string",
+          "const": "notion"
+        },
+        "sourceParent": {
+          "$ref": "#/definitions/srsPageRef"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     }
   }
