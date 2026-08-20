@@ -1,5 +1,6 @@
 import chalk from 'chalk'
 
+import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
 import type { StatusReport } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
@@ -42,6 +43,14 @@ export function renderHuman(payload: RenderPayload): string {
   if (report.installedSkills.length > 0) {
     lines.push(`${chalk.gray('Skills:')} ${report.installedSkills.join(', ')}`)
   }
+  if (report.manifest) {
+    const languages = resolveOutputLanguages(report.manifest)
+    // Stay quiet in the all-English case: restating the default on every run
+    // trains people to skim past the block that matters when it is not.
+    if (!isAllDefaultLanguages(languages)) {
+      lines.push(`${chalk.gray('AI writes in:')} srs ${languages.srs}, tickets ${languages.tickets}, code comments ${languages.codeComments}`)
+    }
+  }
   lines.push('')
   lines.push(chalk.bold('Preconditions'))
   for (const p of preconditions) {
@@ -67,7 +76,10 @@ export function renderJson(payload: RenderPayload): string {
           projectName: report.manifest.projectName,
           structure: report.manifest.structure,
           workflow: report.manifest.workflow?.tool ?? null,
-          tools: report.manifest.tools ?? null
+          tools: report.manifest.tools ?? null,
+          // Always resolved, never echoed raw: a consumer must not have to
+          // re-implement the "absent means English" rule.
+          language: resolveOutputLanguages(report.manifest)
         }
       : null,
     git: report.git,
@@ -103,6 +115,10 @@ export function renderClaudeFriendly(payload: RenderPayload): string {
   if (report.installedSkills.length > 0) {
     lines.push(`- skills: ${report.installedSkills.join(', ')}`)
   }
+  if (report.manifest) {
+    const languages = resolveOutputLanguages(report.manifest)
+    lines.push(`- output language: srs ${languages.srs}, tickets ${languages.tickets}, code comments ${languages.codeComments}`)
+  }
   lines.push('')
   lines.push('## Preconditions')
   for (const p of preconditions) {
@@ -116,6 +132,9 @@ export function renderClaudeFriendly(payload: RenderPayload): string {
   lines.push('- Any `fail` precondition means you MUST resolve it before taking project actions; read the remediation.')
   lines.push('- `warn` preconditions may block specific flows (e.g. workflow transitions, SRS drafters); treat the remediation as required for that flow.')
   lines.push('- `skip` means the check was not applicable or not requested; do not act on it.')
+  lines.push(
+    '- Write every artefact in the `output language` above — SRS pages, tickets and their comments, code comments, commit messages. The language of the conversation is NOT the signal: a session held in French still produces English artefacts when the project says `en`.'
+  )
   lines.push('')
   return lines.join('\n')
 }
