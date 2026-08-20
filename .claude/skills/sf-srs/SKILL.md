@@ -61,6 +61,12 @@ Placeholder subfolders under `templates/` are kept with `.gitkeep` until their o
 Reads `tools.srs.backend` from `.saasfoundry.json` to pick the right adapter — see [manifest schema](../../docs/manifest-schema.md). Dispatch resolution happens inside `src/srs/` (SUB-14.2) — never
 directly in this skill.
 
+## Output language
+
+SRS pages — features, versions, FRs — are written in **`language.srs`** from `.saasfoundry.json` (`jq -r '.language.srs // "en"'`), which defaults to English. The language spoken with the user is
+irrelevant: a French conversation still writes an English SRS unless the project opted that surface out. A project may legitimately want a French SRS alongside English code comments, which is why the
+surfaces are separate.
+
 ## Commands
 
 Two equivalent entrypoints expose the same actions:

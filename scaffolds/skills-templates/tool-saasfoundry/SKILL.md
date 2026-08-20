@@ -46,6 +46,13 @@ The skill invokes the `sf` CLI exclusively in **non-interactive mode**:
 
 Before mutating, always prefer `--dry-run` where available (notably `sf update --dry-run`) to preview the plan for the user.
 
+## Output language
+
+Everything you write into the project — SRS pages, tickets and their comments, code comments, commit messages — follows the `language` block of `.saasfoundry.json`, which defaults to English on all
+three surfaces (`srs`, `tickets`, `codeComments`). `sf status --claude-friendly` prints the resolved values.
+
+**Never take the language of the conversation as the signal.** Talking with the user in French does not make the artefacts French.
+
 ## Available commands
 
 | User intent | CLI command | Notes |

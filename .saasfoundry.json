@@ -2,6 +2,11 @@
   "version": "1.0.0-beta",
   "projectName": "saasfoundryai-cli",
   "structure": "cli",
+  "language": {
+    "srs": "en",
+    "tickets": "en",
+    "codeComments": "en"
+  },
   "workflow": {
     "tool": "github-projects",
     "template": "SaaSFoundry AI",
