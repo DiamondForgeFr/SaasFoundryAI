@@ -15,6 +15,13 @@ Before asking the user anything about scope, backend, or module choices, **read 
 This rule exists because AI sessions historically asked users to re-pick the SRS backend (notion/atlassian/local-markdown) and parent page even though both were already in the manifest — those answers
 must come from `.saasfoundry.json`, not from a fresh dialogue.
 
+## 🌐 Output language
+
+Everything produced here — SRS pages, tickets and their comments, code comments, commit messages, docs — is written in the language declared in `.saasfoundry.json` → `language`, which is English on
+all three surfaces (`srs`, `tickets`, `codeComments`).
+
+**The language of the conversation is not the signal.** Sessions are often held in French; the artefacts stay English. `sf status --claude-friendly` prints the resolved values.
+
 ## 🚨 Critical Rules (non-negotiable)
 
 **We are dogfooding our own system.** Users of SaaSFoundryAI will rely on their AI agents to follow the workflows we generate. If we don't follow ours rigorously, we can't guarantee the system works.

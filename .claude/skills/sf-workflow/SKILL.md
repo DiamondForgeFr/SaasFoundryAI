@@ -99,6 +99,18 @@ An Epic's board status is **computed from its children**, never set directly.
 All workflow configuration lives in **`.saasfoundry.json`** at the project root. See [manifest schema](../../docs/manifest-schema.md) for the full field list and read snippets. **Never hardcode branch
 names** — always read from the manifest.
 
+## Output language
+
+Ticket titles, bodies, comments, commit messages and code comments follow **`language.tickets` / `language.codeComments`** in `.saasfoundry.json`, which default to English.
+
+```bash
+jq -r '.language.tickets      // "en"' .saasfoundry.json
+jq -r '.language.codeComments // "en"' .saasfoundry.json
+```
+
+**The language of the conversation is not the signal.** A session held in French still produces English tickets and English commit messages when the project says `en`. Only change language when the
+manifest says so.
+
 ## Available Commands
 
 ### Workflow Status Commands

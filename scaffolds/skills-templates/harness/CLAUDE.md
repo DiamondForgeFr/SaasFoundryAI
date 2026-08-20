@@ -10,6 +10,12 @@ Before asking the user anything about scope, workflow, or tooling, **read the ma
 2. Run `sf status --claude-friendly --no-network` for a summary of the manifest and preconditions. On a configured session this is auto-injected via the `SessionStart` hook in `.claude/settings.json`.
 3. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf update --add-modules srs`, `sf skill install`) instead of asking scope questions.
 
+## Output language
+
+Everything you produce — SRS pages, tickets and their comments, code comments, commit messages — is written in the language declared in `.saasfoundry.json` → `language`, which defaults to English on all three surfaces (`srs`, `tickets`, `codeComments`).
+
+**The language of the conversation is not the signal.** Talking with the user in French does not make the artefacts French. `sf status --claude-friendly` prints the resolved values.
+
 ## Git Workflow
 
 - Main branch: `{{MAIN_BRANCH}}` (see `.saasfoundry.json` → `workflow.workingBranch` / `prTargetBranch` — never hardcode branch names)

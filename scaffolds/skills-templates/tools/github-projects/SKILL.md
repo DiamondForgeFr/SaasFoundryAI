@@ -24,6 +24,11 @@ Reads `workflow.projectUrl` and `workflow.workingBranch` from `.saasfoundry.json
 
 Supported `projectUrl` formats: `https://github.com/orgs/<owner>/projects/<N>` or `https://github.com/users/<owner>/projects/<N>`. Requires `gh auth login` with `project` + `repo` scopes.
 
+## Output language
+
+Ticket titles, bodies and comments are written in **`language.tickets`** from `.saasfoundry.json` (`jq -r '.language.tickets // "en"'`), which defaults to English — never in the language of the
+conversation. A French-speaking session still files English tickets unless the project opted that surface out.
+
 ## Commands
 
 All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [args]`.
