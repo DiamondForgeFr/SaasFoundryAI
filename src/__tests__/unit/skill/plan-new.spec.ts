@@ -29,6 +29,48 @@ async function runWithIntent(intent: unknown): Promise<ExecResult> {
 }
 
 describe('skill/plan-new', () => {
+  // `profile` decides whether a stack is scaffolded at all. It was absent from the flag manifest,
+  // so plan-new dropped it in silence: an assistant that correctly concluded "this user has an
+  // existing repo, use harness" produced a command that scaffolded a full stack over it.
+  describe('installation profile', () => {
+    it('passes --profile harness through — the "I already have code" case', async () => {
+      const { stdout, code } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', profile: 'harness' })
+      expect(code).toBe(0)
+      expect(stdout).toContain('--profile harness')
+    })
+
+    it('rejects an unknown profile value', async () => {
+      const { code, stderr } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', profile: 'onlythestack' })
+      expect(code).toBe(2)
+      expect(stderr).toContain('profile')
+    })
+  })
+
+  describe('pwa module', () => {
+    it('emits --no-pwa when declined', async () => {
+      const { stdout, code } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', pwa: false })
+      expect(code).toBe(0)
+      expect(stdout).toContain('--no-pwa')
+    })
+  })
+
+  // The deeper bug: silence on unknown input. Any future CLI flag would have been dropped the
+  // same way, with nothing to notice.
+  describe('unknown intent fields', () => {
+    it('fails instead of silently dropping the field', async () => {
+      const { code, stderr } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', notAField: 'x' })
+      expect(code).toBe(2)
+      expect(stderr).toContain('unknown intent field "notAField"')
+    })
+
+    it('suggests near misses so a typo is obvious', async () => {
+      const { code, stderr } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', profil: 'harness' })
+      expect(code).toBe(2)
+      expect(stderr).toContain('did you mean')
+      expect(stderr).toContain('profile')
+    })
+  })
+
   describe('Guided/Express — monorepo backend-only', () => {
     it('builds the minimal command with just projectName + structure', async () => {
       const { stdout, code } = await runWithIntent({ projectName: 'acme', structure: 'monorepo' })

@@ -93,6 +93,12 @@ Pick the mode from the user's first message, not from a menu:
 ### Discovery workflow
 
 1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundryai-cli`). Cache for the rest of the turn.
+1. **Establish the starting point FIRST** — before anything else, determine `profile`. It is the CLI's first question and it gates which later questions apply at all. Ask plainly: *does a codebase already exist here that you intend to keep?*
+   - **Yes, and I'm building on it** → `harness`. Deposits the AI layer onto the existing repository. **No stack is scaffolded and no project directory is created.** Getting this wrong scaffolds a full stack over the user's project.
+   - **No, or it's a throwaway POC I'll rewrite** → `full`
+   - **I want the stack without the AI layer** → `stack` (rare — confirm it is deliberate)
+
+   On `harness`, skip every stack question (database, storage, email, installable app): there is nothing to scaffold.
 2. **Gather intent** — build a JSON object matching the `fields` in `reference/new-flags.json`. Only include fields the user has either stated or confirmed via a recommendation.
 3. **Materialize the plan** — pipe the intent JSON into `scripts/plan-new.sh`. It returns the full command on stdout or exits non-zero with a validation message on stderr.
 4. **Present the plan** — show the command *and* a short human summary built from the intent (structure, database, modules, post-setup apps). Never run the command yet.
@@ -113,6 +119,8 @@ Use these defaults when the user has no strong opinion:
 
 | Dimension | Default | Condition to override |
 | --- | --- | --- |
+| `profile` | `full` | Use `harness` as soon as the user has an existing codebase they are keeping — this is the highest-consequence field in the intent |
+| `pwa` | `true` | Leave on: invisible to anyone who does not install the app, no credentials, no external service. Only `false` when the product should deliberately not be installable |
 | `structure` | `monorepo` | Recommend `multirepo` only when backend/frontend are owned by separate teams or deploy on separate schedules |
 | `mainBranch` | `main` | Only `master` when the user's org standard says so |
 | `dbSetup` | `docker` | Recommend `credentials` for staging/prod stacks, `manual` when DB is provisioned elsewhere |
