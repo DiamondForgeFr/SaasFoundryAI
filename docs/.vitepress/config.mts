@@ -99,6 +99,7 @@ export default defineConfig({
             { text: 'Email', link: '/modules/email' },
             { text: 'Storage', link: '/modules/storage' },
             { text: 'Analytics', link: '/modules/analytics' },
+            { text: 'Installable app (PWA)', link: '/modules/pwa' },
             { text: 'SRS', link: '/modules/srs' }
           ]
         }

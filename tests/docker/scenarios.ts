@@ -14,6 +14,8 @@ export interface GenerationScenario {
   s3Setup: 'docker' | 'credentials' | 'manual'
   emailService: 'none' | 'mailersend'
   includeAnalytics: boolean
+  /** Optional so the 19 existing scenarios keep their shape; only the PWA scenario opts in. */
+  includePwa?: boolean
 }
 
 export interface UpdateScenario {
@@ -275,6 +277,19 @@ export const ALL_SCENARIOS: TestScenario[] = [
       includeAnalytics: false
     },
     addModules: { analytics: true }
+  },
+
+  // ── PWA: the app must still build, and must emit the installable artefacts ──
+  {
+    type: 'generation',
+    name: 'multirepo-pwa',
+    projectName: 'multi-pwa',
+    isMonorepo: false,
+    dbSetup: 'manual',
+    s3Setup: 'manual',
+    emailService: 'none',
+    includeAnalytics: false,
+    includePwa: true
   }
 ]
 

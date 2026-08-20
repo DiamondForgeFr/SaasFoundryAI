@@ -56,6 +56,8 @@ program
   // Analytics
   .option('--analytics', 'Include analytics module')
   .option('--no-analytics', 'Skip analytics module')
+  .option('--pwa', 'Make the app installable as a desktop application (default)')
+  .option('--no-pwa', 'Skip the installable-app module')
   // Advanced skills
   .option('--advanced-skills <skills>', 'Comma-separated list of advanced skills (context7,atlassian,notion,figma)')
   .option('--context7-api-key <key>', 'Context7 API key (unused — free public API)')

@@ -390,3 +390,31 @@ export function reportResults(scenarioName: string, results: AssertionResult[]):
 
   return failed === 0
 }
+
+/**
+ * PWA module — assert the app is actually installable, not merely that the plugin was wired.
+ *
+ * The distinction matters: a manifest that never reaches `dist/` leaves the browser with nothing
+ * to offer, and the icons are what Chromium checks before showing "Install this application" at
+ * all. Assert the built artefacts, not the source config.
+ */
+export function assertPwaBuildOutput(webPath: string): AssertionResult[] {
+  const dist = join(webPath, 'dist')
+  return [
+    assertFileExists(join(dist, 'manifest.webmanifest')),
+    assertFileExists(join(dist, 'sw.js')),
+    assertFileExists(join(dist, 'registerSW.js')),
+    // The two sizes Chromium requires, plus the maskable variant Android crops against.
+    assertFileExists(join(dist, 'pwa-192x192.png')),
+    assertFileExists(join(dist, 'pwa-512x512.png')),
+    assertFileExists(join(dist, 'pwa-maskable-512x512.png')),
+    // `standalone` is what removes the browser chrome — without it the installed app is just a
+    // tab in a bare window, which is not what "desktop app" means to anyone.
+    // Matched without a space: vite-plugin-pwa emits the manifest minified.
+    assertFileContains(join(dist, 'manifest.webmanifest'), '"display":"standalone"'),
+    // The manifest must be reachable from the page, or none of the above is ever read.
+    assertFileContains(join(dist, 'index.html'), 'rel="manifest"'),
+    // The project's own identity, not the template placeholder.
+    assertFileNotContains(join(dist, 'manifest.webmanifest'), '{{PROJECT_NAME}}')
+  ]
+}
