@@ -54,10 +54,24 @@ for (const [key, spec] of Object.entries(manifest.fields)) {
   }
 }
 
+// Same reason as plan-new.js: an unknown field skipped in silence throws away an assistant's
+// correct reasoning with no signal, and drops every future CLI flag the same way.
+// `alreadyInstalled` is context the skill passes deliberately, not a flag — it is exempt.
+const knownFields = Object.keys(manifest.fields)
+const unknown = Object.keys(intent).filter((key) => key !== 'alreadyInstalled' && !manifest.fields[key])
+if (unknown.length > 0) {
+  for (const key of unknown) {
+    const nearMisses = knownFields.filter((k) => k.slice(0, 3) === key.slice(0, 3) || k.includes(key) || key.includes(k))
+    const hint = nearMisses.length > 0 ? ' — did you mean ' + nearMisses.join(' / ') + '?' : ''
+    process.stderr.write('plan-update: unknown intent field "' + key + '"' + hint + '\n')
+  }
+  process.stderr.write('plan-update: known fields are listed in reference/update-flags.json\n')
+  process.exit(2)
+}
+
 for (const [key, value] of Object.entries(intent)) {
   if (key === 'alreadyInstalled') continue
   const spec = manifest.fields[key]
-  if (!spec) continue
   if (spec.type === 'enum' && !spec.values.includes(value)) {
     process.stderr.write(
       'plan-update: invalid value "' +

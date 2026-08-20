@@ -48,9 +48,25 @@ for (const [key, spec] of Object.entries(manifest.fields)) {
   }
 }
 
+// An unknown field used to be skipped in silence. That is how `profile` and `pwa` — both real
+// CLI flags — were dropped from every plan without a word: an assistant that reasoned correctly
+// ("this user has an existing repo, use the harness profile") produced a command that scaffolded
+// a full stack over it. Silence on unknown input is the wrong default for a planner.
+const knownFields = Object.keys(manifest.fields)
+const unknown = Object.keys(intent).filter((key) => !manifest.fields[key])
+if (unknown.length > 0) {
+  for (const key of unknown) {
+    // Cheap near-miss hint: same first three characters, or one contains the other.
+    const nearMisses = knownFields.filter((k) => k.slice(0, 3) === key.slice(0, 3) || k.includes(key) || key.includes(k))
+    const hint = nearMisses.length > 0 ? ' — did you mean ' + nearMisses.join(' / ') + '?' : ''
+    process.stderr.write('plan-new: unknown intent field "' + key + '"' + hint + '\n')
+  }
+  process.stderr.write('plan-new: known fields are listed in reference/new-flags.json\n')
+  process.exit(2)
+}
+
 for (const [key, value] of Object.entries(intent)) {
   const spec = manifest.fields[key]
-  if (!spec) continue
   if (spec.type === 'enum' && !spec.values.includes(value)) {
     process.stderr.write(
       'plan-new: invalid value "' + value + '" for ' + key +
