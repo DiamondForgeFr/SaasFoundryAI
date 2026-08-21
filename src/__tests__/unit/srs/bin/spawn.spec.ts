@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../../builders/srs/types'
-import { extractFrId, extractFrTitle, parseArgs, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
+import { parseArgs, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
+import { parseFrPageTitle } from '../../../../srs/tree/fr-title'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../../srs'
 
 class StubAdapter implements SrsAdapter {
@@ -117,29 +118,31 @@ describe('parseArgs', () => {
   })
 })
 
-describe('extractFrId / extractFrTitle', () => {
-  it('parses "FR-001 — Login flow"', () => {
-    expect(extractFrId('FR-001 — Login flow')).toBe('FR-001')
-    expect(extractFrTitle('FR-001 — Login flow')).toBe('Login flow')
+// spawn used to carry its own FR-title regex matching `FR-\d+` only, so every real
+// id (FR-LIVE-007, FR-CONFIG-ENGINE-01) failed it and was fabricated into a ticket
+// from the raw title. It now shares the one parser with the inventory walk.
+describe('spawn uses the shared FR title parser', () => {
+  it('reads the ids the old local regex could not', () => {
+    expect(parseFrPageTitle('FR-LIVE-007 — Topic-aware AI note taking')).toMatchObject({ id: 'FR-LIVE-007', title: 'Topic-aware AI note taking' })
+    expect(parseFrPageTitle('FR-CONFIG-ENGINE-01 — Declarative steps')).toMatchObject({ id: 'FR-CONFIG-ENGINE-01' })
   })
 
-  it('parses "FR-042: Password reset"', () => {
-    expect(extractFrId('FR-042: Password reset')).toBe('FR-042')
-    expect(extractFrTitle('FR-042: Password reset')).toBe('Password reset')
+  it('keeps the separator tolerance the old regex had', () => {
+    expect(parseFrPageTitle('FR-AUTH-042: Password reset')).toMatchObject({ id: 'FR-AUTH-042', title: 'Password reset' })
+    expect(parseFrPageTitle('fr-auth-009 — Something')).toMatchObject({ id: 'FR-AUTH-009' })
+    expect(parseFrPageTitle('  FR-AUTH-010 - Typed hyphen  ')).toMatchObject({ id: 'FR-AUTH-010', title: 'Typed hyphen' })
   })
 
-  it('uppercases the FR id', () => {
-    expect(extractFrId('fr-009 — Something')).toBe('FR-009')
+  // The two parsers covered DISJOINT shapes, not overlapping ones. The old local
+  // regex accepted `FR-\d+` and nothing else — the shape used in ticket-body
+  // examples, never the one the SRS templates produce. The canonical page-title
+  // convention is `FR-AREA-NN`, so an area-less id is not an FR page title.
+  it('rejects the area-less shape the old local regex was built for', () => {
+    expect(parseFrPageTitle('FR-001 — Login flow')).toBeNull()
   })
 
-  it('falls back to the raw title when no FR pattern is present', () => {
-    expect(extractFrId('Ad hoc page')).toBe('Ad hoc page')
-    expect(extractFrTitle('Ad hoc page')).toBe('Ad hoc page')
-  })
-
-  it('trims surrounding whitespace in the fallback', () => {
-    expect(extractFrId('  FR-010 - Typed hyphen  ')).toBe('FR-010')
-    expect(extractFrTitle('  FR-010 - Typed hyphen  ')).toBe('Typed hyphen')
+  it('returns null instead of falling back to the raw title', () => {
+    expect(parseFrPageTitle('Ad hoc page')).toBeNull()
   })
 })
 
@@ -257,8 +260,8 @@ describe('runSpawn', () => {
 
   it('dry-run: plans without creating, then exits 0', async () => {
     const children: PageRef[] = [
-      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-001 — Login flow' },
-      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-002: Password reset' }
+      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Login flow' },
+      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-AUTH-002: Password reset' }
     ]
     registerSrsBackend('stub', () => new StubAdapter(children))
     writeManifest({ tools: { srs: { backend: 'stub' } } })
@@ -267,16 +270,16 @@ describe('runSpawn', () => {
     expect(code).toBe(0)
     expect(io.createSubtask).not.toHaveBeenCalled()
     const out = io.stdoutBuffer.join('')
-    expect(out).toMatch(/found 2 FR page\(s\)/)
-    expect(out).toMatch(/FR-001 → FR-001: Login flow/)
-    expect(out).toMatch(/FR-002 → FR-002: Password reset/)
+    expect(out).toMatch(/2 FR page\(s\)/)
+    expect(out).toMatch(/FR-AUTH-001 → FR-AUTH-001: Login flow/)
+    expect(out).toMatch(/FR-AUTH-002 → FR-AUTH-002: Password reset/)
     expect(out).toMatch(/dry-run/)
   })
 
   it('creates one Story sub-issue per FR page under the parent', async () => {
     const children: PageRef[] = [
-      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-001 — Login flow' },
-      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-002 — Password reset' }
+      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Login flow' },
+      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-AUTH-002 — Password reset' }
     ]
     registerSrsBackend('stub', () => new StubAdapter(children))
     writeManifest({ tools: { srs: { backend: 'stub' } } })
@@ -284,28 +287,33 @@ describe('runSpawn', () => {
     const code = await runSpawn(baseOptions(), io)
     expect(code).toBe(0)
     expect(io.createSubtask).toHaveBeenCalledTimes(2)
-    expect(io.createSubtask.mock.calls[0]).toEqual(['42', 'FR-001: Login flow', expect.any(String), 'spawned-from-srs'])
-    expect(io.createSubtask.mock.calls[1]).toEqual(['42', 'FR-002: Password reset', expect.any(String), 'spawned-from-srs'])
+    expect(io.createSubtask.mock.calls[0]).toEqual(['42', 'FR-AUTH-001: Login flow', expect.any(String), 'spawned-from-srs'])
+    expect(io.createSubtask.mock.calls[1]).toEqual(['42', 'FR-AUTH-002: Password reset', expect.any(String), 'spawned-from-srs'])
     const firstBody = io.createSubtask.mock.calls[0][2] as string
     expect(firstBody).toMatch(/## Objective/)
-    expect(firstBody).toMatch(/FR-001 — Login flow/)
+    expect(firstBody).toMatch(/FR-AUTH-001 — Login flow/)
     expect(firstBody).toMatch(/https:\/\/example\.test\/fr1/)
   })
 
-  it('warns and uses the raw title (no "X: X" duplication) when a child page is missing the FR-### prefix', async () => {
-    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/ad-hoc', title: 'Ad hoc page' }]
+  // Was: "warns and uses the raw title". Producing a ticket from a non-FR title is
+  // worse than failing — it looks planned and is empty. Two such tickets, and zero
+  // for the four real FRs, is what spawn did on the live "Réunion live" feature.
+  it('aborts and creates nothing when a page under a version is not an FR', async () => {
+    const children: PageRef[] = [
+      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-LIVE-007 — Real' },
+      { id: 'p2', url: 'https://example.test/ad-hoc', title: 'Ad hoc page' }
+    ]
     registerSrsBackend('stub', () => new StubAdapter(children))
     writeManifest({ tools: { srs: { backend: 'stub' } } })
     const io = makeIO()
     const code = await runSpawn(baseOptions(), io)
-    expect(code).toBe(0)
-    expect(io.createSubtask).toHaveBeenCalledTimes(1)
-    expect(io.createSubtask.mock.calls[0][1]).toBe('Ad hoc page')
-    expect(io.stderrBuffer.join('')).toMatch(/does not match the "FR-### — Title" convention/)
+    expect(code).toBe(2)
+    expect(io.createSubtask).not.toHaveBeenCalled()
+    expect(io.stderrBuffer.join('')).toMatch(/mixes 1 loose FR page\(s\) with 1 version page\(s\)/)
   })
 
   it('propagates a custom --bypass-reason to createSubtask', async () => {
-    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-001 — Thing' }]
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Thing' }]
     registerSrsBackend('stub', () => new StubAdapter(children))
     writeManifest({ tools: { srs: { backend: 'stub' } } })
     const io = makeIO()
@@ -314,8 +322,91 @@ describe('runSpawn', () => {
     expect(io.createSubtask.mock.calls[0][3]).toBe('bootstrap-epic-174')
   })
 
+  // ── Version targeting ────────────────────────────────────────────────────
+  //
+  // Measured on the live "Réunion live" feature before this landed: spawn created
+  // two tickets named after the version pages and none for the four real FRs.
+  describe('a versioned feature', () => {
+    const feature: PageRef[] = [
+      { id: 'v1', url: 'https://example.test/v1', title: 'v1 — Existant' },
+      { id: 'v2', url: 'https://example.test/v2', title: 'v2 — Prise de notes vivante' }
+    ]
+    const tree: Record<string, PageRef[]> = {
+      v1: [{ id: 'f1', url: 'https://example.test/f1', title: 'FR-LIVE-001 — Transcript' }],
+      v2: [
+        { id: 'f2', url: 'https://example.test/f2', title: 'FR-LIVE-007 — Topic-aware AI note taking' },
+        { id: 'f3', url: 'https://example.test/f3', title: 'FR-LIVE-008 — Per-topic consolidation' }
+      ]
+    }
+
+    function register(): void {
+      registerSrsBackend(
+        'stub',
+        () =>
+          new StubAdapter(
+            [],
+            undefined,
+            () => ({ id: 'feat', name: 'Réunion live : transcript & notes', url: 'https://example.test/feat' }),
+            (parentId) => (parentId in tree ? tree[parentId] : feature)
+          )
+      )
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+    }
+
+    it('refuses to spawn from the feature and lists the versions with their FR counts and URLs', async () => {
+      register()
+      const io = makeIO()
+      const code = await runSpawn(baseOptions({ dryRun: true }), io)
+      expect(code).toBe(2)
+      expect(io.createSubtask).not.toHaveBeenCalled()
+      const err = io.stderrBuffer.join('')
+      expect(err).toMatch(/is a versioned feature, not an Epic/)
+      expect(err).toMatch(/v1 — Existant\s+\(1 FR\)\s+https:\/\/example\.test\/v1/)
+      expect(err).toMatch(/v2 — Prise de notes vivante\s+\(2 FR\)\s+https:\/\/example\.test\/v2/)
+    })
+
+    it('plans one Story per real FR once a version is selected, and names the Epic <feature> - <version>', async () => {
+      register()
+      const io = makeIO()
+      const code = await runSpawn(baseOptions({ dryRun: true, version: 'v2 — Prise de notes vivante' }), io)
+      expect(code).toBe(0)
+      const out = io.stdoutBuffer.join('')
+      expect(out).toMatch(/Epic « Réunion live : transcript & notes - v2 — Prise de notes vivante »/)
+      expect(out).toMatch(/FR-LIVE-007 → FR-LIVE-007: Topic-aware AI note taking/)
+      expect(out).toMatch(/FR-LIVE-008 → FR-LIVE-008: Per-topic consolidation/)
+      expect(out).not.toMatch(/v2 — Prise de notes vivante →/)
+    })
+
+    it('selects a version by URL as well as by title', async () => {
+      register()
+      const io = makeIO()
+      const code = await runSpawn(baseOptions({ dryRun: true, version: 'https://example.test/v1' }), io)
+      expect(code).toBe(0)
+      expect(io.stdoutBuffer.join('')).toMatch(/FR-LIVE-001 → FR-LIVE-001: Transcript/)
+    })
+
+    it('lists the versions again when the requested one does not exist', async () => {
+      register()
+      const io = makeIO()
+      const code = await runSpawn(baseOptions({ dryRun: true, version: 'v9' }), io)
+      expect(code).toBe(2)
+      expect(io.stderrBuffer.join('')).toMatch(/no version "v9"/)
+      expect(io.stderrBuffer.join('')).toMatch(/v1 — Existant/)
+    })
+  })
+
+  it('rejects --version on a feature that holds its FRs directly', async () => {
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Thing' }]
+    registerSrsBackend('stub', () => new StubAdapter(children))
+    writeManifest({ tools: { srs: { backend: 'stub' } } })
+    const io = makeIO()
+    const code = await runSpawn(baseOptions({ dryRun: true, version: 'v1' }), io)
+    expect(code).toBe(2)
+    expect(io.stderrBuffer.join('')).toMatch(/is not versioned/)
+  })
+
   it('returns 8 when the subtask-creation shim yields an empty childNumber', async () => {
-    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-001 — Thing' }]
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Thing' }]
     registerSrsBackend('stub', () => new StubAdapter(children))
     writeManifest({ tools: { srs: { backend: 'stub' } } })
     const io = makeIO({ createSubtask: jest.fn(() => ({ childNumber: '' })) })
@@ -325,7 +416,7 @@ describe('runSpawn', () => {
   })
 
   it('returns 8 when createSubtask throws', async () => {
-    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-001 — Thing' }]
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Thing' }]
     registerSrsBackend('stub', () => new StubAdapter(children))
     writeManifest({ tools: { srs: { backend: 'stub' } } })
     const io = makeIO({
