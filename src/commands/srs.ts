@@ -3,6 +3,7 @@ import { parseArgs as parseBrowseArgs, runBrowseTree } from '../srs/bin/browse-t
 import { parseArgs as parseDraftCodebaseArgs, runDraftFromCodebase } from '../srs/bin/draft-from-codebase'
 import { parseArgs as parseDraftNotionPagesArgs, runDraftFromNotionPages } from '../srs/bin/draft-from-notion-pages'
 import { parseArgs as parseEvalArgs, runEvalSrs } from '../srs/bin/eval-srs'
+import { parseArgs as parseNormalizeArgs, runNormalize } from '../srs/bin/normalize'
 import { parseArgs as parseSpawnArgs, runSpawn } from '../srs/bin/spawn'
 import { runValidate } from '../srs/bin/validate'
 import { parseArgs as parseWriteArgs, runWriteSrs } from '../srs/bin/write-srs'
@@ -20,6 +21,7 @@ Actions:
   write --spec <path> [--manifest] [--no-clear-pending]
                                          Apply a DraftCandidate[] spec file through the adapter
   spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
+  normalize [--feature <url-or-id>] [--version-name <name>] [--apply] [--manifest] [--root-page <id>]
                                          Enumerate FR page children of an Epic and create Story sub-tickets
   apply-update [--patch <path>] [--manifest]
                                          Apply a conversational eval-hook patch (ADD-only)
@@ -107,6 +109,11 @@ export async function srsCommand(subcommand?: string, ...rest: string[]): Promis
       case 'spawn': {
         const options = parseSpawnArgs(argv)
         code = await runSpawn(options)
+        break
+      }
+      case 'normalize': {
+        const options = parseNormalizeArgs(argv)
+        code = await runNormalize(options, { stdout: (c) => process.stdout.write(c), stderr: (c) => process.stderr.write(c) })
         break
       }
       case 'apply-update': {

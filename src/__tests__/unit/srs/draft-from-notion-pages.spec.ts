@@ -36,6 +36,10 @@ class StubAdapter implements SrsAdapter {
   async listChildren(): Promise<PageRef[]> {
     return []
   }
+  async move(pageId: string, newParentPageId: string): Promise<void> {
+    void pageId
+    void newParentPageId
+  }
 }
 
 describe('runDraftFromNotionPages', () => {

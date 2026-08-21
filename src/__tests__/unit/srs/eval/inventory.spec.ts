@@ -27,6 +27,10 @@ class StubAdapter implements SrsAdapter {
   async listChildren(parentId: string): Promise<PageRef[]> {
     return this.tree[parentId] ?? []
   }
+  async move(pageId: string, newParentPageId: string): Promise<void> {
+    void pageId
+    void newParentPageId
+  }
 }
 
 describe('parseFrPageTitle', () => {
