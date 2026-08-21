@@ -3,12 +3,19 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { renderStoryTicketBody } from '../../builders/srs/templates/tickets/story.tpl'
-import { FrItem, StoryTicketBodySpec } from '../../builders/srs/types'
+import { FrItem, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { parseFrPageTitle } from '../tree/fr-title'
 
 export interface SpawnOptions {
   ticket: string
   epic: string
+  /**
+   * Title, id or URL of a version page under `--epic`. Required when the feature
+   * is versioned: a batch of tickets belongs to one version, never to the whole
+   * feature, because `Epic = feature + version`.
+   */
+  version?: string
   dryRun: boolean
   manifestPath: string
   bypassReason: string
@@ -45,6 +52,9 @@ export function parseArgs(argv: string[]): SpawnOptions {
     } else if (a === '--epic') {
       opts.epic = takeValue(argv, i, '--epic')
       i++
+    } else if (a === '--version') {
+      opts.version = takeValue(argv, i, '--version')
+      i++
     } else if (a === '--dry-run') {
       opts.dryRun = true
     } else if (a === '--manifest') {
@@ -70,23 +80,10 @@ function parseManifest(path: string): SrsManifestSubset {
   }
 }
 
-// Parse the SUB-3 page template convention ("FR-001 — Login flow" / "FR-001: Login flow").
-// When the title doesn't match, hasFrId=false and the id/title are identical (the raw title);
-// callers are expected to surface a warning and avoid rendering "title: title" duplicates.
-export function parseFrTitle(pageTitle: string): { id: string; title: string; hasFrId: boolean } {
-  const match = pageTitle.match(/^\s*(FR-\d+)\s*[—:\-]\s*(.+)$/i)
-  if (match) return { id: match[1].toUpperCase(), title: match[2].trim(), hasFrId: true }
-  const trimmed = pageTitle.trim()
-  return { id: trimmed, title: trimmed, hasFrId: false }
-}
-
-export function extractFrId(title: string): string {
-  return parseFrTitle(title).id
-}
-
-export function extractFrTitle(title: string): string {
-  return parseFrTitle(title).title
-}
+// The FR title parser lives in `src/srs/tree/fr-title.ts` and is shared with the
+// inventory walk. This file used to carry a second one matching `FR-\d+` only, so
+// every real id like FR-LIVE-007 failed it and got fabricated into a ticket from
+// its raw title. One grammar, one parser.
 
 function defaultIO(): SpawnIO {
   return {
@@ -101,6 +98,54 @@ function defaultIO(): SpawnIO {
       return { childNumber: match ? match[1] : '' }
     }
   }
+}
+
+/**
+ * Picks the version to spawn from, or explains why it cannot.
+ *
+ * A batch of tickets belongs to one version and never to the whole feature, so
+ * pointing spawn at a versioned feature is an error — not a licence to guess. The
+ * previous behaviour did guess: it created one ticket per version page, named
+ * after the page, and none for the real FRs.
+ */
+async function selectVersion(
+  adapter: { listChildren: (id: string) => Promise<PageRef[]> },
+  versions: PageRef[],
+  requested: string | undefined,
+  featureTitle: string,
+  io: SpawnIO
+): Promise<{ version: PageRef; frPages: PageRef[] } | null> {
+  const frPagesByVersion = new Map<string, PageRef[]>()
+  for (const version of versions) {
+    const children = await adapter.listChildren(version.id)
+    frPagesByVersion.set(version.id, children)
+  }
+
+  const listVersions = (): void => {
+    for (const version of versions) {
+      const count = (frPagesByVersion.get(version.id) ?? []).filter((page) => parseFrPageTitle(page.title) !== null).length
+      io.stderr(`    ${version.title}${' '.repeat(Math.max(1, 36 - version.title.length))}(${count} FR)  ${version.url}\n`)
+    }
+  }
+
+  if (!requested) {
+    io.stderr(`✗ spawn: « ${featureTitle} » is a versioned feature, not an Epic.\n`)
+    io.stderr(`  Pick the version to spawn:\n\n`)
+    listVersions()
+    io.stderr(`\n  → sf srs spawn --ticket <n> --epic <url> --version "${versions[0].title}"\n`)
+    return null
+  }
+
+  const needle = requested.trim().toLowerCase()
+  const match = versions.find((version) => version.title.trim().toLowerCase() === needle || version.id === requested || (version.url ?? '').includes(requested))
+
+  if (!match) {
+    io.stderr(`✗ spawn: no version "${requested}" under « ${featureTitle} ». Available:\n\n`)
+    listVersions()
+    return null
+  }
+
+  return { version: match, frPages: frPagesByVersion.get(match.id) ?? [] }
 }
 
 export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO()): Promise<number> {
@@ -128,10 +173,12 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   let epicPageId: string
+  let epicTitle: string
   let mainSpecUrl: string | undefined
   try {
     const resolved = await adapter.resolveParent(options.epic)
     epicPageId = resolved.id
+    epicTitle = resolved.name
     mainSpecUrl = resolved.url
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -139,7 +186,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     return 6
   }
 
-  let children
+  let children: PageRef[]
   try {
     children = await adapter.listChildren(epicPageId)
   } catch (error) {
@@ -153,18 +200,50 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     return 0
   }
 
-  const planned: PlannedCreation[] = children.map((child) => {
-    const parsed = parseFrTitle(child.title)
-    if (!parsed.hasFrId) {
-      io.stderr(`  ⚠ spawn: child page "${child.title}" does not match the "FR-### — Title" convention; using raw title as the ticket name.\n`)
+  // Classify by position, exactly as the inventory walk does: under a feature, a
+  // page that is not an FR is a version. The level is never read from the title —
+  // a version is called MVP, V1 or "v2 — Titre" depending on who wrote it.
+  const versionCandidates = children.filter((child) => parseFrPageTitle(child.title) === null)
+
+  let holderTitle = epicTitle
+  let holderPageUrl = mainSpecUrl
+
+  if (versionCandidates.length > 0) {
+    // A feature carrying both loose FRs and version pages is ambiguous: spawning
+    // would silently pick one shape over the other.
+    if (versionCandidates.length < children.length) {
+      io.stderr(`✗ spawn: « ${epicTitle} » mixes ${children.length - versionCandidates.length} loose FR page(s) with ${versionCandidates.length} version page(s).\n`)
+      io.stderr(`  Those FRs belong to no version. Run 'sf srs normalize --feature <url>' first, then spawn a version.\n`)
+      return 2
+    }
+
+    const selected = await selectVersion(adapter, versionCandidates, options.version, epicTitle, io)
+    if (!selected) return 2
+
+    holderTitle = `${epicTitle} - ${selected.version.title}`
+    holderPageUrl = selected.version.url
+    children = selected.frPages
+  } else if (options.version) {
+    io.stderr(`✗ spawn: « ${epicTitle} » is not versioned — it holds its FR pages directly, so --version has nothing to select.\n`)
+    return 2
+  }
+
+  // Never fabricate. At this point every child must be an FR: either the feature
+  // holds them directly, or we descended into the selected version.
+  const planned: PlannedCreation[] = []
+  for (const child of children) {
+    const parsed = parseFrPageTitle(child.title)
+    if (!parsed) {
+      io.stderr(`✗ spawn: page "${child.title}" under « ${holderTitle} » is neither an FR nor a version page.\n`)
+      io.stderr(`  Nothing was created. Producing a ticket from a raw title is worse than failing: it looks planned and is empty.\n`)
+      return 2
     }
     const fr: FrItem = { id: parsed.id, title: parsed.title }
-    const spec: StoryTicketBodySpec = { fr, frPageUrl: child.url, mainSpecUrl }
-    const ticketTitle = parsed.hasFrId ? `${fr.id}: ${fr.title}` : fr.title
-    return { frId: fr.id, title: ticketTitle, frPageUrl: child.url, body: renderStoryTicketBody(spec) }
-  })
+    const spec: StoryTicketBodySpec = { fr, frPageUrl: child.url, mainSpecUrl: holderPageUrl }
+    planned.push({ frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec) })
+  }
 
-  io.stdout(`spawn: found ${planned.length} FR page(s) under the epic — planning Story tickets under parent #${options.ticket}\n`)
+  io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s), planning Story tickets under parent #${options.ticket}\n`)
   for (const p of planned) {
     io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl})\n`)
   }
@@ -201,7 +280,7 @@ if (require.main === module) {
     options = parseArgs(process.argv.slice(2))
   } catch (err) {
     process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
-    process.stderr.write(`\nUsage: spawn.ts --ticket <ticket-number> --epic <page-url-or-id> [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`)
+    process.stderr.write(`\nUsage: spawn.ts --ticket <ticket-number> --epic <page-url-or-id> [--version <title-url-or-id>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`)
     process.exit(1)
   }
   runSpawn(options)

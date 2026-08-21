@@ -82,6 +82,29 @@ library from `dist/srs/`, `src/srs/` or `node_modules/saasfoundryai-cli/dist/srs
 
 Run `sf srs help` to see the full action list.
 
+### Spawning a versioned feature
+
+`Epic = feature + version`, so a batch of tickets belongs to one version and never to the whole feature. Pointing `spawn` at a versioned feature is an error that lists the versions rather than a
+licence to guess:
+
+```
+sf srs spawn --ticket 42 --epic <feature-url> --dry-run
+
+✗ spawn: « Réunion live : transcript & notes » is a versioned feature, not an Epic.
+  Pick the version to spawn:
+
+    v1 — Existant                       (9 FR)  <url>
+    v2 — Prise de notes vivante…        (4 FR)  <url>
+
+  → sf srs spawn --ticket 42 --epic <url> --version "v2 — Prise de notes vivante"
+```
+
+`--version` accepts the version's title, id or URL. The Epic is named `<feature> - <version>`.
+
+A feature holding its FRs directly still spawns from `--epic` alone — 25 real features are in that shape, and `sf srs normalize` is what moves them onto the model.
+
+**A page that is neither an FR nor a version aborts the run and creates nothing.** Producing a ticket from a raw title is worse than failing: it looks planned and is empty.
+
 | Action         | Purpose                                                               | Populated by |
 | -------------- | --------------------------------------------------------------------- | ------------ |
 | `help`         | Print available actions                                               | SUB-14.3     |
