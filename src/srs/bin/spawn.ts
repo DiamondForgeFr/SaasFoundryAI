@@ -130,14 +130,19 @@ async function selectVersion(
   io: SpawnIO
 ): Promise<{ version: PageRef; frPages: PageRef[] } | null> {
   const frPagesByVersion = new Map<string, PageRef[]>()
-  for (const version of versions) {
+  const frPagesOf = async (version: PageRef): Promise<PageRef[]> => {
+    const cached = frPagesByVersion.get(version.id)
+    if (cached) return cached
     const children = await adapter.listChildren(version.id)
     frPagesByVersion.set(version.id, children)
+    return children
   }
 
-  const listVersions = (): void => {
+  // Listing costs one call per version, so it happens only when a list is what the
+  // caller gets — an error. The happy path touches the selected version alone.
+  const listVersions = async (): Promise<void> => {
     for (const version of versions) {
-      const count = (frPagesByVersion.get(version.id) ?? []).filter((page) => parseFrPageTitle(page.title) !== null).length
+      const count = (await frPagesOf(version)).filter((page) => parseFrPageTitle(page.title) !== null).length
       io.stderr(`    ${version.title}${' '.repeat(Math.max(1, 36 - version.title.length))}(${count} FR)  ${version.url}\n`)
     }
   }
@@ -145,21 +150,31 @@ async function selectVersion(
   if (!requested) {
     io.stderr(`✗ spawn: « ${featureTitle} » is a versioned feature, not an Epic.\n`)
     io.stderr(`  Pick the version to spawn:\n\n`)
-    listVersions()
-    io.stderr(`\n  → sf srs spawn --ticket <n> --epic <url> --version "${versions[0].title}"\n`)
+    await listVersions()
+    io.stderr(`\n  → sf srs spawn --epic <url> --version "${versions[0].title}"\n`)
     return null
   }
 
+  // Exact matches only. A substring match on the URL would let `--version v1` pick
+  // a page whose URL merely contains "v1" — a silent wrong target on a command that
+  // writes to the board. A near-miss falls through to the list, which is help.
   const needle = requested.trim().toLowerCase()
-  const match = versions.find((version) => version.title.trim().toLowerCase() === needle || version.id === requested || (version.url ?? '').includes(requested))
+  const match = versions.find((version) => version.title.trim().toLowerCase() === needle || version.id === requested || version.url === requested)
 
   if (!match) {
     io.stderr(`✗ spawn: no version "${requested}" under « ${featureTitle} ». Available:\n\n`)
-    listVersions()
+    await listVersions()
     return null
   }
 
-  return { version: match, frPages: frPagesByVersion.get(match.id) ?? [] }
+  const frPages = await frPagesOf(match)
+  if (frPages.length === 0) {
+    io.stderr(`✗ spawn: version « ${match.title} » of « ${featureTitle} » holds no page — there is nothing to spawn.\n`)
+    io.stderr(`  Creating an Epic with no Story would put a promise on the board that no page backs.\n`)
+    return null
+  }
+
+  return { version: match, frPages }
 }
 
 export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO()): Promise<number> {

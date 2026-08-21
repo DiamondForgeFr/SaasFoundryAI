@@ -395,6 +395,37 @@ describe('runSpawn', () => {
       expect(io.stdoutBuffer.join('')).toMatch(/FR-LIVE-001 → FR-LIVE-001: Transcript/)
     })
 
+    // Adversarial review: an empty version would produce an Epic with no Story —
+    // a promise on the board that no page backs.
+    it('refuses a version that holds no page', async () => {
+      const emptyTree: Record<string, PageRef[]> = { v1: [], v2: [] }
+      registerSrsBackend(
+        'stub',
+        () =>
+          new StubAdapter(
+            [],
+            undefined,
+            () => ({ id: 'feat', name: 'Réunion live', url: 'https://example.test/feat' }),
+            (parentId) => (parentId in emptyTree ? emptyTree[parentId] : feature)
+          )
+      )
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+      const io = makeIO()
+      const code = await runSpawn(baseOptions({ dryRun: true, version: 'v1 — Existant' }), io)
+      expect(code).toBe(2)
+      expect(io.stderrBuffer.join('')).toMatch(/holds no page/)
+    })
+
+    // A substring match on the URL would let `--version v1` silently hit a page
+    // whose URL merely contains "v1", on a command that writes to the board.
+    it('does not match a version on a URL fragment', async () => {
+      register()
+      const io = makeIO()
+      const code = await runSpawn(baseOptions({ dryRun: true, version: 'example.test' }), io)
+      expect(code).toBe(2)
+      expect(io.stderrBuffer.join('')).toMatch(/no version "example\.test"/)
+    })
+
     it('lists the versions again when the requested one does not exist', async () => {
       register()
       const io = makeIO()
