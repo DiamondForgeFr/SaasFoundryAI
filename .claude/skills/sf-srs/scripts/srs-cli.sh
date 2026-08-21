@@ -65,49 +65,88 @@ the matching SrsAdapter. See .claude/skills/sf-srs/SKILL.md for the contract.
 EOF
 }
 
-# Locate the SaaSFoundryAI project root (where src/srs/ lives).
-# In the dogfood repo, the root is the nearest ancestor with a `src/srs` dir.
-# In a generated project consuming sf-srs from a pre-built distribution, the
-# dispatch library ships under node_modules/saasfoundryai-cli/dist/srs — SUB-14.4
-# will bind that path ; for now we walk up from SCRIPT_DIR.
-find_project_root() {
-  local dir="$SCRIPT_DIR"
-  while [[ "$dir" != "/" ]]; do
-    if [[ -d "$dir/src/srs" || -f "$dir/dist/srs/index.js" ]]; then
+# Directories that may hold the dispatch library, nearest first.
+#
+# Two ancestries are searched, because neither alone is sufficient: the skill can
+# be invoked from anywhere (so SCRIPT_DIR anchors it to the project it was
+# installed into), and a monorepo puts node_modules above the working directory
+# (so PWD's ancestors matter too).
+candidate_roots() {
+  local dir
+  for dir in "$SCRIPT_DIR" "$PWD"; do
+    while [[ "$dir" != "/" && -n "$dir" ]]; do
       echo "$dir"
-      return 0
-    fi
-    dir="$(dirname "$dir")"
+      dir="$(dirname "$dir")"
+    done
   done
-  # Fallback : current working directory
-  echo "$PWD"
 }
 
-# Run a TS entrypoint via the dist / src fallback pattern.
-# $1 = bin script basename (without extension), $2+ = args forwarded.
+# Resolve the entrypoint for an action across the three real layouts:
+#
+#   dist/srs/bin/<bin>.js                              this checkout, built
+#   src/srs/bin/<bin>.ts                               this checkout, via tsx
+#   node_modules/saasfoundryai-cli/dist/srs/bin/*.js   a generated project
+#
+# The last one is the layout every user has and the one this resolver used to
+# ignore entirely, which made the skill's documented entrypoint fail in every
+# generated project while working perfectly in the only place we ever ran it.
+#
+# Prints "<mode>:<path>" — mode `node` runs the JS directly, mode `tsx` runs the
+# TS source from the checkout root.
+resolve_entrypoint() {
+  local bin="$1" dir
+  while read -r dir; do
+    if [[ -f "$dir/dist/srs/bin/$bin.js" ]]; then
+      echo "node:$dir/dist/srs/bin/$bin.js"
+      return 0
+    fi
+    if [[ -f "$dir/src/srs/bin/$bin.ts" ]]; then
+      echo "tsx:$dir"
+      return 0
+    fi
+    if [[ -f "$dir/node_modules/saasfoundryai-cli/dist/srs/bin/$bin.js" ]]; then
+      echo "node:$dir/node_modules/saasfoundryai-cli/dist/srs/bin/$bin.js"
+      return 0
+    fi
+    dir=""
+  done < <(candidate_roots)
+  return 1
+}
+
+# Run an entrypoint. $1 = bin basename (no extension), $2+ = forwarded args.
 run_bin() {
   local bin="$1"
   shift
-  local project_root
-  project_root="$(find_project_root)"
-
-  if [[ -f "$project_root/dist/srs/bin/$bin.js" ]]; then
-    node "$project_root/dist/srs/bin/$bin.js" "$@"
-  elif [[ -f "$project_root/src/srs/bin/$bin.ts" ]]; then
-    if ! command -v npx >/dev/null 2>&1; then
-      echo "sf-srs $bin: `node` / `npx` must be on PATH to run the TS entrypoint." >&2
-      exit 1
-    fi
-    if ! (cd "$project_root" && npx --no-install tsx --version >/dev/null 2>&1); then
-      echo "sf-srs $bin: tsx is not installed in $project_root — run 'npm install' there or 'npm run build' to use the dist/ entrypoint." >&2
-      exit 1
-    fi
-    (cd "$project_root" && npx --no-install tsx "src/srs/bin/$bin.ts" "$@")
-  else
-    echo "sf-srs $bin: neither dist/srs/bin/$bin.js nor src/srs/bin/$bin.ts found under $project_root." >&2
-    echo "Run `npm run build` in the SaaSFoundryAI checkout, or install sf-srs via `sf skill install sf-srs` (SUB-14.4)." >&2
+  local resolved
+  if ! resolved="$(resolve_entrypoint "$bin")"; then
+    echo "sf-srs $bin: could not locate the SRS dispatch library." >&2
+    echo "  Searched, from this script and from the working directory upwards:" >&2
+    echo "    dist/srs/bin/$bin.js" >&2
+    echo "    src/srs/bin/$bin.ts" >&2
+    echo "    node_modules/saasfoundryai-cli/dist/srs/bin/$bin.js" >&2
+    echo "  In a project: install the CLI (npm i -D saasfoundryai-cli)." >&2
+    echo "  In the SaaSFoundryAI checkout: run npm run build." >&2
+    echo "  Or use the CLI directly: sf srs $bin" >&2
     exit 1
   fi
+
+  local mode="${resolved%%:*}"
+  local target="${resolved#*:}"
+
+  if [[ "$mode" == "node" ]]; then
+    node "$target" "$@"
+    return
+  fi
+
+  if ! command -v npx >/dev/null 2>&1; then
+    echo "sf-srs $bin: node and npx must be on PATH to run the TS entrypoint." >&2
+    exit 1
+  fi
+  if ! (cd "$target" && npx --no-install tsx --version >/dev/null 2>&1); then
+    echo "sf-srs $bin: tsx is not installed in $target — run 'npm install' there, or 'npm run build' to use the dist/ entrypoint." >&2
+    exit 1
+  fi
+  (cd "$target" && npx --no-install tsx "src/srs/bin/$bin.ts" "$@")
 }
 
 run_validate() { run_bin validate "${1:-.saasfoundry.json}"; }
