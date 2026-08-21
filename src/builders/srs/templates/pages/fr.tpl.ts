@@ -1,4 +1,4 @@
-import { FR_TITLE_SEPARATOR } from '../../constants'
+import { composeFrTitle } from '../../fr-title-format'
 import { FrItem, FrSpec, PageBlock, PageContent, Priority } from '../../types'
 
 const EMPTY_CELL = '—'
@@ -55,10 +55,10 @@ export function renderFrPage(spec: FrSpec): PageContent {
   blocks.push({ kind: 'divider' })
 
   frs.forEach((fr, idx) => {
-    blocks.push({ kind: 'heading', level: 2, text: `${fr.id}${FR_TITLE_SEPARATOR}${fr.title}` })
+    blocks.push({ kind: 'heading', level: 2, text: composeFrTitle(fr.id, fr.title) })
     blocks.push({ kind: 'table', header: ['Field', 'Value'], rows: detailRows(fr) })
     if (idx < frs.length - 1) blocks.push({ kind: 'divider' })
   })
 
-  return { title: `${spec.fr.id}${FR_TITLE_SEPARATOR}${spec.fr.title}`, blocks }
+  return { title: composeFrTitle(spec.fr.id, spec.fr.title), blocks }
 }

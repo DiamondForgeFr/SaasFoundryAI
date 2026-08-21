@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { titleCarriesOwnId } from '../../builders/srs/fr-title-format'
 import { DraftCandidate, FrSpec, PageRef, SrsAdapter } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 
@@ -45,6 +46,18 @@ function normalizeCandidates(input: unknown): DraftCandidate[] {
     return (input as { candidates: DraftCandidate[] }).candidates
   }
   throw new Error('write-srs: spec file must be a JSON array of DraftCandidate or an object with a `candidates` array.')
+}
+
+// A drafter may legitimately pass a title with or without its FR id. The renderer
+// strips a duplicated prefix, so this never rejects — but a spec that carries the id
+// twice is still a spec the drafter should fix at the source, and silence is how
+// `FR-LIVE-011 — FR-LIVE-011 — …` reached two live Notion pages unnoticed.
+function warnOnDuplicatedFrId(candidate: DraftCandidate, index: number, warn: (message: string) => void): void {
+  if (candidate.kind !== 'fr' || !candidate.fr) return
+  const { id, title } = candidate.fr.fr
+  if (id && title && titleCarriesOwnId(id, title)) {
+    warn(`write-srs: candidate #${index} (fr) — title already starts with "${id}"; the duplicate prefix is stripped when the page is rendered.\n`)
+  }
 }
 
 function assertCandidateShape(candidate: DraftCandidate, index: number): void {
@@ -126,6 +139,8 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2
   }
+
+  candidates.forEach((candidate, index) => warnOnDuplicatedFrId(candidate, index, (message) => process.stderr.write(message)))
 
   let adapter: SrsAdapter
   try {
