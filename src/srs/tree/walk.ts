@@ -274,13 +274,17 @@ async function walkVersion(
     // conforming SRS — instead of to the size of the tree.
     const deeper = await adapter.listChildren(child.id)
     if (deeper.length > 0) {
+      // Say how many of those buried pages are FRs. "carries 3 child pages" reads as
+      // untidiness; "3 of them are FR pages, none of which are scored" is the actual cost.
+      const buriedFrs = deeper.filter((page) => parseFrPageTitle(page.title) !== null).length
+      const cost = buriedFrs > 0 ? `, ${buriedFrs} of them FR page(s) that no score will ever see` : ''
       conformance.push({
         kind: 'nesting-too-deep',
         pageId: child.id,
         title: child.title,
         featureTitle: featureRef.title,
         versionTitle: versionRef.title,
-        message: `Page "${child.title}" sits below the FR level and carries ${deeper.length} child page(s) — the SRS model stops at root → feature → version → FR`
+        message: `Page "${child.title}" sits below the FR level and carries ${deeper.length} child page(s)${cost} — the SRS model stops at root → feature → version → FR`
       })
     }
   }

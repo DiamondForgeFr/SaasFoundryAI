@@ -180,7 +180,8 @@ describe('walkSrsTree', () => {
 
     // The buried FR counts for nobody, so the version and the feature both report empty.
     expect(kinds(tree.conformance)).toEqual(['unexpected-page-under-version', 'nesting-too-deep', 'version-without-frs', 'feature-without-frs'])
-    expect(tree.conformance[1].message).toContain('1 child page(s)')
+    // The message has to name the cost: a buried FR is one no score will ever see.
+    expect(tree.conformance[1].message).toContain('1 child page(s), 1 of them FR page(s) that no score will ever see')
     // The buried FR is NOT harvested — the model stops at the FR level, and silently
     // reaching deeper would make the tree's shape unpredictable.
     expect(tree.frs).toEqual([])
