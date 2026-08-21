@@ -3,11 +3,16 @@ layout: home
 hero:
   name: SaaSFoundryAI
   text: Production SaaS, built for human + AI teams.
-  tagline: Scaffold a professional NestJS + React + PostgreSQL project in minutes — then ship features with guardrails that keep every contributor, human or AI, on the same workflow.
+  tagline:
+    Hand your AI assistant one link and it scaffolds a professional NestJS + React + PostgreSQL project — then ships features with guardrails that keep every contributor, human or AI, on the same
+    workflow.
   actions:
     - theme: brand
-      text: Get Started
+      text: Start with your AI
       link: /getting-started/installation
+    - theme: alt
+      text: Prefer the CLI
+      link: /getting-started/quick-start
     - theme: alt
       text: Read the philosophy
       link: /workflow/introduction
@@ -54,6 +59,27 @@ features:
       update` carries old projects forward without manual fix-ups.
 ---
 
+## Start here — one line to your AI assistant
+
+> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
+
+Paste that into Claude Code — or any assistant that can read a link and run commands — move into the folder you want to work in, and describe your product in your own words. The assistant installs the
+skill, asks only what it cannot infer, and drives everything after that: scaffolding, modules, workflow, tickets.
+
+::: details What your assistant does with that line
+
+```bash
+# Installs the tool-saasfoundry skill at user scope, into ~/.claude/skills/tool-saasfoundry/
+npx saasfoundryai-cli@beta skill install --yes --force
+```
+
+From there the skill reads `.saasfoundry.json` when there is one, drives `sf` **non-interactively**, and never answers the interactive prompts on your behalf. Full contract in
+[Skills System](/guide/skills-system) and [`sf skill`](/cli/sf-skill).
+
+:::
+
+**Prefer a terminal?** The CLI is a first-class path, not a fallback — start at [Quick Start](/getting-started/quick-start).
+
 ## Built for teams that care about code quality — with or without AI
 
 SaaSFoundryAI is not an AI wrapper. It is a **professional scaffold + workflow contract** that works perfectly well with a team of humans only, and **scales gracefully when AI agents join the team**.
@@ -96,25 +122,38 @@ Your AI agent does not invent its own task tracker. It uses the tool **you** alr
 | Linear          | Fast, opinionated cycles for startups.                  | On the roadmap  |
 | ClickUp         | All-in-one PM for ops-heavy teams.                      | On the roadmap  |
 
-::: info Tool support today The AI workflow currently ships against **GitHub Projects**. Jira, Notion, Linear and ClickUp adapters are next on the roadmap — the workflow engine is already
-tool-agnostic, only the per-board glue needs to land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundryAI/issues). :::
+::: info Tool support today
+
+The AI workflow currently ships against **GitHub Projects**. Jira, Notion, Linear and ClickUp adapters are next on the roadmap — the workflow engine is already tool-agnostic, only the per-board glue
+needs to land. Track progress on the [public issues](https://github.com/DiamondForgeFr/SaasFoundryAI/issues).
+
+:::
 
 You get human-readable tickets, standard board columns, and a paper trail a non-technical stakeholder can follow. **Your AI agent creates sub-issues, moves statuses, opens PRs and leaves comments —
 exactly like a developer would.** Human checkpoints sit at the natural transitions (Ready, Human testing, In review), so a person always confirms before code leaves the team's hands.
 
-::: tip Customizable in upcoming versions Today the 7-status lifecycle is fixed because it encodes the patterns we have most battle-tested. Upcoming versions will let you **customize the flow itself**
-— rename statuses, drop optional checkpoints, or add team-specific stages — so the workflow matches how your team actually works, not the other way around. :::
+::: tip Customizable in upcoming versions
+
+Today the 7-status lifecycle is fixed because it encodes the patterns we have most battle-tested. Upcoming versions will let you **customize the flow itself** — rename statuses, drop optional
+checkpoints, or add team-specific stages — so the workflow matches how your team actually works, not the other way around.
+
+:::
 
 ## How it works
 
+You say what you want; the assistant runs the command:
+
+| You say                                                 | It runs                                                                       |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| _"I want a SaaS with a client portal and file uploads"_ | `sf new` — topology, modules and workflow tool resolved from the conversation |
+| _"Let's ship the first ticket"_                         | `sf workflow` — Backlog → Done on a real ticket                               |
+| _"Are we still current?"_                               | `sf update` — upstream improvements, new modules, conflicts resolved          |
+
+The same three commands are yours to run directly whenever you prefer the terminal:
+
 ```bash
-# 1. Generate a production-ready project
-sf new my-saas          # choose topology, modules, workflow tool
-
-# 2. Ship your first ticket end-to-end
+sf new my-saas           # choose topology, modules, workflow tool
 sf workflow              # walk through Backlog → Done for a real ticket
-
-# 3. Stay current as SaaSFoundryAI evolves
 sf update                # receive upstream improvements, add modules, resolve conflicts
 ```
 
@@ -122,11 +161,16 @@ Every command respects the same `.saasfoundry.json` configuration — so the wor
 
 ## Ready to try?
 
-- **[Install SaaSFoundryAI →](/getting-started/installation)** — two commands, 60 seconds.
+- **[Start with your AI →](/getting-started/installation)** — one line handed to an assistant, no terminal required.
+- **[Prefer the CLI →](/getting-started/quick-start)** — two commands, 60 seconds.
 - **[Ship your first ticket →](/getting-started/first-project)** — a complete walk-through with a real example.
 - **[Read the philosophy →](/workflow/introduction)** — why this workflow exists and how it stays honest.
 
 ---
 
-::: tip Dogfooded end to end SaaSFoundryAI is built using its own workflow. Every feature you see here was shipped through the same 7-status lifecycle your generated projects will use. If it breaks
-for us, we notice before it breaks for you. :::
+::: tip Dogfooded end to end
+
+SaaSFoundryAI is built using its own workflow. Every feature you see here was shipped through the same 7-status lifecycle your generated projects will use. If it breaks for us, we notice before it
+breaks for you.
+
+:::

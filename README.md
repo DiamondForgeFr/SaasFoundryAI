@@ -18,7 +18,33 @@
   <br /><br />
 </div>
 
-# 🌟 What is SaaSFoundryAI?
+# SaaSFoundryAI
+
+**Give this line to your AI assistant:**
+
+> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
+
+Then open the folder you want to work in and describe your product in your own words. The assistant installs the skill, asks you what it still needs to know, and drives everything after that —
+scaffolding, modules, workflow, tickets. There is no CLI to learn first.
+
+<details>
+<summary><b>What your assistant does with that line</b></summary>
+
+```bash
+# Installs the tool-saasfoundry skill at user scope, into ~/.claude/skills/tool-saasfoundry/
+npx saasfoundryai-cli@beta skill install --yes --force
+
+# Use --project instead to commit the skill with the repo and share it with the team
+```
+
+From there the skill takes over: it reads `.saasfoundry.json` when there is one, drives `sf` **non-interactively**, and never answers the interactive prompts on your behalf. The full contract is in
+[Skills System](docs/guide/skills-system.md) and [`sf skill`](docs/cli/sf-skill.md).
+
+</details>
+
+**Prefer a terminal?** The CLI is a first-class path, not a fallback — see [Quick Start](#-quick-start).
+
+## 🌟 What is SaaSFoundryAI?
 
 SaaSFoundryAI is a comprehensive, production-ready CLI for building modern SaaS applications. Far beyond a simple boilerplate, it's a complete ecosystem with modular architecture, automated workflows,
 and integrated best practices. This open-source project provides a robust foundation for startups, freelancers, and developers looking to create scalable, secure, and maintainable SaaS solutions with
@@ -126,7 +152,18 @@ After installing these tools, you'll be ready to fully utilize all SaaSFoundryAI
 
 ## 🚀 Quick Start
 
-### Creating a New Project
+### Creating a new project — with your AI assistant
+
+Hand it the line at the top of this README, move into the folder you want to work in, then say what you want in your own words:
+
+> _"I want a SaaS with a client portal, file uploads and transactional email."_
+
+The skill asks only what it cannot infer, turns your answers into a single non-interactive `sf new …` invocation, shows you the plan, and runs it. The same skill covers what comes after — modules with
+`sf update`, the board with `sf workflow`.
+
+### Creating a new project — from the terminal
+
+Every step above has a CLI equivalent, and driving it yourself is a supported path rather than a fallback:
 
 ```bash
 # Execute directly (no global install needed)
@@ -619,7 +656,8 @@ Examples: `feat(#317): SRS intent-detector calibration`, `fix(#292): apply prett
 
 ## 📚 Documentation
 
-Detailed documentation is available at [saasfoundry.diamondforge.fr](https://saasfoundry.diamondforge.fr) — getting started, CLI reference, modules, SRS, workflow skills, troubleshooting.
+Detailed documentation lives in [`docs/`](docs/) — getting started, CLI reference, modules, SRS, workflow skills, troubleshooting. Browse it locally with `npm run docs:dev`; the hosted site goes up
+with the first stable release.
 
 📦 Available on npm: [saasfoundryai-cli](https://www.npmjs.com/package/saasfoundryai-cli)
 

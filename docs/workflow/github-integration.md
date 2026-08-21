@@ -175,8 +175,8 @@ Without `addSubIssue`, the zero-open-children gate (AI Rules, rule 7) would fail
 ## Swapping tools
 
 ::: warning Jira / Notion / Linear / ClickUp adapters — on the roadmap The `sf-workflow` orchestration layer is already tool-agnostic, but the only adapter that ships today is
-`sf-tool-github-projects`. The checklist below describes the target behaviour for when the other adapters land. Track progress on the [public issues](https://github.com/AGachet/SaaSFoundryAI/issues).
-:::
+`sf-tool-github-projects`. The checklist below describes the target behaviour for when the other adapters land. Track progress on the
+[public issues](https://github.com/DiamondForgeFr/SaasFoundryAI/issues). :::
 
 If you later migrate to Jira, Notion, Linear, or ClickUp, the checklist will be:
 
