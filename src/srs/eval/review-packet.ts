@@ -61,6 +61,8 @@ function buildFrEntries(inventory: SrsInventory, findings: ScannerFinding[]): { 
       pageId: fr.pageId,
       epicPageId: fr.epicPageId,
       epicTitle: fr.epicTitle,
+      featureTitle: fr.featureTitle,
+      version: fr.version,
       implementationKind: fr.implementationKind,
       areaHints: fr.areaHints,
       matchCount: matched.length,

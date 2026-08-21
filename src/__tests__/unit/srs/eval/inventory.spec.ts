@@ -81,7 +81,7 @@ describe('parseFrPageTitle', () => {
 })
 
 describe('buildSrsInventory', () => {
-  it('walks root → Epic → FR pages and skips non-FR children', async () => {
+  it('maps the flat shape: the feature is its own Epic and the FR carries no version', async () => {
     const adapter = new StubAdapter({
       root: [
         { id: 'epic-a', url: '', title: 'Authentication' },
@@ -89,8 +89,7 @@ describe('buildSrsInventory', () => {
       ],
       'epic-a': [
         { id: 'fr-a1', url: '', title: 'FR-AUTH-01 — Sign in' },
-        { id: 'fr-a2', url: '', title: 'FR-AUTH-02 — Sign out' },
-        { id: 'junk', url: '', title: 'Random note' }
+        { id: 'fr-a2', url: '', title: 'FR-AUTH-02 — Sign out' }
       ],
       'epic-b': [{ id: 'fr-b1', url: '', title: 'FR-STORAGE-01 — Upload file' }]
     })
@@ -100,11 +99,39 @@ describe('buildSrsInventory', () => {
     expect(inventory.rootPageId).toBe('root')
     expect(inventory.epics.map((e) => e.title)).toEqual(['Authentication', 'Storage'])
     expect(inventory.frs).toEqual([
-      { id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'fr-a1', epicPageId: 'epic-a', epicTitle: 'Authentication' },
-      { id: 'FR-AUTH-02', area: 'auth', title: 'Sign out', pageId: 'fr-a2', epicPageId: 'epic-a', epicTitle: 'Authentication' },
-      { id: 'FR-STORAGE-01', area: 'storage', title: 'Upload file', pageId: 'fr-b1', epicPageId: 'epic-b', epicTitle: 'Storage' }
+      { id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'fr-a1', epicPageId: 'epic-a', epicTitle: 'Authentication', featurePageId: 'epic-a', featureTitle: 'Authentication' },
+      { id: 'FR-AUTH-02', area: 'auth', title: 'Sign out', pageId: 'fr-a2', epicPageId: 'epic-a', epicTitle: 'Authentication', featurePageId: 'epic-a', featureTitle: 'Authentication' },
+      { id: 'FR-STORAGE-01', area: 'storage', title: 'Upload file', pageId: 'fr-b1', epicPageId: 'epic-b', epicTitle: 'Storage', featurePageId: 'epic-b', featureTitle: 'Storage' }
     ])
     expect(inventory.unsupportedCategories).toEqual(['UR', 'DS', 'TC', 'NFR'])
+  })
+
+  // The 74 FRs the old two-call walk could not reach. `epics` becomes the version page,
+  // because that is what a board Epic is spawned from once a feature is versioned.
+  it('reaches FRs under a version page and makes the version the Epic', async () => {
+    const adapter = new StubAdapter({
+      root: [{ id: 'feat', url: '', title: 'Réunion live' }],
+      feat: [{ id: 'v2', url: '', title: 'v2 — Prise de notes vivante' }],
+      v2: [{ id: 'fr', url: '', title: 'FR-LIVE-007 — Topic-aware AI note taking' }]
+    })
+
+    const inventory = await buildSrsInventory(adapter, 'root')
+
+    expect(inventory.epics).toEqual([{ pageId: 'v2', title: 'v2 — Prise de notes vivante' }])
+    expect(inventory.frs).toEqual([
+      {
+        id: 'FR-LIVE-007',
+        area: 'live',
+        title: 'Topic-aware AI note taking',
+        pageId: 'fr',
+        epicPageId: 'v2',
+        epicTitle: 'v2 — Prise de notes vivante',
+        featurePageId: 'feat',
+        featureTitle: 'Réunion live',
+        version: 'v2 — Prise de notes vivante'
+      }
+    ])
+    expect(inventory.features[0]).toMatchObject({ title: 'Réunion live', frCount: 1, conforming: true })
   })
 
   it('handles an empty root', async () => {
@@ -112,13 +139,18 @@ describe('buildSrsInventory', () => {
     const inventory = await buildSrsInventory(adapter, 'root')
     expect(inventory.epics).toEqual([])
     expect(inventory.frs).toEqual([])
+    expect(inventory.features).toEqual([])
+    expect(inventory.conformance).toEqual([])
   })
 
   // A page excluded from the inventory is excluded from every score, so it must be reported.
-  it('reports pages under an Epic whose title yields no FR id instead of dropping them silently', async () => {
+  // Under a version an FR was expected, which is what makes this page genuinely unparseable —
+  // unlike a version page under a feature, which is a level and is no longer reported as one.
+  it('reports a page under a version whose title yields no FR id instead of dropping it silently', async () => {
     const adapter = new StubAdapter({
-      root: [{ id: 'epic-a', url: '', title: 'Authentication' }],
-      'epic-a': [
+      root: [{ id: 'feat', url: '', title: 'Authentication' }],
+      feat: [{ id: 'v1', url: '', title: 'MVP' }],
+      v1: [
         { id: 'fr-a1', url: '', title: 'FR-AUTH-01 — Sign in' },
         { id: 'junk', url: '', title: 'Meeting notes' }
       ]
@@ -127,7 +159,22 @@ describe('buildSrsInventory', () => {
     const inventory = await buildSrsInventory(adapter, 'root')
 
     expect(inventory.frs).toHaveLength(1)
-    expect(inventory.unparsedPages).toEqual([{ pageId: 'junk', title: 'Meeting notes', epicTitle: 'Authentication' }])
+    expect(inventory.unparsedPages).toEqual([{ pageId: 'junk', title: 'Meeting notes', holderTitle: 'MVP' }])
+  })
+
+  it('surfaces the conformance findings the normalize command consumes', async () => {
+    const adapter = new StubAdapter({
+      root: [
+        { id: 'flat', url: '', title: 'Flat feature' },
+        { id: 'bare', url: '', title: 'Feature with no spec' }
+      ],
+      flat: [{ id: 'fr', url: '', title: 'FR-FLAT-01 — A' }]
+    })
+
+    const inventory = await buildSrsInventory(adapter, 'root')
+
+    expect(inventory.conformance.map((c) => c.kind)).toEqual(['feature-without-version', 'feature-without-frs'])
+    expect(inventory.conformance[0].title).toBe('Flat feature')
   })
 
   it('inventories multi-segment FR areas', async () => {

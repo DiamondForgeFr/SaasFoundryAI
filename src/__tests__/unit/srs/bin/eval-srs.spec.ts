@@ -66,7 +66,9 @@ describe('runEvalSrs (fixture mode)', () => {
       {
         rootPageId: 'root',
         epics: [{ pageId: 'e', title: 'E' }],
-        frs: [{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'f', epicPageId: 'e', epicTitle: 'E' }],
+        features: [{ pageId: 'e', title: 'E', url: '', versions: [], frCount: 1, conforming: false }],
+        frs: [{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'f', epicPageId: 'e', epicTitle: 'E', featurePageId: 'e', featureTitle: 'E' }],
+        conformance: [],
         unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
       },
       [{ kind: 'endpoint', area: 'auth', method: 'POST', path: '/signin', hasTests: true, file: 'auth/c.ts', title: 'POST /signin' }]
@@ -85,7 +87,9 @@ describe('runEvalSrs (fixture mode)', () => {
       {
         rootPageId: 'root',
         epics: [{ pageId: 'e', title: 'E' }],
-        frs: [{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'f', epicPageId: 'e', epicTitle: 'E' }],
+        features: [{ pageId: 'e', title: 'E', url: '', versions: [], frCount: 1, conforming: false }],
+        frs: [{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'f', epicPageId: 'e', epicTitle: 'E', featurePageId: 'e', featureTitle: 'E' }],
+        conformance: [],
         unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
       },
       [{ kind: 'endpoint', area: 'billing', method: 'GET', path: '/invoices', hasTests: false, file: 'b/c.ts', title: 'GET /invoices' }]
@@ -104,7 +108,9 @@ describe('runEvalSrs (fixture mode)', () => {
       {
         rootPageId: 'root',
         epics: [],
+        features: [],
         frs: [],
+        conformance: [],
         unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
       },
       []
@@ -139,7 +145,9 @@ describe('runEvalSrs (fixture mode)', () => {
       {
         rootPageId: 'root',
         epics: [{ pageId: 'e', title: 'E' }],
-        frs: [{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'f', epicPageId: 'e', epicTitle: 'E' }],
+        features: [{ pageId: 'e', title: 'E', url: '', versions: [], frCount: 1, conforming: false }],
+        frs: [{ id: 'FR-AUTH-01', area: 'auth', title: 'Sign in', pageId: 'f', epicPageId: 'e', epicTitle: 'E', featurePageId: 'e', featureTitle: 'E' }],
+        conformance: [],
         unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
       },
       [{ kind: 'endpoint', area: 'auth', method: 'POST', path: '/signin', hasTests: true, file: 'auth/c.ts', title: 'POST /signin' }]
@@ -156,7 +164,7 @@ describe('runEvalSrs (fixture mode)', () => {
   })
 
   it('returns 3 when the backend is missing from the manifest', async () => {
-    const { inv, fnd } = writeFixture({ rootPageId: 'root', epics: [], frs: [], unsupportedCategories: ['UR', 'DS', 'TC', 'NFR'] }, [])
+    const { inv, fnd } = writeFixture({ rootPageId: 'root', epics: [], features: [], frs: [], conformance: [], unsupportedCategories: ['UR', 'DS', 'TC', 'NFR'] }, [])
     const manifestPath = join(tmp, '.saasfoundry.json')
     writeFileSync(manifestPath, JSON.stringify({ tools: {} }))
     // No fixture paths → real path is taken, which hits createSrsAdapter and returns 3

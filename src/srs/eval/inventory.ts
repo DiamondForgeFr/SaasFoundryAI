@@ -1,66 +1,49 @@
-import { FR_TITLE_SEPARATOR } from '../../builders/srs/constants'
-import { PageRef, SrsAdapter } from '../../builders/srs/types'
+import { SrsAdapter } from '../../builders/srs/types'
+import { walkSrsTree } from '../tree/walk'
 import { SrsFrEntry, SrsInventory } from './types'
 
-// FR page titles follow `FR-AREA-NN[-MM]${FR_TITLE_SEPARATOR}Title` (em-dash,
-// U+2014) produced by `renderFrPage`. The parser accepts the canonical
-// separator and tolerates colon or hyphen as fallbacks for resilience against
-// manual edits in Notion.
-// The area may span several hyphen-separated segments (`FR-CONFIG-ENGINE-01`), so each
-// segment is required to carry at least one letter. That is what keeps the trailing
-// numeric group (`-01`, `-01-02`) out of the area. The previous pattern accepted a single
-// alphanumeric segment, so every multi-segment id failed to parse and its page was
-// dropped from the inventory without a word — silently deflating every FR total.
-const FR_AREA_SEGMENT = '[A-Z0-9]*[A-Z][A-Z0-9]*'
-const FR_ID_RE = new RegExp(`^(FR-(${FR_AREA_SEGMENT}(?:-${FR_AREA_SEGMENT})*)(?:-\\d+)+)`, 'i')
-const CANONICAL_SEP_CHAR = FR_TITLE_SEPARATOR.trim()
-const SEPARATOR_RE = new RegExp(`^\\s*[${CANONICAL_SEP_CHAR}:\\-]\\s*`)
+// The FR title parser lives with the traversal so that `spawn` and the eval share
+// one definition. Re-exported here because this module was its home and callers
+// import it from this path.
+export { parseFrPageTitle } from '../tree/fr-title'
+export type { ParsedFrTitle } from '../tree/fr-title'
 
-export interface ParsedFrTitle {
-  id: string
-  area: string
-  title: string
-}
-
-export function parseFrPageTitle(raw: string): ParsedFrTitle | null {
-  const trimmed = raw.trim()
-  const match = trimmed.match(FR_ID_RE)
-  if (!match) return null
-  const id = match[1].toUpperCase()
-  const area = match[2].toLowerCase()
-  const rest = trimmed.slice(match[0].length).replace(SEPARATOR_RE, '')
-  const title = rest.length > 0 ? rest : id
-  return { id, area, title }
-}
-
+/**
+ * Flattens the SRS tree into the shape the freshness evaluation scores against.
+ *
+ * `epics` is the page that directly holds the FRs — the version when a feature is
+ * versioned, the feature otherwise. That is the level a board Epic is spawned
+ * from, which is why the name survives the move to three levels.
+ */
 export async function buildSrsInventory(adapter: SrsAdapter, rootPageId: string): Promise<SrsInventory> {
-  const epicRefs = await adapter.listChildren(rootPageId)
-  const epics = epicRefs.map((ref) => ({ pageId: ref.id, title: ref.title }))
-  const frs: SrsFrEntry[] = []
-  const unparsedPages: Array<{ pageId: string; title: string; epicTitle: string }> = []
-  for (const epic of epics) {
-    const children: PageRef[] = await adapter.listChildren(epic.pageId)
-    for (const child of children) {
-      const parsed = parseFrPageTitle(child.title)
-      if (!parsed) {
-        unparsedPages.push({ pageId: child.id, title: child.title, epicTitle: epic.title })
-        continue
-      }
-      frs.push({
-        id: parsed.id,
-        area: parsed.area,
-        title: parsed.title,
-        pageId: child.id,
-        epicPageId: epic.pageId,
-        epicTitle: epic.title
-      })
+  const tree = await walkSrsTree(adapter, rootPageId)
+
+  const epicsById = new Map<string, { pageId: string; title: string }>()
+  for (const fr of tree.frs) {
+    if (!epicsById.has(fr.holderPageId)) {
+      epicsById.set(fr.holderPageId, { pageId: fr.holderPageId, title: fr.holderTitle })
     }
   }
+
+  const frs: SrsFrEntry[] = tree.frs.map((fr) => ({
+    id: fr.id,
+    area: fr.area,
+    title: fr.title,
+    pageId: fr.pageId,
+    epicPageId: fr.holderPageId,
+    epicTitle: fr.holderTitle,
+    featurePageId: fr.featurePageId,
+    featureTitle: fr.featureTitle,
+    ...(fr.version === undefined ? {} : { version: fr.version })
+  }))
+
   return {
     rootPageId,
-    epics,
+    epics: [...epicsById.values()],
+    features: tree.features,
     frs,
+    conformance: tree.conformance,
     unsupportedCategories: ['UR', 'DS', 'TC', 'NFR'],
-    unparsedPages
+    unparsedPages: tree.unparsedPages
   }
 }
