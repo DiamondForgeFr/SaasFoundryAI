@@ -108,7 +108,7 @@ export class NotionSrsAdapter implements SrsAdapter {
     const refs: PageRef[] = []
     for (const block of allBlocks) {
       if (!isChildPageBlock(block)) continue
-      refs.push({ id: block.id, url: '', title: block.child_page.title })
+      refs.push({ id: block.id, url: notionPageUrl(block.id), title: block.child_page.title })
     }
     return refs
   }
@@ -187,6 +187,21 @@ const NOTION_ID_REGEX = /[0-9a-f]{32}/i
 // by end-of-string, `?`, `#`, or `/`. Rejects stray hex blobs buried in query
 // strings or other URL positions to avoid resolving to the wrong page.
 const ANCHORED_NOTION_ID_REGEX = /(?:^|[-/])([0-9a-f]{32})(?=$|[?#/])/gi
+
+/**
+ * Composes a page URL from its id.
+ *
+ * A `child_page` block carries no URL — the API does not return one — and this
+ * used to be filled with an empty string, so every ticket spawned from the SRS
+ * linked back to nothing. Retrieving each page to read its real `url` would cost
+ * one request per FR: 236 extra calls on the live tree, on every walk.
+ *
+ * The dash-less id form resolves and redirects to the canonical slug, which is
+ * the same page a human would land on.
+ */
+export function notionPageUrl(pageId: string): string {
+  return `https://www.notion.so/${pageId.replace(/-/g, '')}`
+}
 
 export function extractNotionPageId(input: string): string | null {
   const clean = input.trim().replace(/^<|>$/g, '')

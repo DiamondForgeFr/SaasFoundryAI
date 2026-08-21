@@ -1,7 +1,7 @@
 import type { Client } from '@notionhq/client'
 
 import { EpicSpec, FrSpec } from '../../../../builders/srs/types'
-import { createNotionSrsAdapterFromEnv, extractNotionPageId, NotionSrsAdapter } from '../../../../tools/notion/srs.adapter'
+import { createNotionSrsAdapterFromEnv, extractNotionPageId, notionPageUrl, NotionSrsAdapter } from '../../../../tools/notion/srs.adapter'
 
 interface MockCalls {
   meCalls: unknown[]
@@ -89,6 +89,16 @@ const sampleFr: FrSpec = {
   },
   urs: [{ id: 'UR-1', narrative: 'A user can sign in.' }]
 }
+
+describe('notionPageUrl', () => {
+  it('strips the dashes, which is the form Notion resolves', () => {
+    expect(notionPageUrl('387a31bb-4f3f-81c0-a78a-c0e81d641b4a')).toBe('https://www.notion.so/387a31bb4f3f81c0a78ac0e81d641b4a')
+  })
+
+  it('is idempotent on an id that carries no dashes', () => {
+    expect(notionPageUrl('387a31bb4f3f81c0a78ac0e81d641b4a')).toBe('https://www.notion.so/387a31bb4f3f81c0a78ac0e81d641b4a')
+  })
+})
 
 describe('NotionSrsAdapter', () => {
   describe('constructor', () => {
@@ -444,9 +454,28 @@ describe('NotionSrsAdapter', () => {
       const refs = await adapter.listChildren('root')
 
       expect(refs).toEqual([
-        { id: 'p1', url: '', title: 'Epic 1' },
-        { id: 'p3', url: '', title: 'Epic 2' }
+        { id: 'p1', url: 'https://www.notion.so/p1', title: 'Epic 1' },
+        { id: 'p3', url: 'https://www.notion.so/p3', title: 'Epic 2' }
       ])
+    })
+
+    // This assertion used to read `url: ''`, which is how the defect became a
+    // specification: every ticket spawned from the SRS linked back to nothing,
+    // and the suite was green about it.
+    it('composes a resolvable URL from the page id rather than leaving it empty', async () => {
+      const { client } = buildMockClient({
+        blocksListImpl: async () => ({
+          next_cursor: null,
+          has_more: false,
+          results: [{ id: '387a31bb-4f3f-81c0-a78a-c0e81d641b4a', type: 'child_page', child_page: { title: 'FR-LIVE-007 — Topic-aware' } }]
+        })
+      })
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      const [ref] = await adapter.listChildren('root')
+
+      expect(ref.url).toBe('https://www.notion.so/387a31bb4f3f81c0a78ac0e81d641b4a')
+      expect(ref.url).not.toBe('')
     })
 
     it('walks the has_more/next_cursor chain to read all children', async () => {
