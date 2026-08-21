@@ -217,6 +217,42 @@ describe('walkSrsTree', () => {
     expect(tree).toMatchObject({ rootPageId: 'root', features: [], frs: [], conformance: [], unparsedPages: [] })
   })
 
+  // ── Non-regression: the shape measured on the live SRS ───────────────────
+  //
+  // Measured on the Notulia SRS the day this landed, old walk vs new, same tree:
+  //   FR total           165 -> 239   (the walk recovers 74 FRs one level deeper)
+  //   unparsed-fr-page    13 ->   0   (the 13 version pages were never malformed)
+  //
+  // This miniature reproduces that shape. It fails if anyone ever teaches the walk
+  // to stop at two levels again, or to treat a version page as a broken FR.
+  describe('regression — version pages are levels, not malformed FRs', () => {
+    const liveShape = {
+      root: [page('flat-a', 'Capture audio & enregistrement'), page('flat-b', 'Import audio/vidéo'), page('versioned', 'Réunion live : transcript & notes')],
+      'flat-a': [page('fr-1', 'FR-CAPTURE-01 — A'), page('fr-2', 'FR-CAPTURE-02 — B')],
+      'flat-b': [page('fr-3', 'FR-IMPORT-01 — C')],
+      versioned: [page('v1', 'v1 — Existant'), page('v2', 'v2 — Prise de notes vivante')],
+      v1: [page('fr-4', 'FR-LIVE-001 — D')],
+      v2: [page('fr-5', 'FR-LIVE-007 — E'), page('fr-6', 'FR-LIVE-008 — F')]
+    }
+
+    it('reaches every FR, at both depths', async () => {
+      const tree = await walkSrsTree(new StubAdapter(liveShape), 'root')
+      expect(tree.frs).toHaveLength(6)
+      expect(tree.frs.filter((f) => f.version !== undefined)).toHaveLength(3)
+    })
+
+    it('reports no version page as unparseable', async () => {
+      const tree = await walkSrsTree(new StubAdapter(liveShape), 'root')
+      expect(tree.unparsedPages).toEqual([])
+    })
+
+    it('names one non-conforming feature per flat feature, and none for the versioned one', async () => {
+      const tree = await walkSrsTree(new StubAdapter(liveShape), 'root')
+      const flagged = tree.conformance.filter((c) => c.kind === 'feature-without-version').map((c) => c.title)
+      expect(flagged).toEqual(['Capture audio & enregistrement', 'Import audio/vidéo'])
+    })
+  })
+
   // ── Call budget ───────────────────────────────────────────────────────────
   it('never descends into an FR page, so the call count follows the non-FR pages only', async () => {
     const adapter = new StubAdapter({
