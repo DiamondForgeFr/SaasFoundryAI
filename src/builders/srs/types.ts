@@ -59,6 +59,25 @@ export interface EpicSpec {
   title: string
   parentPageId: string
   id?: string
+  /**
+   * Logical id of the feature this page sits under, resolved within the batch —
+   * the mechanism `FrSpec.parentEpicId` already uses.
+   *
+   * **Its presence is what makes this page a version.** The level comes from
+   * position, never from the title, exactly as the traversal reads it: a version
+   * is called `MVP`, `V1` or `v2 — Titre` depending on who wrote it.
+   */
+  parentId?: string
+  /** Content specific to a version page. Ignored on a feature. */
+  version?: { changes?: string[] }
+  /**
+   * Titles of the versions declared under this feature in the same batch.
+   *
+   * Derived by `write-srs` from the batch, never authored: the feature page is
+   * created before its versions exist, and `updatePage` appends rather than
+   * replaces, so indexing afterwards would duplicate the list on every re-run.
+   */
+  versions?: string[]
   businessValue?: string
   scope?: string
   urs: UrItem[]
