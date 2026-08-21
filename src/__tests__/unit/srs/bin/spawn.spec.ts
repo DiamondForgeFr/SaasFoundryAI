@@ -48,6 +48,7 @@ interface TestIO extends SpawnIO {
   stdout: jest.Mock
   stderr: jest.Mock
   createSubtask: jest.Mock
+  createEpic: jest.Mock
   stdoutBuffer: string[]
   stderrBuffer: string[]
 }
@@ -69,7 +70,13 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
     void reason
     return { childNumber: String(nextNumber++) }
   })
-  return Object.assign({ stdout, stderr, createSubtask, stdoutBuffer, stderrBuffer }, overrides)
+  const createEpic = jest.fn((title: string, body: string, reason: string) => {
+    void title
+    void body
+    void reason
+    return { epicNumber: String(nextNumber++) }
+  })
+  return Object.assign({ stdout, stderr, createSubtask, createEpic, stdoutBuffer, stderrBuffer }, overrides)
 }
 
 describe('parseArgs', () => {
@@ -109,8 +116,11 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['--ticket', '42', '--epic', 'e', '--bypass-reason', '--dry-run'])).toThrow(/--bypass-reason requires a value/)
   })
 
-  it('throws when --ticket is missing altogether', () => {
-    expect(() => parseArgs(['--epic', 'e'])).toThrow(/missing --ticket/)
+  // --ticket became optional in #517: without it, spawn creates the Epic itself.
+  it('accepts a missing --ticket, which means "create the Epic too"', () => {
+    const opts = parseArgs(['--epic', 'e'])
+    expect(opts.ticket).toBeUndefined()
+    expect(opts.epic).toBe('e')
   })
 
   it('throws when --epic is missing altogether', () => {
@@ -403,6 +413,60 @@ describe('runSpawn', () => {
     const code = await runSpawn(baseOptions({ dryRun: true, version: 'v1' }), io)
     expect(code).toBe(2)
     expect(io.stderrBuffer.join('')).toMatch(/is not versioned/)
+  })
+
+  // Without --ticket, spawn owns the Epic. The `<feature> - <version>` name was the
+  // one thing the agent had to remember and got wrong, so the tool guarantees it.
+  describe('without --ticket', () => {
+    const feature: PageRef[] = [{ id: 'v2', url: 'https://example.test/v2', title: 'v2 — Prise de notes vivante' }]
+    const tree: Record<string, PageRef[]> = {
+      v2: [{ id: 'f2', url: 'https://example.test/f2', title: 'FR-LIVE-007 — Topic-aware AI note taking' }]
+    }
+
+    function register(): void {
+      registerSrsBackend(
+        'stub',
+        () =>
+          new StubAdapter(
+            [],
+            undefined,
+            () => ({ id: 'feat', name: 'Réunion live', url: 'https://example.test/feat' }),
+            (parentId) => (parentId in tree ? tree[parentId] : feature)
+          )
+      )
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+    }
+
+    it('creates the Epic named <feature> - <version>, then the Stories under it', async () => {
+      register()
+      const io = makeIO()
+      const code = await runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined }, io)
+      expect(code).toBe(0)
+      expect(io.createEpic).toHaveBeenCalledTimes(1)
+      expect(io.createEpic.mock.calls[0][0]).toBe('Réunion live - v2 — Prise de notes vivante')
+      // The Stories hang under the Epic that was just created, not under a guess.
+      const epicNumber = io.createEpic.mock.results[0].value.epicNumber
+      expect(io.createSubtask).toHaveBeenCalledTimes(1)
+      expect(io.createSubtask.mock.calls[0][0]).toBe(epicNumber)
+      expect(io.createSubtask.mock.calls[0][1]).toBe('FR-LIVE-007: Topic-aware AI note taking')
+    })
+
+    it('creates nothing at all on a dry run', async () => {
+      register()
+      const io = makeIO()
+      const code = await runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante', dryRun: true }), ticket: undefined }, io)
+      expect(code).toBe(0)
+      expect(io.createEpic).not.toHaveBeenCalled()
+      expect(io.createSubtask).not.toHaveBeenCalled()
+    })
+
+    it('returns 8 and creates no Story when the Epic number cannot be read back', async () => {
+      register()
+      const io = makeIO({ createEpic: jest.fn(() => ({ epicNumber: '' })) })
+      const code = await runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined }, io)
+      expect(code).toBe(8)
+      expect(io.createSubtask).not.toHaveBeenCalled()
+    })
   })
 
   it('returns 8 when the subtask-creation shim yields an empty childNumber', async () => {

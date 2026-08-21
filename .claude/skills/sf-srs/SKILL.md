@@ -101,6 +101,9 @@ sf srs spawn --ticket 42 --epic <feature-url> --dry-run
 
 `--version` accepts the version's title, id or URL. The Epic is named `<feature> - <version>`.
 
+`--ticket` is optional. Omit it and spawn creates the Epic itself — named `<feature> - <version>` — then hangs the Stories under it, through `workflow-cli.sh create-epic`. Pass `--ticket` to attach to
+an Epic that already exists. The naming convention becomes something the tool guarantees rather than something the agent has to remember.
+
 A feature holding its FRs directly still spawns from `--epic` alone — 25 real features are in that shape, and `sf srs normalize` is what moves them onto the model.
 
 **A page that is neither an FR nor a version aborts the run and creates nothing.** Producing a ticket from a raw title is worse than failing: it looks planned and is empty.

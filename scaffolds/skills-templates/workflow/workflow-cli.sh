@@ -741,7 +741,7 @@ case "$COMMAND" in
     print_status_banner "$TARGET"
     ;;
 
-  create-subtask|create-pr|list|get-labels)
+  create-subtask|create-epic|create-pr|list|get-labels)
     load_config
     route_to_tool "$WORKFLOW_TOOL" "$COMMAND" "$@"
     ;;
@@ -857,6 +857,7 @@ case "$COMMAND" in
     echo ""
     echo "Tool commands (delegated to tool-specific CLI):"
     echo "  create-subtask ...           Create a sub-issue/task"
+    echo "  create-epic <title> [body]   Create a top-level Epic (no parent)"
     echo "  update-status ...            Update ticket status (SRS-label guarded)"
     echo "  create-pr ...                Create pull request"
     echo "  list ...                     List tickets"

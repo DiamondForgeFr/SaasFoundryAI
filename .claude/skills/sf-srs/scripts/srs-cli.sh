@@ -29,7 +29,7 @@ Actions:
                                     Apply a DraftCandidate[] spec file : creates Epic /
                                     FR pages through the adapter and clears the
                                     `tools.srs.pendingIngestion` flag on success.
-  spawn  --ticket <n> --epic <page-url-or-id> [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
+  spawn  --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
                                     Enumerate FR page children of a drafted Epic and
                                     create a Story sub-ticket per FR under the parent
                                     ticket. Each child is created as a GitHub
