@@ -552,6 +552,97 @@ cmd_create_subtask() {
   fi
 }
 
+
+# ───────────────────────────────────────────────────────────────────────────
+# Command: create-epic — create a top-level Epic (no parent)
+#
+# An Epic is the top of the hierarchy: it has no parent, so `create-subtask`
+# cannot express it. Overloading that command with an optional parent would put
+# a "no parent" branch inside a function whose entire job is linking a child to
+# one, and leave a name that lies. A distinct verb keeps both honest.
+#
+# Used by `sf srs spawn` to guarantee the `<feature> - <version>` naming that the
+# agent used to have to remember — see #517.
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_create_epic() {
+  local TITLE=""
+  local BODY=""
+  local BYPASS_SRS_REASON=""
+  local POSITIONAL=()
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --bypass-srs)
+        if [ -z "${2:-}" ]; then
+          echo -e "${RED}Error: --bypass-srs requires a reason${NC}" >&2
+          exit 1
+        fi
+        BYPASS_SRS_REASON="$2"
+        shift 2
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  TITLE="${POSITIONAL[0]:-}"
+  BODY="${POSITIONAL[1]:-}"
+
+  if [ -z "$TITLE" ]; then
+    echo "Usage: $0 create-epic <title> [body] [--bypass-srs <reason>]" >&2
+    exit 1
+  fi
+
+  # Rule 8 — same contract as create-subtask: on an SRS-enabled project, ticket
+  # creation flows from a drafted SRS page unless the caller opts out explicitly.
+  if [ -f ".saasfoundry.json" ]; then
+    local srs_backend
+    srs_backend=$(jq -r '.tools.srs.backend // empty' .saasfoundry.json)
+    if [ -n "$srs_backend" ] && [ -z "$BYPASS_SRS_REASON" ]; then
+      echo -e "${RED}✗ Rule 8: this project has SRS enabled (tools.srs.backend=${srs_backend}).${NC}" >&2
+      echo "  Epics are spawned from a drafted SRS version page via:" >&2
+      echo "    sf srs spawn --epic <feature-url> --version <version>" >&2
+      echo "" >&2
+      echo "  For an Epic that is genuinely off-spec (transverse batch, infra work, …):" >&2
+      echo "    $0 create-epic \"${TITLE}\" --bypass-srs \"<reason>\"" >&2
+      exit 2
+    fi
+  fi
+
+  if [ -z "$BODY" ]; then
+    BODY=$(render_skeleton_body "epic" "$TITLE")
+  fi
+
+  echo -e "${YELLOW}Creating Epic...${NC}"
+  if [ -n "$BYPASS_SRS_REASON" ]; then
+    printf '%b  (bypassing rule 8 — reason: %s)%b\n' "${BLUE}" "${BYPASS_SRS_REASON}" "${NC}"
+  fi
+
+  local ISSUE_URL EPIC_NUMBER
+  ISSUE_URL=$(gh issue create --title "$TITLE" --body "$BODY")
+  EPIC_NUMBER=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
+
+  if [ -z "$EPIC_NUMBER" ]; then
+    echo -e "${RED}Error: could not determine the created issue number${NC}" >&2
+    exit 1
+  fi
+
+  echo -e "${GREEN}✓ Epic #${EPIC_NUMBER} created${NC}"
+  echo "Issue URL: $ISSUE_URL"
+
+  # Best-effort type chip, same policy as create-subtask: a missing org type must
+  # not fail the creation — the issue exists and is usable either way.
+  local declared_types
+  declared_types=$(jq -r '(.workflow.issueTypes // []) | length' .saasfoundry.json 2>/dev/null)
+  if [ "${declared_types:-0}" != "0" ]; then
+    "$0" assign-type "$EPIC_NUMBER" "sf-epic" 2>/dev/null || \
+      echo -e "${YELLOW}  (issue type 'sf-epic' not assigned — run 'ensure-issue-types' or assign manually)${NC}"
+  fi
+}
+
 # ───────────────────────────────────────────────────────────────────────────
 # Command: status — read status from Projects V2 board
 # Flags:
@@ -1102,6 +1193,7 @@ cmd_delete_issue_type() {
 
 case "$COMMAND" in
   create-subtask)     cmd_create_subtask "$@" ;;
+  create-epic)        cmd_create_epic "$@" ;;
   update-status)      cmd_update_status "$@" ;;
   status)             cmd_status "$@" ;;
   set-complexity)     cmd_set_complexity "$@" ;;
@@ -1121,6 +1213,7 @@ case "$COMMAND" in
     echo ""
     echo "Available commands:"
     echo "  create-subtask <parent> <title> [body] [--type <epic|story|task|issue>]"
+    echo "  create-epic <title> [body]               Create a top-level Epic (no parent)"
     echo "                                           Create a sub-issue linked to parent (default type: story)"
     echo "  status <ticket>                          Read status from the project board"
     echo "  update-status <ticket> <status-name>     Write status on the project board"

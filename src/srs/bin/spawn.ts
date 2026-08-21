@@ -2,13 +2,19 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { renderEpicTicketBody } from '../../builders/srs/templates/tickets/epic.tpl'
 import { renderStoryTicketBody } from '../../builders/srs/templates/tickets/story.tpl'
 import { FrItem, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { parseFrPageTitle } from '../tree/fr-title'
 
 export interface SpawnOptions {
-  ticket: string
+  /**
+   * Existing ticket to hang the Stories under. Omit it and spawn creates the
+   * Epic itself, named `<feature> - <version>` — the one thing the agent used to
+   * have to remember and got wrong.
+   */
+  ticket?: string
   epic: string
   /**
    * Title, id or URL of a version page under `--epic`. Required when the feature
@@ -32,6 +38,7 @@ export interface SpawnIO {
   stdout: (chunk: string) => void
   stderr: (chunk: string) => void
   createSubtask: (parent: string, title: string, body: string, bypassReason: string) => { childNumber: string }
+  createEpic: (title: string, body: string, bypassReason: string) => { epicNumber: string }
 }
 
 function takeValue(argv: string[], i: number, flag: string): string {
@@ -43,7 +50,7 @@ function takeValue(argv: string[], i: number, flag: string): string {
 }
 
 export function parseArgs(argv: string[]): SpawnOptions {
-  const opts: SpawnOptions = { ticket: '', epic: '', dryRun: false, manifestPath: '.saasfoundry.json', bypassReason: 'spawned-from-srs' }
+  const opts: SpawnOptions = { epic: '', dryRun: false, manifestPath: '.saasfoundry.json', bypassReason: 'spawned-from-srs' }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--ticket') {
@@ -65,7 +72,6 @@ export function parseArgs(argv: string[]): SpawnOptions {
       i++
     }
   }
-  if (!opts.ticket) throw new Error('spawn: missing --ticket <ticket-number>')
   if (!opts.epic) throw new Error('spawn: missing --epic <page-url-or-id>')
   return opts
 }
@@ -96,6 +102,14 @@ function defaultIO(): SpawnIO {
       })
       const match = output.match(/#(\d+)\s+linked/)
       return { childNumber: match ? match[1] : '' }
+    },
+    createEpic: (title, body, bypassReason) => {
+      const output = execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['create-epic', title, body, '--bypass-srs', bypassReason], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'inherit']
+      })
+      const match = output.match(/Epic #(\d+) created/)
+      return { epicNumber: match ? match[1] : '' }
     }
   }
 }
@@ -243,7 +257,8 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     planned.push({ frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec) })
   }
 
-  io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s), planning Story tickets under parent #${options.ticket}\n`)
+  const parentLabel = options.ticket ? `#${options.ticket}` : `a new Epic « ${holderTitle} »`
+  io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s), planning Story tickets under ${parentLabel}\n`)
   for (const p of planned) {
     io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl})\n`)
   }
@@ -253,10 +268,35 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     return 0
   }
 
+  // Without --ticket, spawn owns the Epic too. Creating it here is what turns the
+  // `<feature> - <version>` convention from something the agent has to remember
+  // into something the tool guarantees.
+  let parentTicket = options.ticket
+  if (!parentTicket) {
+    const body = renderEpicTicketBody({
+      epic: { title: holderTitle, parentPageId: epicPageId, urs: [], frs: planned.map((p) => ({ id: p.frId, title: p.title })) },
+      epicPageUrl: holderPageUrl,
+      frPages: planned.map((p) => ({ frId: p.frId, frTitle: p.title, pageUrl: p.frPageUrl }))
+    })
+    try {
+      const { epicNumber } = io.createEpic(holderTitle, body, options.bypassReason)
+      if (!epicNumber) {
+        io.stderr(`✗ spawn: could not determine the new Epic number from create-epic output\n`)
+        return 8
+      }
+      parentTicket = epicNumber
+      io.stdout(`  ✓ Epic #${epicNumber} « ${holderTitle} »\n`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      io.stderr(`✗ spawn: failed to create the Epic — ${message}\n`)
+      return 8
+    }
+  }
+
   const created: string[] = []
   for (const p of planned) {
     try {
-      const { childNumber } = io.createSubtask(options.ticket, p.title, p.body, options.bypassReason)
+      const { childNumber } = io.createSubtask(parentTicket, p.title, p.body, options.bypassReason)
       if (!childNumber) {
         io.stderr(`  ✗ ${p.frId}: could not determine new ticket number from create-subtask output\n`)
         return 8
@@ -270,7 +310,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     }
   }
 
-  io.stdout(`\nspawn: created ${created.length} Story ticket(s) under #${options.ticket}.\n`)
+  io.stdout(`\nspawn: created ${created.length} Story ticket(s) under #${parentTicket}.\n`)
   return 0
 }
 
@@ -280,7 +320,7 @@ if (require.main === module) {
     options = parseArgs(process.argv.slice(2))
   } catch (err) {
     process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
-    process.stderr.write(`\nUsage: spawn.ts --ticket <ticket-number> --epic <page-url-or-id> [--version <title-url-or-id>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`)
+    process.stderr.write(`\nUsage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`)
     process.exit(1)
   }
   runSpawn(options)

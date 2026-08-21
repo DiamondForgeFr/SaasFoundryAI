@@ -19,7 +19,7 @@ Actions:
                                          Scan the local codebase and emit structured findings (JSON)
   write --spec <path> [--manifest] [--no-clear-pending]
                                          Apply a DraftCandidate[] spec file through the adapter
-  spawn --ticket <n> --epic <page-url-or-id> [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
+  spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
                                          Enumerate FR page children of an Epic and create Story sub-tickets
   apply-update [--patch <path>] [--manifest]
                                          Apply a conversational eval-hook patch (ADD-only)
