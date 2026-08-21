@@ -443,6 +443,24 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
  *    and apply changes to files the user hasn't modified (three-way merge).
  * 2. Module addition: Detect available but uninstalled modules and let users add them.
  */
+/**
+ * Decides what `selectedModules` the module prompt starts from.
+ *
+ * A scripted run that names no module is asking for nothing, not asking wrongly.
+ * Without a materialised default, `--non-interactive` with no `--add` threw
+ * "Missing required values" and took the whole command down — so `sf update`
+ * could not be used unattended to pick up migrations or refresh the harness,
+ * which is the main reason to run it that way.
+ *
+ * `srsEnable` and `includePwa` already materialise a default for the same reason:
+ * a prompt the caller never had to answer must not block a scripted run.
+ * Interactively the field stays absent, so the checkbox is shown as before.
+ */
+export function moduleSelectionPrefill(requested: string[] | undefined, nonInteractive: boolean): { selectedModules?: string[] } {
+  if (requested !== undefined) return { selectedModules: requested }
+  return nonInteractive ? { selectedModules: [] } : {}
+}
+
 export async function updateCommand(opts: UpdateCommandOptions = {}) {
   checkNodeVersion()
 
@@ -703,7 +721,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   console.log(chalk.blue(`  ${availableModules.length} module(s) available to add:\n`))
 
   const selectedModules = await getModuleSelections(availableModules, {
-    prefill: effectivePrefill !== undefined ? { selectedModules: effectivePrefill } : {},
+    prefill: moduleSelectionPrefill(effectivePrefill, nonInteractive),
     nonInteractive
   })
 

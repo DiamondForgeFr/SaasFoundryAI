@@ -2,7 +2,31 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { applyFileUpdates, computeFileUpdates, FileUpdate } from '../../../commands/update'
+import { applyFileUpdates, computeFileUpdates, FileUpdate, moduleSelectionPrefill } from '../../../commands/update'
+
+describe('moduleSelectionPrefill', () => {
+  // The bug: `sf update --non-interactive` with no --add threw "Missing required
+  // values in --non-interactive mode: selectedModules" and took the command down,
+  // so it could not be used unattended to pick up migrations or refresh the
+  // harness — the main reason to run it that way.
+  it('materialises the empty list in --non-interactive when no module was requested', () => {
+    expect(moduleSelectionPrefill(undefined, true)).toEqual({ selectedModules: [] })
+  })
+
+  // Interactively the field must stay absent, or the checkbox would be skipped
+  // with nothing selected and the user would never be asked.
+  it('leaves the field absent when interactive, so the prompt still shows', () => {
+    expect(moduleSelectionPrefill(undefined, false)).toEqual({})
+  })
+
+  it.each([
+    [['email'], true],
+    [['email', 'storage'], false],
+    [[], true]
+  ])('passes a requested selection through unchanged (%p, nonInteractive=%p)', (requested, nonInteractive) => {
+    expect(moduleSelectionPrefill(requested as string[], nonInteractive as boolean)).toEqual({ selectedModules: requested })
+  })
+})
 
 describe('computeFileUpdates (three-way merge)', () => {
   // Helper to find update for a specific path
