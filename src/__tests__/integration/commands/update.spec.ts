@@ -130,7 +130,7 @@ describe('updateCommand (integration)', () => {
   // user-customized $schema (e.g. someone forking the schema for a private
   // CLI build).
   describe('$schema migration (#290)', () => {
-    const SCHEMA_URL = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json'
+    const SCHEMA_URL = 'https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/saasfoundry-manifest.schema.json'
 
     it('stamps $schema on a legacy manifest even when the run hits the early-return', async () => {
       mockedGetModuleSelections.mockResolvedValue([])

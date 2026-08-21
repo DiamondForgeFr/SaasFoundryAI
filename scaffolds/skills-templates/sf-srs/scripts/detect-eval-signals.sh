@@ -41,7 +41,7 @@ EOF
 emit_rules() {
   cat <<'JSON'
 {
-  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/detect-eval-signals-rules.schema.json",
+  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/detect-eval-signals-rules.schema.json",
   "description": "Detection heuristics + patch shape for the sf-srs conversational eval hook. SKILL.md points here; edit JSON, not prose.",
   "precondition": {
     "manifest_key": "tools.srs.enabled",

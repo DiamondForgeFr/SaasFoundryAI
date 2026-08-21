@@ -1,7 +1,7 @@
 # Troubleshooting
 
 The most common errors people hit when using SaaSFoundryAI, with the cause and the fix. If you do not find your symptom here, open an issue at
-[`github.com/DiamondForgeFr/SaaSFoundryAI/issues`](https://github.com/DiamondForgeFr/SaaSFoundryAI/issues).
+[`github.com/DiamondForgeFr/SaasFoundryAI/issues`](https://github.com/DiamondForgeFr/SaasFoundryAI/issues).
 
 ::: tip Self-diagnose first Run `sf status --no-network` inside your project. It dumps the manifest, the installed modules, and the precondition checks the CLI runs before any command. Most of the
 errors below surface there first. :::
@@ -69,7 +69,7 @@ that no longer matches the current schema all surface here.
 2. Open the manifest and compare against the schema. The schema is shipped with the CLI and also published online — your editor can reference `$schema`:
    ```jsonc
    {
-     "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/develop/schemas/saasfoundry-manifest.schema.json",
+     "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/develop/schemas/saasfoundry-manifest.schema.json",
      ...
    }
    ```

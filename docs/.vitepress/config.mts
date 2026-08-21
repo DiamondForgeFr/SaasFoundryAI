@@ -143,7 +143,7 @@ export default defineConfig({
       ]
     },
 
-    socialLinks: [{ icon: 'github', link: 'https://github.com/DiamondForgeFr/SaaSFoundryAI' }],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/DiamondForgeFr/SaasFoundryAI' }],
 
     search: {
       provider: 'local'

@@ -39,9 +39,9 @@ describe('feedback/request', () => {
     mockEnsureGhAuth.mockResolvedValue(undefined)
     mockReadFeedbackRepo.mockResolvedValue({
       owner: 'DiamondForgeFr',
-      repo: 'SaaSFoundryAI',
-      slug: 'DiamondForgeFr/SaaSFoundryAI',
-      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundryAI'
+      repo: 'SaasFoundryAI',
+      slug: 'DiamondForgeFr/SaasFoundryAI',
+      httpsUrl: 'https://github.com/DiamondForgeFr/SaasFoundryAI'
     })
   })
 
@@ -78,13 +78,13 @@ describe('feedback/request', () => {
       const result = await searchExistingRequests('Stripe')
       expect(mockEnsureGhAuth).toHaveBeenCalled()
       expect(mockGhIssueSearch).toHaveBeenCalledWith({
-        repo: 'DiamondForgeFr/SaaSFoundryAI',
+        repo: 'DiamondForgeFr/SaasFoundryAI',
         labels: ['module-request'],
         state: 'all',
         search: 'Stripe',
         limit: 10
       })
-      expect(result.repo.slug).toBe('DiamondForgeFr/SaaSFoundryAI')
+      expect(result.repo.slug).toBe('DiamondForgeFr/SaasFoundryAI')
       expect(result.matches).toEqual([])
     })
 
@@ -100,7 +100,7 @@ describe('feedback/request', () => {
     it('creates an issue with the module-request label and records it in preferences', async () => {
       mockGhIssueCreate.mockResolvedValue({
         number: 42,
-        url: 'https://github.com/DiamondForgeFr/SaaSFoundryAI/issues/42',
+        url: 'https://github.com/DiamondForgeFr/SaasFoundryAI/issues/42',
         title: 'Module request: Stripe',
         state: 'OPEN',
         labels: [{ name: 'module-request' }],
@@ -111,7 +111,7 @@ describe('feedback/request', () => {
 
       expect(mockGhIssueCreate).toHaveBeenCalledTimes(1)
       const call = mockGhIssueCreate.mock.calls[0][0]
-      expect(call.repo).toBe('DiamondForgeFr/SaaSFoundryAI')
+      expect(call.repo).toBe('DiamondForgeFr/SaasFoundryAI')
       expect(call.title).toBe('Module request: Stripe')
       expect(call.labels).toEqual(['module-request'])
       expect(call.body).toContain('Accept payments')
@@ -122,7 +122,7 @@ describe('feedback/request', () => {
       expect(prefs.filedRequests).toHaveLength(1)
       expect(prefs.filedRequests[0]).toMatchObject({
         issueNumber: 42,
-        repoUrl: 'https://github.com/DiamondForgeFr/SaaSFoundryAI/issues/42',
+        repoUrl: 'https://github.com/DiamondForgeFr/SaasFoundryAI/issues/42',
         title: 'Module request: Stripe'
       })
       expect(typeof prefs.filedRequests[0].openedAt).toBe('string')

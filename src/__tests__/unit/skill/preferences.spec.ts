@@ -36,7 +36,7 @@ describe('skill/preferences', () => {
       cliGlobalInstalled: true,
       votingOptIn: 'never' as const,
       lastVoteSurveyAt: '2026-04-17T00:00:00.000Z',
-      filedRequests: [{ issueNumber: 42, repoUrl: 'https://github.com/DiamondForgeFr/SaaSFoundryAI/issues/42', title: 'Add Stripe', openedAt: '2026-04-17T10:00:00.000Z' }],
+      filedRequests: [{ issueNumber: 42, repoUrl: 'https://github.com/DiamondForgeFr/SaasFoundryAI/issues/42', title: 'Add Stripe', openedAt: '2026-04-17T10:00:00.000Z' }],
       votesCast: [{ issueNumber: 99, direction: 'up' as const, castAt: '2026-04-17T11:00:00.000Z' }]
     }
     await writePreferences(input)

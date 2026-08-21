@@ -31,9 +31,9 @@ describe('feedback/bug', () => {
     mockEnsureGhAuth.mockResolvedValue(undefined)
     mockReadFeedbackRepo.mockResolvedValue({
       owner: 'DiamondForgeFr',
-      repo: 'SaaSFoundryAI',
-      slug: 'DiamondForgeFr/SaaSFoundryAI',
-      httpsUrl: 'https://github.com/DiamondForgeFr/SaaSFoundryAI'
+      repo: 'SaasFoundryAI',
+      slug: 'DiamondForgeFr/SaasFoundryAI',
+      httpsUrl: 'https://github.com/DiamondForgeFr/SaasFoundryAI'
     })
   })
 
@@ -49,7 +49,7 @@ describe('feedback/bug', () => {
       mockGhIssueSearch.mockResolvedValue([])
       await searchExistingBugs('cli', 'crash on new')
       expect(mockGhIssueSearch).toHaveBeenCalledWith({
-        repo: 'DiamondForgeFr/SaaSFoundryAI',
+        repo: 'DiamondForgeFr/SaasFoundryAI',
         labels: ['cli-bug'],
         state: 'all',
         search: 'crash on new',
@@ -61,7 +61,7 @@ describe('feedback/bug', () => {
       mockGhIssueSearch.mockResolvedValue([])
       await searchExistingBugs('scaffold', 'nestjs build fails')
       expect(mockGhIssueSearch).toHaveBeenCalledWith({
-        repo: 'DiamondForgeFr/SaaSFoundryAI',
+        repo: 'DiamondForgeFr/SaasFoundryAI',
         labels: ['scaffold-bug'],
         state: 'all',
         search: 'nestjs build fails',

@@ -38,7 +38,7 @@ describe('clustering-rules.schema.json — canonical shape', () => {
   it('the data file declares the canonical $schema URL', () => {
     for (const file of CLUSTERING_DATA_PATHS) {
       const data = JSON.parse(readFileSync(file, 'utf8'))
-      expect(data.$schema).toBe('https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/clustering-rules.schema.json')
+      expect(data.$schema).toBe('https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/clustering-rules.schema.json')
     }
   })
 })
@@ -90,7 +90,7 @@ describe('detect-eval-signals-rules.schema.json — canonical shape', () => {
     for (const script of EVAL_SIGNALS_SCRIPT_PATHS) {
       const stdout = execFileSync('bash', [script, '--rules'], { encoding: 'utf8' })
       const data = JSON.parse(stdout)
-      expect(data.$schema).toBe('https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/detect-eval-signals-rules.schema.json')
+      expect(data.$schema).toBe('https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/detect-eval-signals-rules.schema.json')
     }
   })
 })
