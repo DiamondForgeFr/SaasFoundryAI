@@ -79,8 +79,46 @@ function tcRow(tc: TcItem): string[] {
   return [tc.id, tc.title, listCell(tc.steps), tc.expectedResult ?? EMPTY_CELL, refsCell(tc.frRefs)]
 }
 
-export function renderEpicPage(spec: EpicSpec): PageContent {
+/**
+ * A version page carries what changed and the FRs that belong to it — not the
+ * traceability primer, which belongs once per feature rather than once per version.
+ */
+function renderVersionPage(spec: EpicSpec): PageContent {
   const blocks: PageBlock[] = []
+
+  blocks.push({ kind: 'heading', level: 2, text: 'What changed in this version' })
+  const changes = spec.version?.changes ?? []
+  if (changes.length === 0) {
+    blocks.push({ kind: 'paragraph', text: '_Describe what this version adds or changes relative to the previous one._' })
+  } else {
+    blocks.push({ kind: 'bulleted_list', items: changes })
+  }
+
+  blocks.push({ kind: 'heading', level: 2, text: 'Functional Requirements (FR)' })
+  if (spec.frs.length === 0) {
+    blocks.push({ kind: 'paragraph', text: 'No functional requirements yet.' })
+  } else {
+    blocks.push({
+      kind: 'table',
+      header: ['ID', 'Requirement', 'Priority'],
+      rows: spec.frs.map((fr) => [fr.id, fr.title, priorityCell(fr.priority)])
+    })
+  }
+
+  return { title: spec.title, blocks }
+}
+
+export function renderEpicPage(spec: EpicSpec): PageContent {
+  // Position decides the shape, the same rule the traversal reads the tree by.
+  if (spec.parentId !== undefined) return renderVersionPage(spec)
+
+  const blocks: PageBlock[] = []
+
+  if (spec.versions && spec.versions.length > 0) {
+    blocks.push({ kind: 'heading', level: 2, text: 'Versions' })
+    blocks.push({ kind: 'paragraph', text: 'Each version below holds the FRs that belong to it. Doing the same thing again later means adding a version, not renaming this page.' })
+    blocks.push({ kind: 'bulleted_list', items: spec.versions })
+  }
 
   blocks.push({ kind: 'heading', level: 2, text: 'Traceability' })
   blocks.push({ kind: 'code', language: 'plain text', text: TRACEABILITY_TREE })

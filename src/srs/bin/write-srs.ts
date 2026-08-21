@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { titleCarriesOwnId } from '../../builders/srs/fr-title-format'
-import { DraftCandidate, FrSpec, PageRef, SrsAdapter } from '../../builders/srs/types'
+import { DraftCandidate, EpicSpec, FrSpec, PageRef, SrsAdapter } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 
 export interface WriteSrsOptions {
@@ -90,14 +90,65 @@ function resolveFrParent(fr: FrSpec, logicalIdMap: Map<string, string>, index: n
   return { ...fr, parentEpicPageId: resolved }
 }
 
-async function applyCandidate(adapter: SrsAdapter, candidate: DraftCandidate, logicalIdMap: Map<string, string>, index: number): Promise<PageRef> {
+/**
+ * Level of a page written in this batch. A page with a `parentId` sits under a
+ * feature, so it is a version; one without sits under the root, so it is a
+ * feature. Position decides, never the title.
+ */
+type PageLevel = 'feature' | 'version'
+
+async function applyCandidate(
+  adapter: SrsAdapter,
+  candidate: DraftCandidate,
+  logicalIdMap: Map<string, string>,
+  levels: Map<string, PageLevel>,
+  versionsByFeature: Map<string, string[]>,
+  index: number
+): Promise<PageRef> {
   if (candidate.kind === 'epic') {
-    const page = await adapter.createEpicPage(candidate.epic!)
-    if (candidate.epic!.id) logicalIdMap.set(candidate.epic!.id, page.id)
+    const epic = resolveEpicParent(candidate.epic!, logicalIdMap, index)
+    const level: PageLevel = epic.parentId === undefined ? 'feature' : 'version'
+    const withIndex = level === 'feature' && epic.id ? { ...epic, versions: versionsByFeature.get(epic.id) } : epic
+    const page = await adapter.createEpicPage(withIndex)
+    if (epic.id) {
+      logicalIdMap.set(epic.id, page.id)
+      levels.set(epic.id, level)
+    }
     return page
   }
   const fr = resolveFrParent(candidate.fr!, logicalIdMap, index)
+  assertFrParentIsVersion(candidate.fr!, levels, index)
   return adapter.createFrPage(fr)
+}
+
+/** A version page is created under the feature its `parentId` names. */
+function resolveEpicParent(epic: EpicSpec, logicalIdMap: Map<string, string>, index: number): EpicSpec {
+  if (epic.parentId === undefined) return epic
+  const resolved = logicalIdMap.get(epic.parentId)
+  if (!resolved) {
+    const known = Array.from(logicalIdMap.keys())
+    const hint = known.length > 0 ? `Known logical IDs so far: ${known.join(', ')}.` : 'No page in this batch declared a logical "id" before this one.'
+    throw new Error(`write-srs: candidate #${index} (epic) references parentId="${epic.parentId}" but no page with that logical id was created before it. ${hint}`)
+  }
+  return { ...epic, parentPageId: resolved }
+}
+
+/**
+ * Refuses an FR written directly under a feature.
+ *
+ * Reading tolerates the flat shape because 25 real features are in it and their
+ * FRs must not be lost. Writing does not: there is no reason to create a new
+ * feature that already needs `sf srs normalize`.
+ */
+function assertFrParentIsVersion(fr: FrSpec, levels: Map<string, PageLevel>, index: number): void {
+  const logicalId = fr.parentEpicId
+  if (!logicalId) return
+  if (levels.get(logicalId) !== 'feature') return
+  throw new Error(
+    `write-srs: candidate #${index} (fr) is attached to "${logicalId}", which is a feature, not a version.\n` +
+      `  Epic = feature + version: an FR belongs to a version, so the batch must declare one.\n` +
+      `  Add an epic candidate with parentId="${logicalId}" and point this FR at its logical id.`
+  )
 }
 
 function clearPendingIngestion(manifestPath: string): boolean {
@@ -109,6 +160,17 @@ function clearPendingIngestion(manifestPath: string): boolean {
   delete srs.pendingIngestion
   writeFileSync(manifestPath, `${JSON.stringify(parsed, null, 2)}\n`)
   return true
+}
+
+export function collectVersionsByFeature(candidates: DraftCandidate[]): Map<string, string[]> {
+  const byFeature = new Map<string, string[]>()
+  for (const candidate of candidates) {
+    if (candidate.kind !== 'epic' || !candidate.epic?.parentId) continue
+    const bucket = byFeature.get(candidate.epic.parentId) ?? []
+    bucket.push(candidate.epic.title)
+    byFeature.set(candidate.epic.parentId, bucket)
+  }
+  return byFeature
 }
 
 export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
@@ -158,11 +220,17 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
 
   const report: WriteSrsReport = { created: [], failed: [], pendingIngestionCleared: false }
   const logicalIdMap = new Map<string, string>()
+  const levels = new Map<string, PageLevel>()
+
+  // A feature page is created before its versions exist, and `updatePage` appends
+  // rather than replaces — so indexing the versions afterwards would duplicate the
+  // list on every re-run. The batch already declares them, so read it up front.
+  const versionsByFeature = collectVersionsByFeature(candidates)
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i]
     try {
-      const page = await applyCandidate(adapter, candidate, logicalIdMap, i)
+      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, i)
       report.created.push({ index: i, kind: candidate.kind, page })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

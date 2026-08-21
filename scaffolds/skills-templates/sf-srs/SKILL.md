@@ -82,6 +82,29 @@ library from `dist/srs/`, `src/srs/` or `node_modules/saasfoundryai-cli/dist/srs
 
 Run `sf srs help` to see the full action list.
 
+### Writing the three levels
+
+`write-srs` creates `feature → version → FR` in one run. Two fields carry the shape:
+
+- **`epic.parentId`** — the logical id of the feature this page sits under, resolved within the batch, the mechanism `fr.parentEpicId` already uses. **Its presence is what makes the page a version.**
+  The level comes from position, never from the title: call it `MVP`, `V1` or `v2 — Titre`, the tooling reads where it sits.
+- **`epic.version.changes`** — what this version adds or changes relative to the previous one. Rendered on the version page.
+
+Order matters: a page can only reference a logical id declared before it in the batch. See `templates/examples/example-three-levels.spec.json`.
+
+**An FR attached to a feature is refused.**
+
+```
+✗ write-srs: candidate #2 (fr) is attached to "FEAT-LIVE", which is a feature, not a version.
+  Epic = feature + version: an FR belongs to a version, so the batch must declare one.
+```
+
+Reading tolerates the flat shape — 25 real features are in it and their FRs must not be lost. Writing does not: there is no reason to create a new feature that already needs `sf srs normalize`. Any
+existing spec that wrote a flat feature is rejected after this change, which is intended.
+
+The feature page lists its versions, resolved from the batch before anything is written — the feature is created before its versions exist, and `updatePage` appends rather than replaces, so indexing
+afterwards would duplicate the list on every re-run.
+
 ### Answering a conformance finding
 
 `sf srs eval` reports structural deviations alongside drift. They are not conversational signals — they come from the tree, so the eval hook does not produce them and there is nothing to detect in

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { DraftCandidate, EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../builders/srs/types'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../srs'
-import { runWriteSrs } from '../../../srs/bin/write-srs'
+import { collectVersionsByFeature, runWriteSrs } from '../../../srs/bin/write-srs'
 
 class StubAdapter implements SrsAdapter {
   createdEpics: EpicSpec[] = []
@@ -234,31 +234,67 @@ describe('runWriteSrs', () => {
     expect(code).toBe(2)
   })
 
-  it('resolves FR parentEpicId to the Epic created earlier in the same batch', async () => {
+  // This test used to attach the FR straight to the feature, which is the
+  // two-level model #518 refuses. It now writes the three levels the SRS actually
+  // has: feature → version → FR.
+  it('resolves FR parentEpicId to the version created earlier in the same batch', async () => {
     const adapter = new StubAdapter()
     registerSrsBackend('write-stub', () => adapter)
     jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
 
     const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
-    const epicCandidate: DraftCandidate = {
+    const featureCandidate: DraftCandidate = {
       kind: 'epic',
       confidence: 'medium',
       epic: { title: 'Auth', id: 'EPIC-AUTH', parentPageId: 'root', urs: [], frs: [] },
       source: { kind: 'notion-pages' }
     }
+    const versionCandidate: DraftCandidate = {
+      kind: 'epic',
+      confidence: 'medium',
+      epic: { title: 'MVP', id: 'AUTH-MVP', parentId: 'EPIC-AUTH', parentPageId: 'ignored', urs: [], frs: [] },
+      source: { kind: 'notion-pages' }
+    }
     const frCandidate: DraftCandidate = {
       kind: 'fr',
       confidence: 'medium',
-      fr: { parentEpicId: 'EPIC-AUTH', fr: { id: 'FR-1', title: 'Login endpoint' } },
+      fr: { parentEpicId: 'AUTH-MVP', fr: { id: 'FR-AUTH-01', title: 'Login endpoint' } },
       source: { kind: 'notion-pages' }
     }
-    const specPath = writeSpec([epicCandidate, frCandidate])
+    const specPath = writeSpec([featureCandidate, versionCandidate, frCandidate])
 
     const code = await runWriteSrs({ specPath, manifestPath })
 
     expect(code).toBe(0)
     expect(adapter.createdFrs).toHaveLength(1)
-    expect(adapter.createdFrs[0].parentEpicPageId).toBe('epic-1')
+    // The version page, not the feature: epic-1 is the feature, epic-2 the version.
+    expect(adapter.createdFrs[0].parentEpicPageId).toBe('epic-2')
+  })
+
+  /**
+   * Reading tolerates the flat shape because 25 real features are in it and their
+   * FRs must not be lost. Writing does not — there is no reason to create a new
+   * feature that already needs `sf srs normalize`. This is the one deliberate
+   * breaking change in the chain.
+   */
+  it('refuses an FR attached to a feature rather than a version', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    const stdout = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const specPath = writeSpec([
+      { kind: 'epic', confidence: 'medium', epic: { title: 'Auth', id: 'EPIC-AUTH', parentPageId: 'root', urs: [], frs: [] }, source: { kind: 'notion-pages' } },
+      { kind: 'fr', confidence: 'medium', fr: { parentEpicId: 'EPIC-AUTH', fr: { id: 'FR-AUTH-01', title: 'Login' } }, source: { kind: 'notion-pages' } }
+    ] as DraftCandidate[])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(6)
+    expect(adapter.createdFrs).toHaveLength(0)
+    const printed = stdout.mock.calls.map((c) => String(c[0])).join('')
+    expect(printed).toMatch(/which is a feature, not a version/)
+    expect(printed).toMatch(/Epic = feature \+ version/)
   })
 
   it('fails with code 6 and a clear error when parentEpicId is unresolved', async () => {
@@ -321,5 +357,38 @@ describe('runWriteSrs', () => {
     const code = await runWriteSrs({ specPath, manifestPath })
 
     expect(code).toBe(2)
+  })
+})
+
+// ── #518: the three-level model ───────────────────────────────────────────
+describe('write-srs — feature → version → FR in one spec', () => {
+  const feature = (id: string, title: string): DraftCandidate => ({
+    kind: 'epic',
+    confidence: 'high',
+    epic: { id, title, parentPageId: 'root', urs: [], frs: [] },
+    source: { kind: 'notion-pages' }
+  })
+
+  const version = (id: string, parentId: string, title: string): DraftCandidate => ({
+    kind: 'epic',
+    confidence: 'high',
+    epic: { id, parentId, title, parentPageId: 'ignored', urs: [], frs: [], version: { changes: ['topic-aware notes'] } },
+    source: { kind: 'notion-pages' }
+  })
+
+  const fr = (parentEpicId: string, id: string): DraftCandidate => ({
+    kind: 'fr',
+    confidence: 'high',
+    fr: { parentEpicId, fr: { id, title: 'Something' } },
+    source: { kind: 'notion-pages' }
+  })
+
+  it('collects the versions declared under each feature, before anything is written', () => {
+    const map = collectVersionsByFeature([feature('feat', 'Réunion live'), version('v1', 'feat', 'v1 — Existant'), version('v2', 'feat', 'v2 — Notes vivantes'), fr('v2', 'FR-LIVE-007')])
+    expect(map.get('feat')).toEqual(['v1 — Existant', 'v2 — Notes vivantes'])
+  })
+
+  it('gives a feature no version index when the batch declares none', () => {
+    expect(collectVersionsByFeature([feature('feat', 'Réunion live')]).get('feat')).toBeUndefined()
   })
 })
