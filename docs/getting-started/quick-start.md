@@ -1,8 +1,21 @@
 # Quick Start
 
-Get up and running with SaaSFoundryAI in 5 minutes.
+Get up and running with SaaSFoundryAI in 5 minutes — with an assistant, or from the terminal.
 
-## Create a Project
+## Create a project with your AI assistant
+
+> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
+
+Hand that line to your assistant, move into the folder you want to work in, and say what you want in your own words:
+
+> _"I want a SaaS with a client portal, file uploads and transactional email."_
+
+The skill asks only what it cannot infer from that, then runs a single non-interactive `sf new …` for you — you never see the prompts below. Setup details are in
+[Installation](/getting-started/installation).
+
+## Create a project from the terminal
+
+Prefer to drive it yourself? Every answer the assistant would have gathered is a prompt in the CLI:
 
 ```bash
 sf new
@@ -32,6 +45,7 @@ Your app will be running at:
 
 ## What's Next?
 
+- [Installation](/getting-started/installation) - The assistant path in full, plus the CLI install
 - [First Project](/getting-started/first-project) - Detailed walkthrough
 - [Project Structure](/guide/project-structure) - Understand the codebase
 - [CLI Commands](/cli/sf-new) - Learn all available commands
