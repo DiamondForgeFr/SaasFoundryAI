@@ -320,4 +320,4 @@ npm run test:e2e
 
 ---
 
-**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaaSFoundryAI) or use Claude Code skills for assistance.
+**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaasFoundryAI) or use Claude Code skills for assistance.

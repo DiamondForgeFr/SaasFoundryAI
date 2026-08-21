@@ -13,7 +13,7 @@ hero:
       link: /workflow/introduction
     - theme: alt
       text: GitHub
-      link: https://github.com/DiamondForgeFr/SaaSFoundryAI
+      link: https://github.com/DiamondForgeFr/SaasFoundryAI
 
 features:
   - icon: 🚀

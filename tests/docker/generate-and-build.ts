@@ -488,7 +488,7 @@ async function runMigrationScenario(scenario: MigrationScenario): Promise<boolea
   // Read back the manifest and check the dispatcher did its job.
   const after = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
 
-  const expectedSchema = 'https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/master/schemas/saasfoundry-manifest.schema.json'
+  const expectedSchema = 'https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/saasfoundry-manifest.schema.json'
 
   const schemaOk = after.$schema === expectedSchema
   const versionOk = typeof after.manifestVersion === 'number' && after.manifestVersion >= 1

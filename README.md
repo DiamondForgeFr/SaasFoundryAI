@@ -1,9 +1,9 @@
 <div align="center">
 
-[![Open Source](https://img.shields.io/badge/Open%20Source-2D3748?style=for-the-badge&logo=github&logoColor=white)](https://github.com/DiamondForgeFr/SaaSFoundryAI)
+[![Open Source](https://img.shields.io/badge/Open%20Source-2D3748?style=for-the-badge&logo=github&logoColor=white)](https://github.com/DiamondForgeFr/SaasFoundryAI)
 [![License](https://img.shields.io/badge/License-MIT-2D3748?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/saasfoundryai-cli?style=for-the-badge&logo=npm&label=CLI&color=CB3837)](https://www.npmjs.com/package/saasfoundryai-cli)
-[![codecov](https://img.shields.io/codecov/c/github/DiamondForgeFr/SaaSFoundryAI?style=for-the-badge&logo=codecov&logoColor=white&label=Coverage)](https://codecov.io/gh/DiamondForgeFr/SaaSFoundryAI)
+[![codecov](https://img.shields.io/codecov/c/github/DiamondForgeFr/SaasFoundryAI?style=for-the-badge&logo=codecov&logoColor=white&label=Coverage)](https://codecov.io/gh/DiamondForgeFr/SaasFoundryAI)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -14,7 +14,7 @@
 
 <div align="center">
   <br /><br />
-  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaaSFoundryAI/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundryAI Logo" width="300"/>
+  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundryAI Logo" width="300"/>
   <br /><br />
 </div>
 

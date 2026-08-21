@@ -227,5 +227,5 @@ Exit codes mirror every `srs-cli.sh bin` entrypoint : `0` success, `2` bad input
 
 - [SRS walkthrough → Drafting from an existing codebase](/srs/walkthrough#drafting-from-an-existing-codebase)
 - [SRS lifecycle → ai-draft phase](/srs/lifecycle)
-- [`sf-srs` SKILL.md → Drafting from codebase](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md) — review-loop prompts and clustering heuristics
-- [`src/srs/scanners/types.ts`](https://github.com/DiamondForgeFr/SaaSFoundryAI/blob/develop/src/srs/scanners/types.ts) — the source-of-truth TypeScript definitions
+- [`sf-srs` SKILL.md → Drafting from codebase](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md) — review-loop prompts and clustering heuristics
+- [`src/srs/scanners/types.ts`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/src/srs/scanners/types.ts) — the source-of-truth TypeScript definitions
