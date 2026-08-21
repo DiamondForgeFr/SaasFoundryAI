@@ -42,6 +42,10 @@ class StubAdapter implements SrsAdapter {
     if (this.onListChildren) return this.onListChildren(parentPageId)
     return this.children
   }
+  async move(pageId: string, newParentPageId: string): Promise<void> {
+    void pageId
+    void newParentPageId
+  }
 }
 
 interface TestIO extends SpawnIO {

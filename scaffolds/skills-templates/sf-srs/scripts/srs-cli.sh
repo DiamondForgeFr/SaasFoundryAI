@@ -30,6 +30,10 @@ Actions:
                                     FR pages through the adapter and clears the
                                     `tools.srs.pendingIngestion` flag on success.
   spawn  --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
+  normalize [--feature <url-or-id>] [--version-name <name>] [--apply] [--manifest] [--root-page <id>]
+                                    Give an unversioned feature a version page and
+                                    MOVE its FR pages under it (ids and URLs survive).
+                                    Dry-run by default; --apply is required to write.
                                     Enumerate FR page children of a drafted Epic and
                                     create a Story sub-ticket per FR under the parent
                                     ticket. Each child is created as a GitHub
@@ -157,6 +161,8 @@ run_write() { run_bin write-srs "$@"; }
 
 run_spawn() { run_bin spawn "$@"; }
 
+run_normalize() { run_bin normalize "$@"; }
+
 run_apply_update() { run_bin apply-srs-update "$@"; }
 
 run_eval() { run_bin eval-srs "$@"; }
@@ -192,6 +198,7 @@ case "$ACTION" in
   draft) run_draft "$@" ;;
   write) run_write "$@" ;;
   spawn) run_spawn "$@" ;;
+  normalize) run_normalize "$@" ;;
   apply-update) run_apply_update "$@" ;;
   eval) run_eval "$@" ;;
   *)

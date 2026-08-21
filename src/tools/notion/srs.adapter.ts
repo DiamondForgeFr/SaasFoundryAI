@@ -113,6 +113,10 @@ export class NotionSrsAdapter implements SrsAdapter {
     return refs
   }
 
+  async move(pageId: string, newParentPageId: string): Promise<void> {
+    await this.client.pages.move({ page_id: pageId, parent: { type: 'page_id', page_id: newParentPageId } })
+  }
+
   private async createPageWithChildren(parent: { page_id: string }, titleContent: string, children: AnyBlockRequest[]): Promise<PageRef> {
     const firstChunk = children.slice(0, NOTION_MAX_CHILDREN_PER_REQUEST)
     const rest = children.slice(NOTION_MAX_CHILDREN_PER_REQUEST)

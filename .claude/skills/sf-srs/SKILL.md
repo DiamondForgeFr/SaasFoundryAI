@@ -82,6 +82,25 @@ library from `dist/srs/`, `src/srs/` or `node_modules/saasfoundryai-cli/dist/srs
 
 Run `sf srs help` to see the full action list.
 
+### Answering a conformance finding
+
+`sf srs eval` reports structural deviations alongside drift. They are not conversational signals — they come from the tree, so the eval hook does not produce them and there is nothing to detect in
+what the user says. The agent reads them from the report and acts:
+
+| finding                         | what it means                                                                                                      | what to do                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `feature-without-version`       | The feature holds its FRs directly, so it has no Epic identity and no place to record what a later version changes | `sf srs normalize --feature <page-url>` — read the dry run to the user, then re-run with `--apply` on their approval  |
+| `feature-without-frs`           | The feature carries no spec at all                                                                                 | Ask whether it is a placeholder or a gap. Never normalize it — an empty version page is a level with nothing under it |
+| `version-without-frs`           | A version page holds no FR, or the page is not a version at all                                                    | Show it to the user; the walk cannot tell the two apart, because the level is read from position                      |
+| `unexpected-page-under-version` | A page sits where an FR was expected                                                                               | Rename it to the FR convention, or move it out. It is excluded from every score until then                            |
+| `fr-at-root-level`              | An FR has no feature above it                                                                                      | Move it under a feature; `spawn` cannot reach it                                                                      |
+| `nesting-too-deep`              | A page sits below the FR level                                                                                     | The FRs it hides are invisible to every score. Flatten it                                                             |
+
+**`normalize` never writes without `--apply`.** Show the plan, get an answer, then apply — one feature at a time with `--feature` rather than a single 196-page sweep, so a failure is small and
+legible.
+
+The pages are **moved**, not recreated: ids, URLs, body and comments survive, so every existing link into the SRS keeps working.
+
 ### Spawning a versioned feature
 
 `Epic = feature + version`, so a batch of tickets belongs to one version and never to the whole feature. Pointing `spawn` at a versioned feature is an error that lists the versions rather than a

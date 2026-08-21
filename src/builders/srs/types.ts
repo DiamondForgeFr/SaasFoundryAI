@@ -249,4 +249,13 @@ export interface SrsAdapter {
   fetchPage(pageId: string): Promise<RawContent>
 
   listChildren(parentPageId: string): Promise<PageRef[]>
+
+  /**
+   * Reparents an existing page.
+   *
+   * The page is **moved**, not recreated: its id, URL, body and comments survive,
+   * so every existing link into the SRS keeps working. `sf srs normalize` depends
+   * on that — recreating 196 FR pages would break every reference to them.
+   */
+  move(pageId: string, newParentPageId: string): Promise<void>
 }

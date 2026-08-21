@@ -28,6 +28,10 @@ class StubAdapter implements SrsAdapter {
     this.calls.push(parentId)
     return this.tree[parentId] ?? []
   }
+  async move(pageId: string, newParentPageId: string): Promise<void> {
+    void pageId
+    void newParentPageId
+  }
 }
 
 function page(id: string, title: string): PageRef {

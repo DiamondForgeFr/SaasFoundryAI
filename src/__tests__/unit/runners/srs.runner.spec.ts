@@ -52,6 +52,10 @@ class FakeSrsAdapter implements SrsAdapter {
     void parentPageId
     return []
   }
+  async move(pageId: string, newParentPageId: string): Promise<void> {
+    void pageId
+    void newParentPageId
+  }
 }
 
 describe('bootstrapSrs', () => {

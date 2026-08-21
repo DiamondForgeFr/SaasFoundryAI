@@ -34,6 +34,10 @@ class StubAdapter implements SrsAdapter {
     this.listed.push(parentPageId)
     return this.children
   }
+  async move(pageId: string, newParentPageId: string): Promise<void> {
+    void pageId
+    void newParentPageId
+  }
 }
 
 describe('runBrowseTree', () => {
