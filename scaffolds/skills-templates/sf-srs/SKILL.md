@@ -69,14 +69,18 @@ surfaces are separate.
 
 ## Commands
 
-Two equivalent entrypoints expose the same actions:
+**Use `sf srs <action> [args]`.** It is registered in Commander (see `src/commands/srs.ts`) and imports the entrypoints directly from the installed package, so it resolves the same way in this
+checkout, in a generated project, in CI and in a script. Every example below uses it.
 
-- **CLI (preferred, non-interactive)**: `sf srs <action> [args]` — registered in Commander (see `src/commands/srs.ts`), forwards directly to the TS entrypoints under `src/srs/bin/*.ts`. Use this in
-  CI, scripts, and from AI agents that can't rely on a skill being installed.
-- **Skill shell wrapper**: `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]` — same actions, kept in parallel so the skill stays self-contained and works even if `sf` isn't on the `PATH` of
-  the Claude Code session.
+The shell wrapper `.claude/skills/sf-srs/scripts/srs-cli.sh <action> [args]` exposes the same actions and exists for one case: a session where `sf` is not on the `PATH`. It resolves the dispatch
+library from `dist/srs/`, `src/srs/` or `node_modules/saasfoundryai-cli/dist/srs/`, searching upwards from both the script and the working directory.
 
-Run `sf srs help` or `srs-cli.sh help` to see the full action list.
+> [!warning] The wrapper was unusable in generated projects until #525
+>
+> Its resolver only ever looked for `src/srs` or `dist/srs/index.js` — paths that exist in this checkout and nowhere else. Every SRS command through the wrapper failed for every user who enabled the
+> module, and our own dogfooding could not see it, because we only ever run the wrapper from here. Prefer `sf srs`: one resolution path, exercised by everyone.
+
+Run `sf srs help` to see the full action list.
 
 | Action         | Purpose                                                               | Populated by |
 | -------------- | --------------------------------------------------------------------- | ------------ |
@@ -91,11 +95,11 @@ Run `sf srs help` or `srs-cli.sh help` to see the full action list.
 
 ## Freshness eval (SUB-16)
 
-`srs-cli.sh eval` scores SRS drift against the codebase in batch mode — the complement to the conversational eval hook described above (which catches new decisions at conversation time ; eval catches
+`sf srs eval` scores SRS drift against the codebase in batch mode — the complement to the conversational eval hook described above (which catches new decisions at conversation time ; eval catches
 silent drift that already happened).
 
 ```bash
-.claude/skills/sf-srs/scripts/srs-cli.sh eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json]
+sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json]
 ```
 
 - `--path` defaults to the current working directory (same rules as `draft --from codebase` — honours `.gitignore`, skips `node_modules / dist / coverage / .git`).
@@ -128,7 +132,7 @@ itself — cost for non-agent users stays at zero.
     the backend's page body carries them; today they are optional and unset.
 - **L3 — AI review packet.** Pass `--review-packet <path>` to `eval-srs` and the tool writes a structured JSON alongside the usual report :
   ```bash
-  .claude/skills/sf-srs/scripts/srs-cli.sh eval --review-packet .srs-audit/review-packet.json
+  sf srs eval --review-packet .srs-audit/review-packet.json
   ```
   The packet contains, per FR, its deterministic `status` (`matched` / `untested` / `unmatched`), the matched file list, and `promptHints` summarising the deterministic gaps. The skill feeds this
   packet into its own context and proposes :
@@ -206,12 +210,12 @@ When `sf new --srs-enable --srs-ingest-enable` is used (or the equivalent is pic
 
 The flag is ephemeral — it signals "the user asked us to ingest existing notes next time they open the project in Claude Code". When the sf-srs skill sees it, it drives a conversational loop :
 
-1. **Browse** — `srs-cli.sh browse --parent <sourceParent.id>` lists direct children. Claude and the user pick which ones are worth ingesting (rejecting TOC / index pages, drilling into sub-pages
+1. **Browse** — `sf srs browse --parent <sourceParent.id>` lists direct children. Claude and the user pick which ones are worth ingesting (rejecting TOC / index pages, drilling into sub-pages
    recursively via repeat browse calls).
-2. **Draft** — `srs-cli.sh draft --from notion-pages --ids id1,id2,...` fetches the selected pages as `RawContent`. Claude then drafts one or more `DraftCandidate` entries (Epic or FR specs) in
+2. **Draft** — `sf srs draft --from notion-pages --ids id1,id2,...` fetches the selected pages as `RawContent`. Claude then drafts one or more `DraftCandidate` entries (Epic or FR specs) in
    conversation with the user. No LLM call happens inside the CLI — the skill owns that step.
-3. **Write** — once the user approves the drafted candidates, the skill serialises them to a temp JSON file and runs `srs-cli.sh write --spec <tmp.json>`. On success, `pendingIngestion` is cleared
-   from the manifest.
+3. **Write** — once the user approves the drafted candidates, the skill serialises them to a temp JSON file and runs `sf srs write --spec <tmp.json>`. On success, `pendingIngestion` is cleared from
+   the manifest.
 
 On partial failure during `write`, `write-srs.ts` emits a JSON report with a `rollbackHint` listing the pages it already created — Notion has no transactional rollback, so the skill surfaces this list
 to the user and suggests either archiving manually or retrying from where it failed.
@@ -276,7 +280,7 @@ Every TS entrypoint under `src/srs/bin/` honours the same contract. The skill mu
 
 ## Drafting from codebase (SUB-13)
 
-For projects where the codebase already exists and Notion is empty (or sparse), `srs-cli.sh draft --from codebase` scans the repo and emits structured `ScannerFinding[]` that Claude clusters into
+For projects where the codebase already exists and Notion is empty (or sparse), `sf srs draft --from codebase` scans the repo and emits structured `ScannerFinding[]` that Claude clusters into
 `DraftCandidate[]` conversationally with the user. The CLI never calls an LLM — it only surfaces what it can prove from the source tree.
 
 > **Stack coverage — the scanner is best-effort, the agent is the backstop.** The deterministic scanner parses a SUBSET of stacks today (NestJS controllers, React pages, Prisma models, Jest/Vitest
@@ -307,7 +311,7 @@ or when the SRS module has not yet been installed (route to `sf update --add-mod
 ### Running the drafter
 
 ```bash
-.claude/skills/sf-srs/scripts/srs-cli.sh draft --from codebase [--path <repo>]
+sf srs draft --from codebase [--path <repo>]
 ```
 
 `--path` defaults to the current working directory. The CLI walks the tree (honouring `.gitignore` and excluding `node_modules / dist / coverage / .git / .vitepress/cache`), runs every registered
@@ -386,9 +390,8 @@ Detection heuristics, confirmation prompt, patch shape, and v1 scope limits live
 - `detect-eval-signals.sh --classify "<text>"` (or stdin) — crude regex prefilter over a turn, returns `{signal, confidence, target}`. Use it to cheap-skip trivial turns; the agent still has the final
   say on whether to fire.
 
-Fire at most **once per conversation turn**. On a signal hit, propose a diff in plain text, wait for `accept / edit / reject`, and — on accept — pipe the patch through
-`.claude/skills/sf-srs/scripts/srs-cli.sh apply-update`. v1 is ADD-only and appends to an "Added …" heading on the target page; the reviewer folds it back into the canonical section during the next
-human SRS review.
+Fire at most **once per conversation turn**. On a signal hit, propose a diff in plain text, wait for `accept / edit / reject`, and — on accept — pipe the patch through `sf srs apply-update`. v1 is
+ADD-only and appends to an "Added …" heading on the target page; the reviewer folds it back into the canonical section during the next human SRS review.
 
 After any change to the rules or classifier, run a short dogfood session: 5 utterances (one per signal row + one trivial control), confirm the hook fires exactly on the four signals and skips the
 trivial one.
@@ -415,7 +418,7 @@ Performance budget: ≤250ms p95 in a real shell (mostly classifier regex + jq p
 
 ## How other skills hand off to `sf-srs`
 
-- **`sf-workflow`** — when a ticket enters `Backlog` with the `srs:drafting` label, the workflow skill calls `srs-cli.sh draft` (or the appropriate action) and stays out of the way otherwise
+- **`sf-workflow`** — when a ticket enters `Backlog` with the `srs:drafting` label, the workflow skill calls `sf srs draft` (or the appropriate action) and stays out of the way otherwise
 - **`sf-tool-*`** skills expose a `SrsAdapter` implementation but never call `sf-srs` themselves. Dispatch is one-way : `sf-srs` → `sf-tool-<backend>` via `createSrsAdapter()`
 
 ## Critical rules
