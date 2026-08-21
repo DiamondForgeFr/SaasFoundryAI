@@ -121,15 +121,28 @@ export function matchSrsAgainstScanners(inventory: SrsInventory, findings: Scann
   const matchedFrIds = new Set<string>()
   const matchedImplFiles = new Set<string>()
 
-  // A page that sits under an Epic but whose title yields no FR id is excluded from every
-  // score. Report it: a silently dropped page looks exactly like a page that never existed,
-  // which is how 8 FR-CONFIG-ENGINE-* pages stayed invisible for two months.
+  // A page that sits where an FR was expected but whose title yields no FR id is excluded
+  // from every score. Report it: a silently dropped page looks exactly like a page that never
+  // existed, which is how 8 FR-CONFIG-ENGINE-* pages stayed invisible for two months.
   for (const page of inventory.unparsedPages ?? []) {
     driftFindings.push({
       kind: 'unparsed-fr-page',
       severity: 'warn',
-      message: `Page "${page.title}" under Epic "${page.epicTitle}" does not parse as an FR id — it is excluded from the freshness score`,
+      message: `Page "${page.title}" under "${page.holderTitle}" does not parse as an FR id — it is excluded from the freshness score`,
       frTitle: page.title
+    })
+  }
+
+  // Structural deviations from root → feature → version → FR. `unexpected-page-under-version`
+  // is deliberately skipped here: the same page already surfaces above as `unparsed-fr-page`,
+  // and reporting it twice would inflate the finding count without adding information.
+  for (const finding of inventory.conformance ?? []) {
+    if (finding.kind === 'unexpected-page-under-version') continue
+    driftFindings.push({
+      kind: finding.kind,
+      severity: finding.kind === 'fr-at-root-level' || finding.kind === 'nesting-too-deep' ? 'error' : 'warn',
+      message: finding.message,
+      frTitle: finding.title
     })
   }
 

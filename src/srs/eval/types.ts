@@ -1,3 +1,5 @@
+import { SrsConformanceFinding, SrsConformanceKind, SrsTreeFeature, SrsUnparsedPage } from '../tree/walk'
+
 export type DriftSeverity = 'info' | 'warn' | 'error'
 
 export type DriftKind =
@@ -5,7 +7,8 @@ export type DriftKind =
   | 'code-without-fr' // scanner finding has no matching FR page
   | 'fr-untested' // FR matched to endpoint(s) but none have tests
   | 'orphan-area' // scanner area carries endpoints but no FR page exists for it
-  | 'unparsed-fr-page' // page sits under an Epic but its title yields no FR id — it is NOT scored
+  | 'unparsed-fr-page' // page sits where an FR was expected but its title yields no FR id — it is NOT scored
+  | SrsConformanceKind // structural deviations from root → feature → version → FR
 
 export interface DriftFinding {
   kind: DriftKind
@@ -24,8 +27,16 @@ export interface SrsFrEntry {
   area: string // normalised area token, e.g. "auth" (lowercase)
   title: string
   pageId: string
+  // The page that directly holds this FR — the version when the feature is
+  // versioned, the feature itself otherwise. Kept under the `epic` name because
+  // `Epic = feature + version`: this is the page a board Epic is spawned from.
   epicPageId: string
   epicTitle: string
+  // The feature above the holder, and the version when there is one. On the flat
+  // shape `featurePageId === epicPageId` and `version` is absent.
+  featurePageId: string
+  featureTitle: string
+  version?: string
   // L2 declarative hints — optional. When a page author wants to steer the
   // matcher (e.g. a frontend-only FR), they can declare implementationKind
   // and/or areaHints in the FR page body. Inventory builders may populate
@@ -36,16 +47,24 @@ export interface SrsFrEntry {
 
 export interface SrsInventory {
   rootPageId: string
+  // Pages that directly hold FRs: the version when a feature is versioned, the
+  // feature itself otherwise. This is the Epic level, hence the name.
   epics: Array<{ pageId: string; title: string }>
+  // The feature level above the Epics, with the versions found under each.
+  features: SrsTreeFeature[]
   frs: SrsFrEntry[]
+  // Structural deviations from root → feature → version → FR, named rather than
+  // absorbed. `sf srs normalize` (#516) consumes these to make them fixable.
+  conformance: SrsConformanceFinding[]
   // Counts the eval cannot compute from the adapter's current RawContent
   // (tables come back empty on fetchPage). Captured for the report so the
   // human output is explicit about what is measured vs. what is not.
   unsupportedCategories: Array<'UR' | 'DS' | 'TC' | 'NFR'>
-  // Pages found under an Epic whose title does not parse as an FR id. They are
-  // excluded from every score, so they must be reported — a silently dropped page
-  // is indistinguishable from one that does not exist.
-  unparsedPages?: Array<{ pageId: string; title: string; epicTitle: string }>
+  // Pages found where an FR was expected whose title does not parse as an FR id.
+  // They are excluded from every score, so they must be reported — a silently
+  // dropped page is indistinguishable from one that does not exist. A version page
+  // under a feature is NOT one of these: it is a level, not a malformed FR.
+  unparsedPages?: SrsUnparsedPage[]
 }
 
 export interface CategoryScore {
@@ -92,6 +111,8 @@ export interface ReviewPacketFrEntry {
   pageId: string
   epicPageId: string
   epicTitle: string
+  featureTitle: string
+  version?: string
   implementationKind?: ImplementationKind
   areaHints?: string[]
   matchCount: number

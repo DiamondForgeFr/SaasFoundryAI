@@ -22,7 +22,9 @@ function inventory(frs: Array<{ id: string; area: string; title: string }>): Srs
   return {
     rootPageId: 'root',
     epics: [{ pageId: 'e', title: 'E' }],
-    frs: frs.map((f) => ({ ...f, pageId: `page-${f.id}`, epicPageId: 'e', epicTitle: 'E' })),
+    features: [{ pageId: 'e', title: 'E', url: '', versions: [], frCount: frs.length, conforming: false }],
+    frs: frs.map((f) => ({ ...f, pageId: `page-${f.id}`, epicPageId: 'e', epicTitle: 'E', featurePageId: 'e', featureTitle: 'E' })),
+    conformance: [],
     unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
   }
 }

@@ -15,7 +15,20 @@ function inv(frs: Array<{ id: string; area: string; title: string; implementatio
   return {
     rootPageId: 'root',
     epics: [{ pageId: 'e', title: 'E' }],
-    frs: frs.map((f) => ({ id: f.id, area: f.area, title: f.title, pageId: `p-${f.id}`, epicPageId: 'e', epicTitle: 'E', implementationKind: f.implementationKind, areaHints: f.areaHints })),
+    features: [{ pageId: 'e', title: 'E', url: '', versions: [], frCount: frs.length, conforming: false }],
+    frs: frs.map((f) => ({
+      id: f.id,
+      area: f.area,
+      title: f.title,
+      pageId: `p-${f.id}`,
+      epicPageId: 'e',
+      epicTitle: 'E',
+      featurePageId: 'e',
+      featureTitle: 'E',
+      implementationKind: f.implementationKind,
+      areaHints: f.areaHints
+    })),
+    conformance: [],
     unsupportedCategories: ['UR', 'DS', 'TC', 'NFR']
   }
 }
