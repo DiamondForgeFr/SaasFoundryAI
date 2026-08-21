@@ -1,3 +1,4 @@
+import chalk from 'chalk'
 import { Command } from 'commander'
 import 'module-alias/register'
 import { version } from '../package.json'
@@ -179,6 +180,17 @@ program
     }
     await runFullUninstall({ yes: Boolean(opts.yes) })
   })
+// Commander runs async actions fire-and-forget, so a rejection surfaces as an
+// unhandled rejection with a raw Node stack — which reads as a crash even when the
+// cause is a missing flag. Print what went wrong; keep the stack behind SF_DEBUG for
+// when the cause really is a bug.
+process.on('unhandledRejection', (reason) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason))
+  console.error(chalk.red(`✗ ${error.message}`))
+  if (process.env['SF_DEBUG']) console.error(error.stack)
+  process.exit(1)
+})
+
 program.parse()
 
 export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, srsCommand, feedbackCommand, statusCommand }
