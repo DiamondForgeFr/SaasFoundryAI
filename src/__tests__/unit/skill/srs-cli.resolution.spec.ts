@@ -10,8 +10,6 @@ const execFileP = promisify(execFile)
 const WRAPPER_SOURCE = path.resolve(__dirname, '../../../../.claude/skills/sf-srs/scripts/srs-cli.sh')
 const BASH = '/bin/bash'
 
-jest.setTimeout(30_000)
-
 /**
  * Builds a sandbox shaped like a **generated project**, which is the layout the
  * resolver used to ignore entirely: the skill is installed under `.claude/`, and
