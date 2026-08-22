@@ -60,6 +60,7 @@ three surfaces (`srs`, `tickets`, `codeComments`). `sf status --claude-friendly`
 | --- | --- | --- |
 | Read an existing POC | `scripts/read-poc.sh <dir>` | Read-only. Decides `recognisable` — never override it |
 | File a POC into `POC/` | `scripts/plan-poc-move.sh` then `scripts/move-poc.sh <dir> --confirm` | Plan first, always. Nothing moves without `--confirm` |
+| Challenge from what the POC showed | `scripts/plan-challenge.sh` then `scripts/record-intake.sh --out <path>` | Seeds only — never invent a question. An unseeded answer is refused |
 | Start a new project | `sf new --non-interactive …` | Gather intent via conversation (Phase 2C) |
 | Add / remove modules | `sf update --non-interactive --add … --remove …` | Consult `sf modules list --json` first (Phase 2D) |
 | Inspect project state | Read `.saasfoundry.json` + `sf modules list --json` | Pure read, no mutation (Phase 2E) |
@@ -152,6 +153,49 @@ The reading is an artefact, so it is written in the manifest's output language �
 - **Never work around a refusal.** Do not pick a different destination to dodge "already exists", do not run the intake from a parent folder to dodge "inside another repository". Relay it and let the user decide.
 - **Never run `sf new` inside the POC folder.** The whole point is that they end up beside each other.
 - **Never delete anything.** The intake only ever relocates. If something looks like it should go, say so and leave it.
+
+## Discovery: challenge what the POC revealed
+
+Runs after the POC intake and before `sf new`. It is the step that makes the rest worth anything: once the POC has been read, you know things the user has not said, and those things are questions only someone who read the code could ask.
+
+Not *"what do you want"*. **"Your POC does X — does that mean Y?"**
+
+### When this flow triggers
+
+- The POC intake has produced a reading and the user has confirmed it
+- The user is about to describe what they want built
+
+### What it replaces
+
+The generic intake: a list of questions any project would get, answered vaguely, producing a specification that says nothing specific about this product. The list feels thorough and produces nothing, because none of it came from looking.
+
+### Workflow
+
+1. **Seed from the reading** — `scripts/read-poc.sh <dir> | scripts/plan-challenge.sh`. A seed is an observation plus the dimension it opens up. **You may refine a seed, merge two, or drop one. You may not invent one.**
+2. **When `revealing` is `false`, say so** — the POC reveals too little to challenge. Tell the user that, in the terms `reason` gives, and ask directly instead. Padding it out with questions any project would get is the exact failure this flow exists to prevent.
+3. **Ask, one at a time** — turn each seed into a real question that names its observation. "Your POC processes audio with a local model rather than an API — was that a privacy decision that has to hold in the product, or just the quickest thing to get working?" The observation is what makes the question worth answering; a question without it is the generic intake wearing a costume.
+4. **Read `notes`** — they say what could not be probed. A python POC yields fewer seeds because only `package.json` is parsed today; that is a limit of the reading, not a verdict on the POC, and the user deserves to hear the difference.
+5. **Record the answers** — pipe `{seeds, answers, root, notes}` into `scripts/record-intake.sh --out <workspace>/intake.json`. Each answer carries the `dimension` of the seed it came from. **An answer that references no seed is refused**, which is how the link to the observation survives into the artefact instead of only living in the conversation.
+6. **Carry it into the SRS step** — the record is what the SRS drafting reads. Nothing in it gets asked twice.
+
+### Seed shape (from `plan-challenge.sh`)
+
+| Field | Meaning |
+| --- | --- |
+| `revealing` | Whether there is enough to build a challenge from. `false` is a finding — the script still exits 0 |
+| `reason` | Why it reveals too little. Say this, in these terms |
+| `seeds[].observation` | A fact quoted from the reading — this is what the question must name |
+| `seeds[].evidence` | The report field it came from, so the claim is checkable |
+| `seeds[].probe` | The opening. You write the question |
+| `cap` / `considered` / `dropped` | The bound, and what did not fit. **`dropped > 0` means questions were left out** — say so if the conversation goes deep |
+| `notes` | What could not be probed, and why |
+
+### Never do these
+
+- **Never ask a question that names no observation.** If it does not come from a seed, it is not part of this step. It may still be a good question — it belongs in the SRS conversation that follows.
+- **Never manufacture a challenge from a thin POC.** `revealing: false` means ask directly and say why. An invented implication is worse than an honest blank, because the user will answer it as though it were grounded.
+- **Never run through all the seeds mechanically.** The cap is an upper bound, not a quota. Two good questions beat six dutiful ones, and the user's answer to the first often kills the third.
+- **Never re-ask what the record already holds.** The intake exists so the SRS step inherits the answers instead of running the same conversation again.
 
 ## Discovery: `sf new`
 
