@@ -538,3 +538,13 @@ Artefacts from the capstone (kept for reference):
   `FR_TITLE_SEPARATOR` in `src/builders/srs/constants.ts`, imported by both the page renderer (`src/builders/srs/templates/pages/fr.tpl.ts`) and the inventory parser (`src/srs/eval/inventory.ts`). Do
   not substitute an ASCII hyphen (U+002D) — it round-trips through Notion as the same glyph visually but breaks the byte-level identity the tests enforce. If you change the separator, update the
   constant in one place and both sites follow.
+
+## Where this sits in the zero-to-project flow
+
+This skill carries **phase 4, _write the SRS_** of the flow a user walks when they arrive with a POC and no project. The map — every phase, its entry, its checkable exit, and how to resume mid-way —
+lives in the `tool-saasfoundry` skill under "The zero-to-project flow".
+
+It starts from a manifest that already declares the backend and from the intake record produced by the challenge phase, and it ends when pages exist under the SRS root page. It never runs before phase
+3: the backend it writes to is declared in `.saasfoundry.json`, which the setup creates.
+
+On a resumed session, run `tool-saasfoundry`'s `scripts/recap.sh` before assuming anything: it reads the phase from the manifest and the board, never from chat history.

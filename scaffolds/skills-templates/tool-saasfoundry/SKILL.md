@@ -61,6 +61,7 @@ three surfaces (`srs`, `tickets`, `codeComments`). `sf status --claude-friendly`
 | Read an existing POC | `scripts/read-poc.sh <dir>` | Read-only. Decides `recognisable` — never override it |
 | File a POC into `POC/` | `scripts/plan-poc-move.sh` then `scripts/move-poc.sh <dir> --confirm` | Plan first, always. Nothing moves without `--confirm` |
 | Challenge from what the POC showed | `scripts/plan-challenge.sh` then `scripts/record-intake.sh --out <path>` | Seeds only — never invent a question. An unseeded answer is refused |
+| Resume a flow in progress | `scripts/recap.sh [workspace]` | Reads state, never chat history. Run it first on any resumed session |
 | Start a new project | `sf new --non-interactive …` | Gather intent via conversation (Phase 2C) |
 | Add / remove modules | `sf update --non-interactive --add … --remove …` | Consult `sf modules list --json` first (Phase 2D) |
 | Inspect project state | Read `.saasfoundry.json` + `sf modules list --json` | Pure read, no mutation (Phase 2E) |
@@ -86,6 +87,70 @@ Guidelines:
 - **Run `detect-env.sh` first** when the conversation starts to cache environment facts (OS, node version, CLI presence) for the rest of the turn
 - **Always gate `gh`-backed flows behind `bootstrap-gh.sh`** — on failure, surface its stderr verbatim to the user and stop rather than retrying blindly
 - **Resolve the CLI invocation via `bootstrap-cli.sh`** — never hardcode `sf` in examples if the user might be running via `npx`
+
+## The zero-to-project flow
+
+The sections that follow describe individual capabilities. This one is the order they run in. A user handed the install line and dropped into a folder gets an *experience* only if the phases are sequenced; otherwise they get a set of tools and have to be their own project manager.
+
+```
+read the POC  →  challenge the intent  →  decide the setup  →  write the SRS
+                                                                     ↓
+                         features  ←  base setup  ←  create the tickets
+```
+
+### The phases
+
+Each phase starts from what the previous one produced and ends on something **checkable** — not a feeling that it went well.
+
+| # | Phase | Starts from | Ends on | Carried by |
+| --- | --- | --- | --- | --- |
+| 1 | Read the POC | a folder holding code | a reading the user confirmed, and the POC filed into `POC/` | `read-poc.sh` → `plan-poc-move.sh` → `move-poc.sh --confirm` |
+| 2 | Challenge the intent | the confirmed reading | `intake.json` holding answers traced to observations | `plan-challenge.sh` → `record-intake.sh` |
+| 3 | Decide the setup | the intake record | a project directory holding `.saasfoundry.json` | `plan-new.sh` → the `sf new` command it prints |
+| 4 | Write the SRS | the manifest and the intake | pages under the SRS root page | the **sf-srs** skill |
+| 5 | Create the tickets | an SRS carrying FRs | the board carries tickets | `srs-cli.sh spawn` against a version page |
+| 6 | Base setup | tickets on the board | the first ticket past Backlog | the **sf-workflow** skill |
+| 7 | Features | a working base | — | the **sf-workflow** skill, one ticket at a time |
+
+**Phase 3 comes before phase 4, and that is not an accident.** The SRS step needs a configured backend, and the backend is declared in the manifest — which only exists once the setup has run.
+
+### Resuming — always start here
+
+A user who closes the session and comes back must be told where they are. **Never reconstruct the phase from what was said earlier**: chat history is the one source that does not survive, and it is the one that lies most confidently.
+
+```bash
+scripts/recap.sh [workspace] [--no-network]
+```
+
+It reads `POC/`, `intake.json` and the manifest from disk, and takes the preconditions from `sf status --json` rather than re-deriving them. Then:
+
+- **`current`** — the first phase not known to be done, and the command that carries it
+- **`state`** per phase — `done`, `pending`, `unknown`, or `not-applicable`
+- **`blockers`** — phases at or after the current one whose precondition fails, each carrying its own remediation
+
+Three things it does that matter more than they look:
+
+- **`unknown` is not `pending`.** Offline, the SRS and the board cannot be inspected, so they are reported as unverified rather than as undone — and the walk stops there. Claiming to be past a phase nobody checked is how written work gets written twice.
+- **`not-applicable` is not `pending`.** A project with a manifest and no `POC/` never had a POC. Phases 1 and 2 did not apply to it; they are not outstanding work, and it must not be sent back to read something that never existed.
+- **A blocked phase routes rather than fails.** The remediation printed is the one `sf status` already carries — `sf update --add-modules srs`, `sf workflow use <template>`, `sf new`. Route the user there and stop; never walk into a phase whose precondition is unmet and improvise around the error.
+
+### Ask, do not assume
+
+Three decisions are the user's, at the phase that needs them, and none of them has a safe default:
+
+| Decision | Phase | Why it cannot be guessed |
+| --- | --- | --- |
+| `profile` | 3 | Getting it wrong scaffolds a full stack over an existing repository |
+| SRS backend | 4 | It decides where every specification page is written, in someone else's workspace |
+| workflow tool | 5 | It decides where every ticket lands |
+
+When the manifest already answers one of them, **it is answered** — read it, do not re-ask. That is the whole reason the manifest is the source of truth.
+
+### Never do these
+
+- **Never skip a phase because its output could be improvised.** Writing an SRS without the intake record produces a specification about nothing in particular, which is what this flow exists to prevent.
+- **Never report a phase from memory.** Run `recap.sh`. A session that "remembers" being at phase 4 and is actually at phase 2 will write a specification over an intake that was never done.
+- **Never continue past a blocker.** Route to the remediation and stop.
 
 ## Discovery: an existing POC
 

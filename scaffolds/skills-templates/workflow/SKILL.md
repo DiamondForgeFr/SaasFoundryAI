@@ -248,3 +248,12 @@ The status descriptions are in the `statuses/` directory:
 - Each status has its own markdown file
 - Descriptions include: when to enter, mandatory actions, exit conditions, next status
 - The CLI script (`workflow-cli.sh`) queries the project management tool and displays the appropriate description
+
+## Where this sits in the zero-to-project flow
+
+This skill carries **phases 5 to 7 — *create the tickets*, *base setup*, then *features*** of the flow a user walks when they arrive with a POC and no project. The map — every phase, its entry, its checkable exit, and how to resume mid-way — lives in the
+`tool-saasfoundry` skill under "The zero-to-project flow".
+
+It starts from an SRS carrying FRs and a configured board, and the first ticket moving past Backlog is what marks the base setup underway.
+
+On a resumed session, run `tool-saasfoundry`'s `scripts/recap.sh` before assuming anything: it reads the phase from the manifest and the board, never from chat history.
