@@ -100,9 +100,7 @@ describe('plan-poc-move.js', () => {
 
   describe('the plan', () => {
     it('lists every top-level entry, dotfiles and .git included', async () => {
-      const { plan } = await planFor(
-        fixture({ 'package.json': '{}', 'src/a.js': 'x', '.env': 'K=v', '.git/HEAD': 'ref: refs/heads/main\n', 'README.md': '# r\n\nProves X.\n' })
-      )
+      const { plan } = await planFor(fixture({ 'package.json': '{}', 'src/a.js': 'x', '.env': 'K=v', '.git/HEAD': 'ref: refs/heads/main\n', 'README.md': '# r\n\nProves X.\n' }))
       expect(plan.moves.map((m) => m.from).sort()).toEqual(['.env', '.git', 'README.md', 'package.json', 'src'])
       expect(plan.entriesMoved).toBe(5)
       expect(plan.moves.find((m) => m.from === 'src')?.type).toBe('dir')
