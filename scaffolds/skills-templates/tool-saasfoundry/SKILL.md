@@ -21,6 +21,7 @@ Activate on explicit SaaSFoundryAI intent:
 
 - "scaffold a SaaS / SaaS project / Node+React stack with postgres"
 - "I want to start a new SaaSFoundryAI project"
+- **"I already have a POC / a prototype / some code and I want to start properly"** → the POC intake runs first (see below)
 - "add the email / storage / analytics module"
 - "update my SaaSFoundryAI project"
 - "what modules do I have?" / "am I up to date?" / "what's in `.saasfoundry.json`?"
@@ -57,6 +58,8 @@ three surfaces (`srs`, `tickets`, `codeComments`). `sf status --claude-friendly`
 
 | User intent | CLI command | Notes |
 | --- | --- | --- |
+| Read an existing POC | `scripts/read-poc.sh <dir>` | Read-only. Decides `recognisable` — never override it |
+| File a POC into `POC/` | `scripts/plan-poc-move.sh` then `scripts/move-poc.sh <dir> --confirm` | Plan first, always. Nothing moves without `--confirm` |
 | Start a new project | `sf new --non-interactive …` | Gather intent via conversation (Phase 2C) |
 | Add / remove modules | `sf update --non-interactive --add … --remove …` | Consult `sf modules list --json` first (Phase 2D) |
 | Inspect project state | Read `.saasfoundry.json` + `sf modules list --json` | Pure read, no mutation (Phase 2E) |
@@ -83,6 +86,73 @@ Guidelines:
 - **Always gate `gh`-backed flows behind `bootstrap-gh.sh`** — on failure, surface its stderr verbatim to the user and stop rather than retrying blindly
 - **Resolve the CLI invocation via `bootstrap-cli.sh`** — never hardcode `sf` in examples if the user might be running via `npx`
 
+## Discovery: an existing POC
+
+Before `sf new` can run in a folder that already holds code, that code has to be read and filed away. This is the first flow of the zero-to-project path, and it runs *before* the `sf new` discovery below.
+
+### When this flow triggers
+
+- The starting-point question is answered with "it's a POC", "a prototype", "something I threw together"
+- The user says they have some code but want to start properly
+- The folder `sf new` is about to run in already holds files
+
+### Why it exists
+
+`sf new --profile full` creates `<projectName>/` under the current folder and scaffolds into it. Run over a POC, the experiment and the generated project become siblings in a folder nobody organised — and the POC gets extended into production by accident, because it is the code that is already there.
+
+The intake makes the POC a **reference**: it moves into `POC/`, the project is scaffolded beside it, and the boundary is visible from the first day.
+
+```
+my-thing/                  before          my-thing/                  after
+├── src/                                   ├── POC/
+├── package.json                           │   ├── src/
+└── notes.md                               │   ├── package.json
+                                           │   └── notes.md
+                                           └── my-project/     ← sf new
+```
+
+### Workflow
+
+1. **Read it** — `scripts/read-poc.sh <dir>`. Never list the folder and infer: the script decides whether there is anything to read, and that decision is not yours to override.
+2. **Say what it is** — turn the evidence into a reading: what it does, what it proves, which parts are the experiment and which are scaffolding. Every claim must trace back to something in the report — a manifest, the README prose, the entry points, the dependencies.
+   - **When `recognisable` is `false`, report the reason and do not guess.** A folder of loose files has no purpose to read. Say what is there, say why it cannot be read, and let the user tell you. This is the failure mode the whole flow exists to prevent.
+3. **Confirm the reading** — show it and let the user correct it. Their correction is the reading; yours was a proposal.
+4. **Propose the move** — `scripts/read-poc.sh <dir> | scripts/plan-poc-move.sh`. Show the entries that move, the resulting tree, and any warnings. If the plan refuses, relay the refusal verbatim and stop — every refusal guards work that exists in no other copy.
+5. **Move only on approval** — `scripts/move-poc.sh <dir> --confirm`. Without `--confirm` it is a dry run that changes nothing, which is also the right thing to run when the user asks "what would this do?".
+6. **Then scaffold** — run the `sf new` discovery below from the same folder. The project directory lands beside `POC/` on its own, because that is what `sf new` already does.
+
+### Report shape (from `read-poc.sh`)
+
+| Field | Meaning |
+| --- | --- |
+| `recognisable` | Whether there is enough here to read a purpose from. **`false` is a finding, not an error** — the script still exits 0 |
+| `reason` | Why it is not recognisable. Say this to the user, in these terms |
+| `anchors` | What makes it readable: a manifest, a README with prose, source files with authored company |
+| `stacks`, `manifests` | Detected stacks and the manifest files that prove them |
+| `package` | `name`, `description`, `scripts`, `dependencies` — the closest thing to a stated intent |
+| `readme.firstParagraph` | The first real paragraph, headings and badges skipped |
+| `entryPoints`, `tests` | Where it starts, and whether anyone tested it |
+| `git` | `ownRepo:false` with `isRepo:true` means the POC sits inside somebody else's repository |
+| `inventory` | Counts, top-level entries, generated directories seen but not walked |
+
+### Plan shape (from `plan-poc-move.sh`)
+
+`moves` lists whole top-level entries, dotfiles and `.git` included — that is what makes the move reversible. `refused` with `refusals` means stop. `warnings` never block. `undo` says how to reverse it.
+
+The repository travels with its files: git resolves tracked paths relative to its own root, so a POC that had a `.git` keeps a clean tree and its full history at the new location, with nothing rewritten.
+
+### Output language
+
+The reading is an artefact, so it is written in the manifest's output language — and at intake time there is no manifest yet, which resolves it to the default, **English**. The conversation's language is not the signal here any more than it is anywhere else.
+
+### Never do these
+
+- **Never move anything before the user has approved the plan.** The POC is normally local-only: no remote, often no history. There is no copy to restore from.
+- **Never invent a purpose when `recognisable` is `false`.** Report the reason instead. A confident-sounding reading of a folder that cannot be read is worse than saying you cannot read it.
+- **Never work around a refusal.** Do not pick a different destination to dodge "already exists", do not run the intake from a parent folder to dodge "inside another repository". Relay it and let the user decide.
+- **Never run `sf new` inside the POC folder.** The whole point is that they end up beside each other.
+- **Never delete anything.** The intake only ever relocates. If something looks like it should go, say so and leave it.
+
 ## Discovery: `sf new`
 
 When the user wants to start a new SaaSFoundryAI project, the skill replaces the CLI's Inquirer prompts with a conversational discovery flow. The goal is to produce a complete **intent** object that `plan-new.sh` can translate into a single `sf new --non-interactive …` command. The intent schema and flag mapping are documented in `reference/new-flags.json` — consult it before inventing field names.
@@ -102,7 +172,8 @@ Pick the mode from the user's first message, not from a menu:
 1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundryai-cli`). Cache for the rest of the turn.
 1. **Establish the starting point FIRST** — before anything else, determine `profile`. It is the CLI's first question and it gates which later questions apply at all. Ask plainly: *does a codebase already exist here that you intend to keep?*
    - **Yes, and I'm building on it** → `harness`. Deposits the AI layer onto the existing repository. **No stack is scaffolded and no project directory is created.** Getting this wrong scaffolds a full stack over the user's project.
-   - **No, or it's a throwaway POC I'll rewrite** → `full`
+   - **No, or it's a throwaway POC I'll rewrite** → `full`. If there *is* a POC in the folder, run the **POC intake above first** — read it, then file it into `POC/` — so the scaffold lands
+     beside the experiment instead of tangled with it.
    - **I want the stack without the AI layer** → `stack` (rare — confirm it is deliberate)
 
    On `harness`, skip every stack question (database, storage, email, installable app): there is nothing to scaffold.
