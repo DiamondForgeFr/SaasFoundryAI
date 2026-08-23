@@ -65,6 +65,19 @@ route_to_tool() {
   "$tool_cli" "$@"
 }
 
+# Which adapters project a milestone today.
+#
+# Kept as an explicit list rather than probed at runtime: an adapter that
+# silently accepts `milestone` and does nothing is worse than one that
+# says it cannot, and probing would report "supported" for any tool CLI
+# that happens not to fail on an unknown argument.
+milestone_supported() {
+  case "$1" in
+    github-projects) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Function to get current status of a ticket.
 #
 # Uses the tool CLI's --json flag and parses with jq — no more grep|awk on
@@ -739,6 +752,98 @@ case "$COMMAND" in
     fi
     route_to_tool "$WORKFLOW_TOOL" update-status "$@" || exit $?
     print_status_banner "$TARGET"
+    ;;
+
+  # ───────────────────────────────────────────────────────────────────
+  # milestone — the release scope, defined in the neutral layer
+  #
+  # A milestone is a first-class object: creatable, renamable and
+  # re-scopable at any point in a project's life. `sf srs spawn` is one
+  # way to POPULATE one, never the way one comes into existence — that
+  # is the whole point of #542's first requirement.
+  #
+  # It lives here rather than in the GitHub skill for the same reason the
+  # seven statuses do: the concept is tool-neutral and each adapter
+  # projects it. GitHub has native milestones, Jira has fix versions,
+  # Linear has cycles, Notion has a database row. A milestone defined
+  # inside one adapter would have to be reinvented for the next three.
+  #
+  # A version is ASSOCIATED to a milestone, never identical to it: one
+  # milestone per release, and several SRS version pages may point at it.
+  # The association is carried by the milestone itself, in the tool that
+  # holds it — not in .saasfoundry.json. Storing it in the manifest would
+  # mean a schema change and a migration for something that belongs to
+  # the board, and it would go stale the moment anyone edited the
+  # milestone from the tool's own UI.
+  # ───────────────────────────────────────────────────────────────────
+  milestone)
+    load_config
+    SUB=$1
+    shift || true
+
+    case "$SUB" in
+      create)
+        if [[ -z "${1:-}" ]]; then
+          echo "Usage: workflow-cli.sh milestone create <name> [--description <text>] [--due <YYYY-MM-DD>] [--version <page-url-or-id>]" >&2
+          echo "  <name> is the release, e.g. v1.0.0 — not the feature, and not the version page title." >&2
+          exit 1
+        fi
+        ;;
+      show|scope)
+        if [[ -z "${1:-}" ]]; then
+          echo "Usage: workflow-cli.sh milestone $SUB <name>" >&2
+          exit 1
+        fi
+        ;;
+      assign)
+        if [[ -z "${1:-}" || -z "${2:-}" ]]; then
+          echo "Usage: workflow-cli.sh milestone assign <ticket> <name>" >&2
+          exit 1
+        fi
+        ;;
+      associate)
+        if [[ -z "${1:-}" || -z "${2:-}" ]]; then
+          echo "Usage: workflow-cli.sh milestone associate <name> <version-page-url-or-id>" >&2
+          echo "  Links an SRS version page to a release milestone. A milestone may carry several." >&2
+          exit 1
+        fi
+        ;;
+      list)
+        : # no required arguments
+        ;;
+      ""|help)
+        echo "Usage: workflow-cli.sh milestone <subcommand> [args]" >&2
+        echo "" >&2
+        echo "Subcommands:" >&2
+        echo "  create <name> [--description <text>] [--due <date>] [--version <page>]" >&2
+        echo "  list [--state open|closed|all]" >&2
+        echo "  show <name>                      completion, and what is still open" >&2
+        echo "  scope <name>                     the tickets it holds" >&2
+        echo "  assign <ticket> <name>           put a ticket in a milestone" >&2
+        echo "  associate <name> <version-page>  link an SRS version to a release" >&2
+        echo "" >&2
+        echo "A milestone reports; it never blocks a release. See #542." >&2
+        [[ "$SUB" == "help" ]] && exit 0
+        exit 1
+        ;;
+      *)
+        echo -e "${RED}Unknown milestone subcommand: $SUB${NC}" >&2
+        echo "Run: workflow-cli.sh milestone help" >&2
+        exit 1
+        ;;
+    esac
+
+    # Refused on purpose when the configured adapter has no milestone
+    # surface — exit 2, per .claude/docs/exit-codes.md, so a caller can
+    # tell "this tool cannot" from "this broke".
+    if ! milestone_supported "$WORKFLOW_TOOL"; then
+      echo -e "${RED}The '${WORKFLOW_TOOL}' adapter does not implement milestones yet.${NC}" >&2
+      echo "Milestones are defined in the workflow layer and projected per tool." >&2
+      echo "Supported today: github-projects." >&2
+      exit 2
+    fi
+
+    route_to_tool "$WORKFLOW_TOOL" milestone "$SUB" "$@"
     ;;
 
   create-subtask|create-epic|create-pr|list|get-labels)
