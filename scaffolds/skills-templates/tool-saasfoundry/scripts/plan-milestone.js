@@ -22,6 +22,10 @@
 //     "srsVersions":[{ "title": "v2 — ...", "url": "..." }]        // optional
 //   }
 //
+// Every candidate carries both `scopeSize` (what the release would contain) and
+// `openCount` (what is left to do). They answer different questions and the ranking uses
+// the first — see the sort below.
+//
 // Output (stdout, JSON): see plan-milestone.sh
 //
 // Exit codes:
@@ -84,9 +88,10 @@ for (const epic of tickets.filter((t) => t.isEpic && !isDone(t))) {
   candidates.push({
     source: 'epic',
     name: null, // the model proposes a release name; the script will not invent semver
-    rationale: 'Epic #' + epic.number + ' has ' + openChildren.length + ' unfinished child' + (openChildren.length === 1 ? '' : 'ren'),
+    rationale: 'Epic #' + epic.number + ' holds ' + children.length + ' ticket' + (children.length === 1 ? '' : 's') + ', ' + openChildren.length + ' still open',
     evidence: 'grouped by sub-issue relationship to #' + epic.number + ' — "' + String(epic.title || '').slice(0, 80) + '"',
     tickets: children.map((t) => t.number),
+    scopeSize: children.length,
     openCount: openChildren.length,
     doneCount: children.length - openChildren.length
   })
@@ -102,6 +107,7 @@ for (const version of srsVersions) {
     rationale: 'the SRS declares a version: "' + version.title.slice(0, 80) + '"',
     evidence: 'SRS version page' + (version.url ? ' ' + version.url : ''),
     tickets: [],
+    scopeSize: 0,
     openCount: 0,
     doneCount: 0
   })
@@ -118,14 +124,28 @@ if (leftovers.length >= 3) {
     rationale: leftovers.length + ' open tickets belong to no Epic and no milestone',
     evidence: 'grouped only by being unaffiliated — this is a leftover set, not a theme',
     tickets: leftovers.map((t) => t.number),
+    scopeSize: leftovers.length,
     openCount: leftovers.length,
     doneCount: 0
   })
 }
 
-// Ranked by how much is still open. Board order is arbitrary, and an arbitrary order plus
-// a cap means the scope that mattered can fall off the end silently.
-candidates.sort((a, b) => b.openCount - a.openCount)
+// Ranked by how defensible the grouping is, then by how much it contains.
+//
+// Not by remaining work. `openCount` answers "where is there still work?", which is the
+// right question when re-scoping mid-flight and the wrong one when framing a release: a
+// milestone records what a release CONTAINS, and it is read mostly after the release,
+// when everything in it is closed. Dogfooding made that plain — #482 holds 16 tickets
+// with 15 done, the most complete release scope on this board, and ranking by remaining
+// work put it last and then dropped it.
+//
+// Size alone is not enough either: it would float the unaffiliated pile to the top, which
+// is the largest grouping and the least defensible one. So source first — the product
+// declared a version, or somebody decided these tickets belong together, or they are
+// simply what is left — and size within it. Both counts are emitted; the model picks the
+// one its question needs.
+const SOURCE_RANK = { 'srs-version': 0, epic: 1, unaffiliated: 2 }
+candidates.sort((a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || b.scopeSize - a.scopeSize)
 
 const considered = candidates.length
 const dropped = Math.max(0, considered - CAP)
@@ -134,7 +154,7 @@ const kept = candidates.slice(0, CAP)
 // Naming what was cut, not just counting it. A cap that reports "2 more" reads as "nothing
 // you care about"; the one you care about is exactly the one you cannot see. Found on the
 // real board, where five Epics competed for three slots.
-const droppedSummary = candidates.slice(CAP).map((c) => ({ source: c.source, rationale: c.rationale, openCount: c.openCount }))
+const droppedSummary = candidates.slice(CAP).map((c) => ({ source: c.source, rationale: c.rationale, scopeSize: c.scopeSize, openCount: c.openCount }))
 
 // ── the trigger ─────────────────────────────────────────────────────────────────────
 
@@ -158,6 +178,11 @@ if (kept.length === 0) {
 }
 
 const notes = []
+// A truncated board makes every count below an undercount, so it is said first and in
+// those terms — not as a footnote about pagination.
+if (input.boardTruncated === true) {
+  notes.push('the board was read up to ' + (input.boardLimit || 'the limit') + ' items and hit that limit — every count here is a floor, and a grouping may be missing tickets entirely')
+}
 if (dropped > 0) {
   notes.push(dropped + ' further candidate(s) did not fit the cap — they are listed in `droppedCandidates`, not hidden')
 }

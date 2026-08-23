@@ -30,6 +30,7 @@ interface Candidate {
   rationale: string
   evidence: string
   tickets: number[]
+  scopeSize: number
   openCount: number
   doneCount: number
 }
@@ -38,7 +39,7 @@ interface Plan {
   trigger: string | null
   reason: string | null
   candidates: Candidate[]
-  droppedCandidates: Array<{ source: string; rationale: string; openCount: number }>
+  droppedCandidates: Array<{ source: string; rationale: string; scopeSize: number; openCount: number }>
   cap: number
   considered: number
   dropped: number
@@ -55,8 +56,8 @@ interface Ticket {
   milestone?: string | null
 }
 
-async function plan(tickets: Ticket[], extra: { milestones?: unknown[]; srsVersions?: unknown[] } = {}): Promise<Plan> {
-  const res = await run({ tickets, milestones: extra.milestones ?? [], srsVersions: extra.srsVersions ?? [] })
+async function plan(tickets: Ticket[], extra: { milestones?: unknown[]; srsVersions?: unknown[]; boardTruncated?: boolean; boardLimit?: number } = {}): Promise<Plan> {
+  const res = await run({ tickets, milestones: extra.milestones ?? [], srsVersions: extra.srsVersions ?? [], ...extra })
   if (res.code !== 0) throw new Error(`expected 0, got ${res.code}: ${res.stderr}`)
   return JSON.parse(res.stdout) as Plan
 }
@@ -89,7 +90,7 @@ describe('plan-milestone.js', () => {
       const p = await plan(epicWith(482, 4))
       const c = p.candidates.find((x) => x.source === 'epic')
       expect(c?.evidence).toContain('sub-issue relationship to #482')
-      expect(c?.rationale).toContain('4 unfinished children')
+      expect(c?.rationale).toContain('holds 4 tickets, 4 still open')
       expect(c?.openCount).toBe(4)
     })
 
@@ -120,13 +121,30 @@ describe('plan-milestone.js', () => {
     })
   })
 
-  describe('the cap names what it cut', () => {
-    // Found on the real board: five Epics competed for three slots and #482 — the release
-    // Epic — was in the silently dropped pair. A cap that only reports a count reads as
-    // "nothing you care about", and the one you care about is the one you cannot see.
-    it('ranks by how much is still open, so the largest scope cannot fall off the end', async () => {
-      const p = await plan([...epicWith(1, 2), ...epicWith(2, 9), ...epicWith(3, 5), ...epicWith(4, 1)])
-      expect(p.candidates.map((c) => c.openCount)).toEqual([9, 5, 2])
+  describe('ranking, and the cap naming what it cut', () => {
+    // All of this came from pointing the engine at SaaSFoundry's own board.
+    it('ranks by what a release would contain, not by what is left to do', async () => {
+      // #482 holds 16 tickets with 15 done — the most complete release scope on the board.
+      // Ranking by remaining work put it last and then dropped it. A milestone records
+      // CONTENTS, and it is read mostly after the release, when everything in it is closed.
+      const nearlyDone = epicWith(482, 1, 15)
+      const p = await plan([...nearlyDone, ...epicWith(393, 7)])
+      expect(p.candidates[0].rationale).toContain('#482')
+      expect(p.candidates[0].scopeSize).toBe(16)
+      expect(p.candidates[0].openCount).toBe(1)
+    })
+
+    it('puts a declared version above an Epic, and an Epic above leftovers', async () => {
+      // Size alone would float the unaffiliated pile to the top: it is the largest
+      // grouping and the least defensible one.
+      const p = await plan([...epicWith(1, 4), ...loose(40)], { srsVersions: [{ title: 'v2 — live notes' }] })
+      expect(p.candidates.map((c) => c.source)).toEqual(['srs-version', 'epic', 'unaffiliated'])
+    })
+
+    it('emits both counts, because they answer different questions', async () => {
+      const p = await plan(epicWith(1, 3, 9))
+      expect(p.candidates[0].scopeSize).toBe(12)
+      expect(p.candidates[0].openCount).toBe(3)
     })
 
     it('lists the dropped candidates rather than only counting them', async () => {
@@ -134,7 +152,17 @@ describe('plan-milestone.js', () => {
       expect(p.dropped).toBe(1)
       expect(p.droppedCandidates).toHaveLength(1)
       expect(p.droppedCandidates[0].rationale).toContain('#4')
+      expect(p.droppedCandidates[0].scopeSize).toBe(1)
       expect(p.notes.join(' ')).toContain('not hidden')
+    })
+
+    it('says when the board itself was read incompletely', async () => {
+      // A 400-item limit silently dropped 10 of this board's 410 — and with them two
+      // children of #482 and the whole of #542. Every count becomes an undercount, so it
+      // is said in those terms rather than as a footnote about pagination.
+      const p = await plan(epicWith(1, 3), { boardTruncated: true, boardLimit: 400 })
+      expect(p.notes.join(' ')).toContain('every count here is a floor')
+      expect(p.notes.join(' ')).toContain('400')
     })
 
     it('drops nothing when everything fits', async () => {
