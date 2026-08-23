@@ -808,6 +808,15 @@ case "$COMMAND" in
           exit 1
         fi
         ;;
+      readiness)
+        if [[ -z "${1:-}" ]]; then
+          echo "Usage: workflow-cli.sh milestone readiness <name> [--acknowledge \"<reason>\"]" >&2
+          echo "  Reports where the release stands. Exits 2 while work is open — that is a" >&2
+          echo "  prompt for an acknowledgement, never a refusal: re-run with --acknowledge" >&2
+          echo "  and it proceeds, recording why." >&2
+          exit 1
+        fi
+        ;;
       list)
         : # no required arguments
         ;;
@@ -821,6 +830,7 @@ case "$COMMAND" in
         echo "  scope <name>                     the tickets it holds" >&2
         echo "  assign <ticket> <name>           put a ticket in a milestone" >&2
         echo "  associate <name> <version-page>  link an SRS version to a release" >&2
+        echo "  readiness <name> [--acknowledge <reason>]   where the release stands" >&2
         echo "" >&2
         echo "A milestone reports; it never blocks a release. See #542." >&2
         [[ "$SUB" == "help" ]] && exit 0

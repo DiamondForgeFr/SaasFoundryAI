@@ -1202,6 +1202,10 @@ cmd_delete_issue_type() {
 # manifest copy would need a migration and would go stale on any UI edit.
 
 MILESTONE_VERSION_MARKER="SRS versions:"
+# Stamped the first time readiness runs, so scope drift is measurable later.
+MILESTONE_FRAMED_MARKER="Framed at:"
+# An acknowledgement lives on the milestone, not in a chat log nobody keeps.
+MILESTONE_ACK_MARKER="Acknowledged:"
 
 # Resolve a milestone number from its title, searching open and closed.
 # Prints the number on stdout, or nothing when there is no such milestone.
@@ -1376,9 +1380,113 @@ ${MILESTONE_VERSION_MARKER} ${page}"
       echo -e "${GREEN}✓ \"${name}\" now carries ${page}${NC}"
       ;;
 
+    readiness)
+      local name=$1; shift || true
+      local acknowledge=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --acknowledge) acknowledge=${2:-}; shift 2 ;;
+          *) echo -e "${RED}milestone readiness: unknown flag $1${NC}" >&2; exit 1 ;;
+        esac
+      done
+
+      local number
+      number=$(milestone_number_by_title "$repo" "$name")
+      [ -z "$number" ] && milestone_not_found "$repo" "$name"
+
+      local payload open closed total pct
+      payload=$(gh api "repos/${repo}/milestones/${number}" 2>/dev/null)
+      open=$(printf '%s' "$payload" | jq -r '.open_issues')
+      closed=$(printf '%s' "$payload" | jq -r '.closed_issues')
+      total=$((open + closed))
+
+      echo ""
+      echo "Release readiness — ${name}"
+      echo ""
+      if [ "$total" -eq 0 ]; then
+        echo "  This milestone holds nothing yet."
+        echo "  Assign the tickets it covers before reading anything into it:"
+        echo "    workflow-cli.sh milestone assign <ticket> \"${name}\""
+        echo ""
+        exit 2
+      fi
+
+      pct=$(( (closed * 100) / total ))
+      echo "  ${closed}/${total} closed (${pct}%)"
+
+      # Drift. The framed size is stamped on the milestone the first time readiness runs,
+      # so "what moved in or out since it was framed" is answerable later rather than
+      # reconstructed from memory — which is to say, not answerable at all.
+      local description framed
+      description=$(printf '%s' "$payload" | jq -r '.description // ""')
+      framed=$(printf '%s' "$description" | sed -n "s/^${MILESTONE_FRAMED_MARKER} \([0-9]*\).*/\1/p" | head -n 1)
+      if [ -n "$framed" ]; then
+        if [ "$total" -gt "$framed" ]; then
+          echo "  scope grew: framed at ${framed}, now ${total} (+$((total - framed)))"
+        elif [ "$total" -lt "$framed" ]; then
+          echo "  scope shrank: framed at ${framed}, now ${total} (-$((framed - total)))"
+        else
+          echo "  scope unchanged since it was framed (${framed})"
+        fi
+      else
+        gh api "repos/${repo}/milestones/${number}" -X PATCH \
+          -f "description=${description}
+
+${MILESTONE_FRAMED_MARKER} ${total} tickets" >/dev/null 2>&1 || true
+        echo "  framed at ${total} tickets — drift will be reported from here on"
+      fi
+
+      if [ "$open" -gt 0 ]; then
+        local still_open
+        still_open=$(gh api "repos/${repo}/issues?milestone=${number}&state=open&per_page=100" --jq \
+          '.[] | "    #\(.number)  \(.title)"' 2>/dev/null)
+        echo ""
+        if [ -n "$still_open" ]; then
+          echo "  Still open:"
+          printf '%s\n' "$still_open"
+        else
+          # The milestone counts N open but the issue-list index has not caught up — it
+          # lags by a few seconds after an assignment. Printing an empty "Still open:"
+          # under a count of N reads as a bug in this report, so say which number to
+          # trust instead.
+          echo "  Still open: ${open}, but GitHub's issue index has not caught up yet."
+          echo "  The count above is authoritative; re-run in a moment to see which."
+        fi
+      fi
+      echo ""
+
+      if [ "$open" -eq 0 ]; then
+        echo -e "${GREEN}✓ Everything in \"${name}\" is closed.${NC}"
+        echo ""
+        exit 0
+      fi
+
+      # Never a refusal. Exit 2 is a prompt for an acknowledgement, and the acknowledged
+      # path always proceeds — a gate that blocks a hotfix behind an unfinished milestone
+      # gets disabled for good, and the tag is a joint call, not a checkbox.
+      if [ -z "$acknowledge" ]; then
+        echo -e "${YELLOW}${open} ticket(s) still open in \"${name}\".${NC}" >&2
+        echo "This does not block the release. To proceed, say why:" >&2
+        echo "  workflow-cli.sh milestone readiness \"${name}\" --acknowledge \"<reason>\"" >&2
+        echo "" >&2
+        exit 2
+      fi
+
+      gh api "repos/${repo}/milestones/${number}" -X PATCH \
+        -f "description=${description}
+
+${MILESTONE_ACK_MARKER} released with ${open} open — ${acknowledge}" >/dev/null 2>&1 || {
+        echo -e "${RED}Could not record the acknowledgement on \"${name}\"${NC}" >&2
+        exit 1
+      }
+      echo -e "${GREEN}✓ Acknowledged: ${open} ticket(s) left open — ${acknowledge}${NC}"
+      echo "  Recorded on the milestone, so the decision survives the conversation."
+      echo ""
+      ;;
+
     *)
       echo -e "${RED}Unknown milestone subcommand: ${sub}${NC}" >&2
-      echo "Expected: create | list | show | scope | assign | associate" >&2
+      echo "Expected: create | list | show | scope | assign | associate | readiness" >&2
       exit 1
       ;;
   esac
@@ -1421,7 +1529,7 @@ case "$COMMAND" in
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
     echo "  create-pr <ticket>                       Open PR for current branch"
     echo "  list [status]                            List project items (optionally filtered)"
-    echo "  milestone <sub> [args]                   create|list|show|scope|assign|associate"
+    echo "  milestone <sub> [args]                   create|list|show|scope|assign|associate|readiness"
     echo "  cache-clear                              Drop the on-disk schema cache"
     echo "  ensure-issue-types [--dry-run]           Idempotently create missing issue types from .saasfoundry.json"
     echo "  assign-type <issue> <type>               Assign a native GitHub Issue Type (sf-epic|sf-story|sf-task|sf-issue)"

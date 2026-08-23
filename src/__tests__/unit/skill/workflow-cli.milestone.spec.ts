@@ -102,7 +102,8 @@ describe('workflow-cli.sh milestone', () => {
       ['show with no name', ['milestone', 'show'], 'milestone show <name>'],
       ['scope with no name', ['milestone', 'scope'], 'milestone scope <name>'],
       ['assign with no milestone', ['milestone', 'assign', '123'], 'milestone assign <ticket> <name>'],
-      ['associate with no version page', ['milestone', 'associate', 'v1.0.0'], 'milestone associate <name> <version-page-url-or-id>']
+      ['associate with no version page', ['milestone', 'associate', 'v1.0.0'], 'milestone associate <name> <version-page-url-or-id>'],
+      ['readiness with no name', ['milestone', 'readiness'], 'milestone readiness <name>']
     ]
 
     it.each(cases)('refuses %s', async (_label, args, expected) => {
@@ -130,6 +131,17 @@ describe('workflow-cli.sh milestone', () => {
       const res = await runIn(box.dir, ['milestone', 'list'])
       expect(res.code).toBe(0)
       expect(logOf(box).trim()).toBe('milestone list')
+    })
+
+    it('routes `readiness`, acknowledgement and all', async () => {
+      await runIn(box.dir, ['milestone', 'readiness', 'v1.0.0', '--acknowledge', 'shipping without the docs pass'])
+      expect(logOf(box).trim()).toBe('milestone readiness v1.0.0 --acknowledge shipping without the docs pass')
+    })
+
+    it('says in its own usage that exit 2 is a prompt, not a refusal', async () => {
+      const res = await runIn(box.dir, ['milestone', 'readiness'])
+      expect(res.stderr).toContain('never a refusal')
+      expect(res.stderr).toContain('--acknowledge')
     })
 
     it('routes `associate`, which is what keeps a version linked rather than merged', async () => {
