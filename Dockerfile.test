@@ -11,6 +11,10 @@ RUN npm ci --ignore-scripts
 COPY tsconfig.json ./
 COPY src/ ./src/
 COPY scaffolds/ ./scaffolds/
+# The bin entrypoint. Until the `cli` scenarios (#546) nothing in the suite executed the
+# real binary — it reached past it into the builders — so the image never needed to carry
+# it. That absence is exactly what those scenarios exist to stop being invisible.
+COPY bin/ ./bin/
 RUN npm run build
 
 # ── Stage 2: Test Runner ────────────────────────────────────────
