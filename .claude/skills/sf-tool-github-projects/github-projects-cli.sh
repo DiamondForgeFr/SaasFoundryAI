@@ -1188,6 +1188,194 @@ cmd_delete_issue_type() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# Command: milestone — the GitHub projection of the neutral release scope
+# ───────────────────────────────────────────────────────────────────────────
+#
+# The concept lives in sf-workflow (#549); this is one projection of it.
+# GitHub has native milestones, so the mapping is direct and completion is
+# read from the API rather than recomputed here — a locally-derived
+# percentage drifts from what the board shows the moment anyone moves an
+# issue from the UI, and the board is what people look at.
+#
+# The version↔release association is carried in the milestone's own
+# description, not in .saasfoundry.json. It belongs to the board, and a
+# manifest copy would need a migration and would go stale on any UI edit.
+
+MILESTONE_VERSION_MARKER="SRS versions:"
+
+# Resolve a milestone number from its title, searching open and closed.
+# Prints the number on stdout, or nothing when there is no such milestone.
+milestone_number_by_title() {
+  local repo=$1 title=$2
+  # gh's --jq takes an expression and nothing else: it has no --arg. Passing one
+  # there silently mangles the query, and on a repository with no milestones the
+  # broken result is indistinguishable from "not found" — which is how this got
+  # written and briefly looked correct. So fetch raw and let real jq bind the title.
+  gh api "repos/${repo}/milestones?state=all&per_page=100" 2>/dev/null \
+    | jq -r --arg t "$title" '.[] | select(.title == $t) | .number' 2>/dev/null | head -n 1
+}
+
+milestone_titles() {
+  local repo=$1
+  gh api "repos/${repo}/milestones?state=all&per_page=100" --jq '.[].title' 2>/dev/null
+}
+
+# Fail with the list of what does exist. "No milestone named X" alone sends
+# the caller to the web UI to find out what it should have said.
+milestone_not_found() {
+  local repo=$1 title=$2
+  echo -e "${RED}No milestone named \"${title}\" in ${repo}.${NC}" >&2
+  local existing
+  existing=$(milestone_titles "$repo" | paste -sd ', ' -)
+  if [ -n "$existing" ]; then
+    echo "Existing milestones: ${existing}" >&2
+  else
+    echo "This repository has no milestones yet — create one with: milestone create <name>" >&2
+  fi
+  exit 1
+}
+
+cmd_milestone() {
+  local sub=${1:-}
+  shift || true
+
+  local repo
+  repo=$(get_repo_owner_name)
+  if [ -z "$repo" ]; then
+    echo -e "${RED}Error: could not resolve the current repository (is this a git checkout with a GitHub remote?)${NC}" >&2
+    exit 1
+  fi
+
+  case "$sub" in
+    create)
+      local name=$1; shift || true
+      local description="" due="" version=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --description) description=${2:-}; shift 2 ;;
+          --due) due=${2:-}; shift 2 ;;
+          --version) version=${2:-}; shift 2 ;;
+          *) echo -e "${RED}milestone create: unknown flag $1${NC}" >&2; exit 1 ;;
+        esac
+      done
+
+      # Never silently reuse. Two releases sharing a milestone is a scope
+      # nobody can read afterwards, and it is an easy mistake to make twice.
+      if [ -n "$(milestone_number_by_title "$repo" "$name")" ]; then
+        echo -e "${RED}A milestone named \"${name}\" already exists.${NC}" >&2
+        echo "Nothing was created. Use a different name, or edit the existing one." >&2
+        exit 2
+      fi
+
+      [ -n "$version" ] && description="${description}
+
+${MILESTONE_VERSION_MARKER} ${version}"
+
+      local args=(-f "title=${name}")
+      [ -n "$description" ] && args+=(-f "description=${description}")
+      # GitHub wants ISO 8601; accept the date a human would type.
+      [ -n "$due" ] && args+=(-f "due_on=${due}T00:00:00Z")
+
+      local created
+      created=$(gh api "repos/${repo}/milestones" "${args[@]}" 2>&1) || {
+        echo -e "${RED}Failed to create milestone \"${name}\"${NC}" >&2
+        echo "$created" >&2
+        exit 1
+      }
+      echo -e "${GREEN}✓ Milestone \"${name}\" created${NC}"
+      echo "$created" | jq -r '"  \(.html_url)"' 2>/dev/null || true
+      ;;
+
+    list)
+      local state="open"
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --state) state=${2:-open}; shift 2 ;;
+          *) echo -e "${RED}milestone list: unknown flag $1${NC}" >&2; exit 1 ;;
+        esac
+      done
+      gh api "repos/${repo}/milestones?state=${state}&per_page=100" --jq \
+        '.[] | "\(.title)\t\(.state)\t\(.closed_issues)/\(.open_issues + .closed_issues) closed"' 2>/dev/null
+      ;;
+
+    show)
+      local name=$1
+      local number
+      number=$(milestone_number_by_title "$repo" "$name")
+      [ -z "$number" ] && milestone_not_found "$repo" "$name"
+
+      gh api "repos/${repo}/milestones/${number}" --jq \
+        '"Milestone: \(.title)
+State:     \(.state)
+Progress:  \(.closed_issues)/\(.open_issues + .closed_issues) closed" +
+         (if (.open_issues + .closed_issues) > 0
+          then " (\(((.closed_issues * 100) / (.open_issues + .closed_issues)) | floor)%)"
+          else " (empty)" end) +
+         (if .due_on then "\nDue:       \(.due_on)" else "" end) +
+         (if .description and (.description | length) > 0 then "\n\n\(.description)" else "" end)'
+      ;;
+
+    scope)
+      local name=$1
+      local number
+      number=$(milestone_number_by_title "$repo" "$name")
+      [ -z "$number" ] && milestone_not_found "$repo" "$name"
+      gh api "repos/${repo}/issues?milestone=${number}&state=all&per_page=100" --jq \
+        '.[] | "#\(.number)\t\(.state)\t\(.title)"' 2>/dev/null
+      ;;
+
+    assign)
+      local ticket=$1 name=$2
+      local number
+      number=$(milestone_number_by_title "$repo" "$name")
+      [ -z "$number" ] && milestone_not_found "$repo" "$name"
+      gh api "repos/${repo}/issues/${ticket}" -X PATCH -F "milestone=${number}" >/dev/null 2>&1 || {
+        echo -e "${RED}Failed to assign #${ticket} to \"${name}\"${NC}" >&2
+        exit 1
+      }
+      echo -e "${GREEN}✓ #${ticket} → milestone \"${name}\"${NC}"
+      ;;
+
+    associate)
+      local name=$1 page=$2
+      local number
+      number=$(milestone_number_by_title "$repo" "$name")
+      [ -z "$number" ] && milestone_not_found "$repo" "$name"
+
+      local current
+      current=$(gh api "repos/${repo}/milestones/${number}" --jq '.description // ""' 2>/dev/null)
+
+      # Associating the same page twice is a no-op, not a duplicate line.
+      if printf '%s' "$current" | grep -qF -- "$page"; then
+        echo -e "${YELLOW}\"${name}\" is already associated with ${page}${NC}"
+        exit 0
+      fi
+
+      local updated
+      if printf '%s' "$current" | grep -qF -- "$MILESTONE_VERSION_MARKER"; then
+        updated=$(printf '%s' "$current" | sed "s|^\(${MILESTONE_VERSION_MARKER}.*\)$|\1, ${page}|")
+      else
+        updated="${current}
+
+${MILESTONE_VERSION_MARKER} ${page}"
+      fi
+
+      gh api "repos/${repo}/milestones/${number}" -X PATCH -f "description=${updated}" >/dev/null 2>&1 || {
+        echo -e "${RED}Failed to associate ${page} with \"${name}\"${NC}" >&2
+        exit 1
+      }
+      echo -e "${GREEN}✓ \"${name}\" now carries ${page}${NC}"
+      ;;
+
+    *)
+      echo -e "${RED}Unknown milestone subcommand: ${sub}${NC}" >&2
+      echo "Expected: create | list | show | scope | assign | associate" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Router
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -1206,6 +1394,7 @@ case "$COMMAND" in
   ensure-issue-types) cmd_ensure_issue_types "$@" ;;
   assign-type)        cmd_assign_type "$@" ;;
   delete-issue-type)  cmd_delete_issue_type "$@" ;;
+  milestone)          cmd_milestone "$@" ;;
   "")
     echo -e "${RED}Error: No command specified${NC}"
     echo ""
@@ -1223,6 +1412,7 @@ case "$COMMAND" in
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
     echo "  create-pr <ticket>                       Open PR for current branch"
     echo "  list [status]                            List project items (optionally filtered)"
+    echo "  milestone <sub> [args]                   create|list|show|scope|assign|associate"
     echo "  cache-clear                              Drop the on-disk schema cache"
     echo "  ensure-issue-types [--dry-run]           Idempotently create missing issue types from .saasfoundry.json"
     echo "  assign-type <issue> <type>               Assign a native GitHub Issue Type (sf-epic|sf-story|sf-task|sf-issue)"
