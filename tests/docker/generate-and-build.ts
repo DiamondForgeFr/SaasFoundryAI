@@ -9,11 +9,14 @@
 //   node --import tsx generate-and-build.ts  # runs all scenarios
 
 import { execSync } from 'child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import {
   assertApiBuildOutput,
+  assertDirExists,
+  assertFileContains,
+  assertFileExists,
   assertPwaBuildOutput,
   assertClaudeMdConfigured,
   assertMonorepoBuildOutput,
@@ -32,7 +35,7 @@ import {
   reportResults,
   scanForUnreplacedPlaceholders
 } from './assertions'
-import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, MigrationScenario, TestScenario } from './scenarios'
+import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, MigrationScenario, TestScenario, CliScenario } from './scenarios'
 
 // ── Config ─────────────────────────────────────────────────────
 
@@ -530,6 +533,90 @@ async function runMigrationScenario(scenario: MigrationScenario): Promise<boolea
   return reportResults(scenario.name, results)
 }
 
+// ── CLI Scenario (runs the real binary as a subprocess) ────────
+
+/**
+ * The only scenario type that executes `bin/sf.js`.
+ *
+ * Everything else reaches past it: the generation scenarios call the builders and create
+ * the project directory themselves, and the migration one imports `updateCommand`. So the
+ * bin entrypoint, Commander, the non-interactive flag validation, and everything `sf new`
+ * does before delegating were covered by nothing — which is why a criterion as plain as
+ * "the project folder is created alongside, not inside" (#537) had to be checked by hand.
+ *
+ * The workspace is seeded with pre-existing content on purpose. `alongside` only means
+ * something when there is something to be alongside of, and it is the cheapest way to
+ * catch a command that scaffolds over a user's files.
+ */
+async function runCliScenario(scenario: CliScenario): Promise<boolean> {
+  const workspace = join(WORKSPACE, `cli-${scenario.name}`)
+  mkdirSync(join(workspace, 'existing-src'), { recursive: true })
+  writeFileSync(join(workspace, 'PREEXISTING.md'), 'this file existed before sf new ran\n')
+  writeFileSync(join(workspace, 'existing-src', 'poc.js'), 'console.log("poc")\n')
+
+  // The harness profile deposits onto an existing repository, so give it one.
+  run('git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm seed', workspace, 'seed a repository')
+
+  console.log(`\nRunning the CLI for real: sf new --profile ${scenario.profile}`)
+
+  const bin = join(CLI_PATH, 'bin', 'sf.js')
+  const flags = [
+    'new',
+    '--non-interactive',
+    `--project-name ${scenario.projectName}`,
+    `--project-description "docker cli scenario: ${scenario.name}"`,
+    `--structure ${scenario.isMonorepo ? 'monorepo' : 'multirepo'}`,
+    '--main-branch main',
+    '--setup-repo local',
+    `--profile ${scenario.profile}`,
+    '--db-setup manual',
+    '--email-service none',
+    '--s3-setup manual',
+    '--start-apps none',
+    '--no-analytics'
+  ].join(' ')
+
+  run(`node ${bin} ${flags}`, workspace, `sf new --profile ${scenario.profile}`)
+
+  const projectDir = join(workspace, scenario.projectName)
+  const results: AssertionResult[] = []
+
+  if (scenario.profile === 'harness') {
+    // The damaging failure mode: harness must scaffold nothing. Getting this wrong lays a
+    // full stack over a repository the user intends to keep (#510).
+    results.push({
+      passed: !existsSync(projectDir),
+      message: !existsSync(projectDir) ? 'OK: harness created no project directory' : `FAIL: harness created ${scenario.projectName}/ — it must deposit into the cwd and scaffold nothing`
+    })
+    results.push(assertFileExists(join(workspace, '.saasfoundry.json')))
+    results.push(assertFileContains(join(workspace, '.saasfoundry.json'), '"structure": "cli"'))
+    results.push(assertDirExists(join(workspace, '.claude')))
+    results.push(assertFileExists(join(workspace, 'CLAUDE.md')))
+  } else {
+    // The placement criterion #537 could not lean on any test for.
+    results.push(assertDirExists(projectDir))
+    results.push(assertFileExists(join(projectDir, '.saasfoundry.json')))
+    results.push({
+      passed: !existsSync(join(workspace, '.saasfoundry.json')),
+      message: !existsSync(join(workspace, '.saasfoundry.json'))
+        ? 'OK: the manifest is inside the project, not in the working directory'
+        : 'FAIL: a manifest was written into the working directory — the full profile must scaffold into its own directory'
+    })
+    results.push({
+      passed: !existsSync(join(workspace, 'existing-src', scenario.projectName)),
+      message: !existsSync(join(workspace, 'existing-src', scenario.projectName))
+        ? 'OK: the project was not created inside pre-existing content'
+        : 'FAIL: the project landed inside existing-src/ — it must be a sibling'
+    })
+  }
+
+  // True of both profiles: the command may add, never trample.
+  results.push(assertFileContains(join(workspace, 'PREEXISTING.md'), 'this file existed before sf new ran'))
+  results.push(assertFileContains(join(workspace, 'existing-src', 'poc.js'), 'console.log("poc")'))
+
+  return reportResults(scenario.name, results)
+}
+
 // ── Scenario Dispatcher ────────────────────────────────────────
 
 async function runScenario(scenario: TestScenario): Promise<boolean> {
@@ -542,6 +629,8 @@ async function runScenario(scenario: TestScenario): Promise<boolean> {
       return runMigrationScenario(scenario)
     case 'ai':
       return runAIScenario(scenario)
+    case 'cli':
+      return runCliScenario(scenario)
   }
 }
 

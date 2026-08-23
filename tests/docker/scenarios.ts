@@ -3,7 +3,7 @@
 // ALL_SCENARIOS is ordered by PRIORITY — first scenarios are the most critical.
 // This allows `--count N` to run the N most important scenarios.
 
-export type ScenarioType = 'generation' | 'update' | 'ai' | 'migration'
+export type ScenarioType = 'generation' | 'update' | 'ai' | 'migration' | 'cli'
 
 export interface GenerationScenario {
   type: 'generation'
@@ -55,7 +55,35 @@ export interface MigrationScenario {
   isMonorepo: boolean
 }
 
-export type TestScenario = GenerationScenario | UpdateScenario | AIScenario | MigrationScenario
+/**
+ * CLI scenario — runs `sf new` as a real subprocess.
+ *
+ * Every other scenario type reaches into the CLI: the generation ones call the builders
+ * directly and create the project directory themselves, and the migration one imports
+ * `updateCommand`. So `bin/sf.js`, Commander, and the non-interactive flag validation are
+ * exercised by nothing — and neither is anything `sf new` does before it delegates: the
+ * profile branch, creating the project directory, choosing where to put it, writing the
+ * manifest.
+ *
+ * That is why "the project folder is created alongside, not inside" (#537) had no coverage
+ * and had to be checked by hand. This type exists so the command is executed rather than
+ * reproduced.
+ */
+export interface CliScenario {
+  type: 'cli'
+  name: string
+  /** Project name passed to the command. For `harness`, no directory of this name may appear. */
+  projectName: string
+  profile: 'full' | 'harness'
+  isMonorepo: boolean
+  /**
+   * Include this scenario in the quick lane (PR → develop) on top of the top-N by priority.
+   * Reserved for scenarios that are both cheap and guard something damaging.
+   */
+  quick?: boolean
+}
+
+export type TestScenario = GenerationScenario | UpdateScenario | AIScenario | MigrationScenario | CliScenario
 
 // ── ALL SCENARIOS — ordered by priority ────────────────────────
 // Priority rationale:
@@ -290,6 +318,25 @@ export const ALL_SCENARIOS: TestScenario[] = [
     emailService: 'none',
     includeAnalytics: false,
     includePwa: true
+  },
+
+  // ── The CLI itself, run as a subprocess ───────────────────────
+  // `harness` first: it is the fast one and the damaging one. Getting it wrong scaffolds a
+  // full stack over a repository the user intends to keep (#510).
+  {
+    type: 'cli',
+    name: 'cli-new-harness',
+    projectName: 'should-not-exist',
+    profile: 'harness',
+    isMonorepo: true,
+    quick: true
+  },
+  {
+    type: 'cli',
+    name: 'cli-new-placement',
+    projectName: 'placed-project',
+    profile: 'full',
+    isMonorepo: true
   }
 ]
 
@@ -309,4 +356,18 @@ export function getScenariosByType<T extends ScenarioType>(type: T): Extract<Tes
 /** Get the first N scenarios (by priority order) */
 export function getTopScenarios(count: number): TestScenario[] {
   return ALL_SCENARIOS.slice(0, Math.min(count, ALL_SCENARIOS.length))
+}
+
+/**
+ * The quick lane: the top N by priority, plus any scenario that opts in with `quick`.
+ *
+ * Exists so the CI workflow can ask this file which scenarios to run instead of carrying
+ * its own copy of the list. A hand-written copy is what let `migration-v0-to-current` and
+ * `multirepo-pwa` be defined and never run on any pull request — the same drift #426 fixed
+ * for `--list` and that never reached the workflow.
+ */
+export function getQuickScenarios(count: number): TestScenario[] {
+  const top = getTopScenarios(count)
+  const opted = ALL_SCENARIOS.filter((s) => 'quick' in s && s.quick === true && !top.includes(s))
+  return [...top, ...opted]
 }
