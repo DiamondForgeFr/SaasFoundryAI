@@ -287,6 +287,106 @@ describe('github-projects-cli.sh milestone', () => {
     })
   })
 
+  describe('readiness', () => {
+    // The decision on #542: it reports where a release stands and asks, it never refuses.
+    // A gate blocking a hotfix behind an unfinished milestone gets disabled permanently.
+    it('exits 0 and says so when everything is closed', async () => {
+      const box = await sandbox([milestone({ open_issues: 0, closed_issues: 12, description: 'Framed at: 12 tickets' })])
+      try {
+        const res = await run(box, ['readiness', 'v1.0.0'])
+        expect(res.code).toBe(0)
+        expect(res.stdout).toContain('12/12 closed (100%)')
+        expect(res.stdout).toContain('Everything in "v1.0.0" is closed')
+      } finally {
+        await box.cleanup()
+      }
+    })
+
+    it('exits 2 while work is open, and offers the way through rather than a wall', async () => {
+      const box = await sandbox([milestone({ open_issues: 3, closed_issues: 9, description: 'Framed at: 12 tickets' })], [{ number: 488, state: 'open', title: 'cut v1.0.0' }])
+      try {
+        const res = await run(box, ['readiness', 'v1.0.0'])
+        expect(res.code).toBe(2)
+        expect(res.stdout).toContain('9/12 closed (75%)')
+        expect(res.stderr).toContain('does not block the release')
+        expect(res.stderr).toContain('--acknowledge')
+      } finally {
+        await box.cleanup()
+      }
+    })
+
+    it('proceeds on --acknowledge, and records the reason on the milestone', async () => {
+      // A decision that lives only in a chat log is a decision nobody can find later.
+      const box = await sandbox([milestone({ open_issues: 1, closed_issues: 15, description: 'Framed at: 16 tickets' })])
+      try {
+        const res = await run(box, ['readiness', 'v1.0.0', '--acknowledge', 'the cut is the last step'])
+        expect(res.code).toBe(0)
+        expect(res.stdout).toContain('Acknowledged: 1 ticket(s) left open')
+        expect(calls(box)).toContain('Acknowledged: released with 1 open — the cut is the last step')
+      } finally {
+        await box.cleanup()
+      }
+    })
+
+    it('refuses to read anything into an empty milestone', async () => {
+      const box = await sandbox([milestone({ open_issues: 0, closed_issues: 0 })])
+      try {
+        const res = await run(box, ['readiness', 'v1.0.0'])
+        expect(res.code).toBe(2)
+        expect(res.stdout).toContain('holds nothing yet')
+        expect(res.stdout).not.toContain('100%')
+      } finally {
+        await box.cleanup()
+      }
+    })
+
+    describe('scope drift', () => {
+      it('stamps the framed size the first time, so drift is measurable later', async () => {
+        const box = await sandbox([milestone({ open_issues: 2, closed_issues: 4, description: 'no marker yet' })])
+        try {
+          const res = await run(box, ['readiness', 'v1.0.0'])
+          expect(res.stdout).toContain('framed at 6 tickets')
+          expect(calls(box)).toContain('Framed at: 6 tickets')
+        } finally {
+          await box.cleanup()
+        }
+      })
+
+      it('reports growth against the framing', async () => {
+        const box = await sandbox([milestone({ open_issues: 5, closed_issues: 7, description: 'Framed at: 9 tickets' })])
+        try {
+          const res = await run(box, ['readiness', 'v1.0.0'])
+          expect(res.stdout).toContain('scope grew: framed at 9, now 12 (+3)')
+        } finally {
+          await box.cleanup()
+        }
+      })
+
+      it('reports shrinkage too, since scope leaving is a decision as much as scope arriving', async () => {
+        const box = await sandbox([milestone({ open_issues: 1, closed_issues: 3, description: 'Framed at: 9 tickets' })])
+        try {
+          const res = await run(box, ['readiness', 'v1.0.0'])
+          expect(res.stdout).toContain('scope shrank: framed at 9, now 4 (-5)')
+        } finally {
+          await box.cleanup()
+        }
+      })
+    })
+
+    it('says which number to trust when the issue index has not caught up', async () => {
+      // Observed live: the milestone counts N open while the issue list still returns
+      // nothing. An empty "Still open:" under a count of N reads as a bug in this report.
+      const box = await sandbox([milestone({ open_issues: 2, closed_issues: 4, description: 'Framed at: 6 tickets' })], [])
+      try {
+        const res = await run(box, ['readiness', 'v1.0.0'])
+        expect(res.stdout).toContain('has not caught up yet')
+        expect(res.stdout).toContain('The count above is authoritative')
+      } finally {
+        await box.cleanup()
+      }
+    })
+  })
+
   describe('reporting', () => {
     it('reads completion from the API rather than recomputing it', async () => {
       // A locally-derived percentage drifts from the board the moment someone moves an
