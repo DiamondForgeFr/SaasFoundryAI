@@ -56,9 +56,17 @@ PROJECT_OWNER=$(printf '%s' "$PROJECT_URL" | sed -E 's#.*/(orgs|users)/([^/]+)/p
 PROJECT_NUMBER=$(printf '%s' "$PROJECT_URL" | sed -E 's#.*/projects/([0-9]+).*#\1#')
 REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 
-# The board: number, title, status. `--limit` is generous but finite; a board larger than
-# this is a different problem than the one this script solves.
-ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 400 2>/dev/null || echo '{"items":[]}')
+# The board: number, title, status.
+#
+# The limit is finite, so it has to say when it bites. At 400 this silently dropped 10 of
+# this project's 410 items — and with them two children of #482, which made the release
+# Epic look like 14 tickets instead of 16. A cap that trims without saying so produces a
+# confidently wrong answer, which is worse than an obviously incomplete one.
+BOARD_LIMIT=1000
+ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit "$BOARD_LIMIT" 2>/dev/null || echo '{"items":[]}')
+BOARD_COUNT=$(printf '%s' "$ITEMS" | jq '.items | length' 2>/dev/null || echo 0)
+BOARD_TRUNCATED=false
+[ "$BOARD_COUNT" -ge "$BOARD_LIMIT" ] && BOARD_TRUNCATED=true
 
 MILESTONES=$(gh api "repos/${REPO}/milestones?state=all&per_page=100" 2>/dev/null || echo '[]')
 
@@ -104,6 +112,8 @@ jq -n \
   --slurpfile assigned "${WORK_DIR}/assigned.json" \
   --slurpfile parents "${WORK_DIR}/parents.json" \
   --slurpfile srs "${WORK_DIR}/srs.json" \
+  --arg truncated "$BOARD_TRUNCATED" \
+  --arg limit "$BOARD_LIMIT" \
   '
   ($assigned[0] | map(select(.milestone != null) | {key: (.number|tostring), value: .milestone.title}) | from_entries) as $ms
   | ($parents[0] | map({key: (.number|tostring), value: .parent}) | from_entries) as $par
@@ -117,6 +127,8 @@ jq -n \
         milestone: ($ms[(.content.number|tostring)] // null)
       } ],
       milestones: [ $milestones[0][]? | {title: .title, state: .state} ],
-      srsVersions: $srs[0]
+      srsVersions: $srs[0],
+      boardTruncated: ($truncated == "true"),
+      boardLimit: ($limit | tonumber)
     }
   ' | node "${SCRIPT_DIR}/plan-milestone.js"
