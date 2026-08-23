@@ -1274,7 +1274,12 @@ ${MILESTONE_VERSION_MARKER} ${version}"
       local args=(-f "title=${name}")
       [ -n "$description" ] && args+=(-f "description=${description}")
       # GitHub wants ISO 8601; accept the date a human would type.
-      [ -n "$due" ] && args+=(-f "due_on=${due}T00:00:00Z")
+      #
+      # 08:00Z, not midnight: GitHub normalises due_on into its own timezone handling and
+      # midnight UTC lands on the PREVIOUS day — ask for the 31st, get the 30th. Verified
+      # against the real API, which is the only place this shows up. 08:00Z is what
+      # GitHub's own UI sends for the same reason.
+      [ -n "$due" ] && args+=(-f "due_on=${due}T08:00:00Z")
 
       local created
       created=$(gh api "repos/${repo}/milestones" "${args[@]}" 2>&1) || {
@@ -1320,6 +1325,10 @@ Progress:  \(.closed_issues)/\(.open_issues + .closed_issues) closed" +
       local number
       number=$(milestone_number_by_title "$repo" "$name")
       [ -z "$number" ] && milestone_not_found "$repo" "$name"
+      # GitHub's issue-list index lags the issue itself by a few seconds: `scope` run
+      # immediately after `assign` can come back empty while `show` already counts the
+      # ticket. Observed against the real API. Nothing to work around here — but a caller
+      # seeing an empty scope right after assigning should look again, not re-assign.
       gh api "repos/${repo}/issues?milestone=${number}&state=all&per_page=100" --jq \
         '.[] | "#\(.number)\t\(.state)\t\(.title)"' 2>/dev/null
       ;;

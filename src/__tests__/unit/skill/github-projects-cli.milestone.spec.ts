@@ -160,11 +160,13 @@ describe('github-projects-cli.sh milestone', () => {
       }
     })
 
-    it('turns a plain date into the ISO instant GitHub expects', async () => {
+    it('sends 08:00Z, because midnight lands on the day before', async () => {
+      // Verified against the real API, which is the only place this appears: asking for
+      // the 31st with T00:00:00Z stores the 30th. GitHub's own UI sends 08:00Z.
       const box = await sandbox()
       try {
         await run(box, ['create', 'v1.1.0', '--due', '2026-09-30'])
-        expect(calls(box)).toContain('-f due_on=2026-09-30T00:00:00Z')
+        expect(calls(box)).toContain('-f due_on=2026-09-30T08:00:00Z')
       } finally {
         await box.cleanup()
       }
