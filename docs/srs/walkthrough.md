@@ -9,8 +9,12 @@ End-to-end tutorial : enable SRS on a project, draft an Epic from scratch, spawn
 - A Notion integration token (see [`sf-tool-notion`](/skills/tool-skills#sf-tool-notion) for the one-time setup)
 - A parent page in Notion that you've explicitly shared with the integration — this is where your SRS root will live
 
-::: tip Why a dedicated parent page? The Notion integration can only see pages it's been shared with. Creating a dedicated "SRS root" page (shared once) is cleaner than sharing the whole workspace —
-it scopes the integration's reach to exactly the area you want under version. :::
+::: tip Why a dedicated parent page?
+
+The Notion integration can only see pages it's been shared with. Creating a dedicated "SRS root" page (shared once) is cleaner than sharing the whole workspace — it scopes the integration's reach to
+exactly the area you want under version.
+
+:::
 
 ## 1. Enable SRS on the project
 

@@ -72,12 +72,19 @@ support and their current availability:
 | Linear          | Fast, opinionated, cycles                        | Startups optimising for engineering velocity | On the roadmap  |
 | ClickUp         | All-in-one PM, lightweight PM surface            | Ops-heavy teams outgrowing Trello            | On the roadmap  |
 
-::: info Today vs. roadmap The only adapter that ships today is `sf-tool-github-projects`. Jira, Notion, Linear and ClickUp adapters are scheduled next — the `sf-workflow` skill already reads
-`workflow.projectUrl` and routes commands through the configured adapter, so the day they land you flip one config entry and you are in. :::
+::: info Today vs. roadmap
 
-::: tip Customizable workflow coming in future versions The 7-status lifecycle is currently fixed because it encodes the patterns we have most battle-tested. Upcoming versions will expose it as
-configuration — rename statuses, drop optional checkpoints, or add team-specific stages from `.saasfoundry.json`. The generated skills and CLI already read their transitions from config, so opening up
-the shape is mostly a matter of surfacing the right knobs. :::
+The only adapter that ships today is `sf-tool-github-projects`. Jira, Notion, Linear and ClickUp adapters are scheduled next — the `sf-workflow` skill already reads `workflow.projectUrl` and routes
+commands through the configured adapter, so the day they land you flip one config entry and you are in.
+
+:::
+
+::: tip Customizable workflow coming in future versions
+
+The 7-status lifecycle is currently fixed because it encodes the patterns we have most battle-tested. Upcoming versions will expose it as configuration — rename statuses, drop optional checkpoints, or
+add team-specific stages from `.saasfoundry.json`. The generated skills and CLI already read their transitions from config, so opening up the shape is mostly a matter of surfacing the right knobs.
+
+:::
 
 The `sf-workflow` skill automatically routes commands to the right tool based on `workflow.projectUrl`. You write workflow commands once — they run against whichever adapter is wired up.
 

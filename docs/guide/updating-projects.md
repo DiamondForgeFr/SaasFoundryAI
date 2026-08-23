@@ -53,8 +53,11 @@ When a conflict is detected (both you and the template modified the same file), 
 | `keep`               | Leaves your file as-is. No sidecar, no diff.                                         | When you're confident your local edits are the source of truth.  |
 | `replace`            | Overwrites your file with the template version. **Destructive.**                     | Only when you deliberately want to reset a file to the template. |
 
-::: warning `replace` is destructive The `replace` strategy writes the template version directly over your file. There is no `.bak` and no undo — your changes are lost. Use it only in scripted
-contexts where you have just committed. :::
+::: warning `replace` is destructive
+
+The `replace` strategy writes the template version directly over your file. There is no `.bak` and no undo — your changes are lost. Use it only in scripted contexts where you have just committed.
+
+:::
 
 ## Dry-run before you apply
 
