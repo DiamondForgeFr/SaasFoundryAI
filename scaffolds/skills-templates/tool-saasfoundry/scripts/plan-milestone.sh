@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Gathers what the board and the SRS already say, and asks plan-milestone.js whether a
+# release scope can be proposed from it. Reads only; creates nothing.
+#
+# Usage:
+#   plan-milestone.sh                     gather from the board, then propose
+#   plan-milestone.sh --stdin             take an already-composed payload on stdin
+#   plan-milestone.sh --srs-versions <f>  add SRS version pages from a JSON file
+#
+# PROPOSAL SHAPE (stdout, JSON):
+#   {
+#     shouldPropose: boolean   whether this is worth interrupting the user for
+#     trigger:       why it is (null when it is not)
+#     reason:        why it is not (null when it is)
+#     candidates:    [{ source, name, rationale, evidence, tickets, openCount, doneCount }]
+#                    source   — epic | srs-version | unaffiliated
+#                    name     — always null: the script never invents a release number
+#                    evidence — what the grouping rests on; a candidate without it is not emitted
+#     cap/considered/dropped   the bound, and what did not fit
+#     counts, notes
+#   }
+#
+# Exit codes:
+#   0 — emitted (shouldPropose:false is a finding, not an error)
+#   1 — internal error (node/gh/jq missing, board unreadable)
+#   2 — invalid input
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+FROM_STDIN=0
+SRS_VERSIONS_FILE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --stdin) FROM_STDIN=1; shift ;;
+    --srs-versions) SRS_VERSIONS_FILE="${2:-}"; shift 2 ;;
+    *) echo "plan-milestone.sh: unknown flag $1" >&2; exit 2 ;;
+  esac
+done
+
+for tool in node jq; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "plan-milestone.sh: $tool is required" >&2; exit 1; }
+done
+
+if [ "$FROM_STDIN" -eq 1 ]; then
+  exec node "${SCRIPT_DIR}/plan-milestone.js"
+fi
+
+command -v gh >/dev/null 2>&1 || { echo "plan-milestone.sh: gh is required to read the board (or pass --stdin)" >&2; exit 1; }
+[ -f ".saasfoundry.json" ] || { echo "plan-milestone.sh: .saasfoundry.json not found — run from the project root" >&2; exit 1; }
+
+PROJECT_URL=$(jq -r '.workflow.projectUrl // empty' .saasfoundry.json)
+[ -z "$PROJECT_URL" ] && { echo "plan-milestone.sh: no workflow.projectUrl in the manifest" >&2; exit 1; }
+PROJECT_OWNER=$(printf '%s' "$PROJECT_URL" | sed -E 's#.*/(orgs|users)/([^/]+)/projects/.*#\2#')
+PROJECT_NUMBER=$(printf '%s' "$PROJECT_URL" | sed -E 's#.*/projects/([0-9]+).*#\1#')
+REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+
+# The board: number, title, status. `--limit` is generous but finite; a board larger than
+# this is a different problem than the one this script solves.
+ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 400 2>/dev/null || echo '{"items":[]}')
+
+MILESTONES=$(gh api "repos/${REPO}/milestones?state=all&per_page=100" 2>/dev/null || echo '[]')
+
+# Which tickets already carry a milestone. One call, not one per ticket.
+ASSIGNED=$(gh api "repos/${REPO}/issues?state=all&per_page=100" 2>/dev/null || echo '[]')
+
+# Sub-issue relationships, for open Epics only. That is a handful of queries rather than
+# one per ticket, and an Epic is the only grouping the board can vouch for.
+EPIC_NUMBERS=$(printf '%s' "$ITEMS" | jq -r '.items[]? | select((.content.title // "") | test("^\\[EPIC\\]")) | select((.status // "") != "Done") | .content.number' 2>/dev/null || true)
+
+PARENTS="[]"
+for epic in $EPIC_NUMBERS; do
+  children=$(gh api graphql -f query="query{repository(owner:\"${REPO%%/*}\",name:\"${REPO##*/}\"){issue(number:${epic}){subIssues(first:50){nodes{number}}}}}" \
+    --jq "[.data.repository.issue.subIssues.nodes[]? | {number: .number, parent: ${epic}}]" 2>/dev/null || echo '[]')
+  PARENTS=$(printf '%s\n%s' "$PARENTS" "$children" | jq -s 'add')
+done
+
+SRS_VERSIONS='[]'
+[ -n "$SRS_VERSIONS_FILE" ] && [ -f "$SRS_VERSIONS_FILE" ] && SRS_VERSIONS=$(cat "$SRS_VERSIONS_FILE")
+
+# Composed through files, not --argjson.
+#
+# A real board blows past ARG_MAX: passing the item list, the issue list and the
+# milestones inline fails with "Argument list too long" — on this project's own board, at
+# a few hundred items. No fixture is large enough to show that, so it surfaces the first
+# time the script meets real data and never before.
+WORK_DIR=$(mktemp -d)
+cleanup_work_dir() {
+  rm -f "${WORK_DIR}"/*.json 2>/dev/null || true
+  rmdir "${WORK_DIR}" 2>/dev/null || true
+}
+trap cleanup_work_dir EXIT
+
+printf '%s' "$ITEMS" > "${WORK_DIR}/items.json"
+printf '%s' "$MILESTONES" > "${WORK_DIR}/milestones.json"
+printf '%s' "$ASSIGNED" > "${WORK_DIR}/assigned.json"
+printf '%s' "$PARENTS" > "${WORK_DIR}/parents.json"
+printf '%s' "$SRS_VERSIONS" > "${WORK_DIR}/srs.json"
+
+jq -n \
+  --slurpfile items "${WORK_DIR}/items.json" \
+  --slurpfile milestones "${WORK_DIR}/milestones.json" \
+  --slurpfile assigned "${WORK_DIR}/assigned.json" \
+  --slurpfile parents "${WORK_DIR}/parents.json" \
+  --slurpfile srs "${WORK_DIR}/srs.json" \
+  '
+  ($assigned[0] | map(select(.milestone != null) | {key: (.number|tostring), value: .milestone.title}) | from_entries) as $ms
+  | ($parents[0] | map({key: (.number|tostring), value: .parent}) | from_entries) as $par
+  | {
+      tickets: [ $items[0].items[]? | select(.content.number != null) | {
+        number: .content.number,
+        title: (.content.title // ""),
+        status: (.status // ""),
+        isEpic: ((.content.title // "") | test("^\\[EPIC\\]")),
+        parent: ($par[(.content.number|tostring)] // null),
+        milestone: ($ms[(.content.number|tostring)] // null)
+      } ],
+      milestones: [ $milestones[0][]? | {title: .title, state: .state} ],
+      srsVersions: $srs[0]
+    }
+  ' | node "${SCRIPT_DIR}/plan-milestone.js"
