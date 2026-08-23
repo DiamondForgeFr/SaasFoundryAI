@@ -257,3 +257,13 @@ This skill carries **phases 5 to 7 — *create the tickets*, *base setup*, then 
 It starts from an SRS carrying FRs and a configured board, and the first ticket moving past Backlog is what marks the base setup underway.
 
 On a resumed session, run `tool-saasfoundry`'s `scripts/recap.sh` before assuming anything: it reads the phase from the manifest and the board, never from chat history.
+
+### Milestones
+
+A release scope is defined in this layer and projected per tool — `workflow-cli.sh milestone create|list|show|scope|assign|associate`. GitHub has native milestones, Jira fix versions, Linear cycles; the concept does not belong to any of them.
+
+A version is **associated** to a release, never equal to it: one milestone per release, and several SRS version pages may point at it. The association travels with the milestone in the tool that holds it, not in `.saasfoundry.json`.
+
+**A milestone reports; it never blocks a release.** It states where the scope stands and asks for an acknowledgement to continue on an incomplete one — it does not refuse. See Epic #542.
+
+The `tool-saasfoundry` skill carries the Milestone Guardrail: when to raise the subject, and how to propose a scope from evidence rather than from a guess.
