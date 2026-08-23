@@ -62,6 +62,7 @@ three surfaces (`srs`, `tickets`, `codeComments`). `sf status --claude-friendly`
 | File a POC into `POC/` | `scripts/plan-poc-move.sh` then `scripts/move-poc.sh <dir> --confirm` | Plan first, always. Nothing moves without `--confirm` |
 | Challenge from what the POC showed | `scripts/plan-challenge.sh` then `scripts/record-intake.sh --out <path>` | Seeds only — never invent a question. An unseeded answer is refused |
 | Resume a flow in progress | `scripts/recap.sh [workspace]` | Reads state, never chat history. Run it first on any resumed session |
+| Frame what a release contains | `scripts/plan-milestone.sh` then `workflow-cli.sh milestone create/assign/associate` | Proposes only from evidence; never invents a version number |
 | Start a new project | `sf new --non-interactive …` | Gather intent via conversation (Phase 2C) |
 | Add / remove modules | `sf update --non-interactive --add … --remove …` | Consult `sf modules list --json` first (Phase 2D) |
 | Inspect project state | Read `.saasfoundry.json` + `sf modules list --json` | Pure read, no mutation (Phase 2E) |
@@ -459,6 +460,66 @@ When the user expresses intent to build, add, or implement a capability **inside
 - **Don't invent scores.** Always consult `check-catalogue.sh`; never eyeball the match yourself. The skill should not outsmart the CLI's scoring.
 - **Don't force a HIGH-tier proposal.** If the user confirms they want custom dev, move on. The guardrail informs, it doesn't block.
 - **Don't conflate `LOW` with `NONE`.** A LOW-tier match is still a signal — surface it as "closest neighbor" when routing to `sf feedback request`, so the user's request can reference existing work.
+
+## Milestone Guardrail
+
+A project that chains SRS → tickets and never declares what a **version** contains cannot say when to cut. The guardrail exists because nobody thinks to frame a release until they are already trying to ship one, and by then the scope is whatever happens to be finished.
+
+Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milestone reports; it never refuses a release.
+
+### When the guardrail triggers
+
+- The user talks about **releasing, cutting, tagging, shipping a version**, or asks what is left before one.
+- A **version Epic was just spawned** from the SRS — the scope exists in the product and not yet on the board.
+- Tickets are accumulating with no milestone and none is open. `plan-milestone.sh` decides whether that has crossed the threshold; do not eyeball it.
+- Triggers only when `.saasfoundry.json` declares a workflow tool. Without one there is no board to scope.
+
+**Do not fire on every turn.** A guardrail that greets is a guardrail that gets ignored, then disabled. `shouldPropose: false` means stay quiet — including when it comes with candidates, which happens when a milestone is already open and the right move is to re-scope rather than add another.
+
+### Workflow
+
+1. **Read the board** — `scripts/plan-milestone.sh`. It gathers tickets, milestones and sub-issue relationships and returns candidates with the evidence each grouping rests on.
+2. **Check `shouldPropose` before saying anything.** `true` → raise it, quoting `trigger`. `false` → say nothing about milestones; if the user asked directly, answer with `reason`.
+3. **Propose from the candidates, never around them.** Each carries `evidence` — a sub-issue relationship, an SRS version page, or an admission of being a leftover pile. A proposal that cites none of those is invented.
+4. **Name the release yourself.** `name` is always `null`: the script will not invent a version number, because choosing one is a decision. Propose it, and say what it is based on.
+5. **Read `droppedCandidates` before presenting.** The cap hides nothing, but it does put things below the fold. On this project's own board the release Epic was in the dropped set — see #551.
+6. **Create only on approval** — `workflow-cli.sh milestone create <name>`, then `assign` per ticket, then `associate` for any SRS version page.
+
+### Recommendation shape (from `plan-milestone.sh`)
+
+```json
+{
+  "shouldPropose": true,
+  "trigger": "51 open tickets carry no milestone and none is open — the next release has no declared scope",
+  "reason": null,
+  "candidates": [
+    {
+      "source": "epic",
+      "name": null,
+      "rationale": "Epic #482 holds 16 tickets, 1 still open",
+      "evidence": "grouped by sub-issue relationship to #482 — \"[EPIC] Release v1.0.0 …\"",
+      "tickets": [483, 484, 486],
+      "scopeSize": 16,
+      "openCount": 1
+    }
+  ],
+  "droppedCandidates": [{ "source": "unaffiliated", "rationale": "30 open tickets belong to no Epic and no milestone", "scopeSize": 30, "openCount": 30 }],
+  "cap": 3,
+  "considered": 6,
+  "dropped": 3,
+  "counts": { "tickets": 410, "open": 51, "unassigned": 51, "openMilestones": 0 },
+  "notes": []
+}
+```
+
+`scopeSize` and `openCount` answer different questions. **What a release contains** is `scopeSize` — that is what a milestone records, and what people read after the release, when everything in it is closed. **What is left to do** is `openCount` — the right question when re-scoping something already in flight. Use the one the conversation is actually about.
+
+### Never do these
+
+- **Never propose a milestone whose grouping cites no evidence.** If it did not come from a candidate, it is a guess with a confident tone. Ask instead.
+- **Never speak up when `shouldPropose` is `false`.** Especially not when a milestone is already open: the answer there is to re-scope it, and proposing a second is how a board ends up with three overlapping releases.
+- **Never treat a milestone as a gate.** It reports where a release stands and asks for an acknowledgement to continue; it does not refuse one. A gate that blocks a hotfix behind an unfinished milestone gets disabled permanently, and it would contradict a standing decision that the tag is a joint call.
+- **Never read `counts` as exact when `notes` says the board was truncated.** Every number is then a floor, and a grouping may be missing tickets outright.
 
 ## Feedback — Module Request
 
