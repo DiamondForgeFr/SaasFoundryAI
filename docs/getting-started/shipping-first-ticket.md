@@ -36,7 +36,9 @@ Open your GitHub Project board and create a new issue:
 
 > "Create a backlog ticket: add a /api/version endpoint that returns the package.json version. Low complexity."
 
-The agent will create the issue, tag complexity, and place it on the board via the same CLI you would run manually. :::
+The agent will create the issue, tag complexity, and place it on the board via the same CLI you would run manually.
+
+:::
 
 ### Tag complexity
 

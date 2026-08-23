@@ -202,8 +202,12 @@ One workflow tool skill is installed per project, chosen at `sf new` time:
 | Linear          | `sf-tool-linear`                    | Linear API key                                          | On the roadmap  |
 | ClickUp         | `sf-tool-clickup`                   | ClickUp API token                                       | On the roadmap  |
 
-::: info What ships today Only `sf-tool-github-projects` is in the current release. The Jira, Notion, Linear and ClickUp adapters are scheduled next — they plug in behind the same `sf-workflow` skill,
-so the commands you learn today do not change when they land. :::
+::: info What ships today
+
+Only `sf-tool-github-projects` is in the current release. The Jira, Notion, Linear and ClickUp adapters are scheduled next — they plug in behind the same `sf-workflow` skill, so the commands you learn
+today do not change when they land.
+
+:::
 
 These skills are **not opt-in** in the same way as `sf-tool-context7` — they are the plumbing `sf-workflow` relies on to move tickets across statuses, create sub-issues, post test-plan comments, and
 open PRs from the CLI. You do not call them directly; `sf-workflow` calls them for you.

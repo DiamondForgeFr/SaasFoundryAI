@@ -3,8 +3,12 @@
 The most common errors people hit when using SaaSFoundryAI, with the cause and the fix. If you do not find your symptom here, open an issue at
 [`github.com/DiamondForgeFr/SaasFoundryAI/issues`](https://github.com/DiamondForgeFr/SaasFoundryAI/issues).
 
-::: tip Self-diagnose first Run `sf status --no-network` inside your project. It dumps the manifest, the installed modules, and the precondition checks the CLI runs before any command. Most of the
-errors below surface there first. :::
+::: tip Self-diagnose first
+
+Run `sf status --no-network` inside your project. It dumps the manifest, the installed modules, and the precondition checks the CLI runs before any command. Most of the errors below surface there
+first.
+
+:::
 
 ## `docker compose up` says "network saasfoundry-network not found"
 
