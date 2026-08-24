@@ -514,12 +514,15 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 
 `scopeSize` and `openCount` answer different questions. **What a release contains** is `scopeSize` — that is what a milestone records, and what people read after the release, when everything in it is closed. **What is left to do** is `openCount` — the right question when re-scoping something already in flight. Use the one the conversation is actually about.
 
+**`scopeSize` is a floor, not a total, while #560 and #561 are open.** The retrofit on this project's own board (#554) framed a release the engine put at 16 tickets and the human record put at 33: it cannot see a finished Epic, and it names one Epic where a release spans four. Before quoting `scopeSize` for a release, ask whether closed Epics or sibling Epics belong to it — the engine will not raise either.
+
 ### Never do these
 
 - **Never propose a milestone whose grouping cites no evidence.** If it did not come from a candidate, it is a guess with a confident tone. Ask instead.
 - **Never speak up when `shouldPropose` is `false`.** Especially not when a milestone is already open: the answer there is to re-scope it, and proposing a second is how a board ends up with three overlapping releases.
 - **Never treat a milestone as a gate.** It reports where a release stands and asks for an acknowledgement to continue; it does not refuse one. A gate that blocks a hotfix behind an unfinished milestone gets disabled permanently, and it would contradict a standing decision that the tag is a joint call.
 - **Never read `counts` as exact when `notes` says the board was truncated.** Every number is then a floor, and a grouping may be missing tickets outright.
+- **Never present a candidate as the whole release without checking for the parts it cannot see.** A closed Epic produces no candidate at all, and no `droppedCandidates` entry either — silence here means "not looked at", not "nothing there". See #560, #561.
 
 ## Feedback — Module Request
 
