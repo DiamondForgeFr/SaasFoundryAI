@@ -56,7 +56,10 @@ interface Ticket {
   milestone?: string | null
 }
 
-async function plan(tickets: Ticket[], extra: { milestones?: unknown[]; srsVersions?: unknown[]; boardTruncated?: boolean; boardLimit?: number; srsUnreachable?: boolean } = {}): Promise<Plan> {
+async function plan(
+  tickets: Ticket[],
+  extra: { milestones?: unknown[]; srsVersions?: unknown[]; boardTruncated?: boolean; boardLimit?: number; srsUnreachable?: boolean; versionNamed?: string } = {}
+): Promise<Plan> {
   const res = await run({ tickets, milestones: extra.milestones ?? [], srsVersions: extra.srsVersions ?? [], ...extra })
   if (res.code !== 0) throw new Error(`expected 0, got ${res.code}: ${res.stderr}`)
   return JSON.parse(res.stdout) as Plan
@@ -300,5 +303,66 @@ describe('SRS versions feed the first-ranked trigger (#570)', () => {
     expect(out.notes.join(' ')).toMatch(/declares no version pages/)
     expect(out.notes.join(' ')).toMatch(/sf srs normalize/)
     expect(out.notes.join(' ')).not.toMatch(/could not be read/)
+  })
+})
+
+/**
+ * #571 — the Guardrail's first documented trigger is conversational, and the decision
+ * was delegated to a script that never learned what was said. A number cannot overrule a
+ * stated intention; it does not know one was stated.
+ */
+describe('a named version outranks the ticket-count threshold (#571)', () => {
+  it('proposes on a board far below the threshold once the user names one', async () => {
+    const out = await plan(epicWith(1, 2), { versionNamed: 'MVP' })
+
+    expect(out.shouldPropose).toBe(true)
+    expect(out.trigger).toContain('the user named a version')
+    expect(out.trigger).toContain('MVP')
+  })
+
+  it('stays silent below the threshold when nothing was named', async () => {
+    const out = await plan(epicWith(1, 2))
+
+    expect(out.shouldPropose).toBe(false)
+    expect(out.reason).toContain('below the threshold')
+  })
+
+  it('still refuses to invent a grouping when there is nothing to point at', async () => {
+    // Being told a version was named is not a licence to produce a candidate. If the
+    // board groups into nothing, the honest answer is still that it groups into nothing.
+    const out = await plan([{ number: 1, status: 'Done' }], { versionNamed: 'MVP' })
+
+    expect(out.shouldPropose).toBe(false)
+    expect(out.candidates).toEqual([])
+    expect(out.reason).toContain('nothing on the board groups into a release scope')
+  })
+
+  it('routes to re-scoping, and names what the user called it, when a milestone is open', async () => {
+    const out = await plan(epicWith(1, 2), { milestones: [{ title: 'v0.9.0', state: 'open' }], versionNamed: 'v1' })
+
+    expect(out.shouldPropose).toBe(false)
+    expect(out.reason).toContain('a milestone is already open (v0.9.0)')
+    expect(out.reason).toContain('The user named "v1"')
+  })
+
+  it('ignores whitespace-only input rather than treating it as an intention', async () => {
+    const out = await plan(epicWith(1, 2), { versionNamed: '   ' })
+
+    expect(out.shouldPropose).toBe(false)
+  })
+
+  it('quotes the user, not the SRS, when both apply — and still leads with the SRS candidate', async () => {
+    const out = await plan(epicWith(1, 2), {
+      versionNamed: 'MVP',
+      srsVersions: [{ title: 'v1 — MVP', url: 'https://notion.so/v1', feature: 'Live', frCount: 4 }]
+    })
+
+    expect(out.shouldPropose).toBe(true)
+    // The trigger is what the model quotes back, so it should connect to what the person
+    // just said. Nothing is lost by preferring it: the SRS version is still ranked first
+    // in `candidates`, which is where the evidence lives.
+    expect(out.trigger).toContain('the user named a version')
+    expect(out.candidates[0].source).toBe('srs-version')
+    expect(out.candidates[0].rationale).toContain('v1 — MVP')
   })
 })

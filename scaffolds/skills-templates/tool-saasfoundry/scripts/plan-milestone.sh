@@ -8,6 +8,8 @@ set -euo pipefail
 #   plan-milestone.sh                     gather from the board, then propose
 #   plan-milestone.sh --stdin             take an already-composed payload on stdin
 #   plan-milestone.sh --srs-versions <f>  add SRS version pages from a JSON file
+#   plan-milestone.sh --version-named <t> the user just named a version out loud, so the
+#                                         ticket-count threshold does not apply
 #
 # PROPOSAL SHAPE (stdout, JSON):
 #   {
@@ -31,10 +33,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 FROM_STDIN=0
 SRS_VERSIONS_FILE=""
+VERSION_NAMED=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --stdin) FROM_STDIN=1; shift ;;
     --srs-versions) SRS_VERSIONS_FILE="${2:-}"; shift 2 ;;
+    --version-named) VERSION_NAMED="${2:-}"; shift 2 ;;
     *) echo "plan-milestone.sh: unknown flag $1" >&2; exit 2 ;;
   esac
 done
@@ -138,6 +142,7 @@ jq -n \
   --arg truncated "$BOARD_TRUNCATED" \
   --arg limit "$BOARD_LIMIT" \
   --arg srsUnreachable "$SRS_UNREACHABLE" \
+  --arg versionNamed "$VERSION_NAMED" \
   '
   ($assigned[0] | map(select(.milestone != null) | {key: (.number|tostring), value: .milestone.title}) | from_entries) as $ms
   | ($parents[0] | map({key: (.number|tostring), value: .parent}) | from_entries) as $par
@@ -153,6 +158,7 @@ jq -n \
       milestones: [ $milestones[0][]? | {title: .title, state: .state, description: (.description // "")} ],
       srsVersions: $srs[0],
       srsUnreachable: ($srsUnreachable == "true"),
+      versionNamed: (if $versionNamed == "" then null else $versionNamed end),
       boardTruncated: ($truncated == "true"),
       boardLimit: ($limit | tonumber)
     }

@@ -470,7 +470,7 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 
 ### When the guardrail triggers
 
-- The user talks about **releasing, cutting, tagging, shipping a version**, or asks what is left before one.
+- The user talks about **releasing, cutting, tagging, shipping a version**, or asks what is left before one — **pass `--version-named "<what they called it>"`**. The threshold below does not apply once they have said it out loud.
 - A **version Epic was just spawned** from the SRS — the scope exists in the product and not yet on the board.
 - Tickets are accumulating with no milestone and none is open. `plan-milestone.sh` decides whether that has crossed the threshold; do not eyeball it.
 - Triggers only when `.saasfoundry.json` declares a workflow tool. Without one there is no board to scope.
@@ -481,10 +481,18 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 
 1. **Read the board and the SRS** — `scripts/plan-milestone.sh`. It gathers tickets, milestones, sub-issue relationships **and the versions the SRS declares**, and returns candidates with the evidence each grouping rests on. The SRS read degrades to nothing on a missing module, a missing network or an adapter error — a release proposal never becomes an error because a remote page was slow.
 2. **Check `shouldPropose` before saying anything.** `true` → raise it, quoting `trigger`. `false` → say nothing about milestones; if the user asked directly, answer with `reason`.
+
+   **When the user named a version, `--version-named` is not optional.** Without it the script judges a young board on ticket count alone, returns `shouldPropose: false`, and the rule below turns that into silence — so someone who just said *"I want to ship an MVP"* gets a quoted threshold, with the right candidate sitting unused in the output. That is the contradiction this flag removes: silence is not an option once they have raised it.
 3. **Propose from the candidates, never around them.** Each carries `evidence` — a sub-issue relationship, an SRS version page, or an admission of being a leftover pile. A proposal that cites none of those is invented.
 4. **Name the release yourself.** `name` is always `null`: the script will not invent a version number, because choosing one is a decision. Propose it, and say what it is based on.
 5. **Read `droppedCandidates` before presenting.** The cap hides nothing, but it does put things below the fold. On this project's own board the release Epic was in the dropped set — see #551.
 6. **Create only on approval** — `workflow-cli.sh milestone create <name>`, then `assign` per ticket, then `associate` for any SRS version page.
+
+### Saying it in their words, not the tracker's
+
+A milestone is **a version of the product**. When you raise it, say what it buys them rather than what it is called in GitHub: grouping the features that go into a release bounds the work, turns a vague ambition into steps, and makes progress toward it readable. `MVP`, `v1`, `v2` are the vocabulary — "milestone" is the implementation.
+
+Propose the name from what they said. Never invent a version number, and never derive one from an SRS page title.
 
 ### Recommendation shape (from `plan-milestone.sh`)
 
@@ -522,6 +530,7 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 ### Never do these
 
 - **Never propose a milestone whose grouping cites no evidence.** If it did not come from a candidate, it is a guess with a confident tone. Ask instead.
+- **Never speak up when `shouldPropose` is `false` — but never let that be the answer to a version the user named.** Run with `--version-named` first; if it *still* comes back `false`, there is genuinely nothing groundable, and the honest reply is to ask what they want in it rather than to propose a scope you invented.
 - **Never speak up when `shouldPropose` is `false`.** Especially not when a milestone is already open: the answer there is to re-scope it, and proposing a second is how a board ends up with three overlapping releases.
 - **Never treat a milestone as a gate.** It reports where a release stands and asks for an acknowledgement to continue; it does not refuse one. A gate that blocks a hotfix behind an unfinished milestone gets disabled permanently, and it would contradict a standing decision that the tag is a joint call.
 - **Never read `counts` as exact when `notes` says the board was truncated.** Every number is then a floor, and a grouping may be missing tickets outright.
