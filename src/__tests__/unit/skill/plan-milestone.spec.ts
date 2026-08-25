@@ -56,7 +56,7 @@ interface Ticket {
   milestone?: string | null
 }
 
-async function plan(tickets: Ticket[], extra: { milestones?: unknown[]; srsVersions?: unknown[]; boardTruncated?: boolean; boardLimit?: number } = {}): Promise<Plan> {
+async function plan(tickets: Ticket[], extra: { milestones?: unknown[]; srsVersions?: unknown[]; boardTruncated?: boolean; boardLimit?: number; srsUnreachable?: boolean } = {}): Promise<Plan> {
   const res = await run({ tickets, milestones: extra.milestones ?? [], srsVersions: extra.srsVersions ?? [], ...extra })
   if (res.code !== 0) throw new Error(`expected 0, got ${res.code}: ${res.stderr}`)
   return JSON.parse(res.stdout) as Plan
@@ -217,9 +217,13 @@ describe('plan-milestone.js', () => {
       expect(p.candidates).toEqual([])
     })
 
-    it('says when it could only read the board, having been given no SRS', async () => {
+    it('says when it could only read the board, and why', async () => {
       const p = await plan(loose(12))
-      expect(p.notes.join(' ')).toContain('no SRS versions were supplied')
+      // Reworded by #570: the note used to say "no SRS versions were supplied" on
+      // every run, describing a gap the script could close itself. It now names the
+      // real cause and the command that fixes it.
+      expect(p.notes.join(' ')).toContain('declares no version pages')
+      expect(p.notes.join(' ')).toContain('sf srs normalize')
     })
   })
 
@@ -232,5 +236,69 @@ describe('plan-milestone.js', () => {
       ])
       expect(p.counts).toEqual({ tickets: 3, open: 2, unassigned: 1, openMilestones: 0 })
     })
+  })
+})
+
+/**
+ * #570 — the `srs-version` source is ranked first and owns the only trigger that
+ * ignores the ticket-count threshold. Until now nothing supplied it, so a project
+ * that had declared its version in the SRS was told to come back once it had
+ * accumulated eight unassigned tickets.
+ */
+describe('SRS versions feed the first-ranked trigger (#570)', () => {
+  const version = { title: 'v1 — MVP', url: 'https://notion.so/v1', feature: 'Réunion live', frCount: 5 }
+
+  it('proposes below the threshold when the SRS declares a version', async () => {
+    const out = await plan(epicWith(1, 2), { srsVersions: [version] })
+
+    expect(out.shouldPropose).toBe(true)
+    expect(out.trigger).toMatch(/the SRS declares a version that no milestone corresponds to/)
+    expect(out.candidates[0].source).toBe('srs-version')
+  })
+
+  it('carries the feature and the FR count into the rationale', async () => {
+    const out = await plan(epicWith(1, 2), { srsVersions: [version] })
+
+    expect(out.candidates[0].rationale).toContain('under « Réunion live »')
+    expect(out.candidates[0].rationale).toContain('5 FRs')
+    // What the release would contain lives on the SRS side here, not the board.
+    // Reporting 0 would read as "this version is empty".
+    expect(out.candidates[0].scopeSize).toBe(5)
+  })
+
+  it('does not propose a version that already belongs to a milestone', async () => {
+    const out = await plan(epicWith(1, 2), {
+      srsVersions: [version],
+      milestones: [{ title: 'v1.0.0', state: 'closed', description: 'SRS versions: https://notion.so/v1' }]
+    })
+
+    expect(out.candidates.some((c) => c.source === 'srs-version')).toBe(false)
+    expect(out.notes.join(' ')).toMatch(/already belongs to a milestone/)
+  })
+
+  it('counts the ones it filtered when only some are already associated', async () => {
+    const other = { title: 'v2 — Live', url: 'https://notion.so/v2', feature: 'Réunion live', frCount: 3 }
+    const out = await plan(epicWith(1, 2), {
+      srsVersions: [version, other],
+      milestones: [{ title: 'v1.0.0', state: 'closed', description: 'SRS versions: https://notion.so/v1' }]
+    })
+
+    expect(out.candidates.filter((c) => c.source === 'srs-version')).toHaveLength(1)
+    expect(out.notes.join(' ')).toMatch(/1 version\(s\) already belong to a milestone/)
+  })
+
+  it('says the SRS was unreadable rather than claiming no version exists', async () => {
+    const out = await plan(epicWith(1, 2), { srsVersions: [], srsUnreachable: true })
+
+    expect(out.notes.join(' ')).toMatch(/could not be read/)
+    expect(out.notes.join(' ')).toMatch(/not a finding that no version exists/)
+  })
+
+  it('distinguishes an SRS with no versions from an SRS that could not be read', async () => {
+    const out = await plan(epicWith(1, 2), { srsVersions: [] })
+
+    expect(out.notes.join(' ')).toMatch(/declares no version pages/)
+    expect(out.notes.join(' ')).toMatch(/sf srs normalize/)
+    expect(out.notes.join(' ')).not.toMatch(/could not be read/)
   })
 })

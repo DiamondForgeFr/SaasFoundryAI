@@ -84,8 +84,31 @@ for epic in $EPIC_NUMBERS; do
   PARENTS=$(printf '%s\n%s' "$PARENTS" "$children" | jq -s 'add')
 done
 
+# The versions the product has already declared.
+#
+# This used to wait for `--srs-versions <file>`, a flag with no caller anywhere in
+# the repository — so the engine always ran with `[]` and reported, truthfully and
+# uselessly, that nothing could be grouped by what the product declared. The
+# `srs-version` source is ranked FIRST and owns the only trigger that ignores the
+# ticket-count threshold, so leaving it empty disabled the best evidence available.
+#
+# It degrades, it never fails: no SRS module, no network, adapter error — all of
+# them mean `[]` and a note saying so, exactly as before. A release proposal must
+# not become an error because a remote page was slow.
 SRS_VERSIONS='[]'
-[ -n "$SRS_VERSIONS_FILE" ] && [ -f "$SRS_VERSIONS_FILE" ] && SRS_VERSIONS=$(cat "$SRS_VERSIONS_FILE")
+SRS_UNREACHABLE=false
+if [ -n "$SRS_VERSIONS_FILE" ]; then
+  [ -f "$SRS_VERSIONS_FILE" ] && SRS_VERSIONS=$(cat "$SRS_VERSIONS_FILE")
+else
+  SF_BIN=$(command -v sf || true)
+  if [ -n "$SF_BIN" ] && [ "$(jq -r '.tools.srs.enabled // false' .saasfoundry.json)" = "true" ]; then
+    if versions_json=$("$SF_BIN" srs versions 2>/dev/null); then
+      SRS_VERSIONS=$(printf '%s' "$versions_json" | jq -c '.versions // []' 2>/dev/null || echo '[]')
+    else
+      SRS_UNREACHABLE=true
+    fi
+  fi
+fi
 
 # Composed through files, not --argjson.
 #
@@ -114,6 +137,7 @@ jq -n \
   --slurpfile srs "${WORK_DIR}/srs.json" \
   --arg truncated "$BOARD_TRUNCATED" \
   --arg limit "$BOARD_LIMIT" \
+  --arg srsUnreachable "$SRS_UNREACHABLE" \
   '
   ($assigned[0] | map(select(.milestone != null) | {key: (.number|tostring), value: .milestone.title}) | from_entries) as $ms
   | ($parents[0] | map({key: (.number|tostring), value: .parent}) | from_entries) as $par
@@ -126,8 +150,9 @@ jq -n \
         parent: ($par[(.content.number|tostring)] // null),
         milestone: ($ms[(.content.number|tostring)] // null)
       } ],
-      milestones: [ $milestones[0][]? | {title: .title, state: .state} ],
+      milestones: [ $milestones[0][]? | {title: .title, state: .state, description: (.description // "")} ],
       srsVersions: $srs[0],
+      srsUnreachable: ($srsUnreachable == "true"),
       boardTruncated: ($truncated == "true"),
       boardLimit: ($limit | tonumber)
     }

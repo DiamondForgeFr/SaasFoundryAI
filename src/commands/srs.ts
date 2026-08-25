@@ -3,6 +3,7 @@ import { parseArgs as parseBrowseArgs, runBrowseTree } from '../srs/bin/browse-t
 import { parseArgs as parseDraftCodebaseArgs, runDraftFromCodebase } from '../srs/bin/draft-from-codebase'
 import { parseArgs as parseDraftNotionPagesArgs, runDraftFromNotionPages } from '../srs/bin/draft-from-notion-pages'
 import { parseArgs as parseEvalArgs, runEvalSrs } from '../srs/bin/eval-srs'
+import { parseArgs as parseListVersionsArgs, runListVersions } from '../srs/bin/list-versions'
 import { parseArgs as parseNormalizeArgs, runNormalize } from '../srs/bin/normalize'
 import { parseArgs as parseSpawnArgs, runSpawn } from '../srs/bin/spawn'
 import { runValidate } from '../srs/bin/validate'
@@ -20,6 +21,8 @@ Actions:
                                          Scan the local codebase and emit structured findings (JSON)
   write --spec <path> [--manifest] [--no-clear-pending]
                                          Apply a DraftCandidate[] spec file through the adapter
+  versions [--root-page <id>] [--manifest]
+                                         List the versions the SRS declares (JSON) — what a release scope is proposed from
   spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--milestone <name>] [--dry-run] [--manifest] [--bypass-reason <text>]
                                          --milestone declares the release these tickets ship in: created or reused,
                                          the version page is linked to it, and every ticket spawned joins it
@@ -106,6 +109,11 @@ export async function srsCommand(subcommand?: string, ...rest: string[]): Promis
       case 'write': {
         const options = parseWriteArgs(argv)
         code = await runWriteSrs(options)
+        break
+      }
+      case 'versions': {
+        const options = parseListVersionsArgs(argv)
+        code = await runListVersions(options)
         break
       }
       case 'spawn': {
