@@ -181,8 +181,27 @@ let shouldPropose = false
 let trigger = null
 let reason = null
 
+// What the user just said. A flag, never a heuristic: deciding that someone named a
+// version is the model's judgement, and a script that guessed at it would be inventing
+// the very intention it is supposed to be honouring.
+//
+// The Guardrail's FIRST documented trigger has always been conversational — "the user
+// talks about releasing, cutting, tagging, shipping a version" — and the decision was
+// then delegated to a script whose inputs are tickets, milestones and SRS versions. It
+// never learned what was said. So on a young board the answer to "I want to ship an MVP"
+// was a quoted threshold, or silence, with the right candidate sitting in the output.
+//
+// A number cannot overrule a stated intention; it does not know one was stated.
+const versionNamed = typeof input.versionNamed === 'string' && input.versionNamed.trim().length > 0 ? input.versionNamed.trim() : null
+
 if (kept.length === 0) {
   reason = tickets.length === 0 ? 'the board is empty — there is nothing to group' : 'nothing on the board groups into a release scope: no open Epic with unfinished children, no SRS version, and too few unaffiliated tickets'
+} else if (versionNamed && openMilestones.length === 0) {
+  // Below the threshold on purpose. The evidence rule still holds: `kept.length === 0`
+  // was handled above, so there is something groundable to point at. Being told a
+  // version was named never licenses inventing a grouping.
+  shouldPropose = true
+  trigger = 'the user named a version — "' + versionNamed.slice(0, 60) + '" — and no milestone corresponds to it'
 } else if (openMilestones.length === 0 && unassigned.length >= UNASSIGNED_THRESHOLD) {
   shouldPropose = true
   trigger = unassigned.length + ' open tickets carry no milestone and none is open — the next release has no declared scope'
@@ -192,7 +211,10 @@ if (kept.length === 0) {
 } else {
   reason =
     openMilestones.length > 0
-      ? 'a milestone is already open (' + openMilestones.map((m) => m.title).join(', ') + ') — re-scope it rather than proposing another'
+      ? 'a milestone is already open (' +
+        openMilestones.map((m) => m.title).join(', ') +
+        ') — re-scope it rather than proposing another' +
+        (versionNamed ? '. The user named "' + versionNamed.slice(0, 60) + '": say whether that is this milestone under another name, or a later one' : '')
       : 'only ' + unassigned.length + ' open ticket(s) carry no milestone, which is below the threshold worth interrupting for'
 }
 
