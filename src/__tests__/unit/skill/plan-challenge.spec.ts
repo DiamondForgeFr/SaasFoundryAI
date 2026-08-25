@@ -209,3 +209,38 @@ describe('plan-challenge.js', () => {
     })
   })
 })
+
+/**
+ * #574 — the challenge phase must serve a project the user keeps, not only a POC they
+ * are about to rewrite.
+ *
+ * Nothing in the script ever required a `POC/` folder — it needs `report.inventory` and
+ * nothing more. These tests exist to keep it that way: on `--profile harness` the
+ * reading is the whole flow, and a future requirement that the code live under `POC/`
+ * would silently strand every user who arrived with a real repository.
+ */
+describe('a reading of a project that stays where it is (#574)', () => {
+  it('seeds the challenge from a live project, with no POC anywhere in the input', async () => {
+    const p = await plan(
+      report({
+        root: '/home/someone/notulias',
+        package: { name: 'notulias', description: 'Live meeting transcription and notes', scripts: { dev: 'vite' }, dependencies: { react: '19.0.0' } },
+        inventory: { files: 12, directories: 3, sourceFiles: 8, authoredFiles: 12, bytes: 4096, topLevel: ['src', 'package.json', 'README.md'], generatedPresent: [], truncated: false }
+      })
+    )
+
+    expect(p.revealing).toBe(true)
+    expect(p.seeds.length).toBeGreaterThan(0)
+    // Every seed still has to trace back to something the code showed — that requirement
+    // is what separates this from the generic intake, and it does not depend on the move.
+    for (const seed of p.seeds) {
+      expect(seed.evidence.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('does not require the folder to be named POC', async () => {
+    const p = await plan(report({ root: '/srv/production-app' }))
+
+    expect(p.revealing).toBe(true)
+  })
+})

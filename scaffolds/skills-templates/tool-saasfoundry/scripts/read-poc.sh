@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Reads an existing POC directory and emits the evidence a reading is built from,
-# plus the deterministic verdict on whether there is enough there to read at all.
+# Reads a directory that already holds code and emits the evidence a reading is built
+# from, plus the deterministic verdict on whether there is enough there to read at all.
+#
+# Despite the name it is not POC-specific: a user's live project reads exactly the same
+# way, and on `--profile harness` the reading is the whole flow — nothing is moved
+# afterwards. The name is kept because it is part of an installed skill's contract; the
+# distinction is carried by the documentation instead. See #574.
 #
 # This script NEVER writes, moves or deletes anything. The move is a separate,
 # confirmed step — see plan-poc-move.sh and move-poc.sh.
