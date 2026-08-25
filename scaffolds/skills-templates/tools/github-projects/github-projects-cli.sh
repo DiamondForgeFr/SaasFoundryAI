@@ -1380,6 +1380,51 @@ ${MILESTONE_VERSION_MARKER} ${page}"
       echo -e "${GREEN}✓ \"${name}\" now carries ${page}${NC}"
       ;;
 
+    # progress <ticket> — where the release stands, after this ticket closed.
+    #
+    # `readiness` answers the same question and had no caller but its own unit
+    # tests (#572), so a version filled up and nobody was told. This is the
+    # cheap version, meant to run on every Done: ONE api call, because the issue
+    # payload already carries its milestone's open/closed counts.
+    #
+    # It reports on a change of state, never on every tick. Announcing "37/49"
+    # after each transition is how a signal becomes wallpaper.
+    progress)
+      local ticket=$1
+      [ -z "$ticket" ] && exit 0
+
+      local payload
+      payload=$(gh api "repos/${repo}/issues/${ticket}" 2>/dev/null) || exit 0
+
+      local title open closed
+      title=$(printf '%s' "$payload" | jq -r '.milestone.title // ""')
+      [ -z "$title" ] && exit 0          # no milestone: costs nothing, says nothing
+
+      open=$(printf '%s' "$payload" | jq -r '.milestone.open_issues // 0')
+      closed=$(printf '%s' "$payload" | jq -r '.milestone.closed_issues // 0')
+      local total=$((open + closed))
+      [ "$total" -eq 0 ] && exit 0
+
+      local pct=$(( closed * 100 / total ))
+
+      if [ "$open" -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}◆ « ${title} » is complete — ${closed}/${total}.${NC}"
+        echo "  Everything this release contains is merged. The next step is the cut."
+        echo "  Where it stands, in full:  workflow-cli.sh milestone readiness \"${title}\""
+        exit 0
+      fi
+
+      # Quarters. Four notes across a release, plus the completion one — enough to
+      # feel the version filling up, few enough to stay worth reading.
+      local before=$(( (closed - 1) * 100 / total ))
+      if [ $(( pct / 25 )) -ne $(( before / 25 )) ]; then
+        echo ""
+        echo -e "${BLUE}◆ « ${title} » — ${closed}/${total} closed (${pct}%), ${open} still open.${NC}"
+      fi
+      exit 0
+      ;;
+
     readiness)
       local name=$1; shift || true
       local acknowledge=""

@@ -752,6 +752,20 @@ case "$COMMAND" in
     fi
     route_to_tool "$WORKFLOW_TOOL" update-status "$@" || exit $?
     print_status_banner "$TARGET"
+
+    # Where the release now stands.
+    #
+    # `readiness` reported perfectly and was called by nothing but its own unit
+    # tests, so a version filled up and nobody was ever told (#572). Closing a
+    # ticket is where progress actually happens, so that is where it is said.
+    #
+    # It REPORTS. The transition has already succeeded above and nothing here can
+    # undo it: no exit code is read, stderr is discarded, and a ticket carrying no
+    # milestone produces no output at all. A milestone never blocks a release, and
+    # it must not block a ticket either.
+    if is_done_target "$TARGET" && milestone_supported "$WORKFLOW_TOOL"; then
+      route_to_tool "$WORKFLOW_TOOL" milestone progress "$TICKET" 2>/dev/null || true
+    fi
     ;;
 
   # ───────────────────────────────────────────────────────────────────
@@ -817,8 +831,8 @@ case "$COMMAND" in
           exit 1
         fi
         ;;
-      list)
-        : # no required arguments
+      list|progress)
+        : # no required arguments to validate here
         ;;
       ""|help)
         echo "Usage: workflow-cli.sh milestone <subcommand> [args]" >&2
@@ -831,6 +845,7 @@ case "$COMMAND" in
         echo "  assign <ticket> <name>           put a ticket in a milestone" >&2
         echo "  associate <name> <version-page>  link an SRS version to a release" >&2
         echo "  readiness <name> [--acknowledge <reason>]   where the release stands" >&2
+        echo "  progress <ticket>                where the release stands after that ticket closed" >&2
         echo "" >&2
         echo "A milestone reports; it never blocks a release. See #542." >&2
         [[ "$SUB" == "help" ]] && exit 0
