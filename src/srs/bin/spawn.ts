@@ -22,6 +22,18 @@ export interface SpawnOptions {
    * feature, because `Epic = feature + version`.
    */
   version?: string
+  /**
+   * Release the spawned tickets belong to. Given, the milestone is created or
+   * reused, the version page is associated to it, and everything this run
+   * creates joins it.
+   *
+   * The CLI will not derive it from the version page title. A milestone names a
+   * RELEASE (`v1.0.0`), a version page names a feature's version (`v2 — Prise de
+   * notes vivante`), and several of the latter may point at one of the former —
+   * see #542 R2. Choosing a release name is a decision, which is the same reason
+   * `plan-milestone` emits `name: null` on every candidate it proposes.
+   */
+  milestone?: string
   dryRun: boolean
   manifestPath: string
   bypassReason: string
@@ -39,6 +51,14 @@ export interface SpawnIO {
   stderr: (chunk: string) => void
   createSubtask: (parent: string, title: string, body: string, bypassReason: string) => { childNumber: string }
   createEpic: (title: string, body: string, bypassReason: string) => { epicNumber: string }
+  /**
+   * Create the milestone, or report that it already existed. Reuse is the normal
+   * case: re-spawning a version must not produce a second release.
+   */
+  ensureMilestone: (name: string) => { created: boolean }
+  assignMilestone: (ticket: string, name: string) => void
+  /** Link the SRS version page to the release. Already a no-op when repeated. */
+  associateMilestone: (name: string, versionPageUrl: string) => void
 }
 
 function takeValue(argv: string[], i: number, flag: string): string {
@@ -61,6 +81,9 @@ export function parseArgs(argv: string[]): SpawnOptions {
       i++
     } else if (a === '--version') {
       opts.version = takeValue(argv, i, '--version')
+      i++
+    } else if (a === '--milestone') {
+      opts.milestone = takeValue(argv, i, '--milestone')
       i++
     } else if (a === '--dry-run') {
       opts.dryRun = true
@@ -110,6 +133,24 @@ function defaultIO(): SpawnIO {
       })
       const match = output.match(/Epic #(\d+) created/)
       return { epicNumber: match ? match[1] : '' }
+    },
+    // `milestone create` refuses a name that already exists on purpose — two
+    // releases sharing one milestone is a scope error. So reuse is detected by
+    // asking first, never by swallowing the refusal.
+    ensureMilestone: (name) => {
+      try {
+        execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['milestone', 'show', name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+        return { created: false }
+      } catch {
+        execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['milestone', 'create', name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
+        return { created: true }
+      }
+    },
+    assignMilestone: (ticket, name) => {
+      execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['milestone', 'assign', ticket, name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
+    },
+    associateMilestone: (name, versionPageUrl) => {
+      execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['milestone', 'associate', name, versionPageUrl], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
     }
   }
 }
@@ -278,9 +319,33 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl})\n`)
   }
 
+  if (options.milestone) {
+    io.stdout(`  release: « ${options.milestone} » — created or reused, and everything above joins it\n`)
+  } else {
+    // Said out loud rather than left to be discovered later. A version spawned
+    // into no release is the state #542 exists to prevent, and the moment to
+    // raise it is now — not when somebody asks what v1 contains.
+    io.stdout(`  release: none — pass --milestone <name> to declare what these tickets ship in\n`)
+  }
+
   if (options.dryRun) {
     io.stdout(`\n[dry-run] No tickets created. Re-run without --dry-run to apply.\n`)
     return 0
+  }
+
+  // Before anything is created, so a failure here leaves an untouched board.
+  // The reverse order would put tickets on a board that belongs to a release
+  // nobody declared, which is worse than not spawning at all.
+  if (options.milestone) {
+    try {
+      const { created } = io.ensureMilestone(options.milestone)
+      io.stdout(`  ✓ milestone « ${options.milestone} » ${created ? 'created' : 'reused'}\n`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      io.stderr(`✗ spawn: could not create or reuse milestone "${options.milestone}" — ${message}\n`)
+      io.stderr(`  Nothing was created.\n`)
+      return 8
+    }
   }
 
   // Without --ticket, spawn owns the Epic too. Creating it here is what turns the
@@ -326,6 +391,43 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   io.stdout(`\nspawn: created ${created.length} Story ticket(s) under #${parentTicket}.\n`)
+
+  if (options.milestone) {
+    // The Epic joins too: a milestone read after the release should show the
+    // grouping that composed it, not a flat list of Stories. It closes on its
+    // own when its children do, so it never holds the percentage back.
+    const toAssign = [parentTicket, ...created]
+    const assigned: string[] = []
+    for (const ticket of toAssign) {
+      try {
+        io.assignMilestone(ticket, options.milestone)
+        assigned.push(ticket)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        io.stderr(`\n✗ spawn: #${ticket} could not join « ${options.milestone} » — ${message}\n`)
+        io.stderr(`  The tickets exist. ${assigned.length} of ${toAssign.length} joined the release: ${assigned.map((t) => `#${t}`).join(', ') || 'none'}\n`)
+        io.stderr(`  Finish with: workflow-cli.sh milestone assign <ticket> "${options.milestone}"\n`)
+        return 9
+      }
+    }
+    io.stdout(`spawn: ${assigned.length} ticket(s) joined « ${options.milestone} ».\n`)
+
+    // Last because it is the only step that is idempotent on its own, so it is
+    // the safe one to be retried by a re-run.
+    if (holderPageUrl) {
+      try {
+        io.associateMilestone(options.milestone, holderPageUrl)
+        io.stdout(`spawn: « ${options.milestone} » carries ${holderPageUrl}\n`)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        io.stderr(`\n✗ spawn: could not link ${holderPageUrl} to « ${options.milestone} » — ${message}\n`)
+        io.stderr(`  Tickets and milestone are correct; only the SRS link is missing.\n`)
+        io.stderr(`  Finish with: workflow-cli.sh milestone associate "${options.milestone}" ${holderPageUrl}\n`)
+        return 9
+      }
+    }
+  }
+
   return 0
 }
 
@@ -335,7 +437,9 @@ if (require.main === module) {
     options = parseArgs(process.argv.slice(2))
   } catch (err) {
     process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
-    process.stderr.write(`\nUsage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`)
+    process.stderr.write(
+      `\nUsage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`
+    )
     process.exit(1)
   }
   runSpawn(options)

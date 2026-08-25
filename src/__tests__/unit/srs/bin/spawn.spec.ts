@@ -80,7 +80,19 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
     void reason
     return { epicNumber: String(nextNumber++) }
   })
-  return Object.assign({ stdout, stderr, createSubtask, createEpic, stdoutBuffer, stderrBuffer }, overrides)
+  const ensureMilestone = jest.fn((name: string) => {
+    void name
+    return { created: true }
+  })
+  const assignMilestone = jest.fn((ticket: string, name: string) => {
+    void ticket
+    void name
+  })
+  const associateMilestone = jest.fn((name: string, page: string) => {
+    void name
+    void page
+  })
+  return Object.assign({ stdout, stderr, createSubtask, createEpic, ensureMilestone, assignMilestone, associateMilestone, stdoutBuffer, stderrBuffer }, overrides)
 }
 
 describe('parseArgs', () => {

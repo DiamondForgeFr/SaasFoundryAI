@@ -146,6 +146,25 @@ sf srs spawn --ticket 42 --epic <feature-url> --dry-run
 `--ticket` is optional. Omit it and spawn creates the Epic itself — named `<feature> - <version>` — then hangs the Stories under it, through `workflow-cli.sh create-epic`. Pass `--ticket` to attach to
 an Epic that already exists. The naming convention becomes something the tool guarantees rather than something the agent has to remember.
 
+### `--milestone` — spawning is when the release scope gets declared
+
+```bash
+sf srs spawn --epic <feature-url> --version "v1 — MVP" --milestone "v1.0.0"
+```
+
+The milestone is created or reused, the version page is linked to it, and the Epic plus every Story spawned in the run joins it. Re-running the same spawn does not produce a second release.
+
+**The name is the release, not the version page.** `v1.0.0`, not `v1 — MVP`. A release may carry several features' versions — that is why the link is an association and not an equality (#542 R2), and
+why the CLI will not derive the name from the page it was handed. Ask the user for it; a version number is a decision.
+
+Omit the flag and spawn behaves as before, but says so: `release: none — pass --milestone <name> to declare what these tickets ship in`. That line exists because a version spawned into no release is
+the exact state #542 was filed to prevent, and the moment to raise it is while the tickets are being created — not when somebody later asks what v1 contains.
+
+**Never assign the tickets one by one afterwards.** That loop is what `--milestone` replaces; running it by hand is how #562 was found.
+
+Failure modes are ordered so they stay recoverable: the milestone is ensured _before_ any ticket exists, so a backend problem leaves an untouched board. If an assignment fails after the tickets are
+created, the run reports which ones joined and exits 9 rather than leaving a half-assigned board implicit.
+
 A feature holding its FRs directly still spawns from `--epic` alone — 25 real features are in that shape, and `sf srs normalize` is what moves them onto the model.
 
 **A page that is neither an FR nor a version aborts the run and creates nothing.** Producing a ticket from a raw title is worse than failing: it looks planned and is empty.
