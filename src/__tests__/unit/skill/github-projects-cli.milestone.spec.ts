@@ -30,7 +30,7 @@ interface Sandbox {
  * what caught `--arg` being passed to `gh --jq`, which gh rejects — on a repo with no
  * milestones the mangled call is indistinguishable from "not found".
  */
-async function sandbox(milestones: unknown[] = [], issues: unknown[] = []): Promise<Sandbox> {
+async function sandbox(milestones: unknown[] = [], issues: unknown[] = [], issue: unknown = {}): Promise<Sandbox> {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-gh-ms-'))
   const binDir = path.join(dir, 'bin')
   const callLog = path.join(dir, 'gh-calls.log')
@@ -62,6 +62,7 @@ if [ "$1" = "api" ]; then
 
   payload=""
   case "$target" in
+    */issues/[0-9]*) [ -n "\${FAKE_ISSUE_FAIL:-}" ] && exit 1; payload="\${FAKE_ISSUE}" ;;
     */issues\\?*) payload="\${FAKE_ISSUES:-[]}" ;;
     */milestones\\?*) payload="\${FAKE_MILESTONES:-[]}" ;;
     */milestones/*) payload=$(printf '%s' "\${FAKE_MILESTONES:-[]}" | jq -r '.[0] // {}') ;;
@@ -84,7 +85,8 @@ exit 0
     ...process.env,
     PATH: `${binDir}:${process.env.PATH}`,
     FAKE_MILESTONES: JSON.stringify(milestones),
-    FAKE_ISSUES: JSON.stringify(issues)
+    FAKE_ISSUES: JSON.stringify(issues),
+    FAKE_ISSUE: JSON.stringify(issue)
   }
   return { dir, env, callLog, cleanup: () => rm(dir, { recursive: true, force: true }) }
 }
@@ -412,5 +414,87 @@ describe('github-projects-cli.sh milestone', () => {
         await box.cleanup()
       }
     })
+  })
+})
+
+/**
+ * #572 — `readiness` had no caller but these tests, so a version filled up and nobody
+ * was told. `progress` is the cheap version meant to run on every Done: one API call,
+ * because the issue payload already carries its milestone's counts.
+ */
+describe('milestone progress', () => {
+  const issueIn = (title: string, closed: number, open: number): unknown => ({
+    number: 42,
+    milestone: { title, closed_issues: closed, open_issues: open }
+  })
+
+  it('says nothing, and costs nothing, for a ticket with no milestone', async () => {
+    const box = await sandbox([], [], { number: 42, milestone: null })
+    try {
+      const res = await run(box, ['progress', '42'])
+      expect(res.code).toBe(0)
+      expect(res.stdout.trim()).toBe('')
+    } finally {
+      await box.cleanup()
+    }
+  })
+
+  it('stays silent inside a quarter — a note after every tick is wallpaper', async () => {
+    // 42→43 of 49: 85% → 87%, same quarter.
+    const box = await sandbox([], [], issueIn('v1.0.0', 43, 6))
+    try {
+      const res = await run(box, ['progress', '42'])
+      expect(res.stdout.trim()).toBe('')
+    } finally {
+      await box.cleanup()
+    }
+  })
+
+  it('speaks when a quarter is crossed', async () => {
+    // 24→25 of 100: 24% → 25%.
+    const box = await sandbox([], [], issueIn('v1.0.0', 25, 75))
+    try {
+      const res = await run(box, ['progress', '42'])
+      expect(res.stdout).toContain('« v1.0.0 »')
+      expect(res.stdout).toContain('25/100')
+      expect(res.stdout).toContain('75 still open')
+    } finally {
+      await box.cleanup()
+    }
+  })
+
+  it('announces completion and names the cut as the next step', async () => {
+    const box = await sandbox([], [], issueIn('v1.0.0', 49, 0))
+    try {
+      const res = await run(box, ['progress', '42'])
+      expect(res.stdout).toContain('is complete')
+      expect(res.stdout).toContain('49/49')
+      expect(res.stdout).toContain('The next step is the cut')
+      expect(res.stdout).toContain('milestone readiness')
+    } finally {
+      await box.cleanup()
+    }
+  })
+
+  it('exits 0 with no ticket rather than printing usage — it must never interrupt a transition', async () => {
+    const box = await sandbox()
+    try {
+      const res = await run(box, ['progress'])
+      expect(res.code).toBe(0)
+    } finally {
+      await box.cleanup()
+    }
+  })
+
+  it('exits 0 when the API call fails, so a transition is never affected', async () => {
+    const box = await sandbox([], [], { number: 42 })
+    box.env.FAKE_ISSUE_FAIL = '1'
+    try {
+      const res = await run(box, ['progress', '42'])
+      expect(res.code).toBe(0)
+      expect(res.stdout.trim()).toBe('')
+    } finally {
+      await box.cleanup()
+    }
   })
 })
