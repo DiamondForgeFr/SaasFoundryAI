@@ -75,6 +75,22 @@ if [ -f "${ROOT}/intake.json" ]; then
   ' "${ROOT}/intake.json")
 fi
 
+# Does this workspace already hold something that is not the flow's own artefacts?
+#
+# It is deliberately NOT a judgement about whether that something is a POC. Deciding
+# that is `read-poc.sh`'s job and the user's answer, and re-deriving it here would be a
+# second grammar for the same question. All this says is "the folder is not empty", which
+# is enough to know the phase cannot be read off disk.
+WORKSPACE_OCCUPIED=false
+for entry in "${ROOT}"/* "${ROOT}"/.[!.]*; do
+  [ -e "${entry}" ] || continue
+  case "$(basename "${entry}")" in
+    POC|intake.json|.saasfoundry.json) continue ;;
+  esac
+  WORKSPACE_OCCUPIED=true
+  break
+done
+
 MANIFEST_PATH=null
 if [ -f "${ROOT}/.saasfoundry.json" ]; then
   MANIFEST_PATH="\"${ROOT}/.saasfoundry.json\""
@@ -116,6 +132,7 @@ printf '%s' "{
   \"network\": $([ "${NETWORK}" -eq 1 ] && echo true || echo false),
   \"signals\": {
     \"pocFiled\": ${POC_FILED},
+    \"workspaceOccupied\": ${WORKSPACE_OCCUPIED},
     \"intakeEntries\": ${INTAKE_ENTRIES},
     \"manifestPath\": ${MANIFEST_PATH},
     \"srsPages\": null,

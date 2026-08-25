@@ -113,8 +113,34 @@ const enteredWithoutPoc =
   signals.pocFiled !== true &&
   !(typeof signals.intakeEntries === 'number' && signals.intakeEntries > 0)
 
+// The guard above needs a manifest, so it protects a project AFTER `sf new` has run —
+// the case that was already safe — and misses the window before it. That window is
+// exactly where a `--profile harness` user starts: an existing project, no manifest yet.
+// Reported as `pending`, phase 1 told them to run `move-poc.sh --confirm` on a codebase
+// they intend to keep. On a POC that is the flow; on a live project it relocates
+// everything they have, and the POC intake's own warning applies with full force — there
+// is often no remote and no history to restore from.
+//
+// The discriminator is not on disk. It is the profile question the skill asks first:
+// "does a codebase already exist here that you intend to keep?" So the honest state is
+// `unknown` — the same answer already given for the SRS and the board offline. It stops
+// the walk and routes to the question instead of guessing an answer that destroys work
+// half the time.
+const codeButNoDecisionYet =
+  !(typeof signals.manifestPath === 'string' && signals.manifestPath) &&
+  signals.pocFiled !== true &&
+  !(typeof signals.intakeEntries === 'number' && signals.intakeEntries > 0) &&
+  signals.workspaceOccupied === true
+
+const PROFILE_QUESTION =
+  'establish the profile first — "does a codebase already exist here that you intend to keep?" Yes → sf new --profile harness, and nothing moves. No, it is a throwaway POC → read-poc.sh, then the move.'
+
 const phases = PHASES.map((phase) => {
-  const state = enteredWithoutPoc && phase.n <= 2 ? 'not-applicable' : completion(phase.n)
+  let state = completion(phase.n)
+  if (phase.n <= 2) {
+    if (enteredWithoutPoc) state = 'not-applicable'
+    else if (codeButNoDecisionYet) state = 'unknown'
+  }
   const gate = GATES[phase.n] ? byName.get(GATES[phase.n]) : undefined
   const blocked = gate && (gate.status === 'fail' || gate.status === 'warn')
   return {
@@ -132,15 +158,22 @@ const current = phases.find((p) => p.state !== 'done' && p.state !== 'not-applic
 
 const blockers = phases.filter((p) => p.blockedBy !== null && p.phase >= current.phase)
 
+// A phase whose answer is a question must not print the command that assumes an answer.
+const currentNext = codeButNoDecisionYet && current.phase <= 2 ? PROFILE_QUESTION : PHASES[current.phase - 1].next
+
 const notes = []
 if (!network) notes.push('run without network: phases 4 and 5 are reported as unknown, not as undone — do not restart work that may already exist')
+if (codeButNoDecisionYet)
+  notes.push(
+    'this folder already holds code and has no manifest yet — whether it is a POC to file into POC/ or a project to keep is the profile question, not something readable from disk. Never propose the move before it is answered'
+  )
 if (enteredWithoutPoc) notes.push('a manifest exists but no POC was ever filed here — phases 1 and 2 did not apply to this project, they are not outstanding work')
 if (!status) notes.push('no sf status payload was supplied, so no precondition could be checked — the phase is read from local signals alone')
 
 process.stdout.write(
   JSON.stringify(
     {
-      current: { phase: current.phase, name: current.name, state: current.state, next: PHASES[current.phase - 1].next },
+      current: { phase: current.phase, name: current.name, state: current.state, next: currentNext },
       phases,
       blockers,
       network,

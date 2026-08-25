@@ -133,6 +133,7 @@ Three things it does that matter more than they look:
 
 - **`unknown` is not `pending`.** Offline, the SRS and the board cannot be inspected, so they are reported as unverified rather than as undone — and the walk stops there. Claiming to be past a phase nobody checked is how written work gets written twice.
 - **`not-applicable` is not `pending`.** A project with a manifest and no `POC/` never had a POC. Phases 1 and 2 did not apply to it; they are not outstanding work, and it must not be sent back to read something that never existed.
+- **An occupied workspace with no manifest is `unknown`, not `pending`.** Code is there and nothing has been decided yet, so phases 1 and 2 cannot be read off disk: whether that code is a POC to file into `POC/` or a project the user keeps is the **profile question**, and `recap` prints that question instead of the move command. Handing `move-poc.sh --confirm` to someone building on an existing repository relocates everything they have, and the POC intake's warning applies with full force — there is often no remote and no history to restore from.
 - **A blocked phase routes rather than fails.** The remediation printed is the one `sf status` already carries — `sf update --add-modules srs`, `sf workflow use <template>`, `sf new`. Route the user there and stop; never walk into a phase whose precondition is unmet and improvise around the error.
 
 ### Ask, do not assume
