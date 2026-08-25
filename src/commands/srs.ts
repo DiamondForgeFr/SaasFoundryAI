@@ -20,7 +20,9 @@ Actions:
                                          Scan the local codebase and emit structured findings (JSON)
   write --spec <path> [--manifest] [--no-clear-pending]
                                          Apply a DraftCandidate[] spec file through the adapter
-  spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
+  spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--milestone <name>] [--dry-run] [--manifest] [--bypass-reason <text>]
+                                         --milestone declares the release these tickets ship in: created or reused,
+                                         the version page is linked to it, and every ticket spawned joins it
   normalize [--feature <url-or-id>] [--version-name <name>] [--apply] [--manifest] [--root-page <id>]
                                          Enumerate FR page children of an Epic and create Story sub-tickets
   apply-update [--patch <path>] [--manifest]
