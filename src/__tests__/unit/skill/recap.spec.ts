@@ -42,6 +42,7 @@ interface Recap {
 
 interface Signals {
   pocFiled?: boolean
+  workspaceOccupied?: boolean
   intakeEntries?: number | null
   manifestPath?: string | null
   srsPages?: number | null
@@ -50,7 +51,7 @@ interface Signals {
 
 async function recap(signals: Signals, opts: { network?: boolean; preconditions?: unknown[] } = {}): Promise<Recap> {
   const payload: Record<string, unknown> = {
-    signals: { pocFiled: false, intakeEntries: null, manifestPath: null, srsPages: null, boardTickets: null, ...signals },
+    signals: { pocFiled: false, workspaceOccupied: false, intakeEntries: null, manifestPath: null, srsPages: null, boardTickets: null, ...signals },
     network: opts.network !== false
   }
   if (opts.preconditions) payload.status = { report: {}, preconditions: opts.preconditions }
@@ -224,5 +225,65 @@ describe('recap.js', () => {
         expect((phase.exit as string).length).toBeGreaterThan(10)
       }
     })
+  })
+})
+
+/**
+ * #573 — the window before the manifest exists.
+ *
+ * `enteredWithoutPoc` needs a manifest, so it guarded the case that was already safe and
+ * missed the one that was not: an existing project, no manifest yet, being told to run
+ * `move-poc.sh --confirm` on the codebase its owner intends to keep.
+ */
+describe('an occupied workspace with no manifest (#573)', () => {
+  it('reports phases 1 and 2 as unknown rather than pending', async () => {
+    const r = await recap({ workspaceOccupied: true })
+
+    expect(stateOf(r, 1)).toBe('unknown')
+    expect(stateOf(r, 2)).toBe('unknown')
+  })
+
+  it('routes to the profile question instead of the move', async () => {
+    const r = await recap({ workspaceOccupied: true })
+
+    expect(r.current.phase).toBe(1)
+    expect(r.current.next).toMatch(/does a codebase already exist here that you intend to keep/)
+    // The whole point: never hand someone the command that relocates their project.
+    expect(r.current.next).not.toMatch(/move-poc/)
+  })
+
+  it('says why the phase cannot be read off disk', async () => {
+    const r = await recap({ workspaceOccupied: true })
+
+    expect(r.notes.join(' ')).toMatch(/not something readable from disk/)
+    expect(r.notes.join(' ')).toMatch(/Never propose the move before it is answered/)
+  })
+
+  it('leaves an empty workspace on the normal path', async () => {
+    const r = await recap({ workspaceOccupied: false })
+
+    expect(stateOf(r, 1)).toBe('pending')
+    expect(r.current.next).toMatch(/read-poc\.sh/)
+  })
+
+  it('does not fire once the POC has been filed — that decision is made', async () => {
+    const r = await recap({ workspaceOccupied: true, pocFiled: true })
+
+    expect(stateOf(r, 1)).toBe('done')
+    expect(r.notes.join(' ')).not.toMatch(/not something readable from disk/)
+  })
+
+  it('does not fire once the intake exists — the challenge already ran', async () => {
+    const r = await recap({ workspaceOccupied: true, intakeEntries: 4 })
+
+    expect(stateOf(r, 1)).not.toBe('unknown')
+  })
+
+  it('leaves the existing manifest case untouched', async () => {
+    const r = await recap({ workspaceOccupied: true, manifestPath: '/x/.saasfoundry.json' })
+
+    expect(stateOf(r, 1)).toBe('not-applicable')
+    expect(stateOf(r, 2)).toBe('not-applicable')
+    expect(r.notes.join(' ')).toMatch(/phases 1 and 2 did not apply/)
   })
 })
