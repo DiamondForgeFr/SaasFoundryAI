@@ -65,6 +65,16 @@ const tickets = input.tickets.filter((t) => t && typeof t === 'object' && typeof
 const milestones = Array.isArray(input.milestones) ? input.milestones : []
 const srsVersions = Array.isArray(input.srsVersions) ? input.srsVersions : []
 
+// A version already linked to a milestone is not an undeclared scope. Without this,
+// a project mid-flight is told to re-declare what it declared last week, every turn.
+// The link lives in the milestone description, where `milestone associate` writes it.
+const associatedPages = milestones.map((m) => String((m && m.description) || '')).join('\n')
+const unmilestonedVersions = srsVersions.filter((v) => {
+  if (!v || typeof v.url !== 'string' || v.url.length === 0) return true
+  return !associatedPages.includes(v.url)
+})
+const alreadyAssociated = srsVersions.length - unmilestonedVersions.length
+
 const isDone = (t) => String(t.status || '').toLowerCase() === 'done'
 const openTickets = tickets.filter((t) => !isDone(t))
 const unassigned = openTickets.filter((t) => !t.milestone)
@@ -99,15 +109,24 @@ for (const epic of tickets.filter((t) => t.isEpic && !isDone(t))) {
 
 // 2. An SRS version page is a scope the product already declared. It is associated to a
 //    release, never equal to it (#542 R2), so this proposes contents, not a name.
-for (const version of srsVersions) {
+for (const version of unmilestonedVersions) {
   if (!version || typeof version.title !== 'string') continue
+  const feature = typeof version.feature === 'string' && version.feature ? version.feature : null
+  const frCount = typeof version.frCount === 'number' ? version.frCount : null
   candidates.push({
     source: 'srs-version',
     name: null,
-    rationale: 'the SRS declares a version: "' + version.title.slice(0, 80) + '"',
+    rationale:
+      'the SRS declares a version: "' +
+      version.title.slice(0, 80) +
+      '"' +
+      (feature ? ' under « ' + feature.slice(0, 60) + ' »' : '') +
+      (frCount !== null ? ', ' + frCount + ' FR' + (frCount === 1 ? '' : 's') : ''),
     evidence: 'SRS version page' + (version.url ? ' ' + version.url : ''),
     tickets: [],
-    scopeSize: 0,
+    // The FRs are on the SRS side, not the board — this scope is what the product
+    // declared, not what has been spawned from it yet. Saying 0 would read as "empty".
+    scopeSize: frCount !== null ? frCount : 0,
     openCount: 0,
     doneCount: 0
   })
@@ -186,7 +205,17 @@ if (input.boardTruncated === true) {
 if (dropped > 0) {
   notes.push(dropped + ' further candidate(s) did not fit the cap — they are listed in `droppedCandidates`, not hidden')
 }
-if (srsVersions.length === 0) notes.push('no SRS versions were supplied, so nothing could be grouped by what the product declared — only by the board')
+// The old note said "no SRS versions were supplied" on every single run, describing a
+// gap the script could close itself. Now it distinguishes the three real cases.
+if (input.srsUnreachable === true) {
+  notes.push('the SRS could not be read, so nothing could be grouped by what the product declared — this is a gap in the evidence, not a finding that no version exists')
+} else if (srsVersions.length === 0) {
+  notes.push('the SRS declares no version pages, so grouping rests on the board alone — `sf srs normalize` is what puts features onto the version model')
+} else if (unmilestonedVersions.length === 0) {
+  notes.push('every version the SRS declares (' + srsVersions.length + ') already belongs to a milestone')
+} else if (alreadyAssociated > 0) {
+  notes.push(alreadyAssociated + ' version(s) already belong to a milestone and were not proposed again')
+}
 
 process.stdout.write(
   JSON.stringify(

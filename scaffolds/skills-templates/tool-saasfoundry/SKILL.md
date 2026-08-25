@@ -478,7 +478,7 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 
 ### Workflow
 
-1. **Read the board** — `scripts/plan-milestone.sh`. It gathers tickets, milestones and sub-issue relationships and returns candidates with the evidence each grouping rests on.
+1. **Read the board and the SRS** — `scripts/plan-milestone.sh`. It gathers tickets, milestones, sub-issue relationships **and the versions the SRS declares**, and returns candidates with the evidence each grouping rests on. The SRS read degrades to nothing on a missing module, a missing network or an adapter error — a release proposal never becomes an error because a remote page was slow.
 2. **Check `shouldPropose` before saying anything.** `true` → raise it, quoting `trigger`. `false` → say nothing about milestones; if the user asked directly, answer with `reason`.
 3. **Propose from the candidates, never around them.** Each carries `evidence` — a sub-issue relationship, an SRS version page, or an admission of being a leftover pile. A proposal that cites none of those is invented.
 4. **Name the release yourself.** `name` is always `null`: the script will not invent a version number, because choosing one is a decision. Propose it, and say what it is based on.
@@ -512,6 +512,8 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 }
 ```
 
+**An `srs-version` candidate is the strongest evidence there is**, and it is the only source whose trigger ignores the ticket-count threshold. A version the product declared is a scope somebody already decided; a large pile of tickets is only a pile. When one appears, its `scopeSize` counts **FR pages in the SRS**, not tickets on the board — the release has been framed but not necessarily spawned yet.
+
 `scopeSize` and `openCount` answer different questions. **What a release contains** is `scopeSize` — that is what a milestone records, and what people read after the release, when everything in it is closed. **What is left to do** is `openCount` — the right question when re-scoping something already in flight. Use the one the conversation is actually about.
 
 **`scopeSize` is a floor, not a total, while #560 and #561 are open.** The retrofit on this project's own board (#554) framed a release the engine put at 16 tickets and the human record put at 33: it cannot see a finished Epic, and it names one Epic where a release spans four. Before quoting `scopeSize` for a release, ask whether closed Epics or sibling Epics belong to it — the engine will not raise either.
@@ -522,6 +524,7 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 - **Never speak up when `shouldPropose` is `false`.** Especially not when a milestone is already open: the answer there is to re-scope it, and proposing a second is how a board ends up with three overlapping releases.
 - **Never treat a milestone as a gate.** It reports where a release stands and asks for an acknowledgement to continue; it does not refuse one. A gate that blocks a hotfix behind an unfinished milestone gets disabled permanently, and it would contradict a standing decision that the tag is a joint call.
 - **Never read `counts` as exact when `notes` says the board was truncated.** Every number is then a floor, and a grouping may be missing tickets outright.
+- **Never read "the SRS declares no version pages" as "this product has no versions".** It usually means the features hold their FRs directly and `sf srs normalize` has not run. `notes` distinguishes that from *"the SRS could not be read"*, which is a gap in the evidence — do not treat the second as the first.
 - **Never present a candidate as the whole release without checking for the parts it cannot see.** A closed Epic produces no candidate at all, and no `droppedCandidates` entry either — silence here means "not looked at", not "nothing there". See #560, #561.
 
 ## Feedback — Module Request
