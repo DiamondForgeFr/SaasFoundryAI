@@ -105,7 +105,7 @@ Each phase starts from what the previous one produced and ends on something **ch
 
 | # | Phase | Starts from | Ends on | Carried by |
 | --- | --- | --- | --- | --- |
-| 1 | Read the POC | a folder holding code | a reading the user confirmed, and the POC filed into `POC/` | `read-poc.sh` → `plan-poc-move.sh` → `move-poc.sh --confirm` |
+| 1 | Read the code | a folder holding code | a reading the user confirmed — and, on `full` only, the POC filed into `POC/` | `read-poc.sh`, then on `full` `plan-poc-move.sh` → `move-poc.sh --confirm` |
 | 2 | Challenge the intent | the confirmed reading | `intake.json` holding answers traced to observations | `plan-challenge.sh` → `record-intake.sh` |
 | 3 | Decide the setup | the intake record | a project directory holding `.saasfoundry.json` | `plan-new.sh` → the `sf new` command it prints |
 | 4 | Write the SRS | the manifest and the intake | pages under the SRS root page | the **sf-srs** skill |
@@ -154,15 +154,28 @@ When the manifest already answers one of them, **it is answered** — read it, d
 - **Never report a phase from memory.** Run `recap.sh`. A session that "remembers" being at phase 4 and is actually at phase 2 will write a specification over an intake that was never done.
 - **Never continue past a blocker.** Route to the remediation and stop.
 
-## Discovery: an existing POC
+## Discovery: code that is already here
 
-Before `sf new` can run in a folder that already holds code, that code has to be read and filed away. This is the first flow of the zero-to-project path, and it runs *before* the `sf new` discovery below.
+Before anything else runs in a folder that already holds code, **that code has to be read**. This is the first flow of the zero-to-project path, and it runs *before* the `sf new` discovery below.
+
+Reading and moving are two steps, and only the first one always applies:
+
+| The user's answer to the profile question | Read | Move |
+| --- | --- | --- |
+| *"it's a throwaway POC, I'll rewrite it"* → `full` | yes | **yes** — into `POC/`, so the scaffold lands beside the experiment |
+| *"it exists and I'm building on it"* → `harness` | yes | **never** — `sf new --profile harness` installs in place and creates no directory |
+
+`read-poc.sh` reads **any** codebase and never writes: *"This script NEVER writes, moves or deletes anything. The move is a separate, confirmed step."* So the same reading serves both, and the move is what the profile decides.
+
+The name says POC for historical reasons. It is not one — do not conclude from it that a user's live project is out of scope, and do not skip the reading because "this isn't a POC".
 
 ### When this flow triggers
 
 - The starting-point question is answered with "it's a POC", "a prototype", "something I threw together"
 - The user says they have some code but want to start properly
+- **The user has a real project and wants the AI layer on it** — read it, then stop before the move
 - The folder `sf new` is about to run in already holds files
+- `recap.sh` reports phases 1–2 as `unknown` because the folder is occupied and nothing has been decided — ask the profile question, then come here
 
 ### Why it exists
 
@@ -188,6 +201,26 @@ my-thing/                  before          my-thing/                  after
 4. **Propose the move** — `scripts/read-poc.sh <dir> | scripts/plan-poc-move.sh`. Show the entries that move, the resulting tree, and any warnings. If the plan refuses, relay the refusal verbatim and stop — every refusal guards work that exists in no other copy.
 5. **Move only on approval** — `scripts/move-poc.sh <dir> --confirm`. Without `--confirm` it is a dry run that changes nothing, which is also the right thing to run when the user asks "what would this do?".
 6. **Then scaffold** — run the `sf new` discovery below from the same folder. The project directory lands beside `POC/` on its own, because that is what `sf new` already does.
+
+**Steps 4–6 are the `full` path only.** On `harness`, the reading is the end of it: go straight to the challenge, then to `sf new --profile harness` in place.
+
+### The `harness` path, end to end
+
+```bash
+# 1. Read what is there. Nothing is written.
+scripts/read-poc.sh .
+
+# 2. Confirm the reading with the user, then seed the challenge from it.
+scripts/read-poc.sh . | scripts/plan-challenge.sh
+scripts/record-intake.sh --out intake.json
+
+# 3. Install the AI layer in place. No directory is created, nothing moves.
+sf new --profile harness --non-interactive ...
+```
+
+`plan-challenge` takes a reading, not a `POC/` folder — it requires `report.inventory` and nothing more. So the questions it seeds come from **this project's** manifest, README and entry points, which is the whole difference between a specification about this product and a generic intake any project would get.
+
+**Never run `plan-poc-move.sh` on this path.** There is nothing to move, and offering it to someone building on an existing repository is how the flow proposes to relocate everything they have.
 
 ### Report shape (from `read-poc.sh`)
 
@@ -218,10 +251,11 @@ The reading is an artefact, so it is written in the manifest's output language �
 - **Never move anything before the user has approved the plan.** The POC is normally local-only: no remote, often no history. There is no copy to restore from.
 - **Never invent a purpose when `recognisable` is `false`.** Report the reason instead. A confident-sounding reading of a folder that cannot be read is worse than saying you cannot read it.
 - **Never work around a refusal.** Do not pick a different destination to dodge "already exists", do not run the intake from a parent folder to dodge "inside another repository". Relay it and let the user decide.
-- **Never run `sf new` inside the POC folder.** The whole point is that they end up beside each other.
+- **Never run `sf new` inside the POC folder.** The whole point is that they end up beside each other. This applies to `full`; on `harness` there is no POC folder and `sf new` runs exactly where the code is.
+- **Never propose the move before the profile question is answered.** Reading is always safe; moving is only correct for a POC the user is rewriting. Getting it backwards relocates a live project that often has no remote and no history to restore from.
 - **Never delete anything.** The intake only ever relocates. If something looks like it should go, say so and leave it.
 
-## Discovery: challenge what the POC revealed
+## Discovery: challenge what the code revealed
 
 Runs after the POC intake and before `sf new`. It is the step that makes the rest worth anything: once the POC has been read, you know things the user has not said, and those things are questions only someone who read the code could ask.
 
