@@ -14,7 +14,11 @@
 
 <div align="center">
   <br /><br />
-  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundryAI" width="420"/>
+  <!-- SVG: raw.githubusercontent serves it as image/svg+xml, so GitHub renders it.
+       docs/assets/logo.png is the same lockup and stays as the fallback — npmjs.com
+       renders this same README and its SVG support is the one surface #567 could not
+       verify before publishing. See #488. -->
+  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/refs/heads/master/docs/public/logo-full.svg" alt="SaaSFoundryAI" width="420"/>
   <br /><br />
 </div>
 
