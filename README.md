@@ -14,7 +14,7 @@
 
 <div align="center">
   <br /><br />
-  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundryAI Logo" width="300"/>
+  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundryAI" width="420"/>
   <br /><br />
 </div>
 
