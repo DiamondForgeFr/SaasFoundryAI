@@ -146,7 +146,7 @@ scripts/              # Version management (tag-manager.sh)
 
 ## Docker
 
-- Dev database: `docker-compose.db.yml` (port 5435, in-memory tmpfs)
+- Dev database: `docker-compose.db.yml` (port 5435 by default — `sf new` moves to the next free port and records the choice in `.saasfoundry.json` → `ports`, see #584)
 - External network: `docker network create saasfoundry-network`
 - API health check: `GET /api/health`
 - Build tests: `Dockerfile.test` + `tests/docker/` — generates real projects and runs `npm install` + `tsc` + `nest build` + `vite build`

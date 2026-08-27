@@ -112,6 +112,9 @@ Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
 
 **Cause** — Another process (a previous `npm run dev`, a different SaaS project's API, a system service) holds the port.
 
+`sf new` no longer hits this: it picks the next free port for anything it was not told explicitly, and records the choice in `.saasfoundry.json` under `ports`. What is left is a project already
+generated on a port that has since been taken by something else.
+
 **Fix**
 
 ```bash
@@ -126,8 +129,10 @@ docker ps              # find the container
 docker stop <name>
 ```
 
-To remap the port instead of freeing it, change the `PORT` env var (API), the Vite `server.port` in `vite.config.ts` (web), or the `ports` mapping in `docker-compose.db.yml`. Both apps log the actual
-URL on boot — read the line, do not assume the default.
+To remap the port instead of freeing it, change the `PORT` env var (API), `server.port` in `vite.config.ts` (web), or the `ports` mapping in `docker-compose.db.yml` — and keep `.saasfoundry.json` →
+`ports` in step, since `sf update` diffs the regenerated template against it. Both apps log the actual URL on boot — read the line, do not assume the default.
+
+To pin a port at generation time instead, pass `--db-port` / `--api-port` / `--web-port` to `sf new`. Those are honoured or refused, never moved.
 
 ## Husky hook failure (commitlint, prettier, eslint)
 
