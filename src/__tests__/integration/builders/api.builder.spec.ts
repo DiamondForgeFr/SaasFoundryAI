@@ -76,7 +76,7 @@ describe('createApiApp (integration)', () => {
     it('should call git init for multirepo', async () => {
       await createApiApp(apiParams())
 
-      expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'))
+      expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'), expect.anything())
     })
 
     it('should replace saasfoundry-network with project-network in docker files', async () => {

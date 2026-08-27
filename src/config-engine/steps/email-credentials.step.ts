@@ -1,7 +1,7 @@
 import chalk from 'chalk'
-import { exec } from 'shelljs'
 
 import { FieldDefinition, StepDefinition } from '../types'
+import { runBestEffort } from '../../run'
 
 /**
  * MailerSend credential collection — runs only when the user picked
@@ -60,7 +60,7 @@ export const emailCredentialsStep: StepDefinition = {
 
       // Open the URL in the default browser
       const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-      await exec(`${openCommand} https://www.mailersend.com/signup?ref=52o9lkySkTka`)
+      runBestEffort('open MailerSend signup', `${openCommand} https://www.mailersend.com/signup?ref=52o9lkySkTka`)
 
       const { ready } = (await render([
         {

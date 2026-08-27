@@ -48,7 +48,7 @@ describe('createWebApp (integration)', () => {
     it('should call git init for multirepo', async () => {
       await createWebApp(webParams())
 
-      expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'))
+      expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'), expect.anything())
     })
   })
 
