@@ -67,7 +67,7 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
 
   // Run npm install (unless monorepo handles it or explicitly skipped)
   if (!isMonorepo && !skipNpmInstall) {
-    const nvm = getNvmPrefix()
+    const nvm = getNvmPrefix(apiPath)
     await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
   }
 

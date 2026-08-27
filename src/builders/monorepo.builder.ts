@@ -35,7 +35,8 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
     { PROJECT_NAME: projectName }
   )
 
-  const nvm = getNvmPrefix()
+  // Monorepo commands run from the repository root, which is the cwd here.
+  const nvm = getNvmPrefix(process.cwd())
 
   // Substitute {{PROJECT_NAME}} in root package.json BEFORE the JSON merge below so the
   // `codegen:api-client -w @<name>/api-client` script ends up with the project's npm scope.
