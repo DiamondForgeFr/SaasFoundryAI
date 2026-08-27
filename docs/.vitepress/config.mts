@@ -12,6 +12,13 @@ export default defineConfig({
     }
   },
 
+  // The tab icon is a THIRD asset on purpose: at 16px the S and F on the cube faces
+  // stop being letters and start being dirt, so the favicon drops them. `icon.svg`
+  // keeps them for the nav bar, where there is enough room to read them. See #567.
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/SaaSFoundryAI/favicon.svg' }]
+  ],
+
   markdown: {
     languageAlias: {
       env: 'bash'
