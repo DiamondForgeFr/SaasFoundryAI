@@ -311,7 +311,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         const dbSpinner = ora(startProjectAnswers.dbSetup === 'docker' ? 'Starting database and running initial setup...' : 'Initializing database...').start()
 
         try {
-          await initAndStartDb(startProjectAnswers.projectName, startProjectAnswers.dbSetup, startProjectAnswers.isMonorepo, dbSpinner)
+          await initAndStartDb(startProjectAnswers.projectName, startProjectAnswers.dbSetup, startProjectAnswers.isMonorepo, dbSpinner, startProjectAnswers.dbCredentials?.port)
           dbSpinner.succeed(chalk.green('Database initialized successfully'))
         } catch (error) {
           dbSpinner.fail(chalk.red('Failed to initialize database'))

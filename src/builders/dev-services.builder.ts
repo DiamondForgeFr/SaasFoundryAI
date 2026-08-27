@@ -17,6 +17,10 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
       password: 'db_dev_password',
       database: 'db_dev'
     }
+    // `port` was destructured nowhere, so the template's '5435:5432' was copied through
+    // untouched: `--db-port 5444` wrote 5444 into the .env and published 5435, and the app
+    // dialled a port nothing listened on. It started clean and nothing worked (#583).
+    const hostPort = dbCredentials?.port || '5435'
 
     const dbCustomized = dbTemplateContent
       .replace(/container_name:.*$/m, `container_name: ${projectName}-db-dev`)
@@ -25,6 +29,8 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
       .replace(/POSTGRES_DB:.*$/m, `POSTGRES_DB: ${database}`)
       .replace(/test: \[.*\]/m, `test: ['CMD-SHELL', 'pg_isready -U ${user} -d ${database}']`)
       .replace(/saasfoundry-network/g, `${projectName}-network`)
+      // Only the host side moves. 5432 is postgres inside its own container.
+      .replace(/- '5435:5432'/, `- '${hostPort}:5432'`)
 
     // Extract the db-dev service block (everything between "services:" and "volumes:")
     const dbServiceBlock = dbCustomized.match(/services:\n([\s\S]*?)(?=\nvolumes:)/)?.[1] || ''

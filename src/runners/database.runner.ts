@@ -18,17 +18,20 @@ function detectPortConflict(port: number, projectName: string): string | null {
   return name
 }
 
-export async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner: ReturnType<typeof ora>) {
+export async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner: ReturnType<typeof ora>, dbPort = '5435') {
   spinner.text = 'Initializing and starting database...'
 
   const projectRoot = process.cwd()
   const apiPath = resolve(projectRoot, isMonorepo ? 'apps/api' : `apps/${projectName}-api`)
 
   if (dbSetup === 'docker') {
-    const conflict = detectPortConflict(5435, projectName)
+    // The port this project will actually publish, not a constant. With --db-port the
+    // guard used to clear 5435 and then start a container that collided elsewhere.
+    const port = Number(dbPort)
+    const conflict = detectPortConflict(port, projectName)
     if (conflict) {
       throw new Error(
-        `Port 5435 is already in use by container "${conflict}" from another project.\n` + `Stop it first: docker compose -f <other-project>/apps/api/docker-compose.dev-services.yml down`
+        `Port ${port} is already in use by container "${conflict}" from another project.\n` + `Free it, or pick another with --db-port <n>.\n` + `To stop the other one:  docker stop ${conflict}`
       )
     }
 
