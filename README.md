@@ -14,11 +14,16 @@
 
 <div align="center">
   <br /><br />
-  <!-- SVG: raw.githubusercontent serves it as image/svg+xml, so GitHub renders it.
-       docs/assets/logo.png is the same lockup and stays as the fallback — npmjs.com
-       renders this same README and its SVG support is the one surface #567 could not
-       verify before publishing. See #488. -->
-  <img src="https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/refs/heads/master/docs/public/logo-full.svg" alt="SaaSFoundryAI" width="420"/>
+  <!-- Relative on purpose. An absolute raw URL has to name a branch, and any branch
+       named here is wrong somewhere: master lags develop by hundreds of commits, so a
+       new asset path 404s there until the release merge — which is exactly how this
+       line broke when it moved from docs/assets/logo.png to a file master has never
+       seen. A relative path resolves against whatever ref the reader is on, so it works
+       on every branch, before and after the cut.
+       npmjs.com rewrites relative README links against the repository field; if it
+       turns out not to, docs/assets/logo.png is the same lockup and is still there.
+       Verify the npm page right after the first publish — see #488. -->
+  <img src="docs/public/logo-full.svg" alt="SaaSFoundryAI" width="420"/>
   <br /><br />
 </div>
 
