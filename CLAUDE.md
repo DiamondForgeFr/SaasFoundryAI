@@ -156,4 +156,6 @@ scripts/              # Version management (tag-manager.sh)
 - This is a **scaffold/generator** CLI — the code in `scaffolds/` is template code, not application code
 - **NEVER** modify scaffold templates without considering the impact on generated projects
 - Current version: 1.0.0-beta (npm package `saasfoundryai-cli`)
-- Node.js >= 22.13.0 required (matches scaffolds + .nvmrc)
+- Node.js >= 22.13.0 to run the CLI (its own `.nvmrc` says 22.15.0)
+- **Generated projects ask for Node 24** — their `.nvmrc` says 24.19.0, because they declare `npm >= 11` with `onFail: error` and Node 22 ships npm 10. The CLI reads the target project's `.nvmrc`
+  before shelling out to `npm`; it does not impose its own version. See #589 — the two used to be assumed identical, and every `npm run` in a generated project was refused.

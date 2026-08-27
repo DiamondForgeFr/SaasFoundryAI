@@ -52,7 +52,7 @@ export async function createApiApp({
   packageJson.repository.url = backendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
   packageJson.keywords = [projectName, 'saasfoundry', 'backend', 'nest', 'prisma']
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
-  const nvm = getNvmPrefix()
+  const nvm = getNvmPrefix(apiPath)
 
   // For monorepo, npm install and prisma generate are handled by the monorepo root builder
   if (!isMonorepo) {

@@ -1000,7 +1000,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     // Run npm install if new dependencies were added
     if (selectedModules.includes('storage') || selectedModules.includes('email')) {
       moduleSpinner.text = 'Installing dependencies...'
-      const nvm = getNvmPrefix()
+      const nvm = getNvmPrefix(isMonorepo ? process.cwd() : apiPath)
       if (isMonorepo) {
         await exec(`${nvm}npm install > /dev/null 2>&1`)
       } else {

@@ -75,7 +75,7 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
 
   // For monorepo, npm install is handled by the monorepo root builder
   if (!isMonorepo) {
-    const nvm = getNvmPrefix()
+    const nvm = getNvmPrefix(webPath)
     await exec(`${nvm}npm install --prefix ${webPath} > /dev/null 2>&1`)
   }
 

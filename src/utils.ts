@@ -57,16 +57,48 @@ export async function computeFileHashes(dir: string): Promise<Record<string, str
 }
 
 /**
- * Required Node.js major version for generated projects (Prisma 7 + Vite 7)
+ * Floor for the CLI's own runtime, and the fallback for a project that declares nothing.
+ *
+ * It is NOT the version a generated project runs on — that project says so itself, in its
+ * `.nvmrc`, and today it says 24. Node 22 ships npm 10.9.7 while the generated
+ * `package.json` demands `npm >= 11` with `onFail: "error"`, so driving a generated
+ * project from this constant makes every `npm run` refuse to start. See #589.
  */
 const REQUIRED_NODE_MAJOR = 22
 
 /**
- * Returns a shell prefix that loads nvm and switches to the required Node.js version.
- * Falls back silently if nvm is not available (the user may already have the right version).
+ * The Node version a project asks for, read from the nearest `.nvmrc` at or above `dir`.
+ *
+ * Returns null when there is none, which is the signal to fall back rather than to guess.
  */
-export function getNvmPrefix(): string {
-  return `export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use ${REQUIRED_NODE_MAJOR} --silent 2>/dev/null; `
+export function resolveProjectNodeVersion(dir: string): string | null {
+  let current = path.resolve(dir)
+  // Stop at the filesystem root; `dirname('/')` is `/`, which is the loop's own guard.
+  for (;;) {
+    const candidate = path.join(current, '.nvmrc')
+    if (fs.existsSync(candidate)) {
+      const version = fs.readFileSync(candidate, 'utf8').trim()
+      if (version) return version
+    }
+    const parent = path.dirname(current)
+    if (parent === current) return null
+    current = parent
+  }
+}
+
+/**
+ * Returns a shell prefix that loads nvm and switches to the Node version the target
+ * project declares. Falls back silently if nvm is not available (the user may already
+ * have the right version).
+ *
+ * Pass the directory the command will run in. Without it — or when that directory
+ * declares nothing — the CLI's own floor is used, which is what every caller did before
+ * `.nvmrc` was allowed to have an opinion.
+ */
+export function getNvmPrefix(targetDir?: string): string {
+  const requested = targetDir ? resolveProjectNodeVersion(targetDir) : null
+  const version = requested || String(REQUIRED_NODE_MAJOR)
+  return `export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use ${version} --silent 2>/dev/null; `
 }
 
 /**
