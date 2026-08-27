@@ -29,8 +29,15 @@ const HeaderBrand = () => {
   if (state !== 'collapsed') return null
   return (
     <>
-      <span className="font-display text-sm font-bold tracking-tight text-foreground select-none">
-        SaaSFoundryAI<span className="text-primary">AI</span>
+      {/*
+       * Three segments, one word, matching the logo: SaaS orange, Foundry grey, AI orange.
+       * Theme tokens rather than the SVG's hex — the logo grey holds on dark chrome and
+       * would lose contrast in light mode, and `--primary` already IS the brand orange.
+       */}
+      <span className="font-display text-sm font-bold tracking-tight select-none">
+        <span className="text-primary">SaaS</span>
+        <span className="text-muted-foreground">Foundry</span>
+        <span className="text-primary">AI</span>
       </span>
       <Separator orientation="vertical" className="mr-2 h-4" />
     </>
