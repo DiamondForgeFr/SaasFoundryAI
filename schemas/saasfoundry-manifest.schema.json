@@ -36,7 +36,33 @@
     },
     "mainBranch": {
       "type": "string",
-      "description": "Git main branch chosen at sf new (main/master). Absent on manifests written before this field existed — readers must fall back."
+      "description": "Git main branch chosen at sf new (main/master). Absent on manifests written before this field existed \u2014 readers must fall back."
+    },
+    "ports": {
+      "type": "object",
+      "description": "Host ports the project runs on, chosen at sf new. Absent on manifests written before this field existed \u2014 readers fall back to 5435/3500/5173, which is what those projects run.",
+      "additionalProperties": false,
+      "required": ["db", "api", "web"],
+      "properties": {
+        "db": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port the development database is published on."
+        },
+        "api": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port the API listens on."
+        },
+        "web": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port the Vite dev server listens on."
+        }
+      }
     },
     "modules": {
       "type": "object",
@@ -47,7 +73,7 @@
           "type": "object",
           "required": ["provider", "version"],
           "additionalProperties": false,
-          "description": "Email module — versioned shape introduced in manifestVersion 2 (Epic #310). `provider` replaces the legacy flat `emailService` string; `version` is the per-module installed version, used by module-level migrations.",
+          "description": "Email module \u2014 versioned shape introduced in manifestVersion 2 (Epic #310). `provider` replaces the legacy flat `emailService` string; `version` is the per-module installed version, used by module-level migrations.",
           "properties": {
             "provider": {
               "type": "string",
@@ -80,7 +106,7 @@
           "type": "object",
           "required": ["version"],
           "additionalProperties": false,
-          "description": "AI harness deposits (skills, docs, workflow artefacts) — versioned so sf update can refresh them and module migrations can target them.",
+          "description": "AI harness deposits (skills, docs, workflow artefacts) \u2014 versioned so sf update can refresh them and module migrations can target them.",
           "properties": {
             "version": {
               "type": "integer",
@@ -92,7 +118,7 @@
           "type": "object",
           "required": ["version"],
           "additionalProperties": false,
-          "description": "PWA module — makes the generated web app installable as a desktop application. Versioned so module migrations can target it.",
+          "description": "PWA module \u2014 makes the generated web app installable as a desktop application. Versioned so module migrations can target it.",
           "properties": {
             "version": {
               "type": "integer",
@@ -104,12 +130,12 @@
     },
     "language": {
       "type": "object",
-      "description": "Language of AI-produced artefacts, per surface. Every key is optional and defaults to English, so a manifest without this block behaves exactly as one that pins \"en\" everywhere. The surfaces are separate because they do not always agree — a French SRS can coexist with English code comments.",
+      "description": "Language of AI-produced artefacts, per surface. Every key is optional and defaults to English, so a manifest without this block behaves exactly as one that pins \"en\" everywhere. The surfaces are separate because they do not always agree \u2014 a French SRS can coexist with English code comments.",
       "additionalProperties": false,
       "properties": {
         "srs": {
           "type": "string",
-          "description": "SRS pages — features, versions, FRs. Absent means English."
+          "description": "SRS pages \u2014 features, versions, FRs. Absent means English."
         },
         "tickets": {
           "type": "string",
@@ -129,7 +155,7 @@
     },
     "fileHashes": {
       "type": "object",
-      "description": "Map of relative path → SHA hash used by sf update to detect user edits.",
+      "description": "Map of relative path \u2192 SHA hash used by sf update to detect user edits.",
       "additionalProperties": {
         "type": "string"
       }

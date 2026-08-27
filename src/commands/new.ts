@@ -23,6 +23,7 @@ import { bootstrapSrs } from '../runners/srs.runner'
 import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
 import { languageConfigFromAnswers } from '../language'
 import { targetManifestVersion } from '../migrations/manifest/registry'
+import { resolvePorts } from '../ports'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { Answers, manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
@@ -53,8 +54,30 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     return
   }
 
+  /**
+   * Ports, resolved before a single file is written.
+   *
+   * Read from `opts` rather than from the credentials, because `setDefaultDbCredentials`
+   * below fills an empty port with 5435 — after which "the user asked for 5435" and "the
+   * user asked for nothing" are the same value, and a default that must scan looks like a
+   * flag that must not.
+   */
+  const ports = await resolvePorts({
+    dbSetup: startProjectAnswers.dbSetup,
+    requested: {
+      db: opts.dbPort ?? startProjectAnswers.dbCredentials?.port,
+      api: opts.apiPort,
+      web: opts.webPort
+    }
+  })
+
+  // The flat shape the builders and the manifest consume.
+  const projectPorts = { db: ports.db.port, api: ports.api.port, web: ports.web.port }
+
   // Set default values for database credentials
-  if (startProjectAnswers.dbCredentials) startProjectAnswers.dbCredentials = setDefaultDbCredentials(startProjectAnswers.dbCredentials)
+  if (startProjectAnswers.dbCredentials) {
+    startProjectAnswers.dbCredentials = setDefaultDbCredentials({ ...startProjectAnswers.dbCredentials, port: String(ports.db.port) })
+  }
 
   /**
    * Project setup
@@ -129,7 +152,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       notionApiVersion: startProjectAnswers.notionApiVersion,
       figmaApiToken: startProjectAnswers.figmaApiToken,
       workflow: startProjectAnswers.workflow,
-      aiRules: startProjectAnswers.aiRules
+      aiRules: startProjectAnswers.aiRules,
+      ports: projectPorts
     })
     updateProgress()
 
@@ -171,7 +195,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       notionApiVersion: startProjectAnswers.notionApiVersion,
       figmaApiToken: startProjectAnswers.figmaApiToken,
       workflow: startProjectAnswers.workflow,
-      aiRules: startProjectAnswers.aiRules
+      aiRules: startProjectAnswers.aiRules,
+      ports: projectPorts
     })
     updateProgress()
 
@@ -184,7 +209,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         monorepoUrl: startProjectAnswers.monorepoUrl,
         mainBranch: startProjectAnswers.mainBranch,
         workflow: startProjectAnswers.workflow,
-        aiRules: startProjectAnswers.aiRules
+        aiRules: startProjectAnswers.aiRules,
+        ports: projectPorts
       })
       updateProgress()
     }
@@ -227,6 +253,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       structure: startProjectAnswers.isMonorepo ? 'monorepo' : 'multirepo',
       projectName: startProjectAnswers.projectName,
       mainBranch: startProjectAnswers.mainBranch,
+      ports: projectPorts,
       modules: {
         email: { provider: startProjectAnswers.emailService, version: 1 },
         s3Setup: startProjectAnswers.s3Setup,

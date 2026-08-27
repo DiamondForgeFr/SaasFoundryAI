@@ -28,6 +28,11 @@ export interface NewCommandOptions {
   dbPassword?: string
   dbName?: string
 
+  // Ports. An explicit value is honoured or refused, never moved (#584); the db port
+  // is only a local one when `dbSetup` is `docker`.
+  apiPort?: string
+  webPort?: string
+
   // Email
   emailService?: 'none' | 'mailersend'
   mailersendApiKey?: string

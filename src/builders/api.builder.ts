@@ -5,8 +5,9 @@ import { resolve } from 'path'
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
+import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
-import { fileExists, generateJwtSecret, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
 export async function createApiApp({
@@ -22,9 +23,14 @@ export async function createApiApp({
   mailersendSenderName,
   s3Setup,
   s3Credentials,
-  workflow
+  workflow,
+  ports
 }: CreateApiAppParams) {
   validateProjectName(projectName)
+
+  // A project scaffolded before ports were chosen runs on these, so they are also
+  // what an absent block has to mean everywhere it is read.
+  const { api: apiPort, web: webPort } = ports ?? DEFAULT_PORTS
 
   // Create the API app directory
   const apiPath = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
@@ -72,6 +78,9 @@ export async function createApiApp({
     confirmAccount: generateJwtSecret(),
     resetPassword: generateJwtSecret()
   }
+
+  // The ports this project was given, not the template's constants.
+  envContent = envContent.replace(/^PORT=.*$/m, `PORT="${apiPort}"`).replace(/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`)
 
   // Update JWT secrets in .env
   envContent = envContent
@@ -143,7 +152,14 @@ export async function createApiApp({
   const dockerComposePath = `${apiPath}/docker-compose.yml`
   if (await fileExists(dockerComposePath)) {
     let dockerComposeContent = await readFile(dockerComposePath, 'utf8')
-    dockerComposeContent = dockerComposeContent.replace(/saasfoundry-network/g, `${projectName}-network`).replace(/saasfoundry-api/g, `${projectName}-api`)
+    dockerComposeContent = dockerComposeContent
+      .replace(/saasfoundry-network/g, `${projectName}-network`)
+      .replace(/saasfoundry-api/g, `${projectName}-api`)
+      // `env_file: ./.env` puts PORT inside the container, so the published side and the
+      // container side have to move together — a mapping of `3501:3500` would publish a
+      // port nothing listens on, and the healthcheck would call a dead one.
+      .replace(/\$\{BACKEND_PORT:-3500\}:3500/, `\${BACKEND_PORT:-${apiPort}}:${apiPort}`)
+      .replace(/http:\/\/localhost:3500\/api\/health/, `http://localhost:${apiPort}/api/health`)
     await writeFile(dockerComposePath, dockerComposeContent)
   }
 
@@ -159,9 +175,23 @@ export async function createApiApp({
   const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
   if (await fileExists(deploymentYmlPath)) {
     let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
-    deploymentYmlContent = deploymentYmlContent.replace(/saasfoundry-network/g, `${projectName}-network`)
+    deploymentYmlContent = deploymentYmlContent
+      .replace(/saasfoundry-network/g, `${projectName}-network`)
+      // One port identity per project: the deploy writes the same PORT the project uses
+      // everywhere else, and the sed that strips the published port matches it.
+      .replace(/PORT=\\"3500\\"/, `PORT=\\"${apiPort}\\"`)
+      .replace(/'\/ports:\/,\/3500\/d'/, `'/ports:/,/${apiPort}/d'`)
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
+
+  // Every other api-side file that names a port
+  await replaceInFile(`${apiPath}/.env.test`, [
+    [/^PORT=.*$/m, `PORT="${apiPort}"`],
+    [/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`]
+  ])
+  await replaceInFile(`${apiPath}/Dockerfile`, [[/^ENV PORT=.*$/m, `ENV PORT=${apiPort}`]])
+  await replaceInFile(`${apiPath}/src/configs/env/services/env.service.ts`, [[/PORT: z\.string\(\)\.default\('3500'\)/, `PORT: z.string().default('${apiPort}')`]])
+  await replaceInFile(`${apiPath}/README.md`, [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
 
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
   const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')

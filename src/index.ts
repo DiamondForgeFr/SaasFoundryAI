@@ -38,10 +38,14 @@ program
   .option('--db-setup <setup>', 'Database setup: docker, credentials, or manual')
   .option('--db-type <type>', 'Database type: postgresql or sql')
   .option('--db-host <host>', 'Database host')
-  .option('--db-port <port>', 'Database port')
+  .option('--db-port <port>', 'Database port (default: first free from 5435)')
   .option('--db-user <user>', 'Database user')
   .option('--db-password <password>', 'Database password')
   .option('--db-name <name>', 'Database name')
+
+  // Ports — an explicit value is honoured or refused, never silently moved (#584)
+  .option('--api-port <port>', 'Host port the API listens on (default: first free from 3500)')
+  .option('--web-port <port>', 'Host port the web dev server listens on (default: first free from 5173)')
   // Email
   .option('--email-service <service>', 'Email service: none or mailersend')
   .option('--mailersend-api-key <key>', 'MailerSend API key')

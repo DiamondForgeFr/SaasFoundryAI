@@ -79,6 +79,8 @@ export interface Answers {
 }
 
 export interface CreateApiAppParams {
+  /** Resolved host ports. Absent means the defaults — see `DEFAULT_PORTS`. */
+  ports?: ProjectPorts
   isMonorepo: boolean
   projectName: string
   projectDescription: string
@@ -105,6 +107,8 @@ export interface CreateApiAppParams {
 }
 
 export interface CreateWebAppParams {
+  /** Resolved host ports. Absent means the defaults — see `DEFAULT_PORTS`. */
+  ports?: ProjectPorts
   isMonorepo: boolean
   projectName: string
   projectDescription: string
@@ -139,6 +143,8 @@ export interface CreateS3AppParams {
 }
 
 export interface CreateMonorepoRootParams {
+  /** Resolved host ports. Absent means the defaults — see `DEFAULT_PORTS`. */
+  ports?: ProjectPorts
   projectName: string
   projectDescription: string
   monorepoUrl?: string
@@ -274,6 +280,17 @@ export interface LanguageConfig {
   codeComments?: LanguageTag
 }
 
+/**
+ * The host ports a generated project runs on, resolved once at `sf new` (#584).
+ * Every file that names a port reads it from here, so the .env, the compose, the
+ * Vite server and the docs cannot drift apart.
+ */
+export interface ProjectPorts {
+  db: number
+  api: number
+  web: number
+}
+
 export interface SaaSFoundryManifest {
   $schema?: string
   // Schema-shape version, monotonic integer, bumped by registered manifest migrations.
@@ -287,6 +304,12 @@ export interface SaaSFoundryManifest {
   // written before this field exists omit it — read sites must fall back
   // (no migration; see .claude/docs/migration-framework.md "When NOT to add").
   mainBranch?: string
+  // Host ports the generated project runs on, chosen at `sf new` (#584). Absent on
+  // manifests written before this field existed — readers must fall back to
+  // `DEFAULT_PORTS` (5435/3500/5173), which is what those projects actually run,
+  // so no migration is needed (see .claude/docs/migration-framework.md,
+  // "When NOT to add a migration").
+  ports?: ProjectPorts
   // Every key is optional: scaffolded projects carry the five stack keys,
   // harness-only projects carry just `harness`. Scaffold-only code paths must
   // gate on `isScaffoldManifest()` (modules.email present), never on the mere
