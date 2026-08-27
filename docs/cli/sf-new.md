@@ -24,6 +24,9 @@ sf new [options]
 | `--frontend-repo-url <url>`                    | Frontend repo URL (multirepo + existing)                        | -       |
 | `--db-setup <setup>`                           | Database: `docker`, `credentials`, or `manual`                  | -       |
 | `--db-type <type>`                             | Database type: `postgresql` or `sql`                            | -       |
+| `--db-port <port>`                             | Host port for the dev database                                  | `5435`  |
+| `--api-port <port>`                            | Host port the API listens on                                    | `3500`  |
+| `--web-port <port>`                            | Host port the web dev server listens on                         | `5173`  |
 | `--email-service <service>`                    | Email service: `none` or `mailersend`                           | -       |
 | `--s3-setup <setup>`                           | S3 storage: `docker`, `credentials`, or `manual`                | -       |
 | `--analytics / --no-analytics`                 | Include (or skip) the analytics module                          | -       |
@@ -37,6 +40,24 @@ sf new [options]
 | `--workflow <config> / --no-workflow`          | Workflow preset, `none`, or skip workflow entirely              | -       |
 | `--start-services / --no-start-services`       | Auto-start dev services (DB + MinIO) after setup                | -       |
 | `--start-apps <mode>`                          | Apps to start after setup: `all`, `backend`, `frontend`, `none` | -       |
+
+## Ports
+
+Two generated projects can run side by side. `sf new` resolves three host ports before it writes anything:
+
+|          | default | when it is taken           |
+| -------- | ------- | -------------------------- |
+| database | `5435`  | the next free port is used |
+| API      | `3500`  | the next free port is used |
+| web      | `5173`  | the next free port is used |
+
+**A port you asked for is never moved.** If `--api-port 3500` is taken, `sf new` stops and names what holds it — you said what you wanted, and quietly running somewhere else would be the tool
+disagreeing without telling you. Only the defaults scan forward.
+
+The chosen ports are written to `.saasfoundry.json` under `ports`, and every generated file that names a port — `.env`, the composes, `vite.config.ts`, the docs — carries them. Manifests written
+before this existed have no `ports` block; those projects run on the defaults.
+
+A `--db-port` under `--db-setup credentials` or `manual` points at a database you host elsewhere, so it is passed through untouched and never scanned.
 
 ## Installation profiles
 
