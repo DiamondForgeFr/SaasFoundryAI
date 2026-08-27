@@ -263,6 +263,16 @@ export async function newCommand(opts: NewCommandOptions = {}) {
    * Project start
    */
   const needsDbInit = startProjectAnswers.dbSetup === 'docker' || startProjectAnswers.dbSetup === 'credentials'
+
+  /**
+   * Steps that were attempted and did not work.
+   *
+   * `servicesOk` lived inside the post-setup block and gated one thing: whether to offer
+   * starting the apps. It never reached the closing banner or the exit code, so a failed
+   * database init still printed "successfully set up" with clickable URLs and returned 0
+   * — to the user, and to every agent and CI job driving this command. See #590.
+   */
+  const failedSteps: { step: string; fix: string }[] = []
   const needsS3Start = startProjectAnswers.s3Setup === 'docker'
   const needsServiceSetup = needsDbInit || needsS3Start
 
@@ -307,6 +317,10 @@ export async function newCommand(opts: NewCommandOptions = {}) {
           dbSpinner.fail(chalk.red('Failed to initialize database'))
           console.error(error)
           servicesOk = false
+          failedSteps.push({
+            step: 'Database initialization',
+            fix: `cd ${startProjectAnswers.projectName} && docker compose -f ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}/docker-compose.dev-services.yml up -d db-dev && npm run db:setup:dev --prefix ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}`
+          })
         }
       }
 
@@ -320,6 +334,10 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         } catch (error) {
           s3Spinner.fail(chalk.red('Failed to start MinIO S3 storage'))
           console.error(error)
+          failedSteps.push({
+            step: 'MinIO S3 storage',
+            fix: `docker compose -f ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}/docker-compose.dev-services.yml up -d s3-dev s3-init`
+          })
         }
       }
 
@@ -458,14 +476,37 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     }
   }
 
-  // Display success message with all useful URLs
-  console.log('\n')
-  console.log(chalk.green('='.repeat(80)))
-  console.log(chalk.green.bold(`🚀 Congratulations! Your project "${startProjectAnswers.projectName}" has been successfully set up by SaaSFoundryAI!`))
-  console.log(chalk.green.bold(`🌍 It's now ready to become the next SaaS that will conquer the world!`))
-  console.log(chalk.green.bold(`🧠 "What are we going to do tonight, Brain?" "The same thing we do every night, Pinky - try to take over the world!"`))
-  console.log(chalk.green('='.repeat(80)))
-  console.log('\n')
+  // A step was attempted and did not work. The project exists and is one step short, so
+  // nothing is rolled back — but it must not be announced as ready, and the exit code has
+  // to say so too: for an agent driving this command, the code is the whole signal.
+  if (failedSteps.length > 0) {
+    console.log('\n')
+    console.log(chalk.yellow('='.repeat(80)))
+    console.log(
+      chalk.yellow.bold(`⚠  Your project "${startProjectAnswers.projectName}" was created, but ${failedSteps.length === 1 ? 'one step did' : `${failedSteps.length} steps did`} not complete.`)
+    )
+    console.log(chalk.yellow('='.repeat(80)))
+    console.log('\n')
+    console.log(chalk.gray('  Everything was written to disk. What is missing:'))
+    console.log()
+    for (const { step, fix } of failedSteps) {
+      console.log(chalk.yellow(`  ✗ ${step}`))
+      console.log(chalk.gray(`    finish it with:  ${fix}`))
+      console.log()
+    }
+    console.log(chalk.gray('  The URLs below will work once those steps do.'))
+    console.log('\n')
+    // Not process.exit: let stdout flush and the rest of the summary print.
+    process.exitCode = 1
+  } else {
+    console.log('\n')
+    console.log(chalk.green('='.repeat(80)))
+    console.log(chalk.green.bold(`🚀 Congratulations! Your project "${startProjectAnswers.projectName}" has been successfully set up by SaaSFoundryAI!`))
+    console.log(chalk.green.bold(`🌍 It's now ready to become the next SaaS that will conquer the world!`))
+    console.log(chalk.green.bold(`🧠 "What are we going to do tonight, Brain?" "The same thing we do every night, Pinky - try to take over the world!"`))
+    console.log(chalk.green('='.repeat(80)))
+    console.log('\n')
+  }
 
   // Display all useful URLs (clickable if terminal supports it)
   console.log(chalk.cyan('📚 Documentation & Resources:'))
