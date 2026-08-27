@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import ora from 'ora'
-import { exec } from 'shelljs'
+
 import shelljs from 'shelljs'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
@@ -37,6 +37,7 @@ import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { buildUpdatePrefillFromOptions, ConflictStrategy, parseConflictStrategy, UpdateCommandOptions, UpdateDryRunReport } from './update.options'
+import { runRequired } from '../run'
 
 export interface FileUpdate {
   path: string
@@ -1002,9 +1003,9 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       moduleSpinner.text = 'Installing dependencies...'
       const nvm = getNvmPrefix(isMonorepo ? process.cwd() : apiPath)
       if (isMonorepo) {
-        await exec(`${nvm}npm install > /dev/null 2>&1`)
+        runRequired('npm install (monorepo root)', `${nvm}npm install`)
       } else {
-        await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
+        runRequired('npm install (api)', `${nvm}npm install --prefix ${apiPath}`)
       }
     }
 

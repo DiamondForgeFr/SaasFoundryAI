@@ -1,13 +1,13 @@
 import { copy } from 'fs-extra'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
-import { exec } from 'shelljs'
 
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { fileExists, generateJwtSecret, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { runBestEffort, runRequired, warn } from '../run'
 
 export async function createApiApp({
   isMonorepo,
@@ -56,8 +56,8 @@ export async function createApiApp({
 
   // For monorepo, npm install and prisma generate are handled by the monorepo root builder
   if (!isMonorepo) {
-    await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
-    await exec(`${nvm}cd ${apiPath} && npx prisma generate > /dev/null 2>&1`)
+    runRequired('npm install (api)', `${nvm}npm install --prefix ${apiPath}`)
+    runRequired('prisma generate (api)', `${nvm}cd ${apiPath} && npx prisma generate`)
   }
 
   // Update .env with core settings (JWT secrets, database credentials)
@@ -169,14 +169,16 @@ export async function createApiApp({
 
   // Initialize Git repository
   if (!isMonorepo) {
-    await exec(`git init ${apiPath} > /dev/null 2>&1`)
-    await exec(`git -C ${apiPath} checkout -b ${mainBranch} > /dev/null 2>&1`)
-    if (backendRepoUrl) await exec(`git -C ${apiPath} remote add origin ${backendRepoUrl} > /dev/null 2>&1`)
-    await exec(`git -C ${apiPath} add . > /dev/null 2>&1`)
-    await exec(`git -C ${apiPath} commit -m "Initial commit" > /dev/null 2>&1`)
+    // Best-effort: the folder may already be a repository, or git may be absent. None of
+    // that makes the scaffold unusable, so it reports and carries on.
+    runBestEffort('git init (api)', `git init ${apiPath}`, { onSkipped: warn })
+    runBestEffort('git checkout (api)', `git -C ${apiPath} checkout -b ${mainBranch}`, { onSkipped: warn })
+    if (backendRepoUrl) runBestEffort('git remote add (api)', `git -C ${apiPath} remote add origin ${backendRepoUrl}`, { onSkipped: warn })
+    runBestEffort('git add (api)', `git -C ${apiPath} add .`, { onSkipped: warn })
+    runBestEffort('git commit (api)', `git -C ${apiPath} commit -m "Initial commit"`, { onSkipped: warn })
     // Develop-first: create the declared working branch so the repo matches its docs.
     const workingBranch = workflow?.workingBranch
-    if (workingBranch && workingBranch !== mainBranch) await exec(`git -C ${apiPath} checkout -b ${workingBranch} > /dev/null 2>&1`)
+    if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (api)', `git -C ${apiPath} checkout -b ${workingBranch}`, { onSkipped: warn })
   }
 
   return true

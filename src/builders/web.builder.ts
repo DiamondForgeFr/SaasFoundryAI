@@ -1,7 +1,7 @@
 import { copy } from 'fs-extra'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
-import { exec } from 'shelljs'
+
 import glob from 'glob'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
@@ -9,6 +9,7 @@ import { installPwaModule } from '../installers/pwa.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { runBestEffort, runRequired, warn } from '../run'
 
 export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, includePwa, workflow }: CreateWebAppParams) {
   validateProjectName(projectName)
@@ -76,7 +77,7 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   // For monorepo, npm install is handled by the monorepo root builder
   if (!isMonorepo) {
     const nvm = getNvmPrefix(webPath)
-    await exec(`${nvm}npm install --prefix ${webPath} > /dev/null 2>&1`)
+    runRequired('npm install (web)', `${nvm}npm install --prefix ${webPath}`)
   }
 
   // Update Docker network name in docker-compose.yml
@@ -124,14 +125,14 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
 
   // Initialize Git repository
   if (!isMonorepo) {
-    await exec(`git init ${webPath} > /dev/null 2>&1`)
-    await exec(`git -C ${webPath} checkout -b ${mainBranch} > /dev/null 2>&1`)
-    if (frontendRepoUrl) await exec(`git -C ${webPath} remote add origin ${frontendRepoUrl} > /dev/null 2>&1`)
-    await exec(`git -C ${webPath} add . > /dev/null 2>&1`)
-    await exec(`git -C ${webPath} commit -m "Initial commit" > /dev/null 2>&1`)
+    runBestEffort('git init (web)', `git init ${webPath}`, { onSkipped: warn })
+    runBestEffort('git checkout (web)', `git -C ${webPath} checkout -b ${mainBranch}`, { onSkipped: warn })
+    if (frontendRepoUrl) runBestEffort('git remote add (web)', `git -C ${webPath} remote add origin ${frontendRepoUrl}`, { onSkipped: warn })
+    runBestEffort('git add (web)', `git -C ${webPath} add .`, { onSkipped: warn })
+    runBestEffort('git commit (web)', `git -C ${webPath} commit -m "Initial commit"`, { onSkipped: warn })
     // Develop-first: create the declared working branch so the repo matches its docs.
     const workingBranch = workflow?.workingBranch
-    if (workingBranch && workingBranch !== mainBranch) await exec(`git -C ${webPath} checkout -b ${workingBranch} > /dev/null 2>&1`)
+    if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (web)', `git -C ${webPath} checkout -b ${workingBranch}`, { onSkipped: warn })
   }
 
   return true

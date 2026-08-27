@@ -2,11 +2,11 @@ import { copy } from 'fs-extra'
 import { existsSync } from 'fs'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
-import { exec } from 'shelljs'
 
 import type { ModuleInstaller } from '../migrations/module/types'
 import { overlaysPath, S3Credentials } from '../types'
 import { fileExists, getNvmPrefix } from '../utils'
+import { runRequired } from '../run'
 
 export const storageInstallerMeta: ModuleInstaller = {
   name: 'storage',
@@ -68,7 +68,7 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
   // Run npm install (unless monorepo handles it or explicitly skipped)
   if (!isMonorepo && !skipNpmInstall) {
     const nvm = getNvmPrefix(apiPath)
-    await exec(`${nvm}npm install --prefix ${apiPath} > /dev/null 2>&1`)
+    runRequired('npm install (storage module)', `${nvm}npm install --prefix ${apiPath}`)
   }
 
   // Uncomment storage configuration in env.service.ts

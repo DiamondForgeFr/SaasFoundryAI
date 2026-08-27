@@ -1,10 +1,10 @@
 import chalk from 'chalk'
-import { exec } from 'shelljs'
 
 import { CATALOGUE } from '../catalogue/modules'
 import { Answers, SaaSFoundryManifest, isScaffoldManifest } from '../types'
 import { PromptOptions, promptWithPrefill } from './helpers'
 import { AdvancedSkillCredentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from './skills.prompts'
+import { runBestEffort } from '../run'
 
 interface AvailableModule {
   name: string
@@ -102,7 +102,7 @@ export async function getEmailModuleCredentials(
     await new Promise((resolve) => setTimeout(resolve, 4000))
 
     const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-    await exec(`${openCommand} https://www.mailersend.com/signup?ref=52o9lkySkTka`)
+    runBestEffort('open MailerSend signup', `${openCommand} https://www.mailersend.com/signup?ref=52o9lkySkTka`)
   }
 
   const { ready } = await promptWithPrefill<{ ready: boolean }>(

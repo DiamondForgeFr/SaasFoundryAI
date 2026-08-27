@@ -1,13 +1,13 @@
 import { copy } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
-import { exec } from 'shelljs'
 
 import { depositEmailSharedTypes } from '../installers/email.installer'
 import { depositStorageSharedConfig } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { runBestEffort, runRequired, warn } from '../run'
 
 export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch, workflow }: CreateMonorepoRootParams) {
   validateProjectName(projectName)
@@ -90,24 +90,24 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   await depositEmailSharedTypes({ apiPath: 'apps/api', projectName })
 
   // Install all dependencies at root (npm workspaces hoists everything)
-  await exec(`${nvm}npm install > /dev/null 2>&1`)
+  runRequired('npm install (monorepo root)', `${nvm}npm install`)
 
   // Generate Prisma client from the API workspace
-  await exec(`${nvm}cd apps/api && npx prisma generate > /dev/null 2>&1`)
+  runRequired('prisma generate (api)', `${nvm}cd apps/api && npx prisma generate`)
 
   // Install workflow artefacts (skill + tool skill) when a workflow is configured
   await installWorkflowArtifacts({ targetPath: '.', workflow })
 
   // Initialize Git repository at root level
-  await exec(`git init > /dev/null 2>&1`)
-  await exec(`git checkout -b ${mainBranch} > /dev/null 2>&1`)
-  if (monorepoUrl) await exec(`git remote add origin ${monorepoUrl} > /dev/null 2>&1`)
-  await exec(`git add . > /dev/null 2>&1`)
-  await exec(`git commit -m "Initial commit" > /dev/null 2>&1`)
+  runBestEffort('git init', 'git init', { onSkipped: warn })
+  runBestEffort('git checkout', `git checkout -b ${mainBranch}`, { onSkipped: warn })
+  if (monorepoUrl) runBestEffort('git remote add', `git remote add origin ${monorepoUrl}`, { onSkipped: warn })
+  runBestEffort('git add', 'git add .', { onSkipped: warn })
+  runBestEffort('git commit', 'git commit -m "Initial commit"', { onSkipped: warn })
   // Develop-first: the manifest declares workflow.workingBranch as the AI's work
   // branch — create it and stay on it so the repo matches its own documentation.
   const workingBranch = workflow?.workingBranch
-  if (workingBranch && workingBranch !== mainBranch) await exec(`git checkout -b ${workingBranch} > /dev/null 2>&1`)
+  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch', `git checkout -b ${workingBranch}`, { onSkipped: warn })
 
   return true
 }

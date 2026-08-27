@@ -70,19 +70,19 @@ describe('createMonorepoRoot (integration)', () => {
   it('should call prisma generate in api workspace', async () => {
     await createMonorepoRoot(monorepoRootParams())
 
-    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('prisma generate'))
+    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('prisma generate'), expect.anything())
   })
 
   it('should call git init at root level', async () => {
     await createMonorepoRoot(monorepoRootParams())
 
-    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'))
+    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'), expect.anything())
   })
 
   it('should set git remote when monorepoUrl is provided', async () => {
     await createMonorepoRoot(monorepoRootParams({ monorepoUrl: 'https://github.com/test/mono.git' }))
 
-    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git remote add origin https://github.com/test/mono.git'))
+    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git remote add origin https://github.com/test/mono.git'), expect.anything())
   })
 
   it('should update deployment workflow with project-specific names', async () => {
