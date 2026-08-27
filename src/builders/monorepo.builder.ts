@@ -5,12 +5,15 @@ import { resolve } from 'path'
 import { depositEmailSharedTypes } from '../installers/email.installer'
 import { depositStorageSharedConfig } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
+import { DEFAULT_PORTS } from '../ports'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
-import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
-export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch, workflow }: CreateMonorepoRootParams) {
+export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch, workflow, ports }: CreateMonorepoRootParams) {
   validateProjectName(projectName)
+
+  const { api: apiPort } = ports ?? DEFAULT_PORTS
 
   // Copy monorepo root overlay to project root (current directory)
   await copy(resolve(overlaysPath, 'monorepo/root'), '.', { overwrite: true })
@@ -63,6 +66,8 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
     let content = await readFile(deployApiPath, 'utf8')
     content = content.replace(/saasfoundry-network/g, `${projectName}-network`)
     content = content.replace(/saasfoundry-api/g, `${projectName}-api`)
+    // Same port identity as the multirepo deployment workflow.
+    content = content.replace(/PORT=\\"3500\\"/, `PORT=\\"${apiPort}\\"`).replace(/'\/ports:\/,\/3500\/d'/, `'/ports:/,/${apiPort}/d'`)
     await writeFile(deployApiPath, content)
   }
 
@@ -74,6 +79,9 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
     content = content.replace(/saasfoundry-api/g, `${projectName}-api`)
     await writeFile(deployWebPath, content)
   }
+
+  // The root CLAUDE.md tells the AI where the API docs live.
+  await replaceInFile('CLAUDE.md', [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
 
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
   const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')

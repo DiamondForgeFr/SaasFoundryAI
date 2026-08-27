@@ -14,6 +14,7 @@ import { installSkills } from '../installers/skills.installer'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness, isHarnessTrackedPath, mergeHarnessUserFiles } from '../installers/harness.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { installStorageModule } from '../installers/storage.installer'
+import { DEFAULT_PORTS } from '../ports'
 import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
 import { createMonorepoRoot } from '../builders/monorepo.builder'
@@ -72,13 +73,24 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
   try {
     process.chdir(projectDir)
 
+    /**
+     * The ports the user's project actually runs on, not the template's defaults.
+     *
+     * This regeneration is diffed against the real project to decide what `sf update`
+     * offers. Rebuilding it on 3500/5173 while the project runs on 3501/5174 would make
+     * every port-bearing file look changed — and the "template update" on offer would be
+     * a revert of the user's own ports. Absent on manifests written before #584, where
+     * the defaults are exactly what those projects run.
+     */
+    const ports = manifest.ports ?? DEFAULT_PORTS
+
     // Re-run API builder with dummy credentials
     await createApiApp({
       isMonorepo: manifest.structure === 'monorepo',
       projectName: manifest.projectName,
       projectDescription: '',
       backendRepoUrl: '',
-      dbCredentials: { host: 'localhost', port: '5435', user: 'user', password: 'pass', database: 'db', dbType: 'postgresql' },
+      dbCredentials: { host: 'localhost', port: String(ports.db), user: 'user', password: 'pass', database: 'db', dbType: 'postgresql' },
       mainBranch: manifest.mainBranch ?? 'main', // pre-mainBranch manifests: backfill deferred (#424 step 6)
       emailService: manifest.modules.email.provider,
       mailersendApiKey: manifest.modules.email.provider === 'mailersend' ? 'dummy-key' : undefined,
@@ -88,7 +100,8 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       s3Credentials: manifest.modules.s3Setup === 'credentials' ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' } : undefined,
       advancedSkills: manifest.modules.advancedSkills || [],
       workflow: manifest.workflow,
-      aiRules: manifest.aiRules
+      aiRules: manifest.aiRules,
+      ports
     })
 
     // Re-run dev services builder if needed
@@ -99,6 +112,9 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
         apiPath,
         projectName: manifest.projectName,
         dbSetup: manifest.modules.dbSetup,
+        // The builder's own template defaults, so the regenerated compose matches what a
+        // fresh scaffold writes — only the port carries real information here.
+        dbCredentials: { host: 'localhost', port: String(ports.db), user: 'db_dev_user', password: 'db_dev_password', database: 'db_dev', dbType: 'postgresql' },
         s3Setup: manifest.modules.s3Setup
       })
     }
@@ -115,7 +131,8 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
       includePwa: manifest.modules.pwa !== undefined,
       advancedSkills: manifest.modules.advancedSkills || [],
       workflow: manifest.workflow,
-      aiRules: manifest.aiRules
+      aiRules: manifest.aiRules,
+      ports
     })
 
     // Re-run monorepo root builder if applicable
@@ -125,7 +142,8 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
         projectDescription: '',
         mainBranch: manifest.mainBranch ?? 'main',
         workflow: manifest.workflow,
-        aiRules: manifest.aiRules
+        aiRules: manifest.aiRules,
+        ports
       })
     }
 

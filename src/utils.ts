@@ -166,6 +166,20 @@ export function setDefaultDbCredentials(credentials?: DbCredentials): DbCredenti
 }
 
 /**
+ * Apply regex replacements to a file, skipping it when it does not exist.
+ *
+ * Overlay-driven scaffolds do not materialise every file on every topology, and a
+ * substitution that throws on a missing file would make the port pass topology-aware
+ * for no reason.
+ */
+export async function replaceInFile(filePath: string, replacements: [RegExp, string][]): Promise<void> {
+  if (!(await fileExists(filePath))) return
+  let content = await fs.promises.readFile(filePath, 'utf8')
+  for (const [pattern, replacement] of replacements) content = content.replace(pattern, replacement)
+  await fs.promises.writeFile(filePath, content, 'utf8')
+}
+
+/**
  * Replace `{{KEY}}` placeholders in the given files with the supplied values.
  * Files that do not exist are skipped silently — overlay-driven scaffolds may
  * not always materialise every targeted file.

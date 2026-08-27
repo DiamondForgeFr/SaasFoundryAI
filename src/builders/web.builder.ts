@@ -7,12 +7,15 @@ import glob from 'glob'
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installPwaModule } from '../installers/pwa.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
+import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
-import { fileExists, getNvmPrefix, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
-export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, includePwa, workflow }: CreateWebAppParams) {
+export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, includePwa, workflow, ports }: CreateWebAppParams) {
   validateProjectName(projectName)
+
+  const { api: apiPort, web: webPort } = ports ?? DEFAULT_PORTS
 
   // Create the WEB app directory
   const webPath = isMonorepo ? 'apps/web' : `apps/${projectName}-web`
@@ -73,6 +76,22 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   packageJson.repository.url = frontendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
   packageJson.keywords = [projectName, 'saasfoundry', 'frontend', 'react', 'vite']
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
+
+  // Every web-side file that names a port. `.env` carries both: the API the app calls,
+  // and the port Vite serves on — which the config now actually reads (FRONTEND_PORT was
+  // declared and ignored, so the web port worked only because 5173 is Vite's own default).
+  for (const envFile of ['.env', '.env.test']) {
+    await replaceInFile(`${webPath}/${envFile}`, [
+      [/^VITE_BASE_API_URL=.*$/m, `VITE_BASE_API_URL="http://localhost:${apiPort}"`],
+      [/^FRONTEND_PORT=.*$/m, `FRONTEND_PORT="${webPort}"`]
+    ])
+  }
+  await replaceInFile(`${webPath}/vite.config.ts`, [[/5173/g, String(webPort)]])
+  await replaceInFile(`${webPath}/playwright.config.ts`, [[/localhost:5173/g, `localhost:${webPort}`]])
+  await replaceInFile(`${webPath}/nginx.conf`, [[/:3500;/g, `:${apiPort};`]])
+  await replaceInFile(`${webPath}/CLAUDE.md`, [[/port 5173/g, `port ${webPort}`]])
+  // Monorepo overlay: the web dev script waits on the API's port before starting Vite.
+  await replaceInFile(`${webPath}/package.json`, [[/tcp:3500/g, `tcp:${apiPort}`]])
 
   // For monorepo, npm install is handled by the monorepo root builder
   if (!isMonorepo) {

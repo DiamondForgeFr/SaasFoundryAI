@@ -48,7 +48,25 @@ describe('SaaSFoundryManifest drift-guard', () => {
       // read-site fallbacks — the "no migration needed" case of migration-framework.md.
       // For `language`, an absent block resolves exactly like one pinning "en"
       // (`resolveOutputLanguages`), so no project can regress by not having it.
-      keys: ['$schema', 'manifestVersion', 'version', 'generatedAt', 'structure', 'projectName', 'mainBranch', 'modules', 'language', 'skillsAccounts', 'fileHashes', 'workflow', 'aiRules', 'tools']
+      // `ports` (#584) is the same case: an absent block reads back as DEFAULT_PORTS,
+      // which is the only set of ports a project scaffolded before it could have used.
+      keys: [
+        '$schema',
+        'manifestVersion',
+        'version',
+        'generatedAt',
+        'structure',
+        'projectName',
+        'mainBranch',
+        'ports',
+        'modules',
+        'language',
+        'skillsAccounts',
+        'fileHashes',
+        'workflow',
+        'aiRules',
+        'tools'
+      ]
     })
   })
 })
