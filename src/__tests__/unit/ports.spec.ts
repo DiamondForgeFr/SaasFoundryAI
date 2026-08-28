@@ -17,11 +17,11 @@ const BASE = { db: 45435, api: 43500, web: 45173 }
 
 const held: Server[] = []
 
-function hold(port: number): Promise<void> {
+function hold(port: number, host = '0.0.0.0'): Promise<void> {
   return new Promise((resolve, reject) => {
     const server = createServer()
     server.once('error', reject)
-    server.listen(port, '0.0.0.0', () => {
+    server.listen(port, host, () => {
       held.push(server)
       resolve()
     })
@@ -147,5 +147,32 @@ describe('isPortFree answers by trying to take the port', () => {
   it('reports a quiet port as free, and does not keep it', async () => {
     expect(await isPortFree(46001)).toBe(true)
     expect(await isPortFree(46001)).toBe(true)
+  })
+
+  /**
+   * Measured on a real machine, and the reason this probe is a loop rather than one bind:
+   * a dev server on `[::1]:5173` was reported free by a `0.0.0.0` probe, and a dual-stack
+   * listener on `:::3500` is reported free by a `127.0.0.1` one. Node sets SO_REUSEADDR,
+   * so binding a wildcard while a specific address is held succeeds.
+   */
+  it.each([
+    ['the IPv4 wildcard', '0.0.0.0'],
+    ['IPv4 loopback only', '127.0.0.1'],
+    ['the IPv6 wildcard', '::'],
+    ['IPv6 loopback only', '::1']
+  ])('sees a listener bound to %s', async (_label, host) => {
+    try {
+      await hold(46100, host)
+    } catch {
+      // No IPv6 on this machine — nothing to detect, and nothing this test can assert.
+      return
+    }
+
+    expect(await isPortFree(46100)).toBe(false)
+  })
+
+  it('does not read a missing address family as a holder', async () => {
+    // Every probe host must be attempted; an unbindable one contributes nothing either way.
+    expect(await isPortFree(46101)).toBe(true)
   })
 })
