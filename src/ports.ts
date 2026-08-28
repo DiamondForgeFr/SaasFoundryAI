@@ -51,19 +51,43 @@ export function containerOnPort(port: number): string | null {
 }
 
 /**
+ * The addresses a local server plausibly binds, and which a probe must therefore try.
+ *
+ * No single one of them is enough, measured on a real machine: a dev server on
+ * `[::1]:5173` is invisible to a `0.0.0.0` bind, and a dual-stack listener on `:::3500`
+ * is invisible to a `127.0.0.1` one. Node sets SO_REUSEADDR, so binding a wildcard while
+ * a specific address is held succeeds — the wildcard alone under-reports.
+ */
+const PROBE_HOSTS = ['0.0.0.0', '127.0.0.1', '::', '::1'] as const
+
+type ProbeResult = 'free' | 'taken' | 'unavailable'
+
+function probe(port: number, host: string): Promise<ProbeResult> {
+  return new Promise((resolve) => {
+    const server = createServer()
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      // Only "someone already has it" means taken. Any other failure — most often no IPv6
+      // on this machine — says the address family is absent, not that the port is held.
+      // Reading those as taken would make every port look occupied and every scan fail.
+      resolve(error.code === 'EADDRINUSE' || error.code === 'EACCES' ? 'taken' : 'unavailable')
+    })
+    server.once('listening', () => server.close(() => resolve('free')))
+    server.listen(port, host)
+  })
+}
+
+/**
  * Whether the port can actually be taken, asked by trying to take it.
  *
  * `docker ps` only answers "does a container publish this". A colleague's `npm run dev`,
  * a system Postgres or another dev server hold a port just as effectively and appear
  * nowhere in that list — the bind is what catches them.
  */
-export function isPortFree(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createServer()
-    server.once('error', () => resolve(false))
-    server.once('listening', () => server.close(() => resolve(true)))
-    server.listen(port, '0.0.0.0')
-  })
+export async function isPortFree(port: number): Promise<boolean> {
+  for (const host of PROBE_HOSTS) {
+    if ((await probe(port, host)) === 'taken') return false
+  }
+  return true
 }
 
 function parsePort(value: string, flag: string): number {
