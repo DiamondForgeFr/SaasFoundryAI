@@ -135,6 +135,28 @@ describe('a database the project does not host is not ours to move', () => {
     expect(db.port).toBe(BASE.db)
     expect(db.movedFrom).toBeUndefined()
   })
+
+  it('does not reserve it against the local ports', async () => {
+    // A Supabase pooler that happens to sit on the API's default port is on another
+    // machine. Reserving it would push the API to the next port and make it announce a
+    // move that nothing local caused.
+    const ports = await resolve({ dbSetup: 'credentials', requested: { db: String(BASE.api) } })
+
+    expect(ports.db.port).toBe(BASE.api)
+    expect(ports.api.port).toBe(BASE.api)
+    expect(ports.api.movedFrom).toBeUndefined()
+  })
+})
+
+describe('the scan stops at the end of the port range', () => {
+  it('reports the range it searched rather than throwing a socket error', async () => {
+    // `listen(65536)` throws ERR_SOCKET_BAD_PORT synchronously, so a scan that walked off
+    // the end surfaced that instead of the message this loop exists to produce.
+    await hold(65534)
+    await hold(65535)
+
+    await expect(resolve({ defaults: { web: 65534 }, scanLimit: 50 })).rejects.toThrow(/Could not find a free web port between 65534 and 65535/)
+  })
 })
 
 describe('isPortFree answers by trying to take the port', () => {

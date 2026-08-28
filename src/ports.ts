@@ -18,6 +18,8 @@ import { run } from './run'
 
 export const DEFAULT_PORTS = { db: 5435, api: 3500, web: 5173 } as const
 
+const MAX_PORT = 65535
+
 export type PortName = keyof typeof DEFAULT_PORTS
 
 export interface ResolvedPort {
@@ -92,8 +94,8 @@ export async function isPortFree(port: number): Promise<boolean> {
 
 function parsePort(value: string, flag: string): number {
   const port = Number(value)
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`${flag} must be a port number between 1 and 65535, got "${value}".`)
+  if (!Number.isInteger(port) || port < 1 || port > MAX_PORT) {
+    throw new Error(`${flag} must be a port number between 1 and ${MAX_PORT}, got "${value}".`)
   }
   return port
 }
@@ -127,9 +129,13 @@ export async function resolvePorts({ dbSetup, requested = {}, scanLimit = 50, de
 
     const port = parsePort(raw, `--${name}-port`)
     resolved[name] = { port }
-    claimed.add(port)
 
+    // A remote database's port is not a local allocation. Reserving it would push the API
+    // off a port nothing on this machine is holding, and make it announce a move that
+    // never happened.
     if (!isLocal(name)) continue
+
+    claimed.add(port)
     if (await isPortFree(port)) continue
 
     throw new Error(
@@ -147,8 +153,13 @@ export async function resolvePorts({ dbSetup, requested = {}, scanLimit = 50, de
       continue
     }
 
+    // Stopping at MAX_PORT is not cosmetic: `listen(65536)` throws ERR_SOCKET_BAD_PORT
+    // synchronously, so walking off the end would surface a socket error instead of the
+    // "no free port in this range" this loop exists to report.
+    const last = Math.min(start + scanLimit - 1, MAX_PORT)
+
     let chosen: number | undefined
-    for (let port = start; port < start + scanLimit; port++) {
+    for (let port = start; port <= last; port++) {
       if (claimed.has(port)) continue
       if (!(await isPortFree(port))) continue
       chosen = port
@@ -156,7 +167,7 @@ export async function resolvePorts({ dbSetup, requested = {}, scanLimit = 50, de
     }
 
     if (chosen === undefined) {
-      throw new Error(`Could not find a free ${name} port between ${start} and ${start + scanLimit - 1}.\n` + `Free one of them, or pass --${name}-port <port> to say which one to use.`)
+      throw new Error(`Could not find a free ${name} port between ${start} and ${last}.\n` + `Free one of them, or pass --${name}-port <port> to say which one to use.`)
     }
 
     resolved[name] = chosen === start ? { port: chosen } : { port: chosen, movedFrom: start }
