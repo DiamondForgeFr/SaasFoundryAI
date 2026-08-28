@@ -22,9 +22,9 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
-      // The port is chosen at generation time so two generated projects can run side
-      // by side. strictPort makes a collision loud: drifting to 5174 would leave the
-      // API's FRONTEND_URL — and therefore CORS — pointing at the wrong origin.
+      // The port is chosen at generation time so two generated projects can run side by
+      // side. strictPort makes a collision loud: silently drifting to the next port would
+      // leave the API's FRONTEND_URL — and therefore CORS — pointing at the wrong origin.
       port: 5173,
       strictPort: true,
       proxy:
