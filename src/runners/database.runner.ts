@@ -2,6 +2,7 @@ import ora from 'ora'
 import { resolve } from 'path'
 import { exec } from 'shelljs'
 
+import { containerOnPort } from '../ports'
 import { getNvmPrefix } from '../utils'
 
 function run(command: string, opts: { cwd?: string; silent?: boolean } = {}): { code: number; stdout: string; stderr: string } {
@@ -9,13 +10,19 @@ function run(command: string, opts: { cwd?: string; silent?: boolean } = {}): { 
   return { code: result.code, stdout: result.stdout, stderr: result.stderr }
 }
 
+/**
+ * The foreign container holding this port, or null when it is free or ours.
+ *
+ * The "which container publishes this" question is answered once, in `ports.ts`. This used
+ * to carry a second `docker ps` parser of its own — two readers of one signal that can
+ * drift apart, which is the shape of #583 and of #584. What is genuinely local to this
+ * runner is the rest: a container named `<project>-…` belongs to the project being set up,
+ * so it is not a conflict.
+ */
 function detectPortConflict(port: number, projectName: string): string | null {
-  // Returns name of the foreign container holding the port, or null if free / owned by us
-  const result = run(`docker ps --format '{{.Names}}\t{{.Ports}}' | grep ':${port}->' | head -1`)
-  if (!result.stdout.trim()) return null
-  const [name] = result.stdout.trim().split('\t')
-  if (name.startsWith(`${projectName}-`)) return null
-  return name
+  const holder = containerOnPort(port)
+  if (!holder || holder.startsWith(`${projectName}-`)) return null
+  return holder
 }
 
 export async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner: ReturnType<typeof ora>, dbPort = '5435') {
