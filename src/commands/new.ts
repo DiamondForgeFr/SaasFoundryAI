@@ -31,6 +31,7 @@ import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { buildManifestTools } from './new.manifest-tools'
+import { labelColumn, projectUrlLines } from './new.summary'
 import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 
 /**
@@ -71,8 +72,11 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     }
   })
 
-  // The flat shape the builders and the manifest consume.
+  // The flat shape the builders and the manifest consume. `ports` keeps the richer one —
+  // which default each port moved off — because the closing summary has to say so (#585).
   const projectPorts = { db: ports.db.port, api: ports.api.port, web: ports.web.port }
+  const apiDocsUrl = `http://localhost:${projectPorts.api}/api/docs`
+  const webUrl = `http://localhost:${projectPorts.web}`
 
   // Set default values for database credentials
   if (startProjectAnswers.dbCredentials) {
@@ -438,13 +442,13 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         if (!nonInteractive && (startApps === 'backend' || startApps === 'all')) {
           try {
             console.log(chalk.blue('Waiting for backend to be ready...'))
-            await waitForServer('http://localhost:3500/api/health')
+            await waitForServer(`http://localhost:${projectPorts.api}/api/health`)
 
             console.log(chalk.blue('Opening API documentation in browser...'))
             const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            execSync(`${openCommand} http://localhost:3500/api/docs`)
+            execSync(`${openCommand} ${apiDocsUrl}`)
           } catch {
-            console.warn(chalk.yellow('Could not open browser automatically. Please navigate to http://localhost:3500/api/docs'))
+            console.warn(chalk.yellow(`Could not open browser automatically. Please navigate to ${apiDocsUrl}`))
           }
         }
 
@@ -452,13 +456,13 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         if (!nonInteractive && (startApps === 'frontend' || startApps === 'all')) {
           try {
             console.log(chalk.blue('Waiting for frontend to be ready...'))
-            await waitForServer('http://localhost:5173')
+            await waitForServer(webUrl)
 
             console.log(chalk.blue('Opening frontend application in browser...'))
             const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            execSync(`${openCommand} http://localhost:5173`)
+            execSync(`${openCommand} ${webUrl}`)
           } catch {
-            console.warn(chalk.yellow('Could not open browser automatically. Please navigate to http://localhost:5173'))
+            console.warn(chalk.yellow(`Could not open browser automatically. Please navigate to ${webUrl}`))
           }
         }
       }
@@ -545,17 +549,17 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   console.log()
 
   console.log(chalk.cyan('🔗 Your Project URLs:'))
-  console.log(chalk.gray('  • Frontend App:     ') + terminalLink('http://localhost:5173', 'http://localhost:5173', { fallback: () => chalk.blue('http://localhost:5173') }))
-  console.log(chalk.gray('  • Backend API:      ') + terminalLink('http://localhost:3500', 'http://localhost:3500', { fallback: () => chalk.blue('http://localhost:3500') }))
-  console.log(chalk.gray('  • API Documentation:') + terminalLink('http://localhost:3500/api/docs', 'http://localhost:3500/api/docs', { fallback: () => chalk.blue('http://localhost:3500/api/docs') }))
-
-  if (startProjectAnswers.s3Setup === 'docker') {
-    console.log(chalk.gray('  • MinIO Console:    ') + terminalLink('http://localhost:9001', 'http://localhost:9001', { fallback: () => chalk.blue('http://localhost:9001') }))
-  }
-
-  if (startProjectAnswers.workflow?.projectUrl) {
-    const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
-    console.log(chalk.gray('  • Project Board:    ') + terminalLink(boardUrl, boardUrl, { fallback: () => chalk.blue(boardUrl) }))
+  const urlLines = projectUrlLines({
+    ports,
+    s3Setup: startProjectAnswers.s3Setup,
+    dbSetup: startProjectAnswers.dbSetup,
+    dbCredentials: startProjectAnswers.dbCredentials,
+    projectUrl: startProjectAnswers.workflow?.projectUrl
+  })
+  const column = labelColumn(urlLines)
+  for (const line of urlLines) {
+    const link = terminalLink(line.url, line.url, { fallback: () => chalk.blue(line.url) })
+    console.log(chalk.gray(column(line)) + link + (line.note ? chalk.yellow(`   ← ${line.note}`) : ''))
   }
 
   console.log('\n')
