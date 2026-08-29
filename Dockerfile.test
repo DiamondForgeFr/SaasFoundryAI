@@ -20,8 +20,17 @@ RUN npm run build
 # ── Stage 2: Test Runner ────────────────────────────────────────
 FROM node:24-alpine AS test-runner
 
-# bcrypt needs python3/make/g++, prisma needs openssl
-RUN apk add --no-cache python3 make g++ openssl bash git
+# bcrypt needs python3/make/g++, prisma needs openssl.
+#
+# Postgres is here so one scenario can do what none of the others can: start the generated
+# project. The alternatives the ticket weighed were docker-in-docker and a sidecar
+# container, and both break the contract the whole harness rests on — `run-docker-tests.sh`
+# and the CI job each do a bare `docker run --rm sf-test:latest`, with no network and no
+# companion. A database inside the image keeps that command meaning what it means (#594).
+#
+# `postgresql16-client` also carries psql, which the generated project's own
+# `db:setup:dev` shells out to.
+RUN apk add --no-cache python3 make g++ openssl bash git postgresql16 postgresql16-client
 
 WORKDIR /workspace
 
@@ -42,6 +51,14 @@ COPY --from=cli-builder /cli /cli
 
 # Copy test harness
 COPY tests/docker/ /workspace/
+
+# The cluster is initialised at build time so the boot scenario pays for a start, not an
+# initdb. `--auth=trust` because this database exists for the length of one container and
+# is reachable from nothing outside it.
+ENV PGDATA=/var/lib/postgresql/data
+RUN mkdir -p "$PGDATA" /run/postgresql \
+  && chown -R postgres:postgres "$PGDATA" /run/postgresql \
+  && su postgres -c "initdb -D $PGDATA --auth=trust --username=postgres"
 
 # Install tsx for running TypeScript directly
 RUN npm install --no-save tsx
