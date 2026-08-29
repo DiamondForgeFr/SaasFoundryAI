@@ -31,7 +31,7 @@ interface InstallStorageModuleParams {
  * 1. Copies the storage overlay module to the API app
  * 2. Adds @aws-sdk/client-s3 and @types/multer dependencies to API package.json
  * 3. Runs npm install (unless monorepo or skipNpmInstall)
- * 4. Uncomments `// TODO storage-service-active:` markers in env.service, app.module, org module/controller/service
+ * 4. Uncomments `// TODO storage-service-active:` markers in every file of STORAGE_GATED_FILES
  * 5. Updates API .env and .env.test with S3 credentials
  * 6. Sets VITE_STORAGE_ENABLED=true in web .env
  * 7. (Mono only) Deposits MIME/size constants in `packages/shared-config` and
@@ -41,6 +41,30 @@ interface InstallStorageModuleParams {
  *
  * Used by both `sf new` (during initial project generation) and `sf update` (when adding the module later).
  */
+
+/** Files whose storage code the blueprint ships commented out behind `STORAGE_MARKER`. */
+const STORAGE_GATED_FILES = [
+  'src/configs/env/services/env.service.ts',
+  'src/app.module.ts',
+  'src/modules/organizations/organizations.module.ts',
+  'src/modules/organizations/controllers/organization.controller.ts',
+  'src/modules/organizations/services/organization.service.ts',
+  // The one that was missing. A spec is not exempt: it imports the same module, and it is
+  // the only place a user runs code the build never compiles.
+  'src/modules/organizations/tests/unit/organization.service.spec.ts'
+]
+
+const STORAGE_MARKER = /\/\/ TODO storage-service-active: /g
+
+async function activateStorageCode(apiPath: string): Promise<void> {
+  for (const relative of STORAGE_GATED_FILES) {
+    const path = `${apiPath}/${relative}`
+    if (!(await fileExists(path))) continue
+    const content = await readFile(path, 'utf8')
+    await writeFile(path, content.replace(STORAGE_MARKER, ''))
+  }
+}
+
 export async function installStorageModule({ apiPath, webPath, isMonorepo, projectName, s3Setup, s3Credentials, skipNpmInstall }: InstallStorageModuleParams) {
   // Copy storage overlay module to the API
   const storageOverlayPath = resolve(overlaysPath, 'modules/storage')
@@ -71,35 +95,14 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
     runRequired('npm install (storage module)', `${nvm}npm install --prefix ${apiPath}`)
   }
 
-  // Uncomment storage configuration in env.service.ts
-  const envServicePath = `${apiPath}/src/configs/env/services/env.service.ts`
-  let envServiceContent = await readFile(envServicePath, 'utf8')
-  envServiceContent = envServiceContent.replace(/\/\/ TODO storage-service-active: /g, '')
-  await writeFile(envServicePath, envServiceContent)
-
-  // Uncomment storage imports in app.module.ts
-  const appModulePath = `${apiPath}/src/app.module.ts`
-  let appModuleContent = await readFile(appModulePath, 'utf8')
-  appModuleContent = appModuleContent.replace(/\/\/ TODO storage-service-active: /g, '')
-  await writeFile(appModulePath, appModuleContent)
-
-  // Uncomment storage imports in organizations.module.ts
-  const orgModulePath = `${apiPath}/src/modules/organizations/organizations.module.ts`
-  let orgModuleContent = await readFile(orgModulePath, 'utf8')
-  orgModuleContent = orgModuleContent.replace(/\/\/ TODO storage-service-active: /g, '')
-  await writeFile(orgModulePath, orgModuleContent)
-
-  // Uncomment storage code in organization.controller.ts
-  const orgControllerPath = `${apiPath}/src/modules/organizations/controllers/organization.controller.ts`
-  let orgControllerContent = await readFile(orgControllerPath, 'utf8')
-  orgControllerContent = orgControllerContent.replace(/\/\/ TODO storage-service-active: /g, '')
-  await writeFile(orgControllerPath, orgControllerContent)
-
-  // Uncomment storage code in organization.service.ts
-  const orgServicePath = `${apiPath}/src/modules/organizations/services/organization.service.ts`
-  let orgServiceContent = await readFile(orgServicePath, 'utf8')
-  orgServiceContent = orgServiceContent.replace(/\/\/ TODO storage-service-active: /g, '')
-  await writeFile(orgServicePath, orgServiceContent)
+  // Activate the storage code the blueprint keeps commented out.
+  //
+  // One list rather than four near-identical read/replace/write blocks: the spec below was
+  // missing from those blocks, so a project that declined storage shipped a unit suite
+  // importing a module it did not have — and `tsconfig.build.json` excludes `**/*spec.ts`,
+  // so no build could see it (#610). A file forgotten here is invisible until someone runs
+  // the tests, which is exactly the gap #594 exists to close.
+  await activateStorageCode(apiPath)
 
   // Determine S3 credentials
   const s3Endpoint = s3Setup === 'docker' ? 'http://localhost:9000' : s3Credentials?.endpoint || ''
