@@ -93,12 +93,6 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   // Monorepo overlay: the web dev script waits on the API's port before starting Vite.
   await replaceInFile(`${webPath}/package.json`, [[/tcp:3500/g, `tcp:${apiPort}`]])
 
-  // For monorepo, npm install is handled by the monorepo root builder
-  if (!isMonorepo) {
-    const nvm = getNvmPrefix(webPath)
-    runRequired('npm install (web)', `${nvm}npm install --prefix ${webPath}`)
-  }
-
   // Update Docker network name in docker-compose.yml
   const dockerComposePath = `${webPath}/docker-compose.yml`
   if (await fileExists(dockerComposePath)) {
@@ -141,6 +135,24 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
 
   // Install workflow artefacts (skill + tool skill) when a workflow is configured
   await installWorkflowArtifacts({ targetPath: webPath, workflow })
+
+  /**
+   * Install once, after every module installer has had its say.
+   *
+   * This used to run before them, and the PWA installer adds `vite-plugin-pwa` to
+   * package.json and its import to vite.config.ts — so the default web app shipped a config
+   * importing a package nothing had installed, and `npm run dev` died before Vite started
+   * (#608). The manifest recorded the module as installed all the same.
+   *
+   * The rule is the order, not a second install per module: package.json is final here, so
+   * a module added later cannot reintroduce the gap by forgetting to install its own
+   * dependency. Monorepo is unaffected either way — the root builder installs after every
+   * builder has run.
+   */
+  if (!isMonorepo) {
+    const nvm = getNvmPrefix(webPath)
+    runRequired('npm install (web)', `${nvm}npm install --prefix ${webPath}`)
+  }
 
   // Initialize Git repository
   if (!isMonorepo) {
