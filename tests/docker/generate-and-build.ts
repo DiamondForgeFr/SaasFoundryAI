@@ -8,8 +8,8 @@
 //   TEST_SCENARIO=all node --import tsx generate-and-build.ts
 //   node --import tsx generate-and-build.ts  # runs all scenarios
 
-import { execSync } from 'child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { execSync, spawn } from 'child_process'
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import {
@@ -35,7 +35,7 @@ import {
   reportResults,
   scanForUnreplacedPlaceholders
 } from './assertions'
-import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, MigrationScenario, TestScenario, CliScenario } from './scenarios'
+import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, MigrationScenario, TestScenario, CliScenario, BootScenario } from './scenarios'
 
 // ── Config ─────────────────────────────────────────────────────
 
@@ -45,14 +45,14 @@ const SCENARIO_ENV = process.env.TEST_SCENARIO || 'all'
 
 // ── Shell Helper ───────────────────────────────────────────────
 
-function run(cmd: string, cwd: string, label?: string): void {
+function run(cmd: string, cwd: string, label?: string, timeoutMs = 300_000): void {
   const displayLabel = label || cmd.slice(0, 80)
   console.log(`  > ${displayLabel}`)
   try {
     execSync(cmd, {
       cwd,
       stdio: 'pipe',
-      timeout: 300_000, // 5 min per command
+      timeout: timeoutMs,
       env: {
         ...process.env,
         HUSKY: '0',
@@ -617,6 +617,215 @@ async function runCliScenario(scenario: CliScenario): Promise<boolean> {
   return reportResults(scenario.name, results)
 }
 
+// ── Boot Scenario ──────────────────────────────────────────────
+
+/**
+ * A step whose failure says which step it was.
+ *
+ * "scenario failed" after eight minutes is not usable. Every stage of this scenario runs
+ * through here so the report names install, database setup, boot, audit or the unit suite.
+ */
+async function runStep<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
+  console.log(`  > ${label}`)
+  try {
+    const value = await fn()
+    console.log(`    Done`)
+    return value
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Error(`step "${label}" failed: ${detail}`)
+  }
+}
+
+/** Starts the cluster baked into the image and creates the role and database the project expects. */
+function startPostgres(): void {
+  const pg = (cmd: string) => execSync(`su postgres -c ${JSON.stringify(cmd)}`, { stdio: 'pipe' })
+
+  pg(`pg_ctl -D ${process.env.PGDATA} -o "-c listen_addresses=localhost" -l /tmp/pg.log start -w -t 30`)
+  pg('createuser -s dev')
+  pg('createdb -O dev devdb')
+}
+
+interface Server {
+  label: string
+  stop: () => void
+}
+
+/**
+ * Starts a long-running command and hands back a way to stop it.
+ *
+ * `detached` so the whole process group can be signalled: `npm run dev` is a shell that
+ * spawns nest or vite, and killing only the shell leaves the server holding its port —
+ * which would then look like a port conflict to whatever runs next.
+ */
+function startServer(label: string, cmd: string, cwd: string, logPath: string): Server {
+  const log = openSync(logPath, 'a')
+  const child = spawn(cmd, {
+    cwd,
+    shell: true,
+    detached: true,
+    stdio: ['ignore', log, log],
+    env: { ...process.env, HUSKY: '0', CI: 'true', NODE_ENV: 'development' }
+  })
+  child.unref()
+
+  return {
+    label,
+    stop: () => {
+      try {
+        if (child.pid) process.kill(-child.pid, 'SIGTERM')
+      } catch {
+        // Already gone — the scenario failing is what matters, not the teardown.
+      }
+    }
+  }
+}
+
+/**
+ * Polls a URL until it answers 200, or gives up and says what it saw.
+ *
+ * A bounded wait, never a sleep: the point of the scenario is that the server answers,
+ * and a fixed sleep would turn "slow" and "dead" into the same result.
+ */
+async function waitForHttp(url: string, timeoutSeconds: number, logPath: string): Promise<void> {
+  const deadline = Date.now() + timeoutSeconds * 1000
+  let lastError = 'no attempt completed'
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(5_000) })
+      if (response.ok) return
+      lastError = `HTTP ${response.status}`
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+
+  // The server's own output is the only thing that explains a boot failure, so it travels
+  // with the error rather than staying in a file nobody reads.
+  const tail = existsSync(logPath) ? readFileSync(logPath, 'utf8').slice(-2000) : '(no output captured)'
+  throw new Error(`${url} did not answer 200 within ${timeoutSeconds}s (last: ${lastError})\n--- server output ---\n${tail}`)
+}
+
+/**
+ * `npm audit`, told apart from `npm audit could not run`.
+ *
+ * Both exit non-zero. Reporting a proxy failure as a critical advisory would be the same
+ * class of confidently wrong answer this scenario exists to remove.
+ */
+function auditCritical(cwd: string, label: string): AssertionResult {
+  try {
+    execSync('npm audit --audit-level=critical', { cwd, stdio: 'pipe', timeout: 120_000 })
+    return { passed: true, message: `OK: ${label} has no critical advisories` }
+  } catch (err) {
+    const error = err as { stdout?: Buffer; stderr?: Buffer }
+    const output = `${error.stdout?.toString() || ''}${error.stderr?.toString() || ''}`
+    if (/ENOTFOUND|ETIMEDOUT|ECONNREFUSED|network|registry/i.test(output) && !/critical/i.test(output)) {
+      throw new Error(`npm audit could not reach the registry for ${label}: ${output.slice(-500)}`)
+    }
+    return { passed: false, message: `FAIL: ${label} has critical advisories\n${output.slice(-1500)}` }
+  }
+}
+
+/**
+ * The scenario that starts the project.
+ *
+ * `--db-setup credentials` against the local cluster is not a shortcut around the docker
+ * path: `initAndStartDb` runs `db:setup:dev` for `credentials` exactly as it does for
+ * `docker`, skipping only `docker compose up` — which has no meaning inside a container
+ * that already has its database. Prisma generate, `prisma db push` and the SQL under
+ * `prisma/sql/` all run for real.
+ */
+async function runBootScenario(scenario: BootScenario): Promise<boolean> {
+  const workspace = join(WORKSPACE, `boot-${scenario.name}`)
+  mkdirSync(workspace, { recursive: true })
+
+  const projectDir = join(workspace, scenario.projectName)
+  const apiDir = join(projectDir, 'apps', `${scenario.projectName}-api`)
+  const webDir = join(projectDir, 'apps', `${scenario.projectName}-web`)
+  const apiLog = join(workspace, 'api-dev.log')
+  const webLog = join(workspace, 'web-dev.log')
+
+  const servers: Server[] = []
+  const results: AssertionResult[] = []
+
+  try {
+    await runStep('start postgres', () => startPostgres())
+
+    await runStep('sf new --start-services', () => {
+      const bin = join(CLI_PATH, 'bin', 'sf.js')
+      const flags = [
+        'new',
+        '--non-interactive',
+        `--project-name ${scenario.projectName}`,
+        `--project-description "docker boot scenario"`,
+        '--structure multirepo',
+        '--main-branch main',
+        '--setup-repo local',
+        '--profile stack',
+        '--db-setup credentials',
+        // --db-type has a default in setDefaultDbCredentials, but the non-interactive
+        // session throws on the unfilled field rather than applying it (#607).
+        '--db-type postgresql',
+        '--db-host localhost',
+        '--db-port 5432',
+        '--db-user dev',
+        '--db-password dev',
+        '--db-name devdb',
+        '--email-service none',
+        '--s3-setup manual',
+        '--no-analytics',
+        '--no-workflow',
+        '--no-srs-enable',
+        '--start-services',
+        '--start-apps none'
+      ].join(' ')
+      // A real npm install on two apps plus a prisma generate outruns the default 5 minutes.
+      run(`node ${bin} ${flags}`, workspace, 'sf new (real install, db setup, prisma generate)', 900_000)
+    })
+
+    // The ports the project chose. Anything else would be assuming what #584 made variable.
+    const manifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8'))
+    const ports = manifest.ports || { api: 3500, web: 5173 }
+    console.log(`  · the project resolved api=${ports.api} web=${ports.web}`)
+
+    await runStep(`api boot — GET /api/health on ${ports.api}`, async () => {
+      servers.push(startServer('api', 'npm run dev', apiDir, apiLog))
+      await waitForHttp(`http://localhost:${ports.api}/api/health`, scenario.bootTimeoutSeconds, apiLog)
+    })
+    results.push({ passed: true, message: `OK: the API answered /api/health on ${ports.api}` })
+
+    await runStep(`web boot — GET / on ${ports.web}`, async () => {
+      servers.push(startServer('web', 'npm run dev', webDir, webLog))
+      await waitForHttp(`http://localhost:${ports.web}/`, scenario.bootTimeoutSeconds, webLog)
+    })
+    results.push({ passed: true, message: `OK: the web app answered / on ${ports.web}` })
+
+    await runStep('npm audit (critical)', () => {
+      results.push(auditCritical(apiDir, 'api'))
+      results.push(auditCritical(webDir, 'web'))
+    })
+
+    await runStep('api npm run test:unit', () => {
+      try {
+        execSync('npm run test:unit', { cwd: apiDir, stdio: 'pipe', timeout: 600_000 })
+        results.push({ passed: true, message: 'OK: the api unit suite the project ships passes' })
+      } catch (err) {
+        const error = err as { stdout?: Buffer; stderr?: Buffer }
+        const output = `${error.stdout?.toString().slice(-2000) || ''}${error.stderr?.toString().slice(-2000) || ''}`
+        results.push({ passed: false, message: `FAIL: the api unit suite is red\n${output}` })
+      }
+    })
+  } catch (err) {
+    results.push({ passed: false, message: `FAIL: ${err instanceof Error ? err.message : String(err)}` })
+  } finally {
+    for (const server of servers) server.stop()
+  }
+
+  return reportResults(scenario.name, results)
+}
+
 // ── Scenario Dispatcher ────────────────────────────────────────
 
 async function runScenario(scenario: TestScenario): Promise<boolean> {
@@ -631,6 +840,8 @@ async function runScenario(scenario: TestScenario): Promise<boolean> {
       return runAIScenario(scenario)
     case 'cli':
       return runCliScenario(scenario)
+    case 'boot':
+      return runBootScenario(scenario)
   }
 }
 
