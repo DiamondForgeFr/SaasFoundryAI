@@ -3,7 +3,7 @@
 // ALL_SCENARIOS is ordered by PRIORITY — first scenarios are the most critical.
 // This allows `--count N` to run the N most important scenarios.
 
-export type ScenarioType = 'generation' | 'update' | 'ai' | 'migration' | 'cli'
+export type ScenarioType = 'generation' | 'update' | 'ai' | 'migration' | 'cli' | 'boot'
 
 export interface GenerationScenario {
   type: 'generation'
@@ -83,7 +83,34 @@ export interface CliScenario {
   quick?: boolean
 }
 
-export type TestScenario = GenerationScenario | UpdateScenario | AIScenario | MigrationScenario | CliScenario
+/**
+ * Boot scenario — the only one that runs the generated project instead of compiling it.
+ *
+ * Everything else in this file stops at `tsc -b` / `nest build` / `vite build`. A build is
+ * the one check that cannot see a module that throws on load, which is how #591 shipped:
+ * `@nestjs/swagger` emitted `enum: string`, every generated API died at startup, and
+ * twenty-two scenarios were green. #589 and #592 end the same way — an application that
+ * does not start — and a single request to /api/health catches all three.
+ *
+ * One scenario, not all of them. The build matrix is good at topology and modules; adding
+ * a boot to each would multiply a seventy-minute suite for no extra signal.
+ *
+ * Multirepo on purpose. The failure this exists to catch lives in the API's DTOs and is
+ * topology-independent, so the cheaper topology proves the same thing — and a fresh
+ * monorepo currently ships 11 critical advisories (#586) while a fresh multirepo ships
+ * none, so gating on `npm audit` here does not mean landing a scenario that is red on
+ * arrival. That audit belongs to #586; this scenario does not borrow against it.
+ */
+export interface BootScenario {
+  type: 'boot'
+  name: string
+  projectName: string
+  /** Seconds to wait for each server to answer before calling it dead. */
+  bootTimeoutSeconds: number
+  quick?: boolean
+}
+
+export type TestScenario = GenerationScenario | UpdateScenario | AIScenario | MigrationScenario | CliScenario | BootScenario
 
 // ── ALL SCENARIOS — ordered by priority ────────────────────────
 // Priority rationale:
@@ -337,6 +364,18 @@ export const ALL_SCENARIOS: TestScenario[] = [
     projectName: 'placed-project',
     profile: 'full',
     isMonorepo: true
+  },
+
+  // ── The one that starts the thing ─────────────────────────────
+  // `quick` on purpose, expensive as it is. The full lane only runs on PR → master, and
+  // #591 was merged to develop and found by a user three days later — a boot check that
+  // does not run on PR → develop would not have caught the thing it was built for.
+  {
+    type: 'boot',
+    name: 'multirepo-boot-and-test',
+    projectName: 'boot-check',
+    bootTimeoutSeconds: 180,
+    quick: true
   }
 ]
 
