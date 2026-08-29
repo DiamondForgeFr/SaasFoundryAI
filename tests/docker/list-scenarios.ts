@@ -18,6 +18,8 @@ import { ALL_SCENARIOS, getQuickScenarios } from './scenarios'
  *   list-scenarios.ts                    human-readable table
  *   list-scenarios.ts --json             every scenario name, as a JSON array
  *   list-scenarios.ts --json --quick [N] the quick lane: top N (default 2) plus opted-in scenarios
+ *   list-scenarios.ts --count            how many there are, for anything that would
+ *                                        otherwise write the number down and let it drift
  */
 function structureOf(scenario: (typeof ALL_SCENARIOS)[number]): string {
   const isMonorepo = scenario.type === 'update' ? scenario.base.isMonorepo : 'isMonorepo' in scenario ? scenario.isMonorepo : false
@@ -26,7 +28,9 @@ function structureOf(scenario: (typeof ALL_SCENARIOS)[number]): string {
 
 const args = process.argv.slice(2)
 
-if (args.includes('--json')) {
+if (args.includes('--count')) {
+  process.stdout.write(String(ALL_SCENARIOS.length))
+} else if (args.includes('--json')) {
   const quick = args.includes('--quick')
   const countArg = args.find((a) => /^\d+$/.test(a))
   const count = countArg ? parseInt(countArg, 10) : 2

@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # ── Docker Build Test Runner ────────────────────────────────────
 # Usage:
-#   ./tests/docker/run-docker-tests.sh                          # All 18 scenarios
+#   ./tests/docker/run-docker-tests.sh                          # Every scenario
 #   ./tests/docker/run-docker-tests.sh --count 4                # Top 4 by priority
 #   ./tests/docker/run-docker-tests.sh --scenario multirepo-full  # Single scenario
 #
-# Priority order (--count picks from top):
-#   1. multirepo-minimal    2. monorepo-minimal
-#   3. multirepo-full       4. monorepo-full
-#   5. update-add-all       6. update-add-email
-#   7-9. AI scenarios      10-18. Module variations
+# The list and its priority order live in `tests/docker/scenarios.ts`; `--list` renders
+# them. Neither is repeated here — a hand-written copy is what let two scenarios be
+# defined and never run (#426, #546), and a count written in prose drifts the same way.
 #
 # Environment variables:
 #   DOCKER_BUILD_ARGS  Extra docker build arguments (e.g., --no-cache)
@@ -107,7 +105,8 @@ echo ""
 if [[ -n "$COUNT" ]]; then
   echo "Running top $COUNT scenario(s) by priority"
 elif [[ "$SCENARIO" == "all" ]]; then
-  echo "Running all 18 scenarios"
+  # Counted from the source of truth rather than written here, for the reason above.
+  echo "Running all $(npx -y tsx tests/docker/list-scenarios.ts --count) scenarios"
 else
   echo "Running scenario: $SCENARIO"
 fi
