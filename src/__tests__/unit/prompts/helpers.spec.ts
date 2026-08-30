@@ -159,3 +159,126 @@ describe('promptWithPrefill', () => {
     })
   })
 })
+
+/**
+ * #607 — a field whose step declares a default was still reported as missing in
+ * non-interactive mode, so a scripted run had to supply values the CLI already knew how to
+ * choose: `--s3-bucket` under `--s3-setup docker`, `--db-user/--db-password/--db-name`
+ * under `--db-setup docker`, `--db-type` under `--db-setup credentials`.
+ *
+ * Interactive runs never saw it, because inquirer applies those defaults itself. The rule
+ * here only makes the two paths agree.
+ */
+describe('a declared default is an answer (#607)', () => {
+  beforeEach(() => {
+    mockedPrompt.mockReset()
+    mockedPrompt.mockResolvedValue({})
+  })
+
+  const resolved = () => mockedPrompt.mock.calls[0][1]
+
+  it('resolves a field that has a default instead of refusing', async () => {
+    await promptWithPrefill([{ type: 'input', name: 'region', message: 'Region?', default: 'us-east-1' }], { nonInteractive: true })
+
+    expect(resolved()).toEqual({ region: 'us-east-1' })
+  })
+
+  it('still refuses a field that has neither prefill nor default', async () => {
+    const questions: DistinctQuestion[] = [
+      { type: 'input', name: 'endpoint', message: 'Endpoint?' },
+      { type: 'input', name: 'region', message: 'Region?', default: 'us-east-1' }
+    ]
+
+    await expect(promptWithPrefill(questions, { nonInteractive: true })).rejects.toThrow(/Missing required values in --non-interactive mode: endpoint$|endpoint\n/)
+  })
+
+  it('names only the fields that genuinely cannot be guessed', async () => {
+    const questions: DistinctQuestion[] = [
+      { type: 'input', name: 'host', message: 'Host?' },
+      { type: 'input', name: 'port', message: 'Port?' },
+      { type: 'input', name: 'user', message: 'User?', default: 'db_dev_user' }
+    ]
+
+    await expect(promptWithPrefill(questions, { nonInteractive: true })).rejects.toThrow(/: host, port\n/)
+  })
+
+  it('lets an explicit value win over the default', async () => {
+    await promptWithPrefill([{ type: 'input', name: 'region', message: 'Region?', default: 'us-east-1' }], { nonInteractive: true, prefill: { region: 'eu-west-3' } })
+
+    expect(resolved()).toEqual({ region: 'eu-west-3' })
+  })
+
+  it('evaluates a function default against the answers collected so far', async () => {
+    const questions: DistinctQuestion[] = [
+      { type: 'input', name: 'projectName', message: 'Name?' },
+      { type: 'input', name: 'bucket', message: 'Bucket?', default: (current: { projectName?: string }) => `${current.projectName}-uploads` }
+    ]
+
+    await promptWithPrefill(questions, { nonInteractive: true, prefill: { projectName: 'acme' } })
+
+    expect(resolved()).toEqual({ projectName: 'acme', bucket: 'acme-uploads' })
+  })
+
+  it("lets a resolved default satisfy a later question's `when`", async () => {
+    const questions: DistinctQuestion[] = [
+      { type: 'list', name: 'mode', message: 'Mode?', default: 'docker' },
+      { type: 'input', name: 'bucket', message: 'Bucket?', when: (current) => current.mode === 'docker', default: 'b' },
+      { type: 'input', name: 'endpoint', message: 'Endpoint?', when: (current) => current.mode === 'credentials' }
+    ]
+
+    // `endpoint` must stay inapplicable: the resolved `mode` is what decides that.
+    await promptWithPrefill(questions, { nonInteractive: true })
+
+    expect(resolved()).toEqual({ mode: 'docker', bucket: 'b' })
+  })
+
+  describe('dot-notation fields', () => {
+    it('resolves into the nested shape inquirer expects', async () => {
+      await promptWithPrefill([{ type: 'input', name: 's3Credentials.bucket', message: 'Bucket?', default: 'demo-uploads' }], { nonInteractive: true })
+
+      expect(resolved()).toEqual({ s3Credentials: { bucket: 'demo-uploads' } })
+    })
+
+    it('keeps a sibling the caller already provided', async () => {
+      const questions: DistinctQuestion[] = [
+        { type: 'input', name: 'dbCredentials.host', message: 'Host?' },
+        { type: 'input', name: 'dbCredentials.dbType', message: 'Type?', default: 'postgresql' }
+      ]
+
+      await promptWithPrefill(questions, { nonInteractive: true, prefill: { dbCredentials: { host: 'db.example.com' } } })
+
+      expect(resolved()).toEqual({ dbCredentials: { host: 'db.example.com', dbType: 'postgresql' } })
+    })
+
+    it("does not write back into the caller's prefill", async () => {
+      const prefill = { dbCredentials: { host: 'db.example.com' } }
+
+      await promptWithPrefill([{ type: 'input', name: 'dbCredentials.dbType', message: 'Type?', default: 'postgresql' }], { nonInteractive: true, prefill })
+
+      expect(prefill).toEqual({ dbCredentials: { host: 'db.example.com' } })
+    })
+  })
+
+  describe('a default that cannot be honoured reads as absent', () => {
+    it('reports the field missing rather than crashing when the default throws', async () => {
+      const questions: DistinctQuestion[] = [
+        {
+          type: 'input',
+          name: 'bucket',
+          message: 'Bucket?',
+          default: () => {
+            throw new Error('nope')
+          }
+        }
+      ]
+
+      await expect(promptWithPrefill(questions, { nonInteractive: true })).rejects.toThrow(/: bucket\n/)
+    })
+
+    it('does not resolve a field to a Promise', async () => {
+      const questions: DistinctQuestion[] = [{ type: 'input', name: 'bucket', message: 'Bucket?', default: async () => 'later' }]
+
+      await expect(promptWithPrefill(questions, { nonInteractive: true })).rejects.toThrow(/: bucket\n/)
+    })
+  })
+})
