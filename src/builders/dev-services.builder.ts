@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
 import { blueprintsPath, CreateDevServicesParams } from '../types'
+import { applyProjectIdentity } from '../utils'
 
 export async function createDevServicesCompose({ apiPath, projectName, dbSetup, dbCredentials, s3Setup, s3Credentials }: CreateDevServicesParams) {
   const serviceBlocks: string[] = []
@@ -22,13 +23,12 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
     // dialled a port nothing listened on. It started clean and nothing worked (#583).
     const hostPort = dbCredentials?.port || '5435'
 
-    const dbCustomized = dbTemplateContent
+    const dbCustomized = applyProjectIdentity(dbTemplateContent, projectName)
       .replace(/container_name:.*$/m, `container_name: ${projectName}-db-dev`)
       .replace(/POSTGRES_USER:.*$/m, `POSTGRES_USER: ${user}`)
       .replace(/POSTGRES_PASSWORD:.*$/m, `POSTGRES_PASSWORD: ${password}`)
       .replace(/POSTGRES_DB:.*$/m, `POSTGRES_DB: ${database}`)
       .replace(/test: \[.*\]/m, `test: ['CMD-SHELL', 'pg_isready -U ${user} -d ${database}']`)
-      .replace(/saasfoundry-network/g, `${projectName}-network`)
       // Only the host side moves. 5432 is postgres inside its own container.
       .replace(/- '5435:5432'/, `- '${hostPort}:5432'`)
 
@@ -48,14 +48,17 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
     const secretKey = s3Credentials?.secretKey || 'minioadmin'
     const bucket = s3Credentials?.bucket || `${projectName}-uploads`
 
-    const s3Customized = s3TemplateContent
+    const s3Customized = applyProjectIdentity(
+      s3TemplateContent
+        // The bucket comes from the user's credentials, not from the project name, so it is
+        // substituted before the generic rename could turn it into <project>-uploads.
+        .replace(/myminio\/saasfoundry-uploads/g, `myminio/${bucket}`),
+      projectName
+    )
       .replace(/container_name:.*$/m, `container_name: ${projectName}-s3-dev`)
       .replace(/MINIO_ROOT_USER: minioadmin/g, `MINIO_ROOT_USER: ${accessKey}`)
       .replace(/MINIO_ROOT_PASSWORD: minioadmin/g, `MINIO_ROOT_PASSWORD: ${secretKey}`)
       .replace(/myminio http:\/\/s3-dev:9000 minioadmin minioadmin/, `myminio http://s3-dev:9000 ${accessKey} ${secretKey}`)
-      .replace(/myminio\/saasfoundry-uploads/g, `myminio/${bucket}`)
-      .replace(/saasfoundry-network/g, `${projectName}-network`)
-      .replace(/saasfoundry-s3-init/g, `${projectName}-s3-init`)
 
     // Extract both s3-dev and s3-init service blocks
     const s3ServiceBlock = s3Customized.match(/services:\n([\s\S]*?)(?=\nvolumes:)/)?.[1] || ''
