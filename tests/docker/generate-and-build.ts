@@ -765,9 +765,6 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
         '--setup-repo local',
         '--profile stack',
         '--db-setup credentials',
-        // --db-type has a default in setDefaultDbCredentials, but the non-interactive
-        // session throws on the unfilled field rather than applying it (#607).
-        '--db-type postgresql',
         '--db-host localhost',
         '--db-port 5432',
         '--db-user dev',
