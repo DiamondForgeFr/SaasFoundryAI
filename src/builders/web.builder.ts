@@ -9,7 +9,7 @@ import { installPwaModule } from '../installers/pwa.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
-import { fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
 export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, includePwa, workflow, ports }: CreateWebAppParams) {
@@ -88,16 +88,27 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   }
   await replaceInFile(`${webPath}/vite.config.ts`, [[/5173/g, String(webPort)]])
   await replaceInFile(`${webPath}/playwright.config.ts`, [[/localhost:5173/g, `localhost:${webPort}`]])
-  await replaceInFile(`${webPath}/nginx.conf`, [[/:3500;/g, `:${apiPort};`]])
+  // The host AND the port. nginx proxies to the API container by name, and that name was
+  // the one place no builder renamed — so the containerised web app dialled a host called
+  // `saasfoundry-api` that no generated project ever creates (#606).
+  await replaceInFile(`${webPath}/nginx.conf`, [
+    [/:3500;/g, `:${apiPort};`],
+    [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
+  ])
   await replaceInFile(`${webPath}/CLAUDE.md`, [[/port 5173/g, `port ${webPort}`]])
   // Monorepo overlay: the web dev script waits on the API's port before starting Vite.
   await replaceInFile(`${webPath}/package.json`, [[/tcp:3500/g, `tcp:${apiPort}`]])
+  // The image describes itself, and the lockfile names the package. Both carried the
+  // scaffold's name: an image labelled as somebody else's app, and a lockfile disagreeing
+  // with the package.json beside it until the first npm install rewrote it.
+  await replaceInFile(`${webPath}/Dockerfile`, [[/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]])
+  await replaceInFile(`${webPath}/package-lock.json`, [[/"saasfoundry-web"/g, `"${projectName}-web"`]])
 
   // Update Docker network name in docker-compose.yml
   const dockerComposePath = `${webPath}/docker-compose.yml`
   if (await fileExists(dockerComposePath)) {
     let dockerComposeContent = await readFile(dockerComposePath, 'utf8')
-    dockerComposeContent = dockerComposeContent.replace(/saasfoundry-network/g, `${projectName}-network`).replace(/saasfoundry-web/g, `${projectName}-web`)
+    dockerComposeContent = applyProjectIdentity(dockerComposeContent, projectName)
     await writeFile(dockerComposePath, dockerComposeContent)
   }
 
@@ -105,7 +116,7 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   const deploymentYmlPath = `${webPath}/.github/workflows/deployment.yml`
   if (await fileExists(deploymentYmlPath)) {
     let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
-    deploymentYmlContent = deploymentYmlContent.replace(/saasfoundry-network/g, `${projectName}-network`)
+    deploymentYmlContent = applyProjectIdentity(deploymentYmlContent, projectName)
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
 

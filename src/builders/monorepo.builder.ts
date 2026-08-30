@@ -7,7 +7,7 @@ import { depositStorageSharedConfig } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
-import { fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
 export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch, workflow, ports }: CreateMonorepoRootParams) {
@@ -64,8 +64,7 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   const deployApiPath = '.github/workflows/deployment-api.yml'
   if (await fileExists(deployApiPath)) {
     let content = await readFile(deployApiPath, 'utf8')
-    content = content.replace(/saasfoundry-network/g, `${projectName}-network`)
-    content = content.replace(/saasfoundry-api/g, `${projectName}-api`)
+    content = applyProjectIdentity(content, projectName)
     // Same port identity as the multirepo deployment workflow.
     content = content.replace(/PORT=\\"3500\\"/, `PORT=\\"${apiPort}\\"`).replace(/'\/ports:\/,\/3500\/d'/, `'/ports:/,/${apiPort}/d'`)
     await writeFile(deployApiPath, content)
@@ -74,9 +73,7 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   const deployWebPath = '.github/workflows/deployment-web.yml'
   if (await fileExists(deployWebPath)) {
     let content = await readFile(deployWebPath, 'utf8')
-    content = content.replace(/saasfoundry-network/g, `${projectName}-network`)
-    content = content.replace(/saasfoundry-web/g, `${projectName}-web`)
-    content = content.replace(/saasfoundry-api/g, `${projectName}-api`)
+    content = applyProjectIdentity(content, projectName)
     await writeFile(deployWebPath, content)
   }
 

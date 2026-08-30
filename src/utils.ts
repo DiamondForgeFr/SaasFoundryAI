@@ -166,6 +166,26 @@ export function setDefaultDbCredentials(credentials?: DbCredentials): DbCredenti
 }
 
 /**
+ * Rename every scaffold-owned resource to the project's own.
+ *
+ * The blueprints name their network, containers and hosts `saasfoundry-<something>`, and a
+ * generated project must own all of them. That was done by hand at fourteen sites across
+ * six builders, each covering a different subset — so `nginx.conf` proxied to a host called
+ * `saasfoundry-api` while the API container was `<project>-api`, and the containerised web
+ * app could not reach its backend at all (#606).
+ *
+ * One rule instead of fourteen partial lists. `saasfoundry.json`, `saasfoundryai` and
+ * `saasfoundry.git` are untouched — the pattern requires the hyphen, which is what makes it
+ * a resource name rather than a mention of the tool.
+ *
+ * The S3 bucket is deliberately NOT covered: it comes from the user's credentials, not from
+ * the project name, so its call sites substitute it explicitly and must do so first.
+ */
+export function applyProjectIdentity(content: string, projectName: string): string {
+  return content.replace(/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`)
+}
+
+/**
  * Apply regex replacements to a file, skipping it when it does not exist.
  *
  * Overlay-driven scaffolds do not materialise every file on every topology, and a

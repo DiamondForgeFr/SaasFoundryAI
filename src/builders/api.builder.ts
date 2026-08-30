@@ -7,7 +7,7 @@ import { installStorageModule } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
-import { fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
 export async function createApiApp({
@@ -152,9 +152,7 @@ export async function createApiApp({
   const dockerComposePath = `${apiPath}/docker-compose.yml`
   if (await fileExists(dockerComposePath)) {
     let dockerComposeContent = await readFile(dockerComposePath, 'utf8')
-    dockerComposeContent = dockerComposeContent
-      .replace(/saasfoundry-network/g, `${projectName}-network`)
-      .replace(/saasfoundry-api/g, `${projectName}-api`)
+    dockerComposeContent = applyProjectIdentity(dockerComposeContent, projectName)
       // `env_file: ./.env` puts PORT inside the container, so the published side and the
       // container side have to move together — a mapping of `3501:3500` would publish a
       // port nothing listens on, and the healthcheck would call a dead one.
@@ -167,7 +165,7 @@ export async function createApiApp({
   const dbTestComposePath = `${apiPath}/docker-compose.db-test.yml`
   if (await fileExists(dbTestComposePath)) {
     let dbTestContent = await readFile(dbTestComposePath, 'utf8')
-    dbTestContent = dbTestContent.replace(/saasfoundry-db-test/g, `${projectName}-db-test`)
+    dbTestContent = applyProjectIdentity(dbTestContent, projectName)
     await writeFile(dbTestComposePath, dbTestContent)
   }
 
@@ -175,8 +173,7 @@ export async function createApiApp({
   const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
   if (await fileExists(deploymentYmlPath)) {
     let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
-    deploymentYmlContent = deploymentYmlContent
-      .replace(/saasfoundry-network/g, `${projectName}-network`)
+    deploymentYmlContent = applyProjectIdentity(deploymentYmlContent, projectName)
       // One port identity per project: the deploy writes the same PORT the project uses
       // everywhere else, and the sed that strips the published port matches it.
       .replace(/PORT=\\"3500\\"/, `PORT=\\"${apiPort}\\"`)
@@ -189,9 +186,20 @@ export async function createApiApp({
     [/^PORT=.*$/m, `PORT="${apiPort}"`],
     [/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`]
   ])
-  await replaceInFile(`${apiPath}/Dockerfile`, [[/^ENV PORT=.*$/m, `ENV PORT=${apiPort}`]])
+  await replaceInFile(`${apiPath}/Dockerfile`, [
+    [/^ENV PORT=.*$/m, `ENV PORT=${apiPort}`],
+    [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
+  ])
+  // Same as the web side: the lockfile named the scaffold, disagreeing with the
+  // package.json beside it until the first npm install rewrote it.
+  await replaceInFile(`${apiPath}/package-lock.json`, [[/"saasfoundry-api"/g, `"${projectName}-api"`]])
   await replaceInFile(`${apiPath}/src/configs/env/services/env.service.ts`, [[/PORT: z\.string\(\)\.default\('3500'\)/, `PORT: z.string().default('${apiPort}')`]])
-  await replaceInFile(`${apiPath}/README.md`, [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
+  // The README hands the user commands to run — `docker network create …`, `docker build -t …`.
+  // Naming the scaffold's resources there is telling them to build somebody else's image.
+  await replaceInFile(`${apiPath}/README.md`, [
+    [/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`],
+    [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
+  ])
 
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
   const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')

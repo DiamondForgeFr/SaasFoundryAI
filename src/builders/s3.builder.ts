@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
 import { blueprintsPath, CreateS3AppParams } from '../types'
-import { validateProjectName } from '../utils'
+import { applyProjectIdentity, validateProjectName } from '../utils'
 
 export async function createS3App({ isMonorepo, projectName, s3Credentials }: CreateS3AppParams) {
   validateProjectName(projectName)
@@ -20,13 +20,17 @@ export async function createS3App({ isMonorepo, projectName, s3Credentials }: Cr
   const secretKey = s3Credentials?.secretKey || 'minioadmin'
   const bucket = s3Credentials?.bucket || `${projectName}-uploads`
 
-  const customizedContent = templateContent
-    .replace(/container_name:.*$/m, `container_name: ${projectName}-s3-dev`)
-    .replace(/MINIO_ROOT_USER: minioadmin/g, `MINIO_ROOT_USER: ${accessKey}`)
-    .replace(/MINIO_ROOT_PASSWORD: minioadmin/g, `MINIO_ROOT_PASSWORD: ${secretKey}`)
-    .replace(/myminio http:\/\/s3-dev:9000 minioadmin minioadmin/, `myminio http://s3-dev:9000 ${accessKey} ${secretKey}`)
-    .replace(/myminio\/saasfoundry-uploads/g, `myminio/${bucket}`)
-    .replace(/saasfoundry-network/g, `${projectName}-network`)
+  const customizedContent = applyProjectIdentity(
+    templateContent
+      .replace(/container_name:.*$/m, `container_name: ${projectName}-s3-dev`)
+      .replace(/MINIO_ROOT_USER: minioadmin/g, `MINIO_ROOT_USER: ${accessKey}`)
+      .replace(/MINIO_ROOT_PASSWORD: minioadmin/g, `MINIO_ROOT_PASSWORD: ${secretKey}`)
+      .replace(/myminio http:\/\/s3-dev:9000 minioadmin minioadmin/, `myminio http://s3-dev:9000 ${accessKey} ${secretKey}`)
+      // The bucket comes from the user's credentials, not the project name, so it is
+      // substituted before the generic rename could turn it into <project>-uploads.
+      .replace(/myminio\/saasfoundry-uploads/g, `myminio/${bucket}`),
+    projectName
+  )
 
   await writeFile(`${s3Path}/docker-compose.s3.yml`, customizedContent)
 

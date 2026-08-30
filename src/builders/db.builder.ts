@@ -4,7 +4,7 @@ import { resolve } from 'path'
 
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateDbAppParams } from '../types'
-import { validateProjectName } from '../utils'
+import { applyProjectIdentity, validateProjectName } from '../utils'
 
 export async function createDbApp({ isMonorepo, projectName, dbCredentials }: CreateDbAppParams) {
   validateProjectName(projectName)
@@ -26,13 +26,12 @@ export async function createDbApp({ isMonorepo, projectName, dbCredentials }: Cr
   // that disagree on the port is the shape of #583, and it only stays fixed if both move.
   const hostPort = dbCredentials?.port || String(DEFAULT_PORTS.db)
 
-  const customizedContent = templateContent
+  const customizedContent = applyProjectIdentity(templateContent, projectName)
     .replace(/container_name:.*$/m, `container_name: ${projectName}-db-dev`)
     .replace(/POSTGRES_USER:.*$/m, `POSTGRES_USER: ${user}`)
     .replace(/POSTGRES_PASSWORD:.*$/m, `POSTGRES_PASSWORD: ${password}`)
     .replace(/POSTGRES_DB:.*$/m, `POSTGRES_DB: ${database}`)
     .replace(/test: \[.*\]/m, `test: ['CMD-SHELL', 'pg_isready -U ${user} -d ${database}']`)
-    .replace(/saasfoundry-network/g, `${projectName}-network`)
     // Only the host side moves. 5432 is postgres inside its own container.
     .replace(/- '5435:5432'/, `- '${hostPort}:5432'`)
 
