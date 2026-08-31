@@ -503,13 +503,35 @@ cmd_create_subtask() {
     exit 1
   fi
 
+  # Same rule as the push in create-pr (#603): a step whose failure changes the outcome is
+  # read. `set -e` aborts on a failing substitution, but says nothing — and a create-subtask
+  # that dies here leaves the operator believing a ticket exists.
+  CREATE_STATUS=0
   if [ -n "$BODY" ]; then
-    ISSUE_URL=$(gh issue create --title "$FULL_TITLE" --body "$BODY")
+    ISSUE_URL=$(gh issue create --title "$FULL_TITLE" --body "$BODY") || CREATE_STATUS=$?
   else
-    ISSUE_URL=$(gh issue create --title "$FULL_TITLE")
+    ISSUE_URL=$(gh issue create --title "$FULL_TITLE") || CREATE_STATUS=$?
   fi
+  if [ "$CREATE_STATUS" -ne 0 ] || [ -z "$ISSUE_URL" ]; then
+    echo -e "${RED}✗ Could not create the issue (gh exit ${CREATE_STATUS}). No subtask exists.${NC}" >&2
+    exit 1
+  fi
+
   CHILD_NUMBER=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
-  CHILD_NODE_ID=$(gh issue view "$CHILD_NUMBER" --json id --jq ".id")
+  if [ -z "$CHILD_NUMBER" ]; then
+    echo -e "${RED}✗ The issue was created but its number could not be read from:${NC}" >&2
+    echo -e "  ${ISSUE_URL}" >&2
+    echo -e "  It exists and is usable; it is not linked to #${PARENT_NUMBER}." >&2
+    exit 1
+  fi
+
+  VIEW_STATUS=0
+  CHILD_NODE_ID=$(gh issue view "$CHILD_NUMBER" --json id --jq ".id") || VIEW_STATUS=$?
+  if [ "$VIEW_STATUS" -ne 0 ] || [ -z "$CHILD_NODE_ID" ]; then
+    echo -e "${RED}✗ Issue #${CHILD_NUMBER} was created but could not be read back (gh exit ${VIEW_STATUS}).${NC}" >&2
+    echo -e "  It is not linked to #${PARENT_NUMBER}. GitHub's issue index lags a few seconds — retrying usually works." >&2
+    exit 1
+  fi
 
   RESULT=$(gh api graphql -H "GraphQL-Features: sub_issues" \
     -f query="mutation {
@@ -621,8 +643,13 @@ cmd_create_epic() {
     printf '%b  (bypassing rule 8 — reason: %s)%b\n' "${BLUE}" "${BYPASS_SRS_REASON}" "${NC}"
   fi
 
-  local ISSUE_URL EPIC_NUMBER
-  ISSUE_URL=$(gh issue create --title "$TITLE" --body "$BODY")
+  local ISSUE_URL EPIC_NUMBER CREATE_STATUS
+  CREATE_STATUS=0
+  ISSUE_URL=$(gh issue create --title "$TITLE" --body "$BODY") || CREATE_STATUS=$?
+  if [ "$CREATE_STATUS" -ne 0 ] || [ -z "$ISSUE_URL" ]; then
+    echo -e "${RED}✗ Could not create the epic (gh exit ${CREATE_STATUS}). Nothing was created.${NC}" >&2
+    exit 1
+  fi
   EPIC_NUMBER=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
 
   if [ -z "$EPIC_NUMBER" ]; then
@@ -866,7 +893,31 @@ cmd_create_pr() {
     exit 1
   fi
 
-  git push -u origin "$CURRENT_BRANCH"
+  # The push is read, and then confirmed.
+  #
+  # `set -e` did abort here, but silently: the last line the operator saw was the pre-push
+  # hook's "All pre-push checks passed. Proceeding with push...", which is printed BEFORE
+  # the push and never corrected by it. Three times in one day that read as success while
+  # no PR existed (#603) — twice after a four-minute hook run.
+  PUSH_STATUS=0
+  git push -u origin "$CURRENT_BRANCH" || PUSH_STATUS=$?
+  if [ "$PUSH_STATUS" -ne 0 ]; then
+    echo -e "${RED}✗ The push failed (exit ${PUSH_STATUS}), so no pull request was created.${NC}" >&2
+    echo -e "  Your commits are still here — nothing was lost. Re-run this command once the push works." >&2
+    exit 1
+  fi
+
+  # Exit 0 is the push's own report; this is the branch's. The whole point of this ticket
+  # is that a step which says it succeeded is not the same as one that did.
+  REMOTE_HEAD=$(git ls-remote --heads origin "$CURRENT_BRANCH" 2>/dev/null | cut -f1)
+  LOCAL_HEAD=$(git rev-parse HEAD 2>/dev/null)
+  if [ "$REMOTE_HEAD" != "$LOCAL_HEAD" ]; then
+    echo -e "${RED}✗ The push reported success, but origin/${CURRENT_BRANCH} does not carry your commits.${NC}" >&2
+    echo -e "  remote: ${REMOTE_HEAD:-<branch absent>}" >&2
+    echo -e "  local:  ${LOCAL_HEAD}" >&2
+    echo -e "  No pull request was created. Re-run this command once the branch is on the remote." >&2
+    exit 1
+  fi
 
   # `|| status=$?` keeps `set -e` from killing the script mid-assignment — that
   # silently swallowed gh's error message (captured in the substitution, never
