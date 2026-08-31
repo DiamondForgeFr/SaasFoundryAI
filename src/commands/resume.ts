@@ -111,6 +111,30 @@ async function startDevServices(projectName: string, apiDir: string, port: numbe
   return done('database container up')
 }
 
+/**
+ * The step this command promised to cover and did not.
+ *
+ * `sf new` printed "Finish all of it with one command: sf resume" next to a failed MinIO,
+ * while `resume` started `db-dev` and nothing else — so the one command that claimed to
+ * finish everything skipped precisely the step that had failed (#623).
+ */
+async function startStorage(projectName: string, apiDir: string, consolePort: number, dryRun: boolean): Promise<StepResult> {
+  const compose = path.join(apiDir, 'docker-compose.dev-services.yml')
+  if (!fs.existsSync(compose)) return skipped(`no dev-services compose at ${compose} — this project does not host its own storage`)
+
+  // Same reasoning as the database: `up -d` succeeds on a container already running, so
+  // starting unconditionally would report work a healthy project did not need.
+  if (await canConnect(consolePort)) return skipped(`already answering on ${consolePort}`)
+
+  if (dryRun) return done(`would run: docker compose -f ${compose} up -d s3-dev s3-init`)
+
+  run(`docker network create ${projectName}-network`)
+
+  const result = run(`docker compose -f ${compose} up -d s3-dev s3-init`)
+  if (result.code !== 0) return blocked(`could not start the storage containers:\n${(result.stderr || result.stdout).trim()}`)
+  return done('storage containers up')
+}
+
 async function setUpDatabase(apiDir: string, projectName: string, port: number, hostedHere: boolean, dryRun: boolean): Promise<StepResult> {
   // A dry run predicts, so it runs the read-only half: reachability and the table count.
   // Only the mutating step is withheld. A dry run that skips the checks announces work on a
@@ -201,7 +225,16 @@ export async function resumeCommand(options: ResumeOptions = {}): Promise<void> 
     steps.push({ label: 'dev services', result: skipped(`dbSetup is "${manifest.modules?.dbSetup ?? 'unset'}" — this project does not host its own database`) })
   }
 
+  // Read before storage is added: the database gate must not depend on MinIO. `sf new`
+  // starts the two independently for the same reason — storage being down is no reason to
+  // leave the schema unapplied.
   const servicesBlocked = steps.some((s) => s.result.outcome === 'blocked')
+
+  if (manifest.modules?.s3Setup === 'docker') {
+    steps.push({ label: 'storage', result: await startStorage(manifest.projectName, apiDir, manifest.ports?.s3Console ?? 9001, dryRun) })
+  } else {
+    steps.push({ label: 'storage', result: skipped(`s3Setup is "${manifest.modules?.s3Setup ?? 'unset'}" — this project does not host its own storage`) })
+  }
   if (!servicesBlocked && manifest.modules?.dbSetup !== 'manual') {
     steps.push({ label: 'database setup', result: await setUpDatabase(apiDir, manifest.projectName, dbPort, manifest.modules?.dbSetup === 'docker', dryRun) })
   }

@@ -160,6 +160,8 @@ export interface CreateDevServicesParams {
   dbCredentials?: DbCredentials
   s3Setup: 'docker' | 'credentials' | 'manual'
   s3Credentials?: S3Credentials
+  /** Resolved host ports for MinIO. Absent falls back to the template's 9000/9001 (#623). */
+  s3Ports?: { api?: number; console?: number }
 }
 
 // Workflow Configuration Interfaces
@@ -289,6 +291,13 @@ export interface ProjectPorts {
   db: number
   api: number
   web: number
+  /**
+   * MinIO's two published ports, present only when the project hosts its own storage.
+   * Absent on `--s3-setup credentials` (the bucket is someone else's) and on manifests
+   * written before #623, whose projects run on 9000/9001.
+   */
+  s3?: number
+  s3Console?: number
 }
 
 export interface SaaSFoundryManifest {

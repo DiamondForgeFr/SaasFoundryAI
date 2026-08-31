@@ -47,7 +47,9 @@ describe('a free default is kept as it is', () => {
   })
 
   it('starts from 5435 / 3500 / 5173 when nothing overrides them', () => {
-    expect(DEFAULT_PORTS).toEqual({ db: 5435, api: 3500, web: 5173 })
+    // MinIO's two ports joined in #623: they were the only published ports still copied
+    // out of the template untouched.
+    expect(DEFAULT_PORTS).toEqual({ db: 5435, api: 3500, web: 5173, s3: 9000, s3Console: 9001 })
   })
 })
 
@@ -196,5 +198,46 @@ describe('isPortFree answers by trying to take the port', () => {
   it('does not read a missing address family as a holder', async () => {
     // Every probe host must be attempted; an unbindable one contributes nothing either way.
     expect(await isPortFree(46101)).toBe(true)
+  })
+})
+
+/**
+ * #623 — Epic #582 moved db, api and web off a taken default and named the move. MinIO was
+ * left out, so a machine already running another project's storage got `Bind for
+ * 0.0.0.0:9000 failed: port is already allocated` and a console URL printed as a literal.
+ *
+ * Real listeners again, for the same reason as above: the question is whether a port can be
+ * taken, and a stub of that answer is a stub of the world.
+ */
+describe('storage ports are resolved like every other published port (#623)', () => {
+  it('is silent about storage when the project does not host it', async () => {
+    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'credentials', defaults: BASE })
+    // A bucket on someone else's host has no local port to choose, and inventing one would
+    // print a number that means nothing.
+    expect(resolved.s3).toBeUndefined()
+    expect(resolved.s3Console).toBeUndefined()
+  })
+
+  it('resolves both published ports when the project hosts its own MinIO', async () => {
+    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: 49000, s3Console: 49001 } })
+    expect(resolved.s3?.port).toBe(49000)
+    expect(resolved.s3Console?.port).toBe(49001)
+    expect(resolved.s3?.movedFrom).toBeUndefined()
+  })
+
+  it('moves off a taken storage port and says which default it left', async () => {
+    await hold(49010)
+    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: 49010, s3Console: 49020 } })
+    expect(resolved.s3?.port).toBe(49011)
+    expect(resolved.s3?.movedFrom).toBe(49010)
+  })
+
+  it('never lands the console on the port the S3 API just moved to', async () => {
+    // The two defaults are adjacent, so a naive scan would hand 9001 to both.
+    await hold(49030)
+    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: 49030, s3Console: 49031 } })
+    expect(resolved.s3?.port).toBe(49031)
+    expect(resolved.s3Console?.port).not.toBe(resolved.s3?.port)
+    expect(resolved.s3Console?.port).toBe(49032)
   })
 })

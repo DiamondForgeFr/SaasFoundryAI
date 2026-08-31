@@ -4,7 +4,7 @@ import { resolve } from 'path'
 import { blueprintsPath, CreateDevServicesParams } from '../types'
 import { applyProjectIdentity } from '../utils'
 
-export async function createDevServicesCompose({ apiPath, projectName, dbSetup, dbCredentials, s3Setup, s3Credentials }: CreateDevServicesParams) {
+export async function createDevServicesCompose({ apiPath, projectName, dbSetup, dbCredentials, s3Setup, s3Credentials, s3Ports }: CreateDevServicesParams) {
   const serviceBlocks: string[] = []
   const volumeBlocks: string[] = []
 
@@ -59,6 +59,12 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
       .replace(/MINIO_ROOT_USER: minioadmin/g, `MINIO_ROOT_USER: ${accessKey}`)
       .replace(/MINIO_ROOT_PASSWORD: minioadmin/g, `MINIO_ROOT_PASSWORD: ${secretKey}`)
       .replace(/myminio http:\/\/s3-dev:9000 minioadmin minioadmin/, `myminio http://s3-dev:9000 ${accessKey} ${secretKey}`)
+      // Only the host side moves — 9000 and 9001 inside the container are MinIO's own, and
+      // `s3-init` reaches them over the compose network, not through the published port.
+      // The db block has done this since #583; the S3 block copied the template untouched,
+      // so a machine already running another MinIO got a container that could not bind (#623).
+      .replace(/- '9000:9000'/, `- '${s3Ports?.api ?? 9000}:9000'`)
+      .replace(/- '9001:9001'/, `- '${s3Ports?.console ?? 9001}:9001'`)
 
     // Extract both s3-dev and s3-init service blocks
     const s3ServiceBlock = s3Customized.match(/services:\n([\s\S]*?)(?=\nvolumes:)/)?.[1] || ''

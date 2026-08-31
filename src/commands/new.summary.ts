@@ -85,7 +85,13 @@ export function projectUrlLines({ ports, s3Setup, dbSetup, dbCredentials, projec
     lines.push({ label: 'Database', url: `${scheme}://${host}:${ports.db.port}`, note: movedNote(ports.db) })
   }
 
-  if (s3Setup === 'docker') lines.push({ label: 'MinIO Console', url: 'http://localhost:9001' })
+  // The console port was a literal here while db, api and web all read their resolved
+  // value — so on a machine already running another MinIO, this line pointed at somebody
+  // else's console and said nothing about it (#623).
+  if (s3Setup === 'docker') {
+    const consolePort = ports.s3Console?.port ?? 9001
+    lines.push({ label: 'MinIO Console', url: `http://localhost:${consolePort}`, note: movedNote(ports.s3Console ?? {}) })
+  }
   if (projectUrl) lines.push({ label: 'Project Board', url: `${projectUrl}?layout=board` })
 
   return lines
