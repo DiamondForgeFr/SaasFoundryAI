@@ -1,12 +1,22 @@
 name: Deploy Documentation
 
+# Manual only, deliberately — see #624.
+#
+# This used to fire on every push to `master` and on every `v*` tag, which meant the v1 cut
+# would have triggered it. It has never run: GitHub Pages is not enabled on this repository
+# (`gh api repos/DiamondForgeFr/SaasFoundryAI/pages` returns 404), so `actions/deploy-pages`
+# could only have failed, and it would have failed inside the release rather than somewhere
+# a failure is cheap.
+#
+# Enabling Pages is a manual, owner-only step: Settings -> Pages -> Source -> "GitHub
+# Actions". Once that is done and one `workflow_dispatch` run has been seen to succeed,
+# restore the `push` block below and delete this comment.
+#
+#  push:
+#    branches: [master]
+#    tags: ['v*']
 on:
-  push:
-    branches:
-      - master # Deploy docs on master merge
-    tags:
-      - 'v*' # Deploy on version tags
-  workflow_dispatch: # Manual trigger
+  workflow_dispatch:
 
 permissions:
   contents: read
