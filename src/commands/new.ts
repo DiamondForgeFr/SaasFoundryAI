@@ -304,6 +304,18 @@ export async function newCommand(opts: NewCommandOptions = {}) {
    * — to the user, and to every agent and CI job driving this command. See #590.
    */
   const failedSteps: { step: string; fix: string }[] = []
+
+  /**
+   * What actually came up, as opposed to what was asked for.
+   *
+   * The closing screen used to build its URLs from the configuration alone, so it could not
+   * tell a live address from a dead one and printed both identically. It also never learned
+   * which apps the user chose to start, so "only backend" still advertised the frontend
+   * (#622). These three carry the observation down to the summary.
+   */
+  let appsRequested: 'all' | 'backend' | 'frontend' | 'none' = 'none'
+  let apiUp = false
+  let webUp = false
   const needsS3Start = startProjectAnswers.s3Setup === 'docker'
   const needsServiceSetup = needsDbInit || needsS3Start
 
@@ -410,6 +422,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
           ? `cd ${startProjectAnswers.projectName} && ${{ all: 'npm run dev', backend: 'npm run dev:api', frontend: 'npm run dev:web' }[startApps as 'all' | 'backend' | 'frontend']}`
           : `cd ${startProjectAnswers.projectName} && npm run dev --prefix apps/${startProjectAnswers.projectName}-api`
         try {
+          appsRequested = startApps
           if (startProjectAnswers.isMonorepo) {
             if (startApps !== 'none') await startMonorepoApps(startApps, { api: projectPorts.api, web: projectPorts.web })
           } else {
@@ -454,31 +467,55 @@ export async function newCommand(opts: NewCommandOptions = {}) {
           }
         }
 
+        /**
+         * A dead server and a stubborn browser are not the same event.
+         *
+         * Both used to land in one `catch` printing "Could not open browser automatically",
+         * so a total boot failure read as a cosmetic nuisance — the day this was found, the
+         * API was not running at all and the screen said the browser would not open (#622).
+         *
+         * Splitting them also fixes the order: there is no point asking a browser to open a
+         * page that nothing is serving.
+         */
         // 2. Open API docs if backend is started
         if (!nonInteractive && (startApps === 'backend' || startApps === 'all')) {
+          console.log(chalk.blue('Waiting for backend to be ready...'))
           try {
-            console.log(chalk.blue('Waiting for backend to be ready...'))
             await waitForServer(`http://localhost:${projectPorts.api}/api/health`)
-
-            console.log(chalk.blue('Opening API documentation in browser...'))
-            const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            execSync(`${openCommand} ${apiDocsUrl}`)
+            apiUp = true
           } catch {
-            console.warn(chalk.yellow(`Could not open browser automatically. Please navigate to ${apiDocsUrl}`))
+            console.warn(chalk.yellow(`The API never answered on http://localhost:${projectPorts.api} — it is not running.`))
+          }
+
+          if (apiUp) {
+            try {
+              console.log(chalk.blue('Opening API documentation in browser...'))
+              const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+              execSync(`${openCommand} ${apiDocsUrl}`)
+            } catch {
+              console.warn(chalk.yellow(`Could not open your browser — the API documentation is at ${apiDocsUrl}`))
+            }
           }
         }
 
         // 3. Open frontend last (will be the active tab)
         if (!nonInteractive && (startApps === 'frontend' || startApps === 'all')) {
+          console.log(chalk.blue('Waiting for frontend to be ready...'))
           try {
-            console.log(chalk.blue('Waiting for frontend to be ready...'))
             await waitForServer(webUrl)
-
-            console.log(chalk.blue('Opening frontend application in browser...'))
-            const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            execSync(`${openCommand} ${webUrl}`)
+            webUp = true
           } catch {
-            console.warn(chalk.yellow(`Could not open browser automatically. Please navigate to ${webUrl}`))
+            console.warn(chalk.yellow(`The web app never answered on ${webUrl} — it is not running.`))
+          }
+
+          if (webUp) {
+            try {
+              console.log(chalk.blue('Opening frontend application in browser...'))
+              const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+              execSync(`${openCommand} ${webUrl}`)
+            } catch {
+              console.warn(chalk.yellow(`Could not open your browser — the web app is at ${webUrl}`))
+            }
           }
         }
       }
@@ -572,12 +609,18 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     s3Setup: startProjectAnswers.s3Setup,
     dbSetup: startProjectAnswers.dbSetup,
     dbCredentials: startProjectAnswers.dbCredentials,
-    projectUrl: startProjectAnswers.workflow?.projectUrl
+    projectUrl: startProjectAnswers.workflow?.projectUrl,
+    // Omitted when nothing was attempted: no liveness was observed, so none is claimed.
+    apps: appsRequested === 'none' && !apiUp && !webUp ? undefined : { requested: appsRequested, apiUp, webUp }
   })
   const column = labelColumn(urlLines)
   for (const line of urlLines) {
     const link = terminalLink(line.url, line.url, { fallback: () => chalk.blue(line.url) })
-    console.log(chalk.gray(column(line)) + link + (line.note ? chalk.yellow(`   ← ${line.note}`) : ''))
+    // A dead address is dimmed and named. Printing it in the same ink as a working one is
+    // what made a failed boot look like a finished setup (#622).
+    const address = line.unreachable ? chalk.dim(line.url) : link
+    const suffix = line.unreachable ? chalk.red(`   ✗ ${line.unreachable}`) : line.note ? chalk.yellow(`   ← ${line.note}`) : ''
+    console.log(chalk.gray(column(line)) + address + suffix)
   }
 
   console.log('\n')

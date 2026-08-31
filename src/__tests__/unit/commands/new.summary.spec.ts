@@ -108,3 +108,54 @@ describe('the label column', () => {
     expect(column(rendered[0])).toContain('Frontend App:')
   })
 })
+
+/**
+ * #622 — the summary rendered the configuration, not the outcome.
+ *
+ * The day this was found, the apps had failed to start and the closing screen printed four
+ * URLs in the same ink as a working run, with only MinIO listed under "one step did not
+ * complete". It also never learned which apps the user asked for, so "only backend" still
+ * advertised the frontend.
+ */
+describe('the summary reports what came up, not what was configured', () => {
+  it('marks an app the user never asked to start, and names the choice', () => {
+    const from = lines({ apps: { requested: 'backend', apiUp: true, webUp: false } })
+    expect(find('Frontend App', from)?.unreachable).toBe('not started — you chose backend only')
+    expect(find('Backend API', from)?.unreachable).toBeUndefined()
+  })
+
+  it('marks an app that was asked for and never answered', () => {
+    const from = lines({ apps: { requested: 'all', apiUp: false, webUp: false } })
+    expect(find('Backend API', from)?.unreachable).toBe('did not come up')
+    expect(find('Frontend App', from)?.unreachable).toBe('did not come up')
+  })
+
+  it('carries the API verdict to the documentation URL, which is served by the same process', () => {
+    const from = lines({ apps: { requested: 'all', apiUp: false, webUp: true } })
+    expect(find('API Documentation', from)?.unreachable).toBe('did not come up')
+    expect(find('Frontend App', from)?.unreachable).toBeUndefined()
+  })
+
+  it('claims nothing when nothing was attempted — "we did not look" is not "it is down"', () => {
+    const from = lines()
+    for (const line of from) expect(line.unreachable).toBeUndefined()
+  })
+
+  it('leaves a fully live run unmarked, so the marker keeps meaning something', () => {
+    const from = lines({ apps: { requested: 'all', apiUp: true, webUp: true } })
+    for (const line of from) expect(line.unreachable).toBeUndefined()
+  })
+
+  it('still reports the moved ports while reporting liveness — the two notes are independent', () => {
+    const from = lines({ apps: { requested: 'all', apiUp: false, webUp: false } })
+    expect(find('Backend API', from)?.note).toBe('3500 was taken')
+    expect(find('Backend API', from)?.unreachable).toBe('did not come up')
+  })
+})
+
+describe('a settled run is not a special case', () => {
+  it('marks a dead app on default ports too', () => {
+    const from = projectUrlLines({ ports: settled, s3Setup: 'manual', dbSetup: 'docker', apps: { requested: 'all', apiUp: false, webUp: false } })
+    expect(from.find((l) => l.label === 'Backend API')?.unreachable).toBe('did not come up')
+  })
+})
