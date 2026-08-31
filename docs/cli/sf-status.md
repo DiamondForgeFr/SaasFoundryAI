@@ -19,6 +19,10 @@ sf status [--json | --claude-friendly] [--check-gh] [--no-network]
 
 ## Preconditions
 
+### Configuration
+
+What the manifest declares, and whether the tooling around it is wired up.
+
 | Name       | Checks                                                                               |
 | ---------- | ------------------------------------------------------------------------------------ |
 | `manifest` | `.saasfoundry.json` exists at the project root                                       |
@@ -26,6 +30,21 @@ sf status [--json | --claude-friendly] [--check-gh] [--no-network]
 | `srs`      | `tools.srs.enabled` with a `rootPage` configured (skipped when SRS is not installed) |
 | `git`      | Project is a git repo and the working tree is clean                                  |
 | `gh`       | GitHub CLI available in `$PATH` (only when `--check-gh` is passed)                   |
+
+### Runtime
+
+Whether the project can actually **run**, which a well-formed manifest says nothing about. A project can be perfectly configured and still have no `node_modules`, no database answering, and no ORM
+client generated — and until these existed, `sf status` reported it as healthy.
+
+| Name           | Checks                                                                                                                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dependencies` | The root workspace in a monorepo, `api` and `web` otherwise                                                                                    |
+| `database`     | Something answers on the port the manifest records. Skipped when the project does not host its own database, and when `--no-network` is passed |
+| `ormClient`    | The generated Prisma client is present under the API                                                                                           |
+
+All three are skipped on a project that is not a generated one — the CLI's own repository, for instance.
+
+When any of them fails, [`sf resume`](/cli/sf-resume) is what finishes the job.
 
 ## Examples
 

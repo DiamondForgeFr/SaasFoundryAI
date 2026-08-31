@@ -71,10 +71,15 @@ export default defineConfig({
         {
           text: 'CLI Commands',
           items: [
+            // Ordered the way a project is lived: create it, change it, finish a setup
+            // that stopped short, ask whether it can run — then the rest.
             { text: 'sf new', link: '/cli/sf-new' },
             { text: 'sf update', link: '/cli/sf-update' },
+            { text: 'sf resume', link: '/cli/sf-resume' },
+            { text: 'sf status', link: '/cli/sf-status' },
             { text: 'sf modules', link: '/cli/sf-modules' },
             { text: 'sf skill', link: '/cli/sf-skill' },
+            { text: 'sf srs', link: '/cli/sf-srs' },
             { text: 'sf feedback', link: '/cli/sf-feedback' },
             { text: 'sf tools', link: '/cli/sf-tools' },
             { text: 'sf workflow', link: '/cli/sf-workflow' },
