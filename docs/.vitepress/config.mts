@@ -3,7 +3,17 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'SaaSFoundryAI',
   description: 'AI-First SaaS Platform Generator',
-  base: '/SaaSFoundryAI/',
+  /**
+   * Served from the root, not from a repository subpath.
+   *
+   * This said `/SaaSFoundryAI/` while the repository is `SaasFoundryAI` — a casing mismatch
+   * nobody could have caught, because the site has never been deployed. Rather than fix the
+   * casing and keep a subpath, `/` is the value that serves both things this documentation
+   * is actually for: the copy bundled in the npm package, served from the root of a local
+   * static server (#626), and a custom domain later. A `github.io/<repo>/` project site is
+   * the only shape that would need the subpath back, and it is not the plan (#624).
+   */
+  base: '/',
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
   vite: {
@@ -16,7 +26,7 @@ export default defineConfig({
   // stop being letters and start being dirt, so the favicon drops them. `icon.svg`
   // keeps them for the nav bar, where there is enough room to read them. See #567.
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/SaaSFoundryAI/favicon.svg' }]
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
   ],
 
   markdown: {
