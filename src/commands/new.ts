@@ -398,29 +398,45 @@ export async function newCommand(opts: NewCommandOptions = {}) {
           ]))
         }
 
-        if (startProjectAnswers.isMonorepo) {
-          if (startApps !== 'none') await startMonorepoApps(startApps)
-        } else {
-          if (startApps === 'backend' || startApps === 'all') await startBackend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
-          if (startApps === 'frontend' || startApps === 'all') await startFrontend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
+        /**
+         * A launch that did not launch is a failed step, not a silent one.
+         *
+         * The runners now verify the port instead of trusting that an emulator accepted a
+         * keystroke, so they can finally fail — and a failure here has to land in the same
+         * `failedSteps` collector as the database and MinIO, or it reaches the user as four
+         * URLs that answer nothing (#621, and #590 for why this collector exists).
+         */
+        const appsFix = startProjectAnswers.isMonorepo
+          ? `cd ${startProjectAnswers.projectName} && ${{ all: 'npm run dev', backend: 'npm run dev:api', frontend: 'npm run dev:web' }[startApps as 'all' | 'backend' | 'frontend']}`
+          : `cd ${startProjectAnswers.projectName} && npm run dev --prefix apps/${startProjectAnswers.projectName}-api`
+        try {
+          if (startProjectAnswers.isMonorepo) {
+            if (startApps !== 'none') await startMonorepoApps(startApps, { api: projectPorts.api, web: projectPorts.web })
+          } else {
+            if (startApps === 'backend' || startApps === 'all') await startBackend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true, projectPorts.api)
+            if (startApps === 'frontend' || startApps === 'all') await startFrontend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true, projectPorts.web)
 
-          // If user didn't choose to start the backend, open a contextualized terminal for it
-          if (!nonInteractive && startApps !== 'backend' && startApps !== 'all') {
-            const apiPath = `apps/${startProjectAnswers.projectName}-api`
-            await openTerminal(apiPath, {
-              command: getHuskySetupCommand(),
-              description: 'Opening terminal for backend...'
-            })
-          }
+            // If user didn't choose to start the backend, open a contextualized terminal for it
+            if (!nonInteractive && startApps !== 'backend' && startApps !== 'all') {
+              const apiPath = `apps/${startProjectAnswers.projectName}-api`
+              await openTerminal(apiPath, {
+                command: getHuskySetupCommand(),
+                description: 'Opening terminal for backend...'
+              })
+            }
 
-          // If user didn't choose to start the frontend, open a contextualized terminal for it
-          if (!nonInteractive && startApps !== 'frontend' && startApps !== 'all') {
-            const webPath = `apps/${startProjectAnswers.projectName}-web`
-            await openTerminal(webPath, {
-              command: getHuskySetupCommand(),
-              description: 'Opening terminal for frontend...'
-            })
+            // If user didn't choose to start the frontend, open a contextualized terminal for it
+            if (!nonInteractive && startApps !== 'frontend' && startApps !== 'all') {
+              const webPath = `apps/${startProjectAnswers.projectName}-web`
+              await openTerminal(webPath, {
+                command: getHuskySetupCommand(),
+                description: 'Opening terminal for frontend...'
+              })
+            }
           }
+        } catch (error) {
+          console.error(error)
+          failedSteps.push({ step: 'Starting the apps', fix: appsFix })
         }
 
         // Open browsers in order: GitHub Board → API Docs → Frontend
