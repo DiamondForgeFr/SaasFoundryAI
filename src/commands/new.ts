@@ -65,6 +65,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
    */
   const ports = await resolvePorts({
     dbSetup: startProjectAnswers.dbSetup,
+    s3Setup: startProjectAnswers.s3Setup,
     requested: {
       db: opts.dbPort ?? startProjectAnswers.dbCredentials?.port,
       api: opts.apiPort,
@@ -74,7 +75,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
 
   // The flat shape the builders and the manifest consume. `ports` keeps the richer one —
   // which default each port moved off — because the closing summary has to say so (#585).
-  const projectPorts = { db: ports.db.port, api: ports.api.port, web: ports.web.port }
+  // The storage entries are absent unless this project hosts its own MinIO (#623).
+  const projectPorts = { db: ports.db.port, api: ports.api.port, web: ports.web.port, s3: ports.s3?.port, s3Console: ports.s3Console?.port }
   const apiDocsUrl = `http://localhost:${projectPorts.api}/api/docs`
   const webUrl = `http://localhost:${projectPorts.web}`
 
@@ -171,7 +173,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         dbSetup: startProjectAnswers.dbSetup,
         dbCredentials: startProjectAnswers.dbCredentials,
         s3Setup: startProjectAnswers.s3Setup,
-        s3Credentials: startProjectAnswers.s3Credentials
+        s3Credentials: startProjectAnswers.s3Credentials,
+        s3Ports: { api: projectPorts.s3, console: projectPorts.s3Console }
       })
       updateProgress()
     }
@@ -373,7 +376,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         try {
           await initAndStartS3(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, s3Spinner)
           s3Spinner.succeed(chalk.green('MinIO S3 storage started successfully'))
-          console.log(chalk.blue('MinIO Console available at: http://localhost:9001'))
+          console.log(chalk.blue(`MinIO Console available at: http://localhost:${projectPorts.s3Console ?? 9001}`))
         } catch (error) {
           s3Spinner.fail(chalk.red('Failed to start MinIO S3 storage'))
           console.error(error)

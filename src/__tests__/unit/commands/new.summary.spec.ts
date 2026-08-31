@@ -159,3 +159,37 @@ describe('a settled run is not a special case', () => {
     expect(from.find((l) => l.label === 'Backend API')?.unreachable).toBe('did not come up')
   })
 })
+
+/**
+ * #623 — the MinIO console URL was the last literal on this screen, while db, api and web
+ * all read their resolved value. On a machine already running another MinIO it pointed at
+ * somebody else's console and said nothing about it.
+ */
+describe('the MinIO console reads its resolved port like everything else', () => {
+  const withS3 = (s3Console?: { port: number; movedFrom?: number }) => projectUrlLines({ ports: { ...moved, s3: { port: 9002, movedFrom: 9000 }, s3Console }, s3Setup: 'docker', dbSetup: 'docker' })
+
+  it('points at the console port that was actually published', () => {
+    const line = withS3({ port: 9003, movedFrom: 9001 }).find((l) => l.label === 'MinIO Console')
+    expect(line?.url).toBe('http://localhost:9003')
+  })
+
+  it('names the default it moved off, the way every other moved port does', () => {
+    const line = withS3({ port: 9003, movedFrom: 9001 }).find((l) => l.label === 'MinIO Console')
+    expect(line?.note).toBe('9001 was taken')
+  })
+
+  it('says nothing about a move that did not happen', () => {
+    const line = withS3({ port: 9001 }).find((l) => l.label === 'MinIO Console')
+    expect(line?.note).toBeUndefined()
+  })
+
+  it('falls back to 9001 for a project generated before storage joined the port system', () => {
+    const line = withS3(undefined).find((l) => l.label === 'MinIO Console')
+    expect(line?.url).toBe('http://localhost:9001')
+  })
+
+  it('prints no console line at all when the project does not host its own storage', () => {
+    const lines = projectUrlLines({ ports: moved, s3Setup: 'credentials', dbSetup: 'docker' })
+    expect(lines.find((l) => l.label === 'MinIO Console')).toBeUndefined()
+  })
+})

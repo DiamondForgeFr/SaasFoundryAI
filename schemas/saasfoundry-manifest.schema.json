@@ -61,6 +61,18 @@
           "minimum": 1,
           "maximum": 65535,
           "description": "Host port the Vite dev server listens on."
+        },
+        "s3": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port MinIO's S3 API is published on. Present only when the project hosts its own storage (--s3-setup docker); absent under `credentials`, where the bucket is on someone else's host, and on manifests written before this field existed, whose projects run on 9000."
+        },
+        "s3Console": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port MinIO's web console is published on. Same presence rule as `s3`; absent means 9001."
         }
       }
     },

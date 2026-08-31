@@ -16,11 +16,25 @@ import { run } from './run'
  *   - only defaults scan forward, and they scan around whatever the flags already claimed.
  */
 
-export const DEFAULT_PORTS = { db: 5435, api: 3500, web: 5173 } as const
+/**
+ * MinIO publishes two ports, and both were outside this file until #623.
+ *
+ * Epic #582 taught db, api and web to move when their default was taken. The S3 block was
+ * left copying `9000:9000` and `9001:9001` straight out of the template, so a machine
+ * already running another project's MinIO — the ordinary case this whole mechanism exists
+ * for — got a container that could not bind and a console URL printed as a literal.
+ */
+export const DEFAULT_PORTS = { db: 5435, api: 3500, web: 5173, s3: 9000, s3Console: 9001 } as const
 
 const MAX_PORT = 65535
 
 export type PortName = keyof typeof DEFAULT_PORTS
+
+/** The ports every project has, whatever it was configured with. */
+export type AlwaysPortName = 'db' | 'api' | 'web'
+
+/** Ports that exist only when the project hosts its own object storage. */
+export type StoragePortName = 's3' | 's3Console'
 
 export interface ResolvedPort {
   port: number
@@ -28,11 +42,18 @@ export interface ResolvedPort {
   movedFrom?: number
 }
 
-export type ResolvedPorts = Record<PortName, ResolvedPort>
+/**
+ * The storage ports are optional rather than always present: a project on `--s3-setup
+ * credentials` points at somebody else's bucket, and inventing a local port for it would
+ * be the same lie #584 removed from the database line.
+ */
+export type ResolvedPorts = Record<AlwaysPortName, ResolvedPort> & Partial<Record<StoragePortName, ResolvedPort>>
 
 export interface ResolvePortsParams {
   /** Only a `docker` database owns a local port. Under `credentials`/`manual` it belongs to someone else's server. */
   dbSetup: 'docker' | 'credentials' | 'manual'
+  /** Same rule for storage: only a `docker` MinIO publishes ports on this machine. */
+  s3Setup?: 'docker' | 'credentials' | 'manual'
   /** Raw `--db-port` / `--api-port` / `--web-port` values, before any defaulting. */
   requested?: Partial<Record<PortName, string>>
   /** How far a default may walk before giving up. */
@@ -143,11 +164,15 @@ function takenBy(port: number): string {
  * Explicit flags are claimed first and never move, so a default scanning forward can
  * never land on a port another flag already asked for.
  */
-export async function resolvePorts({ dbSetup, requested = {}, scanLimit = 50, defaults = {} }: ResolvePortsParams): Promise<ResolvedPorts> {
+export async function resolvePorts({ dbSetup, s3Setup, requested = {}, scanLimit = 50, defaults = {} }: ResolvePortsParams): Promise<ResolvedPorts> {
   const claimed = new Set<number>()
   const resolved = {} as ResolvedPorts
 
-  const names: PortName[] = ['db', 'api', 'web']
+  // The storage ports are only resolved when this project publishes them. Under
+  // `credentials` the bucket lives on someone else's host and has no local port to choose;
+  // omitting them keeps every reader from printing a number that means nothing.
+  const hostsStorage = s3Setup === 'docker'
+  const names: PortName[] = hostsStorage ? ['db', 'api', 'web', 's3', 's3Console'] : ['db', 'api', 'web']
 
   // A database the project does not host is not ours to move: `--db-port 6543` against a
   // Supabase pooler is a remote port, and scanning forward from it would silently point

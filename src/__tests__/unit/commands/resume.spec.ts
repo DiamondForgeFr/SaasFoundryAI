@@ -86,6 +86,49 @@ describe('sf resume (#588)', () => {
     process.exitCode = undefined
   })
 
+  /**
+   * #623 — `sf new` printed "Finish all of it with one command: sf resume" next to a failed
+   * MinIO, and `resume` started `db-dev` and nothing else. The command that promised to
+   * finish everything skipped precisely the step that had failed.
+   */
+  describe('it finishes the storage step it used to skip', () => {
+    const ranStorageUp = () => mockedRun.mock.calls.some(([cmd]) => String(cmd).includes('up -d s3-dev s3-init'))
+
+    it('starts the storage containers when the project hosts its own MinIO', async () => {
+      write('.saasfoundry.json', JSON.stringify(manifest({ modules: { ...manifest().modules, s3Setup: 'docker' } })))
+      mkdirSync(join(dir, 'apps/demo-api/node_modules'), { recursive: true })
+      mkdirSync(join(dir, 'apps/demo-web/node_modules'), { recursive: true })
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  db-dev:\n  s3-dev:\n')
+      ;(portsModule.canConnect as jest.Mock).mockResolvedValue(false)
+
+      await resumeCommand({})
+      expect(ranStorageUp()).toBe(true)
+    })
+
+    it('says why it skipped, rather than going quiet, when storage lives elsewhere', async () => {
+      healthyTree()
+      await resumeCommand({})
+      expect(output()).toContain('does not host its own storage')
+      expect(ranStorageUp()).toBe(false)
+    })
+
+    it('does not let a storage failure hold back the database setup — sf new starts them independently', async () => {
+      write('.saasfoundry.json', JSON.stringify(manifest({ modules: { ...manifest().modules, s3Setup: 'docker' } })))
+      mkdirSync(join(dir, 'apps/demo-api/node_modules'), { recursive: true })
+      mkdirSync(join(dir, 'apps/demo-web/node_modules'), { recursive: true })
+      mkdirSync(join(dir, 'apps/demo-api/src/generated/prisma'), { recursive: true })
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  db-dev:\n  s3-dev:\n')
+      write('apps/demo-api/.env', 'DATABASE_URL="postgresql://db_dev_user:db_dev_password@localhost:5435/db_dev"\n')
+      ;(portsModule.canConnect as jest.Mock).mockResolvedValue(false)
+      mockedRun.mockImplementation((cmd: string) => (String(cmd).includes('s3-dev') ? { code: 1, stdout: '', stderr: 'port is already allocated' } : { code: 0, stdout: '0', stderr: '' }))
+
+      await resumeCommand({})
+      // The storage step reports blocked; the database step still ran.
+      expect(output()).toContain('storage')
+      expect(ranSetupDev()).toBe(true)
+    })
+  })
+
   describe('it refuses to run where there is nothing to finish', () => {
     it('needs a manifest', async () => {
       await resumeCommand()

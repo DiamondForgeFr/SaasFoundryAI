@@ -22,6 +22,15 @@ interface InstallStorageModuleParams {
   s3Setup: 'docker' | 'credentials' | 'manual'
   s3Credentials?: S3Credentials
   skipNpmInstall?: boolean
+  /**
+   * Resolved host port for a Docker MinIO. Absent means 9000, which is what projects
+   * generated before #623 run on.
+   *
+   * This is the same defect #583 fixed on the database: the published port moved and the
+   * `.env` kept the default, so the app dialled a port nothing was listening on. Writing
+   * the endpoint from the resolved value is the whole point of resolving it.
+   */
+  s3Port?: number
 }
 
 /**
@@ -65,7 +74,7 @@ async function activateStorageCode(apiPath: string): Promise<void> {
   }
 }
 
-export async function installStorageModule({ apiPath, webPath, isMonorepo, projectName, s3Setup, s3Credentials, skipNpmInstall }: InstallStorageModuleParams) {
+export async function installStorageModule({ apiPath, webPath, isMonorepo, projectName, s3Setup, s3Credentials, skipNpmInstall, s3Port }: InstallStorageModuleParams) {
   // Copy storage overlay module to the API
   const storageOverlayPath = resolve(overlaysPath, 'modules/storage')
   const apiStoragePath = `${apiPath}/src/modules/storage`
@@ -105,7 +114,7 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
   await activateStorageCode(apiPath)
 
   // Determine S3 credentials
-  const s3Endpoint = s3Setup === 'docker' ? 'http://localhost:9000' : s3Credentials?.endpoint || ''
+  const s3Endpoint = s3Setup === 'docker' ? `http://localhost:${s3Port ?? 9000}` : s3Credentials?.endpoint || ''
   const s3AccessKey = s3Setup === 'docker' ? 'minioadmin' : s3Credentials?.accessKey || ''
   const s3SecretKey = s3Setup === 'docker' ? 'minioadmin' : s3Credentials?.secretKey || ''
   const s3Bucket = s3Credentials?.bucket || `${projectName}-uploads`
@@ -129,7 +138,7 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
   if (await fileExists(envTestPath)) {
     let envTestContent = await readFile(envTestPath, 'utf8')
     envTestContent = envTestContent
-      .replace(/# S3_ENDPOINT=.*$/m, `S3_ENDPOINT="http://localhost:9000"`)
+      .replace(/# S3_ENDPOINT=.*$/m, `S3_ENDPOINT="http://localhost:${s3Port ?? 9000}"`)
       .replace(/# S3_ACCESS_KEY=.*$/m, `S3_ACCESS_KEY="minioadmin"`)
       .replace(/# S3_SECRET_KEY=.*$/m, `S3_SECRET_KEY="minioadmin"`)
       .replace(/# S3_BUCKET=.*$/m, `S3_BUCKET="test-uploads"`)

@@ -138,7 +138,10 @@ export async function createApiApp({
       isMonorepo,
       projectName,
       s3Setup,
-      s3Credentials
+      s3Credentials,
+      // The endpoint written into .env must name the port MinIO was actually published on,
+      // or the API dials a port nothing listens on — the #583 defect, on storage (#623).
+      s3Port: ports?.s3
     })
   }
 

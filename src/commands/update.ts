@@ -1072,7 +1072,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   if (selectedModules.includes('storage') && storageConfig?.s3Setup === 'docker') {
     console.log(chalk.blue('  To start MinIO, run:'))
     console.log(chalk.blue(`    docker compose -f ${apiPath}/docker-compose.dev-services.yml up -d s3-dev s3-init`))
-    console.log(chalk.blue('  MinIO Console: http://localhost:9001'))
+    console.log(chalk.blue(`  MinIO Console: http://localhost:${manifest.ports?.s3Console ?? 9001}`))
     console.log()
   }
 }
