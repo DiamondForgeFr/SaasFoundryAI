@@ -149,7 +149,9 @@ function checkDependencies(report: StatusReport): Precondition {
     description,
     status: 'fail',
     details: `node_modules missing in ${missing.join(', ')}`,
-    remediation: report.manifest?.structure === 'monorepo' ? 'npm install' : missing.map((rel) => `npm install --prefix ${rel}`).join(' && ')
+    // `sf resume` finishes all of it in one command and knows the topology (#588); the
+    // literal is kept beside it so the line stays actionable without the CLI on PATH.
+    remediation: `sf resume   (or: ${report.manifest?.structure === 'monorepo' ? 'npm install' : missing.map((rel) => `npm install --prefix ${rel}`).join(' && ')})`
   }
 }
 
@@ -177,7 +179,7 @@ function checkDatabase(report: StatusReport): Precondition {
     description,
     status: 'fail',
     details: `nothing answering on ${report.database.port}`,
-    remediation: `docker compose -f ${path.join(apps.api, 'docker-compose.dev-services.yml')} up -d db-dev`
+    remediation: `sf resume   (or: docker compose -f ${path.join(apps.api, 'docker-compose.dev-services.yml')} up -d db-dev)`
   }
 }
 
@@ -197,7 +199,7 @@ function checkOrmClient(report: StatusReport): Precondition {
     description,
     status: 'fail',
     details: `${path.join(apps.api, 'src/generated/prisma')} missing — imports of @/generated/prisma will not resolve`,
-    remediation: `npm run db:setup:dev --prefix ${apps.api}`
+    remediation: `sf resume   (or: npm run db:setup:dev --prefix ${apps.api})`
   }
 }
 

@@ -525,6 +525,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       console.log(chalk.gray(`    finish it with:  ${fix}`))
       console.log()
     }
+    console.log(chalk.gray('  Finish all of it with one command:  ') + chalk.cyan('sf resume'))
+    console.log()
     console.log(chalk.gray('  The URLs below will work once those steps do.'))
     console.log('\n')
     // Not process.exit: let stdout flush and the rest of the summary print.

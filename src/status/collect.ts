@@ -1,9 +1,8 @@
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import { Socket } from 'net'
 
-import { DEFAULT_PORTS } from '../ports'
+import { canConnect, DEFAULT_PORTS } from '../ports'
 import type { SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
 
@@ -52,27 +51,6 @@ export function appPaths(manifest: SaaSFoundryManifest | null): { api: string; w
   if (!manifest || manifest.structure === 'cli') return null
   if (manifest.structure === 'monorepo') return { api: path.join('apps', 'api'), web: path.join('apps', 'web') }
   return { api: path.join('apps', `${manifest.projectName}-api`), web: path.join('apps', `${manifest.projectName}-web`) }
-}
-
-/**
- * Whether anything answers on the port, asked by connecting to it.
- *
- * A connect, not a bind: the question is "is the database up", and a bind would report a
- * busy port as unreachable and a free one as fine — exactly backwards.
- */
-function canConnect(port: number, timeoutMs = 600): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = new Socket()
-    const done = (answer: boolean) => {
-      socket.destroy()
-      resolve(answer)
-    }
-    socket.setTimeout(timeoutMs)
-    socket.once('connect', () => done(true))
-    socket.once('timeout', () => done(false))
-    socket.once('error', () => done(false))
-    socket.connect(port, '127.0.0.1')
-  })
 }
 
 export interface CollectOptions {

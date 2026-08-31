@@ -1,4 +1,4 @@
-import { createServer } from 'net'
+import { createServer, Socket } from 'net'
 
 import { run } from './run'
 
@@ -90,6 +90,38 @@ export async function isPortFree(port: number): Promise<boolean> {
     if ((await probe(port, host)) === 'taken') return false
   }
   return true
+}
+
+/**
+ * Whether something is listening, asked by connecting to it.
+ *
+ * The mirror of `isPortFree`, and the two must not be confused: a bind answers "may I take
+ * this port", a connect answers "is a service there". Using the first to check a database
+ * reports a running one as down and a stopped one as fine — exactly backwards.
+ */
+export function canConnect(port: number, timeoutMs = 600, host = '127.0.0.1'): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new Socket()
+    const settle = (answer: boolean) => {
+      socket.destroy()
+      resolve(answer)
+    }
+    socket.setTimeout(timeoutMs)
+    socket.once('connect', () => settle(true))
+    socket.once('timeout', () => settle(false))
+    socket.once('error', () => settle(false))
+    socket.connect(port, host)
+  })
+}
+
+/** Poll until the port answers, or give up. Bounded, never a sleep-and-hope. */
+export async function waitForPort(port: number, timeoutSeconds: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutSeconds * 1000
+  while (Date.now() < deadline) {
+    if (await canConnect(port)) return true
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  return false
 }
 
 function parsePort(value: string, flag: string): number {
