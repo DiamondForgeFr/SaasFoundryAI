@@ -75,7 +75,6 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "docs:generate": "tsx scripts/generate-cli-docs.ts",
     "postinstall": "if [ \"$CI\" != \"true\" ] && [ \"$HUSKY\" != \"0\" ] && [ \"$npm_config_global\" != \"true\" ]; then husky install && find .husky -type f -exec chmod +x {} + 2>/dev/null || true && if [ -d './scripts' ]; then find ./scripts -type f -name '*.sh' -exec chmod +x {} + 2>/dev/null || true; fi; fi"
   },
   "config": {
