@@ -173,14 +173,14 @@ describe('runtime preconditions (#587)', () => {
       const p = find({ manifest: generated('multirepo') }, 'dependencies')
 
       expect(p?.status).toBe('fail')
-      expect(p?.remediation).toBe('npm install --prefix apps/demo-api && npm install --prefix apps/demo-web')
+      expect(p?.remediation).toBe('sf resume   (or: npm install --prefix apps/demo-api && npm install --prefix apps/demo-web)')
     })
 
     it('fails at the root in monorepo, where the install actually happens', () => {
       const p = find({ manifest: generated('monorepo') }, 'dependencies')
 
       expect(p?.status).toBe('fail')
-      expect(p?.remediation).toBe('npm install')
+      expect(p?.remediation).toBe('sf resume   (or: npm install)')
     })
 
     it('passes once the directories exist', () => {
@@ -195,7 +195,7 @@ describe('runtime preconditions (#587)', () => {
       const p = find({ manifest: generated('multirepo') }, 'dependencies')
 
       expect(p?.status).toBe('fail')
-      expect(p?.remediation).toBe('npm install --prefix apps/demo-web')
+      expect(p?.remediation).toBe('sf resume   (or: npm install --prefix apps/demo-web)')
     })
   })
 
@@ -222,7 +222,7 @@ describe('runtime preconditions (#587)', () => {
 
       expect(p?.status).toBe('fail')
       expect(p?.details).toContain('5436')
-      expect(p?.remediation).toBe('docker compose -f apps/demo-api/docker-compose.dev-services.yml up -d db-dev')
+      expect(p?.remediation).toBe('sf resume   (or: docker compose -f apps/demo-api/docker-compose.dev-services.yml up -d db-dev)')
     })
 
     it('passes when it answers', () => {
@@ -236,13 +236,13 @@ describe('runtime preconditions (#587)', () => {
 
       expect(p?.status).toBe('fail')
       expect(p?.details).toContain('@/generated/prisma')
-      expect(p?.remediation).toBe('npm run db:setup:dev --prefix apps/demo-api')
+      expect(p?.remediation).toBe('sf resume   (or: npm run db:setup:dev --prefix apps/demo-api)')
     })
 
     it('looks under apps/api in a monorepo', () => {
       const p = find({ manifest: generated('monorepo') }, 'ormClient')
 
-      expect(p?.remediation).toBe('npm run db:setup:dev --prefix apps/api')
+      expect(p?.remediation).toBe('sf resume   (or: npm run db:setup:dev --prefix apps/api)')
     })
 
     it('passes once the client is generated', () => {
@@ -258,6 +258,17 @@ describe('runtime preconditions (#587)', () => {
      * `docker compose -f <other-project>/…` — a placeholder a human must resolve and an
      * agent can do nothing with.
      */
+    it('leads with the one command that does all of it (#588)', () => {
+      const manifest = generated('multirepo', { ports: { db: 5436, api: 3501, web: 5174 } })
+      const remediations = evaluate({ manifest, database: { port: 5436, reachable: false } })
+        .filter((p) => p.status === 'fail' && p.remediation)
+        .map((p) => p.remediation as string)
+
+      // `sf resume` knows the topology; the literal stays beside it so the line remains
+      // actionable without the CLI on PATH.
+      for (const remediation of remediations) expect(remediation.startsWith('sf resume')).toBe(true)
+    })
+
     it('contains no placeholder to interpret', () => {
       const manifest = generated('multirepo', { ports: { db: 5436, api: 3501, web: 5174 } })
       const remediations = evaluate({ manifest, database: { port: 5436, reachable: false } })

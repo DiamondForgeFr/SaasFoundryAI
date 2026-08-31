@@ -9,6 +9,7 @@ import { skillCommand, runFullUninstall } from './commands/skill'
 import { srsCommand } from './commands/srs'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
+import { resumeCommand } from './commands/resume'
 import { statusCommand } from './commands/status'
 import { workflowCommand } from './commands/workflow'
 import { maybeEmitStaleSkillWarning } from './skill/warn'
@@ -138,6 +139,12 @@ program
   .argument('[args...]', 'Additional arguments for the subcommand')
   .action((subcommand, args) => toolsCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
+  .command('resume')
+  .description('Finish a setup that stopped one step short (idempotent, safe on a healthy project)')
+  .option('--dry-run', 'Report what would run, change nothing')
+  .action((opts) => resumeCommand(opts))
+
+program
   .command('status')
   .description('Report project state and preconditions (manifest, workflow, SRS, git)')
   .option('--json', 'Output a machine-readable JSON report')
@@ -197,4 +204,4 @@ process.on('unhandledRejection', (reason) => {
 
 program.parse()
 
-export { newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, srsCommand, feedbackCommand, statusCommand }
+export { resumeCommand, newCommand, updateCommand, modulesCommand, toolsCommand, workflowCommand, skillCommand, srsCommand, feedbackCommand, statusCommand }
