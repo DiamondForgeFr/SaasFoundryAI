@@ -1,10 +1,23 @@
 import chalk from 'chalk'
 import ora from 'ora'
+
+import { waitForPort } from '../ports'
 import { execSync } from 'child_process'
 import { randomBytes } from 'crypto'
 import { chmodSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+
+/**
+ * Startup prompts we know how to silence for the shell we spawn.
+ *
+ * Deliberately best-effort, and nothing may depend on it: the set of plugins that stop
+ * to ask a question at shell startup is whatever the user installed, so this list is
+ * always one plugin behind. It removes the common cases (oh-my-zsh's update prompt,
+ * Homebrew's auto-update) and no more. The guarantee that a launch worked comes from
+ * verifying the port afterwards, never from this list being complete — see #621.
+ */
+const QUIET_STARTUP_ENV = 'DISABLE_UPDATE_PROMPT=true DISABLE_AUTO_UPDATE=true HOMEBREW_NO_AUTO_UPDATE=1 NONINTERACTIVE=1'
 
 /**
  * Write a tmp `.command` script that `open -a Terminal` can launch directly.
@@ -22,20 +35,23 @@ import { join } from 'path'
 function writeMacInitScript(absolutePath: string, command?: string): string {
   const scriptPath = join(tmpdir(), `saasfoundry-init-${randomBytes(4).toString('hex')}.command`)
   const cdAndCmd = command ? `cd ${JSON.stringify(absolutePath)} && ${command}` : `cd ${JSON.stringify(absolutePath)}`
-  const scriptContent = ['#!/bin/sh', 'rm -f "$0" 2>/dev/null', `DISABLE_UPDATE_PROMPT=true DISABLE_AUTO_UPDATE=true zsh -ic ${JSON.stringify(cdAndCmd)}`, 'exec zsh -i', ''].join('\n')
+  const scriptContent = ['#!/bin/sh', 'rm -f "$0" 2>/dev/null', `${QUIET_STARTUP_ENV} zsh -ic ${JSON.stringify(cdAndCmd)}`, 'exec zsh -i', ''].join('\n')
   writeFileSync(scriptPath, scriptContent)
   chmodSync(scriptPath, 0o755)
   return scriptPath
 }
 
 /**
- * Opens a new terminal tab or window with contextual directory and optional command
- * @param directory The directory to open the terminal in
- * @param options Optional command and description
- * @returns Promise<boolean> indicating success or failure
+ * Opens a new terminal tab or window with contextual directory and optional command.
+ *
+ * `verify` is what makes the return value mean anything. Without it this function reports
+ * that an emulator accepted a request — a tab was opened, keystrokes were sent — which is
+ * not the same as the command having run. Pass a port and the answer becomes evidence.
+ *
+ * @returns true only if the terminal opened AND, when `verify` is given, the port answered
  */
-export async function openTerminal(directory: string, options?: { command?: string; description?: string }): Promise<boolean> {
-  const { command, description } = options || {}
+export async function openTerminal(directory: string, options?: { command?: string; description?: string; verify?: { port: number; label?: string; timeoutSeconds?: number } }): Promise<boolean> {
+  const { command, description, verify } = options || {}
   const spinnerText = description || (command ? `Running command in terminal...` : `Opening terminal...`)
   const spinner = ora(spinnerText).start()
 
@@ -58,16 +74,26 @@ export async function openTerminal(directory: string, options?: { command?: stri
         // macOS - check for cmux first (terminal multiplexer)
         if (isCmux) {
           try {
-            // Create a new terminal surface; cmux replies on stdout with `OK surface:<n> pane:<m> workspace:<k>`
-            const cmuxOut = execSync('cmux new-surface --type terminal', { encoding: 'utf8' })
+            // The surface is created already sitting in the target directory, so `cd` never
+            // travels through the keyboard at all. cmux replies on stdout with
+            // `OK surface:<n> pane:<m> workspace:<k>`.
+            const cmuxOut = execSync(`cmux new-surface --type terminal --working-directory ${JSON.stringify(absolutePath)}`, { encoding: 'utf8' })
             const surfaceMatch = cmuxOut.match(/\b(surface:\d+)\b/)
             if (!surfaceMatch) throw new Error(`unexpected cmux new-surface output: ${cmuxOut.trim()}`)
             const surfaceRef = surfaceMatch[1]
 
-            // Inject `cd <path> && <command>` then press Enter — cmux waits for shell readiness internally
-            const fullCmd = command ? `cd ${absolutePath} && ${command}` : `cd ${absolutePath}`
-            execSync(`cmux send --surface ${surfaceRef} ${JSON.stringify(fullCmd)}`, { stdio: 'ignore' })
-            execSync(`cmux send-key --surface ${surfaceRef} enter`, { stdio: 'ignore' })
+            if (command) {
+              // `cmux send` types into the surface's shell, and cmux does NOT wait for that
+              // shell to be ready — the comment that used to claim otherwise was wrong. A
+              // startup hook reading stdin (oh-my-zsh's `Would you like to update? [Y/n]`)
+              // swallows the first character. Sending a bare script path keeps the damage
+              // legible: a mangled `tmp/saasfoundry-init-….command` is `command not found`,
+              // where the old `cd <path> && <command>` payload lost its `c` and ran the
+              // command in the parent directory instead (#621).
+              const scriptPath = writeMacInitScript(absolutePath, command)
+              execSync(`cmux send --surface ${surfaceRef} ${JSON.stringify(scriptPath)}`, { stdio: 'ignore' })
+              execSync(`cmux send-key --surface ${surfaceRef} enter`, { stdio: 'ignore' })
+            }
             success = true
           } catch {
             // cmux command failed, fallback to regular terminal
@@ -78,14 +104,14 @@ export async function openTerminal(directory: string, options?: { command?: stri
         // If not cmux or cmux failed, use the terminal the user is currently in
         if (!success) {
           if (currentTerminal === 'iTerm.app') {
-            // User is in iTerm2
+            // `write text` typed the command into a shell that may still be running its
+            // startup hooks. Launching the profile WITH a command makes the script the tab's
+            // own process, so no startup prompt can consume it as keystrokes (#621).
+            const itermScriptPath = writeMacInitScript(absolutePath, command)
             const script = `
           tell application "iTerm"
             tell current window
-              create tab with default profile
-              tell current session
-                write text "cd ${absolutePath}${command ? ` && ${command}` : ''}"
-              end tell
+              create tab with default profile command ${JSON.stringify(itermScriptPath)}
             end tell
           end tell
         `
@@ -102,13 +128,11 @@ export async function openTerminal(directory: string, options?: { command?: stri
             // Fallback: try iTerm2 first, then Terminal.app
             try {
               execSync('osascript -e "tell application \\"iTerm\\" to version"', { stdio: 'ignore' })
+              const itermScriptPath = writeMacInitScript(absolutePath, command)
               const script = `
             tell application "iTerm"
               tell current window
-                create tab with default profile
-                tell current session
-                  write text "cd ${absolutePath}${command ? ` && ${command}` : ''}"
-                end tell
+                create tab with default profile command ${JSON.stringify(itermScriptPath)}
               end tell
             end tell
           `
@@ -186,13 +210,30 @@ export async function openTerminal(directory: string, options?: { command?: stri
       }
     }
 
-    if (success) {
-      spinner.succeed(chalk.green(command ? `Command started in new terminal tab` : `Terminal opened successfully`))
-    } else {
+    if (!success) {
       spinner.fail(chalk.red(`Failed to open terminal`))
+      return false
     }
 
-    return success
+    /**
+     * A tab that opened is not a command that ran.
+     *
+     * Everything above measures "the emulator accepted our request". Only this measures the
+     * thing the caller actually wants. It is the single layer that assumes nothing about the
+     * user's shell, which plugins it loads, or which of them decided to ask a question today
+     * — which is why the guarantee lives here and not in QUIET_STARTUP_ENV (#621).
+     */
+    if (verify) {
+      const what = verify.label ?? `port ${verify.port}`
+      spinner.text = `Waiting for ${what}...`
+      if (!(await waitForPort(verify.port, verify.timeoutSeconds ?? 90))) {
+        spinner.fail(chalk.red(`Opened a terminal, but ${what} never came up`))
+        return false
+      }
+    }
+
+    spinner.succeed(chalk.green(command ? `Command started in new terminal tab` : `Terminal opened successfully`))
+    return true
   } catch (error) {
     spinner.fail(chalk.red(`Failed to open terminal`))
     console.error('Failed to open terminal', error)

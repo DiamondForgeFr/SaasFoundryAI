@@ -20,8 +20,12 @@ const source = readFileSync(NEW_TS, 'utf8')
 describe('sf new exit code follows the outcome (#590)', () => {
   it('records a failed step rather than only flipping a local flag', () => {
     expect(source).toContain('failedSteps.push(')
-    // Both post-setup steps that can fail must record, not just the database.
-    expect(source.match(/failedSteps\.push\(/g) ?? []).toHaveLength(2)
+    // Every post-setup step that can fail must record — not just the database. Asserting the
+    // set rather than a count: a new failable step should have to name itself here, not make
+    // an unrelated number go stale. Starting the apps joined in #621, which is exactly the
+    // case a hardcoded `2` would have flagged as a regression.
+    const steps = [...source.matchAll(/failedSteps\.push\(\{\s*step: '([^']+)'/g)].map((m) => m[1])
+    expect(steps).toEqual(expect.arrayContaining(['Database initialization', 'MinIO S3 storage', 'Starting the apps']))
   })
 
   it('sets a non-zero exit code when a step failed', () => {
@@ -49,7 +53,7 @@ describe('sf new exit code follows the outcome (#590)', () => {
     // A remediation an agent cannot run is not a remediation — the old message said
     // "docker compose -f <other-project>/…" with a placeholder nobody could resolve.
     const pushes = source.match(/failedSteps\.push\(\{[\s\S]*?\}\)/g) ?? []
-    expect(pushes).toHaveLength(2)
+    expect(pushes.length).toBeGreaterThanOrEqual(3)
     for (const push of pushes) {
       expect(push).toContain('step:')
       expect(push).toContain('fix:')
