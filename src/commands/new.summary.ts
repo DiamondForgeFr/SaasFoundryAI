@@ -71,9 +71,10 @@ export function projectUrlLines({ ports, s3Setup, dbSetup, dbCredentials, projec
   const webDown = unreachableNote(apps, 'web')
   const lines: ProjectUrlLine[] = [
     { label: 'Frontend App', url: `http://localhost:${ports.web.port}`, note: movedNote(ports.web), unreachable: webDown },
-    { label: 'Backend API', url: `http://localhost:${ports.api.port}`, note: movedNote(ports.api), unreachable: apiDown },
-    // No note here: the move is already stated one line above, on the same port.
-    { label: 'API Documentation', url: `http://localhost:${ports.api.port}/api/docs`, unreachable: apiDown }
+    { label: 'Backend API', url: `http://localhost:${ports.api.port}`, note: movedNote(ports.api), unreachable: apiDown }
+    // The API reference used to sit here, which put a documentation entry among the running
+    // services — and made it disappear with them. It lives in `documentationLines` now,
+    // beside the offline copy that answers whether or not the API is up (#627).
   ]
 
   // A `manual` database is one the CLI knows nothing about — no host, no port worth
@@ -93,6 +94,50 @@ export function projectUrlLines({ ports, s3Setup, dbSetup, dbCredentials, projec
     lines.push({ label: 'MinIO Console', url: `http://localhost:${consolePort}`, note: movedNote(ports.s3Console ?? {}) })
   }
   if (projectUrl) lines.push({ label: 'Project Board', url: `${projectUrl}?layout=board` })
+
+  return lines
+}
+
+export interface DocumentationLine {
+  label: string
+  /** A local path or a command, not necessarily a URL — which is the point. */
+  target: string
+  /** When this entry only works under a condition the reader has to know about. */
+  condition?: string
+}
+
+export interface DocumentationParams {
+  isMonorepo: boolean
+  projectName: string
+  apiPort: number
+  /** Whether the AI harness was installed — `.claude/docs/` exists only then. */
+  hasHarness: boolean
+}
+
+/**
+ * Where to read, as opposed to what is running.
+ *
+ * These two lists used to be one confused pair. "Documentation & Resources" held a single
+ * line — a forward promise to a site that had never been deployed — while the API reference
+ * sat under "Your Project URLs" among the running services. The day the apps failed to
+ * start, the only documentation entry on the screen was the one that needed them (#627).
+ *
+ * The rule that separates them: **URLs are things that run, documentation is things that
+ * can be read.** Local paths come first because they never lie — no port, no boot, no
+ * network can make `./README.md` wrong.
+ */
+export function documentationLines({ isMonorepo, projectName, apiPort, hasHarness }: DocumentationParams): DocumentationLine[] {
+  const apiDir = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
+
+  const lines: DocumentationLine[] = [{ label: 'Getting started', target: './README.md' }]
+
+  if (hasHarness) lines.push({ label: 'Project docs', target: './.claude/docs/' })
+
+  lines.push(
+    { label: 'API reference', target: `./${apiDir}/docs/index.html`, condition: 'offline' },
+    { label: '', target: `http://localhost:${apiPort}/api/docs`, condition: 'live, needs the API up' },
+    { label: 'SaaSFoundryAI docs', target: 'sf docs' }
+  )
 
   return lines
 }

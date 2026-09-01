@@ -38,6 +38,24 @@ describe('createMonorepoRoot (integration)', () => {
     await expectFileExists(join(tempDir, 'package.json'))
   })
 
+  /**
+   * #627 — a generated monorepo had no README at its root.
+   *
+   * The blueprints give apps/api and apps/web one each, so multirepo was fine; the monorepo
+   * overlay deposited CLAUDE.md and nothing else. A human landing in the repository root of
+   * the default structure found only a file addressed to an agent — and it is exactly the
+   * file the closing screen's "Getting started" line points at.
+   */
+  it('gives the monorepo root a README, addressed to a human', async () => {
+    await createMonorepoRoot(monorepoRootParams({ projectName: 'my-saas' }))
+
+    const readme = await readFile(join(tempDir, 'README.md'), 'utf8')
+    expect(readme.startsWith('# my-saas')).toBe(true)
+    // A placeholder that survives is worse than no README: it tells the reader the file was
+    // generated and nobody looked at it.
+    expect(readme).not.toContain('{{PROJECT_NAME}}')
+  })
+
   it('should update root package.json with project name', async () => {
     await createMonorepoRoot(monorepoRootParams({ projectName: 'my-saas' }))
 

@@ -31,7 +31,7 @@ import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { buildManifestTools } from './new.manifest-tools'
-import { labelColumn, projectUrlLines } from './new.summary'
+import { documentationLines, labelColumn, projectUrlLines } from './new.summary'
 import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 
 /**
@@ -597,13 +597,26 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     console.log('\n')
   }
 
-  // Display all useful URLs (clickable if terminal supports it)
+  /**
+   * Two lists, and the line between them is what can be read versus what is running.
+   *
+   * This section used to hold one entry — a link to a site that had never been deployed —
+   * while the API reference sat in the URL list among the services. So on a run where the
+   * apps did not start, the only documentation on screen was the one that needed them.
+   * Local paths lead now: no port, no boot and no network can make `./README.md` wrong.
+   */
   console.log(chalk.cyan('📚 Documentation & Resources:'))
-  console.log(
-    chalk.gray('  • SaaSFoundryAI Docs: ') +
-      terminalLink('https://docs.saasfoundry.io', 'https://docs.saasfoundry.io', { fallback: () => chalk.blue('https://docs.saasfoundry.io') }) +
-      chalk.gray(' (coming soon)')
-  )
+  const docLines = documentationLines({
+    isMonorepo: startProjectAnswers.isMonorepo,
+    projectName: startProjectAnswers.projectName,
+    apiPort: projectPorts.api,
+    hasHarness: startProjectAnswers.profile !== 'stack'
+  })
+  const docColumn = labelColumn(docLines.map((l) => ({ label: l.label, url: l.target })))
+  for (const line of docLines) {
+    const target = line.target.startsWith('http') ? terminalLink(line.target, line.target, { fallback: () => chalk.blue(line.target) }) : chalk.blue(line.target)
+    console.log(chalk.gray(docColumn({ label: line.label, url: line.target })) + target + (line.condition ? chalk.gray(`   (${line.condition})`) : ''))
+  }
   console.log()
 
   console.log(chalk.cyan('🔗 Your Project URLs:'))

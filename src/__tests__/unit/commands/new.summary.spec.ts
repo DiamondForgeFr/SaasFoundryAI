@@ -1,4 +1,4 @@
-import { labelColumn, projectUrlLines } from '../../../commands/new.summary'
+import { documentationLines, labelColumn, projectUrlLines } from '../../../commands/new.summary'
 import { ResolvedPorts } from '../../../ports'
 
 /**
@@ -28,8 +28,10 @@ describe('the summary reports the ports that were resolved', () => {
     expect(find('Backend API')?.url).toBe('http://localhost:3501')
   })
 
-  it('derives the docs URL from the same API port', () => {
-    expect(find('API Documentation')?.url).toBe('http://localhost:3501/api/docs')
+  it('no longer files the API reference among the running services', () => {
+    // It moved to `documentationLines` in #627: a reference is something you read, and
+    // putting it here made it vanish with the services on a run where they never started.
+    expect(find('API Documentation')).toBeUndefined()
   })
 
   it('never emits a default that was moved away from', () => {
@@ -130,9 +132,9 @@ describe('the summary reports what came up, not what was configured', () => {
     expect(find('Frontend App', from)?.unreachable).toBe('did not come up')
   })
 
-  it('carries the API verdict to the documentation URL, which is served by the same process', () => {
+  it('marks the API alone when only the API failed', () => {
     const from = lines({ apps: { requested: 'all', apiUp: false, webUp: true } })
-    expect(find('API Documentation', from)?.unreachable).toBe('did not come up')
+    expect(find('Backend API', from)?.unreachable).toBe('did not come up')
     expect(find('Frontend App', from)?.unreachable).toBeUndefined()
   })
 
@@ -191,5 +193,59 @@ describe('the MinIO console reads its resolved port like everything else', () =>
   it('prints no console line at all when the project does not host its own storage', () => {
     const lines = projectUrlLines({ ports: moved, s3Setup: 'credentials', dbSetup: 'docker' })
     expect(lines.find((l) => l.label === 'MinIO Console')).toBeUndefined()
+  })
+})
+
+/**
+ * #627 — the closing screen held two lists whose boundary was wrong.
+ *
+ * "Documentation & Resources" carried a single entry, a link to a site that had never been
+ * deployed, while the API reference sat under "Your Project URLs" among the running
+ * services. On the run that produced this ticket the apps never started, so the only
+ * documentation on screen was the one that needed them.
+ */
+describe('documentation is what can be read, not what is running', () => {
+  const docs = (over: Partial<Parameters<typeof documentationLines>[0]> = {}) => documentationLines({ isMonorepo: true, projectName: 'demo', apiPort: 3501, hasHarness: true, ...over })
+
+  const label = (l: string, from = docs()) => from.find((d) => d.label === l)
+
+  it('leads with a local path, which no port or boot can invalidate', () => {
+    expect(docs()[0]).toEqual({ label: 'Getting started', target: './README.md' })
+  })
+
+  it('offers the offline API reference the scaffold already deposits', () => {
+    expect(label('API reference')?.target).toBe('./apps/api/docs/index.html')
+    expect(label('API reference')?.condition).toBe('offline')
+  })
+
+  it('offers the live reference too, and states what it depends on', () => {
+    const live = docs().find((d) => d.target.startsWith('http'))
+    expect(live?.target).toBe('http://localhost:3501/api/docs')
+    expect(live?.condition).toBe('live, needs the API up')
+  })
+
+  it('derives the live URL from the resolved API port, not from a default', () => {
+    const live = docs({ apiPort: 3507 }).find((d) => d.target.startsWith('http'))
+    expect(live?.target).toBe('http://localhost:3507/api/docs')
+  })
+
+  it('finds the API in the multirepo layout too', () => {
+    expect(label('API reference', docs({ isMonorepo: false, projectName: 'demo' }))?.target).toBe('./apps/demo-api/docs/index.html')
+  })
+
+  it('points at the CLI documentation by the command that opens it, not by a promised URL', () => {
+    // The old line linked to https://docs.saasfoundry.io "(coming soon)" — a site that has
+    // never existed. `sf docs` serves the copy that shipped with the binary (#626).
+    expect(label('SaaSFoundryAI docs')?.target).toBe('sf docs')
+    expect(docs().some((d) => d.target.includes('docs.saasfoundry.io'))).toBe(false)
+  })
+
+  it('omits the harness docs on a project that never installed the harness', () => {
+    expect(label('Project docs', docs({ hasHarness: false }))).toBeUndefined()
+    expect(label('Project docs')?.target).toBe('./.claude/docs/')
+  })
+
+  it('promises nothing that does not exist yet', () => {
+    for (const line of docs()) expect(line.target).not.toContain('coming soon')
   })
 })
