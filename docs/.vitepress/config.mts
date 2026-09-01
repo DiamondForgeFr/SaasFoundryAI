@@ -14,6 +14,15 @@ export default defineConfig({
    * the only shape that would need the subpath back, and it is not the plan (#624).
    */
   base: '/',
+
+  /**
+   * Built outside `.vitepress/` so the output can ship in the npm package.
+   *
+   * `files` in package.json would have to name a path inside a dotted directory otherwise,
+   * which is exactly the kind of packing edge case that fails quietly in a published
+   * tarball and never locally (#626).
+   */
+  outDir: '../docs-dist',
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
   vite: {
@@ -77,6 +86,7 @@ export default defineConfig({
             { text: 'sf update', link: '/cli/sf-update' },
             { text: 'sf resume', link: '/cli/sf-resume' },
             { text: 'sf status', link: '/cli/sf-status' },
+            { text: 'sf docs', link: '/cli/sf-docs' },
             { text: 'sf modules', link: '/cli/sf-modules' },
             { text: 'sf skill', link: '/cli/sf-skill' },
             { text: 'sf srs', link: '/cli/sf-srs' },

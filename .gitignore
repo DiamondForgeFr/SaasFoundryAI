@@ -61,3 +61,4 @@ docs/.vitepress/dist/
 # …except the persisted artefacts referenced by #203 exit conditions
 !/.srs-audit/follow-ups.md
 !/.srs-audit/baseline-report-fixed-root.json
+docs-dist/
