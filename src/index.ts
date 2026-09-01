@@ -9,6 +9,7 @@ import { skillCommand, runFullUninstall } from './commands/skill'
 import { srsCommand } from './commands/srs'
 import { updateCommand } from './commands/update'
 import { toolsCommand } from './commands/tools'
+import { docsCommand } from './commands/docs'
 import { resumeCommand } from './commands/resume'
 import { statusCommand } from './commands/status'
 import { workflowCommand } from './commands/workflow'
@@ -143,6 +144,14 @@ program
   .description('Finish a setup that stopped one step short (idempotent, safe on a healthy project)')
   .option('--dry-run', 'Report what would run, change nothing')
   .action((opts) => resumeCommand(opts))
+
+program
+  .command('docs')
+  .description('Open the SaaSFoundryAI documentation, served from this installation (no network needed)')
+  .option('--port <port>', 'Serve on a specific port instead of the first free one')
+  .option('--no-open', 'Print the URL without opening a browser')
+  // The handle it returns is for tests; Commander wants a void action.
+  .action(async (opts) => void (await docsCommand(opts)))
 
 program
   .command('status')
