@@ -43,7 +43,10 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
 
   // Substitute {{PROJECT_NAME}} in root package.json BEFORE the JSON merge below so the
   // `codegen:api-client -w @<name>/api-client` script ends up with the project's npm scope.
-  await substitutePlaceholdersInFiles(['package.json'], { PROJECT_NAME: projectName })
+  // README.md is substituted here rather than in the skills installer, where CLAUDE.md is
+  // handled: a README addresses a human and belongs to the project whatever profile was
+  // chosen, while the AI harness may not be installed at all (#627).
+  await substitutePlaceholdersInFiles(['package.json', 'README.md'], { PROJECT_NAME: projectName })
 
   // Update root package.json
   const packageJsonPath = 'package.json'
