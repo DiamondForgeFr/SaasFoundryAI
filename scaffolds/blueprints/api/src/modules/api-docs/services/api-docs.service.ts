@@ -34,7 +34,11 @@ export class ApiDocsService {
         .addBearerAuth()
         .build()
 
-      this.document = cleanupOpenApiDoc(SwaggerModule.createDocument(app, config))
+      // Held in a local const rather than read back off the field: TypeScript 6 no longer
+      // keeps a mutable class property narrowed across the intervening calls, so
+      // `return this.document` is `OpenAPIObject | null` by the time it is reached.
+      const document = cleanupOpenApiDoc(SwaggerModule.createDocument(app, config))
+      this.document = document
 
       // Create docs directory at project root
       const docsPath = join(process.cwd(), 'docs')
@@ -48,7 +52,7 @@ export class ApiDocsService {
       }
 
       // Write openapi.json file
-      writeFileSync(apiDocsPath, JSON.stringify(this.document, null, 2))
+      writeFileSync(apiDocsPath, JSON.stringify(document, null, 2))
       this.logger.log(`OpenAPI documentation generated and saved to: ${apiDocsPath}`)
 
       // Check if index.html exists, if not create it
@@ -57,7 +61,7 @@ export class ApiDocsService {
         this.generateStoplightHtml(indexHtmlPath)
       }
 
-      return this.document
+      return document
     } catch (error) {
       this.logger.error(`Failed to generate OpenAPI documentation: ${error.message}`)
       throw error
