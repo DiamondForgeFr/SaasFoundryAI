@@ -3,6 +3,9 @@
  */
 import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
+// chalk is held at 5.x on purpose: 6.0.0 moved its type declarations behind an `exports`
+// map that this project's `moduleResolution: node` cannot read. See
+// .claude/docs/embedded-dependencies.md before bumping it.
 import chalk from 'chalk'
 import cookieParser from 'cookie-parser'
 import 'dotenv/config'

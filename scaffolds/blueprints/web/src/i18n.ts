@@ -4,7 +4,7 @@
 import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import ResourcesToBackend from 'i18next-resources-to-backend'
-import yaml from 'js-yaml'
+import { load } from 'js-yaml'
 import { initReactI18next } from 'react-i18next'
 
 /**
@@ -18,7 +18,7 @@ const loadYaml = (lng: string, ns: string) => {
     import: 'default'
   })
 
-  if (modules[key]) return yaml.load(modules[key])
+  if (modules[key]) return load(modules[key])
   else throw new Error(`Namespace ${ns} not found for language ${lng}`)
 }
 

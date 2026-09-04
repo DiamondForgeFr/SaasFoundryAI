@@ -5,6 +5,9 @@ import { Injectable, LoggerService } from '@nestjs/common'
 import DailyRotateFile from 'winston-daily-rotate-file'
 import { EnvConfig } from '@configs/env/services/env.service'
 import * as winston from 'winston'
+// chalk is held at 5.x on purpose: 6.0.0 moved its type declarations behind an `exports`
+// map that this project's `moduleResolution: node` cannot read. See
+// .claude/docs/embedded-dependencies.md before bumping it.
 import chalk from 'chalk'
 
 /**
