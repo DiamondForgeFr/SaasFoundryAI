@@ -159,5 +159,9 @@ scripts/              # Version management (tag-manager.sh)
 - **NEVER** modify scaffold templates without considering the impact on generated projects
 - Current version: 1.0.0-beta (npm package `saasfoundryai-cli`)
 - Node.js >= 22.13.0 to run the CLI (its own `.nvmrc` says 22.15.0)
+- **The generated API and web app run different TypeScript majors, on purpose.** The API is pinned to **5.9.x** with `ignoreDeprecations: "5.0"`; the web app is on 6.x. NestJS 11's OpenAPI CLI plugin
+  cannot read the TypeScript 6 AST — it emits `{ enum: string }`, a bare identifier with no runtime value, and **no generated API can start**. The compiler, the build and the unit suite all stay
+  green, because the metadata is only invalid at runtime. See #595 for the measurement and #643 for what happened when the difference was mistaken for drift and "fixed". It stops being a constraint
+  the day the backend moves to NestJS 12, which is an ESM migration — see `.claude/docs/embedded-dependencies.md`.
 - **Generated projects ask for Node 24** — their `.nvmrc` says 24.19.0, because they declare `npm >= 11` with `onFail: error` and Node 22 ships npm 10. The CLI reads the target project's `.nvmrc`
   before shelling out to `npm`; it does not impose its own version. See #589 — the two used to be assumed identical, and every `npm run` in a generated project was refused.
