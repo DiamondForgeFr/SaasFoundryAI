@@ -154,6 +154,7 @@ export interface LocalSetupRecord {
   state: LocalSetupRecordState
   completedOperationIds: string[]
   skippedOperationIds: string[]
+  consentIds: string[]
   resources: LocalSetupOwnedResource[]
   removedResourceRefs: string[]
   lastErrorCode?: string
@@ -261,7 +262,7 @@ function canonicalRefs(value: readonly string[]): string[] {
 }
 
 function operation(kind: LocalSetupOperationKind, targetRef: string, dependsOn: readonly string[], consentScope: LocalSetupConsentScope | null, optional: boolean): LocalSetupOperation {
-  const withoutId = { kind, targetRef, dependsOn: [...dependsOn].sort(), consentScope, optional }
+  const withoutId = { kind, targetRef, dependsOn: [...new Set(dependsOn)].sort(), consentScope, optional }
   return { id: stableFingerprint(withoutId), ...withoutId }
 }
 
@@ -521,6 +522,7 @@ export function createLocalSetupRecord(proposal: LocalSetupProposal, createdAt: 
     state: 'proposed' as const,
     completedOperationIds: [],
     skippedOperationIds: [],
+    consentIds: [],
     resources: [],
     removedResourceRefs: [],
     createdAt,
@@ -559,6 +561,7 @@ export function assertLocalSetupRecord(value: unknown): asserts value is LocalSe
       'state',
       'completedOperationIds',
       'skippedOperationIds',
+      'consentIds',
       'resources',
       'removedResourceRefs',
       'lastErrorCode',
@@ -574,7 +577,7 @@ export function assertLocalSetupRecord(value: unknown): asserts value is LocalSe
   if (!safeReference(value.storageRootRef)) issues.push('record.storageRootRef must be a safe reference')
   if (!boundedInteger(value.revision, 0, Number.MAX_SAFE_INTEGER)) issues.push('record.revision must be a non-negative safe integer')
   if (!['proposed', 'awaiting-consent', 'executing', 'paused', 'ready', 'failed', 'removing', 'removed'].includes(String(value.state))) issues.push('record.state is unsupported')
-  for (const field of ['completedOperationIds', 'skippedOperationIds']) {
+  for (const field of ['completedOperationIds', 'skippedOperationIds', 'consentIds']) {
     const list = value[field]
     if (!Array.isArray(list) || list.length > MAX_OPERATIONS || !list.every((entry) => FINGERPRINT.test(String(entry))) || new Set(list).size !== list.length)
       issues.push(`record.${field} must contain unique operation fingerprints`)
