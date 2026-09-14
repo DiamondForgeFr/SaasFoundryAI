@@ -107,6 +107,7 @@ export default defineConfig({
             { text: 'Host Capabilities', link: '/guide/host-capabilities' },
             { text: 'Local Execution Profiles', link: '/guide/local-execution-profiles' },
             { text: 'Local Execution Setup', link: '/guide/local-execution-setup' },
+            { text: 'Local Execution Qualification', link: '/guide/local-execution-qualification' },
             { text: 'Execution Candidates', link: '/guide/execution-candidates' },
             { text: 'Execution Requirements', link: '/guide/execution-requirements' },
             { text: 'Execution Planning', link: '/guide/execution-planning' },

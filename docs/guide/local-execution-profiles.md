@@ -4,7 +4,8 @@ SaaSFoundry converts a fresh [host capability snapshot](./host-capabilities.md) 
 it names the runtime backend, model artifact and digest, quantization, context and output limits, concurrency, expected latency, workload suitability, and required resources.
 
 The recommender is read-only. It does not download an artifact, install a runtime, start a service, benchmark a model, or create an [execution candidate](./execution-candidates.md). A selected profile
-becomes an immutable, reviewable [local execution setup proposal](./local-execution-setup.md) before any host mutation. Measured qualification and routing integration remain separate lifecycle steps.
+becomes an immutable, reviewable [local execution setup proposal](./local-execution-setup.md) before any host mutation. After setup, the
+[local execution qualification](./local-execution-qualification.md) measures which task classes the installed profile can handle. Routing integration remains a separate lifecycle step.
 
 ```ts
 import { collectHostInferenceCapabilities, recommendLocalExecutionProfiles } from 'saasfoundryai-cli/dist/execution'
