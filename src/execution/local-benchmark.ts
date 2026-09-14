@@ -97,6 +97,13 @@ export interface LocalBenchmarkPlan {
   evidenceRefs: string[]
 }
 
+export interface LocalBenchmarkCurrentState {
+  binding: LocalBenchmarkBinding
+  suiteId: string
+  adapterId: string
+  validatorId: string
+}
+
 export interface CreateLocalBenchmarkPlanInput {
   profile: LocalExecutionProfile
   proposal: LocalSetupProposal
@@ -416,6 +423,25 @@ function benchmarkBinding(profile: LocalExecutionProfile, proposal: LocalSetupPr
   }
 }
 
+export function resolveLocalBenchmarkCurrentState(input: {
+  profile: LocalExecutionProfile
+  proposal: LocalSetupProposal
+  record: LocalSetupRecord
+  suite: LocalBenchmarkSuite
+  adapterId: string
+  validatorId: string
+}): LocalBenchmarkCurrentState {
+  assertReadySetup(input.profile, input.proposal, input.record)
+  assertLocalBenchmarkSuite(input.suite)
+  if (!safeComponent(input.adapterId) || !safeComponent(input.validatorId)) throw new LocalBenchmarkContractError(['adapter and validator IDs must be safe components'])
+  return freeze({
+    binding: benchmarkBinding(input.profile, input.proposal, input.record),
+    suiteId: input.suite.id,
+    adapterId: input.adapterId,
+    validatorId: input.validatorId
+  })
+}
+
 function assertReadySetup(profile: LocalExecutionProfile, proposal: LocalSetupProposal, record: LocalSetupRecord): void {
   assertProfile(profile)
   assertLocalSetupProposal(proposal)
@@ -465,6 +491,12 @@ function validateBinding(value: unknown, label: string, issues: string[]): void 
   for (const field of ['contextTokens', 'maxOutputTokens', 'concurrency']) if (!boundedInteger(value[field], 1, 2_000_000)) issues.push(`${label}.${field} must be a bounded positive integer`)
 }
 
+export function assertLocalBenchmarkBinding(value: unknown): asserts value is LocalBenchmarkBinding {
+  const issues: string[] = []
+  validateBinding(value, 'benchmark binding', issues)
+  if (issues.length) throw new LocalBenchmarkContractError(issues)
+}
+
 export function createLocalBenchmarkPlan(input: CreateLocalBenchmarkPlanInput): LocalBenchmarkPlan {
   assertReadySetup(input.profile, input.proposal, input.record)
   assertLocalBenchmarkSuite(input.suite)
@@ -478,6 +510,7 @@ export function createLocalBenchmarkPlan(input: CreateLocalBenchmarkPlanInput): 
     (Date.parse(input.profile.availability.observedAt) > Date.parse(input.generatedAt) || Date.parse(input.profile.availability.validUntil) <= Date.parse(input.generatedAt))
   )
     issues.push('profile availability must be current when the plan is created')
+  if (timestamp(input.validUntil) && Date.parse(input.validUntil) > Date.parse(input.profile.availability.validUntil)) issues.push('plan validity cannot outlive the profile availability evidence')
   if (!boundedInteger(input.iterations, 1, MAX_ITERATIONS)) issues.push(`iterations must be between 1 and ${MAX_ITERATIONS}`)
   if (!boundedInteger(input.warmupIterations, 0, MAX_WARMUP_ITERATIONS)) issues.push(`warmupIterations must be between 0 and ${MAX_WARMUP_ITERATIONS}`)
   if (!boundedInteger(input.timeoutMs, 1, MAX_TIMEOUT_MS)) issues.push(`timeoutMs must be between 1 and ${MAX_TIMEOUT_MS}`)
