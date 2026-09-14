@@ -1,12 +1,18 @@
 import type { ExecutionBudgetDecision, ExecutionRecoveryBudgetDecision } from './budget'
+import { assertAdaptiveExecutionAuthorizationDecision, type AdaptiveExecutionAuthorizationDecision } from './route-authority'
 import { assertExecutionOutcomeEvidence, type ExecutionOutcomeEvidence } from './calibration'
 import { assertExactCostEvidence } from './exact-cost'
 import { stableFingerprint } from './overrides'
 import { assertExecutionPlanDecision, type BillableUsageP95, type ExactCostEvidence, type ExecutionPlanDecision, type ExecutionPlanExclusionCode, type ExecutionPlanTieBreakDecision } from './plans'
 import { assertExecutionLineage, type ExecutionLineage, type ExecutionLineageTerminalState, type ExecutionObservedOutcome, type ExecutionReplanTrigger } from './replanning'
+import { assertExecutionRoutingDecision, assertExecutionRoutingEvidence, type ExecutionRoutingDecision, type ExecutionRoutingEvidence, type ExecutionRoutingMetrics } from './routing'
 
 const FINGERPRINT = /^[a-f0-9]{64}$/
 const SAFE_ID = /^[a-z0-9][a-z0-9._:/-]{0,127}$/i
+const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d+)?$/
+const MAX_ADAPTIVE_FALLBACK_NODES = 64
+const MAX_ADAPTIVE_EXCLUSIONS = 256
+const MAX_ADAPTIVE_EVIDENCE_REFS = 256
 const SECRET_LIKE =
   /(?:\bBearer\s+|\b(?:sk|gh[pousr]|github_pat|xox[baprs])[_-]|\beyJ[a-zA-Z0-9_-]{8,}\.|(?:api[_-]?key|authorization|client[_-]?secret|cookie|credentials?|password|private[_-]?key|refresh[_-]?token|session[_-]?id|access[_-]?token|token)\s*[:=])/i
 const EXPLANATION_FIELDS = [
@@ -131,6 +137,33 @@ export class ExecutionExplanationContractError extends Error {
     this.name = 'ExecutionExplanationContractError'
     this.issues = [...issues]
   }
+}
+
+export interface AdaptiveExecutionRouteExplanation {
+  schemaVersion: 1
+  id: string
+  routingDecisionId: string
+  status: ExecutionRoutingDecision['status']
+  policyId: string
+  selected?: {
+    planId: string
+    candidateId: string
+    reasonCode: NonNullable<ExecutionRoutingDecision['selectedReason']>
+    metrics: ExecutionRoutingMetrics
+    expectedAggregateP95: ExactCostEvidence
+    maximumPathP95: ExactCostEvidence
+    fallbackNodes: Array<{ nodeId: string; candidateId: string; role: 'fallback' | 'retry'; boundary: string }>
+  }
+  exclusions: ExecutionRoutingDecision['exclusions']
+  authority?: {
+    decisionId: string
+    status: AdaptiveExecutionAuthorizationDecision['status']
+    reasonCode: AdaptiveExecutionAuthorizationDecision['reasonCode']
+    budgetStatus?: ExecutionBudgetDecision['status']
+    cloudBoundaryRequired: boolean
+    dispatchAuthorized: boolean
+  }
+  evidenceRefs: string[]
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -378,4 +411,184 @@ export function assertExecutionDecisionExplanation(value: unknown): asserts valu
     if (stableFingerprint(withoutId(value as unknown as ExecutionDecisionExplanation)) !== value.id) issues.push('explanation.id does not match its canonical payload')
   }
   if (issues.length) throw new ExecutionExplanationContractError(issues)
+}
+
+/** Projects adaptive routing and authority without prompts, source text, outputs, local paths, or adapter metadata. */
+export function explainAdaptiveExecutionRoute(routeValue: unknown, evidenceValues: readonly ExecutionRoutingEvidence[], authorityValue?: unknown): AdaptiveExecutionRouteExplanation {
+  assertExecutionRoutingDecision(routeValue)
+  const route = routeValue
+  const evidence = evidenceValues.map((entry) => {
+    assertExecutionRoutingEvidence(entry)
+    return entry
+  })
+  let authority: AdaptiveExecutionAuthorizationDecision | undefined
+  if (authorityValue !== undefined) {
+    assertAdaptiveExecutionAuthorizationDecision(authorityValue)
+    authority = authorityValue
+    if (authority.routingDecisionId !== route.id) throw new ExecutionExplanationContractError(['adaptive authority must reference the explained route'])
+  }
+  const selectedEvidence = route.selectedEvidenceId ? evidence.find((entry) => entry.id === route.selectedEvidenceId) : undefined
+  if (route.status === 'selected' && (!route.selectedPlan || !route.selectedPlanId || !route.selectedMetrics || !route.selectedReason || !selectedEvidence))
+    throw new ExecutionExplanationContractError(['selected route requires matching public routing evidence'])
+  const evidenceRefs = new Set<string>()
+  for (const reference of selectedEvidence?.evidenceRefs ?? []) evidenceRefs.add(reference)
+  for (const node of selectedEvidence?.nodes ?? []) for (const reference of node.evidenceRefs) evidenceRefs.add(reference)
+  const payload: Omit<AdaptiveExecutionRouteExplanation, 'id'> = {
+    schemaVersion: 1,
+    routingDecisionId: route.id,
+    status: route.status,
+    policyId: route.policyId,
+    ...(route.selectedPlan && route.selectedPlanId && route.selectedMetrics && route.selectedReason && selectedEvidence
+      ? {
+          selected: {
+            planId: route.selectedPlanId,
+            candidateId: route.selectedPlan.rootCandidateId,
+            reasonCode: route.selectedReason,
+            metrics: { ...route.selectedMetrics },
+            expectedAggregateP95: cloneCost(route.selectedPlan.expectedAggregateP95),
+            maximumPathP95: cloneCost(route.selectedPlan.maximumPathP95),
+            fallbackNodes: selectedEvidence.nodes
+              .filter((node): node is ExecutionRoutingEvidence['nodes'][number] & { role: 'fallback' | 'retry' } => node.role === 'fallback' || node.role === 'retry')
+              .map((node) => ({ nodeId: node.nodeId, candidateId: node.candidateId, role: node.role, boundary: node.boundary }))
+              .sort((left, right) => left.nodeId.localeCompare(right.nodeId))
+          }
+        }
+      : {}),
+    exclusions: route.exclusions
+      .map((entry) => ({ ...entry }))
+      .sort((left, right) => `${left.planId}/${left.code}/${left.detailCode}/${left.evidenceId ?? ''}`.localeCompare(`${right.planId}/${right.code}/${right.detailCode}/${right.evidenceId ?? ''}`)),
+    ...(authority
+      ? {
+          authority: {
+            decisionId: authority.id,
+            status: authority.status,
+            reasonCode: authority.reasonCode,
+            ...(authority.budgetDecision ? { budgetStatus: authority.budgetDecision.status } : {}),
+            cloudBoundaryRequired: authority.cloudBoundaryRequired,
+            dispatchAuthorized: authority.dispatchAuthorized
+          }
+        }
+      : {}),
+    evidenceRefs: [...evidenceRefs].sort()
+  }
+  return freeze({ ...payload, id: stableFingerprint(payload) })
+}
+
+export function assertAdaptiveExecutionRouteExplanation(value: unknown): asserts value is AdaptiveExecutionRouteExplanation {
+  if (!object(value)) throw new ExecutionExplanationContractError(['adaptive route explanation must be an object'])
+  const issues: string[] = []
+  const exact = (entry: Record<string, unknown>, allowed: readonly string[], label: string) => {
+    const unknown = Object.keys(entry).filter((field) => !allowed.includes(field))
+    if (unknown.length) issues.push(`${label} contains unsupported fields: ${unknown.sort().join(', ')}`)
+  }
+  exact(value, ['schemaVersion', 'id', 'routingDecisionId', 'status', 'policyId', 'selected', 'exclusions', 'authority', 'evidenceRefs'], 'adaptive route explanation')
+  if (value.schemaVersion !== 1 || typeof value.id !== 'string' || !FINGERPRINT.test(value.id)) issues.push('adaptive route explanation identity is invalid')
+  if (typeof value.routingDecisionId !== 'string' || !FINGERPRINT.test(value.routingDecisionId) || typeof value.policyId !== 'string' || !FINGERPRINT.test(value.policyId))
+    issues.push('adaptive route explanation route binding is invalid')
+  if (!['selected', 'unroutable'].includes(String(value.status))) issues.push('adaptive route explanation status is invalid')
+
+  if (value.selected !== undefined) {
+    if (!object(value.selected)) issues.push('adaptive route explanation selected value is invalid')
+    else {
+      exact(value.selected, ['planId', 'candidateId', 'reasonCode', 'metrics', 'expectedAggregateP95', 'maximumPathP95', 'fallbackNodes'], 'adaptive route explanation selected')
+      if (!safeId(value.selected.planId) || !safeId(value.selected.candidateId) || !safeId(value.selected.reasonCode)) issues.push('adaptive route explanation selected identifiers are invalid')
+      if (!object(value.selected.metrics)) issues.push('adaptive route explanation metrics are invalid')
+      else {
+        exact(
+          value.selected.metrics,
+          ['observedAt', 'validUntil', 'energyMilliwattHours', 'devicePressureRatio', 'failureProbability', 'fallbackExposureProbability'],
+          'adaptive route explanation metrics'
+        )
+        const metric = value.selected.metrics
+        const decimalOrNull = (entry: unknown) => entry === null || (typeof entry === 'string' && DECIMAL.test(entry))
+        if (
+          typeof metric.observedAt !== 'string' ||
+          !Number.isFinite(Date.parse(metric.observedAt)) ||
+          typeof metric.validUntil !== 'string' ||
+          !Number.isFinite(Date.parse(metric.validUntil)) ||
+          metric.observedAt >= metric.validUntil ||
+          !decimalOrNull(metric.energyMilliwattHours) ||
+          !decimalOrNull(metric.devicePressureRatio) ||
+          typeof metric.failureProbability !== 'string' ||
+          !DECIMAL.test(metric.failureProbability) ||
+          typeof metric.fallbackExposureProbability !== 'string' ||
+          !DECIMAL.test(metric.fallbackExposureProbability)
+        )
+          issues.push('adaptive route explanation metrics contain invalid values')
+      }
+      try {
+        assertExactCostEvidence(value.selected.expectedAggregateP95, 'adaptive route expected cost')
+        assertExactCostEvidence(value.selected.maximumPathP95, 'adaptive route maximum cost')
+      } catch {
+        issues.push('adaptive route explanation costs are invalid')
+      }
+      if (!Array.isArray(value.selected.fallbackNodes) || value.selected.fallbackNodes.length > MAX_ADAPTIVE_FALLBACK_NODES) issues.push('adaptive route explanation fallback nodes are invalid')
+      else {
+        const nodeIds = new Set<string>()
+        let previousNodeId = ''
+        for (const node of value.selected.fallbackNodes) {
+          if (!object(node)) {
+            issues.push('adaptive route explanation fallback node is invalid')
+            continue
+          }
+          exact(node, ['nodeId', 'candidateId', 'role', 'boundary'], 'adaptive route explanation fallback node')
+          if (!safeId(node.nodeId) || !safeId(node.candidateId) || !['fallback', 'retry'].includes(String(node.role)) || !safeId(node.boundary))
+            issues.push('adaptive route explanation fallback node contains invalid values')
+          if (nodeIds.has(String(node.nodeId)) || String(node.nodeId).localeCompare(previousNodeId) < 0) issues.push('adaptive route explanation fallback nodes must be unique and canonical')
+          nodeIds.add(String(node.nodeId))
+          previousNodeId = String(node.nodeId)
+        }
+      }
+    }
+  }
+  if (value.status === 'selected' && value.selected === undefined) issues.push('selected adaptive route explanation requires selected facts')
+  if (value.status === 'unroutable' && value.selected !== undefined) issues.push('unroutable adaptive route explanation cannot contain selected facts')
+
+  if (!Array.isArray(value.exclusions) || value.exclusions.length > MAX_ADAPTIVE_EXCLUSIONS) issues.push('adaptive route explanation exclusions are invalid')
+  else {
+    const exclusionKeys = new Set<string>()
+    let previousExclusionKey = ''
+    for (const exclusion of value.exclusions) {
+      if (!object(exclusion)) {
+        issues.push('adaptive route explanation exclusion is invalid')
+        continue
+      }
+      exact(exclusion, ['planId', 'code', 'detailCode', 'evidenceId'], 'adaptive route explanation exclusion')
+      if (!safeId(exclusion.planId) || !safeId(exclusion.code) || !safeId(exclusion.detailCode) || (exclusion.evidenceId !== undefined && !FINGERPRINT.test(String(exclusion.evidenceId))))
+        issues.push('adaptive route explanation exclusion contains invalid values')
+      const key = `${String(exclusion.planId)}/${String(exclusion.code)}/${String(exclusion.detailCode)}/${String(exclusion.evidenceId ?? '')}`
+      if (exclusionKeys.has(key) || key.localeCompare(previousExclusionKey) < 0) issues.push('adaptive route explanation exclusions must be unique and canonical')
+      exclusionKeys.add(key)
+      previousExclusionKey = key
+    }
+  }
+
+  if (value.authority !== undefined) {
+    if (!object(value.authority)) issues.push('adaptive route explanation authority is invalid')
+    else {
+      exact(value.authority, ['decisionId', 'status', 'reasonCode', 'budgetStatus', 'cloudBoundaryRequired', 'dispatchAuthorized'], 'adaptive route explanation authority')
+      if (
+        typeof value.authority.decisionId !== 'string' ||
+        !FINGERPRINT.test(value.authority.decisionId) ||
+        !['authorized', 'approval-required', 'rejected'].includes(String(value.authority.status)) ||
+        !safeId(value.authority.reasonCode) ||
+        (value.authority.budgetStatus !== undefined && !['authorized', 'approval-required', 'rejected'].includes(String(value.authority.budgetStatus))) ||
+        typeof value.authority.cloudBoundaryRequired !== 'boolean' ||
+        typeof value.authority.dispatchAuthorized !== 'boolean'
+      )
+        issues.push('adaptive route explanation authority contains invalid values')
+    }
+  }
+  const evidenceRefs = value.evidenceRefs
+  if (
+    !Array.isArray(evidenceRefs) ||
+    evidenceRefs.length > MAX_ADAPTIVE_EVIDENCE_REFS ||
+    evidenceRefs.some((reference) => !safeId(reference)) ||
+    new Set(evidenceRefs).size !== evidenceRefs.length ||
+    evidenceRefs.some((reference, index) => index > 0 && String(reference).localeCompare(String(evidenceRefs[index - 1])) < 0)
+  )
+    issues.push('adaptive route explanation evidence references are invalid')
+  if (issues.length) throw new ExecutionExplanationContractError(issues)
+  if (stableFingerprint(withoutId(value as unknown as AdaptiveExecutionRouteExplanation)) !== value.id)
+    throw new ExecutionExplanationContractError(['adaptive route explanation id does not match its canonical payload'])
 }

@@ -208,6 +208,14 @@ export interface ExecutionBudgetHostAuthority {
   consumeApprovalGrant(grant: Readonly<ExecutionBudgetApprovalGrant>, challenge: Readonly<ExecutionBudgetApprovalChallenge>): boolean
 }
 
+/** Non-consuming authority used when a larger transaction commits the grant later. */
+export interface ExecutionBudgetValidationHostAuthority {
+  requirements: ExecutionRequirementSet
+  proposals: readonly unknown[]
+  verifySessionEvidence(evidence: Readonly<SessionWorkloadEvidence>): boolean
+  verifyApprovalGrant(grant: Readonly<ExecutionBudgetApprovalGrant>, challenge: Readonly<ExecutionBudgetApprovalChallenge>): boolean
+}
+
 export interface ExecutionRecoveryBudgetHostAuthority extends ExecutionBudgetHostAuthority {
   verifyRecoveryHistory(evidence: Readonly<ExecutionRecoveryBudgetEvidence>): boolean
 }
@@ -500,19 +508,20 @@ function recoveryDecision(value: Omit<ExecutionRecoveryBudgetDecision, 'id'>): E
   return finalize(value)
 }
 
-/** Applies the session-derived monetary gate without weakening other approvals. */
-export function authorizeExecutionPlan(
+function evaluateExecutionPlanBudget(
   planValue: unknown,
   sessionValue: unknown,
   catalogue: ExecutionCandidateCatalogueSnapshot,
   policy: ExecutionPlanSelectionPolicy,
   input: ExecutionBudgetAuthorizationInput,
-  host: ExecutionBudgetHostAuthority
+  host: ExecutionBudgetHostAuthority | ExecutionBudgetValidationHostAuthority,
+  approvalDisposition: 'consume' | 'verify'
 ): ExecutionBudgetDecision {
   assertExecutionPlanDecision(planValue)
   const plan = planValue
   const envelope = deriveSessionBudgetEnvelope(sessionValue, catalogue, policy)
-  if (!object(host) || !Array.isArray(host.proposals) || !object(host.requirements) || typeof host.verifySessionEvidence !== 'function' || typeof host.consumeApprovalGrant !== 'function')
+  const approvalCallback = approvalDisposition === 'consume' ? 'consumeApprovalGrant' : 'verifyApprovalGrant'
+  if (!object(host) || !Array.isArray(host.proposals) || !object(host.requirements) || typeof host.verifySessionEvidence !== 'function' || typeof host[approvalCallback] !== 'function')
     throw new ExecutionBudgetContractError(['host authority must supply planner evidence and authentication callbacks'])
   const recomputedPlan = selectMinimumCostExecutionPlan(host.proposals, host.requirements as ExecutionRequirementSet, catalogue, policy)
   if (recomputedPlan.id !== plan.id) throw new ExecutionBudgetContractError(['plan decision must match recomputed authoritative planner evidence'])
@@ -578,7 +587,13 @@ export function authorizeExecutionPlan(
   }
   if (withinExpected && withinPath) {
     if (input.approval !== undefined) throw new ExecutionBudgetContractError(['approval must not be attached when the plan is within session authority'])
-    return decision({ ...selectedCommon, status: 'authorized', mode: 'automatic', reasonCode: 'within-session-authority', dispatchAuthorized: !selected.approvalRequired })
+    return decision({
+      ...selectedCommon,
+      status: 'authorized',
+      mode: 'automatic',
+      reasonCode: 'within-session-authority',
+      dispatchAuthorized: approvalDisposition === 'consume' && !selected.approvalRequired
+    })
   }
   const approvalChallenge = challenge(plan, envelope, validateJustification(input.justification))
   if (input.approval === undefined) return decision({ ...selectedCommon, status: 'approval-required', mode: null, reasonCode: 'plan-exceeds-session-authority', challenge: approvalChallenge })
@@ -586,7 +601,10 @@ export function authorizeExecutionPlan(
     return decision({ ...selectedCommon, status: 'rejected', mode: null, reasonCode: 'approval-scope-mismatch', challenge: approvalChallenge })
   let consumed = false
   try {
-    consumed = host.consumeApprovalGrant(input.approval, approvalChallenge) === true
+    consumed =
+      (approvalDisposition === 'consume'
+        ? (host as ExecutionBudgetHostAuthority).consumeApprovalGrant(input.approval, approvalChallenge)
+        : (host as ExecutionBudgetValidationHostAuthority).verifyApprovalGrant(input.approval, approvalChallenge)) === true
   } catch {
     consumed = false
   }
@@ -596,10 +614,34 @@ export function authorizeExecutionPlan(
     status: 'authorized',
     mode: 'approved-increment',
     reasonCode: 'approval-granted',
-    dispatchAuthorized: !selected.approvalRequired,
+    dispatchAuthorized: approvalDisposition === 'consume' && !selected.approvalRequired,
     challenge: approvalChallenge,
     approvalEventId: input.approval.id
   })
+}
+
+/** Applies the session-derived monetary gate and consumes an approved increment before dispatch. */
+export function authorizeExecutionPlan(
+  planValue: unknown,
+  sessionValue: unknown,
+  catalogue: ExecutionCandidateCatalogueSnapshot,
+  policy: ExecutionPlanSelectionPolicy,
+  input: ExecutionBudgetAuthorizationInput,
+  host: ExecutionBudgetHostAuthority
+): ExecutionBudgetDecision {
+  return evaluateExecutionPlanBudget(planValue, sessionValue, catalogue, policy, input, host, 'consume')
+}
+
+/** Verifies monetary authority without consuming it so a composed route can commit every grant atomically. */
+export function validateExecutionPlanBudget(
+  planValue: unknown,
+  sessionValue: unknown,
+  catalogue: ExecutionCandidateCatalogueSnapshot,
+  policy: ExecutionPlanSelectionPolicy,
+  input: ExecutionBudgetAuthorizationInput,
+  host: ExecutionBudgetValidationHostAuthority
+): ExecutionBudgetDecision {
+  return evaluateExecutionPlanBudget(planValue, sessionValue, catalogue, policy, input, host, 'verify')
 }
 
 /** Re-authorizes a fresh recovery plan against authority remaining in one execution lineage. */
