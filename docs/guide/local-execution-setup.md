@@ -72,6 +72,9 @@ const result = await resumeLocalSetup({
 The first call stops at the next missing decision and returns its pending consent scope. Supplying that decision and calling `resumeLocalSetup` again continues from the persisted revision without
 repeating completed work.
 
+A ready setup is still not eligible for work. It must pass the host-specific [local execution qualification](./local-execution-qualification.md), which binds benchmark evidence to this exact setup
+revision, runtime source, model artifact digest, quantization, configuration, host snapshot, and policy.
+
 ## Integrity and resumability
 
 The state store uses compare-and-swap revisions and lives outside the generated application repository. Every operation receives a deterministic idempotency key, and state is persisted after each
