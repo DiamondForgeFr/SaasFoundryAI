@@ -84,3 +84,7 @@ const authority = authorizeExecutionPlan(
 
 Dispatch only when `status === 'authorized'` and `dispatchAuthorized === true`. Present `approval-required` to the user, then call the authority function again with the host-authenticated grant. Treat
 `rejected` as a planning or evidence failure to resolve rather than a request the host may bypass.
+
+[Adaptive local/cloud routing](./local-cloud-routing.md) reuses this exact monetary authority and adds an independent, host-authenticated boundary grant for an explicit local-to-cloud fallback. Its
+composed authority uses `validateExecutionPlanBudget` to authenticate an increment grant without consuming it. The final route transaction consumes the budget and boundary grants together; a rejected
+manifest or boundary grant therefore cannot burn monetary approval. Neither approval widens a hard local-only privacy requirement.

@@ -39,3 +39,6 @@ tie-break decisions. It never stores task prompts, raw observations, provider pa
 [Budget authorization](./execution-budgets.md) compares the selected complete tree with authority derived from the active user-facing session. [Safe replanning](./execution-replanning.md) creates a
 new immutable decision after runtime failures, scope changes, or stale evidence. [Decision explanations](./execution-explanations.md) project the immutable reasons and costs for users, while
 [calibration](./execution-calibration.md) can update future evidence without mutating a completed decision.
+
+Qualified plans can be compared with current energy, device-pressure, reliability, and fallback evidence through [adaptive local/cloud routing](./local-cloud-routing.md). Exact monetary totals remain
+owned by this planning and cost layer.

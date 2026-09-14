@@ -42,3 +42,6 @@ const explanation = explainExecutionDecision(planDecision, {
 ```
 
 Render the returned reason codes and facts for users, while resolving private evidence only in an authorized host view.
+
+`explainAdaptiveExecutionRoute` applies the same safe projection rules to [local/cloud routing](./local-cloud-routing.md), including operational metrics, visible fallback nodes, privacy boundary, and
+independent approval state.

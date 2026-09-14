@@ -110,3 +110,5 @@ profile recommendation before routing work.
 
 Synthetic qualification evidence must stay separate from live [execution calibration](./execution-calibration.md). Qualification establishes controlled task-class capability on one host; calibration
 learns from authorized production outcomes after routing exists.
+
+A current per-task-category result can be admitted and selected through [adaptive local/cloud routing](./local-cloud-routing.md). Qualification alone never creates a candidate or authorizes dispatch.
