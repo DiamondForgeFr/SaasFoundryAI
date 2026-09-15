@@ -18,8 +18,10 @@ export interface GenerationScenario {
   includePwa?: boolean
   /** Exercise the emitted OpenAPI -> generated client contract after the normal build. */
   validateApiContract?: boolean
-  /** Reject critical advisories across every generated npm workspace. */
+  /** Reject high or critical production advisories across every generated npm workspace. */
   auditDependencies?: boolean
+  /** Validate committed multirepo locks before a builder can refresh them. */
+  validateSourceLocks?: boolean
 }
 
 export interface UpdateScenario {
@@ -135,7 +137,8 @@ export const ALL_SCENARIOS: TestScenario[] = [
     dbSetup: 'manual',
     s3Setup: 'manual',
     emailService: 'none',
-    includeAnalytics: false
+    includeAnalytics: false,
+    validateSourceLocks: true
   },
   {
     type: 'generation',

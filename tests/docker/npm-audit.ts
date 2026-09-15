@@ -98,7 +98,7 @@ export function discoverNpmAuditTargets(projectDir: string): NpmAuditTarget[] {
 
     return {
       cwd: lockRoot,
-      args: ['audit', '--audit-level=critical', ...workspaceArgs],
+      args: ['audit', '--omit=dev', '--audit-level=high', ...workspaceArgs],
       label: relativePaths.join(', '),
       coveredPaths
     }
@@ -121,7 +121,7 @@ function isNetworkFailure(output: string): boolean {
   return /ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN|network request failed|fetch failed|audit endpoint returned an error|offline mode/i.test(output)
 }
 
-export function auditCriticalWorkspaces(projectDir: string, runner: AuditRunner = defaultAuditRunner): AssertionResult[] {
+export function auditHighProductionWorkspaces(projectDir: string, runner: AuditRunner = defaultAuditRunner): AssertionResult[] {
   const targets = discoverNpmAuditTargets(projectDir)
   if (targets.length === 0) {
     return [{ passed: false, message: `FAIL: no package-lock.json found under ${projectDir}` }]
@@ -130,7 +130,7 @@ export function auditCriticalWorkspaces(projectDir: string, runner: AuditRunner 
   return targets.map((target) => {
     try {
       runner(target.cwd, target.args)
-      return { passed: true, message: `OK: ${target.label} has no critical advisories` }
+      return { passed: true, message: `OK: ${target.label} has no high or critical production advisories` }
     } catch (error) {
       const output = errorOutput(error)
       if (isNetworkFailure(output)) {
@@ -138,7 +138,7 @@ export function auditCriticalWorkspaces(projectDir: string, runner: AuditRunner 
       }
       return {
         passed: false,
-        message: `FAIL: ${target.label} has critical advisories\n${output.slice(-1500)}`
+        message: `FAIL: ${target.label} has high or critical production advisories\n${output.slice(-1500)}`
       }
     }
   })

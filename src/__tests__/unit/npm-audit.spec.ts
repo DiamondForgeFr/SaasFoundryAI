@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-const { auditCriticalWorkspaces, discoverNpmAuditTargets } = require('../../../tests/docker/npm-audit') as {
-  auditCriticalWorkspaces: (projectDir: string, runner?: (cwd: string, args: string[]) => void) => Array<{ passed: boolean; message: string }>
+const { auditHighProductionWorkspaces, discoverNpmAuditTargets } = require('../../../tests/docker/npm-audit') as {
+  auditHighProductionWorkspaces: (projectDir: string, runner?: (cwd: string, args: string[]) => void) => Array<{ passed: boolean; message: string }>
   discoverNpmAuditTargets: (projectDir: string) => Array<{
     cwd: string
     args: string[]
@@ -36,15 +36,15 @@ describe('npm audit workspace discovery', () => {
     writeJson(join(project, 'node_modules/ignored/package-lock.json'), {})
 
     const [target] = discoverNpmAuditTargets(project)
-    expect(target.args).toEqual(['audit', '--audit-level=critical', '--workspaces', '--include-workspace-root'])
+    expect(target.args).toEqual(['audit', '--omit=dev', '--audit-level=high', '--workspaces', '--include-workspace-root'])
     expect(target.coveredPaths.map((path) => (path === project ? '.' : path.replace(`${project}/`, '')))).toEqual(['.', 'apps/api', 'apps/web', 'packages/client'])
 
     const calls: Array<{ cwd: string; args: string[] }> = []
-    const results = auditCriticalWorkspaces(project, (cwd, args) => calls.push({ cwd, args }))
+    const results = auditHighProductionWorkspaces(project, (cwd, args) => calls.push({ cwd, args }))
     expect(results).toEqual([
       {
         passed: true,
-        message: 'OK: ., apps/api, apps/web, packages/client has no critical advisories'
+        message: 'OK: ., apps/api, apps/web, packages/client has no high or critical production advisories'
       }
     ])
     expect(calls).toEqual([{ cwd: project, args: target.args }])
@@ -81,7 +81,7 @@ describe('npm audit workspace discovery', () => {
       throw error
     }
 
-    const [result] = auditCriticalWorkspaces(project, runner)
+    const [result] = auditHighProductionWorkspaces(project, runner)
     expect(result.passed).toBe(false)
     expect(result.message).toContain('packages/vulnerable-fixture')
   })
@@ -91,7 +91,7 @@ describe('npm audit workspace discovery', () => {
     writeJson(join(project, 'package-lock.json'), { lockfileVersion: 3 })
 
     expect(() =>
-      auditCriticalWorkspaces(project, () => {
+      auditHighProductionWorkspaces(project, () => {
         throw new Error('npm error code ENOTFOUND registry.npmjs.org')
       })
     ).toThrow('could not reach the registry')
