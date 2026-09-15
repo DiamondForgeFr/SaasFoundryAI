@@ -81,8 +81,8 @@ function run(cmd: string, cwd: string, label?: string, timeoutMs = 300_000): voi
  *
  * Builders run `npm install` while they apply optional modules. That is correct for a
  * generated project, but it can also refresh an out-of-date source lock and make the later
- * build look green. Running `npm ci` against isolated copies first makes manifest/lock drift
- * fail at the source boundary instead.
+ * build look green. Dry-running `npm ci` against isolated copies first makes manifest/lock
+ * drift fail at the source boundary without materializing two disposable dependency trees.
  */
 function validateSourceMultirepoLockfiles(): AssertionResult[] {
   const validationRoot = join(WORKSPACE, '.source-lock-validation')
@@ -98,7 +98,7 @@ function validateSourceMultirepoLockfiles(): AssertionResult[] {
       for (const file of ['package.json', 'package-lock.json']) {
         copyFileSync(join(sourceRoot, app, file), join(destination, file))
       }
-      run('npm ci --ignore-scripts', destination, `source ${app} lock: npm ci`)
+      run('npm ci --dry-run --ignore-scripts', destination, `source ${app} lock: npm ci --dry-run`)
     }
 
     const results = auditHighProductionWorkspaces(validationRoot)
@@ -222,20 +222,20 @@ async function generateProject(scenario: GenerationScenario | (UpdateScenario['b
 
 function buildMultirepoApi(projectDir: string, projectName: string): void {
   const apiPath = join(projectDir, 'apps', `${projectName}-api`)
-  run('npm ci --ignore-scripts', apiPath, 'npm ci (API lock verification)')
+  run('npm ci --dry-run --ignore-scripts', apiPath, 'npm ci --dry-run (API lock verification)')
   run('npx prisma generate', apiPath, 'prisma generate')
   run('npx nest build', apiPath, 'nest build')
 }
 
 function buildMultirepoWeb(projectDir: string, projectName: string): void {
   const webPath = join(projectDir, 'apps', `${projectName}-web`)
-  run('npm ci --ignore-scripts', webPath, 'npm ci (Web lock verification)')
+  run('npm ci --dry-run --ignore-scripts', webPath, 'npm ci --dry-run (Web lock verification)')
   run('npx tsc -b', webPath, 'tsc -b (Web)')
   run('npx vite build', webPath, 'vite build')
 }
 
 function buildMonorepo(projectDir: string): void {
-  run('npm ci --ignore-scripts', projectDir, 'npm ci (monorepo lock verification)')
+  run('npm ci --dry-run --ignore-scripts', projectDir, 'npm ci --dry-run (monorepo lock verification)')
   run('npx prisma generate', join(projectDir, 'apps', 'api'), 'prisma generate')
   run('npm run lint', projectDir, 'lint all monorepo workspaces')
   run('npx turbo run build', projectDir, 'turbo run build')

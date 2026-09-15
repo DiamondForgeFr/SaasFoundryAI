@@ -162,7 +162,8 @@ export const ALL_SCENARIOS: TestScenario[] = [
     dbSetup: 'docker',
     s3Setup: 'docker',
     emailService: 'mailersend',
-    includeAnalytics: true
+    includeAnalytics: true,
+    auditDependencies: true
   },
   {
     type: 'generation',
