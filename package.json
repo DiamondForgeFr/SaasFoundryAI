@@ -58,11 +58,11 @@
     "test:smoke": "jest --selectProjects smoke",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\" --ignore-path .prettierignore",
     "lint": "eslint --config eslint.config.mjs .",
-    "prepublishOnly": "rm -rf dist && npm run build",
+    "prepublishOnly": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build",
     "link": "npm link --force",
     "uninstall": "npm unlink -g saasfoundryai-cli && hash -r",
     "prepare": "husky",
-    "test:pre-commit": "npm run format && npm run lint && npm run build && npm test",
+    "test:pre-commit": "npm run format && npm run lint && npm run build && npm run package:check && npm test",
     "test:pre-push": "npm run test:docker -- --count 2",
     "test:full": "npm run test:pre-commit && npm run test:pre-push",
     "test:docker": "bash tests/docker/run-docker-tests.sh",
@@ -72,12 +72,11 @@
     "publish:beta": "npm run build && npm publish --tag beta",
     "publish:latest": "npm run build && npm publish --tag latest",
     "publish:check": "npm dist-tag ls saasfoundryai-cli",
-    "version:manage": "./scripts/tag-manager.sh \"$(git symbolic-ref --short HEAD)\"",
+    "package:check": "node scripts/check-package-contents.js",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "prepack": "npm run docs:build",
-    "docs:preview": "vitepress preview docs",
-    "postinstall": "if [ \"$CI\" != \"true\" ] && [ \"$HUSKY\" != \"0\" ] && [ \"$npm_config_global\" != \"true\" ]; then husky install && find .husky -type f -exec chmod +x {} + 2>/dev/null || true && if [ -d './scripts' ]; then find ./scripts -type f -name '*.sh' -exec chmod +x {} + 2>/dev/null || true; fi; fi"
+    "docs:preview": "vitepress preview docs"
   },
   "config": {
     "loglevel": "error"

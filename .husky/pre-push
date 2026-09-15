@@ -6,22 +6,33 @@ echo "Preparing to push branch: $current_branch"
 remote="$1"
 url="$2"
 
-# Check if we're pushing a RC branch
+# RC pushes are validation-only. Version changes must already be committed,
+# and release tags are created from the verified master commit after merge.
 if [[ "$current_branch" =~ ^rc- ]]; then
   echo "Release candidate branch detected: $current_branch"
-  echo "Running version management script..."
+  expected_version="${current_branch#rc-}"
+  current_version=$(node -p "require('./package.json').version")
 
-  # Use npm to run the version management script
-  # This ensures a proper interactive terminal environment
-  npm run version:manage
-
-  # Check exit code
-  if [ $? -ne 0 ]; then
-    echo "❌ Version management failed or was aborted."
+  if [[ ! "$expected_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+    echo "❌ Invalid release branch name. Expected rc-X.Y.Z, got $current_branch."
     exit 1
   fi
 
-  echo "✅ Version management completed successfully."
+  if [ "$current_version" != "$expected_version" ]; then
+    echo "❌ Release version mismatch: $current_branch expects $expected_version, package.json contains $current_version."
+    echo "Prepare and commit the version before pushing the RC branch:"
+    echo "  npm version $expected_version --no-git-tag-version"
+    echo "  git commit -am 'chore(#<ticket>): prepare v$expected_version'"
+    exit 1
+  fi
+
+  if git ls-remote --exit-code --tags "$remote" "refs/tags/v$current_version" >/dev/null 2>&1; then
+    echo "❌ Tag v$current_version already exists on $remote; refusing to reuse a published version."
+    exit 1
+  fi
+
+  echo "✅ RC version is committed and v$current_version is still available."
+  echo "Create the tag only after this RC is merged and the master commit is verified."
 else
   # Not a RC branch
   echo "This is not a release candidate branch."
