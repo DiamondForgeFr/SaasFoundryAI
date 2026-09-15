@@ -138,7 +138,7 @@ export function auditHighProductionWorkspaces(projectDir: string, runner: AuditR
       }
       return {
         passed: false,
-        message: `FAIL: ${target.label} has high or critical production advisories\n${output.slice(-1500)}`
+        message: `FAIL: production audit failed for ${target.label}; npm reported advisories or another audit error\n${output.slice(-1500)}`
       }
     }
   })

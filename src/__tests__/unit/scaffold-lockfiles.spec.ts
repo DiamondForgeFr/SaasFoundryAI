@@ -26,6 +26,8 @@ interface LockPackage {
 }
 
 interface PackageLock {
+  name: string
+  version: string
   lockfileVersion: number
   packages: Record<string, LockPackage>
 }
@@ -61,6 +63,8 @@ function manifestLockDrift(manifest: PackageManifest, lock: PackageLock): string
 
   const drift: string[] = []
   if (lock.lockfileVersion !== 3) drift.push(`lockfileVersion: expected 3, received ${lock.lockfileVersion}`)
+  if (lock.name !== manifest.name) drift.push(`top-level name: expected ${manifest.name}, received ${lock.name}`)
+  if (lock.version !== manifest.version) drift.push(`top-level version: expected ${manifest.version}, received ${lock.version}`)
   if (lockRoot.name !== manifest.name) drift.push(`name: expected ${manifest.name}, received ${lockRoot.name}`)
   if (lockRoot.version !== manifest.version) drift.push(`version: expected ${manifest.version}, received ${lockRoot.version}`)
 
@@ -68,6 +72,30 @@ function manifestLockDrift(manifest: PackageManifest, lock: PackageLock): string
     if (!isDeepStrictEqual(lockRoot[section] ?? {}, manifest[section] ?? {})) drift.push(`${section} differs from package.json`)
   }
   return drift
+}
+
+function minimumResolutionDrift(lock: PackageLock, expected: Record<string, string>): string[] {
+  const toParts = (version: string): number[] | undefined => {
+    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
+    return match ? match.slice(1).map(Number) : undefined
+  }
+
+  return Object.entries(expected).flatMap(([dependency, minimum]) => {
+    const minimumParts = toParts(minimum)!
+    const resolved = versionsOf(lock, dependency)
+    const isPatched =
+      resolved.length > 0 &&
+      resolved.every((version) => {
+        const parts = toParts(version)
+        if (!parts) return false
+        for (let index = 0; index < parts.length; index += 1) {
+          if (parts[index] > minimumParts[index]) return true
+          if (parts[index] < minimumParts[index]) return false
+        }
+        return true
+      })
+    return isPatched ? [] : [`${dependency}: expected every resolution to be at least ${minimum}, received ${resolved.join(', ') || 'nothing'}`]
+  })
 }
 
 function resolutionDrift(lock: PackageLock, expected: Record<string, string>): string[] {
@@ -105,9 +133,8 @@ describe('committed multirepo lockfiles', () => {
     const api = fixtures.find((fixture) => fixture.app === 'api')
     const web = fixtures.find((fixture) => fixture.app === 'web')
 
-    expect(versionsOf(api!.lock, 'fast-uri')).toEqual(['3.1.8'])
-    expect(versionsOf(web!.lock, 'fast-uri')).toEqual(['3.1.8'])
-    expect(versionsOf(api!.lock, 'qs')).toEqual(['6.16.0'])
+    expect(minimumResolutionDrift(api!.lock, { 'fast-uri': '3.1.8', qs: '6.16.0' })).toEqual([])
+    expect(minimumResolutionDrift(web!.lock, { 'fast-uri': '3.1.8' })).toEqual([])
   })
 
   it('fails when a lock root omits a dependency or pins a different version', () => {
@@ -118,8 +145,12 @@ describe('committed multirepo lockfiles', () => {
     const staleVersion = structuredClone(api.lock)
     staleVersion.packages[''].dependencies = { ...staleVersion.packages[''].dependencies, mailersend: '2.8.0' }
 
+    const staleMetadata = structuredClone(api.lock)
+    staleMetadata.name = 'stale-api-name'
+
     expect(manifestLockDrift(api.manifest, missingDependency)).toContain('dependencies differs from package.json')
     expect(manifestLockDrift(api.manifest, staleVersion)).toContain('dependencies differs from package.json')
+    expect(manifestLockDrift(api.manifest, staleMetadata)).toContain(`top-level name: expected ${api.manifest.name}, received stale-api-name`)
   })
 
   it('fails when a vulnerable transitive resolution returns', () => {
@@ -128,5 +159,16 @@ describe('committed multirepo lockfiles', () => {
     staleLock.packages['node_modules/multer'].version = '2.2.0'
 
     expect(resolutionDrift(staleLock, { multer: '2.4.0' })).toEqual(['multer: expected only 2.4.0, received 2.2.0'])
+  })
+
+  it('accepts newer parser patches and rejects any vulnerable resolution', () => {
+    const api = fixtures.find((fixture) => fixture.app === 'api')!
+    const newerLock = structuredClone(api.lock)
+    newerLock.packages['node_modules/fast-uri'].version = '3.2.0'
+    expect(minimumResolutionDrift(newerLock, { 'fast-uri': '3.1.8' })).toEqual([])
+
+    const staleLock = structuredClone(api.lock)
+    staleLock.packages['node_modules/fast-uri'].version = '2.99.0'
+    expect(minimumResolutionDrift(staleLock, { 'fast-uri': '3.1.8' })).toEqual(['fast-uri: expected every resolution to be at least 3.1.8, received 2.99.0'])
   })
 })

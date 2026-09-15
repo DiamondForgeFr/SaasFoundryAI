@@ -45,7 +45,7 @@ The generated API currently needs three transitive security overrides. They live
 | `prisma`                   | `mysql2` `3.24.4`      | Patches Prisma's optional MySQL driver even though PostgreSQL is the default.    | The supported Prisma line resolves `mysql2 >= 3.24.4` itself.                                              |
 
 Do not broaden these overrides to unrelated dependency trees. Before removing one, regenerate both multirepo lockfiles from an empty npm 11 resolution and run the generated production audit. The
-committed lock guard must still resolve `fast-uri` `3.1.8`, `qs` `6.16.0`, and every override target above.
+committed lock guard must still resolve `fast-uri >= 3.1.8`, `qs >= 6.16.0`, and every exact override target above.
 
 ## Method for the next upgrade
 
