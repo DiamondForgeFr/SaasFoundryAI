@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-
-import glob from 'glob'
 
 /**
  * #610 — a project that declined storage shipped a unit suite that did not compile.
@@ -21,7 +19,7 @@ const API_BLUEPRINT = join(__dirname, '../../../../scaffolds/blueprints/api')
 /** Modules a user can decline, and the marker that gates each one's code. */
 const DECLINABLE_MODULES = [{ importPath: '@modules/storage/', marker: '// TODO storage-service-active:' }]
 
-const sourceFiles = glob.sync('src/**/*.ts', { cwd: API_BLUEPRINT }).map((relative) => ({ relative, content: readFileSync(join(API_BLUEPRINT, relative), 'utf8') }))
+const sourceFiles = globSync('src/**/*.ts', { cwd: API_BLUEPRINT }).map((relative) => ({ relative, content: readFileSync(join(API_BLUEPRINT, relative), 'utf8') }))
 
 describe('no blueprint file imports a declinable module unconditionally (#610)', () => {
   it('finds the blueprint, so an empty glob cannot pass silently', () => {

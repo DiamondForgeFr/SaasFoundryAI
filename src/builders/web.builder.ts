@@ -1,8 +1,7 @@
 import { copy } from 'fs-extra'
+import { globSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { resolve } from 'path'
-
-import glob from 'glob'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installPwaModule } from '../installers/pwa.installer'
@@ -38,7 +37,7 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     // import from `@<name>/api-client/...`, and overlay files outside hooks/ (e.g. the
     // query-provider wiring setUnauthorizedHandler) carry the placeholder too. No-op on
     // files without the placeholder.
-    const monorepoSrcTsFiles = glob.sync(`${webPath}/src/**/*.{ts,tsx}`, { ignore: `${webPath}/node_modules/**` })
+    const monorepoSrcTsFiles = globSync(`${webPath}/src/**/*.{ts,tsx}`, { exclude: [`${webPath}/node_modules/**`] })
     if (monorepoSrcTsFiles.length > 0) await substitutePlaceholdersInFiles(monorepoSrcTsFiles, { PROJECT_NAME: projectName })
 
     // Drop the vendored shadcn copy + cn/useIsMobile — primitives now live in
@@ -56,7 +55,7 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
     // Rewire all primitive imports across apps/web to the workspace package.
     // Covers `@/components/ui/shadcn/<name>` → `@<projectName>/ui-primitives/<name>`,
     // and `@/utils/ui` (cn) → `@<projectName>/ui-primitives` (barrel).
-    const monorepoSrcFiles = glob.sync(`${webPath}/src/**/*.{ts,tsx}`, { ignore: `${webPath}/node_modules/**` })
+    const monorepoSrcFiles = globSync(`${webPath}/src/**/*.{ts,tsx}`, { exclude: [`${webPath}/node_modules/**`] })
     for (const filePath of monorepoSrcFiles) {
       let body = await readFile(filePath, 'utf8')
       const before = body
