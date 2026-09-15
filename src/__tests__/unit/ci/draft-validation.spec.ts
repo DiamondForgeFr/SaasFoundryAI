@@ -63,7 +63,7 @@ describe('pre-push validation policy', () => {
     bin = join(dir, 'bin')
     calls = join(dir, 'npm-calls')
     mkdirSync(bin)
-    writeFileSync(join(bin, 'git'), '#!/bin/sh\ncase "$1" in symbolic-ref) echo "$SF_TEST_BRANCH";; log) exit 0;; esac\n')
+    writeFileSync(join(bin, 'git'), '#!/bin/sh\ncase "$1" in symbolic-ref) echo "$SF_TEST_BRANCH";; log) exit 0;; ls-remote) exit "${SF_TEST_TAG_EXIT:-2}";; esac\n')
     writeFileSync(join(bin, 'npm'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$SF_TEST_CALLS"\nexit "${SF_TEST_NPM_EXIT:-0}"\n')
     chmodSync(join(bin, 'git'), 0o755)
     chmodSync(join(bin, 'npm'), 0o755)
@@ -71,20 +71,34 @@ describe('pre-push validation policy', () => {
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
   function env(branch: string, exit = '0'): NodeJS.ProcessEnv {
-    return { ...process.env, PATH: `${bin}:${process.env.PATH}`, SF_TEST_BRANCH: branch, SF_TEST_CALLS: calls, SF_TEST_NPM_EXIT: exit }
+    return { ...process.env, PATH: `${bin}:${process.env.PATH}`, SF_TEST_BRANCH: branch, SF_TEST_CALLS: calls, SF_TEST_NPM_EXIT: exit, SF_TEST_TAG_EXIT: '2' }
   }
   it('allows feedback pushes without invoking Docker and points to the mandatory AI-testing validation', () => {
     const out = execFileSync('bash', [join(ROOT, '.husky/pre-push'), 'origin', 'unused'], { cwd: dir, env: env('feature/654-draft'), encoding: 'utf8' })
     expect(readFileSync(calls, 'utf8')).toBe('')
     expect(out).toContain('Before Human testing, run npm run test:pre-push during AI testing')
   })
-  it('retains RC version management', () => {
-    execFileSync('bash', [join(ROOT, '.husky/pre-push')], { cwd: dir, env: env('rc-release'), stdio: 'pipe' })
-    expect(readFileSync(calls, 'utf8').trim()).toBe('run version:manage')
+  it('validates an already-committed RC version without mutating it or creating a tag', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ version: '1.2.3' }))
+    const out = execFileSync('bash', [join(ROOT, '.husky/pre-push'), 'origin', 'unused'], { cwd: dir, env: env('rc-1.2.3'), encoding: 'utf8' })
+    expect(readFileSync(calls, 'utf8')).toBe('')
+    expect(out).toContain('RC version is committed')
+    expect(out).toContain('tag only after this RC is merged')
   })
-  it('still rejects an RC push if version management fails', () => {
-    const result = spawnSync('bash', [join(ROOT, '.husky/pre-push')], { cwd: dir, env: env('rc-release', '1'), encoding: 'utf8' })
+
+  it('rejects an RC push when the branch and committed package versions differ', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ version: '1.2.2' }))
+    const result = spawnSync('bash', [join(ROOT, '.husky/pre-push'), 'origin', 'unused'], { cwd: dir, env: env('rc-1.2.3'), encoding: 'utf8' })
     expect(result.status).toBe(1)
-    expect(result.stdout).toContain('Version management failed')
+    expect(result.stdout).toContain('Release version mismatch')
+    expect(readFileSync(calls, 'utf8')).toBe('')
+  })
+
+  it('rejects an RC push when the release tag already exists', () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ version: '1.2.3' }))
+    const releaseEnv = { ...env('rc-1.2.3'), SF_TEST_TAG_EXIT: '0' }
+    const result = spawnSync('bash', [join(ROOT, '.husky/pre-push'), 'origin', 'unused'], { cwd: dir, env: releaseEnv, encoding: 'utf8' })
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('Tag v1.2.3 already exists')
   })
 })

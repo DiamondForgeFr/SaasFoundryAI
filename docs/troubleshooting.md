@@ -152,11 +152,11 @@ To pin a port at generation time instead, pass `--db-port` / `--api-port` / `--w
 
 **Cause** — Three Husky hooks gate every commit:
 
-| Hook         | What it checks                                                                 |
-| ------------ | ------------------------------------------------------------------------------ |
-| `commit-msg` | `commitlint` — `<type>(#<ticket>): <description>` shape                        |
-| `pre-commit` | `npm run test:pre-commit` — format + lint + build + jest                       |
-| `pre-push`   | RC version management and WIP checks; Docker runs explicitly during AI Testing |
+| Hook         | What it checks                                                                                  |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| `commit-msg` | `commitlint` — `<type>(#<ticket>): <description>` shape                                         |
+| `pre-commit` | `npm run test:pre-commit` — format + lint + build + jest                                        |
+| `pre-push`   | RC version/tag availability validation and WIP checks; Docker runs explicitly during AI Testing |
 
 **Fix**
 

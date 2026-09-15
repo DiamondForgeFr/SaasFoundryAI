@@ -171,12 +171,17 @@ These flows are documented in dedicated reference docs because they have their o
 
 ## Releasing
 
-Releases run from `master`. The flow is automated through RC branches:
+Releases run from `master`. RC Git hooks validate state but never mutate commits or create tags:
 
 1. From `develop`, branch `rc-X.Y.Z` (e.g. `rc-2.0.0`).
-2. Merge into `master` once the RC is green. Husky's `tag-manager.sh` script handles versioning.
-3. CI publishes `saasfoundryai-cli@X.Y.Z` to npm.
-4. Tag both branches and update `CHANGELOG.md`.
+2. Before the first push, run `npm version X.Y.Z --no-git-tag-version`, update the changelog, and commit both with the release ticket scope.
+3. Push the RC branch and open its PR to `master`. The branch version must match `X.Y.Z`, and the full Docker matrix must pass.
+4. Merge with a merge commit, update the local `master`, verify its exact commit and package contents, then create and push the annotated `vX.Y.Z` tag.
+5. Publish `saasfoundryai-cli@X.Y.Z` from that verified `master` commit and confirm the `latest` dist-tag.
+6. Synchronize the release commit back to `develop` and verify a clean global install.
+
+The v1 release also has divergent legacy `master` history. Its RC branch must first record that history with `git merge -s ours --no-ff origin/master`; see release ticket #488 for the verified
+commands. Do not use `-X ours`, which can retain non-conflicting stale files.
 
 For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/release-objectives.md).
 
