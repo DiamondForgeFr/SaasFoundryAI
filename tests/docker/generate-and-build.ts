@@ -9,7 +9,7 @@
 //   node --import tsx generate-and-build.ts  # runs all scenarios
 
 import { execFileSync, execSync, spawn, spawnSync } from 'child_process'
-import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
+import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import { createRequire } from 'module'
 import { join } from 'path'
 
@@ -36,7 +36,7 @@ import {
   reportResults,
   scanForUnreplacedPlaceholders
 } from './assertions'
-import { auditCriticalWorkspaces } from './npm-audit'
+import { auditHighProductionWorkspaces } from './npm-audit'
 import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, MigrationScenario, TestScenario, CliScenario, BootScenario } from './scenarios'
 
 // ── Config ─────────────────────────────────────────────────────
@@ -73,6 +73,40 @@ function run(cmd: string, cwd: string, label?: string, timeoutMs = 300_000): voi
     if (stdout) console.error(`    stdout: ${stdout}`)
     if (stderr) console.error(`    stderr: ${stderr}`)
     throw new Error(`Command failed: ${cmd}`)
+  }
+}
+
+/**
+ * Exercise the committed multirepo locks without touching the scaffold source.
+ *
+ * Builders run `npm install` while they apply optional modules. That is correct for a
+ * generated project, but it can also refresh an out-of-date source lock and make the later
+ * build look green. Running `npm ci` against isolated copies first makes manifest/lock drift
+ * fail at the source boundary instead.
+ */
+function validateSourceMultirepoLockfiles(): AssertionResult[] {
+  const validationRoot = join(WORKSPACE, '.source-lock-validation')
+  const sourceRoot = join(CLI_PATH, 'scaffolds', 'overlays', 'multirepo')
+
+  rmSync(validationRoot, { recursive: true, force: true })
+  mkdirSync(validationRoot, { recursive: true })
+
+  try {
+    for (const app of ['api', 'web']) {
+      const destination = join(validationRoot, app)
+      mkdirSync(destination, { recursive: true })
+      for (const file of ['package.json', 'package-lock.json']) {
+        copyFileSync(join(sourceRoot, app, file), join(destination, file))
+      }
+      run('npm ci --ignore-scripts', destination, `source ${app} lock: npm ci`)
+    }
+
+    const results = auditHighProductionWorkspaces(validationRoot)
+    const failures = results.filter((result) => !result.passed)
+    if (failures.length > 0) throw new Error(failures.map((failure) => failure.message).join('\n'))
+    return results
+  } finally {
+    rmSync(validationRoot, { recursive: true, force: true })
   }
 }
 
@@ -188,20 +222,20 @@ async function generateProject(scenario: GenerationScenario | (UpdateScenario['b
 
 function buildMultirepoApi(projectDir: string, projectName: string): void {
   const apiPath = join(projectDir, 'apps', `${projectName}-api`)
-  run('npm install --ignore-scripts', apiPath, 'npm install (API)')
+  run('npm ci --ignore-scripts', apiPath, 'npm ci (API lock verification)')
   run('npx prisma generate', apiPath, 'prisma generate')
   run('npx nest build', apiPath, 'nest build')
 }
 
 function buildMultirepoWeb(projectDir: string, projectName: string): void {
   const webPath = join(projectDir, 'apps', `${projectName}-web`)
-  run('npm install --ignore-scripts', webPath, 'npm install (Web)')
+  run('npm ci --ignore-scripts', webPath, 'npm ci (Web lock verification)')
   run('npx tsc -b', webPath, 'tsc -b (Web)')
   run('npx vite build', webPath, 'vite build')
 }
 
 function buildMonorepo(projectDir: string): void {
-  run('npm install --ignore-scripts', projectDir, 'npm install (monorepo root)')
+  run('npm ci --ignore-scripts', projectDir, 'npm ci (monorepo lock verification)')
   run('npx prisma generate', join(projectDir, 'apps', 'api'), 'prisma generate')
   run('npm run lint', projectDir, 'lint all monorepo workspaces')
   run('npx turbo run build', projectDir, 'turbo run build')
@@ -313,6 +347,7 @@ async function validateGeneratedApiContract(projectDir: string, projectName: str
 async function runGenerationScenario(scenario: GenerationScenario): Promise<boolean> {
   console.log(`\nGenerating project: ${scenario.projectName} (${scenario.isMonorepo ? 'monorepo' : 'multirepo'})`)
 
+  const sourceLockResults = scenario.validateSourceLocks === true ? validateSourceMultirepoLockfiles() : []
   const projectDir = await generateProject(scenario)
 
   console.log(`Building...`)
@@ -324,15 +359,15 @@ async function runGenerationScenario(scenario: GenerationScenario): Promise<bool
   }
 
   // Assertions
-  const results: AssertionResult[] = []
+  const results: AssertionResult[] = [...sourceLockResults]
 
   if (scenario.validateApiContract === true) {
     results.push(...(await validateGeneratedApiContract(projectDir, scenario.projectName)))
   }
 
   if (scenario.auditDependencies === true) {
-    console.log('  > npm audit (critical) across generated workspaces')
-    results.push(...auditCriticalWorkspaces(projectDir))
+    console.log('  > production npm audit (high) across generated workspaces')
+    results.push(...auditHighProductionWorkspaces(projectDir))
   }
 
   const storageInstalled = scenario.s3Setup !== 'manual'
@@ -1019,8 +1054,8 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
     })
     results.push({ passed: true, message: `OK: the web app answered / on ${ports.web}` })
 
-    await runStep('npm audit (critical)', () => {
-      results.push(...auditCriticalWorkspaces(projectDir))
+    await runStep('production npm audit (high)', () => {
+      results.push(...auditHighProductionWorkspaces(projectDir))
     })
 
     await runStep('api npm run test:unit', () => {

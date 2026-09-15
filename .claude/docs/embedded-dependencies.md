@@ -33,6 +33,20 @@ stable.
 Following `npm outdated` here puts the CLI on a release candidate while leaving the client on 7 — the two halves of Prisma split apart. Both are pinned to `7.10.0` on purpose. Revisit when `prisma`
 and `@prisma/client` agree on a stable major again.
 
+## Scoped security overrides
+
+The generated API currently needs three transitive security overrides. They live at both actual npm install roots: `scaffolds/overlays/multirepo/api/package.json` for an independent API and
+`scaffolds/overlays/monorepo/root/package.json` for npm workspaces. An override inside `apps/api` would be ignored in a monorepo.
+
+| Parent dependency          | Forced dependency      | Why it is pinned                                                                 | Remove when                                                                                                |
+| -------------------------- | ---------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@nestjs/platform-express` | `multer` `2.4.0`       | Keeps the NestJS 11 upload path on the patched Multer release without NestJS 12. | NestJS 11 resolves an equally new patched Multer itself, or the project completes its NestJS 12 migration. |
+| `@prisma/config`           | `deepmerge-ts` `8.0.2` | Removes the vulnerable Prisma configuration merge implementation.                | The supported Prisma 7 line declares `deepmerge-ts >= 8.0.2` without an override.                          |
+| `prisma`                   | `mysql2` `3.24.4`      | Patches Prisma's optional MySQL driver even though PostgreSQL is the default.    | The supported Prisma line resolves `mysql2 >= 3.24.4` itself.                                              |
+
+Do not broaden these overrides to unrelated dependency trees. Before removing one, regenerate both multirepo lockfiles from an empty npm 11 resolution and run the generated production audit. The
+committed lock guard must still resolve `fast-uri` `3.1.8`, `qs` `6.16.0`, and every override target above.
+
 ## Method for the next upgrade
 
 Validate on a **real generated project** before touching templates. The docker scenarios generate and boot a project (#594), which is a strong final check, but they rebuild an image per attempt — too
