@@ -1,9 +1,8 @@
-import { mkdir, readFile, rm } from 'fs/promises'
+import { globSync } from 'node:fs'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import shelljs from 'shelljs'
-
-import glob from 'glob'
 
 import { createApiApp } from '../../../builders/api.builder'
 import { createDevServicesCompose } from '../../../builders/dev-services.builder'
@@ -86,7 +85,7 @@ describe('no scaffold-owned name survives generation (#606)', () => {
       s3Credentials: { endpoint: '', accessKey: 'k', secretKey: 's', bucket: 'my-own-bucket', region: 'r' }
     })
 
-    const files = glob.sync('apps/**/*', { cwd: tempDir, nodir: true, ignore: ['**/node_modules/**', '**/.git/**'] })
+    const files = globSync('apps/**/*', { cwd: tempDir, exclude: ['**/node_modules/**', '**/.git/**'] })
     const survivors: string[] = []
 
     for (const relative of files) {

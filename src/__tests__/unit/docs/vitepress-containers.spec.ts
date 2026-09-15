@@ -1,7 +1,5 @@
-import { readFileSync } from 'fs'
+import { globSync, readFileSync } from 'node:fs'
 import path from 'path'
-
-import { glob } from 'glob'
 
 // VitePress containers (::: tip / info / warning / details / danger) need their fences on
 // their own lines. Prettier does not know that: `proseWrap: always` treats a fence as
@@ -60,7 +58,7 @@ function scan(file: string): Offence[] {
 }
 
 describe('VitePress containers in docs/', () => {
-  const files = glob.sync('**/*.md', { cwd: DOCS, absolute: true, ignore: ['.vitepress/**', 'node_modules/**'] })
+  const files = globSync('**/*.md', { cwd: DOCS, exclude: ['.vitepress/**', 'node_modules/**'] }).map((file) => path.resolve(DOCS, file))
 
   it('finds markdown to check', () => {
     expect(files.length).toBeGreaterThan(20)
