@@ -6,8 +6,8 @@ if (!npmCli) {
   process.exit(1)
 }
 
-const docs = spawnSync(process.execPath, [npmCli, 'run', 'docs:build'], { encoding: 'utf8', stdio: 'inherit' })
-if (docs.status !== 0) process.exit(docs.status || 1)
+const prepared = spawnSync(process.execPath, [npmCli, 'run', 'package:prepare'], { encoding: 'utf8', stdio: 'inherit' })
+if (prepared.status !== 0) process.exit(prepared.status || 1)
 
 const packed = spawnSync(process.execPath, [npmCli, 'pack', '--dry-run', '--json', '--ignore-scripts'], { encoding: 'utf8' })
 if (packed.status !== 0) {
