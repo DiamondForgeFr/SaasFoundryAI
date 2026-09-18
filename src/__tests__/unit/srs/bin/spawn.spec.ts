@@ -53,6 +53,8 @@ interface TestIO extends SpawnIO {
   stderr: jest.Mock
   createSubtask: jest.Mock
   createEpic: jest.Mock
+  inspectTickets: jest.Mock
+  linkSubtask: jest.Mock
   stdoutBuffer: string[]
   stderrBuffer: string[]
 }
@@ -92,7 +94,9 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
     void name
     void page
   })
-  return Object.assign({ stdout, stderr, createSubtask, createEpic, ensureMilestone, assignMilestone, associateMilestone, stdoutBuffer, stderrBuffer }, overrides)
+  const inspectTickets = jest.fn(() => [])
+  const linkSubtask = jest.fn()
+  return Object.assign({ stdout, stderr, createSubtask, createEpic, inspectTickets, linkSubtask, ensureMilestone, assignMilestone, associateMilestone, stdoutBuffer, stderrBuffer }, overrides)
 }
 
 describe('parseArgs', () => {
@@ -106,10 +110,11 @@ describe('parseArgs', () => {
   })
 
   it('accepts --dry-run and custom --manifest / --bypass-reason', () => {
-    const opts = parseArgs(['--ticket', '1', '--epic', 'e', '--dry-run', '--manifest', '/tmp/m.json', '--bypass-reason', 'bootstrap'])
+    const opts = parseArgs(['--ticket', '1', '--epic', 'e', '--dry-run', '--manifest', '/tmp/m.json', '--bypass-reason', 'bootstrap', '--reconciliation-plan', '/tmp/reconcile.json'])
     expect(opts.dryRun).toBe(true)
     expect(opts.manifestPath).toBe('/tmp/m.json')
     expect(opts.bypassReason).toBe('bootstrap')
+    expect(opts.reconciliationPlanPath).toBe('/tmp/reconcile.json')
   })
 
   it('throws when --ticket has no value', () => {
@@ -130,6 +135,10 @@ describe('parseArgs', () => {
 
   it('throws when --bypass-reason is followed by another flag', () => {
     expect(() => parseArgs(['--ticket', '42', '--epic', 'e', '--bypass-reason', '--dry-run'])).toThrow(/--bypass-reason requires a value/)
+  })
+
+  it('throws when --reconciliation-plan has no value', () => {
+    expect(() => parseArgs(['--ticket', '42', '--epic', 'e', '--reconciliation-plan'])).toThrow(/--reconciliation-plan requires a value/)
   })
 
   // --ticket became optional in #517: without it, spawn creates the Epic itself.
@@ -198,6 +207,23 @@ describe('runSpawn', () => {
 
   const writeManifest = (body: unknown): void => {
     writeFileSync(join(tmp, '.saasfoundry.json'), JSON.stringify(body))
+  }
+
+  const writeReconciliationPlan = (requirements: Array<{ frId: string; classification: 'delivered' | 'partial' | 'missing' | 'superseded'; evidence?: string[] }>): string => {
+    const path = join(tmp, 'reconciliation.json')
+    writeFileSync(
+      path,
+      JSON.stringify({
+        version: 1,
+        sources: {
+          board: { status: 'verified', evidence: ['board inspection'] },
+          srs: { status: 'verified', evidence: ['selected SRS version'] },
+          implementation: { status: 'verified', evidence: ['source, tests and docs audit'] }
+        },
+        requirements: requirements.map((requirement) => ({ ...requirement, evidence: requirement.evidence ?? ['verified'] }))
+      })
+    )
+    return path
   }
 
   it('returns 2 when the manifest is missing', async () => {
@@ -319,6 +345,132 @@ describe('runSpawn', () => {
     expect(firstBody).toMatch(/## Objective/)
     expect(firstBody).toMatch(/FR-AUTH-001 — Login flow/)
     expect(firstBody).toMatch(/https:\/\/example\.test\/fr1/)
+  })
+
+  it('reconciles delivered, existing and missing FRs before creating only missing work', async () => {
+    const children: PageRef[] = [
+      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Existing flow' },
+      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-AUTH-002 — Missing flow' },
+      { id: 'p3', url: 'https://example.test/fr3', title: 'FR-AUTH-003 — Delivered elsewhere' }
+    ]
+    registerSrsBackend('stub', () => new StubAdapter(children))
+    writeManifest({ tools: { srs: { backend: 'stub' } } })
+    const reconciliationPlanPath = writeReconciliationPlan([
+      { frId: 'FR-AUTH-001', classification: 'partial' },
+      { frId: 'FR-AUTH-002', classification: 'missing' },
+      { frId: 'FR-AUTH-003', classification: 'delivered', evidence: ['covered by #88'] }
+    ])
+    const existing = {
+      number: '77',
+      title: 'Renamed existing flow',
+      body: '',
+      state: 'CLOSED' as const,
+      boardStatus: 'Done',
+      parentNumber: '42',
+      issueType: 'sf-story',
+      url: 'https://github.test/issues/77',
+      srsLinks: ['https://example.test/fr1'],
+      frIds: ['FR-AUTH-001']
+    }
+    const io = makeIO({ inspectTickets: jest.fn(() => [existing]) })
+    const code = await runSpawn(baseOptions({ reconciliationPlanPath }), io)
+
+    expect(code).toBe(0)
+    expect(io.createSubtask).toHaveBeenCalledTimes(1)
+    expect(io.createSubtask.mock.calls[0][1]).toBe('FR-AUTH-002: Missing flow')
+    expect(io.stdoutBuffer.join('')).toMatch(/FR-AUTH-001: partial → reuse #77/)
+    expect(io.stdoutBuffer.join('')).toMatch(/FR-AUTH-003: delivered → skip/)
+    expect(io.stdoutBuffer.join('')).toMatch(/created 1, reused 1, skipped 1/)
+  })
+
+  it('is idempotent when every actionable FR already has one canonical ticket', async () => {
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Existing flow' }]
+    registerSrsBackend('stub', () => new StubAdapter(children))
+    writeManifest({ tools: { srs: { backend: 'stub' } } })
+    const reconciliationPlanPath = writeReconciliationPlan([{ frId: 'FR-AUTH-001', classification: 'partial' }])
+    const io = makeIO({
+      inspectTickets: jest.fn(() => [
+        {
+          number: '77',
+          title: 'Existing flow',
+          body: '',
+          state: 'OPEN',
+          boardStatus: 'Backlog',
+          parentNumber: '42',
+          issueType: 'sf-story',
+          url: 'https://github.test/issues/77',
+          srsLinks: ['https://example.test/fr1'],
+          frIds: ['FR-AUTH-001']
+        }
+      ])
+    })
+    const code = await runSpawn(baseOptions({ reconciliationPlanPath }), io)
+
+    expect(code).toBe(0)
+    expect(io.createSubtask).not.toHaveBeenCalled()
+    expect(io.stdoutBuffer.join('')).toMatch(/created 0, reused 1, skipped 0/)
+  })
+
+  it('blocks ambiguous board evidence before milestones or ticket mutation', async () => {
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Existing flow' }]
+    registerSrsBackend('stub', () => new StubAdapter(children))
+    writeManifest({ tools: { srs: { backend: 'stub' } } })
+    const reconciliationPlanPath = writeReconciliationPlan([{ frId: 'FR-AUTH-001', classification: 'partial' }])
+    const candidate = {
+      title: 'Existing flow',
+      body: '',
+      state: 'OPEN' as const,
+      boardStatus: 'Backlog',
+      parentNumber: '42',
+      issueType: 'sf-story',
+      url: 'https://github.test/issues/77',
+      srsLinks: ['https://example.test/fr1'],
+      frIds: ['FR-AUTH-001']
+    }
+    const io = makeIO({
+      inspectTickets: jest.fn(() => [
+        { ...candidate, number: '77' },
+        { ...candidate, number: '78' }
+      ])
+    })
+    const code = await runSpawn(baseOptions({ reconciliationPlanPath, milestone: 'v1.0.0' }), io)
+
+    expect(code).toBe(10)
+    expect(io.ensureMilestone).not.toHaveBeenCalled()
+    expect(io.createSubtask).not.toHaveBeenCalled()
+    expect(io.stderrBuffer.join('')).toMatch(/ambiguous.*#77, #78/)
+    expect(io.stderrBuffer.join('')).toMatch(/Nothing was created/)
+  })
+
+  it('recovers an orphan created before an uncertain create response', async () => {
+    const children: PageRef[] = [{ id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Existing flow' }]
+    registerSrsBackend('stub', () => new StubAdapter(children))
+    writeManifest({ tools: { srs: { backend: 'stub' } } })
+    const reconciliationPlanPath = writeReconciliationPlan([{ frId: 'FR-AUTH-001', classification: 'missing' }])
+    const orphan = {
+      number: '77',
+      title: 'Existing flow',
+      body: '',
+      state: 'OPEN' as const,
+      boardStatus: 'Backlog',
+      parentNumber: null,
+      issueType: 'sf-story',
+      url: 'https://github.test/issues/77',
+      srsLinks: ['https://example.test/fr1'],
+      frIds: ['FR-AUTH-001']
+    }
+    const inspectTickets = jest.fn().mockReturnValueOnce([]).mockReturnValueOnce([orphan])
+    const io = makeIO({
+      inspectTickets,
+      createSubtask: jest.fn(() => {
+        throw new Error('response lost')
+      })
+    })
+    const code = await runSpawn(baseOptions({ reconciliationPlanPath }), io)
+
+    expect(code).toBe(0)
+    expect(io.linkSubtask).toHaveBeenCalledWith('42', '77')
+    expect(io.stdoutBuffer.join('')).toMatch(/recovered after an uncertain create response/)
   })
 
   // Was: "warns and uses the raw title". Producing a ticket from a non-FR title is

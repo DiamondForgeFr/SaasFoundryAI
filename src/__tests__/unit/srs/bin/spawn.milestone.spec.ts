@@ -73,6 +73,8 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
       }),
       createSubtask: jest.fn(() => ({ childNumber: String(nextNumber++) })),
       createEpic: jest.fn(() => ({ epicNumber: String(nextNumber++) })),
+      inspectTickets: jest.fn(() => []),
+      linkSubtask: jest.fn(() => undefined),
       ensureMilestone: jest.fn(() => ({ created: true })),
       assignMilestone: jest.fn(() => undefined),
       associateMilestone: jest.fn(() => undefined),
