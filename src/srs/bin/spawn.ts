@@ -6,6 +6,7 @@ import { renderEpicTicketBody } from '../../builders/srs/templates/tickets/epic.
 import { renderStoryTicketBody } from '../../builders/srs/templates/tickets/story.tpl'
 import { FrItem, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { canonicalSrsIdentity, ExistingSrsTicket, loadReconciliationPlan, reconcileRequirements, ReconciliationError, ReconciliationRequirement, ReconciliationResult } from '../spawn/reconciliation'
 import { parseFrPageTitle } from '../tree/fr-title'
 
 export interface SpawnOptions {
@@ -37,6 +38,12 @@ export interface SpawnOptions {
   dryRun: boolean
   manifestPath: string
   bypassReason: string
+  /**
+   * Evidence-backed classification for an existing SRS version. The plan is
+   * deliberately external: board and SRS facts are deterministic, while
+   * deciding that old code already delivers a newly-written FR is semantic.
+   */
+  reconciliationPlanPath?: string
 }
 
 export interface PlannedCreation {
@@ -51,6 +58,8 @@ export interface SpawnIO {
   stderr: (chunk: string) => void
   createSubtask: (parent: string, title: string, body: string, bypassReason: string) => { childNumber: string }
   createEpic: (title: string, body: string, bypassReason: string) => { epicNumber: string }
+  inspectTickets: (parent: string, requirements: ReconciliationRequirement[]) => ExistingSrsTicket[]
+  linkSubtask: (parent: string, child: string) => void
   /**
    * Create the milestone, or report that it already existed. Reuse is the normal
    * case: re-spawning a version must not produce a second release.
@@ -93,6 +102,9 @@ export function parseArgs(argv: string[]): SpawnOptions {
     } else if (a === '--bypass-reason') {
       opts.bypassReason = takeValue(argv, i, '--bypass-reason')
       i++
+    } else if (a === '--reconciliation-plan') {
+      opts.reconciliationPlanPath = takeValue(argv, i, '--reconciliation-plan')
+      i++
     }
   }
   if (!opts.epic) throw new Error('spawn: missing --epic <page-url-or-id>')
@@ -133,6 +145,19 @@ function defaultIO(): SpawnIO {
       })
       const match = output.match(/Epic #(\d+) created/)
       return { epicNumber: match ? match[1] : '' }
+    },
+    inspectTickets: (parent, requirements) => {
+      const output = execFileSync(
+        '.claude/skills/sf-workflow/workflow-cli.sh',
+        ['inspect-srs-tickets', parent, ...requirements.flatMap((requirement) => ['--fr', `${requirement.frId}=${requirement.frPageUrl}`])],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }
+      )
+      const parsed = JSON.parse(output) as unknown
+      if (!Array.isArray(parsed)) throw new Error('inspect-srs-tickets returned a non-array response')
+      return parsed as ExistingSrsTicket[]
+    },
+    linkSubtask: (parent, child) => {
+      execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['link-subtask', parent, child], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
     },
     // `milestone create` refuses a name that already exists on purpose — two
     // releases sharing one milestone is a scope error. So reuse is detected by
@@ -313,10 +338,38 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     planned.push({ frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec) })
   }
 
+  let reconciliation: ReconciliationResult[] | undefined
+  if (options.reconciliationPlanPath) {
+    if (!options.ticket) {
+      io.stderr(`✗ spawn: --reconciliation-plan currently requires --ticket so existing work has an explicit delivery parent.\n`)
+      return 2
+    }
+    try {
+      const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
+      const plan = loadReconciliationPlan(resolve(options.reconciliationPlanPath))
+      const tickets = io.inspectTickets(options.ticket, requirements)
+      reconciliation = reconcileRequirements(requirements, plan, tickets, options.ticket)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const prefix = error instanceof ReconciliationError ? 'reconciliation blocked' : 'reconciliation preflight failed'
+      io.stderr(`✗ spawn: ${prefix} — ${message}\n`)
+      io.stderr(`  Nothing was created. Restore every evidence source or resolve the ambiguity, then retry.\n`)
+      return 10
+    }
+  }
+
   const parentLabel = options.ticket ? `#${options.ticket}` : `a new Epic « ${holderTitle} »`
   io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s), planning Story tickets under ${parentLabel}\n`)
   for (const p of planned) {
     io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl})\n`)
+  }
+
+  if (reconciliation) {
+    io.stdout(`  reconciliation:\n`)
+    for (const result of reconciliation) {
+      const ticket = result.ticket ? ` #${result.ticket.number}` : ''
+      io.stdout(`    ${result.requirement.frId}: ${result.decision.classification} → ${result.action}${ticket}\n`)
+    }
   }
 
   if (options.milestone) {
@@ -374,7 +427,9 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   const created: string[] = []
-  for (const p of planned) {
+  const reused = reconciliation?.filter((result) => result.action === 'reuse' && result.ticket).map((result) => result.ticket!.number) ?? []
+  const actionable = reconciliation ? planned.filter((item) => reconciliation!.find((result) => result.requirement.frId === item.frId)?.action === 'create') : planned
+  for (const p of actionable) {
     try {
       const { childNumber } = io.createSubtask(parentTicket, p.title, p.body, options.bypassReason)
       if (!childNumber) {
@@ -384,19 +439,40 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       io.stdout(`  ✓ ${p.frId} → #${childNumber}\n`)
       created.push(childNumber)
     } catch (error) {
+      if (reconciliation) {
+        try {
+          const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
+          const candidates = io.inspectTickets(parentTicket, requirements)
+          const expected = canonicalSrsIdentity(p.frPageUrl)
+          const recovered = candidates.filter((ticket) => ticket.srsLinks.some((link) => canonicalSrsIdentity(link) === expected))
+          if (recovered.length === 1 && (!recovered[0].parentNumber || recovered[0].parentNumber === parentTicket)) {
+            if (!recovered[0].parentNumber) io.linkSubtask(parentTicket, recovered[0].number)
+            io.stdout(`  ↻ ${p.frId} → #${recovered[0].number} recovered after an uncertain create response\n`)
+            reused.push(recovered[0].number)
+            continue
+          }
+        } catch {
+          // The original failure remains the useful diagnostic. Recovery is a
+          // best-effort read; it never permits a second blind create.
+        }
+      }
       const message = error instanceof Error ? error.message : String(error)
       io.stderr(`  ✗ failed to create ${p.frId}: ${message}\n`)
       return 8
     }
   }
 
-  io.stdout(`\nspawn: created ${created.length} Story ticket(s) under #${parentTicket}.\n`)
+  if (reconciliation) {
+    io.stdout(`\nspawn: created ${created.length}, reused ${reused.length}, skipped ${planned.length - created.length - reused.length} Story ticket(s) under #${parentTicket}.\n`)
+  } else {
+    io.stdout(`\nspawn: created ${created.length} Story ticket(s) under #${parentTicket}.\n`)
+  }
 
   if (options.milestone) {
     // The Epic joins too: a milestone read after the release should show the
     // grouping that composed it, not a flat list of Stories. It closes on its
     // own when its children do, so it never holds the percentage back.
-    const toAssign = [parentTicket, ...created]
+    const toAssign = [...new Set([parentTicket, ...reused, ...created])]
     const assigned: string[] = []
     for (const ticket of toAssign) {
       try {
@@ -438,7 +514,7 @@ if (require.main === module) {
   } catch (err) {
     process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
     process.stderr.write(
-      `\nUsage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`
+      `\nUsage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`
     )
     process.exit(1)
   }
