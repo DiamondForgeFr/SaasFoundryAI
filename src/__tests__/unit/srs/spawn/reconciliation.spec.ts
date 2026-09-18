@@ -45,6 +45,15 @@ describe('SRS spawn reconciliation', () => {
     expect(canonicalSrsIdentity('https://www.notion.so/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
   })
 
+  it('does not trust a Notion-shaped page id on an unrelated host', () => {
+    const attackerUrl = 'https://attacker.example/Title-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    expect(canonicalSrsIdentity(attackerUrl)).toBe(attackerUrl.toLowerCase())
+    expect(canonicalSrsIdentity(attackerUrl)).not.toBe(canonicalSrsIdentity(requirements[0].frPageUrl))
+
+    const result = reconcileRequirements(requirements, plan(), [ticket({ srsLinks: [attackerUrl], frIds: [] })], '645')
+    expect(result[0]).toMatchObject({ action: 'create' })
+  })
+
   it('rejects an unavailable evidence source before reconciliation', () => {
     expect(() =>
       parseReconciliationPlan({
