@@ -205,14 +205,19 @@ Ready → In progress (brainstorm)
 Drive it with:
 
 ```bash
-.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> <phase>
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> <phase> [phase options]
 # phase: ai-draft | human-review | spawning | done
+
+# spawning requires an explicit SRS target and verified reconciliation plan
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> spawning \
+  --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <name>] \
+  --reconciliation-plan <path> [--dry-run]
 ```
 
 Each phase is documented in detail:
 - `statuses/3a-ai-drafting.md` — AI drafter runs against the configured backend
 - `statuses/3b-human-review.md` — spec owner reviews and approves
-- `statuses/3c-spawning.md` — children land in Backlog, drafting ticket closes
+- `statuses/3c-spawning.md` — children land in Backlog, drafting ticket reaches Done
 
 **Guard** — `update-status <ticket> <any testing/review status>` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
 
@@ -221,10 +226,12 @@ Each phase is documented in detail:
 Once an Epic page tree is drafted (Main spec + FR-001…FR-N children), the Story sub-tickets under the parent must be created by the spawner, not by hand:
 
 ```bash
-.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <parent> spawning \
+  --epic <page-url-or-id> [--version <title-url-or-id>] [--milestone <name>] \
+  --reconciliation-plan <path> [--dry-run]
 ```
 
-The spawner enumerates FR pages, renders each Story body from `renderStoryTicketBody`, and invokes `workflow-cli.sh create-subtask` with `--bypass-srs spawned-from-srs`. Children land as regular sub-issues under the parent ticket (no `srs:*` label — they flow through the normal code-path workflow). Use `--dry-run` to preview without writing.
+The reconciliation plan must exactly cover the selected version and cite verified board, SRS, and implementation evidence. The spawner skips delivered/superseded FRs, reuses the single ticket whose canonical page matches, creates only missing/partial work, and blocks before mutation on unavailable or ambiguous evidence. Preview with `--dry-run`, then rerun the same command without it.
 
 On SRS-enabled projects (`tools.srs.backend` is set), `create-subtask` refuses calls without `--bypass-srs <reason>` and exits 2. The escape hatch is legitimate only for:
 
@@ -269,7 +276,7 @@ The listener executes only trusted default-branch code, never PR code. Commit it
 5. **CLOSE CHILD TICKETS AS THEY LAND** — every child is a native {{TOOL}} sub-issue. A normal child reaches `Done` only after its own PR is verified merged; a bundled child reaches `Done` after its atomic commit is validated on the delivery parent's branch. Close each child immediately and verify `gh issue view <child> --json state` prints `CLOSED` before starting the next sibling. Never batch closures.
 6. **PARENT DONE IS GATED BY CHILDREN** — a delivery parent or Epic cannot enter `Done` until every native child ticket's project-board Status is exactly `Done`. Run `github-projects-cli.sh list-incomplete-children <N>`; any returned or unverifiable child blocks the transition. An Epic moves to In progress with its first active child and to Done with its last completed child.
 7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket sits in any status between `In Progress` and `Done` (see the Workflow Statuses section above), drive it to `Done` before claiming or starting another. The only override is an explicit developer request to pause.
-8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use `.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <page-url-or-id>` to create one child issue per FR page, each body rendered from `renderStoryTicketBody`. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section above. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
+8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use the evidence-first `transition-drafting <parent> spawning --epic <feature> [--version <version>] [--milestone <release>] --reconciliation-plan <path>` flow. It renders each body from `renderStoryTicketBody` and reconciles exact canonical tickets before mutation. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS Handoff" section above. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
 
 9. **ANNOUNCE + STREAM LONG COMMANDS** — before any command expected to take more than ~5 seconds (test suites, builds, commit/push hooks, Docker scenarios), announce in one sentence what runs and the expected duration. Over ~60 seconds, run it in the background and stream its progress markers to the user as they appear (e.g. `tail -f <log> | grep -E --line-buffered "PASS|FAIL|\[sf-progress\]"`) — never block silently. Report the outcome with numbers, and relay the ▶ AI / ⏳ Dev banner printed by `update-status` after every transition.
 

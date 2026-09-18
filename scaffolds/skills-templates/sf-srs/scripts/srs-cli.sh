@@ -29,7 +29,7 @@ Actions:
                                     Apply a DraftCandidate[] spec file : creates Epic /
                                     FR pages through the adapter and clears the
                                     `tools.srs.pendingIngestion` flag on success.
-  spawn  --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--dry-run] [--manifest] [--bypass-reason <text>]
+  spawn  --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--dry-run] [--manifest] [--bypass-reason <text>]
   normalize [--feature <url-or-id>] [--version-name <name>] [--apply] [--manifest] [--root-page <id>]
                                     Give an unversioned feature a version page and
                                     MOVE its FR pages under it (ids and URLs survive).
@@ -39,6 +39,9 @@ Actions:
                                     ticket. Each child is created as a GitHub
                                     sub-issue tagged `srs:new`; board placement
                                     follows the project's default automation.
+                                    `--reconciliation-plan` verifies board, SRS,
+                                    and implementation evidence before mutation,
+                                    then reuses exact canonical FR tickets.
                                     `--dry-run` previews without writing.
   apply-update [--patch <path>] [--manifest]
                                     Apply a conversational eval-hook patch

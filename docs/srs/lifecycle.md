@@ -86,15 +86,24 @@ Exit : owner explicitly approves (comments "OK to spawn" or bumps the transition
 ### 6. spawning
 
 ```bash
-.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> spawning
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> spawning \
+  --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <release>] \
+  --reconciliation-plan <path> --dry-run
 ```
 
-The spawner enumerates FR page children of the Epic, renders each Story body from `renderStoryTicketBody`, and calls `workflow-cli.sh create-subtask --bypass-srs spawned-from-srs` to create one GitHub
-sub-issue per FR under the parent ticket.
+Before this command, inspect the parent and its open/closed children, the approved SRS version, and the relevant source, tests, and documentation. The reconciliation JSON must exactly cover every FR,
+cite those three evidence sources, and classify each requirement as `delivered`, `partial`, `missing`, or `superseded`. If any source is unavailable, the coverage is incomplete, or a ticket match is
+ambiguous, the command stops before mutation.
 
 ```bash
-.claude/skills/sf-srs/scripts/srs-cli.sh spawn --ticket <parent> --epic <epic-url-or-id>
+# after reviewing the dry-run, repeat the same command without --dry-run
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> spawning \
+  --epic <feature-url-or-id> --version <title-url-or-id> --milestone v1.0.0 \
+  --reconciliation-plan /tmp/reconcile.json
 ```
+
+The spawner enumerates FR page children of the selected version, renders Story bodies from `renderStoryTicketBody`, and reconciles them with the board before calling the configured workflow tool.
+Delivered and superseded FRs are skipped, an exact canonical FR ticket is reused, and only missing or partial work without a match is created.
 
 Each spawned child :
 
@@ -103,28 +112,29 @@ Each spawned child :
 - Has a body rendered from `renderStoryTicketBody` : a summary, the FR page link, acceptance criteria pulled from the TC blocks, and the traceability chain (UR → FR → DS → TC)
 - Sits in **Backlog** — ready to flow through the normal code-path workflow from there
 
-Use `--dry-run` first to preview without writing. The spawner is idempotent via stable FR-id matching, so re-running it on the same Epic won't duplicate tickets.
+If a create response is interrupted, rerun the same command and plan. The spawner inspects open and closed tickets, recovers a single exact canonical match, and attaches it only when it has no parent.
+It refuses contradictory FR ids, multiple canonical matches, and implicit reparenting rather than claiming unconditional idempotency.
 
 Exit : every FR page has a matching child issue in Backlog. Board moves the drafter ticket to **Done**.
 
 ### 7. Done
 
-Same as a code-path ticket. The drafter ticket is closed. Its child Stories live on, each following the code-path lane independently.
+The drafter board item reaches Done and keeps its `srs:*` label as provenance. Its child Stories live on, each following the code-path lane independently.
 
 ## Commands — one-page reference
 
 All commands are driven from two wrappers :
 
-| Command                                                | What it does                                                                    |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `workflow-cli.sh transition-drafting <ticket> <phase>` | Moves the drafter ticket through `ai-draft \| human-review \| spawning \| done` |
-| `srs-cli.sh validate`                                  | Smoke-test the configured backend (`adapter.init()`)                            |
-| `srs-cli.sh browse --parent <id>`                      | List direct children of a backend page                                          |
-| `srs-cli.sh draft --from notion-pages --ids <ids>`     | Fetch pages as `RawContent` for conversational drafting                         |
-| `srs-cli.sh write --spec <path>`                       | Apply `DraftCandidate[]` to the backend (creates Epic + FR pages)               |
-| `srs-cli.sh spawn --ticket <parent> --epic <url>`      | Create one Story sub-issue per FR page                                          |
-| `srs-cli.sh apply-update < patch.json`                 | Conversational eval hook — append new UR / FR / DS / TC (ADD-only v1)           |
-| `srs-cli.sh eval [--review-packet <path>]`             | Batch freshness score SRS vs. codebase (L1 script + L2 hints + L3 AI packet)    |
+| Command                                                                  | What it does                                                                    |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `workflow-cli.sh transition-drafting <ticket> <phase> [options]`         | Moves the drafter ticket through `ai-draft \| human-review \| spawning \| done` |
+| `srs-cli.sh validate`                                                    | Smoke-test the configured backend (`adapter.init()`)                            |
+| `srs-cli.sh browse --parent <id>`                                        | List direct children of a backend page                                          |
+| `srs-cli.sh draft --from notion-pages --ids <ids>`                       | Fetch pages as `RawContent` for conversational drafting                         |
+| `srs-cli.sh write --spec <path>`                                         | Apply `DraftCandidate[]` to the backend (creates Epic + FR pages)               |
+| `transition-drafting <ticket> spawning --epic … --reconciliation-plan …` | Reconcile evidence, then reuse or create the required Story sub-issues          |
+| `srs-cli.sh apply-update < patch.json`                                   | Conversational eval hook — append new UR / FR / DS / TC (ADD-only v1)           |
+| `srs-cli.sh eval [--review-packet <path>]`                               | Batch freshness score SRS vs. codebase (L1 script + L2 hints + L3 AI packet)    |
 
 ::: warning `update-status` is gated on SRS tickets
 

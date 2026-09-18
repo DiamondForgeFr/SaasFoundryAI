@@ -57,7 +57,7 @@ import { runBrowseTree } from '../../../srs/bin/browse-tree'
 import { runDraftFromCodebase } from '../../../srs/bin/draft-from-codebase'
 import { runDraftFromNotionPages } from '../../../srs/bin/draft-from-notion-pages'
 import { runEvalSrs } from '../../../srs/bin/eval-srs'
-import { runSpawn } from '../../../srs/bin/spawn'
+import { parseArgs as parseSpawnArgs, runSpawn } from '../../../srs/bin/spawn'
 import { runValidate } from '../../../srs/bin/validate'
 import { runWriteSrs } from '../../../srs/bin/write-srs'
 import { srsCommand } from '../../../commands/srs'
@@ -138,8 +138,9 @@ describe('srsCommand', () => {
     expect(runWriteSrs).toHaveBeenCalled()
   })
 
-  it('forwards spawn to runSpawn', async () => {
-    await srsCommand('spawn', '--ticket', '42', '--epic', 'page_x')
+  it('forwards the reconciliation plan to spawn parsing and execution', async () => {
+    await srsCommand('spawn', '--ticket', '42', '--epic', 'page_x', '--reconciliation-plan', '/tmp/reconcile.json')
+    expect(parseSpawnArgs).toHaveBeenCalledWith(['--ticket', '42', '--epic', 'page_x', '--reconciliation-plan', '/tmp/reconcile.json'])
     expect(runSpawn).toHaveBeenCalled()
   })
 

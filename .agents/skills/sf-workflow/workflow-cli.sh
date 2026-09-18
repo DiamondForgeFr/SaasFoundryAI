@@ -1222,9 +1222,11 @@ case "$COMMAND" in
   transition-drafting)
     TICKET=$1
     PHASE=$2
+    DRAFTING_ARGS=("${@:3}")
     if [[ -z "$TICKET" || -z "$PHASE" ]]; then
-      echo "Usage: workflow-cli.sh transition-drafting <ticket> <phase>" >&2
+      echo "Usage: workflow-cli.sh transition-drafting <ticket> <phase> [phase options]" >&2
       echo "Phases: ai-draft | human-review | spawning | done" >&2
+      echo "Spawning: --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]" >&2
       exit 1
     fi
 
@@ -1284,7 +1286,57 @@ case "$COMMAND" in
           echo -e "${RED}✗ Expected ${SRS_CLI} to be executable. Run the SRS skill install first.${NC}" >&2
           exit 2
         fi
-        "$SRS_CLI" spawn --ticket "$TICKET" || exit $?
+        SPAWN_ARGS=()
+        SPAWN_EPIC_SEEN=0
+        SPAWN_PLAN_SEEN=0
+        SPAWN_INDEX=0
+        while [[ "$SPAWN_INDEX" -lt "${#DRAFTING_ARGS[@]}" ]]; do
+          SPAWN_ARG="${DRAFTING_ARGS[$SPAWN_INDEX]}"
+          case "$SPAWN_ARG" in
+            --epic|--version|--milestone|--reconciliation-plan|--manifest|--bypass-reason)
+              SPAWN_VALUE_INDEX=$((SPAWN_INDEX + 1))
+              SPAWN_VALUE="${DRAFTING_ARGS[$SPAWN_VALUE_INDEX]:-}"
+              if [[ -z "$SPAWN_VALUE" || "$SPAWN_VALUE" == --* ]]; then
+                echo -e "${RED}✗ ${SPAWN_ARG} requires a value.${NC}" >&2
+                exit 2
+              fi
+              if [[ "$SPAWN_ARG" == "--epic" ]]; then
+                if [[ "$SPAWN_EPIC_SEEN" -eq 1 ]]; then
+                  echo -e "${RED}✗ --epic may only be supplied once.${NC}" >&2
+                  exit 2
+                fi
+                SPAWN_EPIC_SEEN=1
+              fi
+              if [[ "$SPAWN_ARG" == "--reconciliation-plan" ]]; then
+                if [[ "$SPAWN_PLAN_SEEN" -eq 1 ]]; then
+                  echo -e "${RED}✗ --reconciliation-plan may only be supplied once.${NC}" >&2
+                  exit 2
+                fi
+                SPAWN_PLAN_SEEN=1
+              fi
+              SPAWN_ARGS+=("$SPAWN_ARG" "$SPAWN_VALUE")
+              SPAWN_INDEX=$((SPAWN_INDEX + 2))
+              ;;
+            --dry-run)
+              SPAWN_ARGS+=("$SPAWN_ARG")
+              SPAWN_INDEX=$((SPAWN_INDEX + 1))
+              ;;
+            --ticket)
+              echo -e "${RED}✗ transition-drafting owns --ticket; do not override #${TICKET}.${NC}" >&2
+              exit 2
+              ;;
+            *)
+              echo -e "${RED}✗ Unknown spawning option '${SPAWN_ARG}'.${NC}" >&2
+              exit 2
+              ;;
+          esac
+        done
+        if [[ "$SPAWN_EPIC_SEEN" -ne 1 || "$SPAWN_PLAN_SEEN" -ne 1 ]]; then
+          echo -e "${RED}✗ Spawning requires --epic and --reconciliation-plan so the approved scope is reconciled before mutation.${NC}" >&2
+          echo "  Usage: workflow-cli.sh transition-drafting ${TICKET} spawning --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]" >&2
+          exit 2
+        fi
+        "$SRS_CLI" spawn --ticket "$TICKET" "${SPAWN_ARGS[@]}" || exit $?
         print_status_banner "drafting:spawning"
         ;;
       done)
@@ -1320,8 +1372,9 @@ case "$COMMAND" in
     echo "  test <ticket> [complexity]       Run validation + examine (→ AI Testing)"
     echo ""
     echo "SRS drafting lifecycle (for tickets tagged srs:drafting|srs:update|srs:new):"
-    echo "  transition-drafting <ticket> <phase>"
+    echo "  transition-drafting <ticket> <phase> [phase options]"
     echo "    phase: ai-draft | human-review | spawning | done"
+    echo "    spawning: --epic <feature> [--version <version>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]"
     echo "    Dispatches to .claude/skills/sf-srs/scripts/srs-cli.sh for draft/spawn."
     echo ""
     echo "Tool commands (delegated to tool-specific CLI):"

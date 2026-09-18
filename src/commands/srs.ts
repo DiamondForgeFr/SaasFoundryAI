@@ -23,9 +23,11 @@ Actions:
                                          Apply a DraftCandidate[] spec file through the adapter
   versions [--root-page <id>] [--manifest]
                                          List the versions the SRS declares (JSON) — what a release scope is proposed from
-  spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--milestone <name>] [--dry-run] [--manifest] [--bypass-reason <text>]
+  spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--dry-run] [--manifest] [--bypass-reason <text>]
                                          --milestone declares the release these tickets ship in: created or reused,
                                          the version page is linked to it, and every ticket spawned joins it
+                                         --reconciliation-plan requires verified board, SRS, and implementation
+                                         evidence, reuses exact canonical FR tickets, and blocks ambiguity
   normalize [--feature <url-or-id>] [--version-name <name>] [--apply] [--manifest] [--root-page <id>]
                                          Enumerate FR page children of an Epic and create Story sub-tickets
   apply-update [--patch <path>] [--manifest]
