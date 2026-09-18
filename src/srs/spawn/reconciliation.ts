@@ -175,7 +175,7 @@ export function reconcileRequirements(requirements: ReconciliationRequirement[],
       throw new ReconciliationError(`${frId} is ambiguous: canonical SRS page matches tickets ${exact.map((ticket) => `#${ticket.number}`).join(', ')}`)
     }
     const idOnly = tickets.filter((ticket) => ticket.frIds.map((id) => id.toUpperCase()).includes(frId) && !matchesCanonicalPage(ticket, requirement))
-    if (idOnly.length > 0) {
+    if (exact.length === 0 && idOnly.length > 0) {
       throw new ReconciliationError(`${frId} is ambiguous: ticket ${idOnly.map((ticket) => `#${ticket.number}`).join(', ')} matches the id but not the canonical SRS page`)
     }
 

@@ -1210,7 +1210,7 @@ case "$COMMAND" in
     route_to_tool "$WORKFLOW_TOOL" "$COMMAND" "$@"
     ;;
 
-  create-subtask|create-epic|list|get-labels)
+  create-subtask|create-epic|list|get-labels|inspect-srs-tickets|link-subtask)
     load_config
     route_to_tool "$WORKFLOW_TOOL" "$COMMAND" "$@"
     ;;
@@ -1340,7 +1340,7 @@ case "$COMMAND" in
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
     echo ""
-    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, list, get-labels, transition-drafting"
+    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, list, get-labels, inspect-srs-tickets, link-subtask, transition-drafting"
     echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;
