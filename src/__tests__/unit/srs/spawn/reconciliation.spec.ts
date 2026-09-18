@@ -97,6 +97,19 @@ describe('SRS spawn reconciliation', () => {
     expect(() => reconcileRequirements(requirements, plan(), [ticket(), ticket({ number: '101' })], '645')).toThrow(/ambiguous.*#100, #101/)
   })
 
+  it('ignores an aggregate Epic that catalogues the same canonical FR page', () => {
+    const aggregate = ticket({
+      number: '645',
+      title: 'Multi-agent harness - v1',
+      parentNumber: null,
+      issueType: 'sf-epic',
+      frIds: ['FR-MAH-001', 'FR-MAH-009', 'FR-MAH-010'],
+      srsLinks: [requirements[0].frPageUrl, requirements[1].frPageUrl]
+    })
+    const result = reconcileRequirements(requirements, plan(), [aggregate, ticket()], '645')
+    expect(result[0]).toMatchObject({ action: 'reuse', ticket: { number: '100' } })
+  })
+
   it('blocks an id-only collision with a contradictory canonical page', () => {
     expect(() => reconcileRequirements(requirements, plan(), [ticket({ srsLinks: ['https://example.test/a-different-page'] })], '645')).toThrow(/matches the id but not the canonical SRS page/)
   })
@@ -109,6 +122,22 @@ describe('SRS spawn reconciliation', () => {
 
   it('blocks implicit reparenting', () => {
     expect(() => reconcileRequirements(requirements, plan(), [ticket({ parentNumber: '999' })], '645')).toThrow(/belongs to parent #999/)
+  })
+
+  it('skips delivered historical work without trying to reparent it', () => {
+    const delivered = plan({
+      requirements: [{ frId: 'FR-MAH-009', classification: 'delivered', evidence: ['delivered by #536'] }, ...plan().requirements.slice(1)]
+    })
+    const result = reconcileRequirements(requirements, delivered, [ticket({ parentNumber: '999' })], '645')
+    expect(result[0]).toMatchObject({ action: 'skip', ticket: { number: '100', parentNumber: '999' } })
+  })
+
+  it('skips delivered scope when audit tickets mention only its FR id', () => {
+    const delivered = plan({
+      requirements: [{ frId: 'FR-MAH-009', classification: 'delivered', evidence: ['delivered by another baseline'] }, ...plan().requirements.slice(1)]
+    })
+    const referenceOnly = ticket({ number: '766', srsLinks: ['https://example.test/a-different-page'], parentNumber: '999' })
+    expect(reconcileRequirements(requirements, delivered, [referenceOnly], '645')[0]).toMatchObject({ action: 'skip', ticket: undefined })
   })
 
   it('does not create delivered or superseded scope even when no canonical ticket exists', () => {
