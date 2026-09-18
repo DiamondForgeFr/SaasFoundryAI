@@ -11,15 +11,15 @@ In this guide, you'll:
 3. Run the development environment
 4. Create a custom API endpoint
 5. Add a new frontend page
-6. Make your first commit with Claude Code
+6. Make your first commit with your configured coding agent
 
 **Time Required**: ~30 minutes
 
 ## Prerequisites
 
-- Node.js 22.13+ installed
+- Node.js 24.19.0 installed (the version pinned by generated `.nvmrc` files)
 - Docker Desktop (for database and S3)
-- Claude Code installed (optional but recommended)
+- A registered coding-agent tool installed (optional but recommended)
 - Basic knowledge of TypeScript, React, and NestJS
 
 ## Step 1: Create Your Project
@@ -33,6 +33,12 @@ sf new
 Answer the prompts as follows (for this tutorial):
 
 ```
+? What would you like SaaSFoundryAI to install?
+→ Full — technical stack and AI harness
+
+? Which coding agents should share this harness?
+→ Select the tools you use (for example Claude Code and Codex)
+
 ? What is the name of your project?
 → my-first-saas
 
@@ -89,7 +95,11 @@ my-first-saas/
 ├── apps/
 │   ├── api/              # Backend (NestJS)
 │   └── web/              # Frontend (React)
-├── .claude/              # Claude Code skills
+├── CLAUDE.md              # Canonical Claude entrypoint
+├── AGENTS.md              # Shared agent entrypoint
+├── GEMINI.md              # Gemini entrypoint
+├── .claude/skills/        # Existing harness skill source
+├── .agents/skills/        # Shared-profile skill surface when declared
 ├── docker-compose.dev-services.yml
 ├── turbo.json
 └── package.json
@@ -587,16 +597,16 @@ The monorepo enforces [conventional commits with a mandatory ticket scope](https
 <type>(#<ticket>): <description>
 ```
 
-### With Claude Code
+### With a configured coding agent
 
-If Claude Code is available in your terminal, simply ask:
+Open the project in one of the profiles reported by `sf agents list`, then ask:
 
 ```
-Commit these changes using the sf-git-commit skill
+Commit these changes using the project's commit skill
 ```
 
-The `sf-git-commit` skill (shipped in `.claude/skills/`) reads the commit pattern from `.saasfoundry.json`, groups related changes, and writes a conventional commit with the `Co-Authored-By: Claude …`
-trailer.
+The commit procedure reads the required pattern from `.saasfoundry.json`, groups related changes, and writes a conventional commit. Follow the skill location exposed by the selected profile; do not
+invent a provider-specific trailer when the project does not require one.
 
 ### Manually
 
@@ -635,7 +645,8 @@ Congratulations! 🎉 You've successfully:
 
 - [Project Structure](/guide/project-structure) - Deep dive into the codebase
 - [Module System](/guide/module-system) - Understanding modules
-- [Skills System](/guide/skills-system) - Using Claude Code skills
+- [Skills System](/guide/skills-system) - Using project skills
+- [`sf agents`](/cli/sf-agents) - Add or verify another coding-agent profile
 - [CLI Commands](/cli/sf-new) - All available commands
 
 ## Troubleshooting

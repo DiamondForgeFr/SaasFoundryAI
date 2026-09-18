@@ -1,5 +1,8 @@
 # Agent coexistence and native verification
 
+This page is the strict verification and handoff protocol. For initial setup, profile choice, existing-project adoption, and local versus shared declarations, start with
+[Installation](/getting-started/installation). The canonical list of registered profiles remains in [`sf agents`](/cli/sf-agents#tool-profiles-and-model-providers).
+
 SaaSFoundryAI can prepare one project for several coding-agent hosts without selecting a model or proving what a host loaded. Keep three evidence levels separate:
 
 - `sf agents list` and `sf agents doctor` report configured support and bounded static evidence.
