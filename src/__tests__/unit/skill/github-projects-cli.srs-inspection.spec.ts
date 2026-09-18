@@ -23,7 +23,7 @@ async function sandbox() {
       html_url: 'https://github.test/issues/10',
       parent_issue_url: 'https://api.github.test/issues/42',
       type: { name: 'sf-story' },
-      labels: []
+      labels: [{ name: 'srs:new' }]
     },
     {
       number: 11,
@@ -56,8 +56,12 @@ if [ "$1" = api ] && [[ "$*" == *'/parent'* ]]; then
   esac
   exit 0
 fi
-if [ "$1" = api ] && [[ "$*" == *'issues?state=all'* ]]; then
-  printf '%s' '[${JSON.stringify(issues).replace(/'/g, "'\\''")} ]'
+if [ "$1" = api ] && [[ "$*" == *'search/issues'* ]]; then
+  if [[ "$*" != *'q=repo:Fake/repo is:issue in:title,body ("FR-MAH-'*' OR "'*'")'* ]]; then
+    echo "unscoped issue search: $*" >&2
+    exit 1
+  fi
+  printf '%s' '[{"items":${JSON.stringify(issues).replace(/'/g, "'\\''")}}]'
   exit 0
 fi
 if [ "$1" = api ] && [ "$2" = graphql ]; then
@@ -92,6 +96,7 @@ describe('github-projects CLI — SRS ticket inspection and recovery', () => {
         expect.objectContaining({ number: '10', state: 'CLOSED', boardStatus: 'Done', parentNumber: '42', frIds: ['FR-MAH-001'] }),
         expect.objectContaining({ number: '11', state: 'OPEN', boardStatus: 'Backlog', parentNumber: null, frIds: ['FR-MAH-002'] })
       ])
+      expect(JSON.parse(stdout)[0]).not.toHaveProperty('body')
     } finally {
       await s.cleanup()
     }

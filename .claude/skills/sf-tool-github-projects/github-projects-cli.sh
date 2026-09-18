@@ -934,7 +934,7 @@ cmd_inspect_srs_tickets() {
 
   local parent=$1
   shift
-  local requests='[]' spec fr_id fr_url identity
+  local requests='[]' spec fr_id fr_url identity normalized_url host
   while [ "$#" -gt 0 ]; do
     if [ "$1" != "--fr" ] || [ -z "${2:-}" ] || [[ "$2" != *=* ]]; then
       echo "Usage: $0 inspect-srs-tickets <parent-ticket-number> --fr <FR-ID>=<page-url> [--fr ...]" >&2
@@ -947,15 +947,22 @@ cmd_inspect_srs_tickets() {
       echo "Error: --fr requires a non-empty FR id and page URL." >&2
       return 1
     fi
-    identity=$(printf '%s' "$fr_url" | sed -E 's/[?#].*$//; s#/$##' | tr -d '-' | grep -Eio '[0-9a-f]{32}$' | tail -n 1 || true)
-    [ -n "$identity" ] || identity=$(printf '%s' "$fr_url" | sed -E 's/[?#].*$//; s#/$##' | tr '[:upper:]' '[:lower:]')
+    normalized_url=$(printf '%s' "$fr_url" | sed -E 's/[?#].*$//; s#/$##' | tr '[:upper:]' '[:lower:]')
+    host=$(printf '%s' "$normalized_url" | sed -nE 's#^https?://([^/:?#]+).*$#\1#p')
+    case "$host" in
+      notion.so|*.notion.so|notion.com|*.notion.com|notion.site|*.notion.site)
+        identity=$(printf '%s' "$normalized_url" | tr -d '-' | grep -Eio '[0-9a-f]{32}$' | tail -n 1 || true)
+        ;;
+      *) identity="" ;;
+    esac
+    [ -n "$identity" ] || identity=$normalized_url
     requests=$(jq -cn --argjson current "$requests" --arg id "$(printf '%s' "$fr_id" | tr '[:lower:]' '[:upper:]')" --arg url "$fr_url" --arg identity "$identity" \
       '$current + [{frId:$id,url:$url,identity:($identity|ascii_downcase)}]') || return 1
     shift 2
   done
 
   load_config
-  local repo children_pages issue_pages children candidates result='[]'
+  local repo children_pages children native_issues search_pages searched='[]' request query candidates result='[]'
   repo=$(get_repo_owner_name)
   if [[ -z "$repo" || "$repo" != */* ]]; then
     echo "Error: could not resolve the current repository." >&2
@@ -974,17 +981,37 @@ cmd_inspect_srs_tickets() {
     echo "Error: invalid child-issues response for #${parent}." >&2
     return 1
   }
+  native_issues=$(printf '%s' "$children_pages" | jq -ce '[.[][]]') || return 1
 
-  issue_pages=$(gh api --paginate --slurp -H "Accept: application/vnd.github+json" \
-    "repos/${repo}/issues?state=all&per_page=100" 2>/dev/null) || {
-      echo "Error: could not inspect repository issues for SRS evidence." >&2
+  # GitHub's issue index is searched once per requested FR instead of downloading
+  # the repository's complete issue history. Native children are merged back in
+  # independently, so a stale search index can never hide an existing child.
+  while IFS= read -r request; do
+    [ -z "$request" ] && continue
+    fr_id=$(printf '%s' "$request" | jq -er '.frId') || return 1
+    identity=$(printf '%s' "$request" | jq -er '.identity') || return 1
+    query="repo:${repo} is:issue in:title,body (\"${fr_id}\" OR \"${identity}\")"
+    search_pages=$(gh api --method GET --paginate --slurp -H "Accept: application/vnd.github+json" \
+      search/issues -f "q=${query}" -f per_page=100 2>/dev/null) || {
+        echo "Error: could not inspect repository issues for SRS evidence." >&2
+        return 1
+      }
+    searched=$(jq -cn --argjson current "$searched" --argjson pages "$search_pages" '
+      if ($pages | type) != "array" or any($pages[]; (.items | type) != "array")
+      then error("Expected paginated issue-search responses")
+      else ($current + [$pages[] | .items[]]) | unique_by(.number)
+      end
+    ') || {
+      echo "Error: invalid repository issue-search response for SRS evidence." >&2
       return 1
     }
-  candidates=$(printf '%s' "$issue_pages" | jq -ce --arg parent "$parent" --argjson native "$children" --argjson requested "$requests" '
-    if type != "array" or any(.[]; type != "array") then error("Expected paginated issue arrays") else . end
-    | [.[][] | select(has("pull_request") | not)]
+  done < <(printf '%s' "$requests" | jq -c '.[]')
+
+  candidates=$(jq -cn --arg parent "$parent" --argjson native "$children" --argjson nativeIssues "$native_issues" --argjson searched "$searched" --argjson requested "$requests" '
+    ($nativeIssues + $searched)
+    | map(select(has("pull_request") | not))
     | map(select(.number != ($parent | tonumber)))
-    | map(select(any(.labels[]?; (.name | startswith("srs:"))) | not))
+    | map(. as $issue | select(($native | index($issue.number)) != null or (any($issue.labels[]?; (.name | startswith("srs:"))) | not)))
     | map(
         . as $issue
         | (($issue.title // "") + "\n" + ($issue.body // "") | ascii_downcase) as $text
@@ -996,7 +1023,7 @@ cmd_inspect_srs_tickets() {
     | unique_by(.number)
     | sort_by(.number)
   ') || {
-    echo "Error: invalid repository issue response for SRS evidence." >&2
+    echo "Error: invalid SRS candidate response." >&2
     return 1
   }
 
@@ -1027,11 +1054,11 @@ cmd_inspect_srs_tickets() {
       | unique
     ') || return 1
     result=$(jq -cn \
-      --argjson current "$result" --arg number "$number" --arg title "$title" --arg body "$body" --arg state "$state" \
+      --argjson current "$result" --arg number "$number" --arg title "$title" --arg state "$state" \
       --arg status "$status" --arg parent "$parent_number" --arg type "${issue_type:-}" --arg url "$url" \
       --argjson links "$srs_links" --argjson ids "$fr_ids" '
         $current + [{
-          number:$number,title:$title,body:$body,state:$state,
+          number:$number,title:$title,state:$state,
           boardStatus:(if $status == "" then null else $status end),
           parentNumber:(if $parent == "" then null else $parent end),
           issueType:(if $type == "" or $type == "null" then null else $type end),

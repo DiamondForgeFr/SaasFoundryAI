@@ -32,7 +32,7 @@ export interface ReconciliationRequirement {
 export interface ExistingSrsTicket {
   number: string
   title: string
-  body: string
+  body?: string
   state: 'OPEN' | 'CLOSED'
   boardStatus: string | null
   parentNumber: string | null
@@ -143,10 +143,21 @@ export function canonicalSrsIdentity(url: string): string {
     .trim()
     .replace(/[?#].*$/, '')
     .replace(/\/$/, '')
-  const compactId = trimmed.match(/([0-9a-f]{32})$/i)?.[1]
-  if (compactId) return compactId.toLowerCase()
-  const uuid = trimmed.match(/([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i)
-  if (uuid) return uuid.slice(1).join('').toLowerCase()
+  try {
+    const parsed = new URL(trimmed)
+    const host = parsed.hostname.toLowerCase()
+    const isNotionHost = ['notion.so', 'notion.com', 'notion.site'].some((domain) => host === domain || host.endsWith(`.${domain}`))
+    if (isNotionHost) {
+      const compactId = parsed.pathname.match(/([0-9a-f]{32})$/i)?.[1]
+      if (compactId) return compactId.toLowerCase()
+      const uuid = parsed.pathname.match(/([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i)
+      if (uuid) return uuid.slice(1).join('').toLowerCase()
+    }
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/$/, '')}`.toLowerCase()
+  } catch {
+    // Non-URL provider identities still compare exactly after harmless casing
+    // and trailing-slash normalization; they never collapse to a Notion id.
+  }
   return trimmed.toLowerCase()
 }
 
