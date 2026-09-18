@@ -166,6 +166,14 @@ function matchesCanonicalPage(ticket: ExistingSrsTicket, requirement: Reconcilia
   return ticket.srsLinks.some((link) => canonicalSrsIdentity(link) === expected)
 }
 
+function isFrDeliveryTicket(ticket: ExistingSrsTicket): boolean {
+  // Aggregate Epics commonly catalogue every canonical FR link in their body.
+  // They are evidence containers, not alternative implementations of each FR.
+  // Treating those links as canonical Story matches makes every correctly-linked
+  // Epic ambiguous with its own native children.
+  return ticket.issueType?.toLowerCase() !== 'sf-epic'
+}
+
 export function reconcileRequirements(requirements: ReconciliationRequirement[], plan: ReconciliationPlan, tickets: ExistingSrsTicket[], parentTicket: string): ReconciliationResult[] {
   const expectedIds = new Set(requirements.map((requirement) => requirement.frId.toUpperCase()))
   const decisionIds = new Set(plan.requirements.map((decision) => decision.frId))
@@ -181,22 +189,24 @@ export function reconcileRequirements(requirements: ReconciliationRequirement[],
   return requirements.map((requirement) => {
     const frId = requirement.frId.toUpperCase()
     const decision = plan.requirements.find((item) => item.frId === frId)!
-    const exact = tickets.filter((ticket) => matchesCanonicalPage(ticket, requirement))
+    const deliveryTickets = tickets.filter(isFrDeliveryTicket)
+    const exact = deliveryTickets.filter((ticket) => matchesCanonicalPage(ticket, requirement))
     if (exact.length > 1) {
       throw new ReconciliationError(`${frId} is ambiguous: canonical SRS page matches tickets ${exact.map((ticket) => `#${ticket.number}`).join(', ')}`)
     }
-    const idOnly = tickets.filter((ticket) => ticket.frIds.map((id) => id.toUpperCase()).includes(frId) && !matchesCanonicalPage(ticket, requirement))
+    const ticket = exact[0]
+    if (decision.classification === 'delivered' || decision.classification === 'superseded') {
+      // No issue will be created or reused for skipped scope. Historical audit
+      // tickets may mention the FR id without owning its canonical page; those
+      // references are evidence, not a reparenting candidate.
+      return { requirement, decision, action: 'skip', ticket }
+    }
+    const idOnly = deliveryTickets.filter((ticket) => ticket.frIds.map((id) => id.toUpperCase()).includes(frId) && !matchesCanonicalPage(ticket, requirement))
     if (exact.length === 0 && idOnly.length > 0) {
       throw new ReconciliationError(`${frId} is ambiguous: ticket ${idOnly.map((ticket) => `#${ticket.number}`).join(', ')} matches the id but not the canonical SRS page`)
     }
-
-    const ticket = exact[0]
     if (ticket?.parentNumber && ticket.parentNumber !== parentTicket) {
       throw new ReconciliationError(`${frId} already belongs to parent #${ticket.parentNumber} through ticket #${ticket.number}; it will not be reparented implicitly`)
-    }
-
-    if (decision.classification === 'delivered' || decision.classification === 'superseded') {
-      return { requirement, decision, action: 'skip', ticket }
     }
     if (ticket) return { requirement, decision, action: 'reuse', ticket }
     return { requirement, decision, action: 'create' }
