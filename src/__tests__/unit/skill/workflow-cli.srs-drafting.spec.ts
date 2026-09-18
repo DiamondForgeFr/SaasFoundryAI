@@ -66,6 +66,12 @@ case "$1" in
   list-incomplete-children)
     printf '%s' '[]'
     ;;
+  inspect-srs-tickets)
+    printf '%s' '[]'
+    ;;
+  link-subtask)
+    echo "linked"
+    ;;
   status)
     echo "Status: \${FAKE_BOARD_STATUS:-In progress}"
     ;;
@@ -213,6 +219,14 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
   })
 
   describe('transition-drafting', () => {
+    it('routes provider-neutral SRS inspection and orphan linking to the configured board tool', async () => {
+      const inspected = await runCli(['inspect-srs-tickets', '42', '--fr', 'FR-AUTH-001=https://example.test/fr1'], sandbox)
+      const linked = await runCli(['link-subtask', '42', '99'], sandbox)
+      expect(inspected.code).toBe(0)
+      expect(linked.code).toBe(0)
+      expect(readLog(sandbox.toolLogPath)).toEqual(expect.arrayContaining(['inspect-srs-tickets 42 --fr FR-AUTH-001=https://example.test/fr1', 'link-subtask 42 99']))
+    })
+
     it('rejects a ticket with no srs:* label', async () => {
       const res = await runCli(['transition-drafting', '42', 'ai-draft'], sandbox, { FAKE_LABELS: 'bug' })
       expect(res.code).toBe(2)

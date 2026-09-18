@@ -922,6 +922,180 @@ cmd_list_incomplete_children() {
   printf '%s\n' "$result"
 }
 
+# Return every issue that can influence SRS spawning under a delivery parent.
+# Native children are always included (open and closed); repository-wide issues
+# are added when their title/body contains a requested FR id or canonical page
+# identity. The spawner performs the final exact match and ambiguity checks.
+cmd_inspect_srs_tickets() {
+  if [ "$#" -lt 3 ]; then
+    echo "Usage: $0 inspect-srs-tickets <parent-ticket-number> --fr <FR-ID>=<page-url> [--fr ...]" >&2
+    return 1
+  fi
+
+  local parent=$1
+  shift
+  local requests='[]' spec fr_id fr_url identity
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" != "--fr" ] || [ -z "${2:-}" ] || [[ "$2" != *=* ]]; then
+      echo "Usage: $0 inspect-srs-tickets <parent-ticket-number> --fr <FR-ID>=<page-url> [--fr ...]" >&2
+      return 1
+    fi
+    spec=$2
+    fr_id=${spec%%=*}
+    fr_url=${spec#*=}
+    if [ -z "$fr_id" ] || [ -z "$fr_url" ]; then
+      echo "Error: --fr requires a non-empty FR id and page URL." >&2
+      return 1
+    fi
+    identity=$(printf '%s' "$fr_url" | sed -E 's/[?#].*$//; s#/$##' | tr -d '-' | grep -Eio '[0-9a-f]{32}$' | tail -n 1 || true)
+    [ -n "$identity" ] || identity=$(printf '%s' "$fr_url" | sed -E 's/[?#].*$//; s#/$##' | tr '[:upper:]' '[:lower:]')
+    requests=$(jq -cn --argjson current "$requests" --arg id "$(printf '%s' "$fr_id" | tr '[:lower:]' '[:upper:]')" --arg url "$fr_url" --arg identity "$identity" \
+      '$current + [{frId:$id,url:$url,identity:($identity|ascii_downcase)}]') || return 1
+    shift 2
+  done
+
+  load_config
+  local repo children_pages issue_pages children candidates result='[]'
+  repo=$(get_repo_owner_name)
+  if [[ -z "$repo" || "$repo" != */* ]]; then
+    echo "Error: could not resolve the current repository." >&2
+    return 1
+  fi
+
+  children_pages=$(gh api --paginate --slurp -H "Accept: application/vnd.github+json" \
+    "repos/${repo}/issues/${parent}/sub_issues?per_page=100" 2>/dev/null) || {
+      echo "Error: could not list child issues for #${parent}." >&2
+      return 1
+    }
+  children=$(printf '%s' "$children_pages" | jq -ce '
+    if type == "array" and all(.[]; type == "array") then [.[][] | .number]
+    else error("Expected paginated sub-issue arrays") end
+  ') || {
+    echo "Error: invalid child-issues response for #${parent}." >&2
+    return 1
+  }
+
+  issue_pages=$(gh api --paginate --slurp -H "Accept: application/vnd.github+json" \
+    "repos/${repo}/issues?state=all&per_page=100" 2>/dev/null) || {
+      echo "Error: could not inspect repository issues for SRS evidence." >&2
+      return 1
+    }
+  candidates=$(printf '%s' "$issue_pages" | jq -ce --arg parent "$parent" --argjson native "$children" --argjson requested "$requests" '
+    if type != "array" or any(.[]; type != "array") then error("Expected paginated issue arrays") else . end
+    | [.[][] | select(has("pull_request") | not)]
+    | map(select(.number != ($parent | tonumber)))
+    | map(select(any(.labels[]?; (.name | startswith("srs:"))) | not))
+    | map(
+        . as $issue
+        | (($issue.title // "") + "\n" + ($issue.body // "") | ascii_downcase) as $text
+        | select(
+            ($native | index($issue.number)) != null
+            or any($requested[]; . as $request | (($text | contains($request.frId | ascii_downcase)) or ($text | contains($request.identity))))
+          )
+      )
+    | unique_by(.number)
+    | sort_by(.number)
+  ') || {
+    echo "Error: invalid repository issue response for SRS evidence." >&2
+    return 1
+  }
+
+  while IFS= read -r issue; do
+    [ -z "$issue" ] && continue
+    local number info status parent_url parent_number title body state url issue_type srs_links fr_ids
+    number=$(printf '%s' "$issue" | jq -er '.number') || return 1
+    info=$(query_project_item "$number") || {
+      echo "Error: could not retrieve project status for SRS candidate #${number}." >&2
+      return 1
+    }
+    status=$(printf '%s' "$info" | jq -er '.status // ""') || return 1
+    title=$(printf '%s' "$issue" | jq -er '.title') || return 1
+    body=$(printf '%s' "$issue" | jq -er '.body // ""') || return 1
+    state=$(printf '%s' "$issue" | jq -er '.state | ascii_upcase') || return 1
+    url=$(printf '%s' "$issue" | jq -er '.html_url') || return 1
+    issue_type=$(printf '%s' "$issue" | jq -cr '.type.name // null') || return 1
+    parent_url=$(printf '%s' "$issue" | jq -r '.parent_issue_url // ""')
+    parent_number=""
+    if [ -n "$parent_url" ]; then parent_number=${parent_url##*/}; fi
+    if [ -z "$parent_number" ] && printf '%s' "$children" | jq -e --argjson n "$number" 'index($n) != null' >/dev/null; then
+      parent_number=$parent
+    fi
+    srs_links=$(printf '%s' "$body" | jq -Rsc '[scan("https?://[^][()<>[:space:]]+") | sub("[.,;]+$"; "")] | unique') || return 1
+    fr_ids=$(printf '%s\n%s' "$title" "$body" | jq -Rsc '
+      gsub("https?://[^][()<>[:space:]]+"; "")
+      | [scan("FR-(?:[A-Za-z0-9]+-)+[0-9]+"; "i") | ascii_upcase]
+      | unique
+    ') || return 1
+    result=$(jq -cn \
+      --argjson current "$result" --arg number "$number" --arg title "$title" --arg body "$body" --arg state "$state" \
+      --arg status "$status" --arg parent "$parent_number" --arg type "${issue_type:-}" --arg url "$url" \
+      --argjson links "$srs_links" --argjson ids "$fr_ids" '
+        $current + [{
+          number:$number,title:$title,body:$body,state:$state,
+          boardStatus:(if $status == "" then null else $status end),
+          parentNumber:(if $parent == "" then null else $parent end),
+          issueType:(if $type == "" or $type == "null" then null else $type end),
+          url:$url,srsLinks:$links,frIds:$ids
+        }]
+      ') || return 1
+  done < <(printf '%s' "$candidates" | jq -c '.[]')
+
+  printf '%s\n' "$result"
+}
+
+# Attach a previously-created orphan to its intended parent. Repeating the
+# command is a no-op; a different existing parent blocks rather than silently
+# moving work between delivery trees.
+cmd_link_subtask() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 link-subtask <parent-ticket-number> <child-ticket-number>" >&2
+    return 1
+  fi
+  local parent=$1 child=$2 repo existing existing_parent parent_lookup_rc=0 parent_id child_id result
+  repo=$(get_repo_owner_name)
+  if [[ -z "$repo" || "$repo" != */* ]]; then
+    echo "Error: could not resolve the current repository." >&2
+    return 1
+  fi
+
+  existing=$(gh api -H "Accept: application/vnd.github+json" "repos/${repo}/issues/${child}/parent" 2>&1) || parent_lookup_rc=$?
+  if [ "$parent_lookup_rc" -eq 0 ]; then
+    existing_parent=$(printf '%s' "$existing" | jq -er '.number | tostring') || {
+      echo "Error: invalid parent response for subtask #${child}." >&2
+      return 1
+    }
+  elif printf '%s' "$existing" | grep -Eq 'HTTP([/][0-9.]+)?[[:space:]]+404'; then
+    existing_parent=""
+  else
+    echo "Error: could not inspect the current parent for subtask #${child}; refusing to mutate an ambiguous relationship." >&2
+    return 1
+  fi
+  if [ "$existing_parent" = "$parent" ]; then
+    echo "✓ Subtask #${child} is already linked to parent #${parent}"
+    return 0
+  fi
+  if [ -n "$existing_parent" ]; then
+    echo "Error: subtask #${child} already belongs to parent #${existing_parent}; refusing to reparent it." >&2
+    return 1
+  fi
+
+  parent_id=$(gh issue view "$parent" --json id --jq '.id' 2>/dev/null) || return 1
+  child_id=$(gh issue view "$child" --json id --jq '.id' 2>/dev/null) || return 1
+  [ -n "$parent_id" ] && [ -n "$child_id" ] || { echo "Error: could not resolve parent or child node id." >&2; return 1; }
+  result=$(gh api graphql -H "GraphQL-Features: sub_issues" -f query="mutation {
+    addSubIssue(input: { issueId: \"$parent_id\", subIssueId: \"$child_id\" }) {
+      issue { number }
+      subIssue { number }
+    }
+  }") || return 1
+  if ! printf '%s' "$result" | jq -e '.data.addSubIssue' >/dev/null 2>&1; then
+    echo "Error: GitHub did not confirm the sub-issue link." >&2
+    printf '%s\n' "$result" >&2
+    return 1
+  fi
+  echo "✓ Subtask #${child} linked to parent #${parent}"
+}
+
 cmd_get_parent() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 get-parent <child-ticket-number>" >&2
@@ -1807,6 +1981,8 @@ case "$COMMAND" in
   get-complexity)     cmd_get_complexity "$@" ;;
   get-labels)         cmd_get_labels "$@" ;;
   list-incomplete-children) cmd_list_incomplete_children "$@" ;;
+  inspect-srs-tickets) cmd_inspect_srs_tickets "$@" ;;
+  link-subtask) cmd_link_subtask "$@" ;;
   get-parent)         cmd_get_parent "$@" ;;
   get-issue-type)     cmd_get_issue_type "$@" ;;
   get-ticket)         cmd_get_ticket "$@" ;;
@@ -1834,6 +2010,8 @@ case "$COMMAND" in
     echo "  get-complexity <ticket>                  Read current complexity label"
     echo "  get-labels <ticket>                      Print every label name (one per line)"
     echo "  list-incomplete-children <parent>       Print native children whose board Status is not Done"
+    echo "  inspect-srs-tickets <parent> --fr ID=URL...  Inspect open/closed SRS ticket candidates as JSON"
+    echo "  link-subtask <parent> <child>           Idempotently attach an existing orphan child"
     echo "  get-parent <child>                      Print the native parent issue as JSON"
     echo "  get-issue-type <ticket>                 Print the native issue type as JSON"
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
@@ -1850,7 +2028,7 @@ case "$COMMAND" in
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-labels, list-incomplete-children, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type"
+    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type"
     exit 1
     ;;
 esac

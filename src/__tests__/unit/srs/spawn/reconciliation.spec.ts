@@ -92,6 +92,12 @@ describe('SRS spawn reconciliation', () => {
     expect(() => reconcileRequirements(requirements, plan(), [ticket({ srsLinks: ['https://example.test/a-different-page'] })], '645')).toThrow(/matches the id but not the canonical SRS page/)
   })
 
+  it('prefers one canonical page match over unrelated textual references to the same FR id', () => {
+    const referenceOnly = ticket({ number: '101', srsLinks: ['https://example.test/a-different-page'], parentNumber: null })
+    const result = reconcileRequirements(requirements, plan(), [ticket(), referenceOnly], '645')
+    expect(result[0]).toMatchObject({ action: 'reuse', ticket: { number: '100' } })
+  })
+
   it('blocks implicit reparenting', () => {
     expect(() => reconcileRequirements(requirements, plan(), [ticket({ parentNumber: '999' })], '645')).toThrow(/belongs to parent #999/)
   })
