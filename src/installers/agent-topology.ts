@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'fs/promises'
 
 import { installAgentInstructions } from '../harness/agent-instructions'
-import type { HarnessAgent } from '../harness/agent-registry'
+import { resolveHarnessAgents, type HarnessAgent } from '../harness/agent-registry'
 import type { SaaSFoundryManifest } from '../types'
 
 /**
@@ -42,7 +42,7 @@ export async function writeMultirepoAgentManifests(manifest: SaaSFoundryManifest
 }
 
 export async function installSelectedAgentInstructions(manifest: SaaSFoundryManifest, projectName: string, agents: HarnessAgent[] | undefined): Promise<void> {
-  const declaredAgents: HarnessAgent[] = agents?.length ? agents : ['claude-code']
+  const declaredAgents = resolveHarnessAgents(agents)
 
   const targets = manifest.structure === 'monorepo' ? ['.'] : [`apps/${projectName}-api`, `apps/${projectName}-web`]
   for (const targetPath of targets) {

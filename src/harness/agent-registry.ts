@@ -105,6 +105,18 @@ export function listAgentProfiles(): AgentProfile[] {
   return getAgentIds().map(getAgentProfile)
 }
 
+/**
+ * Resolve the effective coding-agent declaration for a fresh install.
+ *
+ * Omitted and empty selections both retain the historical Claude Code
+ * declaration. Explicit selections are validated, deduplicated and kept in
+ * user order so the manifest, installed files and completion output agree.
+ */
+export function resolveHarnessAgents(ids?: readonly string[]): HarnessAgent[] {
+  if (!ids?.length) return ['claude-code']
+  return [...new Set(ids.map((id) => getAgentProfile(id).id))]
+}
+
 export function needsSharedInstructions(ids: string[]): boolean {
   // Validate every requested ID even if an earlier profile already needs a bridge.
   return ids.map(getAgentProfile).some((profile) => profile.sharedInstructions)

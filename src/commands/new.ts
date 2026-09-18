@@ -33,7 +33,7 @@ import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import { buildManifestTools } from './new.manifest-tools'
-import { documentationLines, labelColumn, projectUrlLines } from './new.summary'
+import { agentProfileLines, documentationLines, labelColumn, projectUrlLines } from './new.summary'
 import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 
 /**
@@ -634,6 +634,12 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   }
   console.log()
 
+  console.log(chalk.cyan('🤖 Configured coding-agent profiles (runtime not checked):'))
+  for (const profile of agentProfileLines((startProjectAnswers as Answers & { agents?: HarnessAgent[] }).agents)) {
+    console.log(chalk.gray(`  • ${profile.displayName} (${profile.id}) — ${profile.instructionFile}`))
+  }
+  console.log()
+
   console.log(chalk.cyan('🔗 Your Project URLs:'))
   const urlLines = projectUrlLines({
     ports,
@@ -815,9 +821,16 @@ async function runHarnessInstall(config: Answers): Promise<void> {
   }
 
   console.log()
+  const profiles = agentProfileLines(config.agents)
+  console.log(chalk.cyan('Configured coding-agent profiles (runtime not checked):'))
+  for (const profile of profiles) {
+    console.log(chalk.gray(`  • ${profile.displayName} (${profile.id}) — ${profile.instructionFile}`))
+  }
+  console.log()
   console.log(chalk.cyan('Next steps:'))
-  console.log(chalk.gray('  • sf status --claude-friendly          — verify preconditions'))
-  console.log(chalk.gray('  • open the project in Claude Code      — the SessionStart hook loads the project state'))
+  console.log(chalk.gray('  • sf status --agent-friendly --no-network  — verify project preconditions'))
+  console.log(chalk.gray(`  • sf agents doctor ${profiles.map((profile) => profile.id).join(' ')}  — inspect configured support without changing the project`))
+  console.log(chalk.gray('  • open the project in a configured coding agent and follow its entrypoint above'))
   if (config.workflow && config.workflow.tool !== 'none') {
     console.log(chalk.gray('  • .claude/skills/sf-workflow/SKILL.md  — workflow documentation'))
   }
