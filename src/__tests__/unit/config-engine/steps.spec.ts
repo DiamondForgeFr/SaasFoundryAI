@@ -9,6 +9,7 @@ import { workflowStep } from '../../../config-engine/steps/workflow.step'
 import { ConfigState, FieldDefinition, StepContext } from '../../../config-engine/types'
 
 jest.mock('../../../prompts/workflow.prompts', () => ({
+  ...jest.requireActual('../../../prompts/workflow.prompts'),
   promptWorkflowConfiguration: jest.fn().mockResolvedValue({ workflow: { tool: 'github-projects' }, aiRules: {} })
 }))
 jest.mock('../../../prompts/skills.prompts', () => ({
@@ -167,6 +168,35 @@ describe('workflowStep', () => {
 
     expect(result).toEqual({})
     expect(promptWorkflowConfiguration).not.toHaveBeenCalled()
+  })
+
+  it('non-interactive: materializes an explicit preset with the selected tracker', async () => {
+    const result = await workflowStep.collect?.(
+      stepContext({
+        nonInteractive: true,
+        prefill: { workflowPreset: 'solo' },
+        derived: { selectedTracker: 'jira' }
+      })
+    )
+
+    expect(result?.workflow).toMatchObject({
+      tool: 'jira',
+      template: 'SaaSFoundry Solo',
+      workingBranch: 'develop',
+      prTargetBranch: 'develop'
+    })
+    expect(result?.workflow?.statuses?.map((status) => status.name)).toEqual(['Backlog', 'In Progress', 'AI Testing', 'In Review', 'Done'])
+    expect(result?.workflow?.issueTypes).toBeUndefined()
+    expect(result?.aiRules).toMatchObject({ alwaysCreateBranchFromWorking: true, requireHumanCheckOnPushedBranch: true })
+    expect(promptWorkflowConfiguration).not.toHaveBeenCalled()
+  })
+
+  it('non-interactive: defaults an explicit preset to GitHub Projects', async () => {
+    const result = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'saasfoundry' } }))
+
+    expect(result?.workflow).toMatchObject({ tool: 'github-projects', template: 'SaaSFoundry AI Workflow' })
+    expect(result?.workflow?.statuses).toHaveLength(7)
+    expect(result?.workflow?.issueTypes).toHaveLength(4)
   })
 
   it('interactive: delegates to promptWorkflowConfiguration with the repo URL from state', async () => {

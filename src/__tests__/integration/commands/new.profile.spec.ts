@@ -146,6 +146,32 @@ describe('newCommand (--profile integration)', () => {
     expect(failing).toEqual([])
   })
 
+  it('harness profile persists and installs an explicit non-interactive workflow preset', async () => {
+    await newCommand({
+      nonInteractive: true,
+      profile: 'harness',
+      projectName: 'acme',
+      mainBranch: 'main',
+      workflow: 'solo',
+      tracker: 'github-projects'
+    })
+
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest.workflow).toMatchObject({
+      tool: 'github-projects',
+      template: 'SaaSFoundry Solo',
+      workingBranch: 'develop',
+      prTargetBranch: 'develop'
+    })
+    expect(manifest.workflow.statuses.map((status: { name: string }) => status.name)).toEqual(['Backlog', 'In Progress', 'AI Testing', 'In Review', 'Done'])
+    expect(manifest.aiRules).toMatchObject({ alwaysCreateBranchFromWorking: true, requireHumanCheckOnPushedBranch: true })
+
+    const statusDocs = await readdir(join(tempDir, '.claude', 'skills', 'sf-workflow', 'statuses'))
+    expect(statusDocs.filter((file) => /^\d+-/.test(file)).sort()).toEqual(['1-backlog.md', '2-in-progress.md', '3-ai-testing.md', '4-in-review.md', '5-done.md'])
+    expect(await readFile(join(tempDir, '.claude', 'skills', 'sf-workflow', 'workflow-cli.sh'), 'utf8')).toContain('manifest_statuses()')
+    expect(await readdir(join(tempDir, '.claude', 'skills'))).toContain('sf-tool-github-projects')
+  })
+
   // Covers the S4 scenarios of #514, which were only validated by hand: a fresh
   // project must carry the block, and the flag must reach all three surfaces.
   it('writes the language block at English defaults when --language is not passed', async () => {
