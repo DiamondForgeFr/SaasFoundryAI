@@ -10,6 +10,7 @@ import {
   isHarnessAgent,
   listAgentProfiles,
   needsSharedInstructions,
+  resolveHarnessAgents,
   validateAgentRegistry
 } from '../../../harness/agent-registry'
 
@@ -39,6 +40,12 @@ describe('bundled declarative agent registry (#666)', () => {
     expect(getAgentProfile('generic')).toMatchObject({ instructions: 'manual', skills: 'manual' })
     expect(listAgentProfiles().every((profile) => profile.runtime === 'not-checked')).toBe(true)
     expect(getSharedAgentEntrypoints()).toEqual(['AGENTS.md', 'GEMINI.md'])
+  })
+  it('resolves fresh-install declarations without duplicating fallback or explicit profiles', () => {
+    expect(resolveHarnessAgents()).toEqual(['claude-code'])
+    expect(resolveHarnessAgents([])).toEqual(['claude-code'])
+    expect(resolveHarnessAgents(['codex', 'gemini-cli', 'codex'])).toEqual(['codex', 'gemini-cli'])
+    expect(() => resolveHarnessAgents(['codex', 'gpt-5'])).toThrow('Unknown coding agent')
   })
   it.each(['gpt-5', 'sonnet', 'qwen', 'openai', 'future-agent', 'constructor', '__proto__', '', '../codex'])('rejects unsupported agent/model/provider input %s', (id) => {
     expect(isHarnessAgent(id)).toBe(false)

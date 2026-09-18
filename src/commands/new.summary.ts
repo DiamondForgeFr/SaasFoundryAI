@@ -1,5 +1,6 @@
 import { DbCredentials } from '../types'
 import { ResolvedPorts } from '../ports'
+import { getAgentProfile, resolveHarnessAgents } from '../harness/agent-registry'
 
 /**
  * The URLs printed at the end of `sf new` — as data, so they can be asserted.
@@ -112,6 +113,25 @@ export interface DocumentationParams {
   apiPort: number
   /** Whether the AI harness was installed — `.claude/docs/` exists only then. */
   hasHarness: boolean
+}
+
+export interface AgentProfileLine {
+  id: string
+  displayName: string
+  instructionFile: string
+}
+
+/**
+ * The configured coding-agent profiles shown after installation.
+ *
+ * This is registry-backed configuration evidence only. It deliberately makes
+ * no claim about runtime installation, authentication or native discovery.
+ */
+export function agentProfileLines(ids?: readonly string[]): AgentProfileLine[] {
+  return resolveHarnessAgents(ids).map((id) => {
+    const profile = getAgentProfile(id)
+    return { id: profile.id, displayName: profile.displayName, instructionFile: profile.instructionFile }
+  })
 }
 
 /**

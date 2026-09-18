@@ -64,11 +64,11 @@ A `--db-port` under `--db-setup credentials` or `manual` points at a database yo
 
 `--profile` decides **what** `sf new` installs. It is the first question the interactive flow asks, and it changes which of the later questions are asked at all.
 
-| Profile   | Installs                                                       | Use when                                                                       |
-| --------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `full`    | Technical stack **and** the AI harness (workflow, skills, SRS) | Starting a new product from scratch — the default                              |
-| `stack`   | The technical stack only                                       | You want the scaffold without the AI collaboration layer                       |
-| `harness` | The AI harness only, onto an existing repository               | You already have a codebase and want the workflow, skills and SRS on top of it |
+| Profile   | Installs                                                        | Use when                                                                       |
+| --------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `full`    | Technical stack **and** the AI harness (workflow, skills, SRS)  | Starting a new product from scratch — the default                              |
+| `stack`   | Technical scaffold and core helper deposits; no workflow or SRS | You want the generated stack without the managed collaboration workflow        |
+| `harness` | The AI harness only, onto an existing repository                | You already have a codebase and want the workflow, skills and SRS on top of it |
 
 `harness` never creates a project directory and never touches your technical stack — it deposits the AI layer into the repository you run it from. Stack questions (database, storage, email,
 installable app) are skipped entirely, because there is nothing to scaffold.

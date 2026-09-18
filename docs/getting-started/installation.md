@@ -1,167 +1,176 @@
 # Installation
 
-## Start here — give this line to your AI assistant
+## Start with your situation
+
+SaaSFoundryAI supports three starting points. Choose the one that describes the files in front of you before running a command.
+
+| Starting point                                                       | Safe entry                                                                       | What happens                                                                                                                    |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| A managed SaaSFoundryAI project already contains `.saasfoundry.json` | `sf status --agent-friendly --no-network`, then `sf update` or `sf agents`       | The existing manifest remains the source of truth. Updates and agent declarations are applied without recreating the project.   |
+| An empty workspace or a new product                                  | `sf new`                                                                         | Choose the technical stack, AI harness, or both.                                                                                |
+| An existing repository without a SaaSFoundryAI manifest              | Read it first, then choose `sf new --profile harness` or a fresh `full` scaffold | A project you keep receives the harness in place. A throwaway POC is preserved as reference before a clean scaffold is created. |
+
+The detailed choices for each path are below. The [Quick Start](/getting-started/quick-start) is the shortest runnable example.
+
+## Assistant-first setup
+
+For Claude Code, give the assistant this line from the folder you want to work in:
 
 > Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
 
-Move into the folder you want to work in, hand that line to Claude Code — or any assistant that can read a link and run commands — and describe your product in your own words. The assistant installs
-the skill and takes it from there: scaffolding, modules, workflow, tickets. **Nothing below this section is required to get started.**
-
-::: details What your assistant does with that line
+The current user-scope bootstrap installs `tool-saasfoundry` into Claude Code's skill directory:
 
 ```bash
-# Installs the tool-saasfoundry skill at user scope, into ~/.claude/skills/tool-saasfoundry/
 npx saasfoundryai-cli@beta skill install --yes --force
-
-# Use --project instead to commit the skill with the repo and share it with the team
 ```
 
-`npx` means the CLI never has to be installed first. From there the skill reads `.saasfoundry.json` when there is one, drives `sf` **non-interactively**, and never answers the interactive prompts on
-your behalf. Full contract in [Skills System](/guide/skills-system) and [`sf skill`](/cli/sf-skill).
+Use `--project` to place that meta-skill in the repository for review and team sharing.
 
-:::
-
-The rest of this page is for the terminal path — installing the CLI yourself and driving it by hand. It is a supported, first-class route, not a fallback.
-
-## What is SaaSFoundryAI?
-
-SaaSFoundryAI is an **AI-assisted collaborative development platform** that scaffolds production-ready SaaS projects. It's not an AI-powered app itself, but a platform designed for **Human + AI
-collaboration**.
-
-::: info AI Collaboration
-
-SaaSFoundryAI generates projects optimized for development with Claude Code (Anthropic's AI coding assistant). The generated projects include Claude-powered skills that assist with git operations,
-workflow management, and development tasks.
-
-:::
+This bootstrap path is currently native to Claude Code. With Codex, Gemini CLI, Kimi Code, Qwen Code, or another coding-agent host, start with the CLI path below, select the appropriate profiles, then
+open the generated project in that host. The generated harness itself supports several coding-agent profiles; installing the assistant-facing meta-skill and configuring the project harness are
+separate operations.
 
 ## Prerequisites
 
-### 1. Node.js and Package Manager
-
-- **Node.js** >= 22.13.0 — but see the note below: Node 24 is what `.nvmrc` pins
-- **npm** >= 11 (not yarn or pnpm — see below)
+- **Node.js 24.19.0**, as pinned by generated `.nvmrc` files
+- **npm 11 or newer**
 - **Git**
+- **Docker**, when you choose Docker-managed database or storage services
+- At least one coding-agent runtime if you want AI-assisted development
 
-::: warning npm 11 is required, and Node 22 does not ship it
+Generated projects use npm workspaces and a `package-lock.json`. yarn and pnpm are not validated against the generated dependency graph.
 
-Generated projects declare `engines.npm >= 11` and enforce it through `devEngines`. Node 22 bundles npm 10.9.x, so `npm install` in a fresh project fails with:
-
-```
-npm error EBADDEVENGINES Invalid semver version ">=11.0.0" does not match "10.9.2"
-```
-
-The whole npm 10 line crashes on the generated workspace graph (`Cannot read properties of null (reading 'edgesOut')`), which is why the floor exists. Generated projects therefore pin `.nvmrc` to
-**24.19.0**, which bundles npm 11.
-
-If you stay on Node 22, upgrade npm yourself: `npm install -g npm@11`.
-
-:::
-
-::: tip Why not yarn or pnpm
-
-Generated projects ship a `package-lock.json` and declare npm through `devEngines`. yarn and pnpm are not tested against the scaffolds and will not resolve the same tree.
-
-:::
-
-### 2. Claude Code (Terminal Version)
-
-**Required for AI-assisted development**
-
-Claude Code is Anthropic's official CLI for Claude AI. It provides AI assistance directly in your terminal.
-
-**Installation:**
+You can execute the CLI without a global install:
 
 ```bash
-# Using npm
-npm install -g @anthropic-ai/claude-code
-
-# Or using brew (macOS)
-brew install anthropic/tap/claude-code
+npx saasfoundryai-cli@beta new
 ```
 
-**Verify installation:**
+Or install it globally:
 
 ```bash
-claude --version
-```
-
-See: [Claude Code Documentation](https://docs.anthropic.com/claude-code)
-
-### 3. cmux (Recommended for macOS)
-
-**Optional but highly recommended**
-
-cmux is a terminal multiplexer with an integrated browser, perfect for full-stack development.
-
-**Why cmux?**
-
-- ✅ **Split panes** - Work on API, web, and docs simultaneously
-- ✅ **Integrated browser** - See changes instantly without switching apps
-- ✅ **Claude integration** - AI assistance across all panes
-- ✅ **Session management** - Save and restore your workspace
-
-**Installation (macOS only):**
-
-```bash
-brew install cmux
-```
-
-**Launch your project with cmux:**
-
-```bash
-cd my-saas-project
-cmux
-```
-
-See: [cmux Documentation](https://cmux.dev)
-
-## Prefer a terminal? Install the CLI
-
-If you would rather run the commands yourself, install SaaSFoundryAI globally using your preferred package manager:
-
-::: code-group
-
-```bash [npm]
-npm install -g saasfoundryai-cli
-```
-
-```bash [yarn]
-yarn global add saasfoundryai-cli
-```
-
-```bash [pnpm]
-pnpm add -g saasfoundryai-cli
-```
-
-:::
-
-## Verify Installation
-
-```bash
+npm install -g saasfoundryai-cli@beta
 sf --version
 ```
 
-You should see the version number printed.
+## Situation 1: an existing managed project
 
-## Recommended Workflow
+A managed project contains `.saasfoundry.json`. Inspect it before changing anything:
 
-### With your AI assistant
+```bash
+sf status --agent-friendly --no-network
+sf agents list --json
+```
 
-1. **Install Claude Code** (and cmux on macOS, if you want the integrated browser)
-2. **Hand it the line** at the top of this page, from the folder you want to work in
-3. **Describe your product** — the assistant resolves the rest and runs `sf new` for you
-4. **Keep going in the same conversation** — modules, workflow, tickets, all through the skill
+Use `sf update` to refresh the installed SaaSFoundryAI files or add supported modules. Use `sf agents` to change coding-agent declarations:
 
-### From the terminal
+```bash
+# Personal to this checkout; tracked files stay unchanged
+sf agents enable codex
 
-1. **Install tools**: Node.js, Claude Code, SaaSFoundryAI (and cmux on macOS)
-2. **Create project**: `sf new`
-3. **Launch your AI in the project**: `cd my-project && claude` (or `cmux` on macOS)
-4. **Work with AI**: Use Claude skills for git, workflow, and development tasks
+# Shared through the repository as a reviewable diff
+sf agents enable codex --scope shared
 
-## Next Steps
+# Replace one scope's declaration with an exact non-empty set
+sf agents replace claude-code codex --scope shared
 
-- [Quick Start](/getting-started/quick-start) - Create your first project, with an assistant or from the terminal
-- [First Project](/getting-started/first-project) - Detailed walkthrough
-- [Skills System](/guide/skills-system) - Learn about AI-powered skills
+# Refresh generated agent surfaces after a harness update
+sf agents refresh
+```
+
+Local scope is the default and is private to the current checkout or worktree. Shared scope writes the declaration and generated surfaces that the team can review and commit. Enabling one profile does
+not disable another profile.
+
+## Situation 2: an empty workspace
+
+Run the interactive flow:
+
+```bash
+sf new
+```
+
+The first decision is the installation profile:
+
+| Profile   | Installs                                                                               | Choose it when                                                                      |
+| --------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `full`    | Technical stack plus workflow, skills, SRS options and coding-agent instructions       | You are starting a product from scratch, or rebuilding a throwaway POC              |
+| `harness` | The AI collaboration layer in the current repository                                   | You already have code you intend to keep                                            |
+| `stack`   | The technical scaffold and core helper deposits, without workflow or SRS configuration | You deliberately want the technical base without the managed collaboration workflow |
+
+For `full` and `harness`, select one or several registered coding-agent profiles. A scripted example is:
+
+```bash
+sf new --non-interactive \
+  --profile full \
+  --project-name my-saas \
+  --structure monorepo \
+  --agents claude-code,codex \
+  --setup-repo local \
+  --db-setup docker \
+  --db-type postgresql \
+  --email-service none \
+  --s3-setup manual \
+  --no-analytics
+```
+
+Omitting `--agents` keeps the historical Claude Code declaration. The completion screen reports the effective profiles and their instruction entrypoints without claiming that the runtimes were
+installed or loaded them.
+
+## Situation 3: an existing repository or POC
+
+First decide whether the existing code remains the product.
+
+### Keep and continue the existing repository
+
+Install the harness in place:
+
+```bash
+cd existing-project
+sf new --profile harness
+```
+
+This path creates no project directory and does not scaffold a replacement API, web app, database, storage or email module. It deposits the collaboration layer in the existing repository and writes a
+minimal managed manifest.
+
+### Rebuild from a throwaway POC
+
+Let the `tool-saasfoundry` intake read the code first. Review its findings and move plan. Only after explicit approval does it place the existing experiment under `POC/` and create a clean `full`
+project beside it. The old code remains available as reference; it is never silently deleted or overwritten.
+
+Do not run a full scaffold inside a POC directory and do not move a repository that the user intends to keep.
+
+## Choose coding-agent profiles
+
+Profiles identify coding tools and their instruction-discovery surfaces. They do not select a model provider, model name, API credential or reasoning level.
+
+The registered IDs are `claude-code`, `codex`, `kimi`, `gemini-cli`, `qwen-code`, and `generic`. See the single canonical [`sf agents` profile matrix](/cli/sf-agents#tool-profiles-and-model-providers)
+for current evidence and limitations.
+
+After installation:
+
+```bash
+sf agents list --json
+sf agents doctor codex
+sf status --agent-friendly --no-network
+```
+
+`list` reports shared, local and effective declarations. `doctor` inspects bounded static evidence. Neither command proves authentication, permissions, hooks, native skill activation or model
+availability.
+
+## Platforms
+
+The project test suite exercises the CLI and generated shell workflows on macOS and Linux. Windows users should prefer WSL for the same environment. Native Windows commands may work, but
+`sf agents doctor --check-runtime` currently reports executable-extension lookup as `not-checked`; verify the chosen host directly instead of treating file presence as runtime proof.
+
+cmux is an optional macOS workspace. It is not required for SaaSFoundryAI or for any coding-agent profile.
+
+## Documentation after installation
+
+Run the bundled documentation locally, without relying on a hosted site:
+
+```bash
+sf docs
+```
+
+The generated project also contains its own `README.md`, harness documentation and agent entrypoints. Use the [First Project](/getting-started/first-project) tutorial for a complete walkthrough and
+[Agent coexistence](/guide/agent-coexistence) for the stricter native-verification and handoff protocol.

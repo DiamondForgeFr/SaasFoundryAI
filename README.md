@@ -51,6 +51,21 @@ From there the skill takes over: it reads `.saasfoundry.json` when there is one,
 
 </details>
 
+The one-line user-scope bootstrap currently targets Claude Code. Codex, Gemini CLI, Kimi Code, Qwen Code, and other hosts can use the CLI path, then select their coding-agent profiles for the
+generated harness. See [Installation](docs/getting-started/installation.md) for the exact path.
+
+### Choose your starting point
+
+| You have                                         | Start with                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| A managed project containing `.saasfoundry.json` | `sf status`, then `sf update` or `sf agents`                           |
+| An empty workspace or a new product              | `sf new` and choose `full`, `harness`, or `stack`                      |
+| An existing repository you will keep             | Read it first, then install `--profile harness` in place               |
+| A throwaway POC you will rebuild                 | Preserve it under `POC/`, then create a clean `full` project beside it |
+
+The [installation guide](docs/getting-started/installation.md) explains these routes, local versus shared agent declarations, and platform limitations. The canonical profile matrix remains in
+[`sf agents`](docs/cli/sf-agents.md#tool-profiles-and-model-providers).
+
 **Prefer a terminal?** The CLI is a first-class path, not a fallback — see [Quick Start](#-quick-start).
 
 ## 🌟 What is SaaSFoundryAI?
@@ -400,19 +415,20 @@ This ensures your customizations are never lost during updates.
 
 ## 🤖 AI-First Development
 
-SaaSFoundryAI is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects come pre-configured for both traditional team
-development and AI-powered coding with Claude Code.
+SaaSFoundryAI is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects support traditional team development and one or
+several declared coding-agent tools.
 
-### ✨ Built for Claude Code
+### ✨ Built for coding-agent coexistence
 
 Every SaaSFoundryAI project includes:
 
-#### 📝 CLAUDE.md Context Files
+#### 📝 Shared project instructions
 
 - **Project-specific context** for immediate AI understanding
 - **Architecture documentation** with tech stack, conventions, and patterns
 - **Module system documentation** for dynamic feature installation
 - **Git workflow guidelines** with conventional commits and branching strategy
+- **Agent entrypoints** through `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md`, driven by the declared profiles
 
 #### 🛠️ Pre-configured Development Environment
 
@@ -429,16 +445,17 @@ Every SaaSFoundryAI project includes:
 - **Type safety** (TypeScript + Prisma) catches AI mistakes early
 - **ESLint + Prettier** auto-format AI-generated code
 
-### 🎯 Claude Code Skills System
+### 🎯 SaaSFoundryAI skills system
 
-SaaSFoundryAI projects come with a **skills library** that teaches Claude Code the project's conventions, workflows, and integrations. Skills are plain files shipped under `.claude/skills/` — no MCP
-server required. Add skills after scaffold time with `sf skill install <name>` (project- or user-scope).
+SaaSFoundryAI projects come with a **skills library** that teaches configured coding agents the project's conventions, workflows, and integrations. The existing `.claude/skills/` tree remains the
+common source during the additive compatibility phase; declared shared profiles receive reviewed `.agents/skills/` copies or references. Add the assistant-facing meta-skill with `sf skill install`
+(currently Claude-native), and manage project profiles with `sf agents`.
 
 #### 🎯 SRS auto-suggestion (when the SRS module is enabled)
 
-When you install the SRS skill (`sf-srs`) on a project, every Claude Code prompt is silently classified by a deterministic intent detector. If you describe a user need, a feature, a design decision,
-or a test condition, Claude is nudged to draft an SRS update before writing code — the spec stays in sync with the conversation, automatically. The classifier is conservative (precision ≈ 1.0, recall
-≈ 0.94 on a 64-prompt calibration set) and ships with three opt-out paths.
+When you install the SRS skill (`sf-srs`) on a project, supported prompt hooks can classify each request with a deterministic intent detector. If you describe a user need, a feature, a design
+decision, or a test condition, the configured agent is directed to propose an SRS update before writing code. Hosts without a verified native hook apply the same procedure from the shared project
+instructions. The classifier is conservative (precision ≈ 1.0, recall ≈ 0.94 on a 64-prompt calibration set) and ships with three opt-out paths.
 
 #### 📦 Core Skills (Always Installed)
 
@@ -461,7 +478,7 @@ or a test condition, Claude is nudged to draft an SRS update before writing code
 
 #### 🔧 Tool Skills (Paired With Your Issue Tracker)
 
-Each tool skill gives Claude a first-class shell CLI (no MCP) for reading and writing tickets in your chosen tracker:
+Each tool skill gives the configured coding agent a first-class shell CLI (no MCP) for reading and writing tickets in your chosen tracker:
 
 - **`sf-tool-github-projects`** — GitHub Projects V2 (issues, subtasks, status, complexity labels)
 - **`sf-tool-jira`** — Jira tickets, sprints, boards
@@ -481,8 +498,8 @@ Added during `sf new` or later with `sf update`:
 
 #### 🧰 SaaSFoundryAI Meta-Skill
 
-- **`tool-saasfoundry`** — Teaches Claude to drive the `sf` CLI itself: scaffold new projects, add or remove modules, read project state from `.saasfoundry.json`, file module requests, report CLI or
-  scaffold bugs, and vote on community proposals. Install with `sf skill install` (project or user scope).
+- **`tool-saasfoundry`** — Teaches an assistant to drive the `sf` CLI itself: scaffold new projects, add or remove modules, read project state from `.saasfoundry.json`, file module requests, report
+  CLI or scaffold bugs, and vote on community proposals. Install with `sf skill install` (project or user scope).
 
 #### ⚙️ Skills Configuration
 
@@ -521,15 +538,16 @@ sf update
 
 ### 🚀 Quick Start for AI Development
 
-#### 1. **Connect Claude Code**
+#### 1. **Open the project in a configured coding agent**
 
 ```bash
 # After generating your project
 cd your-project
 code .  # or cursor .
 
-# Claude Code will automatically load CLAUDE.md
-# You can start asking questions immediately
+# Read the entrypoint reported by sf new: CLAUDE.md, AGENTS.md, or GEMINI.md
+sf agents list
+sf status --agent-friendly --no-network
 ```
 
 #### 2. **Common AI Development Commands**
@@ -560,16 +578,16 @@ code .  # or cursor .
 
 **Feature Development:**
 
-1. Ask Claude to implement the feature
+1. Ask a configured coding agent to implement the feature
 2. AI generates code following project conventions
 3. Git hooks validate commit message format
 4. Pre-push hooks run tests automatically
 5. CI/CD validates the changes
-6. Claude can create the PR with proper description
+6. The agent can create the PR with the required description
 
 **Code Review:**
 
-1. Claude reads PR comments from GitHub
+1. The agent reads PR comments from GitHub
 2. Implements requested changes
 3. Runs tests to validate fixes
 4. Updates PR with new commits
@@ -627,7 +645,7 @@ All AI-generated code passes through:
 
 ---
 
-**Ready to build with AI?** Generated projects include everything you need to start coding with Claude immediately - no setup required.
+**Ready to build with AI?** Generated projects include the shared instructions, skills, diagnostics, and workflow needed by the coding-agent profiles you select.
 
 ## 🤝 Contributing
 

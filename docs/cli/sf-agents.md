@@ -189,6 +189,8 @@ Commands never stage, commit, push, or change Git branches.
 
 ## Tool profiles and model providers
 
+This is the canonical support matrix. The [installation guide](/getting-started/installation) routes each project starting point here rather than copying the table.
+
 The profile registry describes how a coding tool loads project instructions. It does not select a model, provider or API credential. Configure those personally in your tool; changing them does not
 require regenerating project instructions.
 
@@ -212,3 +214,8 @@ For an unlisted tool, explicitly choose `generic` and verify that it loads the i
 
 New integrations are reviewed data changes in `src/harness/agent-profiles.json`, with registry/schema parity and deposit tests. Profiles cannot contain commands, credentials or arbitrary output
 directories. This delivery includes built-in profiles only; it does not load or execute remote profile plugins.
+
+## Platform notes
+
+The project test suite exercises the CLI and generated shell workflows on macOS and Linux. Windows users should prefer WSL for the same environment. Native Windows commands may work, but runtime
+executable-extension lookup remains `not-checked`; use `sf agents doctor` as bounded evidence and verify the chosen host directly.
