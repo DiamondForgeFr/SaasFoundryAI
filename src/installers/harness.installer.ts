@@ -8,7 +8,7 @@ import { installOptionalSkills } from './optional-skills.installer'
 import { installToolSkill } from './tool-skill.installer'
 import { injectWorkflowSection, installWorkflowSkill } from './workflow-skill.installer'
 import { AgentInstructionsReport, HarnessAgent, installAgentInstructions } from '../harness/agent-instructions'
-import { needsSharedInstructions } from '../harness/agent-registry'
+import { needsSharedInstructions, resolveHarnessAgents } from '../harness/agent-registry'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { SaaSFoundryManifest, WorkflowConfig, skillsTemplatesPath } from '../types'
 import { ClaudeHooksConfig, mergeClaudeSettingsHooks } from '../utils/claude-settings'
@@ -157,13 +157,15 @@ export async function installHarness({
   advancedSkills = [],
   agents
 }: InstallHarnessParams): Promise<AgentInstructionsReport | undefined> {
+  const declaredAgents = resolveHarnessAgents(agents)
+
   // Adding discovery must not reinstall the user's customized legacy skills.
   // Refreshing those files belongs to the conflict-aware update flow.
-  if (agents && needsSharedInstructions(agents) && (await fileExists(join(targetPath, '.claude', 'skills')))) {
+  if (needsSharedInstructions(declaredAgents) && (await fileExists(join(targetPath, '.claude', 'skills')))) {
     if (!(await fileExists(join(targetPath, 'CLAUDE.md')))) {
       throw new Error('Existing Claude skills have no CLAUDE.md instruction source. Reconcile this partial harness before adding shared agent instructions; existing files were left unchanged.')
     }
-    return addAgentInstructions(targetPath, agents)
+    return addAgentInstructions(targetPath, declaredAgents)
   }
   const claudeMdPath = join(targetPath, 'CLAUDE.md')
   const depositedClaudeMd = !(await fileExists(claudeMdPath))
@@ -195,7 +197,7 @@ export async function installHarness({
   // Universal bootstrap entrypoints let an explicitly identified but undeclared
   // host reach the consent flow. Skill copies remain limited to the declared
   // profiles; omission retains the legacy Claude-only declaration.
-  return addAgentInstructions(targetPath, agents ?? ['claude-code'])
+  return addAgentInstructions(targetPath, declaredAgents)
 }
 
 async function addAgentInstructions(targetPath: string, agents: HarnessAgent[]): Promise<AgentInstructionsReport> {

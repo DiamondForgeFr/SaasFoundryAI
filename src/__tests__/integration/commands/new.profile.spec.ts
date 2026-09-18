@@ -144,6 +144,26 @@ describe('newCommand (--profile integration)', () => {
     const report = await collectStatus(tempDir, { checkNetwork: false })
     const failing = evaluatePreconditions(report).filter((p) => p.status === 'fail')
     expect(failing).toEqual([])
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Claude Code (claude-code) — CLAUDE.md')
+    expect(output).toContain('sf status --agent-friendly --no-network')
+  })
+
+  it('harness completion reports explicit agents and provider-neutral next steps', async () => {
+    await newCommand({
+      nonInteractive: true,
+      profile: 'harness',
+      projectName: 'acme',
+      mainBranch: 'main',
+      agents: 'codex,gemini-cli'
+    })
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Codex (codex) — AGENTS.md')
+    expect(output).toContain('Gemini CLI (gemini-cli) — GEMINI.md')
+    expect(output).toContain('sf agents doctor codex gemini-cli')
+    expect(output).not.toContain('open the project in Claude Code')
   })
 
   it('harness profile persists and installs an explicit non-interactive workflow preset', async () => {

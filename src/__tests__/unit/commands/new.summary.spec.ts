@@ -1,4 +1,4 @@
-import { documentationLines, labelColumn, projectUrlLines } from '../../../commands/new.summary'
+import { agentProfileLines, documentationLines, labelColumn, projectUrlLines } from '../../../commands/new.summary'
 import { ResolvedPorts } from '../../../ports'
 
 /**
@@ -21,6 +21,21 @@ const settled: ResolvedPorts = { db: { port: 5435 }, api: { port: 3500 }, web: {
 const lines = (overrides: Partial<Parameters<typeof projectUrlLines>[0]> = {}) => projectUrlLines({ ports: moved, s3Setup: 'manual', dbSetup: 'docker', ...overrides })
 
 const find = (label: string, from = lines()) => from.find((l) => l.label === label)
+
+describe('the summary reports configured coding-agent profiles from the registry', () => {
+  it('keeps explicit order, removes duplicates and exposes the documented entrypoint', () => {
+    expect(agentProfileLines(['codex', 'gemini-cli', 'codex'])).toEqual([
+      { id: 'codex', displayName: 'Codex', instructionFile: 'AGENTS.md' },
+      { id: 'gemini-cli', displayName: 'Gemini CLI', instructionFile: 'GEMINI.md' }
+    ])
+  })
+
+  it('shows the historical Claude Code declaration when selection is omitted or empty', () => {
+    const fallback = [{ id: 'claude-code', displayName: 'Claude Code', instructionFile: 'CLAUDE.md' }]
+    expect(agentProfileLines()).toEqual(fallback)
+    expect(agentProfileLines([])).toEqual(fallback)
+  })
+})
 
 describe('the summary reports the ports that were resolved', () => {
   it('points the app and the API at the ports they actually run on', () => {
