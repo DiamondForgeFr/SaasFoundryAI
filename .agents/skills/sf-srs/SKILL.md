@@ -209,6 +209,41 @@ the exact state #542 was filed to prevent, and the moment to raise it is while t
 
 **Never assign the tickets one by one afterwards.** That loop is what `--milestone` replaces; running it by hand is how #562 was found.
 
+### Evidence-first reconciliation for an existing delivery parent
+
+When an approved SRS version may overlap existing work, `--reconciliation-plan` is required by the drafting transition. Build a versioned JSON plan that exactly covers every selected FR and records
+verified evidence from the board, SRS, and implementation (source, tests, or docs). Classify each FR as `delivered`, `partial`, `missing`, or `superseded`:
+
+```json
+{
+  "version": 1,
+  "sources": {
+    "board": { "status": "verified", "evidence": ["Epic #42 and its open/closed native children inspected"] },
+    "srs": { "status": "verified", "evidence": ["Approved version page and canonical FR links read"] },
+    "implementation": { "status": "verified", "evidence": ["Relevant source, tests, and docs audited"] }
+  },
+  "requirements": [
+    { "frId": "FR-AUTH-001", "classification": "delivered", "evidence": ["Delivered by #18; regression test auth.spec.ts"] },
+    { "frId": "FR-AUTH-002", "classification": "missing", "evidence": ["No matching board ticket or implementation"] }
+  ]
+}
+```
+
+Preview and then apply the same command:
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting 42 spawning \
+  --epic <feature-url> --version <version-title-or-url> --milestone v1.0.0 \
+  --reconciliation-plan /tmp/reconcile.json --dry-run
+# remove only --dry-run after reviewing the plan
+```
+
+The preflight fails before mutation if a source is unavailable, coverage is incomplete, an FR id conflicts with its canonical page, or multiple tickets match. Exact canonical tickets are reused;
+delivered and superseded FRs are skipped. If a create response is interrupted, retry the same command: the spawner inspects open and closed candidates, recovers the exact ticket, and links it only
+when it is truly orphaned. It never silently reparents a ticket.
+
+**Never assign the tickets one by one afterwards.** That loop is what `--milestone` replaces; running it by hand is how #562 was found.
+
 Failure modes are ordered so they stay recoverable: the milestone is ensured _before_ any ticket exists, so a backend problem leaves an untouched board. If an assignment fails after the tickets are
 created, the run reports which ones joined and exits 9 rather than leaving a half-assigned board implicit.
 

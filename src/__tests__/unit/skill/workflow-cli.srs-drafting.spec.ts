@@ -249,14 +249,51 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       expect(srsCalls).toEqual(['draft --ticket 42'])
     })
 
-    it('spawning dispatches to srs-cli.sh spawn', async () => {
-      const res = await runCli(['transition-drafting', '42', 'spawning'], sandbox, {
+    it('spawning forwards the explicit evidence-first target', async () => {
+      const res = await runCli(
+        [
+          'transition-drafting',
+          '42',
+          'spawning',
+          '--epic',
+          'https://example.test/feature',
+          '--version',
+          'v1 — MVP',
+          '--milestone',
+          'v1.0.0',
+          '--reconciliation-plan',
+          '/tmp/reconcile.json',
+          '--dry-run'
+        ],
+        sandbox,
+        {
+          FAKE_LABELS: 'srs:drafting',
+          FAKE_BOARD_STATUS: 'In progress'
+        }
+      )
+      expect(res.code).toBe(0)
+      const srsCalls = readLog(sandbox.srsLogPath)
+      expect(srsCalls).toEqual(['spawn --ticket 42 --epic https://example.test/feature --version v1 — MVP --milestone v1.0.0 --reconciliation-plan /tmp/reconcile.json --dry-run'])
+    })
+
+    it('blocks spawning before dispatch when the target or evidence plan is missing', async () => {
+      const res = await runCli(['transition-drafting', '42', 'spawning', '--epic', 'https://example.test/feature'], sandbox, {
         FAKE_LABELS: 'srs:drafting',
         FAKE_BOARD_STATUS: 'In progress'
       })
-      expect(res.code).toBe(0)
-      const srsCalls = readLog(sandbox.srsLogPath)
-      expect(srsCalls).toEqual(['spawn --ticket 42'])
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('requires --epic and --reconciliation-plan')
+      expect(readLog(sandbox.srsLogPath)).toEqual([])
+    })
+
+    it('refuses a caller-supplied parent override', async () => {
+      const res = await runCli(['transition-drafting', '42', 'spawning', '--epic', 'https://example.test/feature', '--reconciliation-plan', '/tmp/reconcile.json', '--ticket', '99'], sandbox, {
+        FAKE_LABELS: 'srs:drafting',
+        FAKE_BOARD_STATUS: 'In progress'
+      })
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('do not override #42')
+      expect(readLog(sandbox.srsLogPath)).toEqual([])
     })
 
     it('human-review is human-only (no srs-cli dispatch)', async () => {
