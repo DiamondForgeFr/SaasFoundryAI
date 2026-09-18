@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 
-import { promptWorkflowConfiguration } from '../../prompts/workflow.prompts'
+import { promptWorkflowConfiguration, workflowConfigFromPreset } from '../../prompts/workflow.prompts'
 import { WorkflowConfig } from '../../types'
 import { readManifest } from '../../utils'
 import { getRemoteUrl } from '../../utils/git-info'
@@ -29,10 +29,17 @@ export const workflowStep: StepDefinition = {
   effects: ['May create a GitHub Project (4 GraphQL calls through the gh CLI) during collection', 'May save a workflow template to ~/.claude/workflows/'],
   appliesTo: (state) => state.profile !== 'stack',
   collect: async ({ state, prefill, nonInteractive, derived, render }) => {
-    // Non-interactive: use prefilled workflow if provided, otherwise skip (tool = 'none')
+    // Non-interactive: use a complete prefilled workflow when supplied. An
+    // explicit built-in preset is otherwise materialized here because
+    // `buildPrefillFromOptions` intentionally stores only the preset key.
+    // No remote board is created on this path.
     if (nonInteractive) {
       if (prefill.workflow) {
         return { workflow: prefill.workflow, aiRules: prefill.aiRules }
+      }
+      if (prefill.workflowPreset) {
+        const tool = asWorkflowTool(derived.selectedTracker) ?? 'github-projects'
+        return workflowConfigFromPreset(prefill.workflowPreset, tool)
       }
       return {}
     }

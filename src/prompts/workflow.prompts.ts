@@ -562,6 +562,30 @@ export const DEFAULT_AI_RULES: AIRules = {
 }
 
 /**
+ * Materialize a built-in workflow preset without prompting or provisioning a
+ * remote board. Non-interactive `sf new` uses this path so an explicit
+ * `--workflow` choice reaches the manifest and harness deposits instead of
+ * being reduced to a collection-only preset hint.
+ */
+export function workflowConfigFromPreset(presetKey: keyof typeof WORKFLOW_PRESETS, tool: WorkflowConfig['tool']): { workflow: WorkflowConfig; aiRules: AIRules } {
+  const preset = WORKFLOW_PRESETS[presetKey]
+  return {
+    workflow: {
+      tool,
+      workingBranch: 'develop',
+      prTargetBranch: 'develop',
+      requireCodeReview: true,
+      template: preset.name,
+      statuses: preset.statuses.map((status) => ({ ...status })),
+      issueTypes: tool === 'github-projects' ? preset.issueTypes.map((issueType) => ({ ...issueType })) : undefined,
+      branchNaming: { ...DEFAULT_BRANCH_NAMING },
+      commitFormat: { ...DEFAULT_COMMIT_FORMAT, types: [...DEFAULT_COMMIT_FORMAT.types] }
+    },
+    aiRules: { ...DEFAULT_AI_RULES }
+  }
+}
+
+/**
  * Prompt user to select a workflow preset or create custom
  * @returns Selected workflow statuses
  */
