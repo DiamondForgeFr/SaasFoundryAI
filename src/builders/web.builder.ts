@@ -1,7 +1,7 @@
 import { copy } from 'fs-extra'
 import { globSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'fs/promises'
-import { resolve } from 'path'
+import { join, resolve } from 'path'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installPwaModule } from '../installers/pwa.installer'
@@ -11,13 +11,35 @@ import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
-export async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch, s3Setup, includeAnalytics, includePwa, workflow, ports }: CreateWebAppParams) {
+export async function createWebApp(params: CreateWebAppParams) {
+  const targetDir = params.targetDir ?? '.'
+  const result = await renderWebApp({ ...params, targetDir })
+  if (params.externalEffects !== false) await provisionWebApp({ ...params, targetDir })
+  return result
+}
+
+/** Render the web candidate without running package or Git commands. */
+export async function renderWebApp({
+  targetDir,
+  isMonorepo,
+  projectName,
+  projectDescription,
+  frontendRepoUrl,
+  mainBranch,
+  s3Setup,
+  includeAnalytics,
+  includePwa,
+  workflow,
+  ports
+}: CreateWebAppParams & {
+  targetDir: string
+}) {
   validateProjectName(projectName)
 
   const { api: apiPort, web: webPort } = ports ?? DEFAULT_PORTS
 
   // Create the WEB app directory
-  const webPath = isMonorepo ? 'apps/web' : `apps/${projectName}-web`
+  const webPath = join(targetDir, isMonorepo ? 'apps/web' : `apps/${projectName}-web`)
 
   await copy(resolve(blueprintsPath, 'web'), webPath)
   if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/web'), webPath, { overwrite: true })
@@ -146,35 +168,23 @@ export async function createWebApp({ isMonorepo, projectName, projectDescription
   // Install workflow artefacts (skill + tool skill) when a workflow is configured
   await installWorkflowArtifacts({ targetPath: webPath, workflow })
 
-  /**
-   * Install once, after every module installer has had its say.
-   *
-   * This used to run before them, and the PWA installer adds `vite-plugin-pwa` to
-   * package.json and its import to vite.config.ts — so the default web app shipped a config
-   * importing a package nothing had installed, and `npm run dev` died before Vite started
-   * (#608). The manifest recorded the module as installed all the same.
-   *
-   * The rule is the order, not a second install per module: package.json is final here, so
-   * a module added later cannot reintroduce the gap by forgetting to install its own
-   * dependency. Monorepo is unaffected either way — the root builder installs after every
-   * builder has run.
-   */
-  if (!isMonorepo) {
-    const nvm = getNvmPrefix(webPath)
-    runRequired('npm install (web)', `${nvm}npm install --prefix ${webPath}`)
-  }
-
-  // Initialize Git repository
-  if (!isMonorepo) {
-    runBestEffort('git init (web)', `git init ${webPath}`, { onSkipped: warn })
-    runBestEffort('git checkout (web)', `git -C ${webPath} checkout -b ${mainBranch}`, { onSkipped: warn })
-    if (frontendRepoUrl) runBestEffort('git remote add (web)', `git -C ${webPath} remote add origin ${frontendRepoUrl}`, { onSkipped: warn })
-    runBestEffort('git add (web)', `git -C ${webPath} add .`, { onSkipped: warn })
-    runBestEffort('git commit (web)', `git -C ${webPath} commit -m "Initial commit"`, { onSkipped: warn })
-    // Develop-first: create the declared working branch so the repo matches its docs.
-    const workingBranch = workflow?.workingBranch
-    if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (web)', `git -C ${webPath} checkout -b ${workingBranch}`, { onSkipped: warn })
-  }
-
   return true
+}
+
+/** Apply the external effects required to make a rendered multirepo web app ready to use. */
+export async function provisionWebApp({ targetDir = '.', isMonorepo, projectName, frontendRepoUrl, mainBranch, workflow }: CreateWebAppParams): Promise<void> {
+  if (isMonorepo) return
+  const webPath = join(targetDir, `apps/${projectName}-web`)
+  const nvm = getNvmPrefix(webPath)
+
+  // Install once, after every module installer has finalized package.json.
+  runRequired('npm install (web)', `${nvm}npm install`, { cwd: webPath })
+
+  runBestEffort('git init (web)', 'git init', { cwd: webPath, onSkipped: warn })
+  runBestEffort('git checkout (web)', `git checkout -b ${mainBranch}`, { cwd: webPath, onSkipped: warn })
+  if (frontendRepoUrl) runBestEffort('git remote add (web)', `git remote add origin ${frontendRepoUrl}`, { cwd: webPath, onSkipped: warn })
+  runBestEffort('git add (web)', 'git add .', { cwd: webPath, onSkipped: warn })
+  runBestEffort('git commit (web)', 'git commit -m "Initial commit"', { cwd: webPath, onSkipped: warn })
+  const workingBranch = workflow?.workingBranch
+  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (web)', `git checkout -b ${workingBranch}`, { cwd: webPath, onSkipped: warn })
 }

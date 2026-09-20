@@ -44,6 +44,7 @@ jest.mock('../../../runners/srs.runner', () => ({
   })
 }))
 jest.mock('../../../tools/notion/srs.adapter', () => ({ NotionSrsAdapter: jest.fn() }))
+jest.mock('../../../renderers/technical-stack.renderer', () => ({ renderTechnicalStack: jest.fn() }))
 jest.mock('../../../builders/api.builder', () => ({ createApiApp: jest.fn() }))
 jest.mock('../../../builders/web.builder', () => ({ createWebApp: jest.fn() }))
 jest.mock('../../../builders/monorepo.builder', () => ({ createMonorepoRoot: jest.fn() }))

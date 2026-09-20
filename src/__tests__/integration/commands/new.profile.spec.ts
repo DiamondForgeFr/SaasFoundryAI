@@ -12,10 +12,7 @@ jest.mock('../../../utils', () => ({
   computeFileHashes: jest.fn().mockResolvedValue({})
 }))
 
-jest.mock('../../../builders/api.builder', () => ({ createApiApp: jest.fn() }))
-jest.mock('../../../builders/web.builder', () => ({ createWebApp: jest.fn() }))
-jest.mock('../../../builders/monorepo.builder', () => ({ createMonorepoRoot: jest.fn() }))
-jest.mock('../../../builders/dev-services.builder', () => ({ createDevServicesCompose: jest.fn() }))
+jest.mock('../../../renderers/technical-stack.renderer', () => ({ renderTechnicalStack: jest.fn() }))
 jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
 
 jest.mock('../../../runners/database.runner', () => ({ initAndStartDb: jest.fn() }))
@@ -41,14 +38,12 @@ jest.mock('terminal-link', () => ({
 }))
 
 import { newCommand } from '../../../commands/new'
-import { createApiApp } from '../../../builders/api.builder'
-import { createWebApp } from '../../../builders/web.builder'
+import { renderTechnicalStack } from '../../../renderers/technical-stack.renderer'
 import { collectStatus } from '../../../status/collect'
 import { evaluatePreconditions } from '../../../status/preconditions'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
-const mockedCreateApiApp = createApiApp as jest.MockedFunction<typeof createApiApp>
-const mockedCreateWebApp = createWebApp as jest.MockedFunction<typeof createWebApp>
+const mockedRenderTechnicalStack = renderTechnicalStack as jest.MockedFunction<typeof renderTechnicalStack>
 
 describe('newCommand (--profile integration)', () => {
   let tempDir: string
@@ -89,11 +84,12 @@ describe('newCommand (--profile integration)', () => {
   it('stack profile scaffolds the stack with no workflow, skills or SRS in the manifest', async () => {
     await newCommand(stackOpts)
 
-    expect(mockedCreateApiApp).toHaveBeenCalledTimes(1)
-    expect(mockedCreateWebApp).toHaveBeenCalledTimes(1)
-    const apiParams = mockedCreateApiApp.mock.calls[0][0]
-    expect(apiParams.workflow).toBeUndefined()
-    expect(apiParams.advancedSkills ?? []).toEqual([])
+    expect(mockedRenderTechnicalStack).toHaveBeenCalledTimes(1)
+    const renderOptions = mockedRenderTechnicalStack.mock.calls[0][0]
+    expect(renderOptions.targetDir).toBe('.')
+    expect(renderOptions.externalEffects).toBe(true)
+    expect(renderOptions.config.workflow).toBeUndefined()
+    expect(renderOptions.config.advancedSkills ?? []).toEqual([])
 
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
     expect(manifest.workflow).toBeUndefined()
@@ -118,8 +114,7 @@ describe('newCommand (--profile integration)', () => {
       mainBranch: 'main'
     })
 
-    expect(mockedCreateApiApp).not.toHaveBeenCalled()
-    expect(mockedCreateWebApp).not.toHaveBeenCalled()
+    expect(mockedRenderTechnicalStack).not.toHaveBeenCalled()
 
     // Minimal manifest: structure cli, harness deposits version+hash-tracked
     // (scoped to the deposit dirs only — never the user's own code)
@@ -231,13 +226,13 @@ describe('newCommand (--profile integration)', () => {
       })
     ).rejects.toThrow(/already has a \.saasfoundry\.json/)
 
-    expect(mockedCreateApiApp).not.toHaveBeenCalled()
+    expect(mockedRenderTechnicalStack).not.toHaveBeenCalled()
   })
 
   it('defaults to the full profile in non-interactive mode without --profile (regression guard)', async () => {
     await newCommand({ ...stackOpts, profile: undefined })
 
-    expect(mockedCreateApiApp).toHaveBeenCalledTimes(1)
+    expect(mockedRenderTechnicalStack).toHaveBeenCalledTimes(1)
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
     expect(manifest.projectName).toBe('acme')
   })
