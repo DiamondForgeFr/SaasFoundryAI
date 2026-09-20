@@ -11,7 +11,7 @@ const MANIFEST = {
   projectName: 'managed',
   structure: 'cli',
   workflow: { tool: 'github-projects', workingBranch: 'develop' },
-  modules: { harness: { version: 4 }, advancedSkills: ['sf-tool-notion'] },
+  modules: { harness: { version: 4, managed: true }, advancedSkills: ['sf-tool-notion'] },
   fileHashes: { 'unrelated.txt': 'preserve-me' }
 }
 
@@ -43,7 +43,7 @@ describe('additive managed agent support (#660)', () => {
     await enable(['codex'])
     const result = await enable(['kimi'])
     expect(result.configuredAgents).toEqual(['claude-code', 'codex', 'kimi'])
-    expect((await manifest()).modules.harness).toEqual({ version: 4, agents: result.configuredAgents })
+    expect((await manifest()).modules.harness).toEqual({ version: 4, managed: true, agents: result.configuredAgents })
     expect(await get('CLAUDE.md')).toBe('# Custom common instructions\n')
     expect(await get('.claude/skills/sf-git-commit/SKILL.md')).toBe(SKILL)
     expect(await get('.claude/settings.json')).toBe('{"hooks":{"custom":["preserve"]}}')

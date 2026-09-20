@@ -116,7 +116,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     await writeFile(join(projectDir, 'AGENTS.md'), 'custom agent entry point\n')
     const baseline = hashFileContent('original shared instructions\n')
     const entryBaseline = hashFileContent('original entry point\n')
-    const harness = { version: 1, agents: ['claude-code', 'codex', 'kimi'] as ('claude-code' | 'codex' | 'kimi')[] }
+    const harness = { version: 1, managed: true, agents: ['claude-code', 'codex', 'kimi'] as ('claude-code' | 'codex' | 'kimi')[] }
     await writeManifest({ modules: { harness, advancedSkills: ['context7'] }, fileHashes: { ...hashes, [sharedPath]: baseline, 'AGENTS.md': entryBaseline } })
 
     await updateCommand({ nonInteractive: true })

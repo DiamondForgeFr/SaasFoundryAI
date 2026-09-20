@@ -48,7 +48,9 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     structure: 'multirepo',
     projectName: 'acme',
     mainBranch: 'main',
-    modules: { email: { provider: 'none', version: 1 }, s3Setup: 'manual', dbSetup: 'manual', includeAnalytics: false, advancedSkills: [] },
+    // Current `sf new --profile stack` output: common/core harness deposits
+    // are versioned but the collaboration harness is explicitly not managed.
+    modules: { email: { provider: 'none', version: 1 }, s3Setup: 'manual', dbSetup: 'manual', includeAnalytics: false, advancedSkills: [], harness: { version: 1, managed: false } },
     fileHashes: {}
   })
 
@@ -87,14 +89,15 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     const manifest = await readManifest()
     expect(manifest.workflow.tool).toBe('github-projects')
     expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.managed).toBe(true)
     expect(manifest.modules.advancedSkills).toEqual(['context7'])
     expect(manifest.modules.email.provider).toBe('none')
     expect(Object.keys(manifest.fileHashes).some((p: string) => p.startsWith('.claude/skills/sf-workflow/'))).toBe(true)
   })
 
-  it('does not offer harness when the deposits are already version-tracked', async () => {
+  it('does not offer harness when the collaboration surface is already managed', async () => {
     const tracked = stackManifest()
-    tracked.modules = { ...tracked.modules, harness: { version: 1 } }
+    tracked.modules = { ...tracked.modules, harness: { version: 1, managed: true } }
     await writeFile('.saasfoundry.json', JSON.stringify({ ...tracked, workflow: WORKFLOW }, null, 2))
 
     await updateCommand({ nonInteractive: true, addModules: 'harness' })
@@ -116,6 +119,7 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(await readFile(join(projectDir, `${editedPath}.saasfoundry.new`), 'utf8')).not.toBe('my precious user edit\n')
     const manifest = await readManifest()
     expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.managed).toBe(true)
     // Baseline = deposit target, not the user's edit
     const { hashFileContent } = jest.requireActual<typeof import('../../../utils')>('../../../utils')
     expect(manifest.fileHashes[editedPath]).not.toBe(hashFileContent('my precious user edit\n'))
@@ -132,6 +136,7 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     const manifest = await readManifest()
     expect(manifest.workflow.tool).toBe('github-projects')
     expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.managed).toBe(true)
   })
 })
 

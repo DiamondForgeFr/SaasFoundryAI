@@ -124,6 +124,10 @@
               "type": "integer",
               "minimum": 0
             },
+            "managed": {
+              "type": "boolean",
+              "description": "Whether the complete collaboration harness is managed. False means common/core deposits only; omission is a legacy unknown state."
+            },
             "agents": {
               "type": "array",
               "minItems": 1,

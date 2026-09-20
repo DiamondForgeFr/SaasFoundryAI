@@ -97,6 +97,7 @@ function validateManifest(value: unknown): asserts value is SaaSFoundryManifest 
     if (value.modules.harness !== undefined) {
       const harness = value.modules.harness
       if (!isObject(harness) || !Number.isInteger(harness.version) || Number(harness.version) < 0) throw new Error('Invalid manifest harness version.')
+      if (harness.managed !== undefined && typeof harness.managed !== 'boolean') throw new Error('Invalid manifest managed harness capability.')
       if (harness.agents !== undefined) validateAgents(harness.agents)
     }
   }

@@ -1,6 +1,7 @@
 import chalk from 'chalk'
 
 import { CATALOGUE } from '../catalogue/modules'
+import { classifyProjectCapabilities } from '../project-capabilities'
 import { Answers, SaaSFoundryManifest, isScaffoldManifest } from '../types'
 import { PromptOptions, promptWithPrefill } from './helpers'
 import { AdvancedSkillCredentials, promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from './skills.prompts'
@@ -30,11 +31,10 @@ function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): b
     case 'srs':
       return !(manifest.tools?.srs?.enabled === true)
     case 'harness':
-      // Addable while the deposits are not version-tracked yet — any
-      // structure, the harness never needs the scaffold. A tracked project
-      // missing only the workflow config is routed to `sf workflow use`,
-      // not to a re-install.
-      return modules?.harness === undefined
+      // Stack projects also version common/core deposits. The independent
+      // managed-harness capability decides whether the complete collaboration
+      // surface is still addable. Contradictory states fail closed.
+      return ['core-only', 'legacy-unknown'].includes(classifyProjectCapabilities(manifest).collaborationHarness)
     case 'sf-skill-context7':
     case 'sf-skill-atlassian':
     case 'sf-skill-notion':

@@ -326,8 +326,8 @@ export interface SaaSFoundryManifest {
   ports?: ProjectPorts
   // Every key is optional: scaffolded projects carry the five stack keys,
   // harness-only projects carry just `harness`. Scaffold-only code paths must
-  // gate on `isScaffoldManifest()` (modules.email present), never on the mere
-  // presence of the modules block.
+  // gate on `isScaffoldManifest()` (the complete technical stack signature),
+  // never on the mere presence of the modules block.
   modules?: {
     // Email module — versioned shape introduced in manifestVersion 2.
     // `provider` replaces the old flat `emailService` field; `version` is
@@ -345,6 +345,11 @@ export interface SaaSFoundryManifest {
     // `sf update` can refresh them and module migrations can target them.
     harness?: {
       version: number
+      /**
+       * Whether the complete collaboration harness is managed in this project.
+       * `false` means common/core deposits only; absence is a legacy unknown.
+       */
+      managed?: boolean
       /** Exact shared coding-agent declaration; absence preserves legacy Claude behavior. */
       agents?: HarnessAgent[]
     }
@@ -370,7 +375,7 @@ export interface SaaSFoundryManifest {
 
 /** Modules block of a project scaffolded by `sf new` (full/stack profile) — the five stack keys are guaranteed. */
 export type ScaffoldModules = Required<Pick<NonNullable<SaaSFoundryManifest['modules']>, 'email' | 's3Setup' | 'dbSetup' | 'includeAnalytics' | 'advancedSkills'>> & {
-  harness?: { version: number; agents?: HarnessAgent[] }
+  harness?: { version: number; managed?: boolean; agents?: HarnessAgent[] }
   // Optional, not part of the guaranteed stack keys: projects scaffolded before the module
   // existed have no `pwa` entry, and `--no-pwa` projects never get one.
   pwa?: { version: number }
@@ -389,7 +394,15 @@ export interface ScaffoldManifest extends SaaSFoundryManifest {
  * the mere presence of the `modules` block is not a scaffold signal.
  */
 export function isScaffoldManifest(manifest: SaaSFoundryManifest): manifest is ScaffoldManifest {
-  return manifest.modules?.email !== undefined
+  const modules = manifest.modules
+  return (
+    manifest.structure !== 'cli' &&
+    modules?.email !== undefined &&
+    modules.s3Setup !== undefined &&
+    modules.dbSetup !== undefined &&
+    modules.includeAnalytics !== undefined &&
+    modules.advancedSkills !== undefined
+  )
 }
 
 // JSON Schema URL stamped into .saasfoundry.json so IDEs pick up live validation.

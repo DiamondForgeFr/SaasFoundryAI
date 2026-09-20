@@ -20,6 +20,20 @@ describe('isScaffoldManifest', () => {
     expect(isScaffoldManifest({ ...base, structure: 'cli' })).toBe(false)
   })
 
+  it('rejects partial stack evidence instead of promoting a corrupt manifest', () => {
+    expect(isScaffoldManifest({ ...base, modules: { email: { provider: 'none', version: 1 } } })).toBe(false)
+  })
+
+  it('rejects complete stack keys under a cli projection', () => {
+    expect(
+      isScaffoldManifest({
+        ...base,
+        structure: 'cli',
+        modules: { email: { provider: 'none', version: 1 }, s3Setup: 'manual', dbSetup: 'manual', includeAnalytics: false, advancedSkills: [] }
+      })
+    ).toBe(false)
+  })
+
   it('narrows the type: scaffold manifests expose the stack keys non-optionally', () => {
     const manifest: SaaSFoundryManifest = {
       ...base,

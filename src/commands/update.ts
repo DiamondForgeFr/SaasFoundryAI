@@ -455,7 +455,7 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, manifestPat
       // the tracking entirely.
       const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
       manifest.fileHashes = { ...untracked, ...deposit.hashes }
-      manifest.modules = { ...(manifest.modules ?? {}), harness: { ...manifest.modules?.harness, version: harnessInstallerMeta.currentVersion } }
+      manifest.modules = { ...(manifest.modules ?? {}), harness: { ...manifest.modules?.harness, version: harnessInstallerMeta.currentVersion, managed: true } }
       manifest.version = cliVersion
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
     }
@@ -587,7 +587,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
   // ─── FLOW 1: Template updates (version differs) ───
   // Only meaningful for projects scaffolded by `sf new` — the marker is
-  // `modules.email` (isScaffoldManifest), NOT the modules block itself:
+  // the complete technical stack signature (isScaffoldManifest), NOT the modules block itself:
   // harness-only manifests carry `modules.harness` (and may carry fileHashes
   // for their deposits) but have no generated app to regenerate.
   if (manifest.version !== cliVersion && isScaffoldManifest(manifest)) {
@@ -941,7 +941,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       manifest.aiRules = harnessConfig.aiRules ?? manifest.aiRules
       manifest.modules = {
         ...(manifest.modules ?? {}),
-        harness: { ...manifest.modules?.harness, version: harnessInstallerMeta.currentVersion },
+        harness: { ...manifest.modules?.harness, version: harnessInstallerMeta.currentVersion, managed: true },
         advancedSkills: [...new Set([...(manifest.modules?.advancedSkills ?? []), ...(harnessConfig.advancedSkills ?? [])])]
       }
     }
