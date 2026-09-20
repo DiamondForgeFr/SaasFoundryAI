@@ -1,0 +1,12 @@
+source: saasfoundry-cli@1.0.0-beta
+capture: published newCommand with deterministic Inquirer answers
+generationInputs: {"projectName":"previous-release","projectDescription":"Immutable SaaSFoundry previous-release fixture","mainBranch":"main","isMonorepo":false,"setupRepo":"local","dbSetup":"manual","emailService":"none"}
+
+Opening terminals for your project...
+
+
+================================================================================
+🚀 Congratulations! Your project "previous-release" has been successfully set up by SaaSFoundry!
+🌍 It's now ready to become the next SaaS that will conquer the world!
+🧠 "What are we going to do tonight, Brain?" "The same thing we do every night, Pinky - try to take over the world!"
+================================================================================

@@ -36,6 +36,10 @@ For deeper guidance on how to add or modify a module or skill, read the architec
 - `.claude/docs/architecture-skills.md` — skill template shape and the drift-guard contract
 - `.claude/docs/migration-framework.md` — every breaking manifest or module change must ship through this
 
+The immutable previous-release lifecycle fixture has a separate maintainer runbook in
+[`tests/docker/fixtures/previous-release/1.0.0-beta/README.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/tests/docker/fixtures/previous-release/1.0.0-beta/README.md). Follow it
+when adding or refreshing historical update coverage.
+
 ## Local setup
 
 ```bash
