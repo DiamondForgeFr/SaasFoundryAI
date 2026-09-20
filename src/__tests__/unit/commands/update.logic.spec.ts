@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { applyFileUpdates, computeFileUpdates, FileUpdate, moduleSelectionPrefill } from '../../../commands/update'
+import { applyFileUpdates, computeFileUpdates, FileUpdate, moduleSelectionPrefill, refreshProjectHashes } from '../../../commands/update'
 
 describe('moduleSelectionPrefill', () => {
   // The bug: `sf update --non-interactive` with no --add threw "Missing required
@@ -245,5 +245,26 @@ describe('applyFileUpdates (conflict strategies)', () => {
     expect(conflicts).toHaveLength(1)
     expect(await readFile('conflict.ts', 'utf8')).toBe('user-modified-content')
     expect(await readFile('conflict.ts.saasfoundry.new', 'utf8')).toBe('template-version-content')
+  })
+
+  it('checks the destination again immediately before a managed write', async () => {
+    await setupConflictCase()
+    const checks: string[] = []
+    await expect(
+      applyFileUpdates([{ path: 'conflict.ts', action: 'conflict' }], tempProjectDir, stubSpinner(), 'replace', async (path) => {
+        checks.push(path)
+        throw new Error('destination changed')
+      })
+    ).rejects.toThrow('destination changed')
+    expect(checks).toEqual(['conflict.ts'])
+    expect(await readFile('conflict.ts', 'utf8')).toBe('user-modified-content')
+  })
+
+  it('never absorbs adoption-compatible user paths into refreshed ownership', async () => {
+    await writeFile('user-owned.ts', 'same as template')
+    await writeFile('generated.ts', 'generated')
+    const hashes = await refreshProjectHashes({ unmanagedPaths: ['user-owned.ts'], fileHashes: {} } as never)
+    expect(hashes['user-owned.ts']).toBeUndefined()
+    expect(hashes['generated.ts']).toBeDefined()
   })
 })

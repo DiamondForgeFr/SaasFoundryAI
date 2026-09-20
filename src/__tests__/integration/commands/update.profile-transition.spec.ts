@@ -187,6 +187,63 @@ describe('updateCommand profile transition', () => {
     expect(await readFile('.saasfoundry.json')).toEqual(before)
   })
 
+  it('blocks profile promotion from a multirepo child projection', async () => {
+    const child = harnessManifest()
+    child.projectName = 'acme-api'
+    child.projection = { kind: 'multirepo-child', rootProjectName: 'acme', app: 'api' }
+    await writeFile('.saasfoundry.json', JSON.stringify(child, null, 2))
+    const chunks: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      chunks.push(String(chunk))
+      return true
+    }) as typeof process.stdout.write)
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    await updateCommand({ ...technicalOptions, dryRun: true, json: true })
+
+    expect(JSON.parse(chunks.join('')).profileTransition).toMatchObject({ status: 'blocked', reasonCode: 'multirepo-child-projection', currentCapabilities: { effectiveProfile: 'projection' } })
+    await expect(readFile('package.json')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('blocks profile promotion from a legacy multirepo child without a projection marker', async () => {
+    const child = harnessManifest()
+    child.projectName = 'acme-web'
+    child.mainBranch = 'main'
+    child.workflow = undefined
+    await writeFile('.saasfoundry.json', JSON.stringify(child, null, 2))
+    const chunks: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      chunks.push(String(chunk))
+      return true
+    }) as typeof process.stdout.write)
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    await updateCommand({ ...technicalOptions, dryRun: true, json: true })
+
+    expect(JSON.parse(chunks.join('')).profileTransition).toMatchObject({ status: 'blocked', reasonCode: 'multirepo-child-projection' })
+    await expect(readFile('package.json')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('rejects a linked manifest without modifying its external target', async () => {
+    const outside = join(tmpdir(), `sf-linked-manifest-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+    const before = Buffer.from(JSON.stringify(stackManifest(), null, 2))
+    await writeFile(outside, before)
+    await symlink(outside, '.saasfoundry.json')
+
+    await expect(updateCommand({ targetProfile: 'full', dryRun: true, json: true })).rejects.toThrow('regular, non-linked')
+    expect(await readFile(outside)).toEqual(before)
+    await rm(outside, { force: true })
+  })
+
+  it('shares the manifest lock with other supported project writers', async () => {
+    const before = Buffer.from(JSON.stringify(stackManifest(), null, 2))
+    await writeFile('.saasfoundry.json', before)
+    await writeFile('.saasfoundry.agents.lock', 'another supported writer')
+
+    await expect(updateCommand({ nonInteractive: true })).rejects.toThrow('Another manifest or agent configuration update is in progress')
+    expect(await readFile('.saasfoundry.json')).toEqual(before)
+  })
+
   it('blocks a harness preview when a workflow destination is linked outside the project', async () => {
     const before = Buffer.from(JSON.stringify(stackManifest(), null, 2))
     const outside = join(tmpdir(), `sf-harness-outside-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -389,6 +446,20 @@ describe('updateCommand profile transition', () => {
 
     await expect(readFile(TECHNICAL_TRANSITION_JOURNAL)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await readFile('.saasfoundry.json')).toEqual(bytes)
+  })
+
+  it('recovers an interrupted technical transaction before an ordinary update mutates the manifest', async () => {
+    const before = Buffer.from(JSON.stringify(stackManifest(), null, 2))
+    await writeFile('.saasfoundry.json', before)
+    await writeEmptyTransitionJournal(before, 'applying')
+    jest.spyOn(console, 'log').mockImplementation(() => {})
+
+    await updateCommand({ nonInteractive: true })
+
+    await expect(readFile(TECHNICAL_TRANSITION_JOURNAL)).rejects.toMatchObject({ code: 'ENOENT' })
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest
+    expect(manifest.manifestVersion).toBe(targetManifestVersion())
+    expect(classifyProjectCapabilities(manifest).effectiveProfile).toBe('stack')
   })
 
   it('validates technical enums before reading a project manifest', async () => {

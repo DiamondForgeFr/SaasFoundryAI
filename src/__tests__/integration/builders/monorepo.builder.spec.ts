@@ -2,6 +2,7 @@ import { mkdir, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import shelljs from 'shelljs'
+import childProcess from 'node:child_process'
 
 import { createMonorepoRoot } from '../../../builders/monorepo.builder'
 import { monorepoRootParams } from '../../helpers/fixtures'
@@ -11,6 +12,7 @@ describe('createMonorepoRoot (integration)', () => {
   let tempDir: string
   let originalCwd: string
   let shellSpy: jest.SpyInstance
+  let spawnSpy: jest.SpyInstance
 
   beforeEach(async () => {
     tempDir = join(tmpdir(), `sf-monorepo-builder-test-${Date.now()}`)
@@ -23,10 +25,12 @@ describe('createMonorepoRoot (integration)', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     shellSpy = jest.spyOn(shelljs, 'exec').mockImplementation((() => ({ code: 0, stdout: '10.0.0', stderr: '' })) as any)
+    spawnSpy = jest.spyOn(childProcess, 'spawnSync').mockReturnValue({ status: 0, stdout: '', stderr: '' } as never)
   })
 
   afterEach(async () => {
     shellSpy.mockRestore()
+    spawnSpy.mockRestore()
     process.chdir(originalCwd)
     await rm(tempDir, { recursive: true, force: true }).catch(() => {})
   })
@@ -106,13 +110,13 @@ describe('createMonorepoRoot (integration)', () => {
   it('should call git init at root level', async () => {
     await createMonorepoRoot(monorepoRootParams())
 
-    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'), expect.anything())
+    expect(spawnSpy).toHaveBeenCalledWith('git', ['init'], expect.objectContaining({ shell: false }))
   })
 
   it('should set git remote when monorepoUrl is provided', async () => {
     await createMonorepoRoot(monorepoRootParams({ monorepoUrl: 'https://github.com/test/mono.git' }))
 
-    expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git remote add origin https://github.com/test/mono.git'), expect.anything())
+    expect(spawnSpy).toHaveBeenCalledWith('git', ['remote', 'add', 'origin', 'https://github.com/test/mono.git'], expect.objectContaining({ shell: false }))
   })
 
   it('should update deployment workflow with project-specific names', async () => {

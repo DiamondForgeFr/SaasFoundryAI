@@ -9,6 +9,8 @@ const capabilities = (effectiveProfile: ProjectCapabilities['effectiveProfile'])
       return { technicalStack: 'present', collaborationHarness: 'core-only', effectiveProfile }
     case 'harness':
       return { technicalStack: 'absent', collaborationHarness: 'managed', effectiveProfile }
+    case 'projection':
+      return { technicalStack: 'absent', collaborationHarness: 'managed', effectiveProfile }
     case 'unknown':
       return { technicalStack: 'absent', collaborationHarness: 'legacy-unknown', effectiveProfile }
     case 'inconsistent':
@@ -21,6 +23,7 @@ describe('decideProfileTransition', () => {
     ['full', 'noop', 'none'],
     ['stack', 'ready', 'add-harness'],
     ['harness', 'ready', 'add-technical-stack'],
+    ['projection', 'blocked', 'none'],
     ['unknown', 'blocked', 'none'],
     ['inconsistent', 'blocked', 'none']
   ] as const)('maps %s through the canonical capability decision', (profile, status, action) => {

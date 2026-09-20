@@ -39,8 +39,26 @@ describe('classifyProjectCapabilities', () => {
   })
 
   it('does not mistake a multirepo child projection for a technical coordinator', () => {
-    const manifest: SaaSFoundryManifest = { ...base, structure: 'cli', modules: { harness: { version: 1, managed: false }, advancedSkills: [] } }
-    expect(classifyProjectCapabilities(manifest).technicalStack).toBe('absent')
+    const manifest: SaaSFoundryManifest = {
+      ...base,
+      structure: 'cli',
+      projection: { kind: 'multirepo-child', rootProjectName: 'p', app: 'api' },
+      modules: { harness: { version: 1, managed: true }, advancedSkills: [] }
+    }
+    expect(classifyProjectCapabilities(manifest)).toMatchObject({ technicalStack: 'absent', effectiveProfile: 'projection' })
+  })
+
+  it('fails closed for a legacy multirepo child generated before projection markers', () => {
+    const manifest: SaaSFoundryManifest = {
+      ...base,
+      structure: 'cli',
+      projectName: 'acme-api',
+      mainBranch: 'main',
+      workflow: undefined,
+      modules: { harness: { version: 1, managed: true }, advancedSkills: [] },
+      fileHashes: {}
+    }
+    expect(classifyProjectCapabilities(manifest)).toMatchObject({ technicalStack: 'absent', effectiveProfile: 'projection' })
   })
 
   it.each([

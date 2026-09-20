@@ -9,6 +9,7 @@ import { pwaInstallerMeta } from '../installers/pwa.installer'
 import { assertTemporaryTechnicalStack, type RenderedTechnicalStack } from '../renderers/technical-stack.renderer'
 import type { Answers, ProjectPorts, SaaSFoundryManifest } from '../types'
 import { validateProjectName } from '../utils'
+import { projectMultirepoChildManifest } from '../installers/agent-topology'
 import { technicalOwnershipHashes, type TechnicalStackAdoptionPlan } from './technical-stack.planner'
 
 export interface BuildTechnicalTransitionManifestOptions {
@@ -42,30 +43,12 @@ export function buildTechnicalTransitionManifest({ current, config, ports, cliVe
   if (config.includePwa) next.modules.pwa = { version: pwaInstallerMeta.currentVersion }
   else delete next.modules.pwa
   next.fileHashes = { ...(current.fileHashes ?? {}), ...(plan ? technicalOwnershipHashes(plan) : {}) }
-  return next
-}
-
-function childManifest(root: SaaSFoundryManifest, appName: string): SaaSFoundryManifest {
-  if (!root.modules?.harness) throw new Error('A managed harness declaration is required before creating multirepo projections.')
-  return {
-    $schema: root.$schema,
-    manifestVersion: root.manifestVersion,
-    version: root.version,
-    generatedAt: root.generatedAt,
-    structure: 'cli',
-    projectName: appName,
-    mainBranch: root.mainBranch,
-    modules: {
-      harness: JSON.parse(JSON.stringify(root.modules.harness)),
-      advancedSkills: [...(root.modules.advancedSkills ?? [])]
-    },
-    language: root.language ? JSON.parse(JSON.stringify(root.language)) : undefined,
-    workflow: root.workflow ? JSON.parse(JSON.stringify(root.workflow)) : undefined,
-    aiRules: root.aiRules ? JSON.parse(JSON.stringify(root.aiRules)) : undefined,
-    tools: root.tools ? JSON.parse(JSON.stringify(root.tools)) : undefined,
-    skillsAccounts: root.skillsAccounts ? JSON.parse(JSON.stringify(root.skillsAccounts)) : undefined,
-    fileHashes: {}
+  if (plan) {
+    const technicalHashes = technicalOwnershipHashes(plan)
+    const unmanaged = plan.entries.filter((entry) => entry.candidate && !(entry.path in (current.fileHashes ?? {})) && !(entry.path in technicalHashes)).map((entry) => entry.path)
+    next.unmanagedPaths = [...new Set([...(current.unmanagedPaths ?? []), ...unmanaged])].sort()
   }
+  return next
 }
 
 export interface FinalizeTechnicalCandidateOptions {
@@ -130,7 +113,7 @@ export async function finalizeTechnicalAdoptionCandidate({ candidate, projectRoo
     const appName = relative.split('/').at(-1)!
     const targetPath = join(root, ...relative.split('/'))
     await mkdir(targetPath, { recursive: true })
-    const projection = childManifest(manifest, appName)
+    const projection = projectMultirepoChildManifest(manifest, appName.endsWith('-api') ? 'api' : 'web')
     const report = await installAgentInstructions({ targetPath, agents, manifest: projection })
     if (report.conflicts.length > 0) throw new Error(`Generated multirepo agent entrypoints conflict: ${report.conflicts.join(', ')}`)
     projection.fileHashes = { ...projection.fileHashes, ...report.fileHashes }

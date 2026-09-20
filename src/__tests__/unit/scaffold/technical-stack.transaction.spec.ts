@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -90,6 +90,83 @@ describe('recoverable technical stack transaction', () => {
     await expect(lstat(join(projectRoot, 'apps'))).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await readFile(join(projectRoot, '.saasfoundry.json'))).toEqual(beforeManifest)
     await expect(lstat(join(projectRoot, TECHNICAL_TRANSITION_JOURNAL))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('stops before writing when a created ancestor is replaced by a symlink', async () => {
+    const { plan, afterManifest } = await prepared({ 'apps/api/main.ts': 'candidate' })
+    const outside = join(sandbox, 'outside')
+    await mkdir(outside)
+
+    await expect(
+      applyTechnicalStackTransition({
+        projectRoot,
+        candidateRoot,
+        approvedPlan: plan,
+        expectedManifest: beforeManifest,
+        nextManifest: afterManifest,
+        onPhase: async (phase, path) => {
+          if (phase === 'after-directory' && path === 'apps') {
+            await rename(join(projectRoot, 'apps'), join(projectRoot, 'apps-original'))
+            await symlink(outside, join(projectRoot, 'apps'))
+          }
+        }
+      })
+    ).rejects.toBeInstanceOf(AggregateError)
+
+    await expect(lstat(join(outside, 'api'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(join(projectRoot, '.saasfoundry.json'))).toEqual(beforeManifest)
+  })
+
+  it('stops when a created ancestor is replaced by another ordinary directory', async () => {
+    const { plan, afterManifest } = await prepared({ 'apps/api/main.ts': 'candidate' })
+
+    await expect(
+      applyTechnicalStackTransition({
+        projectRoot,
+        candidateRoot,
+        approvedPlan: plan,
+        expectedManifest: beforeManifest,
+        nextManifest: afterManifest,
+        onPhase: async (phase, path) => {
+          if (phase === 'after-directory' && path === 'apps') {
+            await rename(join(projectRoot, 'apps'), join(projectRoot, 'apps-original'))
+            await mkdir(join(projectRoot, 'apps'))
+          }
+        }
+      })
+    ).rejects.toBeInstanceOf(AggregateError)
+
+    await expect(lstat(join(projectRoot, 'apps/api'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(join(projectRoot, '.saasfoundry.json'))).toEqual(beforeManifest)
+  })
+
+  it('never follows a replaced ancestor during recovery', async () => {
+    const { plan, afterManifest } = await prepared({ 'apps/api/main.ts': 'candidate' })
+    await expect(
+      applyTechnicalStackTransition({
+        projectRoot,
+        candidateRoot,
+        approvedPlan: plan,
+        expectedManifest: beforeManifest,
+        nextManifest: afterManifest,
+        onPhase: async (phase, path) => {
+          if (phase === 'after-file' && path === 'apps/api/main.ts') {
+            await writeFile(join(projectRoot, path), 'keep journal')
+            throw new Error('retain recovery evidence')
+          }
+        }
+      })
+    ).rejects.toBeInstanceOf(AggregateError)
+
+    const outside = join(sandbox, 'outside-recovery')
+    await mkdir(outside)
+    await writeFile(join(outside, 'sentinel'), 'outside')
+    await rename(join(projectRoot, 'apps'), join(projectRoot, 'apps-original'))
+    await symlink(outside, join(projectRoot, 'apps'))
+
+    await expect(recoverTechnicalStackTransition(projectRoot)).rejects.toBeInstanceOf(TechnicalStackRecoveryError)
+    expect(await readFile(join(outside, 'sentinel'), 'utf8')).toBe('outside')
+    await expect(lstat(join(outside, 'api'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('leaves the project byte-for-byte unchanged when failure is injected before the first file', async () => {

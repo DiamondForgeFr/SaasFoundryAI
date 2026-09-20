@@ -1,4 +1,5 @@
 import chalk from 'chalk'
+import childProcess from 'node:child_process'
 import { exec } from 'shelljs'
 
 /**
@@ -40,6 +41,22 @@ export interface RunOptions {
 export function run(command: string, options: RunOptions = {}): RunResult {
   const result = exec(command, { silent: !options.stream, ...(options.cwd ? { cwd: options.cwd } : {}) }) as unknown as RunResult
   return { code: result.code, stdout: result.stdout || '', stderr: result.stderr || '' }
+}
+
+/** Run an executable directly, without a shell interpreting its arguments. */
+export function runArgv(command: string, args: readonly string[], options: RunOptions = {}): RunResult {
+  const result = childProcess.spawnSync(command, [...args], {
+    cwd: options.cwd,
+    encoding: 'utf8',
+    shell: false,
+    stdio: options.stream ? 'inherit' : 'pipe'
+  })
+  const error = result.error as NodeJS.ErrnoException | undefined
+  return {
+    code: result.status ?? (error ? 127 : 1),
+    stdout: typeof result.stdout === 'string' ? result.stdout : '',
+    stderr: `${typeof result.stderr === 'string' ? result.stderr : ''}${error ? error.message : ''}`
+  }
 }
 
 /** The last lines of a command's output — enough to diagnose, short enough to read. */
@@ -88,6 +105,28 @@ export function runBestEffort(label: string, command: string, options: RunOption
     return false
   }
   return true
+}
+
+/** Best-effort command execution with an argv boundary and no shell expansion. */
+export function runBestEffortArgv(label: string, command: string, args: readonly string[], options: RunOptions & { onSkipped?: (message: string) => void } = {}): boolean {
+  const result = runArgv(command, args, options)
+  if (result.code !== 0) {
+    options.onSkipped?.(`${label} did not run (exit ${result.code}) — continuing.`)
+    return false
+  }
+  return true
+}
+
+/**
+ * Validate a branch exactly as Git does. The executable call also keeps every
+ * caller on one canonical grammar; the branch is an argv item, never shell text.
+ */
+export function assertGitBranchName(branch: string): void {
+  if (!branch || branch.trim() !== branch || branch.startsWith('-') || /[\u0000-\u0020\u007f~^:?*\\\[]/.test(branch)) {
+    throw new Error(`Invalid Git branch name: ${JSON.stringify(branch)}`)
+  }
+  const result = runArgv('git', ['check-ref-format', '--branch', branch])
+  if (result.code !== 0) throw new Error(`Invalid Git branch name: ${JSON.stringify(branch)}`)
 }
 
 /**

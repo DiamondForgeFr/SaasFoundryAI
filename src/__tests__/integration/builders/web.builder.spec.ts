@@ -2,6 +2,7 @@ import { mkdir, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import shelljs from 'shelljs'
+import childProcess from 'node:child_process'
 
 import { createWebApp } from '../../../builders/web.builder'
 import { webParams } from '../../helpers/fixtures'
@@ -11,6 +12,7 @@ describe('createWebApp (integration)', () => {
   let tempDir: string
   let originalCwd: string
   let shellSpy: jest.SpyInstance
+  let spawnSpy: jest.SpyInstance
 
   beforeEach(async () => {
     tempDir = join(tmpdir(), `sf-web-builder-test-${Date.now()}`)
@@ -20,10 +22,12 @@ describe('createWebApp (integration)', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     shellSpy = jest.spyOn(shelljs, 'exec').mockImplementation((() => ({ code: 0, stdout: '10.0.0', stderr: '' })) as any)
+    spawnSpy = jest.spyOn(childProcess, 'spawnSync').mockReturnValue({ status: 0, stdout: '', stderr: '' } as never)
   })
 
   afterEach(async () => {
     shellSpy.mockRestore()
+    spawnSpy.mockRestore()
     process.chdir(originalCwd)
     await rm(tempDir, { recursive: true, force: true }).catch(() => {})
   })
@@ -48,7 +52,7 @@ describe('createWebApp (integration)', () => {
     it('should call git init for multirepo', async () => {
       await createWebApp(webParams())
 
-      expect(shellSpy).toHaveBeenCalledWith(expect.stringContaining('git init'), expect.anything())
+      expect(spawnSpy).toHaveBeenCalledWith('git', ['init'], expect.objectContaining({ shell: false }))
     })
   })
 
@@ -65,7 +69,7 @@ describe('createWebApp (integration)', () => {
     it('should NOT call git init for monorepo', async () => {
       await createWebApp(webParams({ isMonorepo: true }))
 
-      const gitCalls = shellSpy.mock.calls.filter((call: string[]) => typeof call[0] === 'string' && call[0].includes('git init'))
+      const gitCalls = spawnSpy.mock.calls.filter((call: unknown[]) => call[0] === 'git' && Array.isArray(call[1]) && call[1][0] === 'init')
       expect(gitCalls).toHaveLength(0)
     })
 

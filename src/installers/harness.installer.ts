@@ -175,23 +175,28 @@ export interface MergeHarnessUserFilesParams {
  * merge, which by design never touches these user-owned files.
  */
 export async function mergeHarnessUserFiles({ targetPath, projectName, version, mainBranch = 'main', workflow }: MergeHarnessUserFilesParams): Promise<void> {
+  await assertHarnessWritePathsSafe(targetPath)
   const claudeMdPath = join(targetPath, 'CLAUDE.md')
   const depositedClaudeMd = !(await fileExists(claudeMdPath))
 
   if (depositedClaudeMd) {
+    await assertHarnessWritePathsSafe(targetPath)
     await copy(resolve(skillsTemplatesPath, 'harness', 'CLAUDE.md'), claudeMdPath)
     let content = await readFile(claudeMdPath, 'utf8')
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
       .replace(/\{\{VERSION\}\}/g, version)
       .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
+    await assertHarnessWritePathsSafe(targetPath)
     await writeFile(claudeMdPath, content)
   }
 
   if (workflow && workflow.tool !== 'none') {
+    await assertHarnessWritePathsSafe(targetPath)
     await injectWorkflowSection({ targetPath, workflow, projectUrl: workflow.projectUrl })
   }
 
+  await assertHarnessWritePathsSafe(targetPath)
   await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
 }
 
@@ -228,18 +233,24 @@ export async function installHarness({
   const depositedClaudeMd = !(await fileExists(claudeMdPath))
 
   if (depositedClaudeMd) {
+    await assertHarnessWritePathsSafe(targetPath)
     await copy(resolve(skillsTemplatesPath, 'harness', 'CLAUDE.md'), claudeMdPath)
   }
 
+  await assertHarnessWritePathsSafe(targetPath)
   await installCoreSkills({ targetPath })
+  await assertHarnessWritePathsSafe(targetPath)
   await installClaudeDocs({ targetPath })
 
   if (advancedSkills.length > 0) {
+    await assertHarnessWritePathsSafe(targetPath)
     await installOptionalSkills({ targetPath, selectedSkills: advancedSkills })
   }
 
+  await assertHarnessWritePathsSafe(targetPath)
   await installWorkflowArtifacts({ targetPath, workflow })
 
+  await assertHarnessWritePathsSafe(targetPath)
   await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
 
   if (depositedClaudeMd) {
@@ -248,6 +259,7 @@ export async function installHarness({
       .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
       .replace(/\{\{VERSION\}\}/g, version)
       .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
+    await assertHarnessWritePathsSafe(targetPath)
     await writeFile(claudeMdPath, content)
   }
 

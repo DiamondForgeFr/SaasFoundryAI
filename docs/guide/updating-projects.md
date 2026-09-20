@@ -28,10 +28,14 @@ sf update --target-profile full --dry-run --json
 - A `harness` project plans a technical stack. Interactive mode collects the topology and technical choices, then explains that the resulting profile will be `full` before one confirmation.
 - A `stack` project adds the managed collaboration harness. `sf update --add-modules harness` remains compatible and reaches the same result through the same capability decision.
 - A `full` project is already complete, so the request is a no-op.
+- A multirepo child `projection` delegates technical profile transitions to the root coordinator project.
 - An `unknown` or `inconsistent` project is left unchanged until the reported manifest remediation is applied.
 
 The technical-stack plan is atomic. Any unmanaged file at a generated path, unsafe link or special file, case collision, or file/directory conflict blocks the entire transition. `replace`, `force`,
 and `.saasfoundry.new` sidecars cannot override this initial-adoption guard. A blocked JSON report says `"mutated": false`, lists the paths, and gives executable remediation.
+
+Byte-identical files that already existed remain user-owned and are recorded in `unmanagedPaths`; later module additions and template refreshes do not absorb them into SaaSFoundry ownership.
+SaaSFoundry commands coordinate through one project lock. Avoid running another local tool that renames or replaces project paths while a profile transition is applying.
 
 ### Managed project, external product, or POC?
 
