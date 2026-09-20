@@ -1,8 +1,8 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { CommandFailedError, run, runBestEffort, runRequired } from '../../run'
+import { assertGitBranchName, CommandFailedError, run, runArgv, runBestEffort, runBestEffortArgv, runRequired } from '../../run'
 
 /**
  * #592 — thirty call sites did `await exec(\`… > /dev/null 2>&1\`)` and read none of it.
@@ -92,6 +92,32 @@ describe('runBestEffort (#592)', () => {
     const said: string[] = []
     runBestEffort('git init', 'echo ok', { onSkipped: (m) => said.push(m) })
     expect(said).toHaveLength(0)
+  })
+})
+
+describe('argv execution', () => {
+  it('does not interpret shell metacharacters in arguments', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sf-run-argv-'))
+    try {
+      const marker = join(dir, 'executed')
+      const payload = `value; touch ${marker}`
+      const result = runArgv(process.execPath, ['-e', 'process.stdout.write(process.argv[1])', payload])
+      expect(result).toMatchObject({ code: 0, stdout: payload })
+      expect(() => readFileSync(marker)).toThrow()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('supports best-effort argv calls', () => {
+    expect(runBestEffortArgv('node', process.execPath, ['-e', 'process.exit(0)'])).toBe(true)
+    expect(runBestEffortArgv('node', process.execPath, ['-e', 'process.exit(2)'])).toBe(false)
+  })
+
+  it('uses the Git branch grammar and rejects option or command injection', () => {
+    expect(() => assertGitBranchName('feature/safe-name')).not.toThrow()
+    expect(() => assertGitBranchName('main; touch /tmp/pwned')).toThrow('Invalid Git branch name')
+    expect(() => assertGitBranchName('--upload-pack=evil')).toThrow('Invalid Git branch name')
   })
 })
 

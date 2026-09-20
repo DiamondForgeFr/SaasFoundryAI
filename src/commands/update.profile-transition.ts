@@ -34,6 +34,8 @@ export function decideProfileTransition(capabilities: ProjectCapabilities, targe
       return { status: 'ready', action: 'add-harness' }
     case 'harness':
       return { status: 'ready', action: 'add-technical-stack' }
+    case 'projection':
+      return { status: 'blocked', action: 'none', reasonCode: 'multirepo-child-projection' }
     case 'unknown':
       return { status: 'blocked', action: 'none', reasonCode: 'unknown-project-capabilities' }
     case 'inconsistent':
@@ -54,6 +56,9 @@ function baseReport(manifest: SaaSFoundryManifest, cliVersion: string, conflictS
 }
 
 function remediationFor(reasonCode: string | undefined): Array<{ command: string; description: string }> | undefined {
+  if (reasonCode === 'multirepo-child-projection') {
+    return [{ command: 'sf status', description: 'Run profile transitions from the root coordinator of the multirepo project.' }]
+  }
   if (reasonCode === 'unknown-project-capabilities' || reasonCode === 'inconsistent-project-capabilities') {
     return [
       { command: 'sf status', description: 'Inspect the manifest capability evidence and repair the inconsistent declaration.' },

@@ -56,7 +56,12 @@ jq -r '.language.codeComments // "en"' .saasfoundry.json  # code comments and co
   "version": "x.y.z",
   "projectName": "my-saas-app",
   "structure": "multirepo | monorepo | cli",
+  // Present only in the independent API/web checkouts of a multirepo project.
+  // Profile transitions remain coordinated by the root project.
+  "projection": { "kind": "multirepo-child", "rootProjectName": "my-saas-app", "app": "api | web" },
   "mainBranch": "main | master", // git main branch chosen at sf new; absent on older manifests — fall back when reading
+  // Existing files that matched a technical template during adoption but stay user-owned.
+  "unmanagedPaths": ["path/to/pre-existing-compatible-file"],
   "language": {
     // Language of what the AI writes, per surface. Optional, and so is every key:
     // an absent block means English everywhere. Split by surface because a French

@@ -34,6 +34,16 @@
       "type": "string",
       "minLength": 1
     },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rootProjectName", "app"],
+      "properties": {
+        "kind": { "type": "string", "const": "multirepo-child" },
+        "rootProjectName": { "type": "string", "minLength": 1 },
+        "app": { "type": "string", "enum": ["api", "web"] }
+      }
+    },
     "mainBranch": {
       "type": "string",
       "description": "Git main branch chosen at sf new (main/master). Absent on manifests written before this field existed \u2014 readers must fall back."
@@ -185,6 +195,12 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "unmanagedPaths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Pre-existing files that matched a technical template during adoption and remain user-owned."
     },
     "workflow": {
       "$ref": "#/definitions/workflowConfig"

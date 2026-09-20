@@ -326,6 +326,12 @@ export interface SaaSFoundryManifest {
   generatedAt: string
   structure: 'monorepo' | 'multirepo' | 'cli'
   projectName: string
+  /** Marks a manifest projected into one checkout of a multirepo project. */
+  projection?: {
+    kind: 'multirepo-child'
+    rootProjectName: string
+    app: 'api' | 'web'
+  }
   // Git main branch chosen at `sf new` (main/master). Optional: manifests
   // written before this field exists omit it — read sites must fall back
   // (no migration; see .claude/docs/migration-framework.md "When NOT to add").
@@ -380,6 +386,8 @@ export interface SaaSFoundryManifest {
   language?: LanguageConfig
   skillsAccounts?: Record<string, string>
   fileHashes?: Record<string, string>
+  /** Existing user paths that matched a technical template during adoption but remain user-owned. */
+  unmanagedPaths?: string[]
   workflow?: WorkflowConfig
   aiRules?: AIRules
   tools?: ToolsConfig

@@ -102,6 +102,7 @@ classification:
 | `harness`                   | Plans a monorepo or multirepo technical stack and adds it only when every candidate path is absent or byte-identical. Existing harness configuration and ownership remain unchanged. |
 | `stack`                     | Adds the managed collaboration harness. `--add-modules harness` remains an equivalent compatibility command.                                                                         |
 | `full`                      | Succeeds as a no-op.                                                                                                                                                                 |
+| `projection`                | Stops: this is an API/web checkout of a multirepo project; run the transition from its root coordinator.                                                                             |
 | `unknown` or `inconsistent` | Stops before mutation and reports how to resolve the manifest state.                                                                                                                 |
 
 This transition only adds capabilities. It does not implement `full → stack`, `full → harness`, `harness → stack`, or monorepo↔multirepo conversion.
@@ -111,6 +112,9 @@ and create a clean full project; do not run `sf new --profile full` inside the e
 
 Profile-transition execution requires macOS, Linux, or WSL on Windows in V1. Native Windows is rejected before mutation because the transaction relies on filesystem durability guarantees that the
 native path does not currently provide.
+
+SaaSFoundry writers coordinate through one project lock and verify file identities before publication and recovery. A separate same-user process that deliberately renames project paths between an
+identity check and the following filesystem syscall is outside this local CLI threat model; do not run unrelated tools that rewrite the project tree during a profile transition.
 
 ```bash
 # Scripted: add email + accept upstream template updates

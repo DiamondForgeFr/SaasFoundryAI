@@ -8,7 +8,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
-import { runBestEffort, runRequired, warn } from '../run'
+import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 
 export async function createMonorepoRoot(params: CreateMonorepoRootParams) {
   const targetDir = params.targetDir ?? '.'
@@ -125,11 +125,13 @@ export async function provisionMonorepoRoot({ targetDir = '.', monorepoUrl, main
   runRequired('npm install (monorepo root)', `${nvm}npm install`, { cwd: targetDir })
   runRequired('prisma generate (api)', `${nvm}npx prisma generate`, { cwd: join(targetDir, 'apps/api') })
 
-  runBestEffort('git init', 'git init', { cwd: targetDir, onSkipped: warn })
-  runBestEffort('git checkout', `git checkout -b ${mainBranch}`, { cwd: targetDir, onSkipped: warn })
-  if (monorepoUrl) runBestEffort('git remote add', `git remote add origin ${monorepoUrl}`, { cwd: targetDir, onSkipped: warn })
-  runBestEffort('git add', 'git add .', { cwd: targetDir, onSkipped: warn })
-  runBestEffort('git commit', 'git commit -m "Initial commit"', { cwd: targetDir, onSkipped: warn })
   const workingBranch = workflow?.workingBranch
-  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch', `git checkout -b ${workingBranch}`, { cwd: targetDir, onSkipped: warn })
+  assertGitBranchName(mainBranch)
+  if (workingBranch) assertGitBranchName(workingBranch)
+  runBestEffortArgv('git init', 'git', ['init'], { cwd: targetDir, onSkipped: warn })
+  runBestEffortArgv('git checkout', 'git', ['checkout', '-b', mainBranch], { cwd: targetDir, onSkipped: warn })
+  if (monorepoUrl) runBestEffortArgv('git remote add', 'git', ['remote', 'add', 'origin', monorepoUrl], { cwd: targetDir, onSkipped: warn })
+  runBestEffortArgv('git add', 'git', ['add', '.'], { cwd: targetDir, onSkipped: warn })
+  runBestEffortArgv('git commit', 'git', ['commit', '-m', 'Initial commit'], { cwd: targetDir, onSkipped: warn })
+  if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch', 'git', ['checkout', '-b', workingBranch], { cwd: targetDir, onSkipped: warn })
 }

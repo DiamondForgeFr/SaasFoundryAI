@@ -26,11 +26,16 @@ interface FileIdentity {
   ino: string
 }
 
+interface AncestorIdentity extends FileIdentity {
+  path: string
+}
+
 interface CreatedEntry extends FileIdentity {
   path: string
   sha256?: string
   temporaryPath?: string
   recordPath?: string
+  ancestors?: AncestorIdentity[]
 }
 
 interface PendingEntry {
@@ -58,6 +63,7 @@ interface TransitionJournal {
   }
   createdFiles: CreatedEntry[]
   createdDirectories: CreatedEntry[]
+  protectedDirectories?: AncestorIdentity[]
   plannedFiles?: PendingEntry[]
   plannedDirectories?: PendingEntry[]
   pending?: PendingEntry
@@ -119,6 +125,51 @@ async function assertRoot(root: string, expected: FileIdentity): Promise<void> {
 function absolutePath(root: string, relativePath: string): string {
   const normalized = normalizePortableRelativePath(relativePath)
   return join(root, ...normalized.split('/'))
+}
+
+async function captureAncestors(root: string, relativePath: string, expectedRoot?: FileIdentity): Promise<AncestorIdentity[]> {
+  if (expectedRoot) await assertRoot(root, expectedRoot)
+  const segments = normalizePortableRelativePath(relativePath).split('/').slice(0, -1)
+  const result: AncestorIdentity[] = []
+  for (let index = 1; index <= segments.length; index += 1) {
+    const path = segments.slice(0, index).join('/')
+    const stat = await lstat(absolutePath(root, path), { bigint: true })
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Unsafe technical stack ancestor: ${path}`)
+    result.push({ path, ...identity(stat) })
+  }
+  if (expectedRoot) await assertRoot(root, expectedRoot)
+  return result
+}
+
+async function ancestorsMatch(root: string, relativePath: string, expected: AncestorIdentity[] | undefined, rootIdentity: FileIdentity): Promise<boolean> {
+  if (!expected) return false
+  try {
+    const current = await captureAncestors(root, relativePath, rootIdentity)
+    return current.length === expected.length && current.every((entry, index) => entry.path === expected[index].path && entry.dev === expected[index].dev && entry.ino === expected[index].ino)
+  } catch {
+    return false
+  }
+}
+
+async function safeUnrecordedPath(root: string, relativePath: string, rootIdentity: FileIdentity): Promise<Awaited<ReturnType<typeof lstat>> | undefined | null> {
+  try {
+    await assertRoot(root, rootIdentity)
+    const segments = normalizePortableRelativePath(relativePath).split('/')
+    for (let index = 1; index < segments.length; index += 1) {
+      const ancestor = await lstat(absolutePath(root, segments.slice(0, index).join('/'))).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return undefined
+        throw error
+      })
+      if (!ancestor) return undefined
+      if (!ancestor.isDirectory() || ancestor.isSymbolicLink()) return null
+    }
+    return await lstat(absolutePath(root, relativePath)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+  } catch {
+    return null
+  }
 }
 
 async function syncDirectory(path: string): Promise<void> {
@@ -360,7 +411,7 @@ async function acquireLock(projectRoot: string, recoveredStaleLock = false): Pro
   }
 }
 
-async function acquireManifestMutationLock(projectRoot: string, recoveredStaleLock = false): Promise<{ close: () => Promise<void> }> {
+export async function acquireManifestMutationLock(projectRoot: string, recoveredStaleLock = false): Promise<{ close: () => Promise<void> }> {
   let lockPath: string
   try {
     const git = await inspectGitAgentScope(projectRoot)
@@ -450,11 +501,48 @@ async function planMissingDirectories(projectRoot: string, additions: TechnicalS
   return missing
 }
 
+async function captureTransactionDirectoryBaseline(projectRoot: string, rootIdentity: FileIdentity, additions: TechnicalStackAdoptionPlan['entries']): Promise<AncestorIdentity[]> {
+  const paths = new Set<string>()
+  for (const entry of additions) {
+    const segments = normalizePortableRelativePath(entry.path).split('/').slice(0, -1)
+    for (let index = 1; index <= segments.length; index += 1) paths.add(segments.slice(0, index).join('/'))
+  }
+
+  const baseline: AncestorIdentity[] = []
+  for (const path of [...paths].sort((left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right))) {
+    await assertRoot(projectRoot, rootIdentity)
+    const found = await lstat(absolutePath(projectRoot, path), { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (!found) continue
+    if (!found.isDirectory() || found.isSymbolicLink()) throw new Error(`Unsafe technical stack parent: ${path}`)
+    baseline.push({ path, ...identity(found) })
+  }
+  await assertRoot(projectRoot, rootIdentity)
+  return baseline
+}
+
+async function assertTransactionDirectoryBaseline(projectRoot: string, journal: TransitionJournal): Promise<void> {
+  await assertRoot(projectRoot, journal.root)
+  for (const entry of [...(journal.protectedDirectories ?? []), ...journal.createdDirectories]) {
+    const found = await lstat(absolutePath(projectRoot, entry.path), { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (!found || !found.isDirectory() || found.isSymbolicLink() || !sameIdentity(entry, found)) {
+      throw new Error(`Technical stack directory identity changed during apply: ${entry.path}`)
+    }
+  }
+  await assertRoot(projectRoot, journal.root)
+}
+
 async function createPlannedDirectories(projectRoot: string, rootIdentity: FileIdentity, journal: TransitionJournal, onPhase?: ApplyTechnicalStackTransitionOptions['onPhase']): Promise<void> {
   for (const planned of journal.plannedDirectories ?? []) {
-    await assertRoot(projectRoot, rootIdentity)
+    await assertTransactionDirectoryBaseline(projectRoot, journal)
     if (!planned.recordPath) throw new Error(`Missing durable directory intent for ${planned.path}`)
     const current = absolutePath(projectRoot, planned.path)
+    const ancestors = await captureAncestors(projectRoot, planned.path, rootIdentity)
     const parent = dirname(current)
     const parentBefore = await lstat(parent, { bigint: true })
     if (!parentBefore.isDirectory() || parentBefore.isSymbolicLink()) throw new Error(`Unsafe technical stack parent: ${planned.path}`)
@@ -464,6 +552,7 @@ async function createPlannedDirectories(projectRoot: string, rootIdentity: FileI
     })
     if (found) throw new Error(`Technical stack parent changed before apply: ${planned.path}`)
     await mkdir(current, { mode: 0o755 })
+    if (!(await ancestorsMatch(projectRoot, planned.path, ancestors, rootIdentity))) throw new Error(`Technical stack ancestors changed during apply: ${planned.path}`)
     const created = await lstat(current, { bigint: true })
     if (!created.isDirectory() || created.isSymbolicLink()) throw new Error(`Unsafe created directory: ${planned.path}`)
     const parentAfter = await lstat(parent, { bigint: true })
@@ -471,10 +560,11 @@ async function createPlannedDirectories(projectRoot: string, rootIdentity: FileI
       throw new Error(`Technical stack parent changed during apply: ${planned.path}`)
     }
     await syncDirectory(parent)
-    const evidence: CreatedEntry = { path: planned.path, recordPath: planned.recordPath, ...identity(created) }
+    const evidence: CreatedEntry = { path: planned.path, recordPath: planned.recordPath, ancestors, ...identity(created) }
     await writeCreatedRecord(projectRoot, journal, evidence)
     journal.createdDirectories.push(evidence)
     await onPhase?.('after-directory', planned.path)
+    await assertTransactionDirectoryBaseline(projectRoot, journal)
   }
 }
 
@@ -488,8 +578,9 @@ async function createPlannedFile(
   journal: TransitionJournal,
   onPhase?: ApplyTechnicalStackTransitionOptions['onPhase']
 ): Promise<void> {
-  await assertRoot(projectRoot, rootIdentity)
+  await assertTransactionDirectoryBaseline(projectRoot, journal)
   const destination = absolutePath(projectRoot, path)
+  const ancestors = await captureAncestors(projectRoot, path, rootIdentity)
   const parent = dirname(destination)
   const parentBefore = await lstat(parent, { bigint: true })
   if (!parentBefore.isDirectory() || parentBefore.isSymbolicLink()) throw new Error(`Unsafe destination parent: ${path}`)
@@ -499,18 +590,21 @@ async function createPlannedFile(
   const { temporaryPath, recordPath } = planned
   const temporary = absolutePath(projectRoot, temporaryPath)
   const temporaryIdentity = await writeExclusive(temporary, content, snapshot.mode || 0o644)
-  const evidence: CreatedEntry = { path, sha256: snapshot.sha256, temporaryPath, recordPath, ...temporaryIdentity }
+  if (!(await ancestorsMatch(projectRoot, path, ancestors, rootIdentity))) throw new Error(`Destination ancestors changed during apply: ${path}`)
+  const evidence: CreatedEntry = { path, sha256: snapshot.sha256, temporaryPath, recordPath, ancestors, ...temporaryIdentity }
   await writeCreatedRecord(projectRoot, journal, evidence)
   journal.createdFiles.push(evidence)
 
   const parentNow = await lstat(parent, { bigint: true })
   if (!sameIdentity(identity(parentBefore), parentNow) || !parentNow.isDirectory() || parentNow.isSymbolicLink()) throw new Error(`Destination parent changed during apply: ${path}`)
+  if (!(await ancestorsMatch(projectRoot, path, ancestors, rootIdentity))) throw new Error(`Destination ancestors changed before publication: ${path}`)
   await link(temporary, destination).catch((error: NodeJS.ErrnoException) => {
     if (['EPERM', 'ENOTSUP', 'EXDEV'].includes(error.code ?? ''))
       throw new Error(`The project filesystem does not support safe exclusive publication for ${path}; use a local NTFS, APFS, ext4, or WSL filesystem.`)
     throw error
   })
   const created = await lstat(destination, { bigint: true })
+  if (!(await ancestorsMatch(projectRoot, path, ancestors, rootIdentity))) throw new Error(`Destination ancestors changed during publication: ${path}`)
   if (!created.isFile() || created.isSymbolicLink() || !sameIdentity(temporaryIdentity, created)) throw new Error(`Exclusive creation could not be verified: ${path}`)
   await unlink(temporary)
   const published = await lstat(destination, { bigint: true })
@@ -525,6 +619,7 @@ async function createPlannedFile(
   }
   await syncDirectory(parent)
   await onPhase?.('after-file', path)
+  await assertTransactionDirectoryBaseline(projectRoot, journal)
 }
 
 async function hashRegularFile(path: string): Promise<string | undefined> {
@@ -595,7 +690,7 @@ function sameSnapshot(left: TechnicalStackPathSnapshot | undefined, right: Techn
 }
 
 async function revalidateAppliedPlan(projectRoot: string, candidateRoot: string, approvedPlan: TechnicalStackAdoptionPlan, journal: TransitionJournal, excludedPaths?: string[]): Promise<void> {
-  await assertRoot(projectRoot, journal.root)
+  await assertTransactionDirectoryBaseline(projectRoot, journal)
   const fresh = await planTechnicalStackAdoption({ projectRoot, candidateRoot, excludedPaths })
   if (fresh.entries.length !== approvedPlan.entries.length) throw new Error('The technical stack changed during apply; the manifest was not committed.')
   const byPath = new Map(fresh.entries.map((entry) => [entry.path, entry]))
@@ -614,6 +709,7 @@ async function revalidateAppliedPlan(projectRoot: string, candidateRoot: string,
       throw new Error(`A compatible user file changed before commit: ${approved.path}`)
     }
   }
+  await assertTransactionDirectoryBaseline(projectRoot, journal)
 }
 
 function validateManifestTransition(approvedPlan: TechnicalStackAdoptionPlan, expectedBytes: Buffer, nextBytes: Buffer): void {
@@ -658,6 +754,12 @@ function validateManifestTransition(approvedPlan: TechnicalStackAdoptionPlan, ex
   for (const entry of approvedPlan.entries.filter((candidate) => candidate.action === 'compatible')) {
     if (!(entry.path in beforeHashes) && entry.path in afterHashes) throw new Error(`Compatible user file ${entry.path} must remain unowned.`)
   }
+  const expectedUnmanaged = new Set(Array.isArray(expected.unmanagedPaths) ? (expected.unmanagedPaths as string[]) : [])
+  for (const entry of approvedPlan.entries.filter((candidate) => candidate.candidate && !(candidate.path in beforeHashes) && !(candidate.path in technicalHashes))) expectedUnmanaged.add(entry.path)
+  const afterUnmanaged = Array.isArray(next.unmanagedPaths) ? [...(next.unmanagedPaths as string[])].sort() : []
+  if (JSON.stringify(afterUnmanaged) !== JSON.stringify([...expectedUnmanaged].sort())) {
+    throw new Error('The technical stack manifest must preserve every compatible user-owned path as unmanaged.')
+  }
   const allowedHashes = [...new Set([...Object.keys(beforeHashes), ...Object.keys(technicalHashes)])].sort()
   if (JSON.stringify(Object.keys(afterHashes).sort()) !== JSON.stringify(allowedHashes)) throw new Error('The technical stack manifest contains ownership outside the approved plan.')
 }
@@ -675,10 +777,11 @@ async function rollbackCreated(projectRoot: string, journal: TransitionJournal):
   for (const planned of journal.plannedFiles ?? []) {
     if (evidenced.has(planned.path)) continue
     for (const relativePath of [planned.path, planned.temporaryPath].filter((path): path is string => Boolean(path))) {
-      const found = await lstat(absolutePath(projectRoot, relativePath)).catch((error: NodeJS.ErrnoException) => {
-        if (error.code === 'ENOENT') return undefined
-        throw error
-      })
+      const found = await safeUnrecordedPath(projectRoot, relativePath, journal.root)
+      if (found === null) {
+        unresolved.push(relativePath)
+        continue
+      }
       if (found) unresolved.push(relativePath)
     }
   }
@@ -686,15 +789,20 @@ async function rollbackCreated(projectRoot: string, journal: TransitionJournal):
   const evidencedDirectories = new Set(journal.createdDirectories.map((entry) => entry.path))
   for (const planned of journal.plannedDirectories ?? []) {
     if (evidencedDirectories.has(planned.path)) continue
-    const found = await lstat(absolutePath(projectRoot, planned.path)).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return undefined
-      throw error
-    })
+    const found = await safeUnrecordedPath(projectRoot, planned.path, journal.root)
+    if (found === null) {
+      unresolved.push(planned.path)
+      continue
+    }
     if (found) unresolved.push(planned.path)
   }
 
   for (const entry of [...journal.createdFiles].reverse()) {
     for (const relativePath of [entry.path, entry.temporaryPath].filter((path): path is string => Boolean(path))) {
+      if (!(await ancestorsMatch(projectRoot, relativePath, entry.ancestors, journal.root))) {
+        unresolved.push(relativePath)
+        continue
+      }
       const path = absolutePath(projectRoot, relativePath)
       const stat = await lstat(path, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
         if (error.code === 'ENOENT') return undefined
@@ -712,6 +820,10 @@ async function rollbackCreated(projectRoot: string, journal: TransitionJournal):
   }
 
   for (const entry of [...journal.createdDirectories].reverse()) {
+    if (!(await ancestorsMatch(projectRoot, entry.path, entry.ancestors, journal.root))) {
+      unresolved.push(entry.path)
+      continue
+    }
     const path = absolutePath(projectRoot, entry.path)
     const stat = await lstat(path, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return undefined
@@ -860,14 +972,16 @@ export async function applyTechnicalStackTransition(options: ApplyTechnicalStack
     }
 
     const transactionId = randomUUID()
+    const rootIdentity = await statRoot(projectRoot)
     const missingDirectories = await planMissingDirectories(projectRoot, additions)
+    const protectedDirectories = await captureTransactionDirectoryBaseline(projectRoot, rootIdentity, additions)
     journal = {
       version: 1,
       sequence: 0,
       transactionId,
       planFingerprint: currentPlan.fingerprint,
       state: 'applying',
-      root: await statRoot(projectRoot),
+      root: rootIdentity,
       manifest: {
         path: manifestPath,
         beforeSha256: sha256(options.expectedManifest),
@@ -876,6 +990,7 @@ export async function applyTechnicalStackTransition(options: ApplyTechnicalStack
       },
       createdFiles: [],
       createdDirectories: [],
+      protectedDirectories,
       plannedFiles: additions.map((entry, index) => ({
         kind: 'file',
         path: entry.path,

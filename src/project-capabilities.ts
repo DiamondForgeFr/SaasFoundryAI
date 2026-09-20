@@ -2,7 +2,7 @@ import type { SaaSFoundryManifest } from './types'
 
 export type TechnicalStackCapability = 'present' | 'absent' | 'inconsistent'
 export type CollaborationHarnessCapability = 'managed' | 'core-only' | 'legacy-unknown' | 'inconsistent'
-export type EffectiveProjectProfile = 'full' | 'stack' | 'harness' | 'unknown' | 'inconsistent'
+export type EffectiveProjectProfile = 'full' | 'stack' | 'harness' | 'projection' | 'unknown' | 'inconsistent'
 
 export interface ProjectCapabilities {
   technicalStack: TechnicalStackCapability
@@ -44,9 +44,33 @@ function effectiveProfile(technicalStack: TechnicalStackCapability, collaboratio
   return 'unknown'
 }
 
+/**
+ * Older multirepo children predate the explicit projection marker. Their
+ * generated manifest shape is deliberately recognized conservatively so a
+ * child named `<root>-api` or `<root>-web` can never be promoted as if it were
+ * the coordinator. A standalone harness with the same legacy shape must be
+ * made explicit before profile adoption; failing closed is safer than
+ * scaffolding a second application inside it.
+ */
+export function hasLegacyMultirepoChildShape(manifest: SaaSFoundryManifest): boolean {
+  if (manifest.projection || manifest.structure !== 'cli' || !/-((api)|(web))$/.test(manifest.projectName)) return false
+  const technicalKeys = [manifest.modules?.email, manifest.modules?.s3Setup, manifest.modules?.dbSetup, manifest.modules?.includeAnalytics]
+  return (
+    technicalKeys.every((value) => value === undefined) &&
+    manifest.modules?.harness !== undefined &&
+    Array.isArray(manifest.modules?.advancedSkills) &&
+    manifest.mainBranch !== undefined &&
+    manifest.fileHashes !== undefined &&
+    (manifest.modules.harness.managed === true || hasManagedHarnessEvidence(manifest))
+  )
+}
+
 /** Derive current capabilities without persisting or guessing an installation profile. */
 export function classifyProjectCapabilities(manifest: SaaSFoundryManifest): ProjectCapabilities {
   const technicalStack = technicalStackCapability(manifest)
   const collaborationHarness = collaborationHarnessCapability(manifest)
+  if (manifest.projection?.kind === 'multirepo-child' || hasLegacyMultirepoChildShape(manifest)) {
+    return { technicalStack, collaborationHarness, effectiveProfile: 'projection' }
+  }
   return { technicalStack, collaborationHarness, effectiveProfile: effectiveProfile(technicalStack, collaborationHarness) }
 }

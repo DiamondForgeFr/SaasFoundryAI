@@ -50,6 +50,8 @@ describe('SaaSFoundryManifest drift-guard', () => {
       // (`resolveOutputLanguages`), so no project can regress by not having it.
       // `ports` (#584) is the same case: an absent block reads back as DEFAULT_PORTS,
       // which is the only set of ports a project scaffolded before it could have used.
+      // `projection` and `unmanagedPaths` are additive ownership metadata. Their
+      // absence preserves the legacy coordinator and generated-file behavior.
       keys: [
         '$schema',
         'manifestVersion',
@@ -57,12 +59,14 @@ describe('SaaSFoundryManifest drift-guard', () => {
         'generatedAt',
         'structure',
         'projectName',
+        'projection',
         'mainBranch',
         'ports',
         'modules',
         'language',
         'skillsAccounts',
         'fileHashes',
+        'unmanagedPaths',
         'workflow',
         'aiRules',
         'tools'

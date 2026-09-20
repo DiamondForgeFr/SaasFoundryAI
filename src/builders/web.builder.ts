@@ -9,7 +9,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
-import { runBestEffort, runRequired, warn } from '../run'
+import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 
 export async function createWebApp(params: CreateWebAppParams) {
   const targetDir = params.targetDir ?? '.'
@@ -180,11 +180,13 @@ export async function provisionWebApp({ targetDir = '.', isMonorepo, projectName
   // Install once, after every module installer has finalized package.json.
   runRequired('npm install (web)', `${nvm}npm install`, { cwd: webPath })
 
-  runBestEffort('git init (web)', 'git init', { cwd: webPath, onSkipped: warn })
-  runBestEffort('git checkout (web)', `git checkout -b ${mainBranch}`, { cwd: webPath, onSkipped: warn })
-  if (frontendRepoUrl) runBestEffort('git remote add (web)', `git remote add origin ${frontendRepoUrl}`, { cwd: webPath, onSkipped: warn })
-  runBestEffort('git add (web)', 'git add .', { cwd: webPath, onSkipped: warn })
-  runBestEffort('git commit (web)', 'git commit -m "Initial commit"', { cwd: webPath, onSkipped: warn })
   const workingBranch = workflow?.workingBranch
-  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (web)', `git checkout -b ${workingBranch}`, { cwd: webPath, onSkipped: warn })
+  assertGitBranchName(mainBranch)
+  if (workingBranch) assertGitBranchName(workingBranch)
+  runBestEffortArgv('git init (web)', 'git', ['init'], { cwd: webPath, onSkipped: warn })
+  runBestEffortArgv('git checkout (web)', 'git', ['checkout', '-b', mainBranch], { cwd: webPath, onSkipped: warn })
+  if (frontendRepoUrl) runBestEffortArgv('git remote add (web)', 'git', ['remote', 'add', 'origin', frontendRepoUrl], { cwd: webPath, onSkipped: warn })
+  runBestEffortArgv('git add (web)', 'git', ['add', '.'], { cwd: webPath, onSkipped: warn })
+  runBestEffortArgv('git commit (web)', 'git', ['commit', '-m', 'Initial commit'], { cwd: webPath, onSkipped: warn })
+  if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch (web)', 'git', ['checkout', '-b', workingBranch], { cwd: webPath, onSkipped: warn })
 }

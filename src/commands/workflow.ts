@@ -6,7 +6,8 @@ import os from 'os'
 import { execSync } from 'child_process'
 import { promptWorkflowConfiguration, listGlobalWorkflows, loadGlobalWorkflow, saveGlobalWorkflow, updateGitHubProjectStatuses, WORKFLOW_PRESETS } from '../prompts/workflow.prompts'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
-import { readManifest, writeManifest } from '../utils'
+import { readManifest } from '../utils'
+import { mutateProjectManifestSafe } from '../manifest-file'
 import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
@@ -200,7 +201,7 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
   ])
 
   // Apply template to project
-  manifest.workflow = {
+  const workflow: NonNullable<SaaSFoundryManifest['workflow']> = {
     template: template.name ?? templateName,
     tool: template.tool,
     projectUrl: answers.projectUrl,
@@ -214,22 +215,23 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
     validated: false
   }
 
-  manifest.aiRules = template.aiRules
-
-  await writeManifest(process.cwd(), manifest)
+  const appliedManifest = await mutateProjectManifestSafe(process.cwd(), (current) => {
+    current.workflow = workflow
+    current.aiRules = template.aiRules
+  })
   await updateWorkflowHistory(templateName)
 
   // Regenerate the workflow skill so SKILL.md and the statuses/ docs match
   // the new status set — without this, an in-place preset upgrade leaves the
   // agent documentation describing the previous workflow.
-  if (manifest.workflow.tool !== 'none') {
-    await installWorkflowSkill({ targetPath: process.cwd(), workflow: manifest.workflow, projectUrl: manifest.workflow.projectUrl })
+  if (appliedManifest.workflow?.tool !== 'none') {
+    await installWorkflowSkill({ targetPath: process.cwd(), workflow: appliedManifest.workflow!, projectUrl: appliedManifest.workflow?.projectUrl })
     console.log(chalk.green('✅ Workflow skill regenerated (SKILL.md + statuses docs)'))
   }
 
   // Align the GitHub Project board with the new status set (best-effort).
-  if (manifest.workflow.tool === 'github-projects' && manifest.workflow.projectUrl && manifest.workflow.statuses?.length) {
-    await updateGitHubProjectStatuses(manifest.workflow.projectUrl, manifest.workflow.statuses)
+  if (appliedManifest.workflow?.tool === 'github-projects' && appliedManifest.workflow.projectUrl && appliedManifest.workflow.statuses?.length) {
+    await updateGitHubProjectStatuses(appliedManifest.workflow.projectUrl, appliedManifest.workflow.statuses)
   }
 
   console.log(chalk.green(`\n✅ Workflow template "${templateName}" applied\n`))
@@ -253,9 +255,10 @@ async function setWorkingBranch(manifest: SaaSFoundryManifest, branch?: string) 
     process.exit(1)
   }
 
-  manifest.workflow.workingBranch = branch!
-
-  await writeManifest(process.cwd(), manifest)
+  await mutateProjectManifestSafe(process.cwd(), (current) => {
+    if (!current.workflow) throw new Error('No workflow configured in the current project manifest.')
+    current.workflow.workingBranch = branch!
+  })
   console.log(chalk.green(`\n✅ Branch de travail set to: ${chalk.cyan(branch!)}\n`))
 }
 
@@ -299,14 +302,16 @@ async function setAIRules(manifest: SaaSFoundryManifest) {
     }
   ])
 
-  manifest.aiRules = {
+  const nextRules = {
     alwaysCreateBranchFromWorking: aiRules.includes('alwaysCreateBranchFromWorking'),
     alwaysCreateTicketBeforeCode: aiRules.includes('alwaysCreateTicketBeforeCode'),
     autoUpdateTicketStatus: aiRules.includes('autoUpdateTicketStatus'),
     requireHumanCheckOnPushedBranch: aiRules.includes('requireHumanCheckOnPushedBranch')
   }
 
-  await writeManifest(process.cwd(), manifest)
+  await mutateProjectManifestSafe(process.cwd(), (current) => {
+    current.aiRules = nextRules
+  })
   console.log(chalk.green('\n✅ AI rules updated\n'))
 }
 

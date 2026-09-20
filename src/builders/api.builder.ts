@@ -1,5 +1,5 @@
 import { copy } from 'fs-extra'
-import { readFile, rm, writeFile } from 'fs/promises'
+import { chmod, readFile, rm, writeFile } from 'fs/promises'
 import { join, resolve } from 'path'
 
 import { installEmailModule } from '../installers/email.installer'
@@ -8,7 +8,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
-import { runBestEffort, runRequired, warn } from '../run'
+import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 
 export async function createApiApp(params: CreateApiAppParams) {
   const targetDir = params.targetDir ?? '.'
@@ -117,6 +117,7 @@ export async function renderApiApp({
 
   // Write core .env changes before module installers run
   await writeFile(envPath, envContent)
+  await chmod(envPath, 0o600)
 
   // Install MailerSend email module (if selected)
   if (emailService === 'mailersend') {
@@ -191,6 +192,7 @@ export async function renderApiApp({
     [/^PORT=.*$/m, `PORT="${apiPort}"`],
     [/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`]
   ])
+  await chmod(`${apiPath}/.env.test`, 0o600)
   await replaceInFile(`${apiPath}/Dockerfile`, [
     [/^ENV PORT=.*$/m, `ENV PORT=${apiPort}`],
     [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
@@ -224,11 +226,13 @@ export async function provisionApiApp({ targetDir = '.', isMonorepo, projectName
 
   // Best-effort: the folder may already be a repository, or git may be absent. None of
   // that makes the scaffold unusable, so it reports and carries on.
-  runBestEffort('git init (api)', 'git init', { cwd: apiPath, onSkipped: warn })
-  runBestEffort('git checkout (api)', `git checkout -b ${mainBranch}`, { cwd: apiPath, onSkipped: warn })
-  if (backendRepoUrl) runBestEffort('git remote add (api)', `git remote add origin ${backendRepoUrl}`, { cwd: apiPath, onSkipped: warn })
-  runBestEffort('git add (api)', 'git add .', { cwd: apiPath, onSkipped: warn })
-  runBestEffort('git commit (api)', 'git commit -m "Initial commit"', { cwd: apiPath, onSkipped: warn })
   const workingBranch = workflow?.workingBranch
-  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (api)', `git checkout -b ${workingBranch}`, { cwd: apiPath, onSkipped: warn })
+  assertGitBranchName(mainBranch)
+  if (workingBranch) assertGitBranchName(workingBranch)
+  runBestEffortArgv('git init (api)', 'git', ['init'], { cwd: apiPath, onSkipped: warn })
+  runBestEffortArgv('git checkout (api)', 'git', ['checkout', '-b', mainBranch], { cwd: apiPath, onSkipped: warn })
+  if (backendRepoUrl) runBestEffortArgv('git remote add (api)', 'git', ['remote', 'add', 'origin', backendRepoUrl], { cwd: apiPath, onSkipped: warn })
+  runBestEffortArgv('git add (api)', 'git', ['add', '.'], { cwd: apiPath, onSkipped: warn })
+  runBestEffortArgv('git commit (api)', 'git', ['commit', '-m', 'Initial commit'], { cwd: apiPath, onSkipped: warn })
+  if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch (api)', 'git', ['checkout', '-b', workingBranch], { cwd: apiPath, onSkipped: warn })
 }

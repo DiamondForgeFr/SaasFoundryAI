@@ -5,6 +5,7 @@ import { resolve } from 'path'
 import { fileExists } from '../utils'
 import { SaaSFoundryManifest } from '../types'
 import { promptAtlassianCredentials, promptNotionCredentials, promptFigmaCredentials } from '../prompts/skills.prompts'
+import { mutateProjectManifestSafe } from '../manifest-file'
 
 const CREDENTIALS_DIR = resolve(homedir(), '.claude/credentials')
 
@@ -221,16 +222,9 @@ async function useAccount(tool: string, accountName: string) {
     process.exit(1)
   }
 
-  // Read and update manifest
-  const manifest: SaaSFoundryManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-
-  if (!manifest.skillsAccounts) {
-    manifest.skillsAccounts = {}
-  }
-
-  manifest.skillsAccounts[tool] = accountName
-
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+  await mutateProjectManifestSafe(process.cwd(), (manifest) => {
+    manifest.skillsAccounts = { ...(manifest.skillsAccounts ?? {}), [tool]: accountName }
+  })
 
   console.log(chalk.green(`\n✓ Project configured to use "${accountName}" for ${tool}`))
   console.log(chalk.gray(`  Updated: .saasfoundry.json\n`))

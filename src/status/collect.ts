@@ -74,6 +74,12 @@ export function describeProjectCapabilities(manifest: SaaSFoundryManifest): Stat
         reason: 'Valid partial profile: the managed collaboration harness is installed without a technical stack.',
         previewCommand: FULL_PROFILE_PREVIEW
       }
+    case 'projection':
+      return {
+        ...classified,
+        reason: 'This checkout is a managed multirepo child; technical profile transitions run from the coordinator project.',
+        previewCommand: null
+      }
     case 'unknown':
       return {
         ...classified,
