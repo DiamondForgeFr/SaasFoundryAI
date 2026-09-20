@@ -97,6 +97,19 @@ export const CATALOGUE: ModuleDefinition[] = [
     dependencies: []
   },
   {
+    name: 'pwa',
+    displayName: 'Installable App (PWA)',
+    description: 'Installable web application support with an offline-capable service worker and branded application manifest',
+    category: 'module',
+    keywords: ['pwa', 'installable', 'offline', 'service-worker', 'desktop', 'mobile', 'manifest'],
+    provides: ['Web application manifest', 'Service worker generation', 'Installable application icons', 'Vite PWA integration'],
+    alternatives: ['native desktop wrapper', 'Capacitor', 'Electron', 'manual service worker'],
+    introducedInVersion: '1.0.0-beta',
+    minCliVersion: '1.0.0-beta',
+    filesAffected: ['apps/web/pwa.config.ts', 'apps/web/vite.config.ts', 'apps/web/index.html', 'apps/web/public/icons/', 'apps/web/package.json'],
+    dependencies: ['vite-plugin-pwa']
+  },
+  {
     name: 'sf-skill-context7',
     displayName: 'Advanced Skill: Context7',
     description: 'Up-to-date library documentation (React, Vite, Prisma, etc.) [free, no credentials]',

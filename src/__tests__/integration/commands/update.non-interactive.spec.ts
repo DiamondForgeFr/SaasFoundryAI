@@ -66,7 +66,8 @@ describe('updateCommand (non-interactive integration)', () => {
   beforeEach(async () => {
     tempDir = join(tmpdir(), `sf-int-update-nit-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     originalCwd = process.cwd()
-    await mkdir(tempDir, { recursive: true })
+    await mkdir(join(tempDir, 'apps/api'), { recursive: true })
+    await mkdir(join(tempDir, 'apps/web'), { recursive: true })
     process.chdir(tempDir)
 
     jest.clearAllMocks()

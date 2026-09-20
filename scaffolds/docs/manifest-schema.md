@@ -56,6 +56,17 @@ jq -r '.language.codeComments // "en"' .saasfoundry.json  # code comments and co
   "version": "x.y.z",
   "projectName": "my-saas-app",
   "structure": "multirepo | monorepo | cli",
+  // Present only after explicit, fingerprinted adoption of a pre-manifest release.
+  "adoption": {
+    "kind": "legacy",
+    "sourcePackage": "saasfoundry-cli",
+    "sourceVersion": "1.0.0-beta",
+    "sourceIntegrity": "sha512-...",
+    "layout": "multirepo",
+    "planFingerprint": "<sha256>",
+    // Cleared only after the first current-template comparison succeeds.
+    "refreshPending": true
+  },
   // Present only in the independent API/web checkouts of a multirepo project.
   // Profile transitions remain coordinated by the root project.
   "projection": { "kind": "multirepo-child", "rootProjectName": "my-saas-app", "app": "api | web" },

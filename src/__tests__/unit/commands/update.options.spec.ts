@@ -3,8 +3,10 @@ import {
   buildUpdatePrefillFromOptions,
   parseAddModules,
   parseConflictStrategy,
+  parseUpdateWorkflow,
   parseTargetProfile,
   UpdateCommandOptions,
+  validateLegacyAdoptionOptions,
   validateTechnicalTransitionOptions,
   validateUpdateOutputOptions
 } from '../../../commands/update.options'
@@ -52,6 +54,75 @@ describe('parseTargetProfile', () => {
 
   it.each(['stack', 'harness', 'FULL', '', ' full '])('rejects unsupported or non-canonical target %p', (value) => {
     expect(() => parseTargetProfile(value)).toThrow(/Invalid --target-profile.*V1 supports only: full/)
+  })
+})
+
+describe('parseUpdateWorkflow', () => {
+  it.each(['solo', 'saasfoundry'] as const)('accepts the %s preset', (preset) => {
+    expect(parseUpdateWorkflow(preset)).toEqual({ preset })
+  })
+
+  it.each([false, 'none'] as const)('supports an explicit disabled workflow with %p', (value) => {
+    expect(parseUpdateWorkflow(value)).toEqual({ disabled: true })
+  })
+
+  it('rejects unsupported presets', () => {
+    expect(() => parseUpdateWorkflow('custom')).toThrow(/Invalid --workflow/)
+  })
+})
+
+describe('validateLegacyAdoptionOptions', () => {
+  it('accepts the isolated two-step adoption options', () => {
+    expect(() => validateLegacyAdoptionOptions({ adoptLegacy: true, dryRun: true, projectName: 'legacy-app', mainBranch: 'main' })).not.toThrow()
+    expect(() => validateLegacyAdoptionOptions({ adoptLegacy: true, adoptPlan: 'abc', projectName: 'legacy-app', mainBranch: 'main' })).not.toThrow()
+  })
+
+  it('rejects an orphan plan fingerprint', () => {
+    expect(() => validateLegacyAdoptionOptions({ adoptPlan: 'abc' })).toThrow(/requires --adopt-legacy/)
+  })
+
+  it.each([
+    [{ targetProfile: 'full' }, '--target-profile'],
+    [{ addModules: 'pwa' }, '--add-modules'],
+    [{ acceptTemplateUpdates: true }, '--accept-template-updates'],
+    [{ conflictStrategy: 'replace' }, '--conflict-strategy'],
+    [{ workflow: 'solo' }, '--workflow'],
+    [{ workflow: false }, '--workflow'],
+    [{ projectDescription: 'ignored' }, '--project-description'],
+    [{ structure: 'multirepo' }, '--structure'],
+    [{ dbSetup: 'manual' }, '--db-setup'],
+    [{ dbType: 'postgresql' }, '--db-type'],
+    [{ dbHost: 'localhost' }, '--db-host'],
+    [{ dbPort: '5432' }, '--db-port'],
+    [{ dbUser: 'user' }, '--db-user'],
+    [{ dbPassword: 'secret' }, '--db-password'],
+    [{ dbName: 'app' }, '--db-name'],
+    [{ apiPort: '3500' }, '--api-port'],
+    [{ webPort: '5173' }, '--web-port'],
+    [{ emailService: 'none' }, '--email-service'],
+    [{ analytics: false }, '--analytics'],
+    [{ pwa: false }, '--pwa'],
+    [{ mailersendApiKey: 'secret' }, '--mailersend-api-key'],
+    [{ mailersendSenderEmail: 'from@example.com' }, '--mailersend-sender-email'],
+    [{ mailersendSenderName: 'Example' }, '--mailersend-sender-name'],
+    [{ s3Setup: 'manual' }, '--s3-setup'],
+    [{ s3Endpoint: 'http://localhost' }, '--s3-endpoint'],
+    [{ s3AccessKey: 'access' }, '--s3-access-key'],
+    [{ s3SecretKey: 'secret' }, '--s3-secret-key'],
+    [{ s3Bucket: 'bucket' }, '--s3-bucket'],
+    [{ s3Region: 'eu-west-1' }, '--s3-region'],
+    [{ context7ApiKey: 'unused' }, '--context7-api-key'],
+    [{ atlassianEmail: 'user@example.com' }, '--atlassian-email'],
+    [{ atlassianApiToken: 'secret' }, '--atlassian-api-token'],
+    [{ atlassianSite: 'example' }, '--atlassian-site'],
+    [{ atlassianCloudId: 'cloud' }, '--atlassian-cloud-id'],
+    [{ notionApiToken: 'secret' }, '--notion-api-token'],
+    [{ notionApiVersion: '2022-06-28' }, '--notion-api-version'],
+    [{ figmaApiToken: 'secret' }, '--figma-api-token'],
+    [{ srsBackend: 'notion' }, '--srs-backend'],
+    [{ srsParentPageInput: 'page' }, '--srs-parent-page-input']
+  ] as const)('keeps adoption isolated from %s', (extra, flag) => {
+    expect(() => validateLegacyAdoptionOptions({ adoptLegacy: true, ...extra })).toThrow(flag)
   })
 })
 
@@ -169,6 +240,11 @@ describe('buildUpdatePrefillFromOptions', () => {
   it('parses --add-modules into selectedModules', () => {
     const prefill = buildUpdatePrefillFromOptions({ addModules: 'email,storage' })
     expect(prefill.selectedModules).toEqual(['email', 'storage'])
+  })
+
+  it('maps the late-harness workflow choice', () => {
+    expect(buildUpdatePrefillFromOptions({ workflow: 'saasfoundry' }).workflowPreset).toBe('saasfoundry')
+    expect(buildUpdatePrefillFromOptions({ workflow: false }).workflowDisabled).toBe(true)
   })
 
   it('omits selectedModules when --add-modules is absent', () => {

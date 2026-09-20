@@ -1,13 +1,14 @@
 import chalk from 'chalk'
 import { copy } from 'fs-extra'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { dirname, join, relative, resolve, sep } from 'path'
 import ora from 'ora'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installEmailModule } from '../installers/email.installer'
 import { installOptionalSkills } from '../installers/optional-skills.installer'
+import { installPwaModule, pwaInstallerMeta } from '../installers/pwa.installer'
 import { installSkills } from '../installers/skills.installer'
 import { assertHarnessWritePathsSafe, computeHarnessFileHashes, harnessInstallerMeta, installHarness, isHarnessTrackedPath, mergeHarnessUserFiles } from '../installers/harness.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
@@ -30,11 +31,12 @@ import { runModuleMigrations } from '../migrations/module/registry'
 import { classifyProjectCapabilities } from '../project-capabilities'
 import { recoverTechnicalStackTransition, TECHNICAL_TRANSITION_JOURNAL, TECHNICAL_TRANSITION_LOCK, TECHNICAL_TRANSITION_RECOVERY_LOCK } from '../scaffold/technical-stack.transaction'
 import { acquireManifestMutationLock } from '../scaffold/technical-stack.transaction'
-import { readManifestFileSafe, replaceManifestFileSafe } from '../manifest-file'
+import { createManifestFileSafe, readManifestFileSafe, replaceManifestFileSafe } from '../manifest-file'
+import { detectLegacyAdoption, type LegacyAdoptionReport } from '../legacy-adoption/legacy-adoption'
 import { Answers, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
 import { ensureGitignorePatterns } from '../utils/gitignore'
-import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent } from '../utils'
+import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent, validateProjectName } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import {
   buildUpdatePrefillFromOptions,
@@ -43,6 +45,7 @@ import {
   parseTargetProfile,
   UpdateCommandOptions,
   UpdateDryRunReport,
+  validateLegacyAdoptionOptions,
   validateTechnicalTransitionOptions,
   validateUpdateOutputOptions
 } from './update.options'
@@ -184,8 +187,12 @@ export function computeFileUpdates(baseHashes: Record<string, string>, currentHa
     if (!base && target) {
       if (!current) {
         updates.push({ path: filePath, action: 'add' })
+      } else if (current !== target) {
+        // A user-owned or adopted-unmanaged file already occupies the path.
+        // Surface it through the normal conflict strategy instead of silently
+        // skipping a template addition forever.
+        updates.push({ path: filePath, action: 'conflict' })
       }
-      // If current exists (user created a file with the same name), skip
       continue
     }
 
@@ -247,13 +254,12 @@ export async function applyFileUpdates(
     switch (update.action) {
       case 'update': {
         spinner.text = `Updating ${update.path}...`
-        const content = await readFile(sourcePath, 'utf8')
         // The user may have deleted the containing directory — recreate it
         // rather than crashing the whole update midway.
         await beforeWrite?.(update.path)
         await mkdir(dirname(destPath), { recursive: true })
         await beforeWrite?.(update.path)
-        await writeFile(destPath, content)
+        await copy(sourcePath, destPath, { overwrite: true })
         applied.push(update)
         break
       }
@@ -269,15 +275,17 @@ export async function applyFileUpdates(
           conflicts.push(update)
         } else if (strategy === 'replace') {
           spinner.text = `Overwriting ${update.path}...`
-          const newContent = await readFile(sourcePath, 'utf8')
           await beforeWrite?.(update.path)
-          await writeFile(destPath, newContent)
+          await mkdir(dirname(destPath), { recursive: true })
+          await beforeWrite?.(update.path)
+          await copy(sourcePath, destPath, { overwrite: true })
           conflicts.push(update)
         } else {
           // save-new: write the template version alongside the original.
-          const newContent = await readFile(sourcePath, 'utf8')
           await beforeWrite?.(`${update.path}.saasfoundry.new`)
-          await writeFile(`${destPath}.saasfoundry.new`, newContent)
+          await mkdir(dirname(`${destPath}.saasfoundry.new`), { recursive: true })
+          await beforeWrite?.(`${update.path}.saasfoundry.new`)
+          await copy(sourcePath, `${destPath}.saasfoundry.new`, { overwrite: true })
           conflicts.push(update)
         }
         break
@@ -291,6 +299,171 @@ export async function applyFileUpdates(
   }
 
   return { applied, conflicts, added, removed }
+}
+
+async function assertStackModuleWritePathSafe(path: string, allowLeafDirectory = false): Promise<void> {
+  const root = resolve('.')
+  const destination = resolve(path)
+  const rel = relative(root, destination)
+  if (rel === '..' || rel.startsWith(`..${sep}`) || rel === '' || rel.split(sep).includes('..')) throw new Error(`Unsafe module destination: ${path}`)
+  const segments = rel.split(sep)
+  let current = root
+  for (let index = 0; index < segments.length; index += 1) {
+    current = join(current, segments[index])
+    const stat = await lstat(current).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (!stat) return
+    const leaf = index === segments.length - 1
+    if (stat.isSymbolicLink() || (!leaf && !stat.isDirectory()) || (leaf && !stat.isFile() && !(allowLeafDirectory && stat.isDirectory())) || (leaf && stat.isFile() && stat.nlink > 1)) {
+      throw new Error(`Unsafe module destination: ${path}`)
+    }
+  }
+}
+
+async function assertSafeStackModuleSourceTree(root: string): Promise<void> {
+  const ignored = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.next', '.turbo'])
+  const walk = async (directory: string): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    const names = new Map<string, string>()
+    for (const entry of entries) {
+      if (ignored.has(entry.name)) continue
+      const folded = entry.name.toLocaleLowerCase('en-US')
+      const alias = names.get(folded)
+      if (alias && alias !== entry.name) throw new Error(`Unsafe case-colliding module paths: ${alias}, ${entry.name}`)
+      names.set(folded, entry.name)
+      const path = join(directory, entry.name)
+      const stat = await lstat(path)
+      if (stat.isSymbolicLink() || (!stat.isDirectory() && (!stat.isFile() || stat.nlink > 1))) throw new Error(`Unsafe module source path: ${relative(process.cwd(), path)}`)
+      if (stat.isDirectory()) await walk(path)
+    }
+  }
+  const stat = await lstat(root)
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('A scaffolded project must have a real apps directory before modules can be added.')
+  await walk(root)
+}
+
+function stackModuleSeedPaths(selectedModules: string[], apiPath: string, webPath: string, isMonorepo: boolean): string[] {
+  const paths: string[] = []
+  if (selectedModules.includes('email')) {
+    paths.push(
+      ...[
+        'src/modules/auth/services/auth.service.ts',
+        'src/modules/invitation/services/invitation.service.ts',
+        'src/configs/env/services/env.service.ts',
+        'src/modules/email/services/email.service.ts',
+        'src/modules/email/email.module.ts',
+        'src/modules/email/tests/unit/email.service.disabled-spec.ts',
+        'src/modules/email/tests/unit/email.service.spec.ts',
+        'src/modules/email/services/mailersend.service.ts',
+        '.env',
+        '.env.test',
+        '.github/workflows/deployment.yml'
+      ].map((path) => join(apiPath, path))
+    )
+    if (isMonorepo) paths.push('packages/shared-types/src/index.ts', 'packages/shared-types/src/email.ts')
+  }
+  if (selectedModules.includes('storage')) {
+    paths.push(
+      ...[
+        'package.json',
+        'tsconfig.json',
+        'src/configs/env/services/env.service.ts',
+        'src/app.module.ts',
+        'src/modules/organizations/organizations.module.ts',
+        'src/modules/organizations/controllers/organization.controller.ts',
+        'src/modules/organizations/services/organization.service.ts',
+        'src/modules/organizations/tests/unit/organization.service.spec.ts',
+        'src/modules/storage',
+        '.env',
+        '.env.test',
+        'docker-compose.dev-services.yml'
+      ].map((path) => join(apiPath, path)),
+      join(webPath, '.env')
+    )
+    if (isMonorepo) paths.push('packages/shared-config/src/index.ts', 'packages/shared-config/src/storage.ts')
+  }
+  if (selectedModules.includes('analytics')) paths.push(join(webPath, 'src/main.tsx'), join(webPath, '.env'), join(webPath, 'src/lib/analytics'))
+  if (selectedModules.includes('pwa')) {
+    paths.push(
+      ...['package.json', 'vite.config.ts', 'index.html', 'pwa.config.ts'].map((path) => join(webPath, path)),
+      ...['apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'].map((path) => join(webPath, 'public', path))
+    )
+  }
+  return [...new Set(paths)]
+}
+
+async function copyStackModuleSeeds(liveRoot: string, tempDir: string, paths: string[]): Promise<void> {
+  for (const path of paths) {
+    await assertStackModuleWritePathSafe(path, true)
+    const source = resolve(liveRoot, path)
+    const stat = await lstat(source).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (!stat) continue
+    if (stat.isDirectory()) await assertSafeStackModuleSourceTree(source)
+    const destination = resolve(tempDir, path)
+    await mkdir(dirname(destination), { recursive: true })
+    await copy(source, destination, { overwrite: false })
+  }
+}
+
+async function computeHashesForPaths(root: string, paths: string[]): Promise<Record<string, string>> {
+  const hashes: Record<string, string> = {}
+  for (const path of paths) {
+    const absolute = resolve(root, path)
+    const stat = await lstat(absolute).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (!stat) continue
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink > 1) throw new Error(`Unsafe module hash target: ${path}`)
+    hashes[path] = hashFileContent(await readFile(absolute))
+  }
+  return hashes
+}
+
+async function stageStackModuleChanges(
+  manifest: SaaSFoundryManifest,
+  spinner: ReturnType<typeof ora>,
+  strategy: ConflictStrategy,
+  selectedModules: string[],
+  apiPath: string,
+  webPath: string,
+  isMonorepo: boolean,
+  install: () => Promise<void>
+): Promise<{ targetHashes: Record<string, string>; unresolvedConflicts: FileUpdate[] }> {
+  const liveRoot = process.cwd()
+  const tempDir = await mkdtemp(join(tmpdir(), 'saasfoundry-module-update-'))
+  try {
+    const seedPaths = stackModuleSeedPaths(selectedModules, apiPath, webPath, isMonorepo)
+    await copyStackModuleSeeds(liveRoot, tempDir, seedPaths)
+    try {
+      process.chdir(tempDir)
+      await install()
+    } finally {
+      process.chdir(liveRoot)
+    }
+    await assertSafeStackModuleSourceTree(tempDir)
+    const targetHashes = await computeFileHashes(tempDir)
+    const currentHashes = await computeHashesForPaths(liveRoot, Object.keys(targetHashes))
+    const updates = computeFileUpdates(manifest.fileHashes ?? {}, currentHashes, targetHashes).filter((update) => update.action !== 'remove')
+    const result = await applyFileUpdates(updates, tempDir, spinner, strategy, assertStackModuleWritePathSafe)
+    const unmanaged = new Set(manifest.unmanagedPaths ?? [])
+    return {
+      targetHashes: Object.fromEntries(
+        updates
+          .filter((update) => !unmanaged.has(update.path))
+          .map((update) => [update.path, targetHashes[update.path]])
+          .filter((entry): entry is [string, string] => Boolean(entry[1]))
+      ),
+      unresolvedConflicts: strategy === 'replace' ? [] : result.conflicts
+    }
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  }
 }
 
 /**
@@ -481,6 +654,7 @@ export function moduleSelectionPrefill(requested: string[] | undefined, nonInter
 
 export async function updateCommand(opts: UpdateCommandOptions = {}) {
   validateUpdateOutputOptions(opts)
+  validateLegacyAdoptionOptions(opts)
   validateTechnicalTransitionOptions(opts)
   parseConflictStrategy(opts.conflictStrategy)
   parseTargetProfile(opts.targetProfile)
@@ -510,7 +684,13 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
   // Read manifest
   const manifestPath = '.saasfoundry.json'
-  if (!(await fileExists(manifestPath))) {
+  const manifestExists = await fileExists(manifestPath)
+  if (opts.adoptLegacy && manifestExists) throw new Error('A project manifest already exists; --adopt-legacy will never replace it.')
+  if (!manifestExists) {
+    if (opts.adoptLegacy) {
+      await handleLegacyAdoption(opts, manifestPath)
+      return
+    }
     console.error(chalk.red('No .saasfoundry.json found in the current directory.'))
     console.error(chalk.red('This command must be run from the root of a SaaSFoundryAI project.'))
     console.error(chalk.yellow('If this project was generated before manifest support, you can create one manually.'))
@@ -526,6 +706,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
   let manifestSnapshot = await readManifestFileSafe(manifestPath)
   const manifestBytes = manifestSnapshot.bytes
   let manifest: SaaSFoundryManifest = JSON.parse(manifestBytes.toString('utf8'))
+  validateProjectName(manifest.projectName)
   // Capability decisions and technical adoption must see the current schema
   // even when the on-disk manifest predates the migration registry. Keep the
   // original bytes for the transaction compare-and-swap, while building the
@@ -650,7 +831,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     // the complete technical stack signature (isScaffoldManifest), NOT the modules block itself:
     // harness-only manifests carry `modules.harness` (and may carry fileHashes
     // for their deposits) but have no generated app to regenerate.
-    if (manifest.version !== cliVersion && isScaffoldManifest(manifest)) {
+    if ((manifest.version !== cliVersion || manifest.adoption?.refreshPending === true) && isScaffoldManifest(manifest)) {
       if (!manifest.fileHashes) {
         console.log(chalk.yellow(`  Your project was generated with SaaSFoundryAI v${manifest.version} (before hash tracking).`))
         console.log(chalk.yellow('  Template updates require file hashes. Skipping template update.\n'))
@@ -662,6 +843,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
         const spinner = ora('Regenerating project templates...').start()
         let tempDir: string | undefined
+        let templateRefreshComplete = false
 
         try {
           // Regenerate project in temp dir with current CLI
@@ -686,6 +868,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           if (updates.length === 0) {
             spinner.succeed(chalk.green('No template changes to apply.'))
             if (dryRunReport) dryRunReport.templateUpdate = { status: 'no-changes' }
+            templateRefreshComplete = true
           } else {
             // Preview counts so the user can make an informed decision.
             const updateCount = updates.filter((u) => u.action === 'update').length
@@ -726,6 +909,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             } else {
               spinner.start('Applying updates...')
               const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy)
+              templateRefreshComplete = conflicts.length === 0 || conflictStrategy === 'replace'
 
               spinner.succeed(chalk.green('Template update complete.'))
 
@@ -762,9 +946,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             }
           }
 
-          if (!dryRun) {
+          if (!dryRun && templateRefreshComplete) {
             // Update manifest version and recompute hashes
             manifest.version = cliVersion
+            if (manifest.adoption?.refreshPending) manifest.adoption.refreshPending = false
             manifest.fileHashes = await refreshProjectHashes(manifest)
             await persistManifest()
           }
@@ -791,6 +976,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       await refreshHarnessDeposits(manifest, { dryRun, nonInteractive, conflictStrategy, dryRunReport, persistManifest })
     } else {
       console.log(chalk.green('  Your project is up to date with the current CLI version.\n'))
+    }
+
+    if (!dryRun && manifest.adoption?.refreshPending) {
+      console.log(chalk.yellow('  The initial legacy template refresh still has unresolved changes. Resolve them and rerun sf update before adding modules.\n'))
+      return
     }
 
     // ─── FLOW 2: Module addition ───
@@ -866,7 +1056,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         }
       }
       if (selectedModules.includes('harness')) {
-        dryRunReport.moduleAddition.harness = { workflowConfigured: false, skills: [] }
+        dryRunReport.moduleAddition.harness = { workflowConfigured: Boolean(prefill.workflowPreset), skills: [] }
       }
       dryRunReport.moduleAddition.skills = selectedModules.filter((module) => module.startsWith('sf-skill-')).map((module) => module.replace('sf-skill-', ''))
       if (selectedModules.includes('sf-skill-atlassian')) {
@@ -881,7 +1071,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         if (!prefill.srs.notionApiToken) requiredForApply.push('SF_UPDATE_NOTION_API_TOKEN')
         if (!prefill.srs.srsParentPageInput) requiredForApply.push('--srs-parent-page-input')
       }
-      dryRunReport.moduleAddition.wouldRunNpmInstall = selectedModules.includes('storage') || selectedModules.includes('email')
+      dryRunReport.moduleAddition.wouldRunNpmInstall = selectedModules.includes('storage') || selectedModules.includes('email') || selectedModules.includes('pwa')
       if (requiredForApply.length > 0) dryRunReport.moduleAddition.requiredForApply = [...new Set(requiredForApply)]
       emitDryRunReport(dryRunReport, opts.json === true)
       return
@@ -891,6 +1081,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     const isMonorepo = manifest.structure === 'monorepo'
     const apiPath = isMonorepo ? 'apps/api' : `apps/${manifest.projectName}-api`
     const webPath = isMonorepo ? 'apps/web' : `apps/${manifest.projectName}-web`
+    const appsRoot = resolve('apps')
+    for (const appPath of [apiPath, webPath]) {
+      const rel = relative(appsRoot, resolve(appPath))
+      if (!rel || rel === '..' || rel.startsWith(`..${sep}`)) throw new Error(`Unsafe application path derived from the project manifest: ${appPath}`)
+    }
 
     // Collect credentials for selected modules
     let emailCredentials: { mailersendApiKey: string; mailersendSenderEmail: string; mailersendSenderName: string } | null = null
@@ -929,7 +1124,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       const { config } = await runConfigSession({
         renderer: inquirerRenderer,
         steps: [workflowStep, skillsStep],
-        prefill: { projectName: manifest.projectName, mainBranch: manifest.mainBranch as Answers['mainBranch'] },
+        prefill: {
+          projectName: manifest.projectName,
+          mainBranch: manifest.mainBranch as Answers['mainBranch'],
+          workflowPreset: prefill.workflowDisabled ? undefined : prefill.workflowPreset
+        },
         nonInteractive
       })
       harnessConfig = config
@@ -1038,48 +1237,92 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         }
       }
 
-      if (selectedModules.includes('email') && emailCredentials) {
-        moduleSpinner.text = 'Installing MailerSend email module...'
-        await installEmailModule({
-          apiPath,
-          isMonorepo,
-          projectName: manifest.projectName,
-          mailersendApiKey: emailCredentials.mailersendApiKey,
-          mailersendSenderEmail: emailCredentials.mailersendSenderEmail,
-          mailersendSenderName: emailCredentials.mailersendSenderName
+      let stackModuleTargetHashes: Record<string, string> = {}
+      const hasStackModule = selectedModules.some((module) => ['email', 'storage', 'analytics', 'pwa'].includes(module))
+      if (hasStackModule) {
+        moduleSpinner.text = 'Preparing conflict-safe module changes...'
+        const stagedModules = await stageStackModuleChanges(manifest, moduleSpinner, conflictStrategy, selectedModules, apiPath, webPath, isMonorepo, async () => {
+          if (selectedModules.includes('email') && emailCredentials) {
+            moduleSpinner.text = 'Preparing MailerSend email module...'
+            await installEmailModule({
+              apiPath,
+              isMonorepo,
+              projectName: manifest.projectName,
+              mailersendApiKey: emailCredentials.mailersendApiKey,
+              mailersendSenderEmail: emailCredentials.mailersendSenderEmail,
+              mailersendSenderName: emailCredentials.mailersendSenderName
+            })
+          }
+          if (selectedModules.includes('storage') && storageConfig) {
+            moduleSpinner.text = 'Preparing S3 storage module...'
+            await installStorageModule({
+              apiPath,
+              webPath,
+              isMonorepo,
+              projectName: manifest.projectName,
+              s3Setup: storageConfig.s3Setup,
+              s3Credentials: storageConfig.s3Credentials,
+              skipNpmInstall: true
+            })
+            if (storageConfig.s3Setup === 'docker') {
+              await createDevServicesCompose({
+                apiPath,
+                projectName: manifest.projectName,
+                dbSetup: manifest.modules?.dbSetup ?? 'manual',
+                s3Setup: storageConfig.s3Setup,
+                s3Credentials: storageConfig.s3Credentials
+              })
+            }
+          }
+          if (selectedModules.includes('analytics')) {
+            moduleSpinner.text = 'Preparing Umami analytics module...'
+            await installAnalyticsModule({ webPath })
+          }
+          if (selectedModules.includes('pwa')) {
+            moduleSpinner.text = 'Preparing the PWA module...'
+            await installPwaModule({ webPath, projectName: manifest.projectName })
+          }
         })
-        manifest.modules!.email = { provider: 'mailersend', version: 1 }
-      }
-
-      if (selectedModules.includes('storage') && storageConfig) {
-        moduleSpinner.text = 'Installing S3 storage module...'
-        await installStorageModule({
-          apiPath,
-          webPath,
-          isMonorepo,
-          projectName: manifest.projectName,
-          s3Setup: storageConfig.s3Setup,
-          s3Credentials: storageConfig.s3Credentials,
-          skipNpmInstall: true
-        })
-
-        if (storageConfig.s3Setup === 'docker') {
-          await createDevServicesCompose({
-            apiPath,
-            projectName: manifest.projectName,
-            dbSetup: manifest.modules?.dbSetup ?? 'manual',
-            s3Setup: storageConfig.s3Setup,
-            s3Credentials: storageConfig.s3Credentials
-          })
+        stackModuleTargetHashes = stagedModules.targetHashes
+        if (stagedModules.unresolvedConflicts.length > 0) {
+          const paths = stagedModules.unresolvedConflicts.map(({ path }) => path).join(', ')
+          throw new Error(`Module installation is incomplete because these conflicts still require resolution: ${paths}. Resolve them, then run sf update again.`)
         }
-
-        manifest.modules!.s3Setup = storageConfig.s3Setup
-      }
-
-      if (selectedModules.includes('analytics')) {
-        moduleSpinner.text = 'Installing Umami analytics module...'
-        await installAnalyticsModule({ webPath })
-        manifest.modules!.includeAnalytics = true
+        if (selectedModules.includes('email') && emailCredentials) {
+          for (const envPath of [join(apiPath, '.env'), join(apiPath, '.env.test')]) {
+            upsertEnvKey(envPath, 'MAILERSEND_API_KEY', envPath.endsWith('.env.test') ? 'ms_test_fake_key_12345abcdef67890ghijklmnopqrstuvwxyz' : emailCredentials.mailersendApiKey)
+            upsertEnvKey(envPath, 'MAILERSEND_SENDER_EMAIL', emailCredentials.mailersendSenderEmail)
+            upsertEnvKey(envPath, 'MAILERSEND_SENDER_NAME', emailCredentials.mailersendSenderName)
+          }
+        }
+        if (selectedModules.includes('storage') && storageConfig) {
+          const endpoint = storageConfig.s3Setup === 'docker' ? 'http://localhost:9000' : storageConfig.s3Credentials?.endpoint || ''
+          const accessKey = storageConfig.s3Setup === 'docker' ? 'minioadmin' : storageConfig.s3Credentials?.accessKey || ''
+          const secretKey = storageConfig.s3Setup === 'docker' ? 'minioadmin' : storageConfig.s3Credentials?.secretKey || ''
+          const bucket = storageConfig.s3Credentials?.bucket || `${manifest.projectName}-uploads`
+          const region = storageConfig.s3Credentials?.region || 'us-east-1'
+          for (const [key, value] of Object.entries({ S3_ENDPOINT: endpoint, S3_ACCESS_KEY: accessKey, S3_SECRET_KEY: secretKey, S3_BUCKET: bucket, S3_REGION: region })) {
+            upsertEnvKey(join(apiPath, '.env'), key, value)
+          }
+          for (const [key, value] of Object.entries({
+            S3_ENDPOINT: 'http://localhost:9000',
+            S3_ACCESS_KEY: 'minioadmin',
+            S3_SECRET_KEY: 'minioadmin',
+            S3_BUCKET: 'test-uploads',
+            S3_REGION: 'us-east-1'
+          })) {
+            upsertEnvKey(join(apiPath, '.env.test'), key, value)
+          }
+          upsertEnvKey(join(webPath, '.env'), 'VITE_STORAGE_ENABLED', 'true')
+        }
+        if (selectedModules.includes('analytics')) {
+          upsertEnvKey(join(webPath, '.env'), 'VITE_ANALYTICS_URL', '')
+          upsertEnvKey(join(webPath, '.env'), 'VITE_ANALYTICS_WEBSITE_ID', '')
+        }
+        if (selectedModules.includes('email') && emailCredentials) manifest.modules!.email = { provider: 'mailersend', version: 1 }
+        if (selectedModules.includes('storage') && storageConfig) manifest.modules!.s3Setup = storageConfig.s3Setup
+        if (selectedModules.includes('analytics')) manifest.modules!.includeAnalytics = true
+        if (selectedModules.includes('pwa')) manifest.modules!.pwa = { version: pwaInstallerMeta.currentVersion }
       }
 
       if (selectedModules.includes('srs') && srsBootstrap) {
@@ -1134,14 +1377,15 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       }
 
       // Run npm install if new dependencies were added
-      if (selectedModules.includes('storage') || selectedModules.includes('email')) {
+      if (selectedModules.includes('storage') || selectedModules.includes('email') || selectedModules.includes('pwa')) {
         moduleSpinner.text = 'Installing dependencies...'
         const nvm = getNvmPrefix(isMonorepo ? process.cwd() : apiPath)
         if (isMonorepo) {
           runRequired('npm install (monorepo root)', `${nvm}npm install`)
-        } else {
-          runRequired('npm install (api)', `${nvm}npm install --prefix ${apiPath}`)
+        } else if (selectedModules.includes('storage') || selectedModules.includes('email')) {
+          runRequired('npm install (api)', `${nvm}npm install`, { cwd: apiPath })
         }
+        if (!isMonorepo && selectedModules.includes('pwa')) runRequired('npm install (web)', `${getNvmPrefix(webPath)}npm install`, { cwd: webPath })
       }
 
       // Recompute file hashes after module installation and update manifest.
@@ -1151,7 +1395,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       // user's own code as SaaSFoundryAI templates.
       moduleSpinner.text = 'Updating project manifest...'
       if (isScaffoldManifest(manifest)) {
-        manifest.fileHashes = await refreshProjectHashes(manifest)
+        manifest.fileHashes = { ...(manifest.fileHashes ?? {}) }
+        const unmanaged = new Set(manifest.unmanagedPaths ?? [])
+        for (const [path, hash] of Object.entries(stackModuleTargetHashes)) {
+          if (!unmanaged.has(path)) manifest.fileHashes[path] = hash
+        }
         if (harnessTargetHashes) {
           // Harness deposits keep their TARGET baseline — the disk sweep would
           // re-absorb a conflicted (sidecar'd) user edit and silently overwrite
@@ -1174,6 +1422,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     if (selectedModules.includes('email')) console.log(chalk.green('    ✓ MailerSend Email Service'))
     if (selectedModules.includes('storage')) console.log(chalk.green('    ✓ S3 Object Storage'))
     if (selectedModules.includes('analytics')) console.log(chalk.green('    ✓ Umami Analytics'))
+    if (selectedModules.includes('pwa')) console.log(chalk.green('    ✓ Installable App (PWA)'))
     for (const skill of skillsToAdd) {
       console.log(chalk.green(`    ✓ Advanced Skill: ${skill.charAt(0).toUpperCase() + skill.slice(1)}`))
     }
@@ -1195,6 +1444,50 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
   } finally {
     await manifestLock?.close()
   }
+}
+
+function emitLegacyAdoptionReport(report: LegacyAdoptionReport, json = false): void {
+  if (json) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+    return
+  }
+  console.log('\n<sf-legacy-adoption-report>')
+  console.log(JSON.stringify(report, null, 2))
+  console.log('</sf-legacy-adoption-report>')
+}
+
+async function handleLegacyAdoption(opts: UpdateCommandOptions, manifestPath: string): Promise<void> {
+  const plan = await detectLegacyAdoption({ projectRoot: process.cwd(), projectName: opts.projectName, mainBranch: opts.mainBranch })
+  if (plan.report.legacyAdoption.status === 'blocked' || !plan.manifest) {
+    emitLegacyAdoptionReport(plan.report, opts.json === true)
+    throw new Error(`Legacy adoption blocked: ${plan.report.legacyAdoption.message ?? plan.report.legacyAdoption.reasonCode}`)
+  }
+  const fingerprint = plan.report.legacyAdoption.fingerprint!
+  if (opts.dryRun) {
+    emitLegacyAdoptionReport(plan.report, opts.json === true)
+    return
+  }
+  if (opts.adoptPlan !== fingerprint) {
+    emitLegacyAdoptionReport(plan.report, opts.json === true)
+    throw new Error(`Legacy adoption requires a matching dry-run fingerprint. Re-run with --adopt-plan ${fingerprint}.`)
+  }
+
+  await recoverTechnicalStackTransition('.')
+  const lock = await acquireManifestMutationLock(process.cwd())
+  try {
+    if (await fileExists(manifestPath)) throw new Error('A project manifest appeared during legacy adoption; it was preserved.')
+    // Detection is repeated under the coordinator lock so the accepted plan
+    // cannot be applied after API/web evidence changes.
+    const lockedPlan = await detectLegacyAdoption({ projectRoot: process.cwd(), projectName: opts.projectName, mainBranch: opts.mainBranch })
+    if (!lockedPlan.manifest || lockedPlan.report.legacyAdoption.fingerprint !== fingerprint) {
+      throw new Error('The legacy project changed after the dry run. No manifest was created; review a fresh plan.')
+    }
+    await createManifestFileSafe(manifestPath, Buffer.from(`${JSON.stringify(lockedPlan.manifest, null, 2)}\n`))
+  } finally {
+    await lock.close()
+  }
+  console.log(chalk.green('  Legacy SaaSFoundry project adopted.'))
+  console.log(chalk.blue('  Run sf update --dry-run next to review template updates and optional modules.'))
 }
 
 /**

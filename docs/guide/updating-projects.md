@@ -14,7 +14,35 @@ This page explains **what `sf update` does, what it does not touch, and how to r
 2. **Module addition** — lets you add modules that weren't installed at generation time (email, storage, analytics, optional skills). This flow is independent of the version check and runs every time.
 3. **Managed capability transition** — adds the missing technical stack or collaboration harness so an eligible managed project reaches the `full` profile.
 
-All flows are driven by the manifest and the canonical capability classification, never by guessing from `modules.harness` alone. If `.saasfoundry.json` does not exist, `sf update` refuses to run.
+All flows are driven by the manifest and the canonical capability classification, never by guessing from `modules.harness` alone. A project created by the verified `saasfoundry-cli@1.0.0-beta` release
+can first create that manifest through the explicit legacy-adoption flow below. Other projects without a manifest are refused.
+
+## Adopt a project created before manifest support
+
+Legacy adoption is separate from updating templates or adding modules. Start with a read-only, release-specific inspection:
+
+```bash
+sf update --adopt-legacy --dry-run --json \
+  --project-name my-app \
+  --main-branch main
+```
+
+The report verifies the complete historical API/web file inventory against the integrity-pinned npm release, requires the critical signatures plus at least 90% of eligible template files to match,
+classifies the remaining customized files as user-owned, and returns a `fingerprint`. The fingerprint covers every inspected file, including user-owned files, so an edit between preview and apply
+invalidates the plan. Apply only that reviewed plan:
+
+```bash
+sf update --adopt-legacy \
+  --project-name my-app \
+  --main-branch main \
+  --adopt-plan <fingerprint>
+```
+
+This command creates only `.saasfoundry.json`. It never replaces an existing manifest and it refuses missing historical paths, insufficient release matches, changed critical signatures, links, hard
+links, special files, case collisions, or a different plan fingerprint. The published `1.0.0-beta` generator disabled monorepo generation, so this release-specific adoption path accepts only its
+verified multirepo layout. Run a normal `sf update --dry-run --json` afterwards to review template changes and optional modules. Adoption flags cannot be mixed with module, workflow, technical-stack,
+SRS, or credential options; adopt first and update in a second command. The adopted manifest records a pending initial refresh, so this comparison still runs when the historical package version and
+the current CLI version happen to have the same text. That marker is cleared only after the refresh completes without unresolved conflicts.
 
 ## Promote an existing managed project to full
 
@@ -64,7 +92,8 @@ For each file, the comparison produces one of four actions:
 | `base == target`                               | **noop**     | Template hasn't changed. Nothing to do.                         |
 | `base != target` AND `current == base`         | **update**   | Template evolved, you never touched the file → auto-apply.      |
 | `base != target` AND `current != base, target` | **conflict** | Template evolved AND you modified the file → conflict strategy. |
-| `!base` AND `target`                           | **add**      | New file in the template, you don't have it → copy in.          |
+| `!base` AND `target` AND `!current`            | **add**      | New file in the template, you don't have it → copy in.          |
+| `!base` AND `target` AND `current != target`   | **conflict** | A user-owned file already occupies the new template path.       |
 | `base` AND `!target` AND `current == base`     | **remove**   | Template removed the file, you didn't touch it → flag only.     |
 
 ### Why this matters
@@ -72,7 +101,8 @@ For each file, the comparison produces one of four actions:
 The merge is conservative by design:
 
 - **Your edits are never overwritten silently.** If the hash of a file no longer matches `base`, it is treated as "user-modified" and will never be auto-updated.
-- **New files never clobber your files.** An `add` action only fires when the file is absent in your project. If you created a file with the same name, the template file is skipped.
+- **New files never clobber your files.** An `add` action only fires when the file is absent in your project. A same-name user file is reported as a conflict and follows the selected conflict
+  strategy.
 - **Removed files are flagged, never deleted.** Even if the new CLI no longer generates a file you also didn't touch, `sf update` will only warn you; removal is your call.
 
 ## Conflict strategies
@@ -145,11 +175,17 @@ The `--add-modules` flag accepts a comma-separated list:
 - `email` — MailerSend transactional mail
 - `storage` — S3-compatible object storage (Docker MinIO or external credentials)
 - `analytics` — Umami self-hosted analytics
+- `pwa` — installable web app support, icons, manifest, and service worker
+- `harness` — collaboration skills and process; scripted installs can select `--workflow solo|saasfoundry|none`
 - `srs` — Software Requirements Specifications (Notion backend today ; Confluence + local-markdown on the roadmap)
 - `sf-skill-context7` — Context7 library docs skill
 - `sf-skill-atlassian` — Jira / Confluence skill
 - `sf-skill-notion` — Notion skill
 - `sf-skill-figma` — Figma skill
+
+Stack modules are prepared in an isolated staging directory before any project file is changed. If `keep` or `save-new` leaves even one collision unresolved, SaaSFoundry keeps the module absent from
+the manifest and skips dependency installation. Resolve the listed paths (or intentionally rerun with `--conflict-strategy replace`), then rerun `sf update`; the already-applied non-conflicting files
+are detected as current target content and are not duplicated.
 
 Each module has its own credential flags. See [`sf update`](/cli/sf-update) for the full option table.
 

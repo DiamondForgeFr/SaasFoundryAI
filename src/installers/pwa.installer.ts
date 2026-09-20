@@ -77,4 +77,11 @@ export async function installPwaModule({ webPath, projectName, projectDescriptio
       await writeFile(indexHtmlPath, indexHtml)
     }
   }
+
+  const [installedPackage, installedViteConfig, installedIndex] = await Promise.all([readFile(packageJsonPath, 'utf8'), readFile(viteConfigPath, 'utf8'), readFile(indexHtmlPath, 'utf8')])
+  if (JSON.parse(installedPackage).devDependencies?.['vite-plugin-pwa'] !== VITE_PLUGIN_PWA_VERSION) throw new Error('PWA installation did not register vite-plugin-pwa in package.json.')
+  if (!installedViteConfig.includes("from 'vite-plugin-pwa'") || !installedViteConfig.includes('VitePWA(pwaOptions)')) {
+    throw new Error('PWA installation could not safely register VitePWA in vite.config.ts; update that file and retry.')
+  }
+  if (!installedIndex.includes('name="theme-color"')) throw new Error('PWA installation could not add the required theme-color metadata to index.html.')
 }

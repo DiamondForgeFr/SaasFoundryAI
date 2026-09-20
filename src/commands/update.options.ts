@@ -13,6 +13,14 @@ export interface UpdateCommandOptions {
   targetProfile?: string
   acceptTemplateUpdates?: boolean
   conflictStrategy?: string
+  /** Built-in workflow preset used when installing the harness non-interactively. */
+  workflow?: string | boolean
+
+  // Explicit adoption of a project created before manifests existed.
+  adoptLegacy?: boolean
+  adoptPlan?: string
+  projectName?: string
+  mainBranch?: string
 
   // Module selection
   addModules?: string
@@ -67,6 +75,8 @@ export interface UpdatePrefill {
   storage: { s3Setup?: 'docker' | 'credentials'; endpoint?: string; accessKey?: string; secretKey?: string; bucket?: string; region?: string }
   skills: AdvancedSkillCredentials
   srs: { srsBackend?: 'notion'; srsParentPageInput?: string; notionApiToken?: string; notionApiVersion?: string }
+  workflowPreset?: 'solo' | 'saasfoundry'
+  workflowDisabled?: boolean
 }
 
 /**
@@ -141,6 +151,17 @@ export function validateUpdateOutputOptions(opts: Pick<UpdateCommandOptions, 'dr
   if (opts.json === true && opts.dryRun !== true) throw new Error('The --json option requires --dry-run.')
 }
 
+/** Legacy adoption is a manifest-only transaction and cannot hide other requested mutations. */
+export function validateLegacyAdoptionOptions(opts: UpdateCommandOptions): void {
+  if (opts.adoptPlan && !opts.adoptLegacy) throw new Error('The --adopt-plan option requires --adopt-legacy.')
+  if (!opts.adoptLegacy) return
+  const allowed = new Set<keyof UpdateCommandOptions>(['adoptLegacy', 'adoptPlan', 'dryRun', 'json', 'nonInteractive', 'projectName', 'mainBranch'])
+  const incompatible = Object.entries(opts)
+    .filter(([key, value]) => value !== undefined && !allowed.has(key as keyof UpdateCommandOptions))
+    .map(([key]) => `--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`)
+  if (incompatible.length > 0) throw new Error(`--adopt-legacy cannot be combined with ${incompatible.join(', ')}. Adopt the manifest first, then run sf update again.`)
+}
+
 function assertEnumOption(name: string, value: string | undefined, allowed: readonly string[]): void {
   if (value !== undefined && !allowed.includes(value)) throw new Error(`Invalid --${name} "${value}". Expected one of: ${allowed.join(', ')}.`)
 }
@@ -173,6 +194,14 @@ export function parseAddModules(value: string | undefined): string[] | undefined
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
+}
+
+/** Parse the workflow choice shared with `sf new` without provisioning a board. */
+export function parseUpdateWorkflow(value: string | boolean | undefined): { preset?: 'solo' | 'saasfoundry'; disabled?: boolean } {
+  if (value === undefined) return {}
+  if (value === false || value === 'none') return { disabled: true }
+  if (value === 'solo' || value === 'saasfoundry') return { preset: value }
+  throw new Error(`Invalid --workflow "${String(value)}". Expected one of: solo, saasfoundry, none.`)
 }
 
 /**
@@ -235,6 +264,9 @@ export function buildUpdatePrefillFromOptions(opts: UpdateCommandOptions): Updat
 
   const modules = parseAddModules(opts.addModules)
   if (modules !== undefined) prefill.selectedModules = modules
+  const workflow = parseUpdateWorkflow(opts.workflow)
+  if (workflow.preset) prefill.workflowPreset = workflow.preset
+  if (workflow.disabled) prefill.workflowDisabled = true
 
   const mailersendApiKey = secret(opts.mailersendApiKey, 'SF_UPDATE_MAILERSEND_API_KEY')
   if (mailersendApiKey !== undefined) prefill.email.mailersendApiKey = mailersendApiKey

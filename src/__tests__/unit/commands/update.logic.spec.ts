@@ -109,14 +109,14 @@ describe('computeFileUpdates (three-way merge)', () => {
       expect(findUpdate(updates, 'new-file.ts')).toEqual({ path: 'new-file.ts', action: 'add' })
     })
 
-    it('should skip new files if user already created a file with the same name', () => {
+    it('should report a conflict when a user file occupies a new template path', () => {
       const base = {}
       const current = { 'new-file.ts': 'user-version' }
       const target = { 'new-file.ts': 'template-version' }
 
       const updates = computeFileUpdates(base, current, target)
 
-      expect(updates).toHaveLength(0) // don't overwrite user's file
+      expect(updates).toEqual([{ path: 'new-file.ts', action: 'conflict' }])
     })
   })
 

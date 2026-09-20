@@ -36,6 +36,7 @@ jest.mock('../../../prompts/srs.prompts', () => ({
 jest.mock('../../../installers/email.installer', () => ({ ...jest.requireActual('../../../installers/email.installer'), installEmailModule: jest.fn() }))
 jest.mock('../../../installers/storage.installer', () => ({ ...jest.requireActual('../../../installers/storage.installer'), installStorageModule: jest.fn() }))
 jest.mock('../../../installers/analytics.installer', () => ({ ...jest.requireActual('../../../installers/analytics.installer'), installAnalyticsModule: jest.fn() }))
+jest.mock('../../../installers/pwa.installer', () => ({ ...jest.requireActual('../../../installers/pwa.installer'), installPwaModule: jest.fn() }))
 jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
 jest.mock('../../../installers/srs-skill.installer', () => ({ ...jest.requireActual('../../../installers/srs-skill.installer'), installSrsSkill: jest.fn() }))
 jest.mock('../../../runners/srs.runner', () => ({
@@ -59,6 +60,7 @@ import { getModuleSelections, getEmailModuleCredentials, getStorageModuleConfig,
 import { installEmailModule } from '../../../installers/email.installer'
 import { installStorageModule } from '../../../installers/storage.installer'
 import { installAnalyticsModule } from '../../../installers/analytics.installer'
+import { installPwaModule } from '../../../installers/pwa.installer'
 import { installSkills } from '../../../installers/skills.installer'
 import { createDevServicesCompose } from '../../../builders/dev-services.builder'
 
@@ -69,6 +71,7 @@ const mockedGetSkillCreds = getSkillCredentials as jest.MockedFunction<typeof ge
 const mockedInstallEmail = installEmailModule as jest.MockedFunction<typeof installEmailModule>
 const mockedInstallStorage = installStorageModule as jest.MockedFunction<typeof installStorageModule>
 const mockedInstallAnalytics = installAnalyticsModule as jest.MockedFunction<typeof installAnalyticsModule>
+const mockedInstallPwa = installPwaModule as jest.MockedFunction<typeof installPwaModule>
 const mockedInstallSkills = installSkills as jest.MockedFunction<typeof installSkills>
 const mockedCreateDevServices = createDevServicesCompose as jest.MockedFunction<typeof createDevServicesCompose>
 
@@ -98,7 +101,7 @@ describe('updateCommand (integration)', () => {
   beforeEach(async () => {
     tempDir = join(tmpdir(), `sf-int-update-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     originalCwd = process.cwd()
-    await mkdir(tempDir, { recursive: true })
+    await mkdir(join(tempDir, 'apps'), { recursive: true })
     process.chdir(tempDir)
 
     jest.clearAllMocks()
@@ -266,7 +269,8 @@ describe('updateCommand (integration)', () => {
           dbSetup: 'docker',
           includeAnalytics: true,
           advancedSkills: ['context7', 'atlassian', 'notion', 'figma'],
-          harness: { version: 1 }
+          harness: { version: 1 },
+          pwa: { version: 1 }
         },
         workflow: { tool: 'github-projects' },
         tools: { srs: { enabled: true, backend: 'notion' } }
@@ -322,6 +326,8 @@ describe('updateCommand (integration)', () => {
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
       expect(saved.modules.email).toEqual({ provider: 'mailersend', version: 1 })
+      expect(await readFile('apps/api/.env', 'utf8')).toContain('MAILERSEND_API_KEY=test-api-key')
+      expect(await readFile('apps/api/.env.test', 'utf8')).toContain('MAILERSEND_API_KEY=ms_test_fake_key_12345abcdef67890ghijklmnopqrstuvwxyz')
     })
 
     it('skips email module when user cancels credentials', async () => {
@@ -350,6 +356,8 @@ describe('updateCommand (integration)', () => {
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
       expect(saved.modules.s3Setup).toBe('docker')
+      expect(await readFile('apps/api/.env', 'utf8')).toContain('S3_ENDPOINT=http://localhost:9000')
+      expect(await readFile('apps/web/.env', 'utf8')).toContain('VITE_STORAGE_ENABLED=true')
     })
 
     it('installs storage module (credentials) without dev services', async () => {
@@ -389,6 +397,38 @@ describe('updateCommand (integration)', () => {
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
       expect(saved.modules.includeAnalytics).toBe(true)
+      expect(await readFile('apps/web/.env', 'utf8')).toContain('VITE_ANALYTICS_URL=')
+    })
+
+    it('installs PWA support in a monorepo and updates the manifest', async () => {
+      const manifest = buildBaseManifest()
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+      mockedGetModuleSelections.mockResolvedValue(['pwa'])
+
+      await updateCommand()
+
+      expect(mockedInstallPwa).toHaveBeenCalledWith({ webPath: 'apps/web', projectName: 'integration-project' })
+      const npmInstallCalls = shellSpy.mock.calls.filter((call) => String(call[0]).includes('npm install'))
+      expect(npmInstallCalls).toHaveLength(1)
+
+      const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+      expect(saved.modules.pwa).toEqual({ version: 1 })
+    })
+
+    it('installs PWA dependencies in the web app of a multirepo project', async () => {
+      const manifest = buildBaseManifest({ structure: 'multirepo', projectName: 'multi-proj' })
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+      mockedGetModuleSelections.mockResolvedValue(['pwa'])
+
+      await updateCommand()
+
+      expect(mockedInstallPwa).toHaveBeenCalledWith({ webPath: 'apps/multi-proj-web', projectName: 'multi-proj' })
+      const npmInstallCalls = shellSpy.mock.calls.filter((call) => String(call[0]).includes('npm install'))
+      expect(npmInstallCalls).toHaveLength(1)
+      expect(String(npmInstallCalls[0][0])).toContain('npm install')
+      expect(npmInstallCalls[0][1]).toMatchObject({ cwd: 'apps/multi-proj-web' })
     })
 
     it('installs a single skill and merges with existing skills in the manifest', async () => {
