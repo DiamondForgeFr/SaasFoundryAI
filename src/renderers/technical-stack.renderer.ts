@@ -18,9 +18,20 @@ export interface TechnicalStackRenderOptions {
 }
 
 export interface RenderedTechnicalStack {
-  rootDir: string
-  apiPath: string
-  webPath: string
+  readonly rootDir: string
+  readonly apiPath: string
+  readonly webPath: string
+}
+
+// Candidate provenance is intentionally process-local. A pathname alone is not
+// sufficient authority for destructive finalization: callers must pass the
+// exact object created by withTemporaryTechnicalStack().
+const temporaryCandidates = new WeakMap<RenderedTechnicalStack, string>()
+
+export function assertTemporaryTechnicalStack(candidate: RenderedTechnicalStack): string {
+  const trustedRoot = temporaryCandidates.get(candidate)
+  if (!trustedRoot || candidate.rootDir !== trustedRoot) throw new Error('Technical adoption requires an active candidate created by withTemporaryTechnicalStack().')
+  return trustedRoot
 }
 
 /**
@@ -140,10 +151,13 @@ export async function withTemporaryTechnicalStack<T>(
   useCandidate: (candidate: RenderedTechnicalStack) => Promise<T>
 ): Promise<T> {
   const targetDir = await mkdtemp(join(tmpdir(), 'saasfoundry-stack-'))
+  let candidate: RenderedTechnicalStack | undefined
   try {
-    const candidate = await renderTechnicalStack({ ...options, targetDir, externalEffects: false })
+    candidate = Object.freeze(await renderTechnicalStack({ ...options, targetDir, externalEffects: false }))
+    temporaryCandidates.set(candidate, targetDir)
     return await useCandidate(candidate)
   } finally {
+    if (candidate) temporaryCandidates.delete(candidate)
     await rm(targetDir, { recursive: true, force: true })
   }
 }
