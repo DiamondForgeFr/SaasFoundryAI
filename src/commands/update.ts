@@ -27,12 +27,24 @@ import { bootstrapSrs } from '../runners/srs.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { runManifestMigrations } from '../migrations/manifest/registry'
 import { runModuleMigrations } from '../migrations/module/registry'
+import { classifyProjectCapabilities } from '../project-capabilities'
+import { recoverTechnicalStackTransition, TECHNICAL_TRANSITION_JOURNAL, TECHNICAL_TRANSITION_LOCK, TECHNICAL_TRANSITION_RECOVERY_LOCK } from '../scaffold/technical-stack.transaction'
 import { Answers, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent } from '../utils'
 import { version as cliVersion } from '../../package.json'
-import { buildUpdatePrefillFromOptions, ConflictStrategy, parseConflictStrategy, UpdateCommandOptions, UpdateDryRunReport } from './update.options'
+import {
+  buildUpdatePrefillFromOptions,
+  ConflictStrategy,
+  parseConflictStrategy,
+  parseTargetProfile,
+  UpdateCommandOptions,
+  UpdateDryRunReport,
+  validateTechnicalTransitionOptions,
+  validateUpdateOutputOptions
+} from './update.options'
+import { handleProfileTransition } from './update.profile-transition'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../harness/agent-instructions'
@@ -458,12 +470,31 @@ export function moduleSelectionPrefill(requested: string[] | undefined, nonInter
 }
 
 export async function updateCommand(opts: UpdateCommandOptions = {}) {
+  validateUpdateOutputOptions(opts)
+  validateTechnicalTransitionOptions(opts)
+  parseConflictStrategy(opts.conflictStrategy)
+  parseTargetProfile(opts.targetProfile)
+  if (!opts.json) return updateCommandInternal(opts)
+
+  // Machine mode reserves stdout for exactly one JSON document. Existing
+  // progress messages remain useful diagnostics, so route them to stderr.
+  const originalLog = console.log
+  console.log = (...args: unknown[]) => console.error(...args)
+  try {
+    return await updateCommandInternal(opts)
+  } finally {
+    console.log = originalLog
+  }
+}
+
+async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
   checkNodeVersion()
 
   // Parse + validate CLI flags up-front so bad values fail before any work.
   const conflictStrategy: ConflictStrategy = parseConflictStrategy(opts.conflictStrategy)
+  const targetProfile = parseTargetProfile(opts.targetProfile)
   const prefill = buildUpdatePrefillFromOptions(opts)
-  const nonInteractive = opts.nonInteractive === true
+  const nonInteractive = opts.nonInteractive === true || opts.json === true
   const dryRun = opts.dryRun === true
   const acceptTemplateUpdates = opts.acceptTemplateUpdates === true
 
@@ -476,15 +507,50 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     process.exit(1)
   }
 
-  let manifest: SaaSFoundryManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  if (targetProfile && !dryRun) await recoverTechnicalStackTransition('.')
+
+  const manifestBytes = await readFile(manifestPath)
+  let manifest: SaaSFoundryManifest = JSON.parse(manifestBytes.toString('utf8'))
+  // Capability decisions and technical adoption must see the current schema
+  // even when the on-disk manifest predates the migration registry. Keep the
+  // original bytes for the transaction compare-and-swap, while building the
+  // candidate manifest from this pure in-memory migration result.
+  const migrationResult = runManifestMigrations(manifest)
+  manifest = migrationResult.manifest
+  let requestedProfileTransition: UpdateDryRunReport['profileTransition'] | undefined
+  const recoveryPending =
+    Boolean(targetProfile && dryRun) && ((await fileExists(TECHNICAL_TRANSITION_JOURNAL)) || (await fileExists(TECHNICAL_TRANSITION_LOCK)) || (await fileExists(TECHNICAL_TRANSITION_RECOVERY_LOCK)))
+
+  // The legacy spelling remains valid for stack projects, but it must share
+  // the same fail-closed boundary as --target-profile. Unknown/inconsistent
+  // evidence is never permission to mutate the collaboration surface.
+  if (!targetProfile && prefill.selectedModules?.includes('harness')) {
+    const capabilities = classifyProjectCapabilities(manifest)
+    if (capabilities.effectiveProfile === 'stack' || capabilities.effectiveProfile === 'unknown' || capabilities.effectiveProfile === 'inconsistent') {
+      const transition = await handleProfileTransition({ opts, targetProfile: 'full', manifest, manifestPath, manifestBytes, cliVersion, conflictStrategy })
+      if (transition.handled) return
+      requestedProfileTransition = transition.profileTransition
+    }
+  }
+
+  // Capability convergence runs before legacy migrations and refreshes so a
+  // blocked or previewed transition cannot modify the working tree.
+  if (targetProfile) {
+    const extraModules = (prefill.selectedModules ?? []).filter((module) => module !== 'harness')
+    if (extraModules.length > 0) {
+      throw new Error(`--target-profile cannot be combined with other module additions (${extraModules.join(', ')}). Run a second sf update command for those modules.`)
+    }
+    const transition = await handleProfileTransition({ opts, targetProfile, manifest, manifestPath, manifestBytes, cliVersion, conflictStrategy, recoveryPending })
+    if (transition.handled) return
+    requestedProfileTransition = transition.profileTransition
+    if (transition.addHarness) prefill.selectedModules = [...new Set([...(prefill.selectedModules ?? []), 'harness'])]
+  }
 
   // Run the manifest migration chain. Idempotent at the chain level — a
   // manifest already at the target version returns unchanged with an empty
   // appliedMigrations list. Persisted immediately so any subsequent early-
   // return path (skill install, dry-run aside) sees the upgraded shape.
-  const migrationResult = runManifestMigrations(manifest)
   if (migrationResult.appliedMigrations.length > 0) {
-    manifest = migrationResult.manifest
     console.log(chalk.gray(`  Manifest migrated: v${migrationResult.fromVersion} → v${migrationResult.toVersion}`))
     for (const m of migrationResult.appliedMigrations) {
       console.log(chalk.gray(`    • ${String(m.from).padStart(3, '0')} → ${String(m.to).padStart(3, '0')}  ${m.name}`))
@@ -499,7 +565,9 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   // the regenerated project uses the post-migration module versions. Mutations
   // to user files go through `writeMigratedFile`, which falls back to a
   // `.saasfoundry.new` sidecar when the user has hand-edited the target.
-  const moduleMigrationResult = await runModuleMigrations(manifest, '.')
+  // Module migrations may write project files. A preview must remain strictly
+  // read-only; pending module migrations are applied only by the real update.
+  const moduleMigrationResult = dryRun ? { applied: [], manifest } : await runModuleMigrations(manifest, '.')
   if (moduleMigrationResult.applied.length > 0) {
     manifest = moduleMigrationResult.manifest
     for (const a of moduleMigrationResult.applied) {
@@ -524,9 +592,12 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
   // emit it on stdout at the end of the command when `--dry-run` is set.
   const dryRunReport: UpdateDryRunReport | null = dryRun
     ? {
+        version: 1,
+        mutated: false,
         cliVersion,
         projectVersion: manifest.version,
         conflictStrategy,
+        profileTransition: requestedProfileTransition,
         templateUpdate: { status: 'up-to-date' },
         moduleAddition: { available: [], selected: [], skills: [], wouldRunNpmInstall: false }
       }
@@ -668,6 +739,8 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
       } catch (error) {
         spinner.fail(chalk.red('Failed to update templates'))
         console.error(error)
+        if (dryRunReport) dryRunReport.templateUpdate = { status: 'blocked', reasonCode: 'template-analysis-failed' }
+        process.exitCode = 1
       } finally {
         // Clean up temp dir
         if (tempDir) {
@@ -706,7 +779,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     effectivePrefill = installable
     if (alreadyInstalled.length > 0 && installable.length === 0) {
       console.log(chalk.green('  All requested modules are already installed. Nothing to do.'))
-      if (dryRunReport) emitDryRunReport(dryRunReport)
+      if (dryRunReport) emitDryRunReport(dryRunReport, opts.json === true)
       return
     }
   }
@@ -715,7 +788,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
     if (manifest.version === cliVersion) {
       console.log(chalk.green('  All available modules are already installed. Nothing to update.'))
     }
-    if (dryRunReport) emitDryRunReport(dryRunReport)
+    if (dryRunReport) emitDryRunReport(dryRunReport, opts.json === true)
     return
   }
 
@@ -728,7 +801,57 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
   if (selectedModules.length === 0) {
     console.log(chalk.yellow('\nNo modules selected. Nothing to do.'))
-    if (dryRunReport) emitDryRunReport(dryRunReport)
+    if (dryRunReport) emitDryRunReport(dryRunReport, opts.json === true)
+    return
+  }
+
+  // A preview describes intent only. It must never require credentials, open
+  // a browser, or invoke provider-specific prompts. The real update validates
+  // those values immediately before installation.
+  if (dryRunReport) {
+    const requiredForApply: string[] = []
+    dryRunReport.moduleAddition.selected = [...selectedModules]
+    if (selectedModules.includes('email')) {
+      dryRunReport.moduleAddition.email = {
+        configured: Boolean(prefill.email.mailersendApiKey && prefill.email.mailersendSenderEmail && prefill.email.mailersendSenderName)
+      }
+      if (!prefill.email.mailersendApiKey) requiredForApply.push('SF_UPDATE_MAILERSEND_API_KEY')
+    }
+    if (selectedModules.includes('storage')) {
+      const credentialsProvided = Boolean(prefill.storage.endpoint && prefill.storage.accessKey && prefill.storage.secretKey && prefill.storage.bucket && prefill.storage.region)
+      if (prefill.storage.s3Setup) {
+        dryRunReport.moduleAddition.storage = {
+          s3Setup: prefill.storage.s3Setup,
+          credentialsProvided
+        }
+      } else {
+        requiredForApply.push('--s3-setup')
+      }
+      if (prefill.storage.s3Setup === 'credentials') {
+        if (!prefill.storage.endpoint) requiredForApply.push('--s3-endpoint')
+        if (!prefill.storage.accessKey) requiredForApply.push('SF_UPDATE_S3_ACCESS_KEY')
+        if (!prefill.storage.secretKey) requiredForApply.push('SF_UPDATE_S3_SECRET_KEY')
+      }
+    }
+    if (selectedModules.includes('harness')) {
+      dryRunReport.moduleAddition.harness = { workflowConfigured: false, skills: [] }
+    }
+    dryRunReport.moduleAddition.skills = selectedModules.filter((module) => module.startsWith('sf-skill-')).map((module) => module.replace('sf-skill-', ''))
+    if (selectedModules.includes('sf-skill-atlassian')) {
+      if (!prefill.skills.atlassianEmail) requiredForApply.push('--atlassian-email')
+      if (!prefill.skills.atlassianApiToken) requiredForApply.push('SF_UPDATE_ATLASSIAN_API_TOKEN')
+      if (!prefill.skills.atlassianSite) requiredForApply.push('--atlassian-site')
+      if (!prefill.skills.atlassianCloudId) requiredForApply.push('--atlassian-cloud-id')
+    }
+    if (selectedModules.includes('sf-skill-notion') && !prefill.skills.notionApiToken) requiredForApply.push('SF_UPDATE_NOTION_API_TOKEN')
+    if (selectedModules.includes('sf-skill-figma') && !prefill.skills.figmaApiToken) requiredForApply.push('SF_UPDATE_FIGMA_API_TOKEN')
+    if (selectedModules.includes('srs')) {
+      if (!prefill.srs.notionApiToken) requiredForApply.push('SF_UPDATE_NOTION_API_TOKEN')
+      if (!prefill.srs.srsParentPageInput) requiredForApply.push('--srs-parent-page-input')
+    }
+    dryRunReport.moduleAddition.wouldRunNpmInstall = selectedModules.includes('storage') || selectedModules.includes('email')
+    if (requiredForApply.length > 0) dryRunReport.moduleAddition.requiredForApply = [...new Set(requiredForApply)]
+    emitDryRunReport(dryRunReport, opts.json === true)
     return
   }
 
@@ -812,27 +935,7 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
 
   if (selectedModules.length === 0) {
     console.log(chalk.yellow('\nNo modules to install. Nothing to do.'))
-    if (dryRunReport) emitDryRunReport(dryRunReport)
-    return
-  }
-
-  if (dryRunReport) {
-    dryRunReport.moduleAddition.selected = [...selectedModules]
-    if (selectedModules.includes('email')) {
-      dryRunReport.moduleAddition.email = { configured: emailCredentials !== null }
-    }
-    if (selectedModules.includes('storage') && storageConfig) {
-      dryRunReport.moduleAddition.storage = {
-        s3Setup: storageConfig.s3Setup,
-        credentialsProvided: storageConfig.s3Credentials !== undefined
-      }
-    }
-    if (selectedModules.includes('harness')) {
-      dryRunReport.moduleAddition.harness = { workflowConfigured: harnessConfig?.workflow !== undefined, skills: harnessConfig?.advancedSkills ?? [] }
-    }
-    dryRunReport.moduleAddition.skills = [...skillsToAdd]
-    dryRunReport.moduleAddition.wouldRunNpmInstall = selectedModules.includes('storage') || selectedModules.includes('email')
-    emitDryRunReport(dryRunReport)
+    if (dryRunReport) emitDryRunReport(dryRunReport, opts.json === true)
     return
   }
 
@@ -1064,7 +1167,11 @@ export async function updateCommand(opts: UpdateCommandOptions = {}) {
  * marker so callers parsing the output can locate the report regardless of
  * surrounding status log lines.
  */
-function emitDryRunReport(report: UpdateDryRunReport): void {
+function emitDryRunReport(report: UpdateDryRunReport, json = false): void {
+  if (json) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+    return
+  }
   console.log('\n<sf-update-dry-run-report>')
   console.log(JSON.stringify(report, null, 2))
   console.log('</sf-update-dry-run-report>')

@@ -32,6 +32,12 @@ export function renderHuman(payload: RenderPayload): string {
   lines.push('')
   if (report.manifest) {
     lines.push(`${chalk.gray('Project:')} ${report.manifest.projectName} (${report.manifest.structure}) — v${report.manifest.version}`)
+    if (report.capabilities) {
+      lines.push(`${chalk.gray('Profile:')} ${report.capabilities.effectiveProfile}`)
+      lines.push(`${chalk.gray('Capabilities:')} stack ${report.capabilities.technicalStack}, harness ${report.capabilities.collaborationHarness}`)
+      lines.push(`${chalk.gray('Profile reason:')} ${report.capabilities.reason}`)
+      if (report.capabilities.previewCommand) lines.push(`${chalk.gray('Preview full profile:')} ${report.capabilities.previewCommand}`)
+    }
   } else {
     lines.push(chalk.red('Not a SaaSFoundryAI project (no .saasfoundry.json)'))
   }
@@ -69,6 +75,7 @@ export function renderHuman(payload: RenderPayload): string {
 export function renderJson(payload: RenderPayload): string {
   const { report, preconditions } = payload
   const out = {
+    schemaVersion: 1,
     projectRoot: report.projectRoot,
     manifest: report.manifest
       ? {
@@ -82,6 +89,7 @@ export function renderJson(payload: RenderPayload): string {
           language: resolveOutputLanguages(report.manifest)
         }
       : null,
+    capabilities: report.capabilities ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
     preconditions: preconditions.map((p) => ({
@@ -102,6 +110,13 @@ export function renderAgentFriendly(payload: RenderPayload): string {
   lines.push('')
   if (report.manifest) {
     lines.push(`- project: ${report.manifest.projectName} (${report.manifest.structure}, v${report.manifest.version})`)
+    if (report.capabilities) {
+      lines.push(`- effective profile: ${report.capabilities.effectiveProfile}`)
+      lines.push(`- technical stack: ${report.capabilities.technicalStack}`)
+      lines.push(`- collaboration harness: ${report.capabilities.collaborationHarness}`)
+      lines.push(`- profile reason: ${report.capabilities.reason}`)
+      if (report.capabilities.previewCommand) lines.push(`- full-profile preview: ${report.capabilities.previewCommand}`)
+    }
     lines.push(`- workflow: ${report.manifest.workflow?.tool ?? 'none'}`)
     const srs = report.manifest.tools?.srs
     lines.push(`- srs: ${srs?.enabled ? `${srs.backend} — ${srs.rootPage?.name ?? 'no root page'}` : 'not installed'}`)

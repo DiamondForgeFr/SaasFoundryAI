@@ -91,6 +91,15 @@ describe('shared agent instructions', () => {
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).toContain('@AGENTS.md')
   })
 
+  it('teaches every shared instruction surface to preview additive full-profile transitions', () => {
+    for (const instructions of [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toContain('sf status --claude-friendly --no-network')
+      expect(instructions).toContain('sf update --target-profile full --dry-run --json')
+      expect(instructions).toContain('`sf new --profile full` inside an existing repository')
+      expect(instructions).toContain('POC-preservation')
+    }
+  })
+
   it('publishes universal onboarding entrypoints without copying shared skills for Claude-only configuration', async () => {
     const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
     expect(result.written).toEqual(['AGENTS.md', 'GEMINI.md'])

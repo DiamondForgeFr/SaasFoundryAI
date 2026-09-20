@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Reads .saasfoundry.json from the current directory and `sf modules list --json`
-# from the resolved CLI invocation, then emits a consolidated read-only report
-# via read-project.js.
+# Reads the canonical capability classification from `sf status --json`, then
+# combines it with .saasfoundry.json and `sf modules list --json` in one
+# read-only report via read-project.js.
 #
 # Env overrides (useful for skill orchestration and tests):
 #   SF_MANIFEST_PATH — path to .saasfoundry.json (default: ./.saasfoundry.json)
@@ -40,9 +40,20 @@ if ! catalogue_json=$(${SF_CLI_CMD} modules list --json 2>/dev/null); then
   catalogue_json="[]"
 fi
 
+# Status owns capability classification. Preserve valid JSON even when status
+# exits non-zero because an unrelated project precondition failed.
+status_json="null"
+if ! status_json=$(${SF_CLI_CMD} status --json --no-network 2>/dev/null); then
+  if [ -z "${status_json}" ]; then
+    echo "read-project.sh: '${SF_CLI_CMD} status --json --no-network' produced no report — capabilities unavailable" >&2
+    status_json="null"
+  fi
+fi
+
 node "${SCRIPT_DIR}/read-project.js" <<EOF
 {
   "manifest": ${manifest_json},
-  "catalogue": ${catalogue_json}
+  "catalogue": ${catalogue_json},
+  "status": ${status_json}
 }
 EOF

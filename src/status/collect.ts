@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 import { canConnect, DEFAULT_PORTS } from '../ports'
+import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
 
@@ -29,6 +30,8 @@ export interface StatusReport {
   tools: ToolAvailability[]
   checkedNetwork: boolean
   installedSkills: string[]
+  /** Derived installation profile. Optional only for callers constructing legacy reports. */
+  capabilities?: StatusCapabilities | null
   /**
    * Whether the project's database answers. Absent when it was not asked — under
    * `--no-network`, or on a project that hosts no database of its own (#587).
@@ -36,9 +39,54 @@ export interface StatusReport {
   database?: DatabaseReachability
 }
 
+export interface StatusCapabilities extends ProjectCapabilities {
+  reason: string
+  previewCommand: string | null
+}
+
 export interface DatabaseReachability {
   port: number
   reachable: boolean
+}
+
+const FULL_PROFILE_PREVIEW = 'sf update --target-profile full --dry-run --json'
+
+/** Turn the shared capability classification into stable, actionable status data. */
+export function describeProjectCapabilities(manifest: SaaSFoundryManifest): StatusCapabilities {
+  const classified = classifyProjectCapabilities(manifest)
+
+  switch (classified.effectiveProfile) {
+    case 'full':
+      return {
+        ...classified,
+        reason: 'Technical stack and managed collaboration harness are installed.',
+        previewCommand: null
+      }
+    case 'stack':
+      return {
+        ...classified,
+        reason: 'Valid partial profile: the technical stack is installed without a managed collaboration harness.',
+        previewCommand: FULL_PROFILE_PREVIEW
+      }
+    case 'harness':
+      return {
+        ...classified,
+        reason: 'Valid partial profile: the managed collaboration harness is installed without a technical stack.',
+        previewCommand: FULL_PROFILE_PREVIEW
+      }
+    case 'unknown':
+      return {
+        ...classified,
+        reason: 'The manifest does not provide enough managed capability evidence to derive a profile.',
+        previewCommand: null
+      }
+    case 'inconsistent':
+      return {
+        ...classified,
+        reason: 'The manifest has contradictory or incomplete technical stack or collaboration harness markers.',
+        previewCommand: null
+      }
+  }
 }
 
 /**
@@ -143,6 +191,7 @@ function checkTool(name: string, cmd: string, cwd: string): ToolAvailability {
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
+  const capabilities = manifest ? describeProjectCapabilities(manifest) : null
 
   const git = collectGit(projectRoot)
 
@@ -168,6 +217,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     tools,
     checkedNetwork: options.checkNetwork === true,
     installedSkills,
+    capabilities,
     ...(database ? { database } : {})
   }
 }

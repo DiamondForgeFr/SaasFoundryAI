@@ -38,6 +38,7 @@ const WORKFLOW = {
 describe('updateCommand — late harness install (--add-modules harness)', () => {
   let projectDir: string
   let originalCwd: string
+  let originalExitCode: typeof process.exitCode
   let logSpy: jest.SpyInstance
 
   const stackManifest = (): SaaSFoundryManifest => ({
@@ -57,6 +58,7 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
   beforeEach(async () => {
     projectDir = join(tmpdir(), `sf-harness-add-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     originalCwd = process.cwd()
+    originalExitCode = process.exitCode
     await mkdir(projectDir, { recursive: true })
     process.chdir(projectDir)
 
@@ -67,6 +69,7 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
 
   afterEach(async () => {
     logSpy.mockRestore()
+    process.exitCode = originalExitCode
     process.chdir(originalCwd)
     await rm(projectDir, { recursive: true, force: true }).catch(() => {})
   })
@@ -93,6 +96,18 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(manifest.modules.advancedSkills).toEqual(['context7'])
     expect(manifest.modules.email.provider).toBe('none')
     expect(Object.keys(manifest.fileHashes).some((p: string) => p.startsWith('.claude/skills/sf-workflow/'))).toBe(true)
+  })
+
+  it('routes --target-profile full through the same harness installation path', async () => {
+    await writeFile('.saasfoundry.json', JSON.stringify(stackManifest(), null, 2))
+
+    await updateCommand({ nonInteractive: true, targetProfile: 'full' })
+
+    expect(mockedRunConfigSession).toHaveBeenCalledTimes(1)
+    const manifest = await readManifest()
+    expect(manifest.workflow.tool).toBe('github-projects')
+    expect(manifest.modules.harness).toMatchObject({ version: 1, managed: true })
+    expect(manifest.modules.email.provider).toBe('none')
   })
 
   it('does not offer harness when the collaboration surface is already managed', async () => {
@@ -125,18 +140,20 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(manifest.fileHashes[editedPath]).not.toBe(hashFileContent('my precious user edit\n'))
   })
 
-  it('works on a harness-only manifest that skipped the workflow step', async () => {
+  it('fails closed on a legacy manifest whose harness capability is unknown', async () => {
     await writeFile(
       '.saasfoundry.json',
       JSON.stringify({ $schema: manifestSchemaUrl, manifestVersion: 2, version: cliVersion, generatedAt: 'x', structure: 'cli', projectName: 'acme', mainBranch: 'main' }, null, 2)
     )
 
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
     await updateCommand({ nonInteractive: true, addModules: 'harness' })
+    errorSpy.mockRestore()
 
     const manifest = await readManifest()
-    expect(manifest.workflow.tool).toBe('github-projects')
-    expect(manifest.modules.harness.version).toBe(1)
-    expect(manifest.modules.harness.managed).toBe(true)
+    expect(manifest.workflow).toBeUndefined()
+    expect(manifest.modules?.harness).toBeUndefined()
+    expect(process.exitCode).toBe(1)
   })
 })
 

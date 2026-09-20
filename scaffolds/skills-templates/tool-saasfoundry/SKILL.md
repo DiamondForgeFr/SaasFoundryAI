@@ -39,13 +39,13 @@ Do NOT activate on:
 
 The skill invokes the `sf` CLI exclusively in **non-interactive mode**:
 
-- Scaffolding: `sf new --non-interactive --name <name> --structure <mono|multi> --apps <all|backend|frontend> [flags…]`
-- Module updates: `sf update --non-interactive --add <m1,m2> --remove <m3> [--dry-run]`
+- Scaffolding: `sf new --non-interactive --profile <full|harness|stack> --project-name <name> [--structure <monorepo|multirepo>] [flags…]`
+- Additive updates: `sf update --non-interactive [--target-profile full] [--add-modules <m1,m2>] [--dry-run --json]`
 - Catalogue lookups: `sf modules list --json` / `sf modules info <slug> --json` / `sf modules match <query> --json`
 - Skill lifecycle: `sf skill install [--project]` / `sf skill update` / `sf skill uninstall`
 - Feedback loop: `sf feedback request <name>` / `sf feedback bug --source cli|scaffold` / `sf feedback list` / `sf feedback vote --list` / `sf feedback vote <n> up|down|comment`
 
-Before mutating, always prefer `--dry-run` where available (notably `sf update --dry-run`) to preview the plan for the user.
+Before mutating, always prefer `--dry-run` where available (notably `sf update --dry-run --json`) to preview the plan for the user.
 
 ## Output language
 
@@ -64,8 +64,8 @@ three surfaces (`srs`, `tickets`, `codeComments`). `sf status --claude-friendly`
 | Resume a flow in progress | `scripts/recap.sh [workspace]` | Reads state, never chat history. Run it first on any resumed session |
 | Frame what a release contains | `scripts/plan-milestone.sh` then `workflow-cli.sh milestone create/assign/associate` | Proposes only from evidence; never invents a version number |
 | Start a new project | `sf new --non-interactive …` | Gather intent via conversation (Phase 2C) |
-| Add / remove modules | `sf update --non-interactive --add … --remove …` | Consult `sf modules list --json` first (Phase 2D) |
-| Inspect project state | Read `.saasfoundry.json` + `sf modules list --json` | Pure read, no mutation (Phase 2E) |
+| Reach full / add modules | `sf update --non-interactive [--target-profile full] [--add-modules …]` | Read `sf status --json --no-network` first (Phase 2D) |
+| Inspect project state | `scripts/read-project.sh` (`sf status --json --no-network` + manifest + catalogue) | Pure read, no mutation (Phase 2E) |
 | File a module request | `sf feedback request "<slug>" --description "…"` | Checks dedup automatically |
 | Report a bug | `sf feedback bug --source cli\|scaffold --title "…" --description "…" [--auto-repro]` | `--auto-repro` embeds `.saasfoundry.json` |
 | List open feedback | `sf feedback list [--status open\|closed\|all] [--mine] [--json]` | 3-label fan-out: module-request, cli-bug, scaffold-bug |
@@ -362,9 +362,9 @@ The full rationale for each recommendation is in the `recommendations` block of 
 
 ## Discovery: `sf update`
 
-When the user wants to evolve an existing SaaSFoundryAI project (add a module, apply template updates), the skill replaces the CLI's Inquirer prompts with the same conversational flow pattern as `sf new`. The intent is produced as a JSON object, materialized into a single `sf update --non-interactive …` command via `plan-update.sh`. The intent schema is documented in `reference/update-flags.json`.
+When the user wants to evolve an existing SaaSFoundryAI project (reach the additive `full` profile, add a module, or apply template updates), the skill replaces the CLI's Inquirer prompts with the same conversational flow pattern as `sf new`. The intent is produced as a JSON object, materialized into a single `sf update --non-interactive …` command via `plan-update.sh`. The intent schema is documented in `reference/update-flags.json`.
 
-> **Scope note** — `sf update` is **add-only** today. Module removal is not yet supported by the CLI; if the user asks to remove a module, point them at `sf feedback request` to track the request and keep the conversation unblocked.
+> **Scope note** — `sf update` is **additive-only** today. It can add the missing stack or managed harness to reach `full`; it cannot remove a capability, change an existing stack topology, or remove a module. Redirect removal requests to `sf feedback request`.
 
 ### Three discovery modes
 
@@ -372,26 +372,34 @@ Same triage as `sf new`:
 
 | Mode | When it fits | Flow |
 | --- | --- | --- |
-| **Guided** *(default)* | User says "I want to add email" or "what's missing from my project?" | Read `.saasfoundry.json` + catalogue, recommend 1–2 modules with rationale, ask one question at a time |
-| **Express** | User says exactly what they want: "add email and analytics" | Build intent, echo back as a plan, single-shot confirmation |
+| **Guided** *(default)* | User says "make this full", "add the stack", "add the harness", or "what's missing?" | Read canonical capabilities + catalogue, explain the one additive route, ask only for missing choices |
+| **Express** | User says exactly what they want: "promote to full" or "add email and analytics" | Build intent, echo back as a plan, single-shot confirmation |
 | **Expert** | User pastes a full or partial `sf update --non-interactive …` command | Pass through after sanity-checking flag names + module values against the manifest |
 
 ### Discovery workflow
 
 1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token. Cache for the rest of the turn.
-2. **Read project state** — parse `.saasfoundry.json` to know what modules are already installed. Pass that list in the intent as `alreadyInstalled` so `plan-update.sh` can reject silent no-ops.
-3. **Consult the catalogue** — `sf modules list --json` for the full list, `sf modules info <slug> --json` for drill-down. Never invent module names.
-4. **Gather intent** — build a JSON object matching `fields` in `reference/update-flags.json`. Only include fields the user has confirmed.
-5. **Dry-run first** — set `dryRun: true` in the intent and show the output to the user. Only rebuild the intent with `dryRun: false` after explicit approval.
-6. **Materialize the plan** — pipe the intent JSON into `scripts/plan-update.sh`. It emits the command on stdout or exits non-zero with a validation message on stderr.
-7. **Present and confirm** — show the command + a human summary of what will be added + which credentials were captured (redact secret values). Wait for approval before running.
+2. **Read canonical capabilities** — run `sf status --json --no-network`. Use its top-level `capabilities.technicalStack`, `capabilities.collaborationHarness`, and `capabilities.effectiveProfile`; never infer a profile from `modules.harness` alone. `scripts/read-project.sh` combines this status result with the manifest and catalogue for awareness questions.
+3. **Route the request**:
+   - `harness` + target `full` → add the technical stack; collect its topology and technical choices.
+   - `stack` + target `full` → add the managed collaboration harness. `--add-modules harness` is a compatible spelling and must converge through the same capability decision.
+   - `full` + target `full` → report a no-op; do not invent work.
+   - `unknown` or `inconsistent` → do not guess. Report the status remediation and keep the project unchanged.
+   - no managed manifest → this is an external project, not an update target. If its code is kept, install `sf new --profile harness` in place. If it is a throwaway POC, use the POC-preservation flow and create a clean full project beside `POC/`.
+4. **Consult the catalogue** — `sf modules list --json` for the full list, `sf modules info <slug> --json` for drill-down. Never invent module names.
+5. **Gather intent** — build a JSON object matching `fields` in `reference/update-flags.json`. Only include fields the user has confirmed. Keep every `secret: true` value out of that JSON; provide it to the CLI through its `SF_UPDATE_*` environment variable at execution time.
+6. **Dry-run first** — set `dryRun: true` and `json: true`. Parse the one versioned JSON object from stdout; diagnostics belong on stderr. A blocked plan has `mutated: false`: state that nothing changed and show its executable remediation. Only rebuild with `dryRun: false` and without `json` after explicit approval.
+7. **Materialize the plan** — pipe the non-secret intent JSON into `scripts/plan-update.sh`. It emits the command on stdout or exits non-zero with a validation message on stderr. Secret fields are deliberately omitted from the command and are read by `sf update` from `SF_UPDATE_DB_PASSWORD`, `SF_UPDATE_MAILERSEND_API_KEY`, `SF_UPDATE_S3_ACCESS_KEY`, `SF_UPDATE_S3_SECRET_KEY`, `SF_UPDATE_ATLASSIAN_API_TOKEN`, `SF_UPDATE_NOTION_API_TOKEN`, or `SF_UPDATE_FIGMA_API_TOKEN`.
+8. **Present and confirm** — show the resulting effective profile, command, paths/actions summary, and which credentials were captured (redact secret values). Wait for approval before running.
 
 ### Intent schema (summary)
 
 Full specification: `reference/update-flags.json`. Essentials:
 
-- **`addModules`** (CSV) — values must match `sf modules list --json`; collision with `alreadyInstalled` is an error, not a warning
-- **`dryRun`** (boolean) — recommend `true` for the first round; flip to `false` only after user approves the plan
+- **`targetProfile`** (enum: `full`) — requests the additive capability transition; no downgrade target exists in V1
+- **Harness → full technical choices** — `structure`; database setup/type/credentials; API/web ports; email and S3 setup/credentials; `analytics`; `pwa`. Preserve the manifest's project name and main branch; do not ask for repository URLs during this transition. Non-interactive mode reports every missing required choice together.
+- **`addModules`** (CSV) — values must match `sf modules list --json`; `harness` remains the compatibility alias for stack → full; collision with `alreadyInstalled` is an error, not a warning
+- **`dryRun` + `json`** (booleans) — set both to `true` for the first round; `json: true` without `dryRun: true` is invalid
 - **`conflictStrategy`** (enum: `keep` | `replace` | `save-new`) — default `save-new`; only change if the user has strong preferences about their local edits
 - **Credential pass-throughs** — only collect the ones required by the modules being added (`mailersend*` when adding email, `s3*` when adding storage, `*ApiToken` when adding advanced skills). All `secret: true` fields must be redacted in any echo-back
 
@@ -399,7 +407,8 @@ Full specification: `reference/update-flags.json`. Essentials:
 
 | Dimension | Default | Condition to override |
 | --- | --- | --- |
-| `dryRun` | `true` on first run | Skip only when the user explicitly says "just do it" and the change is small |
+| `targetProfile` | `full` when the user asks to add a missing managed capability | Do not set for an ordinary module-only update |
+| `dryRun` / `json` | `true` / `true` on first run | Skip only when the user explicitly says "just do it" and the change is small |
 | `conflictStrategy` | `save-new` | Recommend `keep` when the user has significant local edits they don't want touched; `replace` only when they ask for "latest upstream, overwrite mine" |
 | Which modules to propose | None unless user asks | If the user asks "what should I add next?", consult `recommendations.modules` in the manifest for guidance anchored to product needs |
 
@@ -407,9 +416,11 @@ Full specification: `reference/update-flags.json`. Essentials:
 
 - **Don't propose a module already in `.saasfoundry.json`.** Check `alreadyInstalled` before building the intent; suggesting a silent no-op erodes user trust.
 - **Don't skip the dry-run round** unless the user explicitly waives it.
+- **Don't run `sf new --profile full` inside an existing repository.** Preview an eligible managed transition with `sf update --target-profile full --dry-run --json`; use the POC-preservation flow for a rebuild.
+- **Don't promise to merge an external product with the generated stack.** A conflict blocks the whole transition; `replace`, `force`, and sidecars do not override the initial-adoption guard.
 - **Don't suggest module removal as if it were supported.** Redirect to `sf feedback request` and note the limitation.
 - **Don't fabricate module names.** Every value in `addModules` must exist in `sf modules list --json`.
-- **Don't echo credentials.** Collect them, pass to `plan-update.sh`, redact in any user-facing summary.
+- **Don't echo credentials or pass them to `plan-update.sh`.** Bind them only as `SF_UPDATE_*` environment variables on the actual CLI process and redact them in every summary.
 
 ## Project Awareness
 
@@ -419,16 +430,18 @@ Project Awareness is the read-only surface of the skill. When the user asks a qu
 
 | User asks | How the skill answers |
 | --- | --- |
+| "Which profile/capabilities does this project have?" | `report.project.capabilities`, copied from `sf status --json`. Report `effectiveProfile` plus the independent stack and managed-harness states. |
+| "Can this project become full?" | For `harness` or `stack`, recommend `sf update --target-profile full --dry-run --json`. For `full`, report a no-op. For `unknown`/`inconsistent`, use status remediation and do not guess. |
 | "What's my SaaSFoundryAI version? Am I up to date?" | `report.project.cliVersion` + `report.upToDate`. If `false`, list `report.modules.obsolete` with their `minCliVersion` and recommend `sf skill update` + `sf update`. |
 | "What modules do I have?" | `report.modules.installed` — read verbatim. If the user wants details on a specific one, run `sf modules info <slug> --json`. |
-| "What would `sf update` do right now?" | Do **not** answer from the snapshot alone. Run `sf update --dry-run --non-interactive` and show the plan (this is a CLI call, not a mutation). |
+| "What would `sf update` do right now?" | Do **not** answer from the snapshot alone. Run `sf update --dry-run --json --non-interactive` and show the plan (this is a CLI call, not a mutation). |
 | "Are there new modules since my install?" | `report.modules.newlyAvailable` — list with one-line descriptions from the catalogue (`sf modules info <name> --json` for the `description` field). |
 | "Where was this project generated / when?" | `report.project.generatedAt` + `report.project.structure` + `report.project.name`. |
 
 ### Workflow
 
 1. **Bootstrap** — run `bootstrap-cli.sh` to resolve the invocation token (`sf` / `npx saasfoundryai-cli`).
-2. **Gather snapshot** — run `scripts/read-project.sh` from the project root. It reads `.saasfoundry.json`, calls `sf modules list --json`, and emits a consolidated JSON report on stdout.
+2. **Gather snapshot** — run `scripts/read-project.sh` from the project root. It reads `.saasfoundry.json`, calls `sf status --json --no-network` for canonical capabilities plus `sf modules list --json`, and emits a consolidated JSON report on stdout.
 3. **Answer from the report** — never invent facts about the project; if a field is missing in the report, tell the user you don't know rather than guessing.
 4. **Stay read-only** — if the user's follow-up becomes "add X", "remove Y", "upgrade Z", route through Phase 2D's `plan-update.sh`. Never let a "tell me about…" thread slip into a mutation without explicit intent.
 
@@ -436,7 +449,13 @@ Project Awareness is the read-only surface of the skill. When the user asks a qu
 
 ```json
 {
-  "project": { "name": "…", "structure": "monorepo", "cliVersion": "1.0.0-beta", "generatedAt": "…" },
+  "project": {
+    "name": "…",
+    "structure": "monorepo",
+    "cliVersion": "1.0.0-beta",
+    "generatedAt": "…",
+    "capabilities": { "technicalStack": "present", "collaborationHarness": "managed", "effectiveProfile": "full" }
+  },
   "modules": {
     "installed": ["email", "storage", "sf-skill-context7"],
     "available": ["email", "storage", "analytics", …],

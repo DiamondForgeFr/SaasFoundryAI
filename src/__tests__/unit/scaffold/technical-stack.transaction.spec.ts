@@ -237,6 +237,16 @@ describe('recoverable technical stack transaction', () => {
     await expect(lstat(join(projectRoot, TECHNICAL_TRANSITION_JOURNAL))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('derives the preservation baseline from the expected manifest through the trusted migration registry', async () => {
+    const { plan } = await prepared({ 'apps/api/main.ts': 'candidate' })
+    const invalid = Buffer.from(`${JSON.stringify({ version: 'after', projectName: 'replaced', fileHashes: technicalOwnershipHashes(plan) })}\n`)
+
+    await expect(applyTechnicalStackTransition({ projectRoot, candidateRoot, approvedPlan: plan, expectedManifest: beforeManifest, nextManifest: invalid })).rejects.toThrow(
+      'cannot change preserved manifest field projectName'
+    )
+    await expect(lstat(join(projectRoot, 'apps'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('rejects additions when the manifest cannot be an unambiguous commit marker', async () => {
     const { plan } = await prepared({ 'apps/api/main.ts': 'candidate' })
     const same = Buffer.from(`${JSON.stringify({ version: 'same', fileHashes: technicalOwnershipHashes(plan) })}\n`)

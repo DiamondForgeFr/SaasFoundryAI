@@ -1,6 +1,22 @@
 import { renderClaudeFriendly, renderHuman, renderJson } from '../../../status/render'
-import type { StatusReport } from '../../../status/collect'
+import { describeProjectCapabilities, type StatusReport } from '../../../status/collect'
 import type { Precondition } from '../../../status/preconditions'
+import type { SaaSFoundryManifest } from '../../../types'
+
+const fullCapabilities = describeProjectCapabilities({
+  version: '1.0.0-beta',
+  generatedAt: '2026-04-24T00:00:00Z',
+  structure: 'monorepo',
+  projectName: 'demo',
+  modules: {
+    email: { provider: 'none', version: 0 },
+    s3Setup: 'manual',
+    dbSetup: 'manual',
+    includeAnalytics: false,
+    advancedSkills: [],
+    harness: { version: 1, managed: true }
+  }
+})
 
 function makeReport(overrides: Partial<StatusReport> = {}): StatusReport {
   return {
@@ -18,6 +34,7 @@ function makeReport(overrides: Partial<StatusReport> = {}): StatusReport {
     tools: [],
     checkedNetwork: false,
     installedSkills: [],
+    capabilities: fullCapabilities,
     ...overrides
   }
 }
@@ -30,14 +47,77 @@ describe('renderJson', () => {
     const out = renderJson({ report: makeReport(), preconditions: [okPrecondition] })
     const parsed = JSON.parse(out)
     expect(parsed.manifest.projectName).toBe('demo')
+    expect(parsed.schemaVersion).toBe(1)
+    expect(parsed.capabilities.effectiveProfile).toBe('full')
     expect(parsed.preconditions).toHaveLength(1)
     expect(parsed.preconditions[0]).toEqual({ name: 'manifest', description: 'Manifest present', status: 'ok', details: 'v1.0.0-beta', remediation: null })
   })
 
   it('serialises a null manifest correctly', () => {
-    const out = renderJson({ report: makeReport({ manifest: null }), preconditions: [failPrecondition] })
+    const out = renderJson({ report: makeReport({ manifest: null, capabilities: null }), preconditions: [failPrecondition] })
     const parsed = JSON.parse(out)
     expect(parsed.manifest).toBeNull()
+    expect(parsed.capabilities).toBeNull()
+  })
+})
+
+describe('project capability status', () => {
+  const base: SaaSFoundryManifest = {
+    version: '1.0.0-beta',
+    generatedAt: '2026-04-24T00:00:00Z',
+    structure: 'monorepo',
+    projectName: 'demo'
+  }
+  const technicalModules = {
+    email: { provider: 'none' as const, version: 0 },
+    s3Setup: 'manual' as const,
+    dbSetup: 'manual' as const,
+    includeAnalytics: false,
+    advancedSkills: []
+  }
+
+  it.each([
+    [
+      'full',
+      { ...base, modules: { ...technicalModules, harness: { version: 1, managed: true } } },
+      { effectiveProfile: 'full', technicalStack: 'present', collaborationHarness: 'managed', preview: null }
+    ],
+    [
+      'stack',
+      { ...base, modules: { ...technicalModules, harness: { version: 1, managed: false } } },
+      { effectiveProfile: 'stack', technicalStack: 'present', collaborationHarness: 'core-only', preview: 'sf update' }
+    ],
+    [
+      'harness',
+      { ...base, structure: 'cli', modules: { harness: { version: 1, managed: true }, advancedSkills: [] } },
+      { effectiveProfile: 'harness', technicalStack: 'absent', collaborationHarness: 'managed', preview: 'sf update' }
+    ],
+    ['unknown', { ...base, modules: { ...technicalModules } }, { effectiveProfile: 'unknown', technicalStack: 'present', collaborationHarness: 'legacy-unknown', preview: null }],
+    [
+      'inconsistent',
+      { ...base, modules: { email: { provider: 'none', version: 0 }, harness: { version: 1, managed: true } } },
+      { effectiveProfile: 'inconsistent', technicalStack: 'inconsistent', collaborationHarness: 'managed', preview: null }
+    ]
+  ] as const)('describes the %s state', (_name, manifest, expected) => {
+    const capabilities = describeProjectCapabilities(manifest as SaaSFoundryManifest)
+    expect(capabilities).toMatchObject({
+      effectiveProfile: expected.effectiveProfile,
+      technicalStack: expected.technicalStack,
+      collaborationHarness: expected.collaborationHarness
+    })
+    expect(capabilities.reason).toBeTruthy()
+    if (expected.preview) expect(capabilities.previewCommand).toContain(expected.preview)
+    else expect(capabilities.previewCommand).toBeNull()
+  })
+
+  it('exposes the same partial-profile guidance in every render', () => {
+    const capabilities = describeProjectCapabilities({ ...base, modules: { ...technicalModules, harness: { version: 1, managed: false } } })
+    const report = makeReport({ capabilities })
+    const payload = { report, preconditions: [okPrecondition] }
+
+    expect(renderHuman(payload)).toContain('Preview full profile: sf update --target-profile full --dry-run --json')
+    expect(renderClaudeFriendly(payload)).toContain('- full-profile preview: sf update --target-profile full --dry-run --json')
+    expect(JSON.parse(renderJson(payload)).capabilities.previewCommand).toBe('sf update --target-profile full --dry-run --json')
   })
 })
 

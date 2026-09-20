@@ -7,13 +7,41 @@ This page explains **what `sf update` does, what it does not touch, and how to r
 
 ## What `sf update` actually does
 
-`sf update` runs two independent flows in one command:
+`sf update` runs three independent flows in one command:
 
 1. **Template update** — detects that the CLI has a newer version than your project's manifest (`.saasfoundry.json`) and propagates scaffold evolutions (e.g. a new skill file, an improved NestJS
    config, a security fix in a generated middleware).
 2. **Module addition** — lets you add modules that weren't installed at generation time (email, storage, analytics, optional skills). This flow is independent of the version check and runs every time.
+3. **Managed capability transition** — adds the missing technical stack or collaboration harness so an eligible managed project reaches the `full` profile.
 
-Both flows are driven by the manifest, never by guessing. If `.saasfoundry.json` does not exist, `sf update` refuses to run.
+All flows are driven by the manifest and the canonical capability classification, never by guessing from `modules.harness` alone. If `.saasfoundry.json` does not exist, `sf update` refuses to run.
+
+## Promote an existing managed project to full
+
+Start with the canonical status report, then preview the transition:
+
+```bash
+sf status --json --no-network
+sf update --target-profile full --dry-run --json
+```
+
+- A `harness` project plans a technical stack. Interactive mode collects the topology and technical choices, then explains that the resulting profile will be `full` before one confirmation.
+- A `stack` project adds the managed collaboration harness. `sf update --add-modules harness` remains compatible and reaches the same result through the same capability decision.
+- A `full` project is already complete, so the request is a no-op.
+- An `unknown` or `inconsistent` project is left unchanged until the reported manifest remediation is applied.
+
+The technical-stack plan is atomic. Any unmanaged file at a generated path, unsafe link or special file, case collision, or file/directory conflict blocks the entire transition. `replace`, `force`,
+and `.saasfoundry.new` sidecars cannot override this initial-adoption guard. A blocked JSON report says `"mutated": false`, lists the paths, and gives executable remediation.
+
+### Managed project, external product, or POC?
+
+- **Managed harness project with no product stack at the candidate paths:** preview `sf update --target-profile full`.
+- **External repository whose existing application remains the product:** install or retain the `harness` profile. The transition does not merge an arbitrary application, dependency tree, database, or
+  runtime data into the generated stack.
+- **Throwaway POC to rebuild:** use the POC intake and approved preservation flow, move the experiment under `POC/`, then create a clean `full` project beside it. Never run `sf new --profile full`
+  inside the POC directory.
+
+The V1 transition runs on macOS, Linux, and Windows through WSL. Native Windows execution is rejected before mutation.
 
 ## The three-way merge
 
@@ -61,30 +89,37 @@ The `replace` strategy writes the template version directly over your file. Ther
 
 ## Dry-run before you apply
 
-Use `--dry-run` to see what would change without touching any file. Combined with `--accept-template-updates`, it gives you a clean JSON preview:
+Use `--dry-run --json` to receive one versioned JSON object without touching any project or external resource:
 
 ```bash
-sf update --dry-run --add-modules email
+sf update --dry-run --json --add-modules email
 ```
 
-Sample output:
+Human-readable diagnostics go to stderr; stdout remains parseable. For example, a profile-transition report includes:
 
-```text
-  SaaSFoundryAI Project Update
-  ────────────────────────────────────────
-  Project:         my-saas-app
-  Structure:       monorepo
-  Project version: 1.0.0-beta
-  CLI version:     1.0.1-beta
-  (dry-run — no files will be written)
-
-  Version change detected: v1.0.0-beta → v1.0.1-beta
-  3 template change(s) detected:
-    2 file(s) to auto-update
-    1 new file(s) to add
+```json
+{
+  "version": 1,
+  "mutated": false,
+  "profileTransition": {
+    "targetProfile": "full",
+    "currentCapabilities": {
+      "technicalStack": "absent",
+      "collaborationHarness": "managed",
+      "effectiveProfile": "harness"
+    },
+    "status": "ready",
+    "plan": {
+      "version": 1,
+      "mutated": false,
+      "topology": "monorepo",
+      "canApply": true
+    }
+  }
+}
 ```
 
-Pair this with `sf update --dry-run > report.txt` in CI to surface upcoming template churn before it hits `develop`.
+Pair this with `sf update --dry-run --json > report.json` in CI to surface upcoming changes before they reach the working branch.
 
 ## Adding modules post-generation
 
@@ -171,7 +206,7 @@ git checkout -
 npm install -g saasfoundryai-cli@latest
 
 # 3. Preview what would change
-sf update --dry-run
+sf update --dry-run --json
 
 # 4. Apply (save-new strategy so conflicts land in sidecar files)
 sf update --accept-template-updates

@@ -107,6 +107,15 @@ repository changes. Replacing a declaration never authorizes deleting existing i
 skills, hooks or settings.
 `
 
+export const PROFILE_TRANSITION_INSTRUCTIONS = `## Managed project capabilities
+
+Treat the capability block from \`sf status --claude-friendly --no-network\` as authoritative.
+When an eligible managed \`harness\` or \`stack\` project should become \`full\`, preview the
+additive transition with \`sf update --target-profile full --dry-run --json\`. Do not run
+\`sf new --profile full\` inside an existing repository. A retained external product stays on
+the harness path; a throwaway POC uses the documented POC-preservation and clean-project flow.
+`
+
 export const COMMON_INSTRUCTIONS = `# SaaSFoundry agent instructions
 
 Read \`CLAUDE.md\` in this project before working: it remains the authoritative project
@@ -123,6 +132,8 @@ Commit and push before AI testing; preserve Human testing requirements. Delivery
 need a verified merge before Done, except for a validated \`nature:bundled-pr\` child whose
 commit ships in its non-Epic delivery parent's PR. An Epic has no PR: its first child entering
 In progress starts it, and it reaches Done only after every native child has board status Done.
+
+${PROFILE_TRANSITION_INSTRUCTIONS}
 
 ${SELF_ONBOARDING_INSTRUCTIONS}
 
@@ -153,6 +164,8 @@ asking about configured scope, tools or modules. Follow its output language and 
 Before a status transition, read the matching status document and execute the guarded CLI:
 \`.claude/skills/sf-workflow/workflow-cli.sh\`. Use its configured board tool and preserve
 all workflow guards, tests and approval requirements.
+
+${PROFILE_TRANSITION_INSTRUCTIONS}
 
 ${SELF_ONBOARDING_INSTRUCTIONS}
 

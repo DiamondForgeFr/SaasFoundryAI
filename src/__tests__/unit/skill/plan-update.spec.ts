@@ -37,6 +37,56 @@ describe('skill/plan-update', () => {
     })
   })
 
+  describe('Managed profile transition', () => {
+    it('builds the canonical JSON dry-run command for full promotion', async () => {
+      const { stdout, code } = await runWithIntent({ targetProfile: 'full', dryRun: true, json: true })
+      expect(code).toBe(0)
+      expect(stdout.trim()).toBe('sf update --non-interactive --target-profile full --dry-run --json')
+    })
+
+    it('keeps --add-modules harness as a compatible spelling', async () => {
+      const { stdout, code } = await runWithIntent({ addModules: ['harness'], dryRun: true, json: true })
+      expect(code).toBe(0)
+      expect(stdout.trim()).toBe('sf update --non-interactive --add-modules harness --dry-run --json')
+    })
+
+    it('rejects unsupported target profiles', async () => {
+      const { code, stderr } = await runWithIntent({ targetProfile: 'stack' })
+      expect(code).toBe(2)
+      expect(stderr).toMatch(/invalid value "stack" for targetProfile; expected one of full/)
+    })
+
+    it('requires JSON output to be a dry-run', async () => {
+      const { code, stderr } = await runWithIntent({ targetProfile: 'full', json: true })
+      expect(code).toBe(2)
+      expect(stderr).toContain('json requires dryRun=true')
+    })
+
+    it('materializes the non-interactive technical choices without project identity or repository URLs', async () => {
+      const { stdout, code } = await runWithIntent({
+        targetProfile: 'full',
+        projectDescription: 'Acme application',
+        structure: 'multirepo',
+        dbSetup: 'manual',
+        dbType: 'postgresql',
+        apiPort: '3501',
+        webPort: '5174',
+        emailService: 'none',
+        s3Setup: 'manual',
+        analytics: false,
+        pwa: false,
+        dryRun: true,
+        json: true
+      })
+      expect(code).toBe(0)
+      expect(stdout.trim()).toBe(
+        "sf update --non-interactive --target-profile full --project-description 'Acme application' --structure multirepo --db-setup manual --db-type postgresql --api-port 3501 --web-port 5174 --email-service none --dry-run --json --s3-setup manual --no-analytics --no-pwa"
+      )
+      expect(stdout).not.toContain('project-name')
+      expect(stdout).not.toContain('repo-url')
+    })
+  })
+
   describe('Express — full plan with credentials and dry-run', () => {
     it('emits flags in manifest order with CSV unquoted and dry-run set', async () => {
       const { stdout, code } = await runWithIntent({
@@ -49,17 +99,24 @@ describe('skill/plan-update', () => {
       })
       expect(code).toBe(0)
       expect(stdout.trim()).toBe(
-        [
-          'sf update',
-          '--non-interactive',
-          '--add-modules email,storage',
-          '--dry-run',
-          '--conflict-strategy save-new',
-          '--mailersend-api-key ms_live_abc',
-          '--mailersend-sender-email noreply@example.com',
-          '--s3-setup docker'
-        ].join(' ')
+        ['sf update', '--non-interactive', '--add-modules email,storage', '--dry-run', '--conflict-strategy save-new', '--mailersend-sender-email noreply@example.com', '--s3-setup docker'].join(' ')
       )
+    })
+
+    it('never emits secret values or secret flags', async () => {
+      const secrets = {
+        dbPassword: 'db super secret',
+        mailersendApiKey: 'ms_live_secret',
+        s3AccessKey: 'access-secret',
+        s3SecretKey: 's3-secret',
+        atlassianApiToken: 'atl-secret',
+        notionApiToken: 'notion-secret',
+        figmaApiToken: 'figma-secret'
+      }
+      const { stdout, code } = await runWithIntent({ targetProfile: 'full', ...secrets, dryRun: true })
+      expect(code).toBe(0)
+      for (const value of Object.values(secrets)) expect(stdout).not.toContain(value)
+      expect(stdout).not.toMatch(/--(?:db-password|mailersend-api-key|s3-access-key|s3-secret-key|atlassian-api-token|notion-api-token|figma-api-token)/)
     })
   })
 

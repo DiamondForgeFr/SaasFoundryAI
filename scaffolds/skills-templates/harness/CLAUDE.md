@@ -10,6 +10,12 @@ Before asking the user anything about scope, workflow, or tooling, **read the ma
 2. Run `sf status --claude-friendly --no-network` for a summary of the manifest and preconditions. On a configured session this is auto-injected via the `SessionStart` hook in `.claude/settings.json`.
 3. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf update --add-modules srs`, `sf skill install`) instead of asking scope questions.
 
+## Managed project capabilities
+
+Treat the capability block from `sf status --claude-friendly --no-network` as authoritative. When an eligible managed `harness` project should become `full`, preview the additive transition with
+`sf update --target-profile full --dry-run --json`. Do not run `sf new --profile full` inside this repository. Keep a retained external product on the harness path; rebuild a throwaway POC only
+through the documented POC-preservation and clean-project flow.
+
 ## Coding-agent identity and onboarding
 
 Use the coding-agent identity explicitly supplied by the current host or session. Never infer it from a model/provider name, executable, repository file, or PATH. If the identity is absent or

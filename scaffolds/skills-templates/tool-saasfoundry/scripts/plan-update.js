@@ -111,11 +111,20 @@ if (Array.isArray(intent.alreadyInstalled) && Array.isArray(intent.addModules)) 
   }
 }
 
+if (intent.json === true && intent.dryRun !== true) {
+  process.stderr.write('plan-update: json requires dryRun=true so --json is paired with --dry-run\n')
+  process.exit(2)
+}
+
 const parts = [...String(manifest.command).trim().split(/\s+/), ...manifest.alwaysAppend]
 
 for (const [key, spec] of Object.entries(manifest.fields)) {
   const value = intent[key]
   if (value === undefined || value === null) continue
+
+  // Secrets are consumed by the CLI from SF_UPDATE_* environment variables.
+  // Never materialize their values in a command, stdout, shell history or argv.
+  if (spec.secret === true) continue
 
   if (spec.type === 'boolean') {
     if (value === true) parts.push(spec.flag)
