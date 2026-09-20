@@ -326,6 +326,17 @@ export interface SaaSFoundryManifest {
   generatedAt: string
   structure: 'monorepo' | 'multirepo' | 'cli'
   projectName: string
+  /** Audit trail for a project adopted from a pre-manifest SaaSFoundry release. */
+  adoption?: {
+    kind: 'legacy'
+    sourcePackage: string
+    sourceVersion: string
+    sourceIntegrity: string
+    layout: 'monorepo' | 'multirepo'
+    planFingerprint: string
+    /** Forces one current-template comparison even when package versions match. */
+    refreshPending?: boolean
+  }
   /** Marks a manifest projected into one checkout of a multirepo project. */
   projection?: {
     kind: 'multirepo-child'

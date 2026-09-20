@@ -34,6 +34,21 @@
       "type": "string",
       "minLength": 1
     },
+    "adoption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sourcePackage", "sourceVersion", "sourceIntegrity", "layout", "planFingerprint"],
+      "properties": {
+        "kind": { "type": "string", "const": "legacy" },
+        "sourcePackage": { "type": "string", "minLength": 1 },
+        "sourceVersion": { "type": "string", "minLength": 1 },
+        "sourceIntegrity": { "type": "string", "minLength": 1 },
+        "layout": { "type": "string", "enum": ["monorepo", "multirepo"] },
+        "planFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "refreshPending": { "type": "boolean", "description": "True until the first current-template comparison completes without unresolved conflicts." }
+      },
+      "description": "Release-specific evidence recorded when a project created before manifest support is adopted."
+    },
     "projection": {
       "type": "object",
       "additionalProperties": false,

@@ -2,7 +2,7 @@ import { link, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { mutateProjectManifestSafe, readManifestFileSafe, replaceManifestFileSafe } from '../../manifest-file'
+import { createManifestFileSafe, mutateProjectManifestSafe, readManifestFileSafe, replaceManifestFileSafe } from '../../manifest-file'
 
 describe('safe manifest file', () => {
   let root: string
@@ -22,6 +22,14 @@ describe('safe manifest file', () => {
     await link(outside, join(root, 'hard.json'))
     await expect(readManifestFileSafe(join(root, 'symbolic.json'))).rejects.toThrow('regular, non-linked')
     await expect(readManifestFileSafe(join(root, 'hard.json'))).rejects.toThrow('regular, non-linked')
+  })
+
+  it('creates a new manifest exclusively and never replaces an existing file', async () => {
+    const path = join(root, '.saasfoundry.json')
+    const snapshot = await createManifestFileSafe(path, Buffer.from('{"version":1}\n'))
+    expect(snapshot.bytes.toString()).toBe('{"version":1}\n')
+    await expect(createManifestFileSafe(path, Buffer.from('{"version":2}\n'))).rejects.toThrow('already exists')
+    expect(await readFile(path, 'utf8')).toBe('{"version":1}\n')
   })
 
   it('replaces the expected identity atomically and refuses stale snapshots', async () => {

@@ -15,10 +15,10 @@ describe('getAvailableModules', () => {
 
     const available = getAvailableModules(manifest)
 
-    // 5 modules (email, storage, analytics, srs, harness) + 4 skills = 9 total
-    expect(available).toHaveLength(9)
+    // 6 modules (email, storage, analytics, pwa, srs, harness) + 4 skills = 10 total
+    expect(available).toHaveLength(10)
     expect(available.map((m) => m.value)).toEqual(
-      expect.arrayContaining(['email', 'storage', 'analytics', 'srs', 'harness', 'sf-skill-context7', 'sf-skill-atlassian', 'sf-skill-notion', 'sf-skill-figma'])
+      expect.arrayContaining(['email', 'storage', 'analytics', 'pwa', 'srs', 'harness', 'sf-skill-context7', 'sf-skill-atlassian', 'sf-skill-notion', 'sf-skill-figma'])
     )
   })
 
@@ -86,6 +86,15 @@ describe('getAvailableModules', () => {
     expect(available.find((m) => m.value === 'analytics')).toBeUndefined()
   })
 
+  it('offers PWA only to scaffolded projects that do not already have it', () => {
+    const available = getAvailableModules(manifestFixture())
+    expect(available.map((module) => module.value)).toContain('pwa')
+
+    const installed = manifestFixture()
+    installed.modules!.pwa = { version: 1 }
+    expect(getAvailableModules(installed).map((module) => module.value)).not.toContain('pwa')
+  })
+
   it('should exclude installed advanced skills', () => {
     const manifest = manifestFixture({
       modules: {
@@ -130,7 +139,8 @@ describe('getAvailableModules', () => {
         dbSetup: 'docker',
         includeAnalytics: true,
         advancedSkills: ['context7', 'atlassian', 'notion', 'figma'],
-        harness: { version: 1, managed: true }
+        harness: { version: 1, managed: true },
+        pwa: { version: 1 }
       },
       workflow: { tool: 'github-projects' },
       tools: { srs: { enabled: true, backend: 'notion' } }

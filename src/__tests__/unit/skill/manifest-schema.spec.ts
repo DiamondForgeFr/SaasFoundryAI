@@ -138,6 +138,23 @@ describe('saasfoundry-manifest.schema.json — canonical shapes', () => {
   it('still validates a manifest that omits the tools registry (backward compat)', () => {
     expect(validate({ ...baseManifest, tools: { srs: { enabled: false, backend: 'notion' } } })).toBe(true)
   })
+
+  it('accepts the complete legacy-adoption provenance written by sf update', () => {
+    expect(
+      validate({
+        ...baseManifest,
+        adoption: {
+          kind: 'legacy',
+          sourcePackage: 'saasfoundry-cli',
+          sourceVersion: '1.0.0-beta',
+          sourceIntegrity: 'sha512-pinned',
+          layout: 'multirepo',
+          planFingerprint: 'a'.repeat(64),
+          refreshPending: true
+        }
+      })
+    ).toBe(true)
+  })
 })
 
 describe('saasfoundry-manifest.schema.json — rejection cases', () => {
@@ -186,6 +203,24 @@ describe('saasfoundry-manifest.schema.json — rejection cases', () => {
 
   it('rejects tools.design when it is not an array of selections', () => {
     expect(validate({ ...baseManifest, tools: { design: { name: 'figma' } } })).toBe(false)
+  })
+
+  it.each([
+    ['unknown kind', { kind: 'imported' }],
+    ['unknown layout', { layout: 'desktop' }],
+    ['invalid fingerprint', { planFingerprint: 'not-a-sha256' }],
+    ['additional property', { trusted: true }]
+  ])('rejects legacy-adoption provenance with %s', (_label, invalid) => {
+    const adoption = {
+      kind: 'legacy',
+      sourcePackage: 'saasfoundry-cli',
+      sourceVersion: '1.0.0-beta',
+      sourceIntegrity: 'sha512-pinned',
+      layout: 'multirepo',
+      planFingerprint: 'a'.repeat(64),
+      ...invalid
+    }
+    expect(validate({ ...baseManifest, adoption })).toBe(false)
   })
 })
 

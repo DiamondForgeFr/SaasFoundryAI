@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { getNvmPrefix, resolveProjectNodeVersion } from '../../../utils'
+import { computeFileHashes, getNvmPrefix, resolveProjectNodeVersion } from '../../../utils'
 
 /**
  * #589 — the CLI drove generated projects with `nvm use 22`, and Node 22 ships npm 10.9.7
@@ -45,6 +45,18 @@ describe('resolveProjectNodeVersion (#589)', () => {
     writeFileSync(join(tmp, '.nvmrc'), '   \n')
     const parentHasOne = resolveProjectNodeVersion(tmp)
     expect(parentHasOne).not.toBe('')
+  })
+
+  it('rejects shell syntax in a repository-controlled .nvmrc', () => {
+    writeFileSync(join(tmp, '.nvmrc'), '24; touch PWNED\n')
+    expect(() => resolveProjectNodeVersion(tmp)).toThrow(/Invalid Node\.js version/)
+  })
+
+  it('hashes raw bytes without collapsing invalid UTF-8 sequences', async () => {
+    writeFileSync(join(tmp, 'first.bin'), Buffer.from([0x80]))
+    writeFileSync(join(tmp, 'second.bin'), Buffer.from([0x81]))
+    const hashes = await computeFileHashes(tmp)
+    expect(hashes['first.bin']).not.toBe(hashes['second.bin'])
   })
 })
 

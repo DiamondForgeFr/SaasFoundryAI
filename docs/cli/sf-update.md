@@ -33,6 +33,12 @@ sf update [options]
 | `--accept-template-updates`      | Auto-apply non-conflicting template updates without prompting                                                         | -          |
 | `--conflict-strategy <strategy>` | Three-way merge conflict handling: `keep` (yours), `replace` (theirs), or `save-new`                                  | `save-new` |
 | `--add-modules <modules>`        | Comma-separated modules; includes `harness` as the compatibility spelling for stack → full                            | -          |
+| `--workflow <preset>`            | Workflow preset when adding the harness: `solo`, `saasfoundry`, or `none`                                             | -          |
+| `--no-workflow`                  | Add the harness without workflow configuration                                                                        | -          |
+| `--adopt-legacy`                 | Inspect or adopt a recognized project created before manifest support                                                 | -          |
+| `--adopt-plan <fingerprint>`     | Apply the exact legacy-adoption plan returned by a previous dry run                                                   | -          |
+| `--project-name <name>`          | Original generated name used to verify a legacy layout                                                                | directory  |
+| `--main-branch <branch>`         | Main branch when the legacy API/web repositories cannot prove one shared branch                                       | detected   |
 | `--mailersend-api-key <key>`     | MailerSend API key (when adding `email`)                                                                              | -          |
 | `--s3-setup <setup>`             | S3 storage: `docker`, `credentials`, or `manual` for a transition; module-only storage supports its applicable subset | -          |
 | `--atlassian-email <email>`      | Atlassian account email (when adding `sf-skill-atlassian`)                                                            | -          |
@@ -51,6 +57,12 @@ sf update
 ```bash
 # Preview what would change (no writes)
 sf update --dry-run --json --add-modules email,analytics
+```
+
+```bash
+# Adopt a verified pre-manifest project in two reviewable steps
+sf update --adopt-legacy --dry-run --json --project-name my-app --main-branch main
+sf update --adopt-legacy --project-name my-app --main-branch main --adopt-plan <fingerprint>
 ```
 
 ```bash
@@ -78,6 +90,11 @@ sf update --non-interactive \
 The JSON report is versioned and always says `"mutated": false`. Technical path collisions return `"canApply": false` and list the blocking paths; every blocked profile transition provides a reason
 code and executable remediation. No partial overlay is applied. Human diagnostics use stderr, so stdout remains directly parseable. A preview describes the planned modules without requiring provider
 secrets or opening signup pages.
+
+Late stack modules are first prepared outside the project and then passed through the same three-way conflict rules as template updates. Existing user files therefore produce a conflict or a
+`.saasfoundry.new` sidecar instead of being overwritten by an installer. An unresolved `keep` or `save-new` collision prevents the module version from being stamped and prevents dependency
+installation; resolve the collision and rerun the command. The legacy-adoption command writes only the manifest, accepts only the verified multirepo output of the published beta, and cannot be mixed
+with module, workflow, technical-stack, SRS, or credential flags. Run a normal update afterwards.
 
 For automation, keep secrets out of shell history and generated planner commands. Supply them through the matching environment variable when the real update runs:
 

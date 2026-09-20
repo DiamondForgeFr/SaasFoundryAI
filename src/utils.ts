@@ -24,7 +24,7 @@ function shouldIgnore(filePath: string): boolean {
 /**
  * Compute SHA-256 hash of a file's content.
  */
-export function hashFileContent(content: string): string {
+export function hashFileContent(content: string | Buffer): string {
   return crypto.createHash('sha256').update(content).digest('hex')
 }
 
@@ -46,7 +46,7 @@ export async function computeFileHashes(dir: string): Promise<Record<string, str
       if (entry.isDirectory()) {
         await walk(fullPath)
       } else if (entry.isFile()) {
-        const content = await fs.promises.readFile(fullPath, 'utf8')
+        const content = await fs.promises.readFile(fullPath)
         hashes[relativePath] = hashFileContent(content)
       }
     }
@@ -78,7 +78,10 @@ export function resolveProjectNodeVersion(dir: string): string | null {
     const candidate = path.join(current, '.nvmrc')
     if (fs.existsSync(candidate)) {
       const version = fs.readFileSync(candidate, 'utf8').trim()
-      if (version) return version
+      if (version) {
+        if (!/^v?\d+(?:\.\d+){0,2}$/.test(version)) throw new Error(`Invalid Node.js version in ${candidate}: ${JSON.stringify(version)}`)
+        return version
+      }
     }
     const parent = path.dirname(current)
     if (parent === current) return null
@@ -132,7 +135,7 @@ export function checkNodeVersion(): void {
  * Validate that a project name is safe for use in shell commands and file paths
  */
 export function validateProjectName(name: string): void {
-  if (!/^[a-z0-9-]+$/.test(name)) {
+  if (typeof name !== 'string' || !/^[a-z0-9-]+$/.test(name)) {
     throw new Error(`Invalid project name "${name}": can only contain lowercase letters, numbers, and hyphens`)
   }
 }

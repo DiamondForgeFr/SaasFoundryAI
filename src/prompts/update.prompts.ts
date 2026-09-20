@@ -28,6 +28,8 @@ function isModuleAvailable(moduleName: string, manifest: SaaSFoundryManifest): b
       return isScaffoldManifest(manifest) && modules?.s3Setup === 'manual'
     case 'analytics':
       return isScaffoldManifest(manifest) && !modules?.includeAnalytics
+    case 'pwa':
+      return isScaffoldManifest(manifest) && modules?.pwa === undefined
     case 'srs':
       return !(manifest.tools?.srs?.enabled === true)
     case 'harness':

@@ -98,6 +98,19 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(Object.keys(manifest.fileHashes).some((p: string) => p.startsWith('.claude/skills/sf-workflow/'))).toBe(true)
   })
 
+  it('passes a non-interactive workflow preset to the shared config engine', async () => {
+    await writeFile('.saasfoundry.json', JSON.stringify(stackManifest(), null, 2))
+
+    await updateCommand({ nonInteractive: true, addModules: 'harness', workflow: 'saasfoundry' })
+
+    expect(mockedRunConfigSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nonInteractive: true,
+        prefill: expect.objectContaining({ workflowPreset: 'saasfoundry' })
+      })
+    )
+  })
+
   it('routes --target-profile full through the same harness installation path', async () => {
     await writeFile('.saasfoundry.json', JSON.stringify(stackManifest(), null, 2))
 
