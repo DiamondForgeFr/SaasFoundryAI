@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/saasfoundry-manifest.schema.json",
+  "manifestVersion": 2,
+  "version": "1.0.0-beta",
+  "generatedAt": "2026-09-20T00:00:00.000Z",
+  "structure": "cli",
+  "projectName": "managed-harness",
+  "modules": {
+    "harness": {
+      "version": 1
+    },
+    "advancedSkills": []
+  },
+  "workflow": {
+    "tool": "github-projects"
+  }
+}

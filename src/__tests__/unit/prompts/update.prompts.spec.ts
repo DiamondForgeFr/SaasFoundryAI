@@ -130,7 +130,7 @@ describe('getAvailableModules', () => {
         dbSetup: 'docker',
         includeAnalytics: true,
         advancedSkills: ['context7', 'atlassian', 'notion', 'figma'],
-        harness: { version: 1 }
+        harness: { version: 1, managed: true }
       },
       workflow: { tool: 'github-projects' },
       tools: { srs: { enabled: true, backend: 'notion' } }
@@ -139,6 +139,37 @@ describe('getAvailableModules', () => {
     const available = getAvailableModules(manifest)
 
     expect(available).toHaveLength(0)
+  })
+
+  it('offers the managed harness to a current stack project with core deposits', () => {
+    const manifest = manifestFixture({
+      modules: {
+        email: { provider: 'none', version: 1 },
+        s3Setup: 'manual',
+        dbSetup: 'docker',
+        includeAnalytics: false,
+        advancedSkills: [],
+        harness: { version: 1, managed: false }
+      }
+    })
+
+    expect(getAvailableModules(manifest).map((module) => module.value)).toContain('harness')
+  })
+
+  it('fails closed when an explicit core-only marker contradicts workflow evidence', () => {
+    const manifest = manifestFixture({
+      modules: {
+        email: { provider: 'none', version: 1 },
+        s3Setup: 'manual',
+        dbSetup: 'docker',
+        includeAnalytics: false,
+        advancedSkills: [],
+        harness: { version: 1, managed: false }
+      },
+      workflow: { tool: 'github-projects' }
+    })
+
+    expect(getAvailableModules(manifest).map((module) => module.value)).not.toContain('harness')
   })
 
   it('should include correct descriptions for skills', () => {

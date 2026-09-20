@@ -276,7 +276,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
         // Every scaffolded profile deposits harness artefacts (core skills +
         // docs at minimum — stack profile included) — track them so sf update
         // can refresh the deposits on any profile.
-        harness: { version: harnessInstallerMeta.currentVersion },
+        harness: { version: harnessInstallerMeta.currentVersion, managed: startProjectAnswers.profile !== 'stack' },
         // Recorded only when installed, so `--no-pwa` leaves no trace and the
         // dispatcher has nothing to replay. Its presence IS the enabled flag.
         ...((startProjectAnswers.includePwa ?? true) ? { pwa: { version: pwaInstallerMeta.currentVersion } } : {})
@@ -767,6 +767,7 @@ async function runHarnessInstall(config: Answers): Promise<void> {
       modules: {
         harness: {
           version: harnessInstallerMeta.currentVersion,
+          managed: true,
           ...(config.agents?.length ? { agents: config.agents } : {})
         },
         advancedSkills: config.advancedSkills ?? []

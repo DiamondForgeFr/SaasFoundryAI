@@ -69,8 +69,8 @@ describe('manifest migration — full chain (v0 → current)', () => {
     expect(manifest.structure).toBe(legacy.structure)
     expect(manifest.fileHashes).toEqual(legacy.fileHashes)
 
-    // Migration 002 lifts the flat `emailService` enum into `email.{provider, version}`
-    // while leaving the rest of the modules block untouched.
+    // Migration 002 lifts the flat `emailService` enum into `email.{provider, version}`;
+    // migration 003 has no harness state to classify in this fixture.
     expect(manifest.modules).toEqual({
       s3Setup: legacyModules.s3Setup,
       dbSetup: legacyModules.dbSetup,

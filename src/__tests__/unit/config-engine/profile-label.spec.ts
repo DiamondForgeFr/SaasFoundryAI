@@ -49,6 +49,6 @@ describe('the stack profile label describes what stack installs (#628)', () => {
     const newTs = readFileSync(resolve(__dirname, '../../../commands/new.ts'), 'utf8')
     const call = newTs.slice(newTs.indexOf('await installSkills({'), newTs.indexOf('await installSkills({') + 200)
     expect(call).not.toContain('profile')
-    expect(newTs).toContain('harness: { version: harnessInstallerMeta.currentVersion }')
+    expect(newTs).toContain("harness: { version: harnessInstallerMeta.currentVersion, managed: startProjectAnswers.profile !== 'stack' }")
   })
 })

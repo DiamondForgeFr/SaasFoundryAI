@@ -211,6 +211,7 @@ function sharedAgentEvidence(manifest: Record<string, unknown>): { valid: boolea
   const harness = manifest.modules.harness
   if (harness === undefined) return { valid: true }
   if (!object(harness) || !Number.isInteger(harness.version) || Number(harness.version) < 0) return { valid: false }
+  if (harness.managed !== undefined && typeof harness.managed !== 'boolean') return { valid: false }
   const agents = harness.agents
   if (agents === undefined) return { valid: true }
   if (!Array.isArray(agents) || agents.length === 0 || agents.some((agent) => typeof agent !== 'string' || !getAgentIds().includes(agent as HarnessAgent))) return { valid: false }

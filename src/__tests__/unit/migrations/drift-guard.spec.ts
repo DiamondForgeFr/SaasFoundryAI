@@ -43,7 +43,7 @@ describe('SaaSFoundryManifest drift-guard', () => {
       keys: extractTopLevelKeys()
     }
     expect(snapshot).toEqual({
-      targetVersion: 2,
+      targetVersion: 3,
       // mainBranch and language added without a version bump: new OPTIONAL fields with
       // read-site fallbacks — the "no migration needed" case of migration-framework.md.
       // For `language`, an absent block resolves exactly like one pinning "en"
