@@ -14,12 +14,14 @@ This page explains **what `sf update` does, what it does not touch, and how to r
 2. **Module addition** — lets you add modules that weren't installed at generation time (email, storage, analytics, optional skills). This flow is independent of the version check and runs every time.
 3. **Managed capability transition** — adds the missing technical stack or collaboration harness so an eligible managed project reaches the `full` profile.
 
-All flows are driven by the manifest and the canonical capability classification, never by guessing from `modules.harness` alone. A project created by the verified `saasfoundry-cli@1.0.0-beta` release
-can first create that manifest through the explicit legacy-adoption flow below. Other projects without a manifest are refused.
+All flows are driven by the manifest and the canonical capability classification, never by guessing from `modules.harness` alone. A **multirepo** project created by the verified
+`saasfoundry-cli@1.0.0-beta` release can first create that manifest through the explicit legacy-adoption flow below. The published beta disabled monorepo generation, so there is no authentic beta
+monorepo layout to adopt. Other projects without a manifest are refused.
 
 ## Adopt a project created before manifest support
 
-Legacy adoption is separate from updating templates or adding modules. Start with a read-only, release-specific inspection:
+Legacy adoption is separate from updating templates or adding modules. It supports only the integrity-pinned multirepo output of the published `saasfoundry-cli@1.0.0-beta` package. It does not infer
+that an arbitrary NestJS/React repository came from SaaSFoundryAI, and it does not accept reconstructed or synthetic monorepo layouts. Start with a read-only, release-specific inspection:
 
 ```bash
 sf update --adopt-legacy --dry-run --json \
@@ -39,10 +41,9 @@ sf update --adopt-legacy \
 ```
 
 This command creates only `.saasfoundry.json`. It never replaces an existing manifest and it refuses missing historical paths, insufficient release matches, changed critical signatures, links, hard
-links, special files, case collisions, or a different plan fingerprint. The published `1.0.0-beta` generator disabled monorepo generation, so this release-specific adoption path accepts only its
-verified multirepo layout. Run a normal `sf update --dry-run --json` afterwards to review template changes and optional modules. Adoption flags cannot be mixed with module, workflow, technical-stack,
-SRS, or credential options; adopt first and update in a second command. The adopted manifest records a pending initial refresh, so this comparison still runs when the historical package version and
-the current CLI version happen to have the same text. That marker is cleared only after the refresh completes without unresolved conflicts.
+links, special files, case collisions, or a different plan fingerprint. Run a normal `sf update --dry-run --json` afterwards to review template changes and optional modules. Adoption flags cannot be
+mixed with module, workflow, technical-stack, SRS, or credential options; adopt first and update in a second command. The adopted manifest records a pending initial refresh, so this comparison still
+runs when the historical package version and the current CLI version happen to have the same text. That marker is cleared only after the refresh completes without unresolved conflicts.
 
 ## Promote an existing managed project to full
 

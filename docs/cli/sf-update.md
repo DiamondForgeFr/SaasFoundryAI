@@ -35,7 +35,7 @@ sf update [options]
 | `--add-modules <modules>`        | Comma-separated modules; includes `harness` as the compatibility spelling for stack → full                            | -          |
 | `--workflow <preset>`            | Workflow preset when adding the harness: `solo`, `saasfoundry`, or `none`                                             | -          |
 | `--no-workflow`                  | Add the harness without workflow configuration                                                                        | -          |
-| `--adopt-legacy`                 | Inspect or adopt a recognized project created before manifest support                                                 | -          |
+| `--adopt-legacy`                 | Inspect or adopt the verified multirepo output of `saasfoundry-cli@1.0.0-beta`                                        | -          |
 | `--adopt-plan <fingerprint>`     | Apply the exact legacy-adoption plan returned by a previous dry run                                                   | -          |
 | `--project-name <name>`          | Original generated name used to verify a legacy layout                                                                | directory  |
 | `--main-branch <branch>`         | Main branch when the legacy API/web repositories cannot prove one shared branch                                       | detected   |
@@ -60,7 +60,7 @@ sf update --dry-run --json --add-modules email,analytics
 ```
 
 ```bash
-# Adopt a verified pre-manifest project in two reviewable steps
+# Adopt a verified beta multirepo project in two reviewable steps
 sf update --adopt-legacy --dry-run --json --project-name my-app --main-branch main
 sf update --adopt-legacy --project-name my-app --main-branch main --adopt-plan <fingerprint>
 ```
@@ -93,8 +93,9 @@ secrets or opening signup pages.
 
 Late stack modules are first prepared outside the project and then passed through the same three-way conflict rules as template updates. Existing user files therefore produce a conflict or a
 `.saasfoundry.new` sidecar instead of being overwritten by an installer. An unresolved `keep` or `save-new` collision prevents the module version from being stamped and prevents dependency
-installation; resolve the collision and rerun the command. The legacy-adoption command writes only the manifest, accepts only the verified multirepo output of the published beta, and cannot be mixed
-with module, workflow, technical-stack, SRS, or credential flags. Run a normal update afterwards.
+installation; resolve the collision and rerun the command. The legacy-adoption command writes only the manifest, accepts only the verified multirepo output of the published
+`saasfoundry-cli@1.0.0-beta` package, and cannot be mixed with module, workflow, technical-stack, SRS, or credential flags. That published generator disabled monorepo generation; reconstructed or
+synthetic monorepo layouts are not eligible. Run a normal update afterwards.
 
 For automation, keep secrets out of shell history and generated planner commands. Supply them through the matching environment variable when the real update runs:
 

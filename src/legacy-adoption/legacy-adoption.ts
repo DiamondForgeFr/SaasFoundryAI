@@ -313,7 +313,14 @@ function inferModules(files: Map<string, LegacyFileEvidence>, roots: { api: stri
     s3Setup: 'manual',
     dbSetup,
     includeAnalytics: false,
-    advancedSkills: []
+    advancedSkills: [],
+    // The published beta deposited a few core AI files inside each generated
+    // application, but it did not install or manage the project-root
+    // collaboration harness. Record that distinction explicitly so capability
+    // classification sees an adopted project as the supported stack profile
+    // and `sf update --target-profile full` can add the managed harness. Leaving
+    // this absent means "legacy unknown" and correctly blocks the transition.
+    harness: { version: 1, managed: false }
   }
 }
 

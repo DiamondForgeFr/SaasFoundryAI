@@ -17,24 +17,52 @@ if (packed.status !== 0) {
 
 let report
 try {
-  const jsonStart = packed.stdout.search(/^\[/m)
+  const candidates = [...packed.stdout.matchAll(/^\[\s*\{/gm)]
+  const jsonStart = candidates.at(-1)?.index ?? -1
+  if (jsonStart < 0) throw new Error('missing JSON array')
   report = JSON.parse(packed.stdout.slice(jsonStart))
 } catch {
   console.error('npm pack did not return a JSON report.')
   process.exit(1)
 }
 
-const files = new Set((report[0]?.files || []).map((entry) => entry.path))
+const packageReport = report[0]
+const files = new Set((packageReport?.files || []).map((entry) => entry.path))
 const required = ['bin/sf.js', 'dist/index.js', 'docs-dist/index.html']
 const missing = required.filter((file) => !files.has(file))
 const compiledTests = [...files].filter((file) => file.startsWith('dist/__tests__/'))
 const scaffoldCount = [...files].filter((file) => file.startsWith('scaffolds/')).length
+const forbiddenFixtureArtifacts = [...files].filter(
+  (file) =>
+    file.startsWith('tests/') ||
+    /(^|\/)(?:__fixtures__|fixtures|previous-release|legacy-beta)(\/|$)/.test(file) ||
+    /(^|\/)scripts\/refresh-previous-release-fixture\.[^/]+$/i.test(file) ||
+    /\.(?:gz|tgz|tar|zip)$/i.test(file)
+)
 
-if (missing.length || compiledTests.length || scaffoldCount === 0) {
+// These ceilings deliberately leave substantial room above the current package.
+// They catch an accidentally published project fixture or build tree while keeping
+// ordinary documentation and scaffold growth reviewable instead of brittle.
+const packageBudgets = {
+  size: 8 * 1024 * 1024,
+  unpackedSize: 24 * 1024 * 1024,
+  entryCount: 2000
+}
+const invalidReportFields = Object.keys(packageBudgets).filter((field) => !Number.isSafeInteger(packageReport?.[field]) || packageReport[field] < 0)
+const exceededBudgets = Object.entries(packageBudgets).filter(([field, maximum]) => Number.isSafeInteger(packageReport?.[field]) && packageReport[field] > maximum)
+
+if (missing.length || compiledTests.length || forbiddenFixtureArtifacts.length || scaffoldCount === 0 || invalidReportFields.length || exceededBudgets.length) {
   if (missing.length) console.error(`Missing required package files: ${missing.join(', ')}`)
   if (compiledTests.length) console.error(`Compiled tests leaked into the package: ${compiledTests.length}`)
+  if (forbiddenFixtureArtifacts.length) console.error(`Test fixture or archive files leaked into the package: ${forbiddenFixtureArtifacts.join(', ')}`)
   if (scaffoldCount === 0) console.error('No scaffold files were included in the package.')
+  if (invalidReportFields.length) console.error(`npm pack omitted valid package metrics: ${invalidReportFields.join(', ')}`)
+  for (const [field, maximum] of exceededBudgets) {
+    console.error(`Package ${field} exceeds the review budget: ${packageReport[field]} > ${maximum}`)
+  }
   process.exit(1)
 }
 
-console.log(`Package boundary valid: ${files.size} files, ${scaffoldCount} scaffold files, no compiled tests.`)
+console.log(
+  `Package boundary valid: ${packageReport.entryCount} files, ${packageReport.size} bytes packed, ${packageReport.unpackedSize} bytes unpacked, ${scaffoldCount} scaffold files, no test fixtures.`
+)
