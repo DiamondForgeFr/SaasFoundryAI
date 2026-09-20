@@ -12,10 +12,7 @@ jest.mock('../../../utils', () => ({
   computeFileHashes: jest.fn().mockResolvedValue({})
 }))
 
-jest.mock('../../../builders/api.builder', () => ({ createApiApp: jest.fn() }))
-jest.mock('../../../builders/web.builder', () => ({ createWebApp: jest.fn() }))
-jest.mock('../../../builders/monorepo.builder', () => ({ createMonorepoRoot: jest.fn() }))
-jest.mock('../../../builders/dev-services.builder', () => ({ createDevServicesCompose: jest.fn() }))
+jest.mock('../../../renderers/technical-stack.renderer', () => ({ renderTechnicalStack: jest.fn() }))
 jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
 
 jest.mock('../../../runners/database.runner', () => ({ initAndStartDb: jest.fn() }))
@@ -41,10 +38,7 @@ jest.mock('terminal-link', () => ({
 }))
 
 import { newCommand } from '../../../commands/new'
-import { createApiApp } from '../../../builders/api.builder'
-import { createWebApp } from '../../../builders/web.builder'
-import { createMonorepoRoot } from '../../../builders/monorepo.builder'
-import { createDevServicesCompose } from '../../../builders/dev-services.builder'
+import { renderTechnicalStack } from '../../../renderers/technical-stack.renderer'
 import { installSkills } from '../../../installers/skills.installer'
 import { initAndStartDb } from '../../../runners/database.runner'
 import { initAndStartS3 } from '../../../runners/s3.runner'
@@ -52,10 +46,7 @@ import { openTerminal } from '../../../runners/terminal.runner'
 import { readAgentSupport } from '../../../harness/agent-support'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
-const mockedCreateApiApp = createApiApp as jest.MockedFunction<typeof createApiApp>
-const mockedCreateWebApp = createWebApp as jest.MockedFunction<typeof createWebApp>
-const mockedCreateMonorepoRoot = createMonorepoRoot as jest.MockedFunction<typeof createMonorepoRoot>
-const mockedCreateDevServices = createDevServicesCompose as jest.MockedFunction<typeof createDevServicesCompose>
+const mockedRenderTechnicalStack = renderTechnicalStack as jest.MockedFunction<typeof renderTechnicalStack>
 const mockedInstallSkills = installSkills as jest.MockedFunction<typeof installSkills>
 const mockedInitAndStartDb = initAndStartDb as jest.MockedFunction<typeof initAndStartDb>
 const mockedInitAndStartS3 = initAndStartS3 as jest.MockedFunction<typeof initAndStartS3>
@@ -75,6 +66,19 @@ describe('newCommand (non-interactive integration)', () => {
     process.chdir(tempDir)
 
     jest.clearAllMocks()
+
+    mockedRenderTechnicalStack.mockImplementation(async ({ targetDir, config }) => {
+      const root = targetDir === '.' ? process.cwd() : targetDir
+      if (config.isMonorepo) {
+        await seedHarnessSource(root)
+        return { rootDir: root, apiPath: join(root, 'apps/api'), webPath: join(root, 'apps/web') }
+      }
+      const apiPath = join(root, 'apps', `${config.projectName}-api`)
+      const webPath = join(root, 'apps', `${config.projectName}-web`)
+      await seedHarnessSource(apiPath)
+      await seedHarnessSource(webPath)
+      return { rootDir: root, apiPath, webPath }
+    })
 
     // Simulate Inquirer's native prefill behavior: when all applicable
     // questions are prefilled, inquirer.prompt returns the prefilled answers as-is.
@@ -118,8 +122,7 @@ describe('newCommand (non-interactive integration)', () => {
   it('runs end-to-end from flags alone without asking the user any question', async () => {
     await newCommand(baseOpts)
 
-    expect(mockedCreateApiApp).toHaveBeenCalledTimes(1)
-    expect(mockedCreateWebApp).toHaveBeenCalledTimes(1)
+    expect(mockedRenderTechnicalStack).toHaveBeenCalledTimes(1)
     expect(mockedInstallSkills).toHaveBeenCalledTimes(1)
 
     // Every prompt call must have received the full prefill (never prompted for real input).
@@ -128,7 +131,7 @@ describe('newCommand (non-interactive integration)', () => {
     }
   })
 
-  it('propagates flags through to the API builder', async () => {
+  it('propagates flags through to the shared technical renderer', async () => {
     await newCommand({
       nonInteractive: true,
       projectName: 'acme',
@@ -152,22 +155,26 @@ describe('newCommand (non-interactive integration)', () => {
       workflow: 'none'
     })
 
-    expect(mockedCreateApiApp).toHaveBeenCalledWith(
+    expect(mockedRenderTechnicalStack).toHaveBeenCalledWith(
       expect.objectContaining({
-        projectName: 'acme',
-        isMonorepo: false,
-        mainBranch: 'main',
-        emailService: 'mailersend',
-        mailersendApiKey: 'ms-key',
-        mailersendSenderEmail: 'hello@acme.com',
-        mailersendSenderName: 'Acme',
-        dbCredentials: expect.objectContaining({
-          dbType: 'postgresql',
-          host: 'db.example.com',
-          port: '5432',
-          user: 'admin',
-          password: 'secret',
-          database: 'acme_prod'
+        targetDir: '.',
+        externalEffects: true,
+        config: expect.objectContaining({
+          projectName: 'acme',
+          isMonorepo: false,
+          mainBranch: 'main',
+          emailService: 'mailersend',
+          mailersendApiKey: 'ms-key',
+          mailersendSenderEmail: 'hello@acme.com',
+          mailersendSenderName: 'Acme',
+          dbCredentials: expect.objectContaining({
+            dbType: 'postgresql',
+            host: 'db.example.com',
+            port: '5432',
+            user: 'admin',
+            password: 'secret',
+            database: 'acme_prod'
+          })
         })
       })
     )
@@ -197,9 +204,6 @@ describe('newCommand (non-interactive integration)', () => {
   })
 
   it('wires the selected agents into both independent multirepo harness roots', async () => {
-    mockedCreateApiApp.mockImplementationOnce(async ({ projectName }) => seedHarnessSource(`apps/${projectName}-api`))
-    mockedCreateWebApp.mockImplementationOnce(async ({ projectName }) => seedHarnessSource(`apps/${projectName}-web`))
-
     await newCommand({ ...baseOpts, agents: 'claude-code,codex' })
 
     for (const app of ['acme-api', 'acme-web']) {
@@ -212,8 +216,6 @@ describe('newCommand (non-interactive integration)', () => {
   })
 
   it('wires the selected agents into the single monorepo harness root', async () => {
-    mockedCreateMonorepoRoot.mockImplementationOnce(async () => seedHarnessSource('.'))
-
     await newCommand({ ...baseOpts, structure: 'monorepo', agents: 'claude-code,codex' })
 
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
@@ -225,7 +227,7 @@ describe('newCommand (non-interactive integration)', () => {
   it('creates a monorepo root when --structure monorepo', async () => {
     await newCommand({ ...baseOpts, structure: 'monorepo' })
 
-    expect(mockedCreateMonorepoRoot).toHaveBeenCalledTimes(1)
+    expect(mockedRenderTechnicalStack).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ isMonorepo: true }) }))
   })
 
   const dockerOpts = {
@@ -254,16 +256,16 @@ describe('newCommand (non-interactive integration)', () => {
     expect(mockedOpenTerminal).not.toHaveBeenCalled()
   })
 
-  it('skips dev services builder when dbSetup=manual and s3Setup=manual', async () => {
+  it('passes manual service choices to the renderer', async () => {
     await newCommand(baseOpts)
 
-    expect(mockedCreateDevServices).not.toHaveBeenCalled()
+    expect(mockedRenderTechnicalStack).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ dbSetup: 'manual', s3Setup: 'manual' }) }))
   })
 
-  it('calls the dev services builder when docker services are requested', async () => {
+  it('passes Docker service choices to the renderer', async () => {
     await newCommand(dockerOpts)
 
-    expect(mockedCreateDevServices).toHaveBeenCalledTimes(1)
+    expect(mockedRenderTechnicalStack).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ dbSetup: 'docker', s3Setup: 'docker' }) }))
   })
 
   it('surfaces missing required flags as a thrown error (not a hang)', async () => {

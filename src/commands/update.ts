@@ -5,8 +5,6 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import ora from 'ora'
 
-import shelljs from 'shelljs'
-
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installEmailModule } from '../installers/email.installer'
 import { installOptionalSkills } from '../installers/optional-skills.installer'
@@ -15,10 +13,7 @@ import { computeHarnessFileHashes, harnessInstallerMeta, installHarness, isHarne
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { DEFAULT_PORTS } from '../ports'
-import { createApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
-import { createMonorepoRoot } from '../builders/monorepo.builder'
-import { createWebApp } from '../builders/web.builder'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { skillsStep } from '../config-engine/steps/skills.step'
@@ -41,6 +36,7 @@ import { buildUpdatePrefillFromOptions, ConflictStrategy, parseConflictStrategy,
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../harness/agent-instructions'
+import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
 // scaffold refreshes must neither delete them nor adopt user edits/private skills.
@@ -73,26 +69,15 @@ export interface FileUpdate {
  */
 async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tempDir: string; hashes: Record<string, string> }> {
   // Template regeneration only applies to projects scaffolded by `sf new`.
-  // The scaffold marker is `modules.email` — a harness-only manifest also
-  // carries a `modules` block (just `harness`) but has no stack to regenerate.
+  // Harness-only manifests carry a `modules` block too, but have no stack to regenerate.
   if (!isScaffoldManifest(manifest)) {
-    throw new Error('regenerateInTempDir requires a scaffolded manifest (modules.email present)')
+    throw new Error('regenerateInTempDir requires a complete scaffolded manifest')
   }
-  const tempDir = join(tmpdir(), `saasfoundry-update-${Date.now()}`)
+  const tempDir = await mkdtemp(join(tmpdir(), 'saasfoundry-update-'))
   const projectDir = join(tempDir, manifest.projectName)
-  await mkdir(`${projectDir}/apps`, { recursive: true })
-
-  // Save original CWD and exec, then suppress side effects
-  const originalCwd = process.cwd()
-  const originalExec = shelljs.exec
-
-  // Monkey-patch shelljs.exec to no-op (skip npm install, git init, prisma generate)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(shelljs as any).exec = () => ({ code: 0, stdout: '10.0.0', stderr: '' })
 
   try {
-    process.chdir(projectDir)
-
+    await mkdir(projectDir, { recursive: true })
     /**
      * The ports the user's project actually runs on, not the template's defaults.
      *
@@ -103,74 +88,47 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
      * the defaults are exactly what those projects run.
      */
     const ports = manifest.ports ?? DEFAULT_PORTS
+    const mainBranch = (manifest.mainBranch ?? 'main') as Answers['mainBranch']
 
-    // Re-run API builder with dummy credentials
-    await createApiApp({
+    const config: Answers = {
+      profile: manifest.modules.harness?.managed === false ? 'stack' : 'full',
+      setupRepo: 'local',
       isMonorepo: manifest.structure === 'monorepo',
       projectName: manifest.projectName,
       projectDescription: '',
       backendRepoUrl: '',
-      dbCredentials: { host: 'localhost', port: String(ports.db), user: 'user', password: 'pass', database: 'db', dbType: 'postgresql' },
-      mainBranch: manifest.mainBranch ?? 'main', // pre-mainBranch manifests: backfill deferred (#424 step 6)
+      frontendRepoUrl: '',
+      dbCredentials: {
+        host: 'localhost',
+        port: String(ports.db),
+        user: 'db_dev_user',
+        password: 'db_dev_password',
+        database: 'db_dev',
+        dbType: 'postgresql'
+      },
+      dbSetup: manifest.modules.dbSetup,
+      initDb: false,
+      mainBranch, // pre-mainBranch manifests: backfill deferred (#424 step 6)
       emailService: manifest.modules.email.provider,
       mailersendApiKey: manifest.modules.email.provider === 'mailersend' ? 'dummy-key' : undefined,
       mailersendSenderEmail: manifest.modules.email.provider === 'mailersend' ? 'noreply@example.com' : undefined,
       mailersendSenderName: manifest.modules.email.provider === 'mailersend' ? 'App' : undefined,
       s3Setup: manifest.modules.s3Setup,
       s3Credentials: manifest.modules.s3Setup === 'credentials' ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' } : undefined,
-      advancedSkills: manifest.modules.advancedSkills || [],
-      workflow: manifest.workflow,
-      aiRules: manifest.aiRules,
-      ports
-    })
-
-    // Re-run dev services builder if needed
-    const hasDevServices = manifest.modules.dbSetup === 'docker' || manifest.modules.s3Setup === 'docker'
-    if (hasDevServices) {
-      const apiPath = manifest.structure === 'monorepo' ? 'apps/api' : `apps/${manifest.projectName}-api`
-      await createDevServicesCompose({
-        apiPath,
-        projectName: manifest.projectName,
-        dbSetup: manifest.modules.dbSetup,
-        // The builder's own template defaults, so the regenerated compose matches what a
-        // fresh scaffold writes — only the port carries real information here.
-        dbCredentials: { host: 'localhost', port: String(ports.db), user: 'db_dev_user', password: 'db_dev_password', database: 'db_dev', dbType: 'postgresql' },
-        s3Setup: manifest.modules.s3Setup
-      })
-    }
-
-    // Re-run web builder
-    await createWebApp({
-      isMonorepo: manifest.structure === 'monorepo',
-      projectName: manifest.projectName,
-      projectDescription: '',
-      frontendRepoUrl: '',
-      mainBranch: manifest.mainBranch ?? 'main',
-      s3Setup: manifest.modules.s3Setup,
       includeAnalytics: manifest.modules.includeAnalytics,
       includePwa: manifest.modules.pwa !== undefined,
       advancedSkills: manifest.modules.advancedSkills || [],
       workflow: manifest.workflow,
-      aiRules: manifest.aiRules,
-      ports
-    })
-
-    // Re-run monorepo root builder if applicable
-    if (manifest.structure === 'monorepo') {
-      await createMonorepoRoot({
-        projectName: manifest.projectName,
-        projectDescription: '',
-        mainBranch: manifest.mainBranch ?? 'main',
-        workflow: manifest.workflow,
-        aiRules: manifest.aiRules,
-        ports
-      })
+      aiRules: manifest.aiRules
     }
+
+    await renderTechnicalStack({ targetDir: projectDir, config, ports, externalEffects: false })
 
     // Re-run skills installer
     const apiPath = manifest.structure === 'monorepo' ? 'apps/api' : `apps/${manifest.projectName}-api`
     const webPath = manifest.structure === 'monorepo' ? 'apps/web' : `apps/${manifest.projectName}-web`
     await installSkills({
+      targetDir: projectDir,
       isMonorepo: manifest.structure === 'monorepo',
       apiPath,
       webPath,
@@ -181,13 +139,12 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
     })
 
     // Compute hashes of the regenerated project
-    const hashes = await computeFileHashes('.')
+    const hashes = await computeFileHashes(projectDir)
 
     return { tempDir, hashes }
-  } finally {
-    process.chdir(originalCwd)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(shelljs as any).exec = originalExec
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    throw error
   }
 }
 

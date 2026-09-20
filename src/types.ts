@@ -82,6 +82,10 @@ export interface Answers {
 }
 
 export interface CreateApiAppParams {
+  /** Directory that owns the generated project. Defaults to the current directory for legacy callers. */
+  targetDir?: string
+  /** Run npm, Prisma and Git after rendering. Defaults to true. */
+  externalEffects?: boolean
   /** Resolved host ports. Absent means the defaults — see `DEFAULT_PORTS`. */
   ports?: ProjectPorts
   isMonorepo: boolean
@@ -110,6 +114,10 @@ export interface CreateApiAppParams {
 }
 
 export interface CreateWebAppParams {
+  /** Directory that owns the generated project. Defaults to the current directory for legacy callers. */
+  targetDir?: string
+  /** Run npm and Git after rendering. Defaults to true. */
+  externalEffects?: boolean
   /** Resolved host ports. Absent means the defaults — see `DEFAULT_PORTS`. */
   ports?: ProjectPorts
   isMonorepo: boolean
@@ -146,6 +154,10 @@ export interface CreateS3AppParams {
 }
 
 export interface CreateMonorepoRootParams {
+  /** Directory that owns the generated project. Defaults to the current directory for legacy callers. */
+  targetDir?: string
+  /** Run npm, Prisma and Git after rendering. Defaults to true. */
+  externalEffects?: boolean
   /** Resolved host ports. Absent means the defaults — see `DEFAULT_PORTS`. */
   ports?: ProjectPorts
   projectName: string

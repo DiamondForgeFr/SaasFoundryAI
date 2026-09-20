@@ -1,6 +1,6 @@
 import { copy } from 'fs-extra'
 import { readFile, rm, writeFile } from 'fs/promises'
-import { resolve } from 'path'
+import { join, resolve } from 'path'
 
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
@@ -10,7 +10,16 @@ import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
-export async function createApiApp({
+export async function createApiApp(params: CreateApiAppParams) {
+  const targetDir = params.targetDir ?? '.'
+  const result = await renderApiApp({ ...params, targetDir })
+  if (params.externalEffects !== false) await provisionApiApp({ ...params, targetDir })
+  return result
+}
+
+/** Render the API candidate without running package, Prisma or Git commands. */
+export async function renderApiApp({
+  targetDir,
   isMonorepo,
   projectName,
   projectDescription,
@@ -25,7 +34,7 @@ export async function createApiApp({
   s3Credentials,
   workflow,
   ports
-}: CreateApiAppParams) {
+}: CreateApiAppParams & { targetDir: string }) {
   validateProjectName(projectName)
 
   // A project scaffolded before ports were chosen runs on these, so they are also
@@ -33,7 +42,7 @@ export async function createApiApp({
   const { api: apiPort, web: webPort } = ports ?? DEFAULT_PORTS
 
   // Create the API app directory
-  const apiPath = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
+  const apiPath = join(targetDir, isMonorepo ? 'apps/api' : `apps/${projectName}-api`)
 
   await copy(resolve(blueprintsPath, 'api'), apiPath)
   if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/api'), apiPath, { overwrite: true })
@@ -58,14 +67,6 @@ export async function createApiApp({
   packageJson.repository.url = backendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
   packageJson.keywords = [projectName, 'saasfoundry', 'backend', 'nest', 'prisma']
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
-  const nvm = getNvmPrefix(apiPath)
-
-  // For monorepo, npm install and prisma generate are handled by the monorepo root builder
-  if (!isMonorepo) {
-    runRequired('npm install (api)', `${nvm}npm install --prefix ${apiPath}`)
-    runRequired('prisma generate (api)', `${nvm}cd ${apiPath} && npx prisma generate`)
-  }
-
   // Update .env with core settings (JWT secrets, database credentials)
   const envPath = `${apiPath}/.env`
   let envContent = await readFile(envPath, 'utf8')
@@ -131,7 +132,7 @@ export async function createApiApp({
 
   // Install S3 storage module (if selected)
   if (s3Setup !== 'manual') {
-    const webPath = isMonorepo ? 'apps/web' : `apps/${projectName}-web`
+    const webPath = join(targetDir, isMonorepo ? 'apps/web' : `apps/${projectName}-web`)
     await installStorageModule({
       apiPath,
       webPath,
@@ -139,6 +140,7 @@ export async function createApiApp({
       projectName,
       s3Setup,
       s3Credentials,
+      skipNpmInstall: true,
       // The endpoint written into .env must name the port MinIO was actually published on,
       // or the API dials a port nothing listens on — the #583 defect, on storage (#623).
       s3Port: ports?.s3
@@ -208,19 +210,25 @@ export async function createApiApp({
   const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')
   await substitutePlaceholdersInFiles([`${apiPath}/.github/workflows/test.yml`, deploymentYmlPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
 
-  // Initialize Git repository
-  if (!isMonorepo) {
-    // Best-effort: the folder may already be a repository, or git may be absent. None of
-    // that makes the scaffold unusable, so it reports and carries on.
-    runBestEffort('git init (api)', `git init ${apiPath}`, { onSkipped: warn })
-    runBestEffort('git checkout (api)', `git -C ${apiPath} checkout -b ${mainBranch}`, { onSkipped: warn })
-    if (backendRepoUrl) runBestEffort('git remote add (api)', `git -C ${apiPath} remote add origin ${backendRepoUrl}`, { onSkipped: warn })
-    runBestEffort('git add (api)', `git -C ${apiPath} add .`, { onSkipped: warn })
-    runBestEffort('git commit (api)', `git -C ${apiPath} commit -m "Initial commit"`, { onSkipped: warn })
-    // Develop-first: create the declared working branch so the repo matches its docs.
-    const workingBranch = workflow?.workingBranch
-    if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (api)', `git -C ${apiPath} checkout -b ${workingBranch}`, { onSkipped: warn })
-  }
-
   return true
+}
+
+/** Apply the external effects required to make a rendered multirepo API ready to use. */
+export async function provisionApiApp({ targetDir = '.', isMonorepo, projectName, backendRepoUrl, mainBranch, workflow }: CreateApiAppParams): Promise<void> {
+  if (isMonorepo) return
+  const apiPath = join(targetDir, `apps/${projectName}-api`)
+  const nvm = getNvmPrefix(apiPath)
+
+  runRequired('npm install (api)', `${nvm}npm install`, { cwd: apiPath })
+  runRequired('prisma generate (api)', `${nvm}npx prisma generate`, { cwd: apiPath })
+
+  // Best-effort: the folder may already be a repository, or git may be absent. None of
+  // that makes the scaffold unusable, so it reports and carries on.
+  runBestEffort('git init (api)', 'git init', { cwd: apiPath, onSkipped: warn })
+  runBestEffort('git checkout (api)', `git checkout -b ${mainBranch}`, { cwd: apiPath, onSkipped: warn })
+  if (backendRepoUrl) runBestEffort('git remote add (api)', `git remote add origin ${backendRepoUrl}`, { cwd: apiPath, onSkipped: warn })
+  runBestEffort('git add (api)', 'git add .', { cwd: apiPath, onSkipped: warn })
+  runBestEffort('git commit (api)', 'git commit -m "Initial commit"', { cwd: apiPath, onSkipped: warn })
+  const workingBranch = workflow?.workingBranch
+  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch (api)', `git checkout -b ${workingBranch}`, { cwd: apiPath, onSkipped: warn })
 }

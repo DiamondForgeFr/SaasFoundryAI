@@ -38,7 +38,7 @@ describe('the web install runs after everything that can touch package.json (#60
   })
 
   it('is the only install in this builder — one final package.json, one install', () => {
-    expect(source.match(/npm install --prefix/g)?.length).toBe(1)
+    expect(source.match(/runRequired\('npm install \(web\)'/g)?.length).toBe(1)
   })
 })
 

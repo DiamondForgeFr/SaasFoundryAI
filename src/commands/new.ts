@@ -5,10 +5,6 @@ import ora from 'ora'
 import { execSync } from 'child_process'
 import terminalLink from 'terminal-link'
 
-import { createApiApp } from '../builders/api.builder'
-import { createDevServicesCompose } from '../builders/dev-services.builder'
-import { createMonorepoRoot } from '../builders/monorepo.builder'
-import { createWebApp } from '../builders/web.builder'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
@@ -25,6 +21,7 @@ import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
 import { languageConfigFromAnswers } from '../language'
 import { targetManifestVersion } from '../migrations/manifest/registry'
 import { resolvePorts } from '../ports'
+import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { Answers, manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
 import type { HarnessAgent } from '../harness/agent-registry'
@@ -139,94 +136,10 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     process.chdir(startProjectAnswers.projectName)
     updateProgress()
 
-    // Create API app
-    spinner.text = 'Setting up API application...'
-    await createApiApp({
-      isMonorepo: startProjectAnswers.isMonorepo,
-      projectName: startProjectAnswers.projectName,
-      projectDescription: startProjectAnswers.projectDescription,
-      backendRepoUrl: startProjectAnswers.backendRepoUrl,
-      dbCredentials: startProjectAnswers.dbCredentials,
-      mainBranch: startProjectAnswers.mainBranch,
-      emailService: startProjectAnswers.emailService,
-      mailersendApiKey: startProjectAnswers.mailersendApiKey,
-      mailersendSenderEmail: startProjectAnswers.mailersendSenderEmail,
-      mailersendSenderName: startProjectAnswers.mailersendSenderName,
-      s3Setup: startProjectAnswers.s3Setup,
-      s3Credentials: startProjectAnswers.s3Credentials,
-      advancedSkills: startProjectAnswers.advancedSkills,
-      context7ApiKey: startProjectAnswers.context7ApiKey,
-      atlassianEmail: startProjectAnswers.atlassianEmail,
-      atlassianApiToken: startProjectAnswers.atlassianApiToken,
-      atlassianSite: startProjectAnswers.atlassianSite,
-      atlassianCloudId: startProjectAnswers.atlassianCloudId,
-      notionApiToken: startProjectAnswers.notionApiToken,
-      notionApiVersion: startProjectAnswers.notionApiVersion,
-      figmaApiToken: startProjectAnswers.figmaApiToken,
-      workflow: startProjectAnswers.workflow,
-      aiRules: startProjectAnswers.aiRules,
-      ports: projectPorts
-    })
-    updateProgress()
-
-    // Create dev services compose file (DB and/or S3 when using Docker)
-    if (hasDevServices) {
-      spinner.text = 'Setting up dev services...'
-      const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
-      await createDevServicesCompose({
-        apiPath,
-        projectName: startProjectAnswers.projectName,
-        dbSetup: startProjectAnswers.dbSetup,
-        dbCredentials: startProjectAnswers.dbCredentials,
-        s3Setup: startProjectAnswers.s3Setup,
-        s3Credentials: startProjectAnswers.s3Credentials,
-        s3Ports: { api: projectPorts.s3, console: projectPorts.s3Console }
-      })
-      updateProgress()
-    }
-
-    // Create WEB app
-    spinner.text = 'Setting up web application...'
-    await createWebApp({
-      isMonorepo: startProjectAnswers.isMonorepo,
-      projectName: startProjectAnswers.projectName,
-      projectDescription: startProjectAnswers.projectDescription,
-      frontendRepoUrl: startProjectAnswers.frontendRepoUrl || '',
-      mainBranch: startProjectAnswers.mainBranch,
-      s3Setup: startProjectAnswers.s3Setup,
-      includeAnalytics: startProjectAnswers.includeAnalytics,
-      // Default-on module: a config session that predates the step (or a prefill that omits it)
-      // must still produce an installable app.
-      includePwa: startProjectAnswers.includePwa ?? true,
-      advancedSkills: startProjectAnswers.advancedSkills,
-      context7ApiKey: startProjectAnswers.context7ApiKey,
-      atlassianEmail: startProjectAnswers.atlassianEmail,
-      atlassianApiToken: startProjectAnswers.atlassianApiToken,
-      atlassianSite: startProjectAnswers.atlassianSite,
-      atlassianCloudId: startProjectAnswers.atlassianCloudId,
-      notionApiToken: startProjectAnswers.notionApiToken,
-      notionApiVersion: startProjectAnswers.notionApiVersion,
-      figmaApiToken: startProjectAnswers.figmaApiToken,
-      workflow: startProjectAnswers.workflow,
-      aiRules: startProjectAnswers.aiRules,
-      ports: projectPorts
-    })
-    updateProgress()
-
-    // Create monorepo root structure (turbo.json, root package.json, husky, etc.)
-    if (startProjectAnswers.isMonorepo) {
-      spinner.text = 'Setting up Turborepo monorepo root...'
-      await createMonorepoRoot({
-        projectName: startProjectAnswers.projectName,
-        projectDescription: startProjectAnswers.projectDescription,
-        monorepoUrl: startProjectAnswers.monorepoUrl,
-        mainBranch: startProjectAnswers.mainBranch,
-        workflow: startProjectAnswers.workflow,
-        aiRules: startProjectAnswers.aiRules,
-        ports: projectPorts
-      })
-      updateProgress()
-    }
+    spinner.text = 'Rendering technical stack...'
+    await renderTechnicalStack({ targetDir: '.', config: startProjectAnswers, ports: projectPorts, externalEffects: true })
+    currentStep = totalSteps
+    spinner.text = 'Setting up your project... 100%'
 
     // Install Claude Code skills
     spinner.text = 'Installing Claude Code skills...'

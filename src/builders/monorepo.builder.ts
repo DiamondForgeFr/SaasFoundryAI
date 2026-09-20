@@ -1,6 +1,6 @@
 import { copy } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
-import { resolve } from 'path'
+import { join, resolve } from 'path'
 
 import { depositEmailSharedTypes } from '../installers/email.installer'
 import { depositStorageSharedConfig } from '../installers/storage.installer'
@@ -10,13 +10,32 @@ import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { runBestEffort, runRequired, warn } from '../run'
 
-export async function createMonorepoRoot({ projectName, projectDescription, monorepoUrl, mainBranch, workflow, ports }: CreateMonorepoRootParams) {
+export async function createMonorepoRoot(params: CreateMonorepoRootParams) {
+  const targetDir = params.targetDir ?? '.'
+  const result = await renderMonorepoRoot({ ...params, targetDir })
+  if (params.externalEffects !== false) await provisionMonorepoRoot({ ...params, targetDir })
+  return result
+}
+
+/** Render the monorepo root without running package, Prisma or Git commands. */
+export async function renderMonorepoRoot({
+  targetDir,
+  projectName,
+  projectDescription,
+  monorepoUrl,
+  mainBranch,
+  workflow,
+  ports
+}: CreateMonorepoRootParams & {
+  targetDir: string
+}) {
   validateProjectName(projectName)
+  const at = (relativePath: string) => join(targetDir, relativePath)
 
   const { api: apiPort } = ports ?? DEFAULT_PORTS
 
   // Copy monorepo root overlay to project root (current directory)
-  await copy(resolve(overlaysPath, 'monorepo/root'), '.', { overwrite: true })
+  await copy(resolve(overlaysPath, 'monorepo/root'), targetDir, { overwrite: true })
 
   // Substitute {{PROJECT_NAME}} in shared-* + api-client + ui-primitives package files (scoped package names + docs)
   await substitutePlaceholdersInFiles(
@@ -34,22 +53,19 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
       'packages/ui-primitives/README.md',
       'packages/ui-primitives/src/index.ts',
       'packages/ui-primitives/src/theme.css'
-    ],
+    ].map(at),
     { PROJECT_NAME: projectName }
   )
-
-  // Monorepo commands run from the repository root, which is the cwd here.
-  const nvm = getNvmPrefix(process.cwd())
 
   // Substitute {{PROJECT_NAME}} in root package.json BEFORE the JSON merge below so the
   // `codegen:api-client -w @<name>/api-client` script ends up with the project's npm scope.
   // README.md is substituted here rather than in the skills installer, where CLAUDE.md is
   // handled: a README addresses a human and belongs to the project whatever profile was
   // chosen, while the AI harness may not be installed at all (#627).
-  await substitutePlaceholdersInFiles(['package.json', 'README.md'], { PROJECT_NAME: projectName })
+  await substitutePlaceholdersInFiles([at('package.json'), at('README.md')], { PROJECT_NAME: projectName })
 
   // Update root package.json
-  const packageJsonPath = 'package.json'
+  const packageJsonPath = at('package.json')
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
   packageJson.name = projectName
   packageJson.description = projectDescription
@@ -64,7 +80,7 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
 
   // Update deployment workflow references with project-specific names
-  const deployApiPath = '.github/workflows/deployment-api.yml'
+  const deployApiPath = at('.github/workflows/deployment-api.yml')
   if (await fileExists(deployApiPath)) {
     let content = await readFile(deployApiPath, 'utf8')
     content = applyProjectIdentity(content, projectName)
@@ -73,7 +89,7 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
     await writeFile(deployApiPath, content)
   }
 
-  const deployWebPath = '.github/workflows/deployment-web.yml'
+  const deployWebPath = at('.github/workflows/deployment-web.yml')
   if (await fileExists(deployWebPath)) {
     let content = await readFile(deployWebPath, 'utf8')
     content = applyProjectIdentity(content, projectName)
@@ -81,11 +97,11 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   }
 
   // The root CLAUDE.md tells the AI where the API docs live.
-  await replaceInFile('CLAUDE.md', [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
+  await replaceInFile(at('CLAUDE.md'), [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
 
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
   const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')
-  await substitutePlaceholdersInFiles(['.github/workflows/test.yml', deployApiPath, deployWebPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
+  await substitutePlaceholdersInFiles([at('.github/workflows/test.yml'), deployApiPath, deployWebPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
 
   // Replay shared-config / shared-types deposits for any module the API
   // installer activated before the workspace existed. `installStorageModule`
@@ -94,28 +110,26 @@ export async function createMonorepoRoot({ projectName, projectDescription, mono
   // so their mono-only deposits are no-ops the first time. The deposit fns are
   // idempotent + gated on activation markers, so calling them here covers
   // `sf new`, `sf update`, and the docker harness uniformly.
-  await depositStorageSharedConfig({ apiPath: 'apps/api', projectName })
-  await depositEmailSharedTypes({ apiPath: 'apps/api', projectName })
-
-  // Install all dependencies at root (npm workspaces hoists everything)
-  runRequired('npm install (monorepo root)', `${nvm}npm install`)
-
-  // Generate Prisma client from the API workspace
-  runRequired('prisma generate (api)', `${nvm}cd apps/api && npx prisma generate`)
+  await depositStorageSharedConfig({ apiPath: at('apps/api'), projectName })
+  await depositEmailSharedTypes({ apiPath: at('apps/api'), projectName })
 
   // Install workflow artefacts (skill + tool skill) when a workflow is configured
-  await installWorkflowArtifacts({ targetPath: '.', workflow })
-
-  // Initialize Git repository at root level
-  runBestEffort('git init', 'git init', { onSkipped: warn })
-  runBestEffort('git checkout', `git checkout -b ${mainBranch}`, { onSkipped: warn })
-  if (monorepoUrl) runBestEffort('git remote add', `git remote add origin ${monorepoUrl}`, { onSkipped: warn })
-  runBestEffort('git add', 'git add .', { onSkipped: warn })
-  runBestEffort('git commit', 'git commit -m "Initial commit"', { onSkipped: warn })
-  // Develop-first: the manifest declares workflow.workingBranch as the AI's work
-  // branch — create it and stay on it so the repo matches its own documentation.
-  const workingBranch = workflow?.workingBranch
-  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch', `git checkout -b ${workingBranch}`, { onSkipped: warn })
+  await installWorkflowArtifacts({ targetPath: targetDir, workflow })
 
   return true
+}
+
+/** Apply the external effects required to make a rendered monorepo ready to use. */
+export async function provisionMonorepoRoot({ targetDir = '.', monorepoUrl, mainBranch, workflow }: CreateMonorepoRootParams): Promise<void> {
+  const nvm = getNvmPrefix(targetDir)
+  runRequired('npm install (monorepo root)', `${nvm}npm install`, { cwd: targetDir })
+  runRequired('prisma generate (api)', `${nvm}npx prisma generate`, { cwd: join(targetDir, 'apps/api') })
+
+  runBestEffort('git init', 'git init', { cwd: targetDir, onSkipped: warn })
+  runBestEffort('git checkout', `git checkout -b ${mainBranch}`, { cwd: targetDir, onSkipped: warn })
+  if (monorepoUrl) runBestEffort('git remote add', `git remote add origin ${monorepoUrl}`, { cwd: targetDir, onSkipped: warn })
+  runBestEffort('git add', 'git add .', { cwd: targetDir, onSkipped: warn })
+  runBestEffort('git commit', 'git commit -m "Initial commit"', { cwd: targetDir, onSkipped: warn })
+  const workingBranch = workflow?.workingBranch
+  if (workingBranch && workingBranch !== mainBranch) runBestEffort('git working branch', `git checkout -b ${workingBranch}`, { cwd: targetDir, onSkipped: warn })
 }
