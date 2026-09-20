@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 'use strict'
 
-// Consolidates .saasfoundry.json and `sf modules list --json` output into a
-// single read-only report the skill can answer project-awareness questions
-// from. This script performs NO mutations — for any add/remove flow, route
-// through plan-update.sh.
+// Consolidates .saasfoundry.json, the canonical `sf status --json` capability
+// classification and `sf modules list --json` into one read-only report.
+// This script performs NO mutations — route every update through plan-update.sh.
 //
 // Input (stdin, JSON object):
 //   {
 //     "manifest": <contents of .saasfoundry.json>,
-//     "catalogue": [<sf modules list --json entries>]
+//     "catalogue": [<sf modules list --json entries>],
+//     "status": <sf status --json output, optional for legacy callers>
 //   }
 //
 // Output (stdout, JSON object):
 //   {
-//     project: { name, structure, cliVersion, generatedAt },
+//     project: { name, structure, cliVersion, generatedAt, capabilities },
 //     modules: {
 //       installed: [string],         // derived from manifest.modules
 //       available: [string],         // every catalogue entry name
@@ -51,6 +51,7 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
 
 const manifest = input.manifest
 const catalogue = input.catalogue
+const status = input.status
 
 if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
   process.stderr.write('read-project: input.manifest must be the .saasfoundry.json object\n')
@@ -62,7 +63,14 @@ if (!Array.isArray(catalogue)) {
   process.exit(2)
 }
 
-function deriveInstalled(m) {
+if (status !== undefined && status !== null && (typeof status !== 'object' || Array.isArray(status))) {
+  process.stderr.write('read-project: input.status must be the `sf status --json` object or null\n')
+  process.exit(2)
+}
+
+const capabilities = status && status.capabilities && typeof status.capabilities === 'object' ? status.capabilities : null
+
+function deriveInstalled(m, canonicalCapabilities) {
   const installed = []
   const mods = m.modules || {}
   // Support both legacy `emailService` (manifestVersion < 2) and the current
@@ -72,6 +80,7 @@ function deriveInstalled(m) {
   if (emailProvider && emailProvider !== 'none') installed.push('email')
   if (mods.s3Setup) installed.push('storage')
   if (mods.includeAnalytics === true) installed.push('analytics')
+  if (canonicalCapabilities && canonicalCapabilities.collaborationHarness === 'managed') installed.push('harness')
   if (Array.isArray(mods.advancedSkills)) {
     for (const s of mods.advancedSkills) installed.push('sf-skill-' + s)
   }
@@ -91,7 +100,7 @@ function compareSemver(a, b) {
   return aPatch - bPatch
 }
 
-const installed = deriveInstalled(manifest)
+const installed = deriveInstalled(manifest, capabilities)
 const installedSet = new Set(installed)
 const available = catalogue.map((c) => c.name)
 const newlyAvailable = available.filter((n) => !installedSet.has(n))
@@ -111,7 +120,8 @@ const report = {
     name: manifest.projectName || 'unknown',
     structure: manifest.structure || 'unknown',
     cliVersion,
-    generatedAt: manifest.generatedAt || null
+    generatedAt: manifest.generatedAt || null,
+    capabilities
   },
   modules: {
     installed,

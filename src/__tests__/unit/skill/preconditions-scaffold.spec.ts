@@ -43,6 +43,13 @@ describe('Preconditions first directive (scaffold mirrors)', () => {
     expect(content).toMatch(/\.saasfoundry\.json/)
     expect(content).toMatch(/sf status --claude-friendly/)
   })
+
+  it('the harness template previews profile promotion instead of scaffolding over existing code', () => {
+    const content = readFileSync(path.resolve(ROOT, 'scaffolds/skills-templates/harness/CLAUDE.md'), 'utf8')
+    expect(content).toContain('sf status --claude-friendly --no-network')
+    expect(content).toContain('sf update --target-profile full --dry-run --json')
+    expect(content).toContain('Do not run `sf new --profile full` inside this repository')
+  })
 })
 
 describe('SessionStart hook (scaffold mirrors)', () => {

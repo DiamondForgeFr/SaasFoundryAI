@@ -12,6 +12,8 @@ import {
   type TechnicalStackAdoptionPlan,
   type TechnicalStackPathSnapshot
 } from './technical-stack.planner'
+import { runManifestMigrations } from '../migrations/manifest/registry'
+import type { SaaSFoundryManifest } from '../types'
 import { inspectGitAgentScope, NotGitRepositoryError } from '../harness/git-agent-scope'
 
 export const TECHNICAL_TRANSITION_LOCK = '.saasfoundry-transition.lock'
@@ -618,8 +620,13 @@ function validateManifestTransition(approvedPlan: TechnicalStackAdoptionPlan, ex
   let expected: Record<string, unknown>
   let next: Record<string, unknown>
   try {
-    expected = JSON.parse(expectedBytes.toString('utf8')) as Record<string, unknown>
-    next = JSON.parse(nextBytes.toString('utf8')) as Record<string, unknown>
+    const parsedExpected = JSON.parse(expectedBytes.toString('utf8')) as SaaSFoundryManifest
+    // Only the trusted registry may define which legacy deltas can be folded
+    // into the atomic profile commit. Callers cannot supply an alternate
+    // preservation baseline.
+    expected = runManifestMigrations(parsedExpected).manifest as unknown as Record<string, unknown>
+    const parsedNext = JSON.parse(nextBytes.toString('utf8')) as SaaSFoundryManifest
+    next = runManifestMigrations(parsedNext).manifest as unknown as Record<string, unknown>
   } catch {
     throw new Error('The technical stack transition requires valid JSON manifests.')
   }

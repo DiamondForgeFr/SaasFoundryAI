@@ -1,5 +1,5 @@
 import { copy } from 'fs-extra'
-import { readFile, writeFile } from 'fs/promises'
+import { lstat, readFile, readdir, writeFile } from 'fs/promises'
 import { join, resolve, sep } from 'path'
 
 import { installClaudeDocs } from './claude-docs.installer'
@@ -32,6 +32,62 @@ export const harnessInstallerMeta: ModuleInstaller = {
  * hook merging), never through the file sweep.
  */
 export const HARNESS_SKILL_PREFIX = 'sf-'
+
+async function inspectHarnessTree(path: string): Promise<void> {
+  const stat = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!stat) return
+  if (stat.isSymbolicLink()) throw new Error(`Unsafe harness path: ${path} is a symbolic link.`)
+  if (stat.isFile()) {
+    if (stat.nlink > 1) throw new Error(`Unsafe harness path: ${path} is a hard-linked file.`)
+    return
+  }
+  if (!stat.isDirectory()) throw new Error(`Unsafe harness path: ${path} is not a regular file or directory.`)
+  for (const entry of await readdir(path)) await inspectHarnessTree(join(path, entry))
+}
+
+/** Reject linked/special destinations before a legacy harness install writes. */
+export async function assertHarnessWritePathsSafe(targetPath: string): Promise<void> {
+  const root = resolve(targetPath)
+  const rootStat = await lstat(root)
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Harness installation requires a real project directory.')
+
+  const claudeRoot = join(root, '.claude')
+  const claudeStat = await lstat(claudeRoot).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (claudeStat?.isSymbolicLink() || (claudeStat && !claudeStat.isDirectory())) throw new Error(`Unsafe harness path: ${claudeRoot} must be a real directory.`)
+
+  await inspectHarnessTree(join(root, 'CLAUDE.md'))
+  await inspectHarnessTree(join(root, '.claude', 'settings.json'))
+  await inspectHarnessTree(join(root, '.claude', 'docs'))
+
+  const skillsRoot = join(root, '.claude', 'skills')
+  const skillsStat = await lstat(skillsRoot).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (skillsStat?.isSymbolicLink() || (skillsStat && !skillsStat.isDirectory())) throw new Error(`Unsafe harness path: ${skillsRoot} must be a real directory.`)
+  if (skillsStat) {
+    for (const entry of await readdir(skillsRoot)) {
+      if (entry.startsWith(HARNESS_SKILL_PREFIX)) await inspectHarnessTree(join(skillsRoot, entry))
+    }
+  }
+
+  // A GitHub-backed workflow also deposits the PR synchronization action.
+  // Inspect both ancestors explicitly so an intermediate `.github` symlink
+  // cannot redirect an otherwise regular-looking leaf outside the project.
+  const githubRoot = join(root, '.github')
+  const githubStat = await lstat(githubRoot).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (githubStat?.isSymbolicLink() || (githubStat && !githubStat.isDirectory())) throw new Error(`Unsafe harness path: ${githubRoot} must be a real directory.`)
+  await inspectHarnessTree(join(githubRoot, 'workflows'))
+}
 
 /** Is this project-root-relative path inside the harness-tracked scope? */
 export function isHarnessTrackedPath(relPath: string): boolean {
@@ -157,6 +213,7 @@ export async function installHarness({
   advancedSkills = [],
   agents
 }: InstallHarnessParams): Promise<AgentInstructionsReport | undefined> {
+  await assertHarnessWritePathsSafe(targetPath)
   const declaredAgents = resolveHarnessAgents(agents)
 
   // Adding discovery must not reinstall the user's customized legacy skills.

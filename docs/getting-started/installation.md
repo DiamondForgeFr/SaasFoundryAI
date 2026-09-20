@@ -132,6 +132,15 @@ sf new --profile harness
 This path creates no project directory and does not scaffold a replacement API, web app, database, storage or email module. It deposits the collaboration layer in the existing repository and writes a
 minimal managed manifest.
 
+If that managed harness project later needs a clean SaaSFoundry technical stack at non-conflicting paths, preview the additive promotion with:
+
+```bash
+sf update --target-profile full --dry-run --json
+```
+
+This does not merge or replace the external application's existing technical files. If the current code remains the product, keep the project on the harness path whenever the preview reports
+conflicts.
+
 ### Rebuild from a throwaway POC
 
 Let the `tool-saasfoundry` intake read the code first. Review its findings and move plan. Only after explicit approval does it place the existing experiment under `POC/` and create a clean `full`
@@ -159,8 +168,10 @@ availability.
 
 ## Platforms
 
-The project test suite exercises the CLI and generated shell workflows on macOS and Linux. Windows users should prefer WSL for the same environment. Native Windows commands may work, but
-`sf agents doctor --check-runtime` currently reports executable-extension lookup as `not-checked`; verify the chosen host directly instead of treating file presence as runtime proof.
+The project test suite exercises the CLI and generated shell workflows on macOS and Linux. Windows users should use WSL for the same environment. In V1, `sf update --target-profile full` explicitly
+supports macOS, Linux, and WSL; it rejects native Windows before mutation because the profile-transition transaction requires directory durability guarantees not currently provided there. Other native
+Windows commands may work, but `sf agents doctor --check-runtime` reports executable-extension lookup as `not-checked`; verify the chosen host directly instead of treating file presence as runtime
+proof.
 
 cmux is an optional macOS workspace. It is not required for SaaSFoundryAI or for any coding-agent profile.
 

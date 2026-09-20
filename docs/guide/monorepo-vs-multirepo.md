@@ -65,9 +65,16 @@ my-saas-web/          # Separate repo
 - Apps have different release cycles
 - Microservices architecture
 
-## Migration
+## Choosing a structure during profile promotion
 
-You can start with one structure and migrate later:
+A harness-only managed project has no SaaSFoundry technical topology yet. When `sf update --target-profile full` adds the stack, interactive mode asks for `monorepo` or `multirepo`; non-interactive
+mode requires the choice explicitly. Preview it first with `--dry-run --json`.
+
+Once a technical stack exists, profile promotion preserves its topology. `stack → full` adds the managed harness and `full → full` is a no-op; neither converts repository structure.
+
+## Manual migration
+
+Moving between structures remains a manual repository migration outside `sf update`:
 
 ```bash
 # Monorepo → Multirepo
@@ -79,4 +86,4 @@ You can start with one structure and migrate later:
 
 ## Recommendation
 
-**Start with monorepo** unless you have a specific reason for multirepo. You can always split later if needed.
+**Start with monorepo** unless you have a specific reason for multirepo. It can be split later as a deliberate manual migration, but the profile-transition command does not perform that conversion.
