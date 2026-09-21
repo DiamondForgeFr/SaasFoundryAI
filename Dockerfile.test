@@ -1,67 +1,70 @@
-# ── Stage 1: Build the SaaSFoundryAI CLI ──────────────────────────
-FROM node:24-alpine AS cli-builder
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.59.1-noble@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53
 
+# Use the same Ubuntu/glibc and Node 24 runtime in both stages. Copying
+# node_modules built on Alpine/musl into the Playwright image is not portable,
+# especially once a dependency gains a native binary.
+FROM ${PLAYWRIGHT_IMAGE} AS cli-builder
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /cli
 
-# Install dependencies first (cache layer)
+# Install dependencies first so source changes retain the dependency layer.
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-# Copy source and build
 COPY tsconfig.json ./
 COPY src/ ./src/
 COPY scaffolds/ ./scaffolds/
-# The bin entrypoint. Until the `cli` scenarios (#546) nothing in the suite executed the
-# real binary — it reached past it into the builders — so the image never needed to carry
-# it. That absence is exactly what those scenarios exist to stop being invisible.
 COPY bin/ ./bin/
 RUN npm run build
 
-# ── Stage 2: Test Runner ────────────────────────────────────────
-FROM node:24-alpine AS test-runner
+# The official image carries all three matching browsers and their Ubuntu
+# dependencies. The npm package is installed separately below, as required by
+# Playwright's image contract.
+FROM ${PLAYWRIGHT_IMAGE} AS test-runner
 
-# bcrypt needs python3/make/g++, prisma needs openssl.
-#
-# Postgres is here so one scenario can do what none of the others can: start the generated
-# project. The alternatives the ticket weighed were docker-in-docker and a sidecar
-# container, and both break the contract the whole harness rests on — `run-docker-tests.sh`
-# and the CI job each do a bare `docker run --rm sf-test:latest`, with no network and no
-# companion. A database inside the image keeps that command meaning what it means (#594).
-#
-# `postgresql16-client` also carries psql, which the generated project's own
-# `db:setup:dev` shells out to.
-RUN apk add --no-cache python3 make g++ openssl bash git postgresql16 postgresql16-client
+ARG DEBIAN_FRONTEND=noninteractive
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# bcrypt needs Python/build tools, Prisma needs OpenSSL, and the lifecycle
+# runtime starts one isolated PostgreSQL 16 cluster per container. PGDATA is
+# deliberately absent here: no mutable database cluster is baked into the
+# image, and the runtime owns initialisation and teardown.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    build-essential \
+    git \
+    openssl \
+    postgresql-16 \
+    postgresql-client-16 \
+    python3 \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
-# Disable git hooks and interactive prompts in generated projects
 ENV HUSKY=0
 ENV CI=true
 ENV npm_config_loglevel=error
-
-# Prisma generate needs a DATABASE_URL (just for schema parsing, no connection)
 ENV DATABASE_URL="postgresql://test:test@localhost:5432/test"
-
-# Paths for the test harness
 ENV CLI_PATH=/cli
 ENV WORKSPACE_DIR=/workspace/projects
+ENV SF_TEST_ARTIFACTS_DIR=/artifacts
 
-# Copy built CLI (source + dist + node_modules + scaffolds)
+# Install the harness runtime from its dedicated lock before copying frequently
+# changing tests and fixtures. The metadata version is checked again by a unit
+# drift guard.
+COPY tests/docker/playwright-runtime.json /tmp/playwright-runtime.json
+COPY tests/docker/runtime/package.json tests/docker/runtime/package-lock.json ./
+RUN npm ci --ignore-scripts \
+  && PLAYWRIGHT_VERSION="$(node -p 'require("/tmp/playwright-runtime.json").playwright.version')" \
+  && node -e "const expected=require('/tmp/playwright-runtime.json').playwright.version; const actual=require('@playwright/test/package.json').version; if(actual!==expected) throw new Error('Playwright runtime drift: '+actual+' != '+expected)"
+
 COPY --from=cli-builder /cli /cli
-
-# Copy test harness
 COPY tests/docker/ /workspace/
 
-# The cluster is initialised at build time so the boot scenario pays for a start, not an
-# initdb. `--auth=trust` because this database exists for the length of one container and
-# is reachable from nothing outside it.
-ENV PGDATA=/var/lib/postgresql/data
-RUN mkdir -p "$PGDATA" /run/postgresql \
-  && chown -R postgres:postgres "$PGDATA" /run/postgresql \
-  && su postgres -c "initdb -D $PGDATA --auth=trust --username=postgres"
-
-# Install the Docker harness runtime and its OpenAPI validator. Keep the validator
-# test-only: generated projects should not need it at runtime.
-RUN npm install --no-save tsx@4.21.0 @apidevtools/swagger-parser@13.0.0
+LABEL org.saasfoundry.playwright.version="1.59.1" \
+  org.saasfoundry.playwright.image="mcr.microsoft.com/playwright:v1.59.1-noble" \
+  org.saasfoundry.playwright.manifest-digest="sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53"
 
 ENTRYPOINT ["node", "--import", "tsx", "/workspace/generate-and-build.ts"]

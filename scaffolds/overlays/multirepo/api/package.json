@@ -51,6 +51,7 @@
     "test:full": "npm run format && npm run lint && npm run type-check && npm run test:unit && npm run test:e2e",
     "test:full:verbose": "npm run format && npm run lint && npm run type-check && npm run test:unit:verbose && npm run test:e2e:verbose",
     "db:setup:dev": "./scripts/setup-db-dev.sh",
+    "db:update:dev": "./scripts/update-db-dev.sh",
     "db:init:test": "./scripts/init-test-db.sh",
     "services:up": "docker compose -f docker-compose.dev-services.yml up -d",
     "services:down": "docker compose -f docker-compose.dev-services.yml down",

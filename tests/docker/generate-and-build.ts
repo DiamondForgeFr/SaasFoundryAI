@@ -8,8 +8,8 @@
 //   TEST_SCENARIO=all node --import tsx generate-and-build.ts
 //   node --import tsx generate-and-build.ts  # runs all scenarios
 
-import { execFileSync, execSync, spawn, spawnSync } from 'child_process'
-import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import { execFileSync, execSync, spawnSync } from 'child_process'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import { createRequire } from 'module'
 import { join } from 'path'
 
@@ -37,7 +37,23 @@ import {
   scanForUnreplacedPlaceholders
 } from './assertions'
 import { auditHighProductionWorkspaces } from './npm-audit'
-import { ALL_SCENARIOS, getScenario, getTopScenarios, GenerationScenario, UpdateScenario, AIScenario, MigrationScenario, TestScenario, CliScenario, BootScenario } from './scenarios'
+import { runSupervisedProcess, startSupervisedProcess } from './lifecycle/process'
+import { startPrivatePostgres, type PrivatePostgres } from './lifecycle/postgres'
+import { runProductPhase } from './lifecycle/product'
+import {
+  ALL_SCENARIOS,
+  getScenario,
+  getTopScenarios,
+  GenerationScenario,
+  UpdateScenario,
+  AIScenario,
+  MigrationScenario,
+  TestScenario,
+  CliScenario,
+  BootScenario,
+  PreviousReleaseScenario
+} from './scenarios'
+import { runPreviousReleaseRuntimeLifecycle } from './update-previous-release-runtime'
 
 // ── Config ─────────────────────────────────────────────────────
 
@@ -247,34 +263,6 @@ type OpenApiDocument = {
 
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
-async function stopProcessGroup(child: ReturnType<typeof spawn>): Promise<void> {
-  if (!child.pid) return
-
-  try {
-    process.kill(-child.pid, 'SIGTERM')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return
-    throw error
-  }
-
-  const deadline = Date.now() + 2_000
-  while (Date.now() < deadline) {
-    try {
-      process.kill(-child.pid, 0)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return
-      throw error
-    }
-    await wait(50)
-  }
-
-  try {
-    process.kill(-child.pid, 'SIGKILL')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
-  }
-}
-
 /**
  * Recreate the checked-in snapshot through the generated application's real bootstrap.
  * Removing it first prevents the scaffold fixture from satisfying the wait by itself.
@@ -282,42 +270,64 @@ async function stopProcessGroup(child: ReturnType<typeof spawn>): Promise<void> 
 async function emitOpenApiDocument(projectDir: string): Promise<string> {
   const apiDir = join(projectDir, 'apps', 'api')
   const openApiPath = join(apiDir, 'docs', 'openapi.json')
-  const logPath = join(projectDir, 'openapi-emission.log')
   if (existsSync(openApiPath)) unlinkSync(openApiPath)
-
-  startPostgres()
-  const databaseUrl = 'postgresql://dev:dev@localhost:5432/devdb'
-
-  const log = openSync(logPath, 'a')
-  const child = spawn(process.execPath, ['dist/src/main.js'], {
-    cwd: apiDir,
-    detached: true,
-    stdio: ['ignore', log, log],
-    env: {
-      ...process.env,
-      HUSKY: '0',
-      CI: 'true',
-      NODE_ENV: 'development',
-      DATABASE_URL: databaseUrl,
-      DIRECT_URL: databaseUrl
-    }
-  })
+  const deadline = Date.now() + 60_000
+  const postgres = await startPrivatePostgres({ workspace: join(WORKSPACE, '.openapi-runtime'), deadline })
+  const manifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8')) as { ports?: { api?: number } }
+  const apiPort = manifest.ports?.api ?? 3500
+  let child: Awaited<ReturnType<typeof startSupervisedProcess>> | undefined
+  let primaryFailure: unknown
+  let emitted = false
 
   try {
-    const deadline = Date.now() + 30_000
+    child = await startSupervisedProcess({
+      label: 'generated API OpenAPI emission',
+      executable: process.execPath,
+      args: ['dist/src/main.js'],
+      cwd: apiDir,
+      deadline,
+      ports: [apiPort],
+      env: {
+        HUSKY: '0',
+        CI: 'true',
+        NODE_ENV: 'development',
+        DATABASE_URL: postgres.databaseUrl,
+        DIRECT_URL: postgres.directUrl,
+        PORT: String(apiPort)
+      },
+      fatalPatterns: [/EADDRINUSE/, /PrismaClientInitializationError/, /Cannot find module/, /UnhandledPromiseRejection/]
+    })
     while (!existsSync(openApiPath)) {
-      if (child.exitCode !== null || child.signalCode !== null) {
-        const tail = existsSync(logPath) ? readFileSync(logPath, 'utf8').slice(-2_000) : '(no output captured)'
-        throw new Error(`generated API exited before emitting OpenAPI (exit=${child.exitCode}, signal=${child.signalCode})\n--- server output ---\n${tail}`)
+      const exit = await Promise.race([child.exited, wait(100).then(() => undefined)])
+      if (exit) {
+        throw new Error(
+          `generated API exited before emitting OpenAPI (exit=${String(exit.status)}, signal=${String(exit.signal)})\n${[exit.stdout, exit.stderr].filter(Boolean).join('\n').slice(-4_096)}`
+        )
       }
-      if (Date.now() >= deadline) throw new Error('generated API did not emit docs/openapi.json within 30 seconds')
-      await wait(100)
+      if (Date.now() >= deadline) throw new Error('generated API did not emit docs/openapi.json within 60 seconds')
     }
-    return openApiPath
-  } finally {
-    await stopProcessGroup(child)
-    closeSync(log)
+    emitted = true
+  } catch (error) {
+    primaryFailure = error
   }
+
+  const cleanupFailures: unknown[] = []
+  try {
+    if (child) await child.stop()
+  } catch (error) {
+    cleanupFailures.push(error)
+  }
+  try {
+    await postgres.stop()
+  } catch (error) {
+    cleanupFailures.push(error)
+  }
+  if (primaryFailure !== undefined || cleanupFailures.length > 0) {
+    const failures = [...(primaryFailure === undefined ? [] : [primaryFailure]), ...cleanupFailures]
+    throw failures.length === 1 ? failures[0] : new AggregateError(failures, 'OpenAPI emission and lifecycle teardown failed.')
+  }
+  if (!emitted) throw new Error('generated API did not emit docs/openapi.json')
+  return openApiPath
 }
 
 async function validateGeneratedApiContract(projectDir: string, projectName: string): Promise<AssertionResult[]> {
@@ -907,82 +917,6 @@ async function runStep<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-/** Starts the cluster baked into the image and creates the role and database the project expects. */
-function startPostgres(): void {
-  const pg = (cmd: string) => execSync(`su postgres -c ${JSON.stringify(cmd)}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-
-  try {
-    pg(`pg_ctl -D ${process.env.PGDATA} status`)
-  } catch {
-    pg(`pg_ctl -D ${process.env.PGDATA} -o "-c listen_addresses=localhost" -l /tmp/pg.log start -w -t 30`)
-  }
-
-  if (pg(`psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'dev'"`).trim() !== '1') pg('createuser -s dev')
-  if (pg(`psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'devdb'"`).trim() !== '1') pg('createdb -O dev devdb')
-}
-
-interface Server {
-  label: string
-  stop: () => void
-}
-
-/**
- * Starts a long-running command and hands back a way to stop it.
- *
- * `detached` so the whole process group can be signalled: `npm run dev` is a shell that
- * spawns nest or vite, and killing only the shell leaves the server holding its port —
- * which would then look like a port conflict to whatever runs next.
- */
-function startServer(label: string, cmd: string, cwd: string, logPath: string): Server {
-  const log = openSync(logPath, 'a')
-  const child = spawn(cmd, {
-    cwd,
-    shell: true,
-    detached: true,
-    stdio: ['ignore', log, log],
-    env: { ...process.env, HUSKY: '0', CI: 'true', NODE_ENV: 'development' }
-  })
-  child.unref()
-
-  return {
-    label,
-    stop: () => {
-      try {
-        if (child.pid) process.kill(-child.pid, 'SIGTERM')
-      } catch {
-        // Already gone — the scenario failing is what matters, not the teardown.
-      }
-    }
-  }
-}
-
-/**
- * Polls a URL until it answers 200, or gives up and says what it saw.
- *
- * A bounded wait, never a sleep: the point of the scenario is that the server answers,
- * and a fixed sleep would turn "slow" and "dead" into the same result.
- */
-async function waitForHttp(url: string, timeoutSeconds: number, logPath: string): Promise<void> {
-  const deadline = Date.now() + timeoutSeconds * 1000
-  let lastError = 'no attempt completed'
-
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(5_000) })
-      if (response.ok) return
-      lastError = `HTTP ${response.status}`
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-
-  // The server's own output is the only thing that explains a boot failure, so it travels
-  // with the error rather than staying in a file nobody reads.
-  const tail = existsSync(logPath) ? readFileSync(logPath, 'utf8').slice(-2000) : '(no output captured)'
-  throw new Error(`${url} did not answer 200 within ${timeoutSeconds}s (last: ${lastError})\n--- server output ---\n${tail}`)
-}
-
 /**
  * The scenario that starts the project.
  *
@@ -998,61 +932,89 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
 
   const projectDir = join(workspace, scenario.projectName)
   const apiDir = join(projectDir, 'apps', `${scenario.projectName}-api`)
-  const webDir = join(projectDir, 'apps', `${scenario.projectName}-web`)
-  const apiLog = join(workspace, 'api-dev.log')
-  const webLog = join(workspace, 'web-dev.log')
-
-  const servers: Server[] = []
+  const deadline = Date.now() + 20 * 60 * 1_000
   const results: AssertionResult[] = []
+  let postgres: PrivatePostgres | undefined
 
   try {
-    await runStep('start postgres', () => startPostgres())
+    postgres = await runStep('start isolated postgres', () => startPrivatePostgres({ workspace, deadline }))
 
-    await runStep('sf new --start-services', () => {
+    await runStep('sf new --start-services', async () => {
       const bin = join(CLI_PATH, 'bin', 'sf.js')
-      const flags = [
-        'new',
-        '--non-interactive',
-        `--project-name ${scenario.projectName}`,
-        `--project-description "docker boot scenario"`,
-        '--structure multirepo',
-        '--main-branch main',
-        '--setup-repo local',
-        '--profile stack',
-        '--db-setup credentials',
-        '--db-host localhost',
-        '--db-port 5432',
-        '--db-user dev',
-        '--db-password dev',
-        '--db-name devdb',
-        '--email-service none',
-        '--s3-setup manual',
-        '--no-analytics',
-        '--no-workflow',
-        '--no-srs-enable',
-        '--start-services',
-        '--start-apps none'
-      ].join(' ')
-      // A real npm install on two apps plus a prisma generate outruns the default 5 minutes.
-      run(`node ${bin} ${flags}`, workspace, 'sf new (real install, db setup, prisma generate)', 900_000)
+      await runSupervisedProcess({
+        label: 'sf new (real install, db setup, prisma generate)',
+        executable: process.execPath,
+        args: [
+          bin,
+          'new',
+          '--non-interactive',
+          '--project-name',
+          scenario.projectName,
+          '--project-description',
+          'docker boot scenario',
+          '--structure',
+          'multirepo',
+          '--main-branch',
+          'main',
+          '--setup-repo',
+          'local',
+          '--profile',
+          'stack',
+          '--db-setup',
+          'credentials',
+          '--db-host',
+          '127.0.0.1',
+          '--db-port',
+          String(postgres.port),
+          '--db-user',
+          'sf_lifecycle',
+          '--db-password',
+          'fixture-only',
+          '--db-name',
+          'sf_lifecycle',
+          '--email-service',
+          'none',
+          '--s3-setup',
+          'manual',
+          '--no-analytics',
+          '--no-workflow',
+          '--no-srs-enable',
+          '--start-services',
+          '--start-apps',
+          'none'
+        ],
+        cwd: workspace,
+        deadline,
+        env: {
+          npm_config_loglevel: 'error',
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+          ...(process.env.HOME ? { HOME: process.env.HOME } : {}),
+          ...(process.env.USERPROFILE ? { USERPROFILE: process.env.USERPROFILE } : {})
+        },
+        secrets: ['fixture-only']
+      })
     })
 
     // The ports the project chose. Anything else would be assuming what #584 made variable.
-    const manifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8')) as Record<string, unknown> & { ports?: { api?: number; web?: number } }
     const ports = manifest.ports || { api: 3500, web: 5173 }
     console.log(`  · the project resolved api=${ports.api} web=${ports.web}`)
 
-    await runStep(`api boot — GET /api/health on ${ports.api}`, async () => {
-      servers.push(startServer('api', 'npm run dev', apiDir, apiLog))
-      await waitForHttp(`http://localhost:${ports.api}/api/health`, scenario.bootTimeoutSeconds, apiLog)
-    })
-    results.push({ passed: true, message: `OK: the API answered /api/health on ${ports.api}` })
-
-    await runStep(`web boot — GET / on ${ports.web}`, async () => {
-      servers.push(startServer('web', 'npm run dev', webDir, webLog))
-      await waitForHttp(`http://localhost:${ports.web}/`, scenario.bootTimeoutSeconds, webLog)
-    })
-    results.push({ passed: true, message: `OK: the web app answered / on ${ports.web}` })
+    const phase = await runStep('production API/web boot, strict readiness and verified teardown', () =>
+      runProductPhase({
+        phase: 'creation',
+        projectRoot: projectDir,
+        manifest,
+        postgres: postgres!,
+        deadline,
+        readinessTimeoutMs: scenario.bootTimeoutSeconds * 1_000,
+        apiPort: ports.api,
+        webPort: ports.web
+      })
+    )
+    results.push({ passed: phase.apiProbe.status === 200, message: `OK: the API answered strict /api/health on ${ports.api}` })
+    results.push({ passed: phase.webProbe.status === 200, message: `OK: the production web app answered on ${ports.web}` })
+    results.push({ passed: true, message: 'OK: API and web process groups stopped through supervised teardown' })
 
     await runStep('production npm audit (high)', () => {
       results.push(...auditHighProductionWorkspaces(projectDir))
@@ -1071,9 +1033,46 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
   } catch (err) {
     results.push({ passed: false, message: `FAIL: ${err instanceof Error ? err.message : String(err)}` })
   } finally {
-    for (const server of servers) server.stop()
+    if (postgres) {
+      try {
+        await postgres.stop()
+      } catch (error) {
+        results.push({ passed: false, message: `FAIL: isolated postgres teardown: ${error instanceof Error ? error.message : String(error)}` })
+      }
+    }
   }
 
+  return reportResults(scenario.name, results)
+}
+
+async function runPreviousReleaseScenario(scenario: PreviousReleaseScenario): Promise<boolean> {
+  const workspace = join(WORKSPACE, scenario.name)
+  mkdirSync(workspace, { recursive: true })
+  const fixture = readFileSync(join('/workspace', 'fixtures', 'previous-release', '1.0.0-beta', 'multirepo.fixture.json.gz'))
+  const results: AssertionResult[] = []
+
+  try {
+    const lifecycle = await runPreviousReleaseRuntimeLifecycle({
+      fixture,
+      workspace,
+      cliEntry: join(CLI_PATH, 'bin', 'sf.js'),
+      timeoutMs: scenario.timeoutSeconds * 1_000,
+      harnessRuntimeRoot: '/workspace',
+      env: {
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+        npm_config_loglevel: 'error'
+      }
+    })
+    const before = lifecycle.phases['before-update']
+    const after = lifecycle.phases['after-update']
+    results.push({ passed: before?.apiProbe.status === 200 && before.webProbe.status === 200, message: 'OK: authentic beta API and web booted against isolated PostgreSQL' })
+    results.push({ passed: after?.apiProbe.status === 200 && after.webProbe.status === 200, message: 'OK: updated API and web booted against the preserved PostgreSQL state' })
+    results.push({ passed: lifecycle.browserCapabilities.length === 3, message: 'OK: Chromium, Firefox and WebKit launched from the pinned harness runtime' })
+    results.push({ passed: lifecycle.artifacts.some((artifact) => artifact.path === 'manifest.json'), message: `OK: sanitized diagnostic manifest written under ${lifecycle.artifactRoot}` })
+    results.push({ passed: /^[0-9a-f]{64}$/.test(lifecycle.stableDigest), message: 'OK: the second identical update remained byte-idempotent' })
+  } catch (error) {
+    results.push({ passed: false, message: `FAIL: ${error instanceof Error ? error.message : String(error)}` })
+  }
   return reportResults(scenario.name, results)
 }
 
@@ -1093,6 +1092,8 @@ async function runScenario(scenario: TestScenario): Promise<boolean> {
       return runCliScenario(scenario)
     case 'boot':
       return runBootScenario(scenario)
+    case 'previous-release':
+      return runPreviousReleaseScenario(scenario)
   }
 }
 

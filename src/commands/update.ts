@@ -1,8 +1,9 @@
 import chalk from 'chalk'
 import { copy } from 'fs-extra'
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm } from 'fs/promises'
+import { constants as fsConstants } from 'fs'
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm } from 'fs/promises'
 import { tmpdir } from 'os'
-import { dirname, join, relative, resolve, sep } from 'path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import ora from 'ora'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
@@ -67,6 +68,273 @@ function withoutSharedAgentHashes(hashes: Record<string, string>, protectClaude 
   return Object.fromEntries(Object.entries(hashes).filter(([path]) => !isSharedAgentPath(path, protectClaude)))
 }
 
+export const DEPENDENCY_REFRESH_JOURNAL = '.saasfoundry-dependency-refresh.json'
+export const DEPENDENCY_REFRESH_OUTCOME = '.saasfoundry-dependency-refresh.outcome.json'
+const DEPENDENCY_REFRESH_BACKUP_PREFIX = '.saasfoundry-dependency-refresh-'
+
+interface DependencyRefreshJournal {
+  version: 1
+  packageRoot: string
+  backupRoot: string
+  hadModules: boolean
+}
+
+interface DependencyRefreshOutcome {
+  version: 1
+  outcome: 'committed' | 'rolled-back'
+}
+
+async function syncDirectory(path: string): Promise<void> {
+  let handle
+  try {
+    handle = await open(path, 'r')
+    await handle.sync()
+  } catch (error) {
+    // Windows does not provide a portable directory-fsync primitive. File
+    // fsync + atomic same-directory rename is the strongest available contract.
+    if (!['EACCES', 'EBADF', 'EINVAL', 'EISDIR', 'ENOTSUP', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+  } finally {
+    await handle?.close()
+  }
+}
+
+async function writeDurableFile(path: string, bytes: Buffer): Promise<void> {
+  const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${Date.now()}.tmp`)
+  let handle
+  try {
+    handle = await open(temporary, 'wx', 0o600)
+    await handle.writeFile(bytes)
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+    await rename(temporary, path)
+    await syncDirectory(dirname(path))
+  } catch (error) {
+    await handle?.close().catch(() => {})
+    await rm(temporary, { force: true }).catch(() => {})
+    throw error
+  }
+}
+
+async function readSafeRegularFile(path: string, maxBytes = 16 * 1024 * 1024): Promise<Buffer> {
+  const before = await lstat(path)
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size > maxBytes) throw new Error(`Unsafe transaction file: ${path}`)
+  const noFollow = 'O_NOFOLLOW' in fsConstants ? fsConstants.O_NOFOLLOW : 0
+  const handle = await open(path, fsConstants.O_RDONLY | noFollow)
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > maxBytes || stat.dev !== before.dev || stat.ino !== before.ino) {
+      throw new Error(`Unsafe transaction file: ${path}`)
+    }
+    return await handle.readFile()
+  } finally {
+    await handle.close()
+  }
+}
+
+function resolveJournalPath(projectRoot: string, value: string, label: string): string {
+  if (!value || isAbsolute(value)) throw new Error(`Unsafe dependency refresh ${label}.`)
+  const destination = resolve(projectRoot, value)
+  const rel = relative(projectRoot, destination)
+  if (rel === '..' || rel.startsWith(`..${sep}`)) throw new Error(`Unsafe dependency refresh ${label}.`)
+  return destination
+}
+
+async function assertSafeDirectory(path: string, label: string): Promise<void> {
+  const stat = await lstat(path)
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Unsafe ${label}: ${path}`)
+}
+
+async function removeSafeFile(path: string): Promise<void> {
+  const stat = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!stat) return
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error(`Unsafe transaction file: ${path}`)
+  await rm(path)
+  await syncDirectory(dirname(path))
+}
+
+async function removeSafeDirectory(path: string): Promise<void> {
+  const stat = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!stat) return
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`Unsafe transaction directory: ${path}`)
+  await rm(path, { recursive: true })
+  await syncDirectory(dirname(path))
+}
+
+async function finalizeDependencyRefresh(projectRoot: string, backupRoot: string): Promise<void> {
+  const failures: unknown[] = []
+  for (const operation of [
+    () => removeSafeDirectory(backupRoot),
+    () => removeSafeFile(join(projectRoot, DEPENDENCY_REFRESH_JOURNAL)),
+    () => removeSafeFile(join(projectRoot, DEPENDENCY_REFRESH_OUTCOME))
+  ]) {
+    try {
+      await operation()
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length > 0) throw new AggregateError(failures, 'Dependency refresh cleanup was incomplete; the next update will retry it.')
+}
+
+/** Restore or finish the one dependency transaction coordinated by the project mutation lock. */
+export async function recoverDependencyRefreshTransaction(root = '.'): Promise<void> {
+  const projectRoot = resolve(root)
+  const journalPath = join(projectRoot, DEPENDENCY_REFRESH_JOURNAL)
+  const outcomePath = join(projectRoot, DEPENDENCY_REFRESH_OUTCOME)
+  const journalStat = await lstat(journalPath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (!journalStat) {
+    await removeSafeFile(outcomePath)
+    return
+  }
+
+  const journal = JSON.parse((await readSafeRegularFile(journalPath, 64 * 1024)).toString('utf8')) as DependencyRefreshJournal
+  if (journal.version !== 1 || typeof journal.packageRoot !== 'string' || typeof journal.backupRoot !== 'string' || typeof journal.hadModules !== 'boolean') {
+    throw new Error('Invalid dependency refresh journal; refusing to modify dependency files.')
+  }
+  const packageRoot = resolveJournalPath(projectRoot, journal.packageRoot, 'package root')
+  const backupRoot = resolveJournalPath(projectRoot, journal.backupRoot, 'backup root')
+  const backupRelative = relative(packageRoot, backupRoot)
+  if (backupRelative === '..' || backupRelative.startsWith(`..${sep}`) || !basename(backupRoot).startsWith(DEPENDENCY_REFRESH_BACKUP_PREFIX)) {
+    throw new Error('Unsafe dependency refresh backup root.')
+  }
+
+  const outcomeStat = await lstat(outcomePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (outcomeStat) {
+    const outcome = JSON.parse((await readSafeRegularFile(outcomePath, 4 * 1024)).toString('utf8')) as DependencyRefreshOutcome
+    if (outcome.version !== 1 || !['committed', 'rolled-back'].includes(outcome.outcome)) throw new Error('Invalid dependency refresh outcome.')
+    await finalizeDependencyRefresh(projectRoot, backupRoot)
+    return
+  }
+
+  const backupLock = join(backupRoot, 'package-lock.json')
+  const lockPath = join(packageRoot, 'package-lock.json')
+  const modulesPath = join(packageRoot, 'node_modules')
+  const backupModules = join(backupRoot, 'node_modules')
+  const backupLockStat = await lstat(backupLock).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+
+  // A crash between the durable journal and its durable backup made no project
+  // mutation. Leave the original assets in place and only discard the shell.
+  if (!backupLockStat) {
+    const currentLockStat = await lstat(lockPath).catch(() => undefined)
+    const currentModulesStat = await lstat(modulesPath).catch(() => undefined)
+    if (!currentLockStat?.isFile() || currentLockStat.isSymbolicLink() || currentLockStat.nlink !== 1 || (journal.hadModules && !currentModulesStat?.isDirectory())) {
+      throw new Error('Dependency refresh was interrupted before its backup became durable; automatic recovery is unsafe.')
+    }
+    await writeDurableFile(outcomePath, Buffer.from(`${JSON.stringify({ version: 1, outcome: 'rolled-back' } satisfies DependencyRefreshOutcome)}\n`))
+    await finalizeDependencyRefresh(projectRoot, backupRoot)
+    return
+  }
+
+  const failures: unknown[] = []
+  try {
+    const originalLock = await readSafeRegularFile(backupLock)
+    await removeSafeFile(lockPath)
+    await writeDurableFile(lockPath, originalLock)
+  } catch (error) {
+    failures.push(error)
+  }
+
+  try {
+    const backupModulesStat = await lstat(backupModules).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (backupModulesStat) {
+      if (!backupModulesStat.isDirectory() || backupModulesStat.isSymbolicLink()) throw new Error(`Unsafe dependency backup directory: ${backupModules}`)
+      await removeSafeDirectory(modulesPath)
+      await rename(backupModules, modulesPath)
+      await syncDirectory(packageRoot)
+    } else if (journal.hadModules) {
+      await assertSafeDirectory(modulesPath, 'restored npm dependency directory')
+    } else {
+      await removeSafeDirectory(modulesPath)
+    }
+  } catch (error) {
+    failures.push(error)
+  }
+
+  if (failures.length > 0) throw new AggregateError(failures, 'Dependency refresh rollback was incomplete; the next update will retry it.')
+  await writeDurableFile(outcomePath, Buffer.from(`${JSON.stringify({ version: 1, outcome: 'rolled-back' } satisfies DependencyRefreshOutcome)}\n`))
+  await finalizeDependencyRefresh(projectRoot, backupRoot)
+}
+
+/**
+ * Re-resolve an unmanaged npm lock after a template or late module changed package.json.
+ *
+ * Keeping the installed tree while changing major lint/build dependencies makes npm resolve
+ * the old tree against the new manifest and can fail before it has a chance to update the
+ * lock. Preserve both old assets until a clean lock + install succeeds, then discard them.
+ */
+export async function refreshDependencyLockAndInstall(label: string, packageRoot: string, nvmPrefix: string): Promise<void> {
+  const projectRoot = resolve('.')
+  const resolvedPackageRoot = resolve(packageRoot)
+  const packageRelative = relative(projectRoot, resolvedPackageRoot) || '.'
+  if (packageRelative === '..' || packageRelative.startsWith(`..${sep}`)) throw new Error(`Unsafe npm package root: ${packageRoot}`)
+  const lockPath = join(resolvedPackageRoot, 'package-lock.json')
+  if (!(await fileExists(lockPath))) {
+    runRequired(label, `${nvmPrefix}npm install`, { cwd: packageRoot })
+    return
+  }
+  await assertSafeDirectory(resolvedPackageRoot, 'npm package root')
+
+  const lockStat = await lstat(lockPath)
+  if (!lockStat.isFile() || lockStat.isSymbolicLink() || lockStat.nlink > 1) throw new Error(`Unsafe npm lockfile: ${lockPath}`)
+  const originalLock = await readSafeRegularFile(lockPath)
+  const modulesPath = join(resolvedPackageRoot, 'node_modules')
+  const modulesStat = await lstat(modulesPath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (modulesStat && (!modulesStat.isDirectory() || modulesStat.isSymbolicLink())) throw new Error(`Unsafe npm dependency directory: ${modulesPath}`)
+
+  await recoverDependencyRefreshTransaction(projectRoot)
+  const backupRoot = await mkdtemp(join(resolvedPackageRoot, DEPENDENCY_REFRESH_BACKUP_PREFIX))
+  const backupModules = join(backupRoot, 'node_modules')
+  const backupLock = join(backupRoot, 'package-lock.json')
+  const journalPath = join(projectRoot, DEPENDENCY_REFRESH_JOURNAL)
+  const outcomePath = join(projectRoot, DEPENDENCY_REFRESH_OUTCOME)
+  const journal: DependencyRefreshJournal = { version: 1, packageRoot: packageRelative, backupRoot: relative(projectRoot, backupRoot), hadModules: Boolean(modulesStat) }
+  await writeDurableFile(journalPath, Buffer.from(`${JSON.stringify(journal)}\n`))
+  try {
+    await writeDurableFile(backupLock, originalLock)
+    if (modulesStat) {
+      await rename(modulesPath, backupModules)
+      await syncDirectory(resolvedPackageRoot)
+    }
+    await removeSafeFile(lockPath)
+    runRequired(`${label} lock refresh`, `${nvmPrefix}npm install --package-lock-only --ignore-scripts --no-audit --no-fund`, { cwd: resolvedPackageRoot })
+    if (!(await fileExists(lockPath))) throw new Error(`${label} did not produce package-lock.json.`)
+    await readSafeRegularFile(lockPath)
+    runRequired(label, `${nvmPrefix}npm ci --no-audit --no-fund`, { cwd: resolvedPackageRoot })
+    await assertSafeDirectory(modulesPath, 'npm dependency directory')
+    await writeDurableFile(outcomePath, Buffer.from(`${JSON.stringify({ version: 1, outcome: 'committed' } satisfies DependencyRefreshOutcome)}\n`))
+  } catch (error) {
+    try {
+      await recoverDependencyRefreshTransaction(projectRoot)
+    } catch (recoveryError) {
+      throw new AggregateError([error, recoveryError], `${label} failed and dependency rollback was incomplete.`)
+    }
+    throw error
+  }
+  await finalizeDependencyRefresh(projectRoot, backupRoot)
+}
+
 export async function refreshProjectHashes(manifest: SaaSFoundryManifest): Promise<Record<string, string>> {
   const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
   const sharedBaselines = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([path]) => isSharedAgentPath(path, protectClaude)))
@@ -77,6 +345,8 @@ export async function refreshProjectHashes(manifest: SaaSFoundryManifest): Promi
 export interface FileUpdate {
   path: string
   action: 'update' | 'add' | 'conflict' | 'remove'
+  /** Current managed hash captured by the three-way comparison. Required for deletion. */
+  expectedCurrentHash?: string
 }
 
 /**
@@ -200,7 +470,7 @@ export function computeFileUpdates(baseHashes: Record<string, string>, currentHa
     if (base && !target) {
       if (current && current === base) {
         // User didn't modify it, safe to flag for removal
-        updates.push({ path: filePath, action: 'remove' })
+        updates.push({ path: filePath, action: 'remove', expectedCurrentHash: base })
       }
       continue
     }
@@ -291,7 +561,11 @@ export async function applyFileUpdates(
         break
       }
       case 'remove': {
-        // Don't auto-delete, just warn
+        // computeFileUpdates emits removal only when the current bytes still match
+        // the tracked template baseline. User-modified former template files stay put.
+        await beforeWrite?.(update.path)
+        if (!update.expectedCurrentHash) throw new Error(`Missing managed hash for obsolete template file: ${update.path}`)
+        await removeManagedFileSafely(update.path, update.expectedCurrentHash)
         removed.push(update)
         break
       }
@@ -299,6 +573,54 @@ export async function applyFileUpdates(
   }
 
   return { applied, conflicts, added, removed }
+}
+
+async function removeManagedFileSafely(path: string, expectedHash: string): Promise<void> {
+  await assertStackModuleWritePathSafe(path)
+  const quarantineRoot = await mkdtemp(join(dirname(path), '.saasfoundry-remove-'))
+  const quarantined = join(quarantineRoot, 'candidate')
+  await rename(path, quarantined)
+  await syncDirectory(dirname(path))
+  const noFollow = 'O_NOFOLLOW' in fsConstants ? fsConstants.O_NOFOLLOW : 0
+  let primaryFailure: unknown
+  try {
+    const before = await lstat(quarantined)
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) throw new Error(`Unsafe obsolete template file: ${path}`)
+    const handle = await open(quarantined, fsConstants.O_RDONLY | noFollow)
+    try {
+      const stat = await handle.stat()
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.dev !== before.dev || stat.ino !== before.ino) throw new Error(`Unsafe obsolete template file: ${path}`)
+      const currentHash = hashFileContent(await handle.readFile())
+      if (currentHash !== expectedHash) throw new Error(`Obsolete template file changed before deletion: ${path}`)
+    } finally {
+      await handle.close()
+    }
+  } catch (error) {
+    primaryFailure = error
+  }
+
+  if (primaryFailure === undefined) {
+    await rm(quarantined)
+    await rm(quarantineRoot, { recursive: true })
+    await syncDirectory(dirname(path))
+    return
+  }
+
+  const restorationFailures: unknown[] = []
+  try {
+    const replacement = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (replacement) throw new Error(`Cannot restore changed obsolete file because its destination was concurrently recreated: ${path}. Preserved at ${quarantined}`)
+    await rename(quarantined, path)
+    await syncDirectory(dirname(path))
+    await rm(quarantineRoot, { recursive: true })
+  } catch (error) {
+    restorationFailures.push(error)
+  }
+  if (restorationFailures.length > 0) throw new AggregateError([primaryFailure, ...restorationFailures], `Obsolete template file was not deleted and requires recovery: ${path}`)
+  throw primaryFailure
 }
 
 async function assertStackModuleWritePathSafe(path: string, allowLeafDirectory = false): Promise<void> {
@@ -701,7 +1023,15 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
   // must happen before reading or persisting migrations, module state or
   // refreshed hashes, otherwise the journal's before/after manifest evidence
   // could be poisoned by an unrelated update.
-  if (!dryRun) await recoverTechnicalStackTransition('.')
+  if (!dryRun) {
+    await recoverTechnicalStackTransition('.')
+    const dependencyRecoveryLock = await acquireManifestMutationLock(process.cwd())
+    try {
+      await recoverDependencyRefreshTransaction('.')
+    } finally {
+      await dependencyRecoveryLock.close()
+    }
+  }
 
   let manifestSnapshot = await readManifestFileSafe(manifestPath)
   const manifestBytes = manifestSnapshot.bytes
@@ -747,12 +1077,17 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
   // after lock acquisition so time spent in prompts cannot erase a newer edit.
   const manifestLock = dryRun ? undefined : await acquireManifestMutationLock(process.cwd())
   if (manifestLock) {
-    const lockedSnapshot = await readManifestFileSafe(manifestPath)
-    if (!lockedSnapshot.bytes.equals(manifestSnapshot.bytes)) {
+    try {
+      await recoverDependencyRefreshTransaction('.')
+      const lockedSnapshot = await readManifestFileSafe(manifestPath)
+      if (!lockedSnapshot.bytes.equals(manifestSnapshot.bytes)) {
+        throw new Error('The project manifest changed while the update was being prepared. Existing changes were preserved; retry the command.')
+      }
+      manifestSnapshot = lockedSnapshot
+    } catch (error) {
       await manifestLock.close()
-      throw new Error('The project manifest changed while the update was being prepared. Existing changes were preserved; retry the command.')
+      throw error
     }
-    manifestSnapshot = lockedSnapshot
   }
   const persistManifest = async (): Promise<void> => {
     manifestSnapshot = await replaceManifestFileSafe(manifestSnapshot, Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`))
@@ -925,8 +1260,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               }
 
               if (removed.length > 0) {
-                console.log(chalk.yellow(`\n  ${removed.length} file(s) removed in new version (not auto-deleted):`))
-                for (const f of removed) console.log(chalk.yellow(`    - ${f.path}`))
+                console.log(chalk.green(`\n  ${removed.length} unchanged obsolete template file(s) removed:`))
+                for (const f of removed) console.log(chalk.green(`    - ${f.path}`))
               }
 
               if (conflicts.length > 0) {
@@ -1381,11 +1716,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         moduleSpinner.text = 'Installing dependencies...'
         const nvm = getNvmPrefix(isMonorepo ? process.cwd() : apiPath)
         if (isMonorepo) {
-          runRequired('npm install (monorepo root)', `${nvm}npm install`)
+          await refreshDependencyLockAndInstall('npm install (monorepo root)', process.cwd(), nvm)
         } else if (selectedModules.includes('storage') || selectedModules.includes('email')) {
-          runRequired('npm install (api)', `${nvm}npm install`, { cwd: apiPath })
+          await refreshDependencyLockAndInstall('npm install (api)', apiPath, nvm)
         }
-        if (!isMonorepo && selectedModules.includes('pwa')) runRequired('npm install (web)', `${getNvmPrefix(webPath)}npm install`, { cwd: webPath })
+        if (!isMonorepo && selectedModules.includes('pwa')) await refreshDependencyLockAndInstall('npm install (web)', webPath, getNvmPrefix(webPath))
       }
 
       // Recompute file hashes after module installation and update manifest.

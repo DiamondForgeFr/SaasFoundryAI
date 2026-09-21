@@ -11,12 +11,14 @@
 #
 # Environment variables:
 #   DOCKER_BUILD_ARGS  Extra docker build arguments (e.g., --no-cache)
+#   SF_DOCKER_ARTIFACTS_DIR  Host directory receiving lifecycle diagnostics
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 IMAGE_NAME="sf-build-test"
+ARTIFACTS_DIR="${SF_DOCKER_ARTIFACTS_DIR:-$PROJECT_ROOT/.tmp/docker-artifacts}"
 
 # ── Parse Arguments ─────────────────────────────────────────────
 
@@ -95,7 +97,10 @@ docker build \
 
 # ── Run Tests ───────────────────────────────────────────────────
 
-ENV_ARGS=(-e "TEST_SCENARIO=$SCENARIO")
+mkdir -p "$ARTIFACTS_DIR"
+ARTIFACTS_DIR="$(cd "$ARTIFACTS_DIR" && pwd)"
+
+ENV_ARGS=(-e "TEST_SCENARIO=$SCENARIO" -e "SF_TEST_ARTIFACTS_DIR=/artifacts")
 
 if [[ -n "$COUNT" ]]; then
   ENV_ARGS+=(-e "TEST_COUNT=$COUNT")
@@ -111,8 +116,16 @@ else
   echo "Running scenario: $SCENARIO"
 fi
 echo ""
+echo "Artifacts: $ARTIFACTS_DIR"
+echo ""
 
-docker run --rm "${ENV_ARGS[@]}" "$IMAGE_NAME"
+# --init reaps browser/application descendants. Chromium needs the larger host
+# IPC namespace recommended by Playwright. The only mount is the diagnostics
+# directory: no ports and no Docker socket are exposed to generated code.
+docker run --rm --init --ipc=host \
+  "${ENV_ARGS[@]}" \
+  --mount "type=bind,source=$ARTIFACTS_DIR,target=/artifacts" \
+  "$IMAGE_NAME"
 
 echo ""
 echo "Docker build tests completed successfully!"

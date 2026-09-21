@@ -1,0 +1,10 @@
+{
+  "name": "saasfoundry-lifecycle-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@apidevtools/swagger-parser": "13.0.0",
+    "@playwright/test": "1.59.1",
+    "tsx": "4.21.0"
+  }
+}
