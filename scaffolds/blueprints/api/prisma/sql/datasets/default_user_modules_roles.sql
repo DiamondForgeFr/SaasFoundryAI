@@ -8,15 +8,35 @@
 --   entity-user    — basic authenticated user scoped to a single entity (ENTITY)
 --   platform-admin — platform-wide administrator (PLATFORM)
 ------
-INSERT INTO public.roles (name, description, scope, is_system, is_active, updated_at)
-VALUES
-  ('guest',          'Non-authenticated user',                  'PLATFORM', TRUE, TRUE, NOW()),
-  ('account-user',   'Basic authenticated user',                'ACCOUNT',  TRUE, TRUE, NOW()),
-  ('account-admin',  'Account administrator',                   'ACCOUNT',  TRUE, TRUE, NOW()),
-  ('entity-admin',   'Entity administrator',                    'ENTITY',   TRUE, TRUE, NOW()),
-  ('entity-user',    'Basic authenticated user of an entity',   'ENTITY',   TRUE, TRUE, NOW()),
-  ('platform-admin', 'Platform-wide administrator (superuser)', 'PLATFORM', TRUE, TRUE, NOW()),
-  ('platform-user',  'Platform user (read-only is out of scope; profile + password only)', 'PLATFORM', TRUE, TRUE, NOW());
+DO $$
+DECLARE
+  system_role RECORD;
+BEGIN
+  FOR system_role IN
+    SELECT * FROM (VALUES
+      ('guest',          'Non-authenticated user',                  'PLATFORM'::role_scope, TRUE),
+      ('account-user',   'Basic authenticated user',                'ACCOUNT'::role_scope,  TRUE),
+      ('account-admin',  'Account administrator',                   'ACCOUNT'::role_scope,  TRUE),
+      ('entity-admin',   'Entity administrator',                    'ENTITY'::role_scope,   TRUE),
+      ('entity-user',    'Basic authenticated user of an entity',   'ENTITY'::role_scope,   TRUE),
+      ('platform-admin', 'Platform-wide administrator (superuser)', 'PLATFORM'::role_scope, TRUE),
+      ('platform-user',  'Platform user (read-only is out of scope; profile + password only)', 'PLATFORM'::role_scope, TRUE)
+    ) AS seed(name, description, scope, is_active)
+  LOOP
+    UPDATE public.roles
+    SET description = system_role.description,
+        scope = system_role.scope,
+        is_system = TRUE,
+        is_active = system_role.is_active,
+        updated_at = NOW()
+    WHERE name = system_role.name AND account_id IS NULL;
+
+    IF NOT FOUND THEN
+      INSERT INTO public.roles (name, description, scope, is_system, is_active, updated_at)
+      VALUES (system_role.name, system_role.description, system_role.scope, TRUE, system_role.is_active, NOW());
+    END IF;
+  END LOOP;
+END $$;
 
 ------
 -- 2. Default module types
@@ -27,14 +47,16 @@ VALUES
   ('PROFILE_MANAGEMENT',      'Profile management-related modules',      NOW()),
   ('ACCOUNT_MANAGEMENT',      'Account management-related modules',      NOW()),
   ('PLATFORM_MANAGEMENT',     'Platform management-related modules',     NOW()),
-  ('ORGANIZATION_MANAGEMENT', 'Organization management-related modules', NOW());
+  ('ORGANIZATION_MANAGEMENT', 'Organization management-related modules', NOW())
+ON CONFLICT (name) DO NOTHING;
 
 ------
 -- 2b. Default entity types (registry of profile tables eligible to be an entity type)
 ------
 INSERT INTO public.entity_types (name, table_name, label, is_active, updated_at)
 VALUES
-  ('ORGANIZATION', 'organizations', 'Organization', TRUE, NOW());
+  ('ORGANIZATION', 'organizations', 'Organization', TRUE, NOW())
+ON CONFLICT (name) DO NOTHING;
 
 ------
 -- 3. Default modules
@@ -48,7 +70,8 @@ VALUES
   ('MULTI_ACCOUNT_MANAGEMENT',       (SELECT id FROM public.module_types WHERE name = 'ACCOUNT_MANAGEMENT'),      '1.0.0', 'Multi-account management module',        FALSE, NOW()),
   ('MULTI_ENTITY_MANAGEMENT',        (SELECT id FROM public.module_types WHERE name = 'ACCOUNT_MANAGEMENT'),      '1.0.0', 'Multi-entity management module',         FALSE, NOW()),
   ('PLATFORM_ADMINISTRATION',        (SELECT id FROM public.module_types WHERE name = 'PLATFORM_MANAGEMENT'),     '1.0.0', 'Platform-wide administration module',    TRUE,  NOW()),
-  ('ORGANIZATION_ADMINISTRATION',    (SELECT id FROM public.module_types WHERE name = 'ORGANIZATION_MANAGEMENT'), '1.0.0', 'Organization management module',         TRUE,  NOW());
+  ('ORGANIZATION_ADMINISTRATION',    (SELECT id FROM public.module_types WHERE name = 'ORGANIZATION_MANAGEMENT'), '1.0.0', 'Organization management module',         TRUE,  NOW())
+ON CONFLICT (name) DO NOTHING;
 
 ------
 -- 3b. Default sub-modules (sections inside complex modules)
@@ -69,7 +92,8 @@ VALUES
   ((SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION'), 'PLATFORM_ACCOUNTS',     'All-accounts list section',    NOW()),
   ((SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION'), 'PLATFORM_USERS',        'Cross-account users section',  NOW()),
   ((SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION'), 'PLATFORM_MODULES',      'Platform modules section',     NOW()),
-  ((SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION'), 'PLATFORM_REACTIVATION', 'Reactivation requests section',NOW());
+  ((SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION'), 'PLATFORM_REACTIVATION', 'Reactivation requests section',NOW())
+ON CONFLICT (module_id, name) DO NOTHING;
 
 ------
 -- 4. Default permissions by module (with applicable scopes)
@@ -109,7 +133,8 @@ VALUES
   ((SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION'),        'ACCOUNT_REACTIVATION_REVIEW',       'Approve or reject account reactivation requests', ARRAY['PLATFORM']::role_scope[],                      NOW()),
   -- organization_management module
   ((SELECT id FROM public.modules WHERE name = 'ORGANIZATION_ADMINISTRATION'),    'ORGANIZATION_CREATION',             'Create an organization',                         ARRAY['PLATFORM','ACCOUNT','ENTITY']::role_scope[],    NOW()),
-  ((SELECT id FROM public.modules WHERE name = 'ORGANIZATION_ADMINISTRATION'),    'ORGANIZATION_UPDATE',               'Update an organization',                         ARRAY['PLATFORM','ACCOUNT','ENTITY']::role_scope[],    NOW());
+  ((SELECT id FROM public.modules WHERE name = 'ORGANIZATION_ADMINISTRATION'),    'ORGANIZATION_UPDATE',               'Update an organization',                         ARRAY['PLATFORM','ACCOUNT','ENTITY']::role_scope[],    NOW())
+ON CONFLICT (name) DO NOTHING;
 
 
 ------
@@ -167,7 +192,8 @@ VALUES
   ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.modules WHERE name = 'PROFILE_ADMINISTRATION'),         NOW()),
   ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.modules WHERE name = 'USER_ACCOUNT_PASSWORD_RECOVERY'), NOW()),
   ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION'),        NOW()),
-  ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.modules WHERE name = 'ACCOUNT_ADMINISTRATION'),         NOW());
+  ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.modules WHERE name = 'ACCOUNT_ADMINISTRATION'),         NOW())
+ON CONFLICT (role_id, module_id) DO NOTHING;
 
 ------
 -- 5b. Link roles to visible sub-modules (section visibility / read).
@@ -197,7 +223,8 @@ WHERE
   OR (r.name = 'platform-user' AND sm.module_id IN (
         (SELECT id FROM public.modules WHERE name = 'ACCOUNT_ADMINISTRATION'),
         (SELECT id FROM public.modules WHERE name = 'PLATFORM_ADMINISTRATION')
-     ));
+     ))
+ON CONFLICT (role_id, sub_module_id) DO NOTHING;
 
 ------
 -- 6. Link roles to authorized permissions
@@ -273,7 +300,8 @@ VALUES
   -- platform-user (own profile + password recovery only)
   ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.module_permissions WHERE name = 'PROFILE_UPDATE_OWN'),                NOW()),
   ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.module_permissions WHERE name = 'PASSWORD_RECOVERY_LINK_REQUEST_OWN'), NOW()),
-  ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.module_permissions WHERE name = 'PASSWORD_RECOVERY_RESET_OWN'),       NOW());
+  ((SELECT id FROM public.roles WHERE name = 'platform-user'),  (SELECT id FROM public.module_permissions WHERE name = 'PASSWORD_RECOVERY_RESET_OWN'),       NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 
 ------
@@ -281,13 +309,16 @@ VALUES
 ------
 DO $$
 DECLARE
-  guest_user_id TEXT := 'clsystem00000000guest000000';
+  guest_user_id TEXT;
 BEGIN
   INSERT INTO public.users (id, is_active, email, password, updated_at)
-  VALUES (guest_user_id, TRUE, 'user@appguest.com', 'passwordNotUsed', NOW());
+  VALUES ('clsystem00000000guest000000', TRUE, 'user@appguest.com', 'passwordNotUsed', NOW())
+  ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+  RETURNING id INTO guest_user_id;
 
   INSERT INTO public.user_preferences (user_id, locale, updated_at)
-  VALUES (guest_user_id, 'FR', NOW());
+  VALUES (guest_user_id, 'FR', NOW())
+  ON CONFLICT (user_id) DO NOTHING;
 
   -- Guest is a PLATFORM-scoped role: assignment carries no account_id / entity_id.
   INSERT INTO public.users_roles_assignments (id, user_id, role_id, updated_at)
@@ -296,5 +327,6 @@ BEGIN
     guest_user_id,
     (SELECT id FROM public.roles WHERE name = 'guest'),
     NOW()
-  );
+  )
+  ON CONFLICT DO NOTHING;
 END $$;

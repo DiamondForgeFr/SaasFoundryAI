@@ -3,6 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { applyFileUpdates, computeFileUpdates, FileUpdate, moduleSelectionPrefill, refreshProjectHashes } from '../../../commands/update'
+import { hashFileContent } from '../../../utils'
 
 describe('moduleSelectionPrefill', () => {
   // The bug: `sf update --non-interactive` with no --add threw "Missing required
@@ -129,7 +130,7 @@ describe('computeFileUpdates (three-way merge)', () => {
       const updates = computeFileUpdates(base, current, target)
 
       expect(updates).toHaveLength(1)
-      expect(findUpdate(updates, 'old-file.ts')).toEqual({ path: 'old-file.ts', action: 'remove' })
+      expect(findUpdate(updates, 'old-file.ts')).toEqual({ path: 'old-file.ts', action: 'remove', expectedCurrentHash: 'aaa' })
     })
 
     it('should NOT flag for removal if user modified the file', () => {
@@ -258,6 +259,27 @@ describe('applyFileUpdates (conflict strategies)', () => {
     ).rejects.toThrow('destination changed')
     expect(checks).toEqual(['conflict.ts'])
     expect(await readFile('conflict.ts', 'utf8')).toBe('user-modified-content')
+  })
+
+  it('deletes a removed template file only after the three-way comparison marked it unchanged', async () => {
+    const content = 'old template\n'
+    await writeFile('obsolete.config.js', content)
+
+    const update: FileUpdate = { path: 'obsolete.config.js', action: 'remove', expectedCurrentHash: hashFileContent(content) }
+    const { removed } = await applyFileUpdates([update], tempProjectDir, stubSpinner(), 'save-new')
+
+    expect(removed).toEqual([update])
+    await expect(readFile('obsolete.config.js', 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('preserves an obsolete template file changed after planning', async () => {
+    await writeFile('obsolete.config.js', 'user edit after planning\n')
+
+    await expect(
+      applyFileUpdates([{ path: 'obsolete.config.js', action: 'remove', expectedCurrentHash: hashFileContent('old template\n') }], tempProjectDir, stubSpinner(), 'save-new')
+    ).rejects.toThrow('changed before deletion')
+
+    expect(await readFile('obsolete.config.js', 'utf8')).toBe('user edit after planning\n')
   })
 
   it('never absorbs adoption-compatible user paths into refreshed ownership', async () => {

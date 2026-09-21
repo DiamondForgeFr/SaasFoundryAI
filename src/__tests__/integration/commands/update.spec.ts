@@ -1,5 +1,6 @@
 import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../../../harness/agent-instructions'
 import { mkdir, rm, writeFile, readFile } from 'fs/promises'
+import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import shelljs from 'shelljs'
@@ -55,7 +56,7 @@ jest.mock('ora', () => () => ({
   start: () => ({ text: '', succeed: jest.fn(), fail: jest.fn(), stop: jest.fn() })
 }))
 
-import { updateCommand } from '../../../commands/update'
+import { DEPENDENCY_REFRESH_JOURNAL, DEPENDENCY_REFRESH_OUTCOME, updateCommand } from '../../../commands/update'
 import { getModuleSelections, getEmailModuleCredentials, getStorageModuleConfig, getSkillCredentials } from '../../../prompts/update.prompts'
 import { installEmailModule } from '../../../installers/email.installer'
 import { installStorageModule } from '../../../installers/storage.installer'
@@ -504,6 +505,91 @@ describe('updateCommand (integration)', () => {
 
       const npmInstallCalls = shellSpy.mock.calls.filter((c) => String(c[0]).includes('npm install'))
       expect(npmInstallCalls).toHaveLength(1)
+    })
+
+    it('rebuilds an existing unmanaged lock against a clean dependency tree', async () => {
+      const manifest = buildBaseManifest()
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+      await writeFile('package-lock.json', 'old-lock\n')
+      await mkdir('node_modules')
+      await writeFile('node_modules/old-tree', 'old\n')
+      mockedGetModuleSelections.mockResolvedValue(['email'])
+      mockedGetEmailCreds.mockResolvedValue({
+        mailersendApiKey: 'k',
+        mailersendSenderEmail: 'a@b.c',
+        mailersendSenderName: 'X'
+      })
+      shellSpy.mockImplementation(((command: string) => {
+        if (command.includes('--package-lock-only')) writeFileSync('package-lock.json', 'new-lock\n')
+        if (command.includes('npm ci')) {
+          mkdirSync('node_modules', { recursive: true })
+          writeFileSync('node_modules/new-tree', 'new\n')
+        }
+        return { code: 0, stdout: '', stderr: '' }
+      }) as never)
+
+      await updateCommand()
+
+      const npmCalls = shellSpy.mock.calls.map((call) => String(call[0])).filter((command) => command.includes('npm install') || command.includes('npm ci'))
+      expect(npmCalls).toHaveLength(2)
+      expect(npmCalls[0]).toContain('--package-lock-only --ignore-scripts')
+      expect(npmCalls[1]).toContain('npm ci')
+      expect(await readFile('package-lock.json', 'utf8')).toBe('new-lock\n')
+      expect(await readFile('node_modules/new-tree', 'utf8')).toBe('new\n')
+      await expect(readFile('node_modules/old-tree', 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    })
+
+    it('restores a durable dependency backup left by an interrupted update before continuing', async () => {
+      const manifest = buildBaseManifest()
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+      await writeFile('package-lock.json', 'partial-new-lock\n')
+      await mkdir('node_modules')
+      await writeFile('node_modules/partial-tree', 'partial\n')
+      const backupName = '.saasfoundry-dependency-refresh-interrupted'
+      await mkdir(join(backupName, 'node_modules'), { recursive: true })
+      await writeFile(join(backupName, 'package-lock.json'), 'original-lock\n')
+      await writeFile(join(backupName, 'node_modules', 'original-tree'), 'original\n')
+      await writeFile(DEPENDENCY_REFRESH_JOURNAL, `${JSON.stringify({ version: 1, packageRoot: '.', backupRoot: backupName, hadModules: true })}\n`)
+      mockedGetModuleSelections.mockResolvedValue([])
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(await readFile('package-lock.json', 'utf8')).toBe('original-lock\n')
+      expect(await readFile('node_modules/original-tree', 'utf8')).toBe('original\n')
+      await expect(readFile('node_modules/partial-tree', 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(readFile(DEPENDENCY_REFRESH_JOURNAL, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(readFile(DEPENDENCY_REFRESH_OUTCOME, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    })
+
+    it('rolls back lock and dependency tree when npm ci fails after lock regeneration', async () => {
+      const manifest = buildBaseManifest()
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+      await writeFile('package-lock.json', 'original-lock\n')
+      await mkdir('node_modules')
+      await writeFile('node_modules/original-tree', 'original\n')
+      mockedGetModuleSelections.mockResolvedValue(['email'])
+      mockedGetEmailCreds.mockResolvedValue({
+        mailersendApiKey: 'k',
+        mailersendSenderEmail: 'a@b.c',
+        mailersendSenderName: 'X'
+      })
+      shellSpy.mockImplementation(((command: string) => {
+        if (command.includes('--package-lock-only')) writeFileSync('package-lock.json', 'partial-new-lock\n')
+        if (command.includes('npm ci')) {
+          mkdirSync('node_modules', { recursive: true })
+          writeFileSync('node_modules/partial-tree', 'partial\n')
+          return { code: 1, stdout: '', stderr: 'simulated install failure' }
+        }
+        return { code: 0, stdout: '', stderr: '' }
+      }) as never)
+
+      await expect(updateCommand()).rejects.toThrow('process.exit(1)')
+
+      expect(await readFile('package-lock.json', 'utf8')).toBe('original-lock\n')
+      expect(await readFile('node_modules/original-tree', 'utf8')).toBe('original\n')
+      await expect(readFile('node_modules/partial-tree', 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(readFile(DEPENDENCY_REFRESH_JOURNAL, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(readFile(DEPENDENCY_REFRESH_OUTCOME, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     })
 
     it('skips npm install when only analytics is selected', async () => {

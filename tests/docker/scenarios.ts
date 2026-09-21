@@ -3,7 +3,7 @@
 // ALL_SCENARIOS is ordered by PRIORITY — first scenarios are the most critical.
 // This allows `--count N` to run the N most important scenarios.
 
-export type ScenarioType = 'generation' | 'update' | 'ai' | 'migration' | 'cli' | 'boot'
+export type ScenarioType = 'generation' | 'update' | 'ai' | 'migration' | 'cli' | 'boot' | 'previous-release'
 
 export interface GenerationScenario {
   type: 'generation'
@@ -114,7 +114,21 @@ export interface BootScenario {
   quick?: boolean
 }
 
-export type TestScenario = GenerationScenario | UpdateScenario | AIScenario | MigrationScenario | CliScenario | BootScenario
+/**
+ * Previous-release lifecycle — consumes the immutable #787 fixture through the
+ * real adoption/update sequence and the supervised runtime supplied by #788.
+ *
+ * CI lane depth remains owned by #790. Keeping it as one named scenario gives
+ * that ticket a stable entrypoint without duplicating the lifecycle here.
+ */
+export interface PreviousReleaseScenario {
+  type: 'previous-release'
+  name: string
+  /** One global budget shared by materialization, installs, both boots, update and teardown. */
+  timeoutSeconds: number
+}
+
+export type TestScenario = GenerationScenario | UpdateScenario | AIScenario | MigrationScenario | CliScenario | BootScenario | PreviousReleaseScenario
 
 // ── ALL SCENARIOS — ordered by priority ────────────────────────
 // Priority rationale:
@@ -385,6 +399,14 @@ export const ALL_SCENARIOS: TestScenario[] = [
     projectName: 'boot-check',
     bootTimeoutSeconds: 180,
     quick: true
+  },
+
+  // Historical update lifecycle. #790 decides whether the normal lane runs the
+  // smoke or exhaustive browser depth; #788 owns this stable runtime entrypoint.
+  {
+    type: 'previous-release',
+    name: 'update-previous-release-runtime',
+    timeoutSeconds: 1_800
   }
 ]
 
