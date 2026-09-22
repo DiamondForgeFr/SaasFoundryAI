@@ -37,6 +37,8 @@ import {
   scanForUnreplacedPlaceholders
 } from './assertions'
 import { auditHighProductionWorkspaces } from './npm-audit'
+import { verifyHarnessBrowsers } from './lifecycle/browser'
+import { runLiveSuite } from './lifecycle/live-suite'
 import { runSupervisedProcess, startSupervisedProcess } from './lifecycle/process'
 import { startPrivatePostgres, type PrivatePostgres } from './lifecycle/postgres'
 import { runProductPhase } from './lifecycle/product'
@@ -912,9 +914,20 @@ async function runStep<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
     console.log(`    Done`)
     return value
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
+    const detail = formatErrorDetails(err)
     throw new Error(`step "${label}" failed: ${detail}`)
   }
+}
+
+function formatErrorDetails(error: unknown): string {
+  if (error instanceof AggregateError) {
+    return [error.message, ...error.errors.map(formatErrorDetails)].filter(Boolean).join('\n')
+  }
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause
+    return cause === undefined ? error.message : `${error.message}\n${formatErrorDetails(cause)}`
+  }
+  return String(error)
 }
 
 /**
@@ -931,8 +944,10 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
   mkdirSync(workspace, { recursive: true })
 
   const projectDir = join(workspace, scenario.projectName)
-  const apiDir = join(projectDir, 'apps', `${scenario.projectName}-api`)
-  const deadline = Date.now() + 20 * 60 * 1_000
+  const structure = scenario.structure ?? 'multirepo'
+  const profile = scenario.profile ?? 'stack'
+  const apiDir = structure === 'monorepo' ? join(projectDir, 'apps', 'api') : join(projectDir, 'apps', `${scenario.projectName}-api`)
+  const deadline = Date.now() + (scenario.timeoutSeconds ?? 20 * 60) * 1_000
   const results: AssertionResult[] = []
   let postgres: PrivatePostgres | undefined
 
@@ -953,19 +968,19 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
           '--project-description',
           'docker boot scenario',
           '--structure',
-          'multirepo',
+          structure,
           '--main-branch',
           'main',
           '--setup-repo',
           'local',
           '--profile',
-          'stack',
+          profile,
           '--db-setup',
           'credentials',
           '--db-host',
           '127.0.0.1',
           '--db-port',
-          String(postgres.port),
+          String(postgres!.port),
           '--db-user',
           'sf_lifecycle',
           '--db-password',
@@ -973,10 +988,13 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
           '--db-name',
           'sf_lifecycle',
           '--email-service',
-          'none',
+          profile === 'full' ? 'mailersend' : 'none',
+          ...(profile === 'full'
+            ? ['--mailersend-api-key', 'ms_fixture_runtime_key_00000000000000000000', '--mailersend-sender-email', 'noreply@example.test', '--mailersend-sender-name', 'Fixture']
+            : []),
           '--s3-setup',
           'manual',
-          '--no-analytics',
+          profile === 'full' ? '--analytics' : '--no-analytics',
           '--no-workflow',
           '--no-srs-enable',
           '--start-services',
@@ -1000,6 +1018,7 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
     const ports = manifest.ports || { api: 3500, web: 5173 }
     console.log(`  · the project resolved api=${ports.api} web=${ports.web}`)
 
+    const browserCapabilities = scenario.liveSuite ? await runStep('verify harness browser capabilities', () => verifyHarnessBrowsers('/workspace')) : []
     const phase = await runStep('production API/web boot, strict readiness and verified teardown', () =>
       runProductPhase({
         phase: 'creation',
@@ -1009,7 +1028,9 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
         deadline,
         readinessTimeoutMs: scenario.bootTimeoutSeconds * 1_000,
         apiPort: ports.api,
-        webPort: ports.web
+        webPort: ports.web,
+        browserCapabilities,
+        onReady: scenario.liveSuite ? (context) => runLiveSuite(context, { depth: scenario.liveSuite!, runtimeRoot: '/workspace' }).then(() => undefined) : undefined
       })
     )
     results.push({ passed: phase.apiProbe.status === 200, message: `OK: the API answered strict /api/health on ${ports.api}` })
@@ -1061,6 +1082,18 @@ async function runPreviousReleaseScenario(scenario: PreviousReleaseScenario): Pr
       env: {
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
         npm_config_loglevel: 'error'
+      },
+      onProductReady: async (context) => {
+        if (context.phase !== 'after-update') return
+        await runLiveSuite(context, {
+          depth: 'smoke',
+          runtimeRoot: '/workspace',
+          artifacts: context.artifacts,
+          artifactPaths: {
+            result: 'events/after-update-e2e.json',
+            screenshot: context.screenshotPath
+          }
+        })
       }
     })
     const before = lifecycle.phases['before-update']
@@ -1071,7 +1104,7 @@ async function runPreviousReleaseScenario(scenario: PreviousReleaseScenario): Pr
     results.push({ passed: lifecycle.artifacts.some((artifact) => artifact.path === 'manifest.json'), message: `OK: sanitized diagnostic manifest written under ${lifecycle.artifactRoot}` })
     results.push({ passed: /^[0-9a-f]{64}$/.test(lifecycle.stableDigest), message: 'OK: the second identical update remained byte-idempotent' })
   } catch (error) {
-    results.push({ passed: false, message: `FAIL: ${error instanceof Error ? error.message : String(error)}` })
+    results.push({ passed: false, message: `FAIL: ${formatErrorDetails(error)}` })
   }
   return reportResults(scenario.name, results)
 }

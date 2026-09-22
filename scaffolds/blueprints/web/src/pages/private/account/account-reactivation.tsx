@@ -86,7 +86,7 @@ export function AccountReactivation() {
   }
 
   return (
-    <div className="container mx-auto py-10 max-w-2xl">
+    <div data-testid="reactivation-page" className="container mx-auto py-10 max-w-2xl">
       {/* Headline state card */}
       <div className="rounded-sm border border-border bg-card p-6 mb-6">
         <div className="flex items-start gap-4">
@@ -118,7 +118,7 @@ export function AccountReactivation() {
 
       {/* Pending request — show status + when submitted */}
       {!isLoadingLatest && hasPendingRequest && latest && (
-        <div className="rounded-sm border border-amber-500/40 bg-amber-500/5 p-5">
+        <div data-testid="reactivation-pending" className="rounded-sm border border-amber-500/40 bg-amber-500/5 p-5">
           <div className="flex items-start gap-3">
             <Clock className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
             <div className="min-w-0 flex-1">
@@ -135,7 +135,7 @@ export function AccountReactivation() {
 
       {/* Rejected — show reason + allow resubmitting */}
       {!isLoadingLatest && wasRejected && latest && (
-        <div className="rounded-sm border border-destructive/40 bg-destructive/5 p-5 mb-6">
+        <div data-testid="reactivation-rejected" className="rounded-sm border border-destructive/40 bg-destructive/5 p-5 mb-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
             <div className="min-w-0 flex-1">
@@ -168,6 +168,7 @@ export function AccountReactivation() {
       {/* Submission form — visible when no pending request */}
       {!isLoadingLatest && !hasPendingRequest && (
         <form
+          data-testid="reactivation-request-form"
           onSubmit={(e) => {
             e.preventDefault()
             submit()
@@ -179,6 +180,7 @@ export function AccountReactivation() {
           </label>
           <p className="text-[12px] text-muted-foreground mb-3">{tAccount('reactivation.form.tk_help_')}</p>
           <textarea
+            data-testid="reactivation-message"
             id="reactivation-message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -198,7 +200,7 @@ export function AccountReactivation() {
           {submitError && <p className="mt-3 text-[12px] text-destructive">{submitError}</p>}
 
           <div className="mt-4 flex items-center justify-end gap-2">
-            <WaveButton type="submit" disabled={createRequest.isLoading} className="!h-9 !w-auto !text-[12px] px-4">
+            <WaveButton data-testid="reactivation-submit" type="submit" disabled={createRequest.isLoading} className="!h-9 !w-auto !text-[12px] px-4">
               {createRequest.isLoading ? tCommon('tk_loading_') : tAccount('reactivation.form.tk_submit_')}
             </WaveButton>
           </div>

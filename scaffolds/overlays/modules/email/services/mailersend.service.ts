@@ -46,6 +46,24 @@ export class MailerSendService {
     try {
       this.logger.debug(`Preparing email to ${options.to}`, 'MailerSendService')
 
+      const lifecycleMailboxUrl = this.env.get('SF_LIFECYCLE_MAILBOX_URL')
+      const lifecycleCapability = this.env.get('SF_LIFECYCLE_MAILBOX_CAPABILITY')
+      const lifecycleHttp = this.env.get('SF_LIFECYCLE_ALLOW_INSECURE_HTTP') === 'true'
+      if (lifecycleMailboxUrl || lifecycleCapability || lifecycleHttp) {
+        if (!lifecycleMailboxUrl || !lifecycleCapability || !lifecycleHttp) throw new Error('Lifecycle mailbox configuration must provide URL, capability and insecure HTTP flag together')
+        const response = await fetch(`${lifecycleMailboxUrl.replace(/\/$/, '')}/messages`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${lifecycleCapability}`,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify(options)
+        })
+        if (!response.ok) throw new Error(`Lifecycle mailbox rejected the message with status ${response.status}`)
+        this.logger.debug(`Email captured by the lifecycle mailbox for ${options.to}`, 'MailerSendService')
+        return
+      }
+
       const emailParams = new EmailParams()
         .setFrom({
           email: this.senderEmail,

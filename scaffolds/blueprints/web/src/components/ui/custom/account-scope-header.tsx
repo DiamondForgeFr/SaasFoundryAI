@@ -204,6 +204,7 @@ export function AccountScopeHeader() {
                       title={tAccount(target.isActive ? 'scopeHeader.tk_status-deactivate_' : 'scopeHeader.tk_status-reactivate_')}
                     >
                       <Switch
+                        data-testid="account-status-switch"
                         checked={target.isActive}
                         disabled={updateStatus.isLoading}
                         onCheckedChange={() => setConfirmStatusOpen(true)}

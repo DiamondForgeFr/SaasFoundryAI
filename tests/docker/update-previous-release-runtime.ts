@@ -23,6 +23,7 @@ const ARTIFACT_PATHS = [
   'logs/after-update-web.log',
   'events/before-update.json',
   'events/after-update.json',
+  'events/after-update-e2e.json',
   'events/lifecycle-failure.json',
   'screenshots/before-update-failure.png',
   'screenshots/after-update-failure.png',

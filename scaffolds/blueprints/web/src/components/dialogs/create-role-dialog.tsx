@@ -264,7 +264,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px]">
+      <DialogContent data-testid="role-editor" className="sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
@@ -276,6 +276,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
             <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('roles.create.tk_section-identity_')}</p>
             <div>
               <Input
+                data-testid="role-name"
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value)
@@ -289,6 +290,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
               {errors.name && <p className="mt-1 text-[11px] text-destructive">{errors.name}</p>}
             </div>
             <Input
+              data-testid="role-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={tAccount('roles.create.tk_description-placeholder_')}
@@ -371,7 +373,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                     mod.subModules.reduce((acc, sm) => acc + (selectedSubModuleNames.has(sm.name) ? 1 : 0) + sm.permissions.filter((p) => selectedPermissionNames.has(p.name)).length, 0)
                   const totalInModule = mod.standalonePermissions.length + mod.subModules.reduce((acc, sm) => acc + 1 + sm.permissions.length, 0)
                   return (
-                    <div key={mod.moduleId} className="rounded-sm border border-border bg-secondary">
+                    <div key={mod.moduleId} data-testid={`role-module-${mod.moduleName}`} className="rounded-sm border border-border bg-secondary">
                       <button type="button" onClick={() => toggleModule(mod.moduleId)} className="cursor-pointer w-full flex items-center justify-between px-2.5 py-2">
                         <div className="flex items-center gap-2">
                           {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -390,6 +392,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                             return (
                               <div key={sm.id} className="rounded-[2px] border border-border/60 bg-background/30">
                                 <button
+                                  data-testid={`role-section-${sm.name}`}
                                   type="button"
                                   onClick={() => toggleSubModule(sm.name, sectionPermNames)}
                                   className={cn(
@@ -452,7 +455,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
           >
             {tCommon('actions.tk_cancel_')}
           </button>
-          <WaveButton type="button" disabled={isLoading} onClick={handleSubmit}>
+          <WaveButton data-testid="role-submit" type="button" disabled={isLoading} onClick={handleSubmit}>
             {isLoading ? tCommon('actions.tk_loading_') : isEdit ? tAccount('roles.edit.tk_submit_') : tAccount('roles.create.tk_submit_')}
           </WaveButton>
         </DialogFooter>

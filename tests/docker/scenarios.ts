@@ -109,6 +109,11 @@ export interface BootScenario {
   type: 'boot'
   name: string
   projectName: string
+  structure?: 'monorepo' | 'multirepo'
+  profile?: 'stack' | 'full'
+  liveSuite?: 'smoke' | 'full'
+  /** One global lifecycle budget. Defaults to twenty minutes. */
+  timeoutSeconds?: number
   /** Seconds to wait for each server to answer before calling it dead. */
   bootTimeoutSeconds: number
   quick?: boolean
@@ -397,8 +402,30 @@ export const ALL_SCENARIOS: TestScenario[] = [
     type: 'boot',
     name: 'multirepo-boot-and-test',
     projectName: 'boot-check',
+    structure: 'multirepo',
+    profile: 'stack',
     bootTimeoutSeconds: 180,
     quick: true
+  },
+  {
+    type: 'boot',
+    name: 'monorepo-live-full',
+    projectName: 'mono-live',
+    structure: 'monorepo',
+    profile: 'full',
+    liveSuite: 'full',
+    timeoutSeconds: 1_800,
+    bootTimeoutSeconds: 180
+  },
+  {
+    type: 'boot',
+    name: 'multirepo-live-full',
+    projectName: 'multi-live',
+    structure: 'multirepo',
+    profile: 'full',
+    liveSuite: 'full',
+    timeoutSeconds: 1_800,
+    bootTimeoutSeconds: 180
   },
 
   // Historical update lifecycle. #790 decides whether the normal lane runs the

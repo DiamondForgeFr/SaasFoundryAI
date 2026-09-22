@@ -76,6 +76,7 @@ export function ConfirmDialog({ isOpen, onOpenChange, title, description, tone =
 
         <DialogFooter className="mt-2">
           <button
+            data-testid="confirm-dialog-cancel"
             type="button"
             disabled={isLoading}
             onClick={() => onOpenChange(false)}
@@ -83,7 +84,7 @@ export function ConfirmDialog({ isOpen, onOpenChange, title, description, tone =
           >
             {cancelLabel ?? tCommon('actions.tk_cancel_')}
           </button>
-          <WaveButton type="button" tone={tone === 'destructive' ? 'destructive' : 'default'} disabled={isLoading} onClick={handleConfirm}>
+          <WaveButton data-testid="confirm-dialog-confirm" type="button" tone={tone === 'destructive' ? 'destructive' : 'default'} disabled={isLoading} onClick={handleConfirm}>
             {isLoading ? tCommon('actions.tk_loading_') : (confirmLabel ?? tCommon('actions.tk_confirm_'))}
           </WaveButton>
         </DialogFooter>
