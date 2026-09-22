@@ -139,6 +139,7 @@ function ModuleCard({ mod, onOpen, onToggle, busy, canToggle }: { mod: PlatformM
 
   return (
     <div
+      data-testid={`module-card-${mod.name}`}
       role="button"
       onClick={onOpen}
       className={cn(
@@ -189,6 +190,7 @@ function ModuleCard({ mod, onOpen, onToggle, busy, canToggle }: { mod: PlatformM
                 )}
               >
                 <Switch
+                  data-testid={`module-switch-${mod.name}`}
                   checked={isActive}
                   disabled={busy}
                   onCheckedChange={onToggle}

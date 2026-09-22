@@ -224,6 +224,27 @@ describe('lifecycle process supervisor', () => {
     }
   })
 
+  it('treats a procfs ESRCH race as an already-exited descendant', async () => {
+    if (process.platform !== 'linux') return
+    const helper = join(__dirname, '../../../../tests/docker/lifecycle/process-subtree.py')
+    const script = [
+      'import builtins, errno, runpy',
+      `module = runpy.run_path(${JSON.stringify(helper)})`,
+      "def vanished(*_args, **_kwargs): raise OSError(errno.ESRCH, 'No such process')",
+      'builtins.open = vanished',
+      "assert module['direct_children'](999999) == []",
+      ''
+    ].join('\n')
+    const result = await runSupervisedProcess({
+      label: 'procfs race',
+      executable: '/usr/bin/python3',
+      args: ['-c', script],
+      cwd: temporaryRoot,
+      deadline: Date.now() + 5_000
+    })
+    expect(result.status).toBe(0)
+  })
+
   it('preserves a primary error and cleanup verification failure together', async () => {
     const occupied = createServer()
     const port = await new Promise<number>((resolve, reject) => {

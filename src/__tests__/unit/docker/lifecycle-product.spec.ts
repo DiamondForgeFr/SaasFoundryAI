@@ -112,6 +112,7 @@ describe('previous-release product runtime', () => {
     const dbPush = specs.find((spec) => spec.label.endsWith('prisma db push'))!
     const apiInstall = specs.find((spec) => spec.label.endsWith('api npm ci'))!
     const apiRuntime = specs.find((spec) => spec.label.endsWith(' api'))!
+    expect(dbPush.executable).toBe(join(root, 'apps', 'previous-release-api', 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma'))
     expect(dbPush.args).toEqual(['db', 'push'])
     expect(dbPush.args).not.toContain('--force-reset')
     expect(apiInstall.env?.NODE_ENV).toBeUndefined()
@@ -122,5 +123,60 @@ describe('previous-release product runtime', () => {
     expect(sequence.indexOf('001-stage.sql')).toBeLessThan(sequence.indexOf('after-update prisma db push'))
     expect(sequence.indexOf('001-migrate.sql')).toBeGreaterThan(sequence.indexOf('b.sql'))
     expect(stopped).toEqual(['after-update web', 'after-update api'])
+  })
+
+  it('fails when a product process exits during live validation', async () => {
+    let crashApi!: (value: SupervisedProcessResult) => void
+    const apiExited = new Promise<SupervisedProcessResult>((resolve) => (crashApi = resolve))
+    const processApi: LifecycleProcessApi = {
+      run: jest.fn(async (spec) => result(spec.label)),
+      start: jest.fn(async (spec) => ({
+        label: spec.label,
+        pid: 123,
+        child: {} as never,
+        exited: spec.label.endsWith(' api') ? apiExited : new Promise<SupervisedProcessResult>(() => undefined),
+        wait: async () => result(spec.label),
+        stop: async () => result(spec.label)
+      }))
+    }
+    const postgres = {
+      root: '/tmp/postgres',
+      port: 55432,
+      databaseUrl: 'postgresql://sf@127.0.0.1:55432/sf',
+      directUrl: 'postgresql://sf@127.0.0.1:55432/sf',
+      executeSql: jest.fn(),
+      runSqlFile: jest.fn(async (path: string) => result(path)),
+      stop: jest.fn()
+    } as unknown as PrivatePostgres
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      return url.endsWith('/api/health')
+        ? new Response('{"status":"ok","info":{"app":{"status":"up"}}}', { status: 200, headers: { 'content-type': 'application/json' } })
+        : new Response('<html><div id="root"></div></html>', { status: 200, headers: { 'content-type': 'text/html' } })
+    })
+    try {
+      let failure: unknown
+      try {
+        await runProductPhase({
+          phase: 'after-update',
+          projectRoot: root,
+          manifest: { structure: 'multirepo', name: 'previous-release' },
+          postgres,
+          deadline: Date.now() + 10_000,
+          settleWindowMs: 0,
+          processApi,
+          onReady: async () => {
+            crashApi({ ...result('after-update api'), status: 1 })
+            await new Promise<void>((resolve) => setImmediate(resolve))
+          }
+        })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toBeInstanceOf(AggregateError)
+      expect((failure as AggregateError).errors[0]).toHaveProperty('message', expect.stringMatching(/after-update api exited during live product validation/))
+    } finally {
+      fetchSpy.mockRestore()
+    }
   })
 })

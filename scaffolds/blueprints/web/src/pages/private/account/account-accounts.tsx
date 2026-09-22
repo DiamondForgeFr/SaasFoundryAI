@@ -444,6 +444,7 @@ function AccountCard({
 
   return (
     <div
+      data-testid={`account-card-${account.id}`}
       role="button"
       onClick={handleCardClick}
       className={cn(
@@ -559,7 +560,7 @@ function PendingReactivationSheet({
 
   return (
     <Sheet open={account !== null && request !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-[500px] flex flex-col p-0 overflow-hidden">
+      <SheetContent data-testid="reactivation-review-sheet" side="right" className="sm:max-w-[500px] flex flex-col p-0 overflow-hidden">
         <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/15 text-amber-500">
@@ -593,6 +594,7 @@ function PendingReactivationSheet({
         {request && (
           <div className="flex flex-col gap-2 px-6 py-4 border-t border-border bg-muted/20">
             <button
+              data-testid="reactivation-approve"
               type="button"
               onClick={onApprove}
               disabled={isApproving || isRejecting}
@@ -602,6 +604,7 @@ function PendingReactivationSheet({
               {tAccount('platformReactivation.tk_approve_')}
             </button>
             <button
+              data-testid="reactivation-reject"
               type="button"
               onClick={onReject}
               disabled={isApproving || isRejecting}

@@ -702,15 +702,16 @@ export class AuthService {
 
   public setAuthCookies(response: Response, accessToken: string, refreshToken: string): void {
     this.logger.debug('Setting auth cookies for user', 'setAuthCookies')
+    const secure = this.useSecureCookies()
     response.cookie('access_token', accessToken, {
       httpOnly: true,
-      secure: !['development', 'test'].includes(this.env.get('NODE_ENV')),
+      secure,
       sameSite: 'strict',
       path: '/'
     })
     response.cookie('refresh_token', refreshToken, {
       httpOnly: true,
-      secure: !['development', 'test'].includes(this.env.get('NODE_ENV')),
+      secure,
       sameSite: 'strict',
       path: '/'
     })
@@ -718,18 +719,25 @@ export class AuthService {
 
   public clearAuthCookies(response: Response): void {
     this.logger.debug('Clearing auth cookies for user', 'clearAuthCookies')
+    const secure = this.useSecureCookies()
     response.clearCookie('access_token', {
       httpOnly: true,
-      secure: !['development', 'test'].includes(this.env.get('NODE_ENV')),
+      secure,
       sameSite: 'strict',
       path: '/'
     })
     response.clearCookie('refresh_token', {
       httpOnly: true,
-      secure: !['development', 'test'].includes(this.env.get('NODE_ENV')),
+      secure,
       sameSite: 'strict',
       path: '/'
     })
+  }
+
+  private useSecureCookies(): boolean {
+    const lifecycleHttp =
+      this.env.get('SF_LIFECYCLE_ALLOW_INSECURE_HTTP') === 'true' && this.env.get('SF_LIFECYCLE_MAILBOX_URL') !== undefined && this.env.get('SF_LIFECYCLE_MAILBOX_CAPABILITY') !== undefined
+    return !['development', 'test'].includes(this.env.get('NODE_ENV')) && !lifecycleHttp
   }
 
   public decodeToken(token: string): TokenPayload | null {

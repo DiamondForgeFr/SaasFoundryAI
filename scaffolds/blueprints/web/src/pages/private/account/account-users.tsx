@@ -160,7 +160,7 @@ function FilterBar({
         </div>
         <SegmentedFilter value={status} onChange={onStatus} options={statusOptions} />
         {canInvite && (
-          <WaveButton type="button" onClick={onInvite} className="!h-9 !w-auto !text-[11px] px-3.5">
+          <WaveButton data-testid="invite-user-button" type="button" onClick={onInvite} className="!h-9 !w-auto !text-[11px] px-3.5">
             <UserPlus className="h-3.5 w-3.5" />
             {tAccount('users.tk_invite-user-cta_')}
           </WaveButton>

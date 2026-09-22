@@ -1,14 +1,22 @@
 {
   "compilerOptions": {
-    "target": "ES2021",
+    "target": "ES2022",
     "module": "commonjs",
-    "lib": ["ES2021"],
+    "lib": ["ES2022", "DOM"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@playwright/test": ["runtime/node_modules/@playwright/test"],
+      "@playwright/test/*": ["runtime/node_modules/@playwright/test/*"],
+      "pg": ["runtime/node_modules/pg"]
+    },
+    "typeRoots": ["runtime/node_modules/@types", "../../node_modules/@types"]
   },
-  "include": ["*.ts"]
+  "include": ["**/*.ts"],
+  "exclude": ["fixtures/**", "runtime/node_modules/**"]
 }

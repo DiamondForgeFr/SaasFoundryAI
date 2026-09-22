@@ -240,7 +240,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
         onOpenChange(open)
       }}
     >
-      <DialogContent className="sm:max-w-[620px]">
+      <DialogContent data-testid="invite-user-dialog" className="sm:max-w-[620px]">
         <DialogHeader>
           <DialogTitle>{tAccount('users.tk_invite-new-user_')}</DialogTitle>
           <DialogDescription>
@@ -262,7 +262,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <FloatingLabelInput label={tCommon('user.tk_email_')} type="email" {...field} />
+                      <FloatingLabelInput data-testid="invite-user-email" label={tCommon('user.tk_email_')} type="email" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -275,7 +275,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <FloatingLabelInput label={tCommon('user.tk_firstName_')} {...field} />
+                        <FloatingLabelInput data-testid="invite-user-firstname" label={tCommon('user.tk_firstName_')} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -287,7 +287,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <FloatingLabelInput label={tCommon('user.tk_lastName_')} {...field} />
+                        <FloatingLabelInput data-testid="invite-user-lastname" label={tCommon('user.tk_lastName_')} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -582,6 +582,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                                     key={role.id}
                                     type="button"
                                     data-testid="invite-role-tile"
+                                    data-role-id={role.id}
                                     onClick={() => {
                                       const current = field.value || []
                                       field.onChange(selected ? current.filter((id: number) => id !== role.id) : [...current, role.id])
@@ -653,7 +654,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
             )}
 
             <DialogFooter>
-              <WaveButton type="submit" disabled={inviteUser.isLoading}>
+              <WaveButton data-testid="invite-user-submit" type="submit" disabled={inviteUser.isLoading}>
                 <Mail className="h-3.5 w-3.5" />
                 {inviteUser.isLoading ? tCommon('actions.tk_loading_') : tAccount('users.tk_invite-new-user_')}
               </WaveButton>

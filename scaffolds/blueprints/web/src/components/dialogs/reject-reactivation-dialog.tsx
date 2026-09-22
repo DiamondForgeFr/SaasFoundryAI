@@ -48,6 +48,7 @@ export function RejectReactivationDialog({ isOpen, onOpenChange, accountName, is
           <DialogDescription>{tAccount('platformReactivation.reject.tk_description_')}</DialogDescription>
         </DialogHeader>
         <textarea
+          data-testid="reactivation-reject-note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={5}
@@ -71,7 +72,7 @@ export function RejectReactivationDialog({ isOpen, onOpenChange, accountName, is
           >
             {tCommon('tk_cancel_')}
           </button>
-          <WaveButton type="button" onClick={submit} disabled={isLoading || !isValid} className="!h-9 !w-auto !text-[12px] px-4">
+          <WaveButton data-testid="reactivation-reject-submit" type="button" onClick={submit} disabled={isLoading || !isValid} className="!h-9 !w-auto !text-[12px] px-4">
             {isLoading ? tCommon('tk_loading_') : tAccount('platformReactivation.reject.tk_submit_')}
           </WaveButton>
         </DialogFooter>

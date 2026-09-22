@@ -32,9 +32,12 @@ def direct_children(pid: int) -> list[int]:
     try:
         with open(f"/proc/{pid}/task/{pid}/children", encoding="ascii") as stream:
             return [int(value) for value in stream.read().split()]
-    except FileNotFoundError:
-        return []
     except (OSError, ValueError) as error:
+        # A process can disappear between discovering its pid and opening its
+        # children file. Linux reports that race as either ENOENT or ESRCH,
+        # depending on which procfs component vanished first.
+        if isinstance(error, OSError) and error.errno in (errno.ENOENT, errno.ESRCH):
+            return []
         fail(f"could not inspect /proc descendants: {error}")
 
 

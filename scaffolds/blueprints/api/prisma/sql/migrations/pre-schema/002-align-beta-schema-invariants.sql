@@ -185,15 +185,33 @@ BEGIN
     RAISE EXCEPTION 'Cannot migrate organizations.entity_id: preserved % of % validated beta relationship(s). Transaction aborted.', migrated_pair_count, source_pair_count;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conrelid = 'public.organizations'::regclass
-      AND conname = 'organizations_entity_id_key'
-      AND contype = 'u'
-  ) THEN
+  -- Prisma represents @unique as a standalone unique index, whereas older
+  -- beta schemas may expose the same invariant as a UNIQUE constraint. Both
+  -- own the relation name below and both satisfy the target schema.
+  IF to_regclass('public.organizations_entity_id_key') IS NULL THEN
     ALTER TABLE public.organizations
       ADD CONSTRAINT organizations_entity_id_key UNIQUE (entity_id);
+  ELSIF NOT EXISTS (
+    SELECT 1
+    FROM pg_index
+    WHERE indexrelid = 'public.organizations_entity_id_key'::regclass
+      AND indrelid = 'public.organizations'::regclass
+      AND indisunique
+      AND indisvalid
+      AND indisready
+      AND indpred IS NULL
+      AND indexprs IS NULL
+      AND indnkeyatts = 1
+      AND indnatts = 1
+      AND indkey[0] = (
+        SELECT attnum
+        FROM pg_attribute
+        WHERE attrelid = 'public.organizations'::regclass
+          AND attname = 'entity_id'
+          AND NOT attisdropped
+      )
+  ) THEN
+    RAISE EXCEPTION 'Cannot enforce organizations.entity_id uniqueness: public.organizations_entity_id_key is not one valid, unqualified unique key on public.organizations(entity_id).';
   END IF;
 
   IF to_regclass('public.organizations_entities_links') IS NOT NULL THEN
@@ -226,15 +244,37 @@ BEGIN
     RAISE EXCEPTION 'Cannot enforce roles_name_account_id_key: % duplicated (name, account_id) pair(s) exist. Rename or merge those roles and retry.', duplicate_pair_count;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conrelid = 'public.roles'::regclass
-      AND conname = 'roles_name_account_id_key'
-      AND contype = 'u'
-  ) THEN
+  IF to_regclass('public.roles_name_account_id_key') IS NULL THEN
     ALTER TABLE public.roles
       ADD CONSTRAINT roles_name_account_id_key UNIQUE (name, account_id);
+  ELSIF NOT EXISTS (
+    SELECT 1
+    FROM pg_index
+    WHERE indexrelid = 'public.roles_name_account_id_key'::regclass
+      AND indrelid = 'public.roles'::regclass
+      AND indisunique
+      AND indisvalid
+      AND indisready
+      AND indpred IS NULL
+      AND indexprs IS NULL
+      AND indnkeyatts = 2
+      AND indnatts = 2
+      AND indkey[0] = (
+        SELECT attnum
+        FROM pg_attribute
+        WHERE attrelid = 'public.roles'::regclass
+          AND attname = 'name'
+          AND NOT attisdropped
+      )
+      AND indkey[1] = (
+        SELECT attnum
+        FROM pg_attribute
+        WHERE attrelid = 'public.roles'::regclass
+          AND attname = 'account_id'
+          AND NOT attisdropped
+      )
+  ) THEN
+    RAISE EXCEPTION 'Cannot enforce role name/account uniqueness: public.roles_name_account_id_key is not one valid, unqualified unique key on public.roles(name, account_id).';
   END IF;
 
   IF EXISTS (

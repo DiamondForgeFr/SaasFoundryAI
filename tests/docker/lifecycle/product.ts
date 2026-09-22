@@ -4,6 +4,7 @@ import { basename, join } from 'node:path'
 import { BrowserFailureBridge, type BrowserCapability } from './browser'
 import { lifecycleProcessApi, type LifecycleProcessApi, type PrivatePostgres } from './postgres'
 import { validateApiHealth, validateWebDocument, waitForHttpProbe, type HttpProbeResult } from './probes'
+import { startProviderFixture, type ProviderFixture } from './provider-fixture'
 import type { LifecyclePhase, SupervisedProcessHandle, SupervisedProcessResult } from './types'
 
 export interface ProductLayout {
@@ -14,9 +15,14 @@ export interface ProductLayout {
 
 export interface ProductReadyContext {
   phase: LifecyclePhase
+  topology: ProductLayout['topology']
   projectRoot: string
   apiUrl: string
   webUrl: string
+  databaseUrl: string
+  deadline: number
+  processApi: LifecycleProcessApi
+  mailbox: Pick<ProviderFixture, 'url' | 'capability'>
   browserCapabilities: readonly BrowserCapability[]
   browserFailures: BrowserFailureBridge
   signal?: AbortSignal
@@ -37,6 +43,8 @@ export interface ProductPhaseOptions {
   webPort?: number
   processApi?: LifecycleProcessApi
   browserCapabilities?: readonly BrowserCapability[]
+  egressGuardPath?: string
+  startProviderFixture?: typeof startProviderFixture
   onReady?: (context: ProductReadyContext) => Promise<void>
 }
 
@@ -117,9 +125,14 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
   const run = (label: string, executable: string, args: readonly string[], cwd: string, env: NodeJS.ProcessEnv = common) =>
     processApi.run({ label, executable, args, cwd, env, deadline: options.deadline, signal: options.signal })
 
-  await run(`${options.phase} api npm ci`, 'npm', ['ci'], layout.apiRoot, apiBuildEnv)
-  await run(`${options.phase} web npm ci`, 'npm', ['ci', '--ignore-scripts'], layout.webRoot, webEnv)
-  const prisma = join(layout.apiRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma')
+  const packageRoot = layout.topology === 'monorepo' ? options.projectRoot : layout.apiRoot
+  if (layout.topology === 'monorepo') {
+    await run(`${options.phase} monorepo npm ci`, 'npm', ['ci'], packageRoot, apiBuildEnv)
+  } else {
+    await run(`${options.phase} api npm ci`, 'npm', ['ci'], layout.apiRoot, apiBuildEnv)
+    await run(`${options.phase} web npm ci`, 'npm', ['ci', '--ignore-scripts'], layout.webRoot, webEnv)
+  }
+  const prisma = join(packageRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma')
   await applySqlDirectory(options.postgres, join(layout.apiRoot, 'prisma', 'sql', 'migrations', 'pre-schema'), 'pre-schema migration')
   const dbPushArgs = options.phase === 'before-update' ? ['db', 'push', '--force-reset', '--accept-data-loss'] : ['db', 'push']
   await run(`${options.phase} prisma db push`, prisma, dbPushArgs, layout.apiRoot, {
@@ -129,16 +142,26 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
   await run(`${options.phase} prisma generate`, prisma, ['generate'], layout.apiRoot, apiBuildEnv)
   await applySql(options.postgres, layout.apiRoot)
   await applySqlDirectory(options.postgres, join(layout.apiRoot, 'prisma', 'sql', 'migrations', 'post-schema'), 'post-schema migration')
-  await run(`${options.phase} api build`, 'npm', ['run', 'build'], layout.apiRoot, apiBuildEnv)
-  await run(`${options.phase} web build`, 'npm', ['run', 'build'], layout.webRoot, webEnv)
+  if (layout.topology === 'monorepo') {
+    await run(`${options.phase} monorepo build`, 'npm', ['run', 'build'], options.projectRoot, { ...apiBuildEnv, ...webEnv })
+  } else {
+    await run(`${options.phase} api build`, 'npm', ['run', 'build'], layout.apiRoot, apiBuildEnv)
+    await run(`${options.phase} web build`, 'npm', ['run', 'build'], layout.webRoot, webEnv)
+  }
 
   let api: SupervisedProcessHandle | undefined
   let web: SupervisedProcessHandle | undefined
+  let provider: ProviderFixture | undefined
   let primaryFailure: unknown
   let apiProbe!: HttpProbeResult
   let webProbe!: HttpProbeResult
   const bridge = new BrowserFailureBridge()
   try {
+    provider = await (options.startProviderFixture ?? startProviderFixture)({ signal: options.signal })
+    apiEnv.SF_LIFECYCLE_MAILBOX_URL = provider.url
+    apiEnv.SF_LIFECYCLE_MAILBOX_CAPABILITY = provider.capability
+    apiEnv.SF_LIFECYCLE_ALLOW_INSECURE_HTTP = 'true'
+    apiEnv.NODE_OPTIONS = `--require=${options.egressGuardPath ?? '/workspace/lifecycle/egress-guard.cjs'}`
     api = await processApi.start({
       label: `${options.phase} api`,
       executable: 'npm',
@@ -148,7 +171,8 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
       deadline: options.deadline,
       signal: options.signal,
       ports: [apiPort],
-      fatalPatterns: [/EADDRINUSE/, /PrismaClientInitializationError/, /Cannot find module/, /UnhandledPromiseRejection/, /uncaughtException/, /Failed to start application/]
+      fatalPatterns: [/EADDRINUSE/, /PrismaClientInitializationError/, /Cannot find module/, /UnhandledPromiseRejection/, /uncaughtException/, /Failed to start application/],
+      secrets: [provider.capability]
     })
     web = await processApi.start({
       label: `${options.phase} web`,
@@ -167,15 +191,26 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
       whileRunning(web, waitForHttpProbe({ label: `${options.phase} web`, url: webUrl, deadline: readinessDeadline, signal: options.signal, validate: validateWebDocument }))
     ])
     await assertStableAfterReadiness([api, web], Math.min(options.settleWindowMs ?? 500, Math.max(0, options.deadline - Date.now())), options.signal)
-    await options.onReady?.({
-      phase: options.phase,
-      projectRoot: options.projectRoot,
-      apiUrl,
-      webUrl,
-      browserCapabilities: options.browserCapabilities ?? [],
-      browserFailures: bridge,
-      signal: options.signal
-    })
+    if (options.onReady) {
+      await whileProcessesRunning(
+        [api, web],
+        options.onReady({
+          phase: options.phase,
+          topology: layout.topology,
+          projectRoot: options.projectRoot,
+          apiUrl,
+          webUrl,
+          databaseUrl: options.postgres.databaseUrl,
+          deadline: options.deadline,
+          processApi,
+          mailbox: { url: provider.url, capability: provider.capability },
+          browserCapabilities: options.browserCapabilities ?? [],
+          browserFailures: bridge,
+          signal: options.signal
+        }),
+        'live product validation'
+      )
+    }
     bridge.assertClean()
   } catch (error) {
     primaryFailure = error
@@ -191,6 +226,13 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
     if (!handle) continue
     try {
       save(await handle.stop())
+    } catch (error) {
+      cleanupFailures.push(error)
+    }
+  }
+  if (provider) {
+    try {
+      await provider.stop()
     } catch (error) {
       cleanupFailures.push(error)
     }
@@ -239,6 +281,17 @@ async function whileRunning<T>(process: SupervisedProcessHandle, operation: Prom
     process.exited.then((result) => {
       throw new Error(`${result.label} exited before its readiness probe completed (status=${String(result.status)}, signal=${String(result.signal)}).`)
     })
+  ])
+}
+
+async function whileProcessesRunning<T>(processes: readonly SupervisedProcessHandle[], operation: Promise<T>, activity: string): Promise<T> {
+  return Promise.race([
+    operation,
+    ...processes.map((process) =>
+      process.exited.then((result) => {
+        throw new Error(`${result.label} exited during ${activity} (status=${String(result.status)}, signal=${String(result.signal)}).`)
+      })
+    )
   ])
 }
 

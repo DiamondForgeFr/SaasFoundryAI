@@ -500,6 +500,7 @@ export function AccountRoles() {
         {scopeFilterOptions.length > 0 && <SegmentedFilter dataTestid="roles-scope-filter" value={scopeFilter} onChange={setScopeFilter} options={scopeFilterOptions} />}
         {canManageCustomRoles && (accountId || isPlatformAll) && (
           <WaveButton
+            data-testid="new-role-button"
             type="button"
             onClick={() => setEditorTarget({ mode: 'create', accountId: accountId ?? null, allowPlatformScope: isPlatformAll, lockToEntityScope: isEntityScopedView })}
             className="!h-9 !w-auto !text-[11px] px-3.5"

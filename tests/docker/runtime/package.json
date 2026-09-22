@@ -5,6 +5,8 @@
   "dependencies": {
     "@apidevtools/swagger-parser": "13.0.0",
     "@playwright/test": "1.59.1",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.0",
     "tsx": "4.21.0"
   }
 }
