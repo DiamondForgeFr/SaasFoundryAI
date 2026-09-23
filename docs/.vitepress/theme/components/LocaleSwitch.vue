@@ -26,7 +26,6 @@ const targetPath = computed(() => {
   if (!hasEquivalentTranslation.value) return '/fr/'
   return currentRoute.value === '/' ? '/fr/' : `/fr${currentRoute.value}`
 })
-const targetLabel = computed(() => (targetLocale.value === 'fr' ? 'FR' : 'EN'))
 const accessibleLabel = computed(() => {
   if (targetLocale.value === 'en') return 'Read this page in English'
   return hasEquivalentTranslation.value ? 'Lire cette page en français' : "Ouvrir l'accueil de la documentation française"
@@ -35,38 +34,48 @@ const accessibleLabel = computed(() => {
 
 <template>
   <a class="LocaleSwitch" :class="{ 'is-screen-menu': screenMenu }" :href="withBase(targetPath)" :aria-label="accessibleLabel" :title="accessibleLabel" :lang="targetLocale" :hreflang="targetLocale">
-    <span aria-hidden="true" class="LocaleSwitch__mark">文</span>
-    <span>{{ targetLabel }}</span>
+    <span aria-hidden="true" class="LocaleSwitch__locale" :class="{ 'is-current': locale === 'en' }">EN</span>
+    <span aria-hidden="true" class="LocaleSwitch__separator"></span>
+    <span aria-hidden="true" class="LocaleSwitch__locale" :class="{ 'is-current': locale === 'fr' }">FR</span>
   </a>
 </template>
 
 <style scoped>
 .LocaleSwitch {
   display: inline-flex;
-  min-width: 42px;
+  min-width: 58px;
   height: 36px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  margin-left: 10px;
-  padding: 0 10px;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
+  gap: 7px;
+  margin-left: 8px;
+  padding: 0 4px;
+  border-radius: 3px;
   color: var(--vp-c-text-1);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  transition:
-    border-color 160ms ease,
-    color 160ms ease,
-    background-color 160ms ease;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
 }
 
-.LocaleSwitch:hover,
-.LocaleSwitch:focus-visible {
-  border-color: var(--vp-c-brand-1);
-  background: var(--vp-c-brand-soft);
+.LocaleSwitch__locale {
+  color: var(--vp-c-text-3);
+  transition: color 140ms ease;
+}
+
+.LocaleSwitch__locale.is-current {
   color: var(--vp-c-brand-1);
+}
+
+.LocaleSwitch__separator {
+  width: 1px;
+  height: 13px;
+  background: var(--vp-c-divider);
+  transform: rotate(18deg);
+}
+
+.LocaleSwitch:hover .LocaleSwitch__locale,
+.LocaleSwitch:focus-visible .LocaleSwitch__locale {
+  color: var(--vp-c-text-1);
 }
 
 .LocaleSwitch:focus-visible {
@@ -74,20 +83,13 @@ const accessibleLabel = computed(() => {
   outline-offset: 2px;
 }
 
-.LocaleSwitch__mark {
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0;
-}
-
 .LocaleSwitch.is-screen-menu {
-  width: 100%;
+  width: fit-content;
   margin: 12px 0 0;
-  justify-content: flex-start;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .LocaleSwitch {
+  .LocaleSwitch__locale {
     transition: none;
   }
 }
