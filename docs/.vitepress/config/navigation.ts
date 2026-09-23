@@ -1,6 +1,7 @@
 import type { DefaultTheme } from 'vitepress'
+import { documentationLink, type DocumentationLocale } from './locale-paths'
 
-export type DocumentationLocale = 'en' | 'fr'
+export type { DocumentationLocale } from './locale-paths'
 
 type Labels = {
   nav: {
@@ -217,81 +218,80 @@ const labels: Record<DocumentationLocale, Labels> = {
 
 const prefixPath = (locale: DocumentationLocale, path: string): string => (locale === 'fr' ? `/fr${path}` : path)
 
-const item = (locale: DocumentationLocale, text: string, link: string): DefaultTheme.SidebarItem => ({
+const item = (locale: DocumentationLocale, text: string, link: string, translatedRoutes: readonly string[]): DefaultTheme.SidebarItem => ({
   text,
-  link: prefixPath(locale, link)
+  link: documentationLink(locale, link, translatedRoutes)
 })
 
-const createSidebar = (locale: DocumentationLocale): DefaultTheme.Sidebar => {
+const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly string[]): DefaultTheme.Sidebar => {
   const { groups, pages } = labels[locale]
   const group = (text: string, items: DefaultTheme.SidebarItem[]): DefaultTheme.SidebarItem[] => [{ text, items }]
+  const page = (text: string, link: string): DefaultTheme.SidebarItem => item(locale, text, link, translatedRoutes)
 
   return {
     [prefixPath(locale, '/getting-started/')]: group(groups.gettingStarted, [
-      item(locale, pages.installation, '/getting-started/installation'),
-      item(locale, pages.developmentTools, '/getting-started/tools'),
-      item(locale, pages.quickStart, '/getting-started/quick-start'),
-      item(locale, pages.firstProject, '/getting-started/first-project'),
-      item(locale, pages.firstTicket, '/getting-started/shipping-first-ticket')
+      page(pages.installation, '/getting-started/installation'),
+      page(pages.developmentTools, '/getting-started/tools'),
+      page(pages.quickStart, '/getting-started/quick-start'),
+      page(pages.firstProject, '/getting-started/first-project'),
+      page(pages.firstTicket, '/getting-started/shipping-first-ticket')
     ]),
     [prefixPath(locale, '/cli/')]: group(
       groups.cli,
-      ['new', 'update', 'resume', 'status', 'agents', 'docs', 'modules', 'skill', 'srs', 'feedback', 'tools', 'workflow', 'uninstall'].map((command) =>
-        item(locale, `sf ${command}`, `/cli/sf-${command}`)
-      )
+      ['new', 'update', 'resume', 'status', 'agents', 'docs', 'modules', 'skill', 'srs', 'feedback', 'tools', 'workflow', 'uninstall'].map((command) => page(`sf ${command}`, `/cli/sf-${command}`))
     ),
     [prefixPath(locale, '/guide/')]: group(groups.guide, [
-      item(locale, pages.projectStructure, '/guide/project-structure'),
-      item(locale, pages.topology, '/guide/monorepo-vs-multirepo'),
-      item(locale, pages.agentCoexistence, '/guide/agent-coexistence'),
-      item(locale, pages.hostCapabilities, '/guide/host-capabilities'),
-      item(locale, pages.localProfiles, '/guide/local-execution-profiles'),
-      item(locale, pages.localSetup, '/guide/local-execution-setup'),
-      item(locale, pages.localQualification, '/guide/local-execution-qualification'),
-      item(locale, pages.localRouting, '/guide/local-cloud-routing'),
-      item(locale, pages.executionCandidates, '/guide/execution-candidates'),
-      item(locale, pages.executionRequirements, '/guide/execution-requirements'),
-      item(locale, pages.executionPlanning, '/guide/execution-planning'),
-      item(locale, pages.executionBudgets, '/guide/execution-budgets'),
-      item(locale, pages.executionReplanning, '/guide/execution-replanning'),
-      item(locale, pages.executionExplanations, '/guide/execution-explanations'),
-      item(locale, pages.executionCalibration, '/guide/execution-calibration'),
-      item(locale, pages.workflowSystem, '/guide/workflow-system'),
-      item(locale, pages.skillsSystem, '/guide/skills-system'),
-      item(locale, pages.moduleSystem, '/guide/module-system'),
-      item(locale, pages.updatingProjects, '/guide/updating-projects')
+      page(pages.projectStructure, '/guide/project-structure'),
+      page(pages.topology, '/guide/monorepo-vs-multirepo'),
+      page(pages.agentCoexistence, '/guide/agent-coexistence'),
+      page(pages.hostCapabilities, '/guide/host-capabilities'),
+      page(pages.localProfiles, '/guide/local-execution-profiles'),
+      page(pages.localSetup, '/guide/local-execution-setup'),
+      page(pages.localQualification, '/guide/local-execution-qualification'),
+      page(pages.localRouting, '/guide/local-cloud-routing'),
+      page(pages.executionCandidates, '/guide/execution-candidates'),
+      page(pages.executionRequirements, '/guide/execution-requirements'),
+      page(pages.executionPlanning, '/guide/execution-planning'),
+      page(pages.executionBudgets, '/guide/execution-budgets'),
+      page(pages.executionReplanning, '/guide/execution-replanning'),
+      page(pages.executionExplanations, '/guide/execution-explanations'),
+      page(pages.executionCalibration, '/guide/execution-calibration'),
+      page(pages.workflowSystem, '/guide/workflow-system'),
+      page(pages.skillsSystem, '/guide/skills-system'),
+      page(pages.moduleSystem, '/guide/module-system'),
+      page(pages.updatingProjects, '/guide/updating-projects')
     ]),
     [prefixPath(locale, '/skills/')]: group(groups.skills, [
-      item(locale, pages.overview, '/skills/overview'),
-      item(locale, pages.coreSkills, '/skills/core-skills'),
-      item(locale, pages.toolSkills, '/skills/tool-skills'),
-      item(locale, pages.creatingSkills, '/skills/creating-skills')
+      page(pages.overview, '/skills/overview'),
+      page(pages.coreSkills, '/skills/core-skills'),
+      page(pages.toolSkills, '/skills/tool-skills'),
+      page(pages.creatingSkills, '/skills/creating-skills')
     ]),
     [prefixPath(locale, '/modules/')]: group(groups.modules, [
-      item(locale, pages.email, '/modules/email'),
-      item(locale, pages.storage, '/modules/storage'),
-      item(locale, pages.analytics, '/modules/analytics'),
-      item(locale, pages.pwa, '/modules/pwa'),
-      item(locale, 'SRS', '/modules/srs')
+      page(pages.email, '/modules/email'),
+      page(pages.storage, '/modules/storage'),
+      page(pages.analytics, '/modules/analytics'),
+      page(pages.pwa, '/modules/pwa'),
+      page('SRS', '/modules/srs')
     ]),
     [prefixPath(locale, '/srs/')]: group(groups.srs, [
-      item(locale, pages.moduleOverview, '/modules/srs'),
-      item(locale, pages.lifecycle, '/srs/lifecycle'),
-      item(locale, pages.walkthrough, '/srs/walkthrough'),
-      item(locale, pages.scannerFindings, '/srs/scanner-findings')
+      page(pages.moduleOverview, '/modules/srs'),
+      page(pages.lifecycle, '/srs/lifecycle'),
+      page(pages.walkthrough, '/srs/walkthrough'),
+      page(pages.scannerFindings, '/srs/scanner-findings')
     ]),
     [prefixPath(locale, '/workflow/')]: group(groups.workflow, [
-      item(locale, pages.introduction, '/workflow/introduction'),
-      item(locale, pages.sevenStatuses, '/workflow/7-status-system'),
-      item(locale, pages.complexity, '/workflow/complexity-system'),
-      item(locale, pages.aiRules, '/workflow/ai-rules'),
-      item(locale, pages.github, '/workflow/github-integration')
+      page(pages.introduction, '/workflow/introduction'),
+      page(pages.sevenStatuses, '/workflow/7-status-system'),
+      page(pages.complexity, '/workflow/complexity-system'),
+      page(pages.aiRules, '/workflow/ai-rules'),
+      page(pages.github, '/workflow/github-integration')
     ]),
     [prefixPath(locale, '/api/')]: group(groups.api, [
-      item(locale, pages.types, '/api/types'),
-      item(locale, pages.builders, '/api/builders'),
-      item(locale, pages.installers, '/api/installers'),
-      item(locale, pages.runners, '/api/runners')
+      page(pages.types, '/api/types'),
+      page(pages.builders, '/api/builders'),
+      page(pages.installers, '/api/installers'),
+      page(pages.runners, '/api/runners')
     ])
   }
 }
@@ -302,21 +302,21 @@ export const createThemeConfig = (locale: DocumentationLocale, translatedRoutes:
   return {
     logo: '/icon.svg',
     nav: [
-      { text: nav.guide, link: prefixPath(locale, '/guide/project-structure') },
-      { text: nav.cli, link: prefixPath(locale, '/cli/sf-new') },
-      { text: nav.skills, link: prefixPath(locale, '/skills/overview') },
-      { text: nav.modules, link: prefixPath(locale, '/modules/email') },
-      { text: nav.srs, link: prefixPath(locale, '/modules/srs') },
+      { text: nav.guide, link: documentationLink(locale, '/guide/project-structure', translatedRoutes) },
+      { text: nav.cli, link: documentationLink(locale, '/cli/sf-new', translatedRoutes) },
+      { text: nav.skills, link: documentationLink(locale, '/skills/overview', translatedRoutes) },
+      { text: nav.modules, link: documentationLink(locale, '/modules/email', translatedRoutes) },
+      { text: nav.srs, link: documentationLink(locale, '/modules/srs', translatedRoutes) },
       {
         text: 'v1.0.0-beta',
         items: [
-          { text: nav.changelog, link: prefixPath(locale, '/changelog') },
-          { text: nav.contributing, link: prefixPath(locale, '/contributing/development') }
+          { text: nav.changelog, link: documentationLink(locale, '/changelog', translatedRoutes) },
+          { text: nav.contributing, link: documentationLink(locale, '/contributing/development', translatedRoutes) }
         ]
       },
       { component: 'LocaleSwitch', props: { locale, translatedRoutes } }
     ],
-    sidebar: createSidebar(locale),
+    sidebar: createSidebar(locale, translatedRoutes),
     outline: { label: ui.outline },
     docFooter: { prev: ui.previous, next: ui.next },
     darkModeSwitchLabel: ui.appearance,
