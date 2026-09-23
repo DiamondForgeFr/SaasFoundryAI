@@ -1,5 +1,8 @@
 import { defineConfig } from 'vitepress'
+import { discoverLocaleRoutes, localizedRoute, routeForPage } from './config/locale-routes'
 import { createThemeConfig } from './config/navigation'
+
+const translatedRoutes = discoverLocaleRoutes('fr')
 
 export default defineConfig({
   title: 'SaaSFoundryAI',
@@ -38,6 +41,20 @@ export default defineConfig({
   // keeps them for the nav bar, where there is enough room to read them. See #567.
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]],
 
+  transformHead({ pageData }) {
+    const current = routeForPage(pageData.relativePath)
+    const englishRoute = localizedRoute('en', current.route)
+    const frenchRoute = localizedRoute('fr', current.route)
+    const canonical = current.locale === 'fr' ? frenchRoute : englishRoute
+    const alternate = [
+      ['link', { rel: 'canonical', href: canonical }],
+      ['link', { rel: 'alternate', hreflang: 'en', href: englishRoute }],
+      ['link', { rel: 'alternate', hreflang: 'x-default', href: englishRoute }]
+    ] as const
+
+    return translatedRoutes.includes(current.route) ? [...alternate, ['link', { rel: 'alternate', hreflang: 'fr', href: frenchRoute }]] : [...alternate]
+  },
+
   markdown: {
     languageAlias: {
       env: 'bash'
@@ -49,14 +66,14 @@ export default defineConfig({
       lang: 'en-US',
       title: 'SaaSFoundryAI',
       description: 'Production-ready SaaS foundation and guarded delivery harness for human + AI teams',
-      themeConfig: createThemeConfig('en')
+      themeConfig: createThemeConfig('en', translatedRoutes)
     },
     fr: {
       label: 'Français',
       lang: 'fr-FR',
       title: 'SaaSFoundryAI',
       description: 'Fondation SaaS prête pour la production et harness de livraison sécurisé pour les équipes humaines et IA',
-      themeConfig: createThemeConfig('fr')
+      themeConfig: createThemeConfig('fr', translatedRoutes)
     }
   }
 })
