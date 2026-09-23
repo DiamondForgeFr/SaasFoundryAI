@@ -296,7 +296,7 @@ const createSidebar = (locale: DocumentationLocale): DefaultTheme.Sidebar => {
   }
 }
 
-export const createThemeConfig = (locale: DocumentationLocale): DefaultTheme.Config => {
+export const createThemeConfig = (locale: DocumentationLocale, translatedRoutes: string[] = ['/']): DefaultTheme.Config => {
   const { nav, interface: ui } = labels[locale]
 
   return {
@@ -313,7 +313,8 @@ export const createThemeConfig = (locale: DocumentationLocale): DefaultTheme.Con
           { text: nav.changelog, link: prefixPath(locale, '/changelog') },
           { text: nav.contributing, link: prefixPath(locale, '/contributing/development') }
         ]
-      }
+      },
+      { component: 'LocaleSwitch', props: { locale, translatedRoutes } }
     ],
     sidebar: createSidebar(locale),
     outline: { label: ui.outline },
@@ -325,6 +326,7 @@ export const createThemeConfig = (locale: DocumentationLocale): DefaultTheme.Con
     returnToTopLabel: ui.returnToTop,
     langMenuLabel: ui.changeLanguage,
     skipToContentLabel: ui.skipToContent,
+    i18nRouting: false,
     socialLinks: [{ icon: 'github', link: 'https://github.com/DiamondForgeFr/SaasFoundryAI' }],
     search: {
       provider: 'local',

@@ -56,6 +56,12 @@
   width: auto;
 }
 
+/* Replaced by LocaleSwitch so untranslated routes can fall back safely instead of 404ing. */
+.VPNavBarTranslations,
+.VPNavScreenTranslations {
+  display: none !important;
+}
+
 /* Custom badge styling */
 .vp-doc a[href^='https://img.shields.io']
 {
