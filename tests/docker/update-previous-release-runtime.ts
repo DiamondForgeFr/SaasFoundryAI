@@ -150,6 +150,7 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
              VALUES ('${LEGACY_USER_ID}', '${LEGACY_ACCOUNT_ID}', NOW());
            INSERT INTO public.users_roles_links(user_id, role_id, updated_at)
              SELECT '${LEGACY_USER_ID}', id, NOW() FROM public.roles WHERE name = 'user';
+           UPDATE public.roles SET is_active = FALSE WHERE name = 'guest';
            COMMIT;`,
           'create managed-schema lifecycle canaries'
         )
@@ -164,13 +165,27 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
           processApi,
           browserCapabilities: capabilities,
           signal: options.signal,
-          onReady: async (ready) =>
-            options.onProductReady?.({
+          onReady: async (ready) => {
+            const guestStatus = await postgres.executeSql(
+              `SELECT is_active::TEXT
+               FROM public.roles
+               WHERE name = 'guest' AND account_id IS NULL AND is_system = TRUE;`,
+              'verify preserved beta guest status'
+            )
+            if (guestStatus.stdout.trim() !== 'false') throw new Error('The beta migration reactivated the administrator-disabled guest role.')
+            await postgres.executeSql(
+              `UPDATE public.roles
+               SET is_active = TRUE, updated_at = NOW()
+               WHERE name = 'guest' AND account_id IS NULL AND is_system = TRUE;`,
+              'restore guest role for after-update product validation'
+            )
+            await options.onProductReady?.({
               ...ready,
               artifacts: artifactSink,
               screenshotPath: `screenshots/${ready.phase}-failure.png`,
               tracePath: `traces/${ready.phase}-failure.zip`
             })
+          }
         })
         await persistPhase(artifactSink, phases['after-update'])
         const canary = await postgres.executeSql(`SELECT description FROM public.module_types WHERE name = '${CANARY_NAME}';`, 'verify lifecycle database canary')

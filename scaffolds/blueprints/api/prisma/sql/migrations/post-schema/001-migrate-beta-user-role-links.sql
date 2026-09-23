@@ -27,7 +27,7 @@ BEGIN
     IF legacy.role_name = 'guest' THEN
       SELECT id, scope INTO target_role_id, target_scope
       FROM public.roles
-      WHERE name = 'guest' AND account_id IS NULL;
+      WHERE name = 'guest' AND account_id IS NULL AND is_system = TRUE;
 
       IF target_role_id IS NULL OR target_scope <> 'PLATFORM' THEN
         RAISE EXCEPTION 'Cannot migrate beta guest role % for user %: canonical PLATFORM role is missing', legacy.role_id, legacy.user_id;
@@ -48,11 +48,11 @@ BEGIN
       IF legacy.role_name = 'user' THEN
         SELECT id, scope INTO target_role_id, target_scope
         FROM public.roles
-        WHERE name = 'account-user' AND account_id IS NULL;
+        WHERE name = 'account-user' AND account_id IS NULL AND is_system = TRUE;
       ELSIF legacy.role_name = 'admin' THEN
         SELECT id, scope INTO target_role_id, target_scope
         FROM public.roles
-        WHERE name = 'account-admin' AND account_id IS NULL;
+        WHERE name = 'account-admin' AND account_id IS NULL AND is_system = TRUE;
       ELSE
         SELECT id, scope INTO target_role_id, target_scope
         FROM public.roles

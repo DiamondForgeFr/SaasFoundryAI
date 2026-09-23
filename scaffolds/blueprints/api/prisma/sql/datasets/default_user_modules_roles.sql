@@ -1,3 +1,99 @@
+BEGIN;
+
+-- Serialize supported RBAC writers for the whole snapshot/bootstrap/restore
+-- transaction so a concurrent administrator change can never be overwritten
+-- by a stale snapshot.
+LOCK TABLE
+  public.roles,
+  public.roles_modules_links,
+  public.roles_sub_modules_links,
+  public.roles_permissions_links
+IN SHARE ROW EXCLUSIVE MODE;
+
+------
+-- The 1.0.0-beta schema had a global `guest` role before `is_system` existed.
+-- Prisma adds the new flag with FALSE, so adopt that exact legacy role when
+-- the beta migration staging table proves this is an upgrade. This preserves
+-- its identity for the post-schema user-link migration instead of creating a
+-- second global guest role.
+------
+DO $$
+BEGIN
+  IF to_regclass('saasfoundry_migration.beta_user_role_links') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.roles
+       WHERE name = 'guest' AND account_id IS NULL AND is_system = TRUE
+    ) THEN
+    UPDATE public.roles
+    SET scope = 'PLATFORM', is_system = TRUE, updated_at = NOW()
+    WHERE id = (
+      SELECT id FROM public.roles
+      WHERE name = 'guest' AND account_id IS NULL
+      ORDER BY id
+      LIMIT 1
+    );
+  END IF;
+END $$;
+
+------
+-- Preserve administrator-managed RBAC state across forward database updates.
+--
+-- This dataset also bootstraps newly introduced system roles. Existing system
+-- roles, however, are mutable through the supported administration API: their
+-- active flag and grants must survive every subsequent `db:update:dev` run.
+-- The snapshots are transaction-local, so a failed dataset never exposes the
+-- temporary bootstrap state.
+------
+CREATE TEMP TABLE sf_existing_system_roles ON COMMIT DROP AS
+SELECT id
+FROM public.roles
+WHERE account_id IS NULL AND is_system = TRUE;
+
+CREATE TEMP TABLE sf_existing_role_modules ON COMMIT DROP AS
+SELECT link.*
+FROM public.roles_modules_links link
+JOIN sf_existing_system_roles role ON role.id = link.role_id;
+
+CREATE TEMP TABLE sf_existing_role_sub_modules ON COMMIT DROP AS
+SELECT link.*
+FROM public.roles_sub_modules_links link
+JOIN sf_existing_system_roles role ON role.id = link.role_id;
+
+CREATE TEMP TABLE sf_existing_role_permissions ON COMMIT DROP AS
+SELECT link.*
+FROM public.roles_permissions_links link
+JOIN sf_existing_system_roles role ON role.id = link.role_id;
+
+------
+-- A custom account role may legitimately use the same name as a system role.
+-- Temporarily move such names out of the bootstrap lookup namespace; they are
+-- restored before commit and are never visible outside this transaction.
+------
+CREATE TEMP TABLE sf_colliding_custom_roles ON COMMIT DROP AS
+SELECT id, name, account_id
+FROM public.roles
+WHERE NOT (account_id IS NULL AND is_system = TRUE)
+  AND name IN ('guest', 'account-user', 'account-admin', 'entity-admin', 'entity-user', 'platform-admin', 'platform-user');
+
+DO $$
+DECLARE
+  collision RECORD;
+  candidate TEXT;
+BEGIN
+  FOR collision IN SELECT * FROM sf_colliding_custom_roles ORDER BY id LOOP
+    LOOP
+      candidate := LEFT('__sf_' || md5(collision.id::TEXT || ':' || clock_timestamp()::TEXT || ':' || random()::TEXT), 30);
+      EXIT WHEN NOT EXISTS (
+        SELECT 1 FROM public.roles
+        WHERE name = candidate
+          AND account_id IS NOT DISTINCT FROM collision.account_id
+      );
+    END LOOP;
+
+    UPDATE public.roles SET name = candidate WHERE id = collision.id;
+  END LOOP;
+END $$;
+
 ------
 -- 1. Default user roles (system templates, isSystem = TRUE)
 --
@@ -27,9 +123,8 @@ BEGIN
     SET description = system_role.description,
         scope = system_role.scope,
         is_system = TRUE,
-        is_active = system_role.is_active,
         updated_at = NOW()
-    WHERE name = system_role.name AND account_id IS NULL;
+    WHERE name = system_role.name AND account_id IS NULL AND is_system = TRUE;
 
     IF NOT FOUND THEN
       INSERT INTO public.roles (name, description, scope, is_system, is_active, updated_at)
@@ -330,3 +425,36 @@ BEGIN
   )
   ON CONFLICT DO NOTHING;
 END $$;
+
+------
+-- Restore the exact mutable state of every system role that existed before
+-- this dataset run. Roles first introduced by this version retain the defaults
+-- seeded above; existing roles retain every administrator-managed grant.
+------
+DELETE FROM public.roles_permissions_links
+WHERE role_id IN (SELECT id FROM sf_existing_system_roles);
+
+DELETE FROM public.roles_sub_modules_links
+WHERE role_id IN (SELECT id FROM sf_existing_system_roles);
+
+DELETE FROM public.roles_modules_links
+WHERE role_id IN (SELECT id FROM sf_existing_system_roles);
+
+INSERT INTO public.roles_modules_links (role_id, module_id, created_at, updated_at)
+SELECT role_id, module_id, created_at, updated_at
+FROM sf_existing_role_modules;
+
+INSERT INTO public.roles_sub_modules_links (role_id, sub_module_id, created_at, updated_at)
+SELECT role_id, sub_module_id, created_at, updated_at
+FROM sf_existing_role_sub_modules;
+
+INSERT INTO public.roles_permissions_links (role_id, permission_id, created_at, updated_at)
+SELECT role_id, permission_id, created_at, updated_at
+FROM sf_existing_role_permissions;
+
+UPDATE public.roles role
+SET name = collision.name
+FROM sf_colliding_custom_roles collision
+WHERE role.id = collision.id;
+
+COMMIT;

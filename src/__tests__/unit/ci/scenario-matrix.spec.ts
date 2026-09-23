@@ -53,11 +53,11 @@ describe('lifecycle workflow contract', () => {
   it('routes ordinary PRs to normal and schedule, manual and RC tags to full', () => {
     expect(workflow).toContain('if [[ "${{ github.event_name }}" == "pull_request" ]]; then lane=normal; fi')
     expect(workflow).toContain("tags: ['rc-*']")
-    expect(workflow).toContain("branches: [master, develop, 'rc-*']")
+    expect(workflow).toContain('branches: [master, develop]')
     expect(workflow).toContain('schedule:')
     expect(workflow).toContain('workflow_dispatch:')
     expect(workflow).toContain("startsWith(github.ref, 'refs/tags/rc-')")
-    expect(workflow).toContain("startsWith(github.ref, 'refs/heads/rc-')")
+    expect(workflow).not.toContain("startsWith(github.ref, 'refs/heads/rc-')")
   })
 
   it('uses exact matrix check names and the isolated Docker/artifact contract', () => {

@@ -19,10 +19,14 @@ load_env_variables() {
     echo "Missing ${ENV_DEV_FILE}" >&2
     exit 1
   fi
-  set -a
-  # shellcheck disable=SC1090
-  source "${ENV_DEV_FILE}"
-  set +a
+  DATABASE_URL="$(node --input-type=module -e '
+    import { readFileSync } from "node:fs";
+    import dotenv from "dotenv";
+    const parsed = dotenv.parse(readFileSync(process.argv[1]));
+    if (!parsed.DATABASE_URL) process.exit(1);
+    process.stdout.write(parsed.DATABASE_URL);
+  ' "${ENV_DEV_FILE}")"
+  export DATABASE_URL
   : "${DATABASE_URL:?DATABASE_URL must be configured}"
 }
 
