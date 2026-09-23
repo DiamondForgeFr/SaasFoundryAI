@@ -16,8 +16,6 @@ features:
     details: NestJS, React, PostgreSQL, Prisma, authentification, multi-tenant, RBAC, invitations, administration, API typée et modules composables.
   - title: Harness de livraison
     details: Agents, skills, SRS, tickets, niveaux de complexité, validations, pull requests et garde-fous partagés par toute l'équipe.
-  - title: Anglais et français
-    details: La structure bilingue est en place. Les pages sont traduites et révisées au fil des livraisons de l'Epic documentation v1.
 ---
 
 ## Deux piliers, un seul produit
@@ -34,10 +32,3 @@ API typée, tests et infrastructure locale.
 
 Le fichier `.saasfoundry.json`, les instructions du projet et les skills `sf-*` relient le code à votre board, vos spécifications et vos règles de validation. Le niveau de rigueur s'adapte à la
 complexité du ticket sans supprimer les validations humaines.
-
-::: info Traduction en cours de livraison
-
-La page d'accueil française est disponible dès maintenant. Les guides et références détaillés sont traduits dans les Stories suivantes de
-l'[Epic documentation #393](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/393), avec un contrôle automatique de parité avant la clôture de la v1.
-
-:::
