@@ -1,8 +1,10 @@
 import { defineConfig } from 'vitepress'
+import { createThemeConfig } from './config/navigation'
 
 export default defineConfig({
   title: 'SaaSFoundryAI',
-  description: 'AI-First SaaS Platform Generator',
+  description: 'Production-ready SaaS foundation and guarded delivery harness for human + AI teams',
+  lang: 'en-US',
   /**
    * Served from the root, not from a repository subpath.
    *
@@ -41,161 +43,20 @@ export default defineConfig({
       env: 'bash'
     }
   },
-
-  themeConfig: {
-    logo: '/icon.svg',
-
-    nav: [
-      { text: 'Guide', link: '/guide/project-structure' },
-      { text: 'CLI', link: '/cli/sf-new' },
-      { text: 'Skills', link: '/skills/overview' },
-      { text: 'Modules', link: '/modules/email' },
-      { text: 'SRS', link: '/modules/srs' },
-      {
-        text: 'v1.0.0-beta',
-        items: [
-          { text: 'Changelog', link: '/changelog' },
-          { text: 'Contributing', link: '/contributing/development' }
-        ]
-      }
-    ],
-
-    sidebar: {
-      '/getting-started/': [
-        {
-          text: 'Getting Started',
-          items: [
-            { text: 'Installation', link: '/getting-started/installation' },
-            { text: 'Development Tools', link: '/getting-started/tools' },
-            { text: 'Quick Start', link: '/getting-started/quick-start' },
-            { text: 'First Project', link: '/getting-started/first-project' },
-            { text: 'Shipping Your First Ticket', link: '/getting-started/shipping-first-ticket' }
-          ]
-        }
-      ],
-
-      '/cli/': [
-        {
-          text: 'CLI Commands',
-          items: [
-            // Ordered the way a project is lived: create it, change it, finish a setup
-            // that stopped short, ask whether it can run — then the rest.
-            { text: 'sf new', link: '/cli/sf-new' },
-            { text: 'sf update', link: '/cli/sf-update' },
-            { text: 'sf resume', link: '/cli/sf-resume' },
-            { text: 'sf status', link: '/cli/sf-status' },
-            { text: 'sf agents', link: '/cli/sf-agents' },
-            { text: 'sf docs', link: '/cli/sf-docs' },
-            { text: 'sf modules', link: '/cli/sf-modules' },
-            { text: 'sf skill', link: '/cli/sf-skill' },
-            { text: 'sf srs', link: '/cli/sf-srs' },
-            { text: 'sf feedback', link: '/cli/sf-feedback' },
-            { text: 'sf tools', link: '/cli/sf-tools' },
-            { text: 'sf workflow', link: '/cli/sf-workflow' },
-            { text: 'sf uninstall', link: '/cli/sf-uninstall' }
-          ]
-        }
-      ],
-
-      '/guide/': [
-        {
-          text: 'Guide',
-          items: [
-            { text: 'Project Structure', link: '/guide/project-structure' },
-            { text: 'Monorepo vs Multirepo', link: '/guide/monorepo-vs-multirepo' },
-            { text: 'Agent Coexistence', link: '/guide/agent-coexistence' },
-            { text: 'Host Capabilities', link: '/guide/host-capabilities' },
-            { text: 'Local Execution Profiles', link: '/guide/local-execution-profiles' },
-            { text: 'Local Execution Setup', link: '/guide/local-execution-setup' },
-            { text: 'Local Execution Qualification', link: '/guide/local-execution-qualification' },
-            { text: 'Adaptive Local/Cloud Routing', link: '/guide/local-cloud-routing' },
-            { text: 'Execution Candidates', link: '/guide/execution-candidates' },
-            { text: 'Execution Requirements', link: '/guide/execution-requirements' },
-            { text: 'Execution Planning', link: '/guide/execution-planning' },
-            { text: 'Execution Budgets', link: '/guide/execution-budgets' },
-            { text: 'Execution Replanning', link: '/guide/execution-replanning' },
-            { text: 'Execution Explanations', link: '/guide/execution-explanations' },
-            { text: 'Execution Calibration', link: '/guide/execution-calibration' },
-            { text: 'Workflow System', link: '/guide/workflow-system' },
-            { text: 'Skills System', link: '/guide/skills-system' },
-            { text: 'Module System', link: '/guide/module-system' },
-            { text: 'Updating Projects', link: '/guide/updating-projects' }
-          ]
-        }
-      ],
-
-      '/skills/': [
-        {
-          text: 'Skills',
-          items: [
-            { text: 'Overview', link: '/skills/overview' },
-            { text: 'Core Skills', link: '/skills/core-skills' },
-            { text: 'Tool Skills', link: '/skills/tool-skills' },
-            { text: 'Creating Skills', link: '/skills/creating-skills' }
-          ]
-        }
-      ],
-
-      '/modules/': [
-        {
-          text: 'Modules',
-          items: [
-            { text: 'Email', link: '/modules/email' },
-            { text: 'Storage', link: '/modules/storage' },
-            { text: 'Analytics', link: '/modules/analytics' },
-            { text: 'Installable app (PWA)', link: '/modules/pwa' },
-            { text: 'SRS', link: '/modules/srs' }
-          ]
-        }
-      ],
-
-      '/srs/': [
-        {
-          text: 'SRS',
-          items: [
-            { text: 'Module overview', link: '/modules/srs' },
-            { text: 'Lifecycle', link: '/srs/lifecycle' },
-            { text: 'Walkthrough', link: '/srs/walkthrough' },
-            { text: 'Scanner findings', link: '/srs/scanner-findings' }
-          ]
-        }
-      ],
-
-      '/workflow/': [
-        {
-          text: 'Workflow System',
-          items: [
-            { text: 'Introduction', link: '/workflow/introduction' },
-            { text: '7-Status System', link: '/workflow/7-status-system' },
-            { text: 'Complexity System', link: '/workflow/complexity-system' },
-            { text: 'AI Rules', link: '/workflow/ai-rules' },
-            { text: 'GitHub Integration', link: '/workflow/github-integration' }
-          ]
-        }
-      ],
-
-      '/api/': [
-        {
-          text: 'API Reference',
-          items: [
-            { text: 'Types', link: '/api/types' },
-            { text: 'Builders', link: '/api/builders' },
-            { text: 'Installers', link: '/api/installers' },
-            { text: 'Runners', link: '/api/runners' }
-          ]
-        }
-      ]
+  locales: {
+    root: {
+      label: 'English',
+      lang: 'en-US',
+      title: 'SaaSFoundryAI',
+      description: 'Production-ready SaaS foundation and guarded delivery harness for human + AI teams',
+      themeConfig: createThemeConfig('en')
     },
-
-    socialLinks: [{ icon: 'github', link: 'https://github.com/DiamondForgeFr/SaasFoundryAI' }],
-
-    search: {
-      provider: 'local'
-    },
-
-    footer: {
-      message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2026 DiamondForge'
+    fr: {
+      label: 'Français',
+      lang: 'fr-FR',
+      title: 'SaaSFoundryAI',
+      description: 'Fondation SaaS prête pour la production et harness de livraison sécurisé pour les équipes humaines et IA',
+      themeConfig: createThemeConfig('fr')
     }
   }
 })

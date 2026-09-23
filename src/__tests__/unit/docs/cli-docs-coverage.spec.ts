@@ -1,5 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import type { DefaultTheme } from 'vitepress'
+import { createThemeConfig } from '../../../../docs/.vitepress/config/navigation'
 
 /**
  * #625 — the documentation could not notice that a command had been added.
@@ -53,9 +55,14 @@ describe('the documentation notices when a command is added (#625)', () => {
   })
 
   it('lists every command page in the sidebar, so a written page is a reachable one', () => {
-    const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
+    const collectLinks = (items: DefaultTheme.SidebarItem[]): string[] =>
+      items.flatMap((item) => [item.link, ...(item.items ? collectLinks(item.items) : [])]).filter((link): link is string => Boolean(link))
+
+    const sidebar = createThemeConfig('en').sidebar as DefaultTheme.SidebarMulti
+    const links = Object.values(sidebar).flatMap((section) => collectLinks(Array.isArray(section) ? section : section.items))
+
     for (const command of documented()) {
-      expect(config).toContain(`/cli/sf-${command}`)
+      expect(links).toContain(`/cli/sf-${command}`)
     }
   })
 })
