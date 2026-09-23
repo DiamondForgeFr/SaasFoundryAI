@@ -45,6 +45,7 @@ export interface PreviousReleaseUpdateLifecycleOptions {
   cliEntry: string
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
+  signal?: AbortSignal
   /** Runtime hooks are supplied by #788; each hook must tear down its processes in a finally block and honor signal aborts. */
   beforeUpdate?: (context: PreviousReleaseLifecyclePhaseContext) => Promise<void>
   afterUpdate?: (context: PreviousReleaseLifecyclePhaseContext) => Promise<void>
@@ -66,6 +67,7 @@ export interface PreviousReleaseCliRequest {
   env: NodeJS.ProcessEnv
   timeoutMs: number
   maxOutputBytes?: number
+  signal?: AbortSignal
 }
 
 export interface CliResult {
@@ -126,6 +128,14 @@ export function executePreviousReleaseUpdateProcess(request: PreviousReleaseCliR
     let outputBytes = 0
     let settled = false
     let timedOut = false
+    let aborted = false
+    const onAbort = () => {
+      if (settled) return
+      aborted = true
+      void terminateProcessTree(child.pid!)
+    }
+    request.signal?.addEventListener('abort', onAbort, { once: true })
+    if (request.signal?.aborted) onAbort()
 
     const collect = (target: Buffer[], chunk: Buffer): void => {
       if (settled) return
@@ -142,6 +152,7 @@ export function executePreviousReleaseUpdateProcess(request: PreviousReleaseCliR
     child.stdout.on('data', (chunk: Buffer) => collect(stdout, chunk))
     child.stderr.on('data', (chunk: Buffer) => collect(stderr, chunk))
     child.once('error', (error) => {
+      request.signal?.removeEventListener('abort', onAbort)
       if (!settled) {
         settled = true
         reject(error)
@@ -154,10 +165,13 @@ export function executePreviousReleaseUpdateProcess(request: PreviousReleaseCliR
     }, request.timeoutMs)
     child.once('close', (status, signal) => {
       clearTimeout(timer)
+      request.signal?.removeEventListener('abort', onAbort)
       if (settled) return
       settled = true
       const result = { stdout: Buffer.concat(stdout).toString('utf8'), stderr: Buffer.concat(stderr).toString('utf8') }
-      if (timedOut) {
+      if (aborted) {
+        reject(request.signal?.reason instanceof Error ? request.signal.reason : new Error('Previous-release update aborted.'))
+      } else if (timedOut) {
         reject(new Error(`${describeFailure(request.args, status, signal, result.stdout, result.stderr, request.env)}\nLifecycle deadline exceeded.`))
       } else if (status !== 0) {
         reject(new Error(describeFailure(request.args, status, signal, result.stdout, result.stderr, request.env)))
@@ -195,7 +209,8 @@ async function runUpdate(options: PreviousReleaseUpdateLifecycleOptions, project
     cwd: projectRoot,
     args,
     env,
-    timeoutMs: Math.max(1, deadline - Date.now())
+    timeoutMs: Math.max(1, deadline - Date.now()),
+    signal: options.signal
   }
   const result = await (options.executeUpdate ?? executePreviousReleaseUpdateProcess)(request)
   return { ...result, env }
@@ -281,12 +296,16 @@ export async function runPreviousReleaseLifecycleHook(
   label: string,
   hook: ((context: PreviousReleaseLifecyclePhaseContext) => Promise<void>) | undefined,
   context: Omit<PreviousReleaseLifecyclePhaseContext, 'deadline' | 'signal'>,
-  deadline: number
+  deadline: number,
+  parentSignal?: AbortSignal
 ): Promise<void> {
   if (!hook) return
   const remaining = deadline - Date.now()
   if (remaining <= 0) throw new Error(`${label} could not start because the lifecycle deadline was exhausted.`)
   const controller = new AbortController()
+  const abortFromParent = () => controller.abort(parentSignal?.reason)
+  parentSignal?.addEventListener('abort', abortFromParent, { once: true })
+  if (parentSignal?.aborted) abortFromParent()
   const hookPromise = Promise.resolve().then(() => hook({ ...context, deadline, signal: controller.signal }))
   let deadlineTimer: NodeJS.Timeout | undefined
   const timeout = new Promise<'timeout'>((resolve) => {
@@ -297,6 +316,7 @@ export async function runPreviousReleaseLifecycleHook(
     outcome = await Promise.race([hookPromise.then(() => 'complete' as const), timeout])
   } finally {
     if (deadlineTimer) clearTimeout(deadlineTimer)
+    parentSignal?.removeEventListener('abort', abortFromParent)
   }
   if (outcome === 'complete') return
 
@@ -344,7 +364,7 @@ export async function runPreviousReleaseUpdateLifecycle(options: PreviousRelease
   }
   await assertHistoricalSourceCanaries(projectRoot, historicalCanaries)
 
-  await runPreviousReleaseLifecycleHook('Previous-release pre-update runtime hook', options.beforeUpdate, { projectRoot, manifest: undefined }, deadline)
+  await runPreviousReleaseLifecycleHook('Previous-release pre-update runtime hook', options.beforeUpdate, { projectRoot, manifest: undefined }, deadline, options.signal)
 
   const previewExecution = await runUpdate(
     options,
@@ -390,7 +410,7 @@ export async function runPreviousReleaseUpdateLifecycle(options: PreviousRelease
     throw new Error('The unmanaged user canary changed during the update lifecycle.')
   }
 
-  await runPreviousReleaseLifecycleHook('Previous-release post-update runtime hook', options.afterUpdate, { projectRoot, manifest }, deadline)
+  await runPreviousReleaseLifecycleHook('Previous-release post-update runtime hook', options.afterUpdate, { projectRoot, manifest }, deadline, options.signal)
 
   const stableDigest = await canonicalTreeDigest(projectRoot, { exclude: RUNTIME_EXCLUSIONS })
   await runUpdate(options, projectRoot, ['--non-interactive', '--accept-template-updates', '--target-profile', 'full', '--workflow', 'solo'], deadline, sterileHome)

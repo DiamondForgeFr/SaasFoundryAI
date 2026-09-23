@@ -1,7 +1,7 @@
 import { test, expect, observeLivePage } from '../fixtures'
 import { signInBrowser } from '../support/api'
 import { expectRowCount, queryRows } from '../support/assertions'
-import { LIVE_NEW_PASSWORD, LIVE_PASSWORD, liveIdentity, liveName } from '../support/data'
+import { LIVE_NEW_PASSWORD, LIVE_PASSWORD, liveIdentity, liveName, liveRoleName } from '../support/data'
 import { messageLink, resetMailbox, waitForMail } from '../support/mailbox'
 
 test.describe.serial('live users, roles and scope switching', () => {
@@ -12,7 +12,7 @@ test.describe.serial('live users, roles and scope switching', () => {
     const admin = liveIdentity(contract, 'admin')
     const accountName = liveName(contract, 'owner account')
     const entityName = liveName(contract, 'company')
-    const roleName = `LC ${contract.topology} ${contract.phase} viewer`
+    const roleName = liveRoleName(contract)
     const accounts = await queryRows<{ id: string }>(contract, 'SELECT id FROM public.accounts WHERE name = $1', [accountName])
     const accountId = accounts[0]?.id
     expect(accountId).toBeTruthy()

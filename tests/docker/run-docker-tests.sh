@@ -1,131 +1,86 @@
 #!/usr/bin/env bash
-# ── Docker Build Test Runner ────────────────────────────────────
-# Usage:
-#   ./tests/docker/run-docker-tests.sh                          # Every scenario
-#   ./tests/docker/run-docker-tests.sh --count 4                # Top 4 by priority
-#   ./tests/docker/run-docker-tests.sh --scenario multirepo-full  # Single scenario
-#
-# The list and its priority order live in `tests/docker/scenarios.ts`; `--list` renders
-# them. Neither is repeated here — a hand-written copy is what let two scenarios be
-# defined and never run (#426, #546), and a count written in prose drifts the same way.
-#
-# Environment variables:
-#   DOCKER_BUILD_ARGS  Extra docker build arguments (e.g., --no-cache)
-#   SF_DOCKER_ARTIFACTS_DIR  Host directory receiving lifecycle diagnostics
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE_NAME="sf-build-test"
+IMAGE_NAME="${SF_DOCKER_IMAGE_NAME:-sf-build-test}"
 ARTIFACTS_DIR="${SF_DOCKER_ARTIFACTS_DIR:-$PROJECT_ROOT/.tmp/docker-artifacts}"
-
-# ── Parse Arguments ─────────────────────────────────────────────
-
-SCENARIO="all"
-COUNT=""
+SCENARIO=""
+DEPTH="full"
+LANE=""
 
 while [[ $# -gt 0 ]]; do
-  case $1 in
-    --count)
-      COUNT="$2"
-      shift 2
-      ;;
-    --scenario)
-      SCENARIO="$2"
-      shift 2
-      ;;
-    --list)
-      # Single source of truth: the list is rendered from scenarios.ts. It used to be 18
-      # hardcoded `echo` lines that silently drifted — the runner executed 19 while --list
-      # advertised 18, hiding a whole scenario from anyone reading the CLI (#426).
-      npx tsx "$SCRIPT_DIR/list-scenarios.ts"
-      exit 0
-      ;;
+  case "$1" in
+    --lane) LANE="${2:-}"; shift 2 ;;
+    --scenario) SCENARIO="${2:-}"; shift 2 ;;
+    --depth) DEPTH="${2:-}"; shift 2 ;;
+    --list) npx tsx "$SCRIPT_DIR/list-scenarios.ts" "${@:2}"; exit 0 ;;
     --help)
-      echo "Usage: $0 [--count N] [--scenario <name>] [--list]"
-      echo ""
-      echo "Options:"
-      echo "  --count N            Run the top N scenarios by priority"
-      echo "  --scenario <name>    Run a specific scenario (or comma-separated list)"
-      echo "  --list               Show all scenarios with priority order"
-      echo ""
-      echo "Examples:"
-      echo "  $0                   # All scenarios"
-      echo "  $0 --count 2         # Top 2: multirepo-minimal + monorepo-minimal"
-      echo "  $0 --count 6         # Top 6: minimals + fulls + key updates"
-      echo "  $0 --scenario monorepo-full"
-      echo "  $0 --scenario multirepo-full,update-add-email"
+      echo "Usage: $0 [--lane normal|full] [--scenario <name> --depth smoke|full] [--list]"
       exit 0
       ;;
-    *)
-      echo "Unknown option: $1 (use --help for usage)"
-      exit 1
-      ;;
+    *) echo "Unknown option: $1 (use --help for usage)" >&2; exit 1 ;;
   esac
 done
 
-# ── Build Docker Image ──────────────────────────────────────────
-
-echo "Building Docker test image..."
-echo "  Context: $PROJECT_ROOT"
+if [[ -n "$LANE" && -n "$SCENARIO" ]]; then
+  echo "--lane and --scenario are mutually exclusive" >&2
+  exit 1
+fi
+if [[ -z "$LANE" && -z "$SCENARIO" ]]; then
+  LANE="full"
+fi
+if [[ -n "$LANE" && "$LANE" != "normal" && "$LANE" != "full" ]]; then
+  echo "Unknown lane: $LANE" >&2
+  exit 1
+fi
+if [[ "$DEPTH" != "smoke" && "$DEPTH" != "full" ]]; then
+  echo "Unknown browser depth: $DEPTH" >&2
+  exit 1
+fi
 
 cd "$PROJECT_ROOT"
-
-# Temporarily install .dockerignore for the build context
-DOCKERIGNORE_BACKUP=""
-if [[ -f ".dockerignore" ]]; then
-  DOCKERIGNORE_BACKUP="$(mktemp)"
-  cp .dockerignore "$DOCKERIGNORE_BACKUP"
-fi
-cp .dockerignore.test .dockerignore
-
-cleanup() {
-  if [[ -n "$DOCKERIGNORE_BACKUP" && -f "$DOCKERIGNORE_BACKUP" ]]; then
-    mv "$DOCKERIGNORE_BACKUP" .dockerignore
-  else
-    rm -f .dockerignore
-  fi
-}
-trap cleanup EXIT
-
-docker build \
-  -f Dockerfile.test \
-  -t "$IMAGE_NAME" \
-  ${DOCKER_BUILD_ARGS:-} \
-  .
-
-# ── Run Tests ───────────────────────────────────────────────────
-
 mkdir -p "$ARTIFACTS_DIR"
 ARTIFACTS_DIR="$(cd "$ARTIFACTS_DIR" && pwd)"
+RUN_ARTIFACTS_DIR="$ARTIFACTS_DIR/run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+mkdir -p "$RUN_ARTIFACTS_DIR"
 
-ENV_ARGS=(-e "TEST_SCENARIO=$SCENARIO" -e "SF_TEST_ARTIFACTS_DIR=/artifacts")
+echo "Building Docker lifecycle image once..."
+docker build -f Dockerfile.test -t "$IMAGE_NAME" ${DOCKER_BUILD_ARGS:-} .
 
-if [[ -n "$COUNT" ]]; then
-  ENV_ARGS+=(-e "TEST_COUNT=$COUNT")
-fi
+run_scenario() {
+  local scenario="$1"
+  local depth="$2"
+  local check="$3"
+  local output="$RUN_ARTIFACTS_DIR/$check"
+  local status=0
+  mkdir -p "$output"
+  echo "[sf-progress] lifecycle $check — started ($scenario, $depth)"
+  set +e
+  docker run --rm --init --ipc=host \
+    -e "TEST_SCENARIO=$scenario" \
+    -e "TEST_LIVE_DEPTH=$depth" \
+    -e "SF_TEST_ARTIFACTS_DIR=/artifacts" \
+    --mount "type=bind,source=$output,target=/artifacts" \
+    "$IMAGE_NAME"
+  status=$?
+  set -e
+  docker run --rm --entrypoint chown \
+    --mount "type=bind,source=$output,target=/artifacts" \
+    "$IMAGE_NAME" -R "$(id -u):$(id -g)" /artifacts
+  if [[ "$status" -ne 0 ]]; then
+    echo "[sf-progress] lifecycle $check — failed (artifacts: $output)" >&2
+    return "$status"
+  fi
+  echo "[sf-progress] lifecycle $check — passed"
+}
 
-echo ""
-if [[ -n "$COUNT" ]]; then
-  echo "Running top $COUNT scenario(s) by priority"
-elif [[ "$SCENARIO" == "all" ]]; then
-  # Counted from the source of truth rather than written here, for the reason above.
-  echo "Running all $(npx -y tsx tests/docker/list-scenarios.ts --count) scenarios"
+if [[ -n "$LANE" ]]; then
+  while IFS=$'\t' read -r check scenario depth; do
+    run_scenario "$scenario" "$depth" "$check"
+  done < <(npx tsx "$SCRIPT_DIR/list-scenarios.ts" --tsv --lane "$LANE")
 else
-  echo "Running scenario: $SCENARIO"
+  run_scenario "$SCENARIO" "$DEPTH" "$SCENARIO-$DEPTH"
 fi
-echo ""
-echo "Artifacts: $ARTIFACTS_DIR"
-echo ""
 
-# --init reaps browser/application descendants. Chromium needs the larger host
-# IPC namespace recommended by Playwright. The only mount is the diagnostics
-# directory: no ports and no Docker socket are exposed to generated code.
-docker run --rm --init --ipc=host \
-  "${ENV_ARGS[@]}" \
-  --mount "type=bind,source=$ARTIFACTS_DIR,target=/artifacts" \
-  "$IMAGE_NAME"
-
-echo ""
-echo "Docker build tests completed successfully!"
+echo "Lifecycle Docker tests completed successfully. Artifacts: $RUN_ARTIFACTS_DIR"

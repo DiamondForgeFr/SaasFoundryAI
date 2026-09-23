@@ -72,6 +72,7 @@ describe('Playwright lifecycle image contract', () => {
 
   it('runs with Playwright isolation flags and mounts diagnostics only', async () => {
     const runner = await readFile(join(ROOT, 'tests/docker/run-docker-tests.sh'), 'utf8')
+    const workflow = await readFile(join(ROOT, '.github/workflows/test.yml'), 'utf8')
     const dockerRun = runner.match(/docker run --rm[\s\S]*?"\$IMAGE_NAME"/)?.[0]
 
     expect(runner).toContain('docker run --rm --init --ipc=host')
@@ -81,5 +82,25 @@ describe('Playwright lifecycle image contract', () => {
     expect(dockerRun).not.toMatch(/(?:^|\s)(?:-p|--publish)(?:\s|=)/m)
     expect(dockerRun).not.toContain('/var/run/docker.sock')
     expect(dockerRun).not.toMatch(/--platform(?:\s|=)linux\/amd64/)
+    expect(workflow).toContain('docker run --rm --init --ipc=host')
+    expect(workflow).toContain('target=/artifacts')
+    expect(workflow).not.toContain('/var/run/docker.sock')
+  })
+
+  it('uses one tracked credential-safe Docker context policy locally and in CI', async () => {
+    const canonical = await readFile(join(ROOT, '.dockerignore'), 'utf8')
+    const testPolicy = await readFile(join(ROOT, '.dockerignore.test'), 'utf8')
+    const normalize = (value: string) =>
+      value
+        .split('\n')
+        .filter((line) => line.trim() && !line.startsWith('#'))
+        .sort()
+
+    expect(normalize(canonical)).toEqual(normalize(testPolicy))
+    expect(canonical).toContain('/.claude/')
+    expect(canonical).toContain('/.agents/')
+    expect(canonical).toContain('.env.*')
+    expect(canonical).toContain('.npmrc')
+    expect(canonical).toContain('*.pem')
   })
 })

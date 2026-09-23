@@ -1,4 +1,4 @@
-# Docker build context filter for Dockerfile.test
+# Canonical Dockerfile.test context policy. Keep in sync with .dockerignore.test.
 node_modules/
 dist/
 .git/

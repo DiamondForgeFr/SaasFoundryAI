@@ -39,6 +39,15 @@ describe('lifecycle diagnostic redaction', () => {
     expect(result).not.toContain(jwt)
   })
 
+  it('redacts product-specific camel-case token keys from retained browser evidence', () => {
+    const result = redactText('{"invitationToken":"invite-secret","resetPasswordToken":"reset-secret"}\nhttps://example.test/?invitationToken=url-secret')
+
+    expect(result).not.toContain('invite-secret')
+    expect(result).not.toContain('reset-secret')
+    expect(result).not.toContain('url-secret')
+    expect(result).toContain('"invitationToken":"<redacted>"')
+  })
+
   it('replaces an unterminated oversized record rather than leaking or retaining it', () => {
     const secret = 'secret-at-the-end'
     const capture = new StreamingRedactor({ secrets: [secret], maxPendingBytes: 32, maxRetainedBytes: 128 })

@@ -13,6 +13,8 @@ installers, and migrations that generate user projects).
 - **Docker network** — create the shared external network once: `docker network create saasfoundry-network`. Without it, `docker compose up` fails on the API service in any generated project.
 - **GitHub CLI (`gh`)** — needed to drive the workflow CLI (`workflow-cli.sh`) and `github-projects-cli.sh`. Auth once with `gh auth login`.
 
+Lifecycle lane resolution uses the repository's TypeScript runtime and has no separate `jq` dependency.
+
 ## Repository layout
 
 The high-level shape is documented in [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md) — the same file Claude Code reads at session start. Key directories:
@@ -26,7 +28,7 @@ The high-level shape is documented in [`CLAUDE.md`](https://github.com/DiamondFo
 | `scaffolds/blueprints/`       | Base project templates (`api/`, `web/`, `db/`, `s3/`)                                                      |
 | `scaffolds/overlays/`         | Topology overrides (`monorepo/`, `multirepo/`) and module overlays (`modules/email/`, `modules/storage/`)  |
 | `scaffolds/skills-templates/` | Skill templates that ship into generated projects (sf-srs, sf-workflow, sf-integration-rules, …)           |
-| `tests/docker/`               | Real-build E2E matrix — generates a project, runs `npm install`, `tsc`, `nest build`, `vite build`         |
+| `tests/docker/`               | Real lifecycle E2E lanes — browser → API → PostgreSQL for fresh generation and update                      |
 | `.claude/skills/`             | Local copies of the same skills the scaffolds ship — drift-guarded against `scaffolds/skills-templates/`   |
 | `.claude/docs/`               | Reference docs the agent reads during dev (architecture-modules, architecture-skills, migration-framework) |
 
@@ -70,24 +72,23 @@ sf new --project-name local-test --structure monorepo
 
 ## Build, test, format, lint
 
-| Command                                                     | What it does                                                                                                                                                                   | When to run                                                                                                            |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `npm run build`                                             | `tsc` — emits `dist/`                                                                                                                                                          | Before publishing or running the CLI standalone                                                                        |
-| `npm run dev`                                               | `tsc -w` — incremental compile while editing                                                                                                                                   | While developing                                                                                                       |
-| `npm run format`                                            | Prettier on `**/*.{js,jsx,ts,tsx,json,css,md}` (respects `.prettierignore`)                                                                                                    | Before pushing — Husky's pre-commit will retry it                                                                      |
-| `npm run lint`                                              | ESLint with the flat config in `eslint.config.mjs`                                                                                                                             | Before pushing                                                                                                         |
-| `npm test`                                                  | Jest across all four projects (`unit`, `integration`, `e2e`, `smoke`)                                                                                                          | While iterating                                                                                                        |
-| `npm run test:unit`                                         | Just the unit project (fastest)                                                                                                                                                | Quick local feedback                                                                                                   |
-| `npm run test:integration`                                  | Just integration tests (filesystem builders, scaffolds, installers)                                                                                                            | When changing builders / installers                                                                                    |
-| `npm run test:e2e`                                          | E2E tests (CLI command surface)                                                                                                                                                | When changing command wiring                                                                                           |
-| `npm run test:pre-commit`                                   | `format` + `lint` + `build` + `test` — what Husky runs on every commit (~15s)                                                                                                  | Before pushing                                                                                                         |
-| `npm run test:pre-push`                                     | Top 2 Docker scenarios (`monorepo-minimal` + `multirepo-minimal`, ~2–3 min)                                                                                                    | Explicitly during AI Testing before Human Testing; record the results                                                  |
-| `npm run test:full`                                         | `test:pre-commit` + `test:pre-push` — full local validation                                                                                                                    | Before declaring something done                                                                                        |
-| `npm run test:docker`                                       | All Docker scenarios (~70 min, see `--list`)                                                                                                                                   | When in doubt about a builder or installer change                                                                      |
-| `npm run test:docker:list`                                  | Lists every scenario without running them                                                                                                                                      | To pick a specific one                                                                                                 |
-| `npm run test:docker -- --scenario multirepo-boot-and-test` | The only scenario that **starts** the generated project: `sf new --start-services`, then `/api/health` and the web root must answer, then `npm audit` and the api's unit suite | After touching a builder, an installer or a pinned dependency — a build cannot see a module that throws on load (#594) |
-| `npm run test:docker -- --count N`                          | Runs the top N priority scenarios                                                                                                                                              | Selective E2E coverage                                                                                                 |
-| `npm run test:docker -- --scenario <name>`                  | Runs a single named scenario                                                                                                                                                   | Targeted reproduction                                                                                                  |
+| Command                                               | What it does                                                                                          | When to run                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `npm run build`                                       | `tsc` — emits `dist/`                                                                                 | Before publishing or running the CLI standalone                       |
+| `npm run dev`                                         | `tsc -w` — incremental compile while editing                                                          | While developing                                                      |
+| `npm run format`                                      | Prettier on `**/*.{js,jsx,ts,tsx,json,css,md}` (respects `.prettierignore`)                           | Before pushing — Husky's pre-commit will retry it                     |
+| `npm run lint`                                        | ESLint with the flat config in `eslint.config.mjs`                                                    | Before pushing                                                        |
+| `npm test`                                            | Jest across all four projects (`unit`, `integration`, `e2e`, `smoke`)                                 | While iterating                                                       |
+| `npm run test:unit`                                   | Just the unit project (fastest)                                                                       | Quick local feedback                                                  |
+| `npm run test:integration`                            | Just integration tests (filesystem builders, scaffolds, installers)                                   | When changing builders / installers                                   |
+| `npm run test:e2e`                                    | E2E tests (CLI command surface)                                                                       | When changing command wiring                                          |
+| `npm run test:pre-commit`                             | `format` + `lint` + `build` + `test` — what Husky runs on every commit (~15s)                         | Before pushing                                                        |
+| `npm run test:pre-push`                               | Exact normal lifecycle lane: fresh monorepo full, fresh multirepo full, previous-release update smoke | Explicitly during AI Testing before Human Testing; record the results |
+| `npm run test:full`                                   | `test:pre-commit` + `test:pre-push` — full local validation                                           | Before declaring something done                                       |
+| `npm run test:docker` / `npm run test:docker:full`    | Exhaustive four-check lane: fresh generation and update for both topologies                           | Release, scheduled, or deep local validation                          |
+| `npm run test:docker:normal`                          | The same three-check lane used by ordinary non-draft PRs                                              | Required AI Testing validation                                        |
+| `npm run test:docker:list -- --lane normal`           | Lists stable check name, scenario, browser depth, and outer budget                                    | Inspecting the CI contract                                            |
+| `npm run test:docker:scenario -- <name> --depth full` | Builds the shared image once and runs one lifecycle                                                   | Targeted reproduction                                                 |
 
 Pre-commit runs in ~15 seconds; if it stalls, prettier is reformatting a large file (most often a `.md` you just changed).
 
@@ -126,7 +127,8 @@ Husky installs three hooks under `.husky/`:
 If pre-commit reformats files (prettier), the commit aborts so you can stage the formatted result. **Do not amend** — `git add` the formatted files and create a new commit. The same rule appears in
 the workflow skill: pre-commit retries are the source of truth for "the commit didn't happen."
 
-RC branches (`rc-*`) retain version management. Ordinary pushes do not repeat Docker builds. Run `npm run test:pre-push` during AI Testing before opening the Human Testing draft PR.
+RC branch/tag pushes, weekly schedules, and manual runs execute the exhaustive lane. Ordinary `develop`/`master` pushes do not repeat Docker builds. Run `npm run test:pre-push` during AI Testing
+before opening the Human Testing draft PR.
 
 Draft PRs provide the diff and manual test plan without running test/build CI. After human approval, push the required non-regression tests and use `workflow-cli.sh ready-pr <ticket>` to start full
 CI. Later ready-PR pushes rerun it; `draft-pr <ticket>` returns the PR to draft for further human testing and cancels obsolete CI.
@@ -169,7 +171,7 @@ Full guidance: [Workflow skill SKILL.md](https://github.com/DiamondForgeFr/SaasF
 These flows are documented in dedicated reference docs because they have their own constraints (drift-guard for skills, blueprint markers + overlay files + installer for modules):
 
 - **Adding a new module** — read [`.claude/docs/architecture-modules.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md). Cover the markers, the
-  overlay layout, the installer's `currentVersion` + `migrations`, the manifest delta, and the Docker scenario you'll add to `tests/docker/`.
+  overlay layout, the installer's `currentVersion` + `migrations`, the manifest delta, and the lifecycle/fast-test signal mapping you'll update under `tests/docker/`.
 - **Adding or editing a skill** — read [`.claude/docs/architecture-skills.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md). Cover the
   `scaffolds/skills-templates/<name>/` source tree, the drift-guard test that pins it byte-equal to `.claude/skills/<name>/`, and the SKILL.md / scripts split.
 

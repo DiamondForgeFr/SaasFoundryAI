@@ -74,6 +74,8 @@ export interface CanonicalTreeEntry {
 export interface CanonicalTreeOptions {
   /** Exact relative paths; a directory excludes its complete subtree. */
   exclude?: readonly string[]
+  /** Directory basenames to exclude at every depth (for example generated dependency trees). */
+  excludeDirectoryNames?: readonly string[]
   limits?: Partial<Pick<LegacyFixtureLimits, 'maxEntries' | 'maxEntryBytes' | 'maxAggregateBytes' | 'maxPathBytes' | 'maxSegmentBytes'>>
 }
 
@@ -400,6 +402,13 @@ async function hashRegularFile(path: string, limits: LegacyFixtureLimits, budget
 export async function snapshotCanonicalTree(root: string, options: CanonicalTreeOptions = {}): Promise<CanonicalTreeEntry[]> {
   const limits = resolveLimits(options.limits)
   const exclusions = (options.exclude ?? []).map((path) => validateFixturePath(path, limits))
+  const excludedDirectoryNames = new Set(
+    (options.excludeDirectoryNames ?? []).map((name) => {
+      const validated = validateFixturePath(name, limits)
+      if (validated.includes('/')) throw new Error(`canonical directory exclusion must be one basename: ${name}`)
+      return validated
+    })
+  )
   assertPathGraph(exclusions)
   const rootStat = await lstat(root)
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error(`canonical tree root must be a real directory: ${root}`)
@@ -414,6 +423,7 @@ export async function snapshotCanonicalTree(root: string, options: CanonicalTree
       const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name
       validateFixturePath(relativePath, limits)
       if (excluded(relativePath, exclusions)) continue
+      if (entry.isDirectory() && excludedDirectoryNames.has(entry.name)) continue
       const absolute = join(directory, entry.name)
       const stat = await lstat(absolute)
       if (stat.isSymbolicLink()) throw new Error(`canonical tree does not support symbolic links: ${relativePath}`)

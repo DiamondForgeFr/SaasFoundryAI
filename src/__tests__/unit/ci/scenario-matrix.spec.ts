@@ -1,91 +1,76 @@
-import { execFileSync } from 'child_process'
-import { readFileSync } from 'fs'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
+import { CI_LANES } from '../../../../tests/docker/ci-lanes'
 
 const ROOT = path.resolve(__dirname, '../../../..')
 const WORKFLOW = path.join(ROOT, '.github/workflows/test.yml')
 const LIST_SCRIPT = path.join(ROOT, 'tests/docker/list-scenarios.ts')
 
-// The docker suite is the only thing in this repo that generates real projects, so "it passed"
-// is read as "the scenarios passed". That statement is only true if every scenario actually
-// runs.
-//
-// It was not true. `.github/workflows/test.yml` carried a hand-written list of scenario names
-// and drifted from the code: `migration-v0-to-current` (the migration framework's only
-// end-to-end test) and `multirepo-pwa` were defined, runnable locally, and ran on no pull
-// request at all (#546).
-//
-// The same drift had already happened once, in the shell script's `--list`, and was fixed in
-// #426 by rendering the list from `scenarios.ts`. `list-scenarios.ts` even states the rule in
-// its own docstring — "anything that reads the list must read it from scenarios.ts" — and the
-// workflow never got it.
-//
-// This guard is here because a rule that is only written down gets forgotten in exactly the
-// place nobody rereads.
-
-function scenarioNames(args: string[] = []): string[] {
-  const out = execFileSync('npx', ['tsx', LIST_SCRIPT, '--json', ...args], { cwd: ROOT, encoding: 'utf8' })
-  return JSON.parse(out) as string[]
+function listedLane(name: 'normal' | 'full') {
+  return JSON.parse(execFileSync('npx', ['tsx', LIST_SCRIPT, '--json', '--lane', name], { cwd: ROOT, encoding: 'utf8' })) as unknown
 }
 
-describe('the CI docker matrix', () => {
-  const workflow = readFileSync(WORKFLOW, 'utf8')
+function listedTsv(name: 'normal' | 'full') {
+  return execFileSync('npx', ['tsx', LIST_SCRIPT, '--tsv', '--lane', name], { cwd: ROOT, encoding: 'utf8' })
+}
 
-  it('derives both matrices from the scenario definitions', () => {
-    expect(workflow).toContain('scenario: ${{ fromJSON(needs.docker-scenarios.outputs.full) }}')
-    expect(workflow).toContain('scenario: ${{ fromJSON(needs.docker-scenarios.outputs.quick) }}')
+describe('typed lifecycle CI lanes', () => {
+  it('keeps exactly the three required normal checks', () => {
+    expect(CI_LANES.normal.map((entry) => entry.check)).toEqual(['new-monorepo-full', 'new-multirepo-full', 'update-previous-release-smoke'])
+    expect(CI_LANES.normal).toHaveLength(3)
   })
 
-  it('carries no hand-written copy of the scenario names', () => {
-    // The exact shape that drifted: a scenario name as a bare YAML list item.
-    const names = scenarioNames()
-    const hardcoded = names.filter((name) => new RegExp(`^\\s+- ${name}\\s*$`, 'm').test(workflow))
-
-    if (hardcoded.length > 0) {
-      throw new Error(
-        [
-          `The workflow lists ${hardcoded.length} scenario name(s) by hand: ${hardcoded.join(', ')}.`,
-          '',
-          'A copied list drifts. That is how migration-v0-to-current and multirepo-pwa came to be',
-          'defined, runnable locally, and executed by no pull request.',
-          '',
-          'Derive the matrix instead: `scenario: ${{ fromJSON(needs.docker-scenarios.outputs.full) }}`.'
-        ].join('\n')
-      )
-    }
-
-    expect(hardcoded).toEqual([])
+  it('keeps exhaustive fresh and update coverage for both topologies', () => {
+    expect(CI_LANES.full.map((entry) => entry.check)).toEqual(['new-monorepo-full', 'new-multirepo-full', 'update-previous-release-full', 'update-current-monorepo-full'])
+    expect(CI_LANES.full).toHaveLength(4)
   })
 
-  it('resolves the job the matrices depend on', () => {
-    expect(workflow).toContain('docker-scenarios:')
-    expect(workflow).toContain('needs: docker-scenarios')
-    expect(workflow).toContain('list-scenarios.ts --json')
+  it('renders the CLI from the same typed source', () => {
+    expect(listedLane('normal')).toEqual(CI_LANES.normal)
+    expect(listedLane('full')).toEqual(CI_LANES.full)
+  })
+
+  it('terminates every TSV lane entry so Bash consumes the final scenario', () => {
+    const output = listedTsv('normal')
+    expect(output.endsWith('\n')).toBe(true)
+    expect(output.trimEnd().split('\n')).toHaveLength(CI_LANES.normal.length)
+    expect(output).toContain('update-previous-release-smoke\tupdate-previous-release\tsmoke\n')
   })
 })
 
-describe('list-scenarios --json', () => {
-  it('emits every defined scenario, including the two that CI used to miss', () => {
-    const names = scenarioNames()
-    expect(names.length).toBeGreaterThanOrEqual(20)
-    expect(names).toContain('migration-v0-to-current')
-    expect(names).toContain('multirepo-pwa')
+describe('lifecycle workflow contract', () => {
+  const workflow = readFileSync(WORKFLOW, 'utf8')
+
+  it('builds and writes the cache exactly once', () => {
+    expect(workflow.match(/docker\/build-push-action@v6/g)).toHaveLength(1)
+    expect(workflow.match(/cache-to:/g)).toHaveLength(1)
+    expect(workflow).toContain('outputs: type=docker,dest=${{ runner.temp }}/sf-test.tar')
+    expect(workflow).toContain('docker load --input')
   })
 
-  it('emits the quick lane as the top two plus whatever opts in', () => {
-    const all = scenarioNames()
-    const quick = scenarioNames(['--quick'])
-
-    expect(quick.slice(0, 2)).toEqual(all.slice(0, 2))
-    expect(quick.length).toBeGreaterThan(2)
-    // The harness profile guards the path that scaffolds over a user's existing repository
-    // (#510), and it is cheap because it scaffolds nothing. It belongs on every PR.
-    expect(quick).toContain('cli-new-harness')
-    expect(new Set(quick).size).toBe(quick.length)
+  it('routes ordinary PRs to normal and schedule, manual and RC tags to full', () => {
+    expect(workflow).toContain('if [[ "${{ github.event_name }}" == "pull_request" ]]; then lane=normal; fi')
+    expect(workflow).toContain("tags: ['rc-*']")
+    expect(workflow).toContain("branches: [master, develop, 'rc-*']")
+    expect(workflow).toContain('schedule:')
+    expect(workflow).toContain('workflow_dispatch:')
+    expect(workflow).toContain("startsWith(github.ref, 'refs/tags/rc-')")
+    expect(workflow).toContain("startsWith(github.ref, 'refs/heads/rc-')")
   })
 
-  it('keeps every quick-lane scenario in the full list', () => {
-    const all = new Set(scenarioNames())
-    for (const name of scenarioNames(['--quick'])) expect(all.has(name)).toBe(true)
+  it('uses exact matrix check names and the isolated Docker/artifact contract', () => {
+    expect(workflow).toContain('name: ${{ matrix.check }}')
+    expect(workflow).toContain('docker run --rm --init --ipc=host')
+    expect(workflow).toContain('target=/artifacts')
+    expect(workflow).toContain('SF_TEST_ARTIFACTS_DIR=/artifacts')
+    expect(workflow).not.toContain('/var/run/docker.sock')
+  })
+
+  it('always verifies timings and retains diagnostics only on failure', () => {
+    expect(workflow).toMatch(/name: Verify timing evidence\n\s+if: always\(\)/)
+    expect(workflow).toMatch(/name: Upload lifecycle timing\n\s+if: always\(\)/)
+    expect(workflow).toMatch(/name: Upload lifecycle failure diagnostics\n\s+if: failure\(\)/)
   })
 })

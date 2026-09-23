@@ -11,7 +11,7 @@
 import { execFileSync, execSync, spawnSync } from 'child_process'
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import { createRequire } from 'module'
-import { join } from 'path'
+import { join, resolve } from 'path'
 
 import {
   assertApiBuildOutput,
@@ -37,15 +37,17 @@ import {
   scanForUnreplacedPlaceholders
 } from './assertions'
 import { auditHighProductionWorkspaces } from './npm-audit'
+import { createArtifactSink } from './lifecycle/artifacts'
 import { verifyHarnessBrowsers } from './lifecycle/browser'
 import { runLiveSuite } from './lifecycle/live-suite'
 import { runSupervisedProcess, startSupervisedProcess } from './lifecycle/process'
 import { startPrivatePostgres, type PrivatePostgres } from './lifecycle/postgres'
 import { runProductPhase } from './lifecycle/product'
+import { finishLifecyclePhase, startLifecyclePhase, startLifecycleTiming, writeLifecycleTiming, type LifecycleTimingStart } from './lifecycle/timings'
+import { canonicalTreeDigest } from './legacy-release-fixture'
 import {
   ALL_SCENARIOS,
   getScenario,
-  getTopScenarios,
   GenerationScenario,
   UpdateScenario,
   AIScenario,
@@ -53,8 +55,11 @@ import {
   TestScenario,
   CliScenario,
   BootScenario,
-  PreviousReleaseScenario
+  PreviousReleaseScenario,
+  CurrentUpdateScenario,
+  type BrowserDepth
 } from './scenarios'
+import type { LifecycleArtifactSink, LifecyclePhase } from './lifecycle/types'
 import { runPreviousReleaseRuntimeLifecycle } from './update-previous-release-runtime'
 
 // ── Config ─────────────────────────────────────────────────────
@@ -62,6 +67,42 @@ import { runPreviousReleaseRuntimeLifecycle } from './update-previous-release-ru
 const WORKSPACE = process.env.WORKSPACE_DIR || '/workspace/projects'
 const CLI_PATH = process.env.CLI_PATH || '/cli'
 const SCENARIO_ENV = process.env.TEST_SCENARIO || 'all'
+const LIVE_DEPTH: BrowserDepth = process.env.TEST_LIVE_DEPTH === 'smoke' ? 'smoke' : 'full'
+const LIFECYCLE_ABORT = new AbortController()
+const TEARDOWN_RESERVE_MS = 30_000
+let ACTIVE_SCENARIO_DEADLINE: number | undefined
+let ACTIVE_LIFECYCLE_TIMING: LifecycleTimingStart | undefined
+
+function scenarioDeadline(timeoutSeconds: number): number {
+  return ACTIVE_SCENARIO_DEADLINE ?? Date.now() + timeoutSeconds * 1_000
+}
+
+function boundedScenarioTimeout(requestedMs: number): number {
+  if (ACTIVE_SCENARIO_DEADLINE === undefined) return requestedMs
+  const remaining = ACTIVE_SCENARIO_DEADLINE - Date.now() - TEARDOWN_RESERVE_MS
+  if (remaining <= 0) throw new Error('Lifecycle budget exhausted; teardown reserve reached.')
+  return Math.max(1, Math.min(requestedMs, remaining))
+}
+
+const LIVE_ARTIFACT_PATHS = ['events/creation-e2e.json', 'events/after-update-e2e.json', 'screenshots/creation-failure.png', 'screenshots/after-update-failure.png'] as const
+
+async function createLiveArtifactSink(scenarioName: string, projectRoot: string): Promise<LifecycleArtifactSink> {
+  const parent = resolve(process.env.SF_TEST_ARTIFACTS_DIR ?? join(WORKSPACE, '..', 'artifacts'))
+  mkdirSync(parent, { recursive: true })
+  return createArtifactSink({
+    root: join(parent, `${scenarioName}-${process.pid}-${Date.now()}`),
+    projectRoot,
+    allowedPaths: LIVE_ARTIFACT_PATHS,
+    secrets: ['fixture-only', 'ms_fixture_runtime_key_00000000000000000000']
+  })
+}
+
+function liveArtifactPaths(phase: Extract<LifecyclePhase, 'creation' | 'after-update'>) {
+  return {
+    result: `events/${phase}-e2e.json` as const,
+    screenshot: `screenshots/${phase}-failure.png` as const
+  }
+}
 
 // ── Shell Helper ───────────────────────────────────────────────
 
@@ -72,7 +113,7 @@ function run(cmd: string, cwd: string, label?: string, timeoutMs = 300_000): voi
     execSync(cmd, {
       cwd,
       stdio: 'pipe',
-      timeout: timeoutMs,
+      timeout: boundedScenarioTimeout(timeoutMs),
       env: {
         ...process.env,
         HUSKY: '0',
@@ -269,12 +310,13 @@ const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resol
  * Recreate the checked-in snapshot through the generated application's real bootstrap.
  * Removing it first prevents the scaffold fixture from satisfying the wait by itself.
  */
-async function emitOpenApiDocument(projectDir: string): Promise<string> {
+async function emitOpenApiDocument(projectDir: string, runtime?: { postgres: PrivatePostgres; deadline: number; signal?: AbortSignal }): Promise<string> {
   const apiDir = join(projectDir, 'apps', 'api')
   const openApiPath = join(apiDir, 'docs', 'openapi.json')
   if (existsSync(openApiPath)) unlinkSync(openApiPath)
-  const deadline = Date.now() + 60_000
-  const postgres = await startPrivatePostgres({ workspace: join(WORKSPACE, '.openapi-runtime'), deadline })
+  const deadline = Math.min(runtime?.deadline ?? Number.POSITIVE_INFINITY, Date.now() + 60_000)
+  const ownsPostgres = runtime === undefined
+  const postgres = runtime?.postgres ?? (await startPrivatePostgres({ workspace: join(WORKSPACE, '.openapi-runtime'), deadline }))
   const manifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8')) as { ports?: { api?: number } }
   const apiPort = manifest.ports?.api ?? 3500
   let child: Awaited<ReturnType<typeof startSupervisedProcess>> | undefined
@@ -297,6 +339,7 @@ async function emitOpenApiDocument(projectDir: string): Promise<string> {
         DIRECT_URL: postgres.directUrl,
         PORT: String(apiPort)
       },
+      signal: runtime?.signal,
       fatalPatterns: [/EADDRINUSE/, /PrismaClientInitializationError/, /Cannot find module/, /UnhandledPromiseRejection/]
     })
     while (!existsSync(openApiPath)) {
@@ -319,10 +362,12 @@ async function emitOpenApiDocument(projectDir: string): Promise<string> {
   } catch (error) {
     cleanupFailures.push(error)
   }
-  try {
-    await postgres.stop()
-  } catch (error) {
-    cleanupFailures.push(error)
+  if (ownsPostgres) {
+    try {
+      await postgres.stop()
+    } catch (error) {
+      cleanupFailures.push(error)
+    }
   }
   if (primaryFailure !== undefined || cleanupFailures.length > 0) {
     const failures = [...(primaryFailure === undefined ? [] : [primaryFailure]), ...cleanupFailures]
@@ -332,9 +377,9 @@ async function emitOpenApiDocument(projectDir: string): Promise<string> {
   return openApiPath
 }
 
-async function validateGeneratedApiContract(projectDir: string, projectName: string): Promise<AssertionResult[]> {
+async function validateGeneratedApiContract(projectDir: string, projectName: string, runtime?: { postgres: PrivatePostgres; deadline: number; signal?: AbortSignal }): Promise<AssertionResult[]> {
   console.log('  > emit and validate OpenAPI, regenerate client, type-check client')
-  const openApiPath = await emitOpenApiDocument(projectDir)
+  const openApiPath = await emitOpenApiDocument(projectDir, runtime)
   const require = createRequire(join(process.cwd(), 'package.json'))
   const SwaggerParser = require('@apidevtools/swagger-parser') as {
     validate(path: string): Promise<OpenApiDocument>
@@ -693,6 +738,13 @@ async function runMigrationScenario(scenario: MigrationScenario): Promise<boolea
   return reportResults(scenario.name, results)
 }
 
+// Kept temporarily as non-routable reference implementations while the executable
+// replacement map protects signal parity. ALL_SCENARIOS cannot select these runners.
+void runGenerationScenario
+void runUpdateScenario
+void runAIScenario
+void runMigrationScenario
+
 // ── CLI Scenario (runs the real binary as a subprocess) ────────
 
 /**
@@ -908,12 +960,15 @@ async function runCliScenario(scenario: CliScenario): Promise<boolean> {
  * through here so the report names install, database setup, boot, audit or the unit suite.
  */
 async function runStep<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
+  const phase = startLifecyclePhase(label)
   console.log(`  > ${label}`)
   try {
     const value = await fn()
+    ACTIVE_LIFECYCLE_TIMING?.phases.push(finishLifecyclePhase(phase, 'passed'))
     console.log(`    Done`)
     return value
   } catch (err) {
+    ACTIVE_LIFECYCLE_TIMING?.phases.push(finishLifecyclePhase(phase, 'failed'))
     const detail = formatErrorDetails(err)
     throw new Error(`step "${label}" failed: ${detail}`)
   }
@@ -941,18 +996,28 @@ function formatErrorDetails(error: unknown): string {
  */
 async function runBootScenario(scenario: BootScenario): Promise<boolean> {
   const workspace = join(WORKSPACE, `boot-${scenario.name}`)
-  mkdirSync(workspace, { recursive: true })
+  mkdirSync(join(workspace, 'existing-src'), { recursive: true })
+  writeFileSync(join(workspace, 'PREEXISTING.md'), 'this file existed before sf new ran\n')
+  writeFileSync(join(workspace, 'existing-src', 'poc.js'), 'console.log("poc")\n')
 
   const projectDir = join(workspace, scenario.projectName)
-  const structure = scenario.structure ?? 'multirepo'
-  const profile = scenario.profile ?? 'stack'
+  const structure = scenario.structure
+  const profile = scenario.profile
   const apiDir = structure === 'monorepo' ? join(projectDir, 'apps', 'api') : join(projectDir, 'apps', `${scenario.projectName}-api`)
-  const deadline = Date.now() + (scenario.timeoutSeconds ?? 20 * 60) * 1_000
+  const deadline = scenarioDeadline(scenario.timeoutSeconds)
   const results: AssertionResult[] = []
   let postgres: PrivatePostgres | undefined
+  let artifacts: LifecycleArtifactSink | undefined
 
   try {
-    postgres = await runStep('start isolated postgres', () => startPrivatePostgres({ workspace, deadline }))
+    artifacts = await createLiveArtifactSink(scenario.name, projectDir)
+    if (structure === 'monorepo') {
+      const harnessPassed = await runStep('real CLI harness on a non-empty repository', () =>
+        runCliScenario({ type: 'cli', name: 'lifecycle-harness', projectName: 'must-not-exist', profile: 'harness', isMonorepo: true })
+      )
+      results.push({ passed: harnessPassed, message: 'OK: the compiled CLI harness preserved a non-empty repository' })
+    }
+    postgres = await runStep('start isolated postgres', () => startPrivatePostgres({ workspace, deadline, signal: LIFECYCLE_ABORT.signal }))
 
     await runStep('sf new --start-services', async () => {
       const bin = join(CLI_PATH, 'bin', 'sf.js')
@@ -993,7 +1058,17 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
             ? ['--mailersend-api-key', 'ms_fixture_runtime_key_00000000000000000000', '--mailersend-sender-email', 'noreply@example.test', '--mailersend-sender-name', 'Fixture']
             : []),
           '--s3-setup',
-          'manual',
+          'credentials',
+          '--s3-endpoint',
+          'http://127.0.0.1:9000',
+          '--s3-access-key',
+          'fixture-access-key',
+          '--s3-secret-key',
+          'fixture-only',
+          '--s3-bucket',
+          'sf-lifecycle',
+          '--s3-region',
+          'us-east-1',
           profile === 'full' ? '--analytics' : '--no-analytics',
           '--no-workflow',
           '--no-srs-enable',
@@ -1009,7 +1084,8 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
           ...(process.env.HOME ? { HOME: process.env.HOME } : {}),
           ...(process.env.USERPROFILE ? { USERPROFILE: process.env.USERPROFILE } : {})
         },
-        secrets: ['fixture-only']
+        secrets: ['fixture-only'],
+        signal: LIFECYCLE_ABORT.signal
       })
     })
 
@@ -1018,7 +1094,7 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
     const ports = manifest.ports || { api: 3500, web: 5173 }
     console.log(`  · the project resolved api=${ports.api} web=${ports.web}`)
 
-    const browserCapabilities = scenario.liveSuite ? await runStep('verify harness browser capabilities', () => verifyHarnessBrowsers('/workspace')) : []
+    const browserCapabilities = await runStep('verify harness browser capabilities', () => verifyHarnessBrowsers('/workspace'))
     const phase = await runStep('production API/web boot, strict readiness and verified teardown', () =>
       runProductPhase({
         phase: 'creation',
@@ -1030,20 +1106,59 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
         apiPort: ports.api,
         webPort: ports.web,
         browserCapabilities,
-        onReady: scenario.liveSuite ? (context) => runLiveSuite(context, { depth: scenario.liveSuite!, runtimeRoot: '/workspace' }).then(() => undefined) : undefined
+        signal: LIFECYCLE_ABORT.signal,
+        onReady: (context) =>
+          runLiveSuite(context, {
+            depth: LIVE_DEPTH,
+            runtimeRoot: '/workspace',
+            artifacts,
+            artifactPaths: liveArtifactPaths('creation')
+          }).then(() => undefined)
       })
     )
     results.push({ passed: phase.apiProbe.status === 200, message: `OK: the API answered strict /api/health on ${ports.api}` })
     results.push({ passed: phase.webProbe.status === 200, message: `OK: the production web app answered on ${ports.web}` })
     results.push({ passed: true, message: 'OK: API and web process groups stopped through supervised teardown' })
+    results.push(assertFileContains(join(workspace, 'PREEXISTING.md'), 'this file existed before sf new ran'))
+    results.push(assertFileContains(join(workspace, 'existing-src', 'poc.js'), 'console.log("poc")'))
+    results.push(scanForUnreplacedPlaceholders(projectDir))
+
+    const webDir = structure === 'monorepo' ? join(projectDir, 'apps', 'web') : join(projectDir, 'apps', `${scenario.projectName}-web`)
+    if (structure === 'monorepo') {
+      results.push(...assertMonorepoBuildOutput(projectDir))
+      results.push(...assertMonorepoSharedPackages(projectDir, scenario.projectName))
+      results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.projectName))
+      results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.projectName))
+      results.push(...assertMonorepoUiPrimitives(projectDir, scenario.projectName))
+    } else {
+      const web = join(projectDir, 'apps', `${scenario.projectName}-web`)
+      results.push(...assertApiBuildOutput(apiDir))
+      results.push(...assertWebBuildOutput(web))
+      results.push(...assertMultirepoEmailInlined(apiDir))
+      results.push(...assertMultirepoStorageInlined(apiDir))
+      results.push(...assertMultirepoUiPrimitivesUntouched(web))
+      results.push(...validateSourceMultirepoLockfiles())
+    }
+    results.push(...assertPwaBuildOutput(webDir))
+    if (structure === 'monorepo') {
+      results.push(
+        ...(await runStep('emitted OpenAPI and generated client contract', () =>
+          validateGeneratedApiContract(projectDir, scenario.projectName, { postgres: postgres!, deadline, signal: LIFECYCLE_ABORT.signal })
+        ))
+      )
+    }
 
     await runStep('production npm audit (high)', () => {
-      results.push(...auditHighProductionWorkspaces(projectDir))
+      results.push(
+        ...auditHighProductionWorkspaces(projectDir, (cwd, args) => {
+          execFileSync('npm', args, { cwd, stdio: 'pipe', timeout: boundedScenarioTimeout(120_000) })
+        })
+      )
     })
 
     await runStep('api npm run test:unit', () => {
       try {
-        execSync('npm run test:unit', { cwd: apiDir, stdio: 'pipe', timeout: 600_000 })
+        execSync('npm run test:unit', { cwd: apiDir, stdio: 'pipe', timeout: boundedScenarioTimeout(600_000) })
         results.push({ passed: true, message: 'OK: the api unit suite the project ships passes' })
       } catch (err) {
         const error = err as { stdout?: Buffer; stderr?: Buffer }
@@ -1056,9 +1171,16 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
   } finally {
     if (postgres) {
       try {
-        await postgres.stop()
+        await runStep('teardown isolated postgres', () => postgres!.stop())
       } catch (error) {
         results.push({ passed: false, message: `FAIL: isolated postgres teardown: ${error instanceof Error ? error.message : String(error)}` })
+      }
+    }
+    if (artifacts) {
+      try {
+        await artifacts.writeManifest()
+      } catch (error) {
+        results.push({ passed: false, message: `FAIL: lifecycle artifact manifest: ${formatErrorDetails(error)}` })
       }
     }
   }
@@ -1073,29 +1195,32 @@ async function runPreviousReleaseScenario(scenario: PreviousReleaseScenario): Pr
   const results: AssertionResult[] = []
 
   try {
-    const lifecycle = await runPreviousReleaseRuntimeLifecycle({
-      fixture,
-      workspace,
-      cliEntry: join(CLI_PATH, 'bin', 'sf.js'),
-      timeoutMs: scenario.timeoutSeconds * 1_000,
-      harnessRuntimeRoot: '/workspace',
-      env: {
-        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
-        npm_config_loglevel: 'error'
-      },
-      onProductReady: async (context) => {
-        if (context.phase !== 'after-update') return
-        await runLiveSuite(context, {
-          depth: 'smoke',
-          runtimeRoot: '/workspace',
-          artifacts: context.artifacts,
-          artifactPaths: {
-            result: 'events/after-update-e2e.json',
-            screenshot: context.screenshotPath
-          }
-        })
-      }
-    })
+    const lifecycle = await runStep('materialize, update and boot previous release', () =>
+      runPreviousReleaseRuntimeLifecycle({
+        fixture,
+        workspace,
+        cliEntry: join(CLI_PATH, 'bin', 'sf.js'),
+        timeoutMs: Math.max(1, scenarioDeadline(scenario.timeoutSeconds) - Date.now()),
+        harnessRuntimeRoot: '/workspace',
+        env: {
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+          npm_config_loglevel: 'error'
+        },
+        onProductReady: async (context) => {
+          if (context.phase !== 'after-update') return
+          await runLiveSuite(context, {
+            depth: LIVE_DEPTH,
+            runtimeRoot: '/workspace',
+            artifacts: context.artifacts,
+            artifactPaths: {
+              result: 'events/after-update-e2e.json',
+              screenshot: context.screenshotPath
+            }
+          })
+        },
+        signal: LIFECYCLE_ABORT.signal
+      })
+    )
     const before = lifecycle.phases['before-update']
     const after = lifecycle.phases['after-update']
     results.push({ passed: before?.apiProbe.status === 200 && before.webProbe.status === 200, message: 'OK: authentic beta API and web booted against isolated PostgreSQL' })
@@ -1109,24 +1234,234 @@ async function runPreviousReleaseScenario(scenario: PreviousReleaseScenario): Pr
   return reportResults(scenario.name, results)
 }
 
+const CURRENT_UPDATE_DIGEST_EXCLUSIONS = [
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  'logs',
+  '.turbo',
+  'apps/api/node_modules',
+  'apps/api/dist',
+  'apps/api/logs',
+  'apps/web/node_modules',
+  'apps/web/dist',
+  'packages/api-client/node_modules',
+  'packages/api-client/dist',
+  'packages/shared-config/node_modules',
+  'packages/shared-config/dist',
+  'packages/shared-types/node_modules',
+  'packages/shared-types/dist',
+  'packages/ui/node_modules',
+  'packages/ui/dist'
+] as const
+const CURRENT_UPDATE_DIGEST_LIMITS = {
+  // A generated full-profile npm lock currently exceeds the fixture-oriented 1 MiB
+  // default. Keep the idempotence snapshot bounded while admitting real lockfiles.
+  maxEntryBytes: 4 * 1024 * 1024,
+  maxAggregateBytes: 32 * 1024 * 1024
+} as const
+
+async function runCurrentUpdateScenario(scenario: CurrentUpdateScenario): Promise<boolean> {
+  const workspace = join(WORKSPACE, scenario.name)
+  const projectDir = join(workspace, scenario.projectName)
+  const deadline = scenarioDeadline(scenario.timeoutSeconds)
+  const bin = join(CLI_PATH, 'bin', 'sf.js')
+  const results: AssertionResult[] = []
+  let postgres: PrivatePostgres | undefined
+  let artifacts: LifecycleArtifactSink | undefined
+
+  const update = async (args: readonly string[], label: string) => {
+    await runSupervisedProcess({
+      label,
+      executable: process.execPath,
+      args: [bin, 'update', ...args],
+      cwd: projectDir,
+      deadline,
+      env: {
+        npm_config_loglevel: 'error',
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+        SF_UPDATE_MAILERSEND_API_KEY: 'ms_fixture_runtime_key_00000000000000000000',
+        ...(process.env.HOME ? { HOME: process.env.HOME } : {})
+      },
+      secrets: ['ms_fixture_runtime_key_00000000000000000000'],
+      signal: LIFECYCLE_ABORT.signal
+    })
+  }
+  const profileArgs = ['--non-interactive', '--accept-template-updates', '--target-profile', 'full', '--workflow', 'solo'] as const
+  const moduleArgs = [
+    '--non-interactive',
+    '--accept-template-updates',
+    '--conflict-strategy',
+    'save-new',
+    '--add-modules',
+    'email,storage,analytics,pwa,sf-skill-context7',
+    '--mailersend-sender-email',
+    'noreply@example.test',
+    '--mailersend-sender-name',
+    'Fixture',
+    '--s3-setup',
+    'docker'
+  ] as const
+
+  try {
+    mkdirSync(workspace, { recursive: true })
+    artifacts = await createLiveArtifactSink(scenario.name, projectDir)
+    postgres = await runStep('start isolated postgres for current update', () => startPrivatePostgres({ workspace, deadline, signal: LIFECYCLE_ABORT.signal }))
+    await runStep('generate current minimal monorepo through the real CLI', () =>
+      runSupervisedProcess({
+        label: 'sf new current update base',
+        executable: process.execPath,
+        args: [
+          bin,
+          'new',
+          '--non-interactive',
+          '--project-name',
+          scenario.projectName,
+          '--project-description',
+          'current update lifecycle',
+          '--structure',
+          scenario.structure,
+          '--main-branch',
+          'main',
+          '--setup-repo',
+          'local',
+          '--profile',
+          'stack',
+          '--db-setup',
+          'credentials',
+          '--db-host',
+          '127.0.0.1',
+          '--db-port',
+          String(postgres!.port),
+          '--db-user',
+          'sf_lifecycle',
+          '--db-password',
+          'fixture-only',
+          '--db-name',
+          'sf_lifecycle',
+          '--email-service',
+          'none',
+          '--s3-setup',
+          'manual',
+          '--no-analytics',
+          '--no-pwa',
+          '--no-workflow',
+          '--no-srs-enable',
+          '--start-services',
+          '--start-apps',
+          'none'
+        ],
+        cwd: workspace,
+        deadline,
+        env: { npm_config_loglevel: 'error', PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1', ...(process.env.HOME ? { HOME: process.env.HOME } : {}) },
+        secrets: ['fixture-only'],
+        signal: LIFECYCLE_ABORT.signal
+      })
+    )
+
+    const beforeManifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8')) as Record<string, unknown> & { ports?: { api?: number; web?: number } }
+    const ports = beforeManifest.ports ?? { api: 3500, web: 5173 }
+    await runStep('boot current monorepo before update', () =>
+      runProductPhase({
+        phase: 'before-update',
+        projectRoot: projectDir,
+        manifest: beforeManifest,
+        postgres: postgres!,
+        deadline,
+        readinessTimeoutMs: scenario.bootTimeoutSeconds * 1_000,
+        apiPort: ports.api,
+        webPort: ports.web,
+        signal: LIFECYCLE_ABORT.signal
+      })
+    )
+    writeFileSync(join(projectDir, 'USER-CANARY.md'), 'current lifecycle user canary\n', { flag: 'wx' })
+    await postgres.executeSql("INSERT INTO public.module_types(name, description) VALUES ('SF_CURRENT_UPDATE_CANARY', 'preserve-me');", 'create current update database canary')
+
+    await runStep('transition current monorepo to managed full profile', () => update(profileArgs, 'sf update target profile full'))
+    await runStep('install late modules through the real update command', () => update(moduleArgs, 'sf update late modules'))
+
+    const afterManifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8')) as Record<string, unknown>
+    const capabilities = await verifyHarnessBrowsers('/workspace')
+    await runStep('boot updated monorepo and run full live inventory', () =>
+      runProductPhase({
+        phase: 'after-update',
+        projectRoot: projectDir,
+        manifest: afterManifest,
+        postgres: postgres!,
+        deadline,
+        readinessTimeoutMs: scenario.bootTimeoutSeconds * 1_000,
+        apiPort: ports.api,
+        webPort: ports.web,
+        browserCapabilities: capabilities,
+        signal: LIFECYCLE_ABORT.signal,
+        onReady: (context) =>
+          runLiveSuite(context, {
+            depth: LIVE_DEPTH,
+            runtimeRoot: '/workspace',
+            artifacts,
+            artifactPaths: liveArtifactPaths('after-update')
+          }).then(() => undefined)
+      })
+    )
+
+    const databaseCanary = await postgres.executeSql("SELECT description FROM public.module_types WHERE name = 'SF_CURRENT_UPDATE_CANARY';", 'verify current update database canary')
+    results.push({ passed: databaseCanary.stdout.trim() === 'preserve-me', message: 'OK: current update preserved PostgreSQL state' })
+    results.push(assertFileContains(join(projectDir, 'USER-CANARY.md'), 'current lifecycle user canary'))
+    results.push(scanForUnreplacedPlaceholders(projectDir))
+    results.push(...assertMonorepoBuildOutput(projectDir))
+    results.push(...assertMonorepoSharedPackages(projectDir, scenario.projectName))
+    results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.projectName))
+    results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.projectName))
+    results.push(...assertMonorepoUiPrimitives(projectDir, scenario.projectName))
+    results.push(...assertPwaBuildOutput(join(projectDir, 'apps', 'web')))
+    results.push(...(await validateGeneratedApiContract(projectDir, scenario.projectName, { postgres: postgres!, deadline, signal: LIFECYCLE_ABORT.signal })))
+
+    const stableDigest = await canonicalTreeDigest(projectDir, {
+      exclude: CURRENT_UPDATE_DIGEST_EXCLUSIONS,
+      excludeDirectoryNames: ['node_modules'],
+      limits: CURRENT_UPDATE_DIGEST_LIMITS
+    })
+    await update(profileArgs, 'repeat current target profile update')
+    await update(moduleArgs, 'repeat current late module update')
+    const repeatedDigest = await canonicalTreeDigest(projectDir, {
+      exclude: CURRENT_UPDATE_DIGEST_EXCLUSIONS,
+      excludeDirectoryNames: ['node_modules'],
+      limits: CURRENT_UPDATE_DIGEST_LIMITS
+    })
+    results.push({ passed: stableDigest === repeatedDigest, message: 'OK: repeated current monorepo update is byte-idempotent' })
+  } catch (error) {
+    results.push({ passed: false, message: `FAIL: ${formatErrorDetails(error)}` })
+  } finally {
+    if (postgres) {
+      try {
+        await runStep('teardown current update postgres', () => postgres!.stop())
+      } catch (error) {
+        results.push({ passed: false, message: `FAIL: current update postgres teardown: ${formatErrorDetails(error)}` })
+      }
+    }
+    if (artifacts) {
+      try {
+        await artifacts.writeManifest()
+      } catch (error) {
+        results.push({ passed: false, message: `FAIL: current update artifact manifest: ${formatErrorDetails(error)}` })
+      }
+    }
+  }
+  return reportResults(scenario.name, results)
+}
+
 // ── Scenario Dispatcher ────────────────────────────────────────
 
 async function runScenario(scenario: TestScenario): Promise<boolean> {
   switch (scenario.type) {
-    case 'generation':
-      return runGenerationScenario(scenario)
-    case 'update':
-      return runUpdateScenario(scenario)
-    case 'migration':
-      return runMigrationScenario(scenario)
-    case 'ai':
-      return runAIScenario(scenario)
-    case 'cli':
-      return runCliScenario(scenario)
     case 'boot':
       return runBootScenario(scenario)
     case 'previous-release':
       return runPreviousReleaseScenario(scenario)
+    case 'current-update':
+      return runCurrentUpdateScenario(scenario)
   }
 }
 
@@ -1139,19 +1474,12 @@ async function main() {
   // Ensure workspace exists
   mkdirSync(WORKSPACE, { recursive: true })
 
-  // Determine which scenarios to run
-  // TEST_SCENARIO supports: "all", a number (top N by priority), or scenario name(s)
+  // TEST_SCENARIO supports all lifecycle scenarios or an explicit comma-separated list.
   let scenarios: TestScenario[]
-  const countEnv = process.env.TEST_COUNT
 
-  if (SCENARIO_ENV === 'all' && !countEnv) {
-    scenarios = ALL_SCENARIOS
-  } else if (/^\d+$/.test(SCENARIO_ENV)) {
-    scenarios = getTopScenarios(parseInt(SCENARIO_ENV, 10))
-  } else if (countEnv && /^\d+$/.test(countEnv)) {
-    scenarios = getTopScenarios(parseInt(countEnv, 10))
+  if (SCENARIO_ENV === 'all') {
+    scenarios = [...ALL_SCENARIOS]
   } else {
-    // Single scenario or comma-separated list
     scenarios = SCENARIO_ENV.split(',')
       .map((s) => s.trim())
       .map(getScenario)
@@ -1161,19 +1489,49 @@ async function main() {
 
   const results: { name: string; passed: boolean }[] = []
 
+  const abort = (signal: NodeJS.Signals) => LIFECYCLE_ABORT.abort(new Error(`Lifecycle received ${signal}; completing supervised teardown.`))
+  const onSigint = () => abort('SIGINT')
+  const onSigterm = () => abort('SIGTERM')
+  process.once('SIGINT', onSigint)
+  process.once('SIGTERM', onSigterm)
+
   for (const [index, scenario] of scenarios.entries()) {
+    if (LIFECYCLE_ABORT.signal.aborted) break
     // [sf-progress] markers are the greppable progress contract for agent
     // harnesses streaming this run (tail -f | grep) — see workflow SKILL.md
     // "ANNOUNCE + STREAM LONG COMMANDS" (#436). Keep the format stable.
     console.log(`[sf-progress] scenario ${index + 1}/${scenarios.length} ${scenario.name} — started`)
+    const timing = startLifecycleTiming()
+    const deadline = Date.now() + scenario.timeoutSeconds * 1_000
+    ACTIVE_SCENARIO_DEADLINE = deadline
+    ACTIVE_LIFECYCLE_TIMING = timing
+    const budgetTimer = setTimeout(
+      () => {
+        LIFECYCLE_ABORT.abort(new Error(`Lifecycle scenario ${scenario.name} reached its teardown reserve within the ${scenario.timeoutSeconds}s budget.`))
+      },
+      Math.max(1, deadline - Date.now() - TEARDOWN_RESERVE_MS)
+    )
     try {
       const passed = await runScenario(scenario)
       results.push({ name: scenario.name, passed })
+      const status = LIFECYCLE_ABORT.signal.aborted ? 'aborted' : passed ? 'passed' : 'failed'
+      await writeLifecycleTiming(scenario.name, LIVE_DEPTH, timing, status, {
+        budgetMs: scenario.timeoutSeconds * 1_000,
+        teardownReserveMs: TEARDOWN_RESERVE_MS
+      })
       console.log(`[sf-progress] scenario ${index + 1}/${scenarios.length} ${scenario.name} — ${passed ? 'passed' : 'failed'}`)
     } catch (error) {
       console.error(`\nScenario "${scenario.name}" crashed:`, error instanceof Error ? error.message : error)
       results.push({ name: scenario.name, passed: false })
+      await writeLifecycleTiming(scenario.name, LIVE_DEPTH, timing, LIFECYCLE_ABORT.signal.aborted ? 'aborted' : 'crashed', {
+        budgetMs: scenario.timeoutSeconds * 1_000,
+        teardownReserveMs: TEARDOWN_RESERVE_MS
+      })
       console.log(`[sf-progress] scenario ${index + 1}/${scenarios.length} ${scenario.name} — crashed`)
+    } finally {
+      clearTimeout(budgetTimer)
+      ACTIVE_SCENARIO_DEADLINE = undefined
+      ACTIVE_LIFECYCLE_TIMING = undefined
     }
   }
 
@@ -1191,12 +1549,15 @@ async function main() {
 
   console.log(`\n${passed} passed, ${failed} failed out of ${results.length} scenarios`)
 
-  if (failed > 0) {
-    process.exit(1)
+  if (failed > 0 || LIFECYCLE_ABORT.signal.aborted || results.length !== scenarios.length) {
+    if (LIFECYCLE_ABORT.signal.aborted) console.error(`  FAIL lifecycle interrupted: ${formatErrorDetails(LIFECYCLE_ABORT.signal.reason)}`)
+    process.exitCode = 1
   }
+  process.off('SIGINT', onSigint)
+  process.off('SIGTERM', onSigterm)
 }
 
 main().catch((err) => {
   console.error('Fatal error:', err)
-  process.exit(1)
+  process.exitCode = 1
 })
