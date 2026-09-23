@@ -210,26 +210,30 @@ The same exit-code table appears in the SRS walkthrough; this entry exists to su
 **Symptom**
 
 ```
-Scenario: monorepo-with-email
+Lifecycle: new-monorepo-full
 ============================================================
-Timeout: scenario exceeded 600s
+Lifecycle deadline exceeded after 1800s
 ```
 
-**Cause** — The Docker E2E matrix runs full project generation + `npm install` + `tsc` + `nest build` + `vite build` per scenario. On a slow disk or a cold npm cache, a single scenario can blow past
-the default timeout. The full 18-scenario matrix is ~65 minutes; a single scenario is 2–4 minutes typically.
+**Cause** — Each lifecycle performs real generation/update, installs, production builds, API/web boot, browser journeys and PostgreSQL assertions. The lifecycle owns a 30-minute internal budget; CI
+allows 40 minutes so teardown and diagnostics can finish. Exact elapsed time is written to the uploaded `lifecycle-timing-*` artifact instead of being maintained as an estimate in documentation.
 
 **Fix**
 
 ```bash
 # Run the failing scenario in isolation to see the real error
-npm run test:docker -- --scenario monorepo-with-email
+npm run test:docker:scenario -- new-monorepo --depth full
+
+# Inspect the exact normal or exhaustive lane
+npm run test:docker:list -- --lane normal
 
 # Pre-warm the npm cache by generating once manually
 sf new --project-name warmup --structure monorepo --setup-repo none
 cd warmup && npm install && cd .. && rm -rf warmup
 ```
 
-If a scenario consistently times out on a known-good machine, the assertion list inside `tests/docker/scenarios/<scenario>.sh` may have grown — open an issue with the timeout output attached.
+If a lifecycle consistently times out on a known-good machine, attach its `lifecycle-timing-*` and failure diagnostic artifacts. The stable lanes and declared budgets live in
+`tests/docker/ci-lanes.ts`; the runtime implementation lives in `tests/docker/generate-and-build.ts`.
 
 ## Node version mismatch in CI but not locally
 

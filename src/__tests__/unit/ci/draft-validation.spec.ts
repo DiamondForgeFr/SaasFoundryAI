@@ -13,13 +13,19 @@ const FILES = [
   'scaffolds/overlays/monorepo/root/.github/workflows/test.yml'
 ]
 interface Workflow {
-  on: { pull_request: { types: string[]; branches: string[] }; push?: { branches: string[] } }
+  on: { pull_request: { types: string[]; branches: string[] }; push?: { branches: string[]; tags?: string[] }; schedule?: unknown; workflow_dispatch?: unknown }
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, { if: string; needs?: string | string[] }>
 }
 
-function permits(expression: string, event: string, draft: boolean, base = 'develop'): boolean {
-  return Boolean(runInNewContext(expression, { github: { event_name: event, base_ref: base, event: { pull_request: { draft } } } }))
+function permits(expression: string, event: string, draft: boolean, base = 'develop', ref = 'refs/heads/develop', prepareResult = 'success'): boolean {
+  return Boolean(
+    runInNewContext(expression, {
+      startsWith: (value: string, prefix: string) => value.startsWith(prefix),
+      github: { event_name: event, base_ref: base, ref, event: { pull_request: { draft } } },
+      needs: { lifecycle_prepare: { result: prepareResult } }
+    })
+  )
 }
 
 describe.each(FILES)('%s draft validation policy', (file) => {
@@ -27,7 +33,11 @@ describe.each(FILES)('%s draft validation policy', (file) => {
   it('handles draft creation, feedback pushes, reopening, promotion and returning to draft', () => {
     expect(workflow.on.pull_request.types).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft']))
     expect(workflow.on.pull_request.branches).toEqual(expect.arrayContaining(['develop', 'master']))
-    expect(workflow.concurrency).toEqual({ group: '${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}', 'cancel-in-progress': true })
+    const expectedGroup =
+      file === '.github/workflows/test.yml'
+        ? "${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.ref) }}"
+        : '${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'
+    expect(workflow.concurrency).toEqual({ group: expectedGroup, 'cancel-in-progress': true })
   })
   it('skips every job on a draft PR, including dependency installation and Docker matrix resolution', () => {
     expect(Object.keys(workflow.jobs).length).toBeGreaterThan(0)
@@ -37,18 +47,21 @@ describe.each(FILES)('%s draft validation policy', (file) => {
     }
   })
   it('runs validation for ready PRs while preserving Docker target branch selection', () => {
-    for (const [name, job] of Object.entries(workflow.jobs)) {
+    for (const job of Object.values(workflow.jobs)) {
       for (const base of ['develop', 'master']) {
-        const expected = name === 'docker-build-tests-full' ? base === 'master' : name === 'docker-build-tests-quick' ? base === 'develop' : true
-        expect(permits(job.if, 'pull_request', false, base)).toBe(expected)
+        expect(permits(job.if, 'pull_request', false, base)).toBe(true)
       }
     }
   })
   if (file === '.github/workflows/test.yml') {
-    it('preserves protected branch and RC push validation without adding Docker push jobs', () => {
+    it('keeps ordinary pushes fast and routes RC tags, schedules and manual runs to the full lifecycle lane', () => {
       expect(workflow.on.push?.branches).toEqual(['master', 'develop', 'rc-*'])
+      expect(workflow.on.push?.tags).toEqual(['rc-*'])
       for (const [name, job] of Object.entries(workflow.jobs)) {
-        expect(permits(job.if, 'push', false)).toBe(!name.startsWith('docker-'))
+        const isLifecycle = name === 'lifecycle_prepare' || name === 'lifecycle'
+        expect(permits(job.if, 'push', false, 'develop', 'refs/heads/develop', 'skipped')).toBe(!isLifecycle)
+        expect(permits(job.if, 'push', false, 'develop', 'refs/tags/rc-1.0.0', 'success')).toBe(true)
+        expect(permits(job.if, 'push', false, 'develop', 'refs/heads/rc-1.0.0', 'success')).toBe(true)
       }
     })
   }

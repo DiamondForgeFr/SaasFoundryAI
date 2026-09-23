@@ -50,6 +50,7 @@ export interface PreviousReleaseRuntimeOptions {
   artifactRoot?: string
   harnessRuntimeRoot?: string
   processApi?: LifecycleProcessApi
+  signal?: AbortSignal
   browserCapabilities?: readonly BrowserCapability[]
   startPostgres?: (options: PrivatePostgresOptions) => Promise<PrivatePostgres>
   onProductReady?: (context: PreviousReleaseReadyContext) => Promise<void>
@@ -78,7 +79,8 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
     workspace: options.workspace,
     deadline,
     port: options.postgresPort,
-    processApi
+    processApi,
+    signal: options.signal
   })
   const phases = {} as Record<'before-update' | 'after-update', ProductPhaseResult>
   let lifecycle: PreviousReleaseUpdateLifecycleResult | undefined
@@ -91,6 +93,7 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
       cliEntry: options.cliEntry,
       env: options.env,
       timeoutMs: Math.max(1, deadline - Date.now()),
+      signal: options.signal,
       executeUpdate: processApi
         ? async (request) => {
             const result = await processApi.run({
@@ -100,6 +103,7 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
               cwd: request.cwd,
               env: request.env,
               deadline,
+              signal: options.signal,
               maxOutputBytes: request.maxOutputBytes
             })
             return { stdout: result.stdout, stderr: result.stderr }
@@ -112,6 +116,7 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
               cwd: request.cwd,
               env: request.env,
               deadline,
+              signal: options.signal,
               maxOutputBytes: request.maxOutputBytes
             })
             return { stdout: result.stdout, stderr: result.stderr }
@@ -125,6 +130,7 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
           webPort: options.webPort,
           processApi,
           browserCapabilities: capabilities,
+          signal: options.signal,
           onReady: async (ready) =>
             options.onProductReady?.({
               ...ready,
@@ -157,6 +163,7 @@ export async function runPreviousReleaseRuntimeLifecycle(options: PreviousReleas
           webPort: options.webPort,
           processApi,
           browserCapabilities: capabilities,
+          signal: options.signal,
           onReady: async (ready) =>
             options.onProductReady?.({
               ...ready,

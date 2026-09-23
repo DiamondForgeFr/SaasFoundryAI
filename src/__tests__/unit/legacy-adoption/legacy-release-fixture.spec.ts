@@ -276,12 +276,17 @@ describe('legacy release fixture ingestion', () => {
     await writeFile(join(destination, 'keep.txt'), 'keep')
     await mkdir(join(destination, 'ignored'))
     await writeFile(join(destination, 'ignored', 'volatile.log'), 'changes')
+    await mkdir(join(destination, 'nested'))
+    await mkdir(join(destination, 'nested', 'node_modules'))
+    await writeFile(join(destination, 'nested', 'node_modules', 'generated.js'), 'generated')
 
-    const first = await snapshotCanonicalTree(destination, { exclude: ['ignored'] })
+    const options = { exclude: ['ignored'], excludeDirectoryNames: ['node_modules'] } as const
+    const first = await snapshotCanonicalTree(destination, options)
     await writeFile(join(destination, 'ignored', 'volatile.log'), 'different')
-    const second = await snapshotCanonicalTree(destination, { exclude: ['ignored'] })
+    await writeFile(join(destination, 'nested', 'node_modules', 'generated.js'), 'different generated content')
+    const second = await snapshotCanonicalTree(destination, options)
     expect(second).toEqual(first)
-    expect(await canonicalTreeDigest(destination, { exclude: ['ignored'] })).toBe(inventoryDigest(first))
+    expect(await canonicalTreeDigest(destination, options)).toBe(inventoryDigest(first))
 
     if (process.platform !== 'win32') {
       await symlink('keep.txt', join(destination, 'linked.txt'))

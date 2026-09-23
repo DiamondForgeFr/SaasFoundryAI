@@ -1,7 +1,20 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
+import { liveRoleName } from '../../../../tests/docker/e2e/support/data'
+
 describe('live journey selector contract', () => {
+  it.each([
+    ['monorepo', 'creation'],
+    ['monorepo', 'before-update'],
+    ['monorepo', 'after-update'],
+    ['multirepo', 'creation'],
+    ['multirepo', 'before-update'],
+    ['multirepo', 'after-update']
+  ] as const)('keeps the %s/%s role fixture within the UI limit', (topology, phase) => {
+    expect(liveRoleName({ topology, phase }).length).toBeLessThanOrEqual(30)
+  })
+
   it.each([
     ['platform modules', 'scaffolds/blueprints/web/src/pages/private/platform/platform-modules.tsx', ['module-card-', 'module-switch-']],
     ['role editor', 'scaffolds/blueprints/web/src/components/dialogs/create-role-dialog.tsx', ['role-editor', 'role-name', 'role-module-', 'role-section-', 'role-submit']],

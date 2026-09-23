@@ -5,9 +5,9 @@ const JWT = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g
 const AUTHORIZATION = /\b(authorization\s*[:=]\s*)(?:basic|bearer)?\s*[^\s,;]+/gi
 const COOKIE = /\b((?:set-)?cookie\s*[:=]\s*)[^\r\n]*/gi
 const PASSWORD_URL = /\b([a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:)[^\s/@]+(@)/gi
-const SENSITIVE_ASSIGNMENT = /\b((?:api[_-]?key|access[_-]?token|auth(?:orization)?|cookie|password|passwd|secret|token)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi
-const SENSITIVE_JSON = /("(?:api[_-]?key|access[_-]?token|auth(?:orization)?|cookie|password|passwd|secret|token)"\s*:\s*)"(?:[^"\\]|\\.)*"/gi
-const SENSITIVE_QUERY = /([?&](?:api[_-]?key|access[_-]?token|auth|authorization|cookie|password|secret|token)=)[^&#\s]*/gi
+const SENSITIVE_ASSIGNMENT = /\b((?:[a-z0-9_-]*token|api[_-]?key|auth(?:orization)?|cookie|password|passwd|secret)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi
+const SENSITIVE_JSON = /("(?:[a-z0-9_-]*token|api[_-]?key|auth(?:orization)?|cookie|password|passwd|secret)"\s*:\s*)"(?:[^"\\]|\\.)*"/gi
+const SENSITIVE_QUERY = /([?&](?:[a-z0-9_-]*token|api[_-]?key|auth|authorization|cookie|password|secret)=)[^&#\s]*/gi
 
 export interface StreamingRedactorOptions {
   secrets?: readonly string[]

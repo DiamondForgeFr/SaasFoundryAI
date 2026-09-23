@@ -118,14 +118,13 @@ scripts/              # Version management (tag-manager.sh)
 - `npm run format` — Prettier
 - `npm run lint` — ESLint
 - `npm run test:pre-commit` — Format + Lint + Type-check + Jest tests (runs on pre-commit, ~15s)
-- `npm run test:pre-push` — Top 2 Docker scenarios (run explicitly during AI Testing before Human Testing, ~2-3 min)
+- `npm run test:pre-push` — the exact three-check normal lifecycle lane (run explicitly during AI Testing before Human Testing)
 - `npm run test:full` — Alias: `test:pre-commit` + `test:pre-push` (full local validation)
-- `npm run test:docker` — All Docker scenarios (~70 min; `test:docker:list` prints the current set, `--count` the number)
-- `npm run test:docker -- --count N` — Top N priority scenarios
-- `npm run test:docker -- --scenario <name>` — Single scenario
-- `npm run test:docker:list` — Show all scenarios
-- One of them, `multirepo-boot-and-test`, **starts** a generated project instead of compiling it — `sf new --start-services` against a Postgres inside the test image, then `/api/health` and the web
-  root must answer, then `npm audit` and the api's own unit suite. It runs on PRs to both branches; the rest of the matrix compiles only (#594).
+- `npm run test:docker` / `npm run test:docker:full` — the four-check exhaustive lifecycle lane
+- `npm run test:docker:normal` — the three checks used by ordinary non-draft pull requests
+- `npm run test:docker:scenario -- <name> --depth <smoke|full>` — one lifecycle scenario
+- `npm run test:docker:list -- --lane <normal|full>` — show a lane, its browser depth, and its 40-minute outer budget
+- Every lifecycle starts real generated API/web processes against isolated PostgreSQL. See `tests/docker/README.md` for lane membership, artifact evidence, and legacy signal replacements.
 
 ## Git Workflow
 
