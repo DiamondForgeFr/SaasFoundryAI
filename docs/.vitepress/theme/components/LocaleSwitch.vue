@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useData, useRoute, withBase } from 'vitepress'
+import { useRoute, withBase } from 'vitepress'
 
 const props = withDefaults(
   defineProps<{
@@ -12,7 +12,6 @@ const props = withDefaults(
 )
 
 const route = useRoute()
-const { hash } = useData()
 
 const currentRoute = computed(() => {
   const withoutLocale = route.path.replace(/^\/fr(?=\/|$)/, '') || '/'
@@ -35,15 +34,7 @@ const accessibleLabel = computed(() => {
 </script>
 
 <template>
-  <a
-    class="LocaleSwitch"
-    :class="{ 'is-screen-menu': screenMenu }"
-    :href="withBase(`${targetPath}${hash}`)"
-    :aria-label="accessibleLabel"
-    :title="accessibleLabel"
-    :lang="targetLocale"
-    :hreflang="targetLocale"
-  >
+  <a class="LocaleSwitch" :class="{ 'is-screen-menu': screenMenu }" :href="withBase(targetPath)" :aria-label="accessibleLabel" :title="accessibleLabel" :lang="targetLocale" :hreflang="targetLocale">
     <span aria-hidden="true" class="LocaleSwitch__mark">文</span>
     <span>{{ targetLabel }}</span>
   </a>
