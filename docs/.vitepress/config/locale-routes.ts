@@ -1,6 +1,6 @@
 import { readdirSync } from 'node:fs'
 import { extname, relative, resolve, sep } from 'node:path'
-import { markdownPathToRoute } from './locale-paths'
+import { markdownPathToRoute, type DocumentationLocale } from './locale-paths'
 
 export { documentationLink, localizedRoute, markdownPathToRoute, routeForPage, routeWithoutLocale } from './locale-paths'
 
@@ -12,10 +12,10 @@ const markdownFiles = (directory: string): string[] =>
     return entry.isDirectory() ? markdownFiles(absolute) : extname(entry.name) === '.md' ? [absolute] : []
   })
 
-export const discoverLocaleRoutes = (locale: string): string[] => {
+export const discoverLocaleRoutes = (locale: DocumentationLocale): string[] => {
   const localeRoot = locale === 'en' ? docsRoot : resolve(docsRoot, locale)
   return markdownFiles(localeRoot)
-    .filter((file) => locale !== 'en' || !relative(localeRoot, file).split(sep).includes('fr'))
+    .filter((file) => locale !== 'en' || relative(localeRoot, file).split(sep)[0] !== 'fr')
     .map((file) => markdownPathToRoute(relative(localeRoot, file).split(sep).join('/')))
     .sort()
 }
