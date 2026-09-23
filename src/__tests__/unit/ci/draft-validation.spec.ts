@@ -55,14 +55,14 @@ describe.each(FILES)('%s draft validation policy', (file) => {
   })
   if (file === '.github/workflows/test.yml') {
     it('keeps ordinary pushes fast and routes RC tags, schedules and manual runs to the full lifecycle lane', () => {
-      expect(workflow.on.push?.branches).toEqual(['master', 'develop', 'rc-*'])
+      expect(workflow.on.push?.branches).toEqual(['master', 'develop'])
       expect(workflow.on.push?.tags).toEqual(['rc-*'])
       for (const [name, job] of Object.entries(workflow.jobs)) {
         const isLifecycle = name === 'lifecycle_prepare' || name === 'lifecycle'
         expect(permits(job.if, 'push', false, 'develop', 'refs/heads/develop', 'skipped')).toBe(!isLifecycle)
         expect(permits(job.if, 'push', false, 'develop', 'refs/tags/rc-1.0.0', 'success')).toBe(true)
-        expect(permits(job.if, 'push', false, 'develop', 'refs/heads/rc-1.0.0', 'success')).toBe(true)
       }
+      expect(permits(workflow.jobs.lifecycle_prepare.if, 'push', false, 'develop', 'refs/heads/rc-1.0.0', 'success')).toBe(false)
     })
   }
 })

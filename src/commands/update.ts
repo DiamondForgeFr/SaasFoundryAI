@@ -1243,7 +1243,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               // In dry-run we report but never mutate.
             } else {
               spinner.start('Applying updates...')
-              const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy)
+              const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy, assertStackModuleWritePathSafe)
               templateRefreshComplete = conflicts.length === 0 || conflictStrategy === 'replace'
 
               spinner.succeed(chalk.green('Template update complete.'))

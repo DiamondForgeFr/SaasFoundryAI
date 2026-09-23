@@ -12,7 +12,7 @@ The Docker suite has one typed source of truth: `ci-lanes.ts`. It replaces the f
 | full        | `update-previous-release-full`  | `update-previous-release` | full          | 40 min       |
 | full        | `update-current-monorepo-full`  | `update-current-monorepo` | full          | 40 min       |
 
-Ordinary non-draft pull requests run `normal`. Weekly schedules, manual dispatches, and `rc-*` branch or tag pushes run `full`. Ordinary `develop`/`master` pushes retain the fast non-Docker jobs only.
+Ordinary non-draft pull requests run `normal`. Weekly schedules, manual dispatches, and `rc-*` tag pushes run `full`. Ordinary branch pushes retain the fast non-Docker jobs only.
 
 The lifecycle itself has a 30-minute global deadline, including post-boot audit and generated-project tests. Execution stops 30 seconds early to reserve supervised teardown. The larger CI timeout
 deliberately leaves headroom for ownership normalization and artifact upload, and a contract compares each scenario's real budget with its outer timeout.

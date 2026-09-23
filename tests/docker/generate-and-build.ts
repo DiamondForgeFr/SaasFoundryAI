@@ -1378,6 +1378,61 @@ async function runCurrentUpdateScenario(scenario: CurrentUpdateScenario): Promis
     )
     writeFileSync(join(projectDir, 'USER-CANARY.md'), 'current lifecycle user canary\n', { flag: 'wx' })
     await postgres.executeSql("INSERT INTO public.module_types(name, description) VALUES ('SF_CURRENT_UPDATE_CANARY', 'preserve-me');", 'create current update database canary')
+    await postgres.executeSql(
+      `
+        INSERT INTO public.accounts (id, name, updated_at)
+        VALUES ('sf-rbac-canary-account', 'RBAC lifecycle canary', NOW());
+
+        INSERT INTO public.roles (name, description, scope, is_system, is_active, account_id, updated_at)
+        VALUES ('account-admin', 'Custom role sharing a system-role name', 'ACCOUNT', FALSE, TRUE, 'sf-rbac-canary-account', NOW());
+
+        UPDATE public.roles
+        SET is_active = FALSE
+        WHERE name = 'platform-user' AND account_id IS NULL AND is_system = TRUE;
+
+        INSERT INTO public.users (id, is_active, email, password, updated_at)
+        VALUES ('sf-rbac-canary-user', TRUE, 'rbac-canary@example.test', 'not-used', NOW());
+
+        INSERT INTO public.users_roles_assignments (id, user_id, role_id, updated_at)
+        VALUES (
+          'sf-rbac-canary-assignment',
+          'sf-rbac-canary-user',
+          (SELECT id FROM public.roles WHERE name = 'platform-user' AND account_id IS NULL AND is_system = TRUE),
+          NOW()
+        );
+
+        DELETE FROM public.roles_permissions_links
+        WHERE role_id = (
+          SELECT id FROM public.roles
+          WHERE name = 'platform-user' AND account_id IS NULL AND is_system = TRUE
+        )
+        AND permission_id = (
+          SELECT id FROM public.module_permissions WHERE name = 'PROFILE_UPDATE_OWN'
+        );
+
+        DELETE FROM public.roles_sub_modules_links
+        WHERE role_id = (
+          SELECT id FROM public.roles
+          WHERE name = 'platform-user' AND account_id IS NULL AND is_system = TRUE
+        )
+        AND sub_module_id IN (
+          SELECT sub_module.id
+          FROM public.sub_modules sub_module
+          JOIN public.modules module ON module.id = sub_module.module_id
+          WHERE module.name = 'ACCOUNT_ADMINISTRATION'
+        );
+
+        DELETE FROM public.roles_modules_links
+        WHERE role_id = (
+          SELECT id FROM public.roles
+          WHERE name = 'platform-user' AND account_id IS NULL AND is_system = TRUE
+        )
+        AND module_id = (
+          SELECT id FROM public.modules WHERE name = 'ACCOUNT_ADMINISTRATION'
+        );
+      `,
+      'create current update RBAC preservation canaries'
+    )
 
     await runStep('transition current monorepo to managed full profile', () => update(profileArgs, 'sf update target profile full'))
     await runStep('install late modules through the real update command', () => update(moduleArgs, 'sf update late modules'))
@@ -1408,6 +1463,43 @@ async function runCurrentUpdateScenario(scenario: CurrentUpdateScenario): Promis
 
     const databaseCanary = await postgres.executeSql("SELECT description FROM public.module_types WHERE name = 'SF_CURRENT_UPDATE_CANARY';", 'verify current update database canary')
     results.push({ passed: databaseCanary.stdout.trim() === 'preserve-me', message: 'OK: current update preserved PostgreSQL state' })
+    const firstRbacCanary = await postgres.executeSql(
+      `
+        SELECT
+          (SELECT COUNT(*) FROM public.roles WHERE name = 'account-admin' AND account_id = 'sf-rbac-canary-account' AND is_system = FALSE)
+          || '|' ||
+          (SELECT is_active::TEXT FROM public.roles WHERE name = 'platform-user' AND account_id IS NULL AND is_system = TRUE)
+          || '|' ||
+          (SELECT COUNT(*)
+           FROM public.roles_permissions_links link
+           JOIN public.roles role ON role.id = link.role_id
+           JOIN public.module_permissions permission ON permission.id = link.permission_id
+           WHERE role.name = 'platform-user' AND role.account_id IS NULL AND role.is_system = TRUE
+             AND permission.name = 'PROFILE_UPDATE_OWN')
+          || '|' ||
+          (SELECT COUNT(*)
+           FROM public.roles_modules_links link
+           JOIN public.roles role ON role.id = link.role_id
+           JOIN public.modules module ON module.id = link.module_id
+           WHERE role.name = 'platform-user' AND role.account_id IS NULL AND role.is_system = TRUE
+             AND module.name = 'ACCOUNT_ADMINISTRATION')
+          || '|' ||
+          (SELECT COUNT(*)
+           FROM public.roles_sub_modules_links link
+           JOIN public.roles role ON role.id = link.role_id
+           JOIN public.sub_modules sub_module ON sub_module.id = link.sub_module_id
+           JOIN public.modules module ON module.id = sub_module.module_id
+           WHERE role.name = 'platform-user' AND role.account_id IS NULL AND role.is_system = TRUE
+             AND module.name = 'ACCOUNT_ADMINISTRATION')
+          || '|' ||
+          (SELECT is_active::TEXT FROM public.users WHERE id = 'sf-rbac-canary-user');
+      `,
+      'verify RBAC state after first forward update'
+    )
+    results.push({
+      passed: firstRbacCanary.stdout.trim() === '1|false|0|0|0|true',
+      message: 'OK: first forward update preserved custom role collision, role/user state and removed grants'
+    })
     results.push(assertFileContains(join(projectDir, 'USER-CANARY.md'), 'current lifecycle user canary'))
     results.push(scanForUnreplacedPlaceholders(projectDir))
     results.push(...assertMonorepoBuildOutput(projectDir))
@@ -1425,6 +1517,59 @@ async function runCurrentUpdateScenario(scenario: CurrentUpdateScenario): Promis
     })
     await update(profileArgs, 'repeat current target profile update')
     await update(moduleArgs, 'repeat current late module update')
+    await runStep('run a second forward database update', () =>
+      runSupervisedProcess({
+        label: 'repeat db:update:dev',
+        executable: 'npm',
+        args: ['run', 'db:update:dev'],
+        cwd: join(projectDir, 'apps', 'api'),
+        deadline,
+        env: {
+          CI: 'true',
+          HUSKY: '0',
+          PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes',
+          ...(process.env.HOME ? { HOME: process.env.HOME } : {})
+        },
+        signal: LIFECYCLE_ABORT.signal
+      })
+    )
+    const secondRbacCanary = await postgres.executeSql(
+      `
+        SELECT
+          (SELECT COUNT(*) FROM public.roles WHERE name = 'account-admin' AND account_id = 'sf-rbac-canary-account' AND is_system = FALSE)
+          || '|' ||
+          (SELECT is_active::TEXT FROM public.roles WHERE name = 'platform-user' AND account_id IS NULL AND is_system = TRUE)
+          || '|' ||
+          (SELECT COUNT(*)
+           FROM public.roles_permissions_links link
+           JOIN public.roles role ON role.id = link.role_id
+           JOIN public.module_permissions permission ON permission.id = link.permission_id
+           WHERE role.name = 'platform-user' AND role.account_id IS NULL AND role.is_system = TRUE
+             AND permission.name = 'PROFILE_UPDATE_OWN')
+          || '|' ||
+          (SELECT COUNT(*)
+           FROM public.roles_modules_links link
+           JOIN public.roles role ON role.id = link.role_id
+           JOIN public.modules module ON module.id = link.module_id
+           WHERE role.name = 'platform-user' AND role.account_id IS NULL AND role.is_system = TRUE
+             AND module.name = 'ACCOUNT_ADMINISTRATION')
+          || '|' ||
+          (SELECT COUNT(*)
+           FROM public.roles_sub_modules_links link
+           JOIN public.roles role ON role.id = link.role_id
+           JOIN public.sub_modules sub_module ON sub_module.id = link.sub_module_id
+           JOIN public.modules module ON module.id = sub_module.module_id
+           WHERE role.name = 'platform-user' AND role.account_id IS NULL AND role.is_system = TRUE
+             AND module.name = 'ACCOUNT_ADMINISTRATION')
+          || '|' ||
+          (SELECT is_active::TEXT FROM public.users WHERE id = 'sf-rbac-canary-user');
+      `,
+      'verify RBAC state after repeated forward update'
+    )
+    results.push({
+      passed: secondRbacCanary.stdout.trim() === '1|false|0|0|0|true',
+      message: 'OK: repeated forward database update preserved administrator-managed RBAC state'
+    })
     const repeatedDigest = await canonicalTreeDigest(projectDir, {
       exclude: CURRENT_UPDATE_DIGEST_EXCLUSIONS,
       excludeDirectoryNames: ['node_modules'],
