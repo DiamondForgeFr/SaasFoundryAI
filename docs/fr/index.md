@@ -2,181 +2,156 @@
 layout: home
 hero:
   name: SaaSFoundryAI
-  text: Un SaaS prêt pour la production, conçu pour les équipes humaines et IA.
+  text: Livrez le produit. Pas le boilerplate.
   tagline: >-
-    Confiez un seul lien à votre assistant IA : il génère un projet professionnel NestJS + React + PostgreSQL, puis livre les fonctionnalités avec des garde-fous qui maintiennent chaque contributeur,
-    humain ou IA, dans le même workflow.
+    Une fondation SaaS prête pour la production et un harness de développement sécurisé, conçus ensemble pour que les humains et les agents IA livrent selon les mêmes règles.
   actions:
     - theme: brand
-      text: Commencer avec votre IA
-      link: /getting-started/installation
+      text: Démarrer avec l'agent
+      link: /fr/getting-started/setup-paths#parcours-2-—-pilote-par-assistant
     - theme: alt
       text: Utiliser le CLI
-      link: /getting-started/quick-start
+      link: /fr/getting-started/quick-start
     - theme: alt
-      text: Comprendre la philosophie
-      link: /workflow/introduction
-    - theme: alt
-      text: GitHub
-      link: https://github.com/DiamondForgeFr/SaasFoundryAI
-
-features:
-  - icon: 🚀
-    title: Productif dès le premier jour
-    details: >-
-      Générez un monorepo complet — NestJS 11, React 19, PostgreSQL 16, Prisma 7, Docker, CI, hooks, tests, i18n et authentification — avec `sf new`. Vous développez la première fonctionnalité métier
-      dès le premier jour, pas la deuxième semaine.
-
-  - icon: 🎯
-    title: Concentrez-vous sur ce qui rend votre produit unique
-    details: Le socle technique est résolu une fois, au niveau du générateur. Vous évitez des semaines d'intégration pour consacrer votre temps aux fonctionnalités propres à votre produit.
-
-  - icon: 🤝
-    title: Un même workflow pour les humains et l'IA
-    details: >-
-      Un cycle en 7 statuts (Backlog → Ready → In progress → AI testing → Human testing → In review → Done) s'applique à chaque ticket, quel que soit son auteur. Votre agent IA travaille sur le board
-      comme un développeur.
-
-  - icon: 🛡️
-    title: Des garde-fous qui protègent la qualité du code
-    details:
-      Commits conventionnels, validations pre-commit et pre-push, tickets structurés et contrôles de pull request. Les dérives sont détectées avant le merge, que l'auteur soit humain, IA ou les deux.
-
-  - icon: 🧠
-    title: Économe en tokens par conception
-    details: >-
-      Chaque ticket est classé bug, low, medium ou complex. L'IA adapte la rigueur du processus : analyse minimale pour une coquille, revue contradictoire complète pour une évolution critique. Vous
-      payez pour la rigueur utile, pas pour le cérémonial.
-
-  - icon: 🧩
-    title: Évoluez avec `sf update`
-    details: >-
-      L'email, le stockage, l'analytics et le support des applications installables (PWA) sont fournis sous forme de modules composables. Ajoutez-les plus tard, recevez les améliorations du socle et
-      restez aligné avec la dernière version du scaffold.
-
-  - icon: 🛟
-    title: Un manifeste validé et migré en sécurité
-    details: >-
-      `.saasfoundry.json` est validé par ajv contre un schéma JSON à chaque appel du CLI : les erreurs deviennent immédiatement exploitables. Les changements incompatibles passent par un registre de
-      migrations numérotées, afin que `sf update` fasse évoluer les anciens projets sans correction manuelle.
+      text: Explorer le système
+      link: /fr/features/built-in
 ---
 
-## Commencez ici — une phrase pour votre assistant IA
+<dl class="sf-proof-strip" aria-label="Résumé du produit">
+  <div><dt>2 fondations</dt><dd>application + livraison</dd></div>
+  <div><dt>7 étapes sécurisées</dt><dd>parcours de livraison canonique</dd></div>
+  <div><dt>2 topologies</dt><dd>monorepo ou multirepo</dd></div>
+  <div><dt>1 contrat</dt><dd>.saasfoundry.json</dd></div>
+</dl>
 
-> Installe le skill SaaSFoundryAI depuis https://github.com/DiamondForgeFr/SaasFoundryAI
+<section class="sf-home-section">
+  <span class="sf-home-eyebrow">LE CONTRAT DE LIVRAISON</span>
+  <h2>Les garde-fous vivent avant la pull request.</h2>
+  <p class="sf-home-lead">
+    Le parcours canonique visible par l'utilisateur suit sept étapes. La nature du ticket active des raccourcis explicites et contrôlés pour le travail interne, les changements groupés et les Epics.
+    Les humains valident l'intention et le comportement ; l'automatisation vérifie le code ; le board connecté conserve la piste d'audit. GitHub Projects fournit le contrat de livraison v1 complet ;
+    les adaptateurs de board Jira et Linear sont expérimentaux.
+  </p>
 
-Collez cette phrase dans Claude Code — ou dans tout assistant capable de lire un lien et d'exécuter des commandes — placez-vous dans le dossier où vous souhaitez travailler, puis décrivez votre
-produit avec vos propres mots. L'assistant installe le skill, demande uniquement ce qu'il ne peut pas déduire et pilote la suite : génération du projet, modules, workflow et tickets.
+  <ol class="sf-status-flow" aria-label="Workflow de livraison canonique en sept étapes">
+    <li>Backlog</li>
+    <li class="sf-human-gate">Ready<span class="sf-gate-label">validation humaine</span></li>
+    <li>In progress</li>
+    <li>AI testing</li>
+    <li class="sf-human-gate">Human testing<span class="sf-gate-label">validation humaine</span></li>
+    <li class="sf-human-gate">In review<span class="sf-gate-label">validation humaine</span></li>
+    <li>Done</li>
+  </ol>
 
-::: details Ce que votre assistant fait avec cette phrase
+  <p><strong>Les validations humaines sont nommées et mises en évidence.</strong> L'agent peut préparer les preuves et exécuter les opérations contrôlées, mais il ne peut pas valider silencieusement son propre travail.</p>
 
-```bash
-# Installe le skill tool-saasfoundry au niveau utilisateur, dans ~/.claude/skills/tool-saasfoundry/
-npx saasfoundryai-cli@beta skill install --yes --force
-```
+  <dl class="sf-complexity-grid" aria-label="Rigueur adaptée à la complexité">
+    <div><dt>bug</dt><dd>Correction directe + test de régression</dd></div>
+    <div><dt>low</dt><dd>Analyse minimale, exécution rapide</dd></div>
+    <div><dt>medium</dt><dd>Plan structuré + validation</dd></div>
+    <div><dt>complex</dt><dd>Analyse profonde + revue contradictoire</dd></div>
+  </dl>
 
-Le skill lit ensuite `.saasfoundry.json` lorsqu'il existe, pilote `sf` **sans interaction** et ne répond jamais aux questions interactives à votre place. Le contrat complet se trouve dans
-[Système de skills](/guide/skills-system) et [`sf skill`](/cli/sf-skill).
+  <p><strong>Payez pour la rigueur, pas pour le cérémonial.</strong> Le processus s'adapte au risque : une coquille ne consomme pas le même contexte ni le même budget de revue qu'une modification des autorisations.</p>
+</section>
 
-:::
+<section class="sf-home-section">
+  <span class="sf-home-eyebrow">LE MODÈLE PRODUIT</span>
+  <h2>Deux systèmes qui n'auraient jamais dû être séparés.</h2>
+  <p class="sf-home-lead">
+    La plupart des générateurs s'arrêtent après avoir créé des fichiers. La plupart des workflows IA commencent sans comprendre l'application qu'ils modifient. SaaSFoundryAI relie les deux : une
+    véritable architecture SaaS sur laquelle construire et un harness de livraison qui rend chaque changement traçable.
+  </p>
 
-**Vous préférez le terminal ?** Le CLI est un parcours de premier ordre, pas une solution de repli — commencez par le [Démarrage rapide](/getting-started/quick-start).
+  <div class="sf-pillar-grid">
+    <a class="sf-pillar" href="/fr/features/built-in">
+      <span class="sf-card-index">01 / CONSTRUIRE</span>
+      <h3>Fondation SaaS de production</h3>
+      <p>Authentification, multi-tenant, RBAC contextualisé, API typée, React, PostgreSQL et socle opérationnel fonctionnent déjà ensemble avant votre première fonctionnalité métier.</p>
+      <span class="sf-card-link">Voir les capacités incluses →</span>
+    </a>
+    <a class="sf-pillar sf-pillar--harness" href="/fr/getting-started/setup-paths">
+      <span class="sf-card-index">02 / LIVRER</span>
+      <h3>Harness de développement sécurisé</h3>
+      <p>SRS, tickets, skills, tests, validations humaines et pull requests partagent un seul workflow. Votre agent utilise le système ; il n'invente pas un processus privé à côté.</p>
+      <span class="sf-card-link">Explorer le harness →</span>
+    </a>
+  </div>
+</section>
 
-## Pour les équipes qui prennent la qualité du code au sérieux — avec ou sans IA
+<section class="sf-home-section">
+  <span class="sf-home-eyebrow">CE QUI EST LIVRÉ DÈS LE PREMIER JOUR</span>
+  <h2>Le travail indifférencié est déjà fait.</h2>
+  <p class="sf-home-lead">
+    Commencez avec un produit cohérent plutôt qu'un empilement de packages déconnectés. Chaque capacité ci-dessous est générée, câblée et documentée dans la même architecture.
+  </p>
 
-SaaSFoundryAI n'est pas une simple couche autour de l'IA. C'est une **fondation SaaS professionnelle et un contrat de workflow** qui fonctionnent parfaitement avec une équipe entièrement humaine et
-**s'adaptent naturellement lorsque des agents IA rejoignent l'équipe**.
+  <div class="sf-capability-grid">
+    <a href="/fr/features/built-in#authentification-et-cycle-de-session">Authentification & sessions</a>
+    <a href="/fr/features/built-in#modele-tenant-compte-et-entite">Modèle tenant & compte</a>
+    <a href="/fr/features/rbac">RBAC contextualisé</a>
+    <a href="/fr/features/built-in#invitations-et-reactivation-de-compte">Invitations & réactivation</a>
+    <a href="/fr/features/built-in#postgresql-et-prisma">PostgreSQL & Prisma</a>
+    <a href="/fr/features/built-in#contrat-d-api-type">Contrat API typé</a>
+    <a href="/fr/features/built-in#application-react">Application React</a>
+    <a href="/fr/features/built-in#internationalisation">Internationalisation</a>
+    <a href="/fr/features/built-in#experience-de-developpement-et-quality-gates">Tests, hooks & CI</a>
+    <a href="/fr/features/built-in#runtime-de-production">Runtime Docker</a>
+    <a href="/fr/guide/monorepo-vs-multirepo">Monorepo ou multirepo</a>
+    <a href="/fr/features/built-in#capacites-optionnelles">Extensions composables</a>
+  </div>
+</section>
 
-Que vous soyez freelance sur un nouveau projet client, CTO lançant un produit ou équipe intégrant Claude Code à un workflow d'ingénierie existant, SaaSFoundryAI vous apporte la même chose : un socle
-logiciel et un processus auxquels toute l'équipe peut se fier.
+<section class="sf-home-section">
+  <span class="sf-home-eyebrow">CHOISISSEZ VOTRE INTERFACE</span>
+  <h2>Demandez à votre agent ou lancez la commande. Obtenez le même résultat.</h2>
+  <p class="sf-home-lead">
+    L'IA est une interface de SaaSFoundryAI, pas le remplacement de son CLI. Les deux parcours utilisent le même manifeste, les mêmes installateurs, la même validation et le même projet généré.
+  </p>
 
-### L'idée centrale
+  <div class="sf-path-grid">
+    <a class="sf-path-card" href="/fr/getting-started/setup-paths#parcours-2-—-pilote-par-assistant">
+      <code>« Crée mon espace SaaS »</code>
+      <h3>Parcours assisté par un agent</h3>
+      <p>Décrivez le résultat. Votre agent lit le projet, ne demande que les décisions manquantes, puis pilote les commandes SaaSFoundry explicites.</p>
+      <span class="sf-card-link">Installer le skill agent →</span>
+    </a>
+    <a class="sf-path-card" href="/fr/getting-started/setup-paths#parcours-1-—-cli-interactif">
+      <code>sf new mon-produit</code>
+      <h3>Parcours CLI direct</h3>
+      <p>Utilisez le questionnaire interactif ou les options scriptées. Le CLI reste déterministe, inspectable et automatisable sans modèle dans la boucle.</p>
+      <span class="sf-card-link">Ouvrir le démarrage rapide →</span>
+    </a>
+  </div>
+  <div class="sf-convergence">même projet · même manifeste · mêmes garanties</div>
+</section>
 
-Les workflows d'ingénierie traditionnels concentrent tous les garde-fous au niveau de la pull request. Cela fonctionne tant qu'un reviewer peut reconstruire mentalement l'intention de l'auteur. Le
-modèle atteint ses limites dès qu'une partie du travail est réalisée par un agent IA sans mémoire des décisions précédentes.
+<section class="sf-home-section">
+  <span class="sf-home-eyebrow">DES PREUVES, PAS DES PROMESSES</span>
+  <h2>Construit avec le workflow qu'il vous fournit.</h2>
+  <p class="sf-home-lead">SaaSFoundryAI utilise son propre harness. Le produit généré est testé du navigateur à PostgreSQL en passant par l'API, dans les deux topologies prises en charge.</p>
 
-**SaaSFoundryAI inverse ce modèle : les garde-fous vivent dans le workflow lui-même.** Lorsqu'une pull request apparaît, le code a déjà été planifié, relu, testé et validé par les humains et par
-l'automatisation.
+  <div class="sf-evidence-grid">
+    <div class="sf-evidence-card">
+      <span class="sf-card-index">PARCOURS PRODUIT RÉELS</span>
+      <h3>Navigateur → API → base de données</h3>
+      <p>Les tests live couvrent l'authentification, les invitations, les frontières tenant, les permissions contextualisées, le contrôle des modules et la réactivation sans fournisseur externe.</p>
+    </div>
+    <div class="sf-evidence-card">
+      <span class="sf-card-index">ÉVOLUTION SÛRE</span>
+      <h3>Générez aujourd'hui. Mettez à jour demain.</h3>
+      <p>Manifestes validés, migrations numérotées et mises à jour conscientes des conflits font évoluer la fondation sans traiter les projets générés comme des démos jetables.</p>
+    </div>
+  </div>
+</section>
 
-```text
-Backlog → Ready → In progress → AI testing → Human testing → In review → Done
-```
-
-Chaque ticket suit les mêmes sept statuts. La rigueur de chaque étape **s'adapte au niveau de complexité du ticket**, afin de ne mobiliser le processus complet que lorsqu'il apporte de la valeur.
-
-| Complexité     | Style                | Ce que fait l'IA                                             |
-| -------------- | -------------------- | ------------------------------------------------------------ |
-| 🐛 **bug**     | Correction directe   | Pas d'analyse préalable. Test de non-régression obligatoire. |
-| 🟢 **low**     | Oneshot              | Analyse minimale, plan mental, sans validation préalable.    |
-| 🟡 **medium**  | Structuré            | 2 à 4 agents d'exploration, plan détaillé et validation.     |
-| 🔴 **complex** | Revue contradictoire | 6 à 10 agents, plan complet et revue de niveau OWASP.        |
-
-Résultat : les changements simples restent légers, les évolutions critiques bénéficient de la rigueur nécessaire et **la consommation de tokens suit la valeur du travail**.
-
-## Vos outils, pas un silo supplémentaire
-
-Votre agent IA n'invente pas son propre gestionnaire de tâches. Il utilise l'outil que **vous** utilisez déjà :
-
-| Outil           | Quand le choisir                                                      | Disponibilité           |
-| --------------- | --------------------------------------------------------------------- | ----------------------- |
-| GitHub Projects | Le choix par défaut : natif au dépôt, gratuit, avec sous-tickets.     | Disponible aujourd'hui  |
-| Jira            | Gestion de projet mature, sprints et champs personnalisés.            | Sur la feuille de route |
-| Notion          | Proche de la documentation, adapté aux équipes produit et ingénierie. | Sur la feuille de route |
-| Linear          | Cycles rapides et structurés pour les startups.                       | Sur la feuille de route |
-| ClickUp         | Gestion tout-en-un pour les équipes très orientées opérations.        | Sur la feuille de route |
-
-::: info Outils pris en charge aujourd'hui
-
-Le workflow IA fonctionne actuellement avec **GitHub Projects**. Les adaptateurs Jira, Notion, Linear et ClickUp sont prévus ensuite : le moteur de workflow est déjà indépendant de l'outil, seule
-l'intégration propre à chaque board reste à livrer. Suivez l'avancement dans les [issues publiques](https://github.com/DiamondForgeFr/SaasFoundryAI/issues).
-
-:::
-
-Vous obtenez des tickets lisibles par tous, des colonnes standard et un historique qu'une personne non technique peut suivre. **Votre agent IA crée des sous-tickets, déplace les statuts, ouvre des
-pull requests et laisse des commentaires exactement comme un développeur.** Les validations humaines se trouvent aux transitions naturelles (Ready, Human testing, In review), afin qu'une personne
-confirme toujours avant que le code ne quitte l'équipe.
-
-::: tip Personnalisable dans les prochaines versions
-
-Le cycle en 7 statuts est aujourd'hui fixe, car il encode les pratiques que nous avons le plus éprouvées. Les prochaines versions vous permettront de **personnaliser le workflow lui-même** : renommer
-les statuts, retirer les étapes optionnelles ou ajouter des phases propres à votre équipe. Le workflow s'adaptera ainsi à votre façon de travailler.
-
-:::
-
-## Comment ça fonctionne
-
-Vous décrivez votre besoin ; l'assistant exécute la commande :
-
-| Vous dites                                                          | Il exécute                                                                        |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| _« Je veux un SaaS avec un portail client et l'envoi de fichiers »_ | `sf new` — topologie, modules et outil de workflow déduits de la conversation     |
-| _« Livrons le premier ticket »_                                     | `sf workflow` — Backlog → Done sur un véritable ticket                            |
-| _« Notre projet est-il toujours à jour ? »_                         | `sf update` — améliorations du socle, nouveaux modules et résolution des conflits |
-
-Vous pouvez également lancer directement les trois mêmes commandes depuis le terminal :
-
-```bash
-sf new my-saas           # choisir la topologie, les modules et l'outil de workflow
-sf workflow              # suivre Backlog → Done pour un véritable ticket
-sf update                # recevoir les améliorations, ajouter des modules, résoudre les conflits
-```
-
-Chaque commande respecte la même configuration `.saasfoundry.json`. Le workflow suivi aujourd'hui par votre équipe est donc celui que votre agent IA suivra demain.
-
-## Prêt à essayer ?
-
-- **[Commencer avec votre IA →](/getting-started/installation)** — une phrase confiée à un assistant, sans terminal.
-- **[Choisir le CLI ou l'assistant →](/fr/getting-started/setup-paths)** — deux parcours d'installation, un même projet généré.
-- **[Utiliser le CLI →](/getting-started/quick-start)** — deux commandes, 60 secondes.
-- **[Livrer votre premier ticket →](/getting-started/first-project)** — un parcours complet avec un exemple réel.
-- **[Garder les exigences traçables →](/fr/srs/centralization)** — laisser l'agent structurer le SRS sans créer un silo privé supplémentaire.
-- **[Comprendre la philosophie →](/workflow/introduction)** — pourquoi ce workflow existe et comment il reste fiable.
-
----
-
-::: tip Éprouvé de bout en bout
-
-SaaSFoundryAI est développé avec son propre workflow. Chaque fonctionnalité visible ici a suivi le même cycle en 7 statuts que celui utilisé par les projets générés. Si quelque chose casse chez nous,
-nous le voyons avant que cela ne casse chez vous.
-
-:::
+<section class="sf-final-cta">
+  <span class="sf-home-eyebrow">COMMENCEZ À VOTRE NIVEAU</span>
+  <h2>Apportez l'idée produit. Gardez les standards d'ingénierie.</h2>
+  <p>Utilisez votre agent pour le parcours guidé ou restez dans le terminal. Les deux commencent avec la même fondation de production et terminent dans le même workflow sécurisé.</p>
+  <div class="sf-final-actions">
+    <a href="/fr/getting-started/setup-paths#parcours-2-—-pilote-par-assistant">Construire avec votre agent →</a>
+    <a href="/fr/getting-started/quick-start">Commencer avec le CLI →</a>
+    <a href="/fr/features/built-in">Inspecter chaque capacité →</a>
+  </div>
+</section>
