@@ -35,8 +35,8 @@ The exact selection is recorded in `.saasfoundry.json`, so the CLI and coding ag
   "profile": "full",
   "structure": "monorepo",
   "modules": {
-    "harness": { "version": "1.0.0-beta" },
-    "email": { "version": "1.0.0-beta" }
+    "harness": { "version": 1 },
+    "email": { "provider": "mailersend", "version": 1 }
   }
 }
 ```
@@ -240,7 +240,7 @@ That command gives a coding agent a deterministic, offline summary before it cha
 ### Complexity-adaptive delivery workflow
 
 The harness ships two guarded presets. The team workflow separates functional feature testing from code review; the Solo workflow combines its human gate with PR review. Interactive setup can also
-define and save a custom status sequence.
+define and save a custom status sequence as an advanced extension point; it does not generate arbitrary status documents or guards.
 
 ```text
 Backlog → Ready → In progress → AI testing

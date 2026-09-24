@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Adaptive planning script based on complexity level
-# Extracted from apex step-02-plan.md
+# Workflow planning procedure
 # Usage: plan.sh <ticket-number> <complexity>
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -74,7 +74,7 @@ EOF
 
   medium)
     cat <<'EOF'
-DETAILED PLANNING (Apex-free-style):
+DETAILED PLANNING (structured):
 
 1. **ULTRA THINK before planning:**
    - Walk through the implementation mentally
@@ -120,7 +120,7 @@ EOF
 
   complex)
     cat <<'EOF'
-COMPREHENSIVE PLANNING (Full Apex):
+COMPREHENSIVE PLANNING (maximum rigor):
 
 1. **ULTRA THINK - simulate entire implementation:**
    - Walk through step-by-step execution

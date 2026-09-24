@@ -103,6 +103,29 @@ Cette phase est la **revue du code et de la qualité d'intégration**. La pull r
 2. Déplacer le ticket vers `Done` avec le CLI.
 3. Synchroniser la branche de travail configurée et nettoyer uniquement les branches locales fusionnées qui ne sont plus utilisées.
 
+## Parcours contrôlés par la nature du ticket
+
+Tous les tickets ne représentent pas une livraison visible par l'utilisateur :
+
+| Nature               | Parcours contrôlé                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `nature:user-facing` | Parcours Team complet avec test fonctionnel puis revue de code                                                                          |
+| `nature:internal`    | Peut éviter la validation fonctionnelle séparée ; la politique de revue et la preuve de fusion restent obligatoires                     |
+| `nature:bundled-pr`  | L'enfant atteint Done après validation de son commit atomique sur la branche du parent ; il ne possède aucune pull request individuelle |
+| Epic                 | Son statut découle des enfants natifs ; il ne possède ni branche ni pull request                                                        |
+
+Ces parcours sont encodés dans les garde-fous du workflow. Ils n'autorisent pas à inventer des raccourcis.
+
+## La rédaction SRS suit un cycle distinct
+
+Les tickets portant `srs:drafting`, `srs:update` ou `srs:new` restent dans la colonne `In progress` du board pendant le cycle suivant :
+
+```text
+AI draft → Human review → Spawning → Done
+```
+
+Utilisez `workflow-cli.sh transition-drafting` : les transitions du parcours de code vers AI testing, Human testing ou In review sont refusées.
+
 ## Pourquoi ces portes comptent
 
 - `Backlog → Ready` bloque les spécifications ambiguës.

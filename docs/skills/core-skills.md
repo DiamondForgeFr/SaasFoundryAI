@@ -112,9 +112,9 @@ The most important core skill — and the one you will invoke least often explic
 **What it does**:
 
 - Reads the ticket's complexity label (`bug` / `low` / `medium` / `complex`) and adjusts ceremony
-- Reads the configured preset: Team uses seven statuses, Solo uses five, and Custom uses the route saved by the project
-- Knows the mandatory actions and exit conditions of every configured status
-- Enforces the configured route — an agent cannot invent an unapproved shortcut
+- Reads the configured preset: Team uses seven statuses and Solo uses five; Custom stores an advanced status configuration
+- Knows the mandatory actions and exit conditions shipped for the Team and Solo statuses
+- Enforces the guarded Team or Solo route — an agent cannot invent an unapproved shortcut
 - Invokes the relevant **workflow tool skill** (`sf-tool-github-projects`, `sf-tool-jira`, etc.) to actually move the ticket on your board
 
 **Explicit usage**:
@@ -126,8 +126,8 @@ The most important core skill — and the one you will invoke least often explic
 /sf-workflow next 42                  # What's the exact next action?
 ```
 
-**Configuration is in `.saasfoundry.json`** — branch names, PR target, status names, commit format. `sf-workflow` never hardcodes any of them. If you change the workflow (e.g. renaming "Human testing"
-to "QA"), edit `.saasfoundry.json` and re-run `sf update` — the skill picks up the new names automatically.
+**Configuration is in `.saasfoundry.json`** — branch names, PR target, status names, commit format. Branch and target policy is read from that contract. In v1, arbitrary renamed statuses also require
+matching status documents and guard extensions; changing the manifest alone does not generate them.
 
 The Team preset separates **Human testing**, the functional validation of a draft PR, from **In review**, the code review of a ready PR. Solo removes the separate Human testing status and uses PR
 review as its human gate.

@@ -113,6 +113,8 @@ Un besoin produit suit donc toujours : **rédiger la FR → approuver → récon
 
 ## Configuration
 
+### `.saasfoundry.json → tools.srs.*`
+
 | Clé                      | Rôle                                                          |
 | ------------------------ | ------------------------------------------------------------- |
 | `enabled`                | Active le hook conversationnel et la protection spec → ticket |
@@ -122,10 +124,14 @@ Un besoin produit suit donc toujours : **rédiger la FR → approuver → récon
 
 Ne modifiez pas `pendingIngestion` à la main : le CLI en est propriétaire.
 
+### Environnement du backend Notion
+
 ```env
 NOTION_API_TOKEN="secret_..."
 NOTION_API_VERSION="2025-09-03"
 ```
+
+Le token se crée dans les intégrations Notion. Partagez explicitement l'intégration avec la page parente, ainsi qu'avec la source lorsque l'ingestion est activée.
 
 ## Feuille de route
 
@@ -153,17 +159,24 @@ Rédigez et approuvez la FR, puis utilisez le spawner. Un bypass doit rester ré
 Le code 7 signifie que les pages ont été créées mais que le manifeste n'a pas pu être mis à jour. Vérifiez d'abord les pages et les permissions du fichier, puis reprenez l'opération de façon
 contrôlée.
 
+### L'agent ne propose jamais de mise à jour SRS en conversation
+
+Vérifiez que `tools.srs.enabled` vaut `true` dans le manifeste. Le hook reste consultatif et applique les heuristiques du fichier `sf-srs/SKILL.md` ; il est volontairement silencieux lorsque le module
+est désactivé.
+
 ## Mise à jour du projet
 
 Le merge à trois voies de `sf update` protège les compétences modifiées localement. Gardez les personnalisations produit dans la documentation du projet pour recevoir plus facilement les améliorations
 du harness.
+
+L'adaptateur livré se trouve sous `src/tools/<backend>/srs.adapter.ts` dans le projet généré. `sf update` le fait évoluer tant que le fichier n'a pas été personnalisé localement.
 
 ## Étapes suivantes
 
 - [Cycle de vie SRS](/fr/srs/lifecycle)
 - [Tutoriel complet](/fr/srs/walkthrough)
 - [Référence des scanners](/fr/srs/scanner-findings)
-- [Mise à jour des projets](/fr/guide/updating-projects#activer-la-srs-sur-un-projet-existant)
+- [Mise à jour des projets](/fr/guide/updating-projects#activer-le-srs-sur-un-projet-existant)
 
 ## Commandes associées
 

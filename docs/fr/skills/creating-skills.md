@@ -158,7 +158,7 @@ Indiquez ce qui doit être vrai avant l'exécution. L'agent peut ainsi s'arrête
 - Ticket is in Human testing
 ```
 
-Le preset Team à sept statuts applique précisément ce principe. Solo et les workflows personnalisés utilisent le même modèle de préconditions avec leur propre séquence.
+Les presets Team et Solo appliquent ce principe avec leurs parcours livrés. Un parcours personnalisé exige des documents de statut et des garde-fous correspondants avant d'offrir le même contrat.
 
 ### Corps : des étapes `## Workflow` explicites
 

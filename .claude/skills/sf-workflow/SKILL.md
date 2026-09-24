@@ -10,12 +10,12 @@ workflow status, check workflow, what should i do, next step, workflow help, cur
 
 This workflow adapts its rigor based on ticket complexity:
 
-| Level       | Label      | Process                          | Use Case          |
-| ----------- | ---------- | -------------------------------- | ----------------- |
-| **bug**     | 🐛 Bug Fix | Direct fix, regression test      | Quick bug fixes   |
-| **low**     | 🟢 Low     | Oneshot-style (minimal ceremony) | Simple tasks      |
-| **medium**  | 🟡 Medium  | Apex-free-style (structured)     | Standard features |
-| **complex** | 🔴 Complex | Full Apex (adversarial review)   | Critical features |
+| Level       | Label      | Process                            | Use Case          |
+| ----------- | ---------- | ---------------------------------- | ----------------- |
+| **bug**     | 🐛 Bug Fix | Direct fix, regression test        | Quick bug fixes   |
+| **low**     | 🟢 Low     | Oneshot-style (minimal ceremony)   | Simple tasks      |
+| **medium**  | 🟡 Medium  | Structured analysis and planning   | Standard features |
+| **complex** | 🔴 Complex | Deep analysis + adversarial review | Critical features |
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 

@@ -43,13 +43,13 @@ sf workflow use my-team-flow
 sf workflow validate
 ```
 
-Saved templates retain statuses, branch policy, issue types and AI rules. Applying a template regenerates the installed workflow skill; when GitHub Projects is configured, SaaSFoundryAI also attempts
-to align the board's Status options.
+Saved templates retain statuses, branch policy, issue types and AI rules. Applying a template writes the configured sequence and attempts to align a configured GitHub Project's Status options.
 
 ::: warning Guard coverage follows the installed status documents
 
-The two built-in presets ship matching status documents and tested transition guards. A custom sequence is supported as configuration, but teams must give every status a precise description and verify
-that their review policy still has an explicit human gate.
+The two built-in presets are the only end-to-end guarded routes in v1: they ship matching status documents and tested transition guards. Custom templates are an advanced configuration surface for
+storing and synchronising board stages. The installer does not yet generate complete status documents or arbitrary transition guards for new names, so a team must extend the installed skill before
+using a custom sequence as its delivery contract.
 
 :::
 
@@ -57,7 +57,7 @@ that their review policy still has an explicit human gate.
 
 The workflow shape is only one part of the contract:
 
-- **Preset or custom statuses** decide which phases exist.
+- **Team or Solo preset** decides the fully guarded delivery route; custom statuses are an advanced extension point.
 - **Complexity** (`bug`, `low`, `medium`, `complex`) decides how much analysis, planning and review happens inside those phases.
 - **Nature** decides the delivery path: user-facing, internal, bundled child or Epic.
 
@@ -90,7 +90,8 @@ The agent reads, rather than guesses, these manifest fields:
 - `workflow.projectUrl` and `workflow.tool`
 - `aiRules`
 
-Run `sf workflow show` to inspect them and `sf workflow validate` to compare the manifest with the configured board.
+Run `sf workflow show` to inspect them. `sf workflow validate` validates the local manifest fields in v1; it does not currently compare remote board options. Check the configured board separately
+after changing statuses.
 
 ## Tool support in v1
 

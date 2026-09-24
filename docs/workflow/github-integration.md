@@ -24,7 +24,8 @@ A status is not a label, and complexity is not a phase column. Keeping them inde
 - `gh` authenticated with `project` and `repo` permissions.
 - `.saasfoundry.json` configured with the board URL and branches.
 
-The Team preset expects seven statuses. Solo expects five. A Custom workflow uses exactly the route saved in the project manifest.
+The Team preset expects seven statuses and Solo expects five; both ship complete guards. A Custom template can align the board with statuses saved in the manifest, but its route needs team-authored
+status documents and guard extensions before use.
 
 ```json
 {

@@ -41,9 +41,9 @@ l’unique barrière humaine : on y relit la pull request et, lorsque nécessair
 Sélectionnez un preset pendant la création ou l’ajout du harness :
 
 ```bash
-sf new my-product --profile full --workflow saasfoundry
-sf new my-product --profile harness --workflow solo
-sf update --profile harness --workflow solo
+sf new --project-name my-product --profile full --workflow saasfoundry
+sf new --project-name my-product --profile harness --workflow solo
+sf update --target-profile harness --workflow solo
 ```
 
 Changez le preset d’un projet géré existant sur place :
@@ -70,8 +70,8 @@ sf workflow use regulated-team
 
 ::: warning Personnalisable ne signifie pas sans garde-fous
 
-Les presets équipe et Solo fournissent des documents de statut dédiés et des garde-fous testés. Avec une séquence personnalisée, l’équipe est responsable du sens de chaque phase et doit conserver une
-politique explicite de revue humaine.
+Les presets équipe et Solo sont les seuls parcours protégés de bout en bout en v1. Un modèle personnalisé peut enregistrer et synchroniser les étapes du board, mais l'installateur ne génère pas les
+documents de statut complets ni des contrôles arbitraires pour de nouveaux noms. L'équipe doit étendre le skill installé avant d'utiliser cette séquence comme contrat de livraison.
 
 :::
 
@@ -79,7 +79,7 @@ politique explicite de revue humaine.
 
 | Axe               | Contrôle                                                           | Exemples                                   |
 | ----------------- | ------------------------------------------------------------------ | ------------------------------------------ |
-| Forme du workflow | Statuts disponibles et ordre                                       | équipe, Solo, personnalisé                 |
+| Forme du workflow | Preset protégé ou extension avancée active                         | équipe, Solo, personnalisé                 |
 | Complexité        | Profondeur d’analyse, de planification et de revue dans les phases | bug, low, medium, complex                  |
 | Nature            | Propriété de la livraison et parcours autorisé                     | user-facing, internal, enfant groupé, Epic |
 
@@ -127,6 +127,9 @@ sf workflow set-ai-rules
 ```
 
 Ne modifiez jamais le board directement pour contourner une transition refusée. Ce refus prouve qu’une condition d’entrée, une condition de sortie ou une preuve externe manque.
+
+En v1, `sf workflow validate` contrôle uniquement les champs locaux du manifeste. Il ne compare pas les options du board distant : inspectez séparément le board configuré après toute modification des
+statuts.
 
 ## Contrat du manifeste
 

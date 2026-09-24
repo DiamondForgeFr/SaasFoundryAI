@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Adversarial review script (complex tickets only)
-# Extracted from apex step-05-examine.md
+# Workflow adversarial-review procedure
 # Usage: examine.sh <ticket-number>
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

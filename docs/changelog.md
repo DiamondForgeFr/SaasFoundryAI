@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 #### Workflow system
 
-- Two built-in presets: Team with seven statuses, and Solo with five; projects can also create, save, and reuse Custom workflows.
+- Two end-to-end guarded presets: Team with seven statuses and Solo with five; projects can also create, save, and reuse Custom status templates as an advanced extension point.
 - 4 complexity levels (bug / low / medium / complex) with adaptive ceremony — analyze depth, plan approval gates, adversarial review for complex tickets.
 - Complete GitHub Projects workflow adapter; experimental Jira and Linear adapters; complete Notion SRS backend without claiming it as a full workflow tracker.
 - GitHub Projects CLI helper (`github-projects-cli.sh`) with sub-issue linking via GraphQL.

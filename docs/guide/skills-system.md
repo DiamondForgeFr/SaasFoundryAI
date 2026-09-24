@@ -62,15 +62,15 @@ The portable invariant is the procedure, not a particular slash-command syntax. 
 
 Core skills cover the repeatable development loop without external credentials:
 
-| Area         | Examples                                            | Responsibility                                   |
-| ------------ | --------------------------------------------------- | ------------------------------------------------ |
-| Git          | `sf-git-commit`, `sf-git-create-pr`, `sf-git-merge` | Branch, commit and PR policy                     |
-| Quality      | `sf-utils-fix-errors`, `sf-utils-fix-grammar`       | Focused repair while preserving unrelated work   |
-| Workflow     | `sf-workflow`                                       | Team, Solo or custom status sequence plus guards |
-| Architecture | `sf-integration-rules`                              | Complete cross-layer implementation              |
+| Area         | Examples                                            | Responsibility                                 |
+| ------------ | --------------------------------------------------- | ---------------------------------------------- |
+| Git          | `sf-git-commit`, `sf-git-create-pr`, `sf-git-merge` | Branch, commit and PR policy                   |
+| Quality      | `sf-utils-fix-errors`, `sf-utils-fix-grammar`       | Focused repair while preserving unrelated work |
+| Workflow     | `sf-workflow`                                       | Guarded Team/Solo routes and custom extension  |
+| Architecture | `sf-integration-rules`                              | Complete cross-layer implementation            |
 
-`sf-workflow` is one complexity-adaptive skill. The team preset uses seven statuses; Solo uses five; custom templates can define another documented sequence. Complexity (`bug`, `low`, `medium`,
-`complex`) controls rigor inside that workflow rather than selecting a separate skill.
+`sf-workflow` is one complexity-adaptive skill. The team preset uses seven statuses and Solo uses five. Custom templates can store another sequence, but teams must add matching documents and guards
+before treating it as a delivery contract. Complexity (`bug`, `low`, `medium`, `complex`) controls rigor inside the workflow rather than selecting a separate skill.
 
 ## Tool skills and honest support levels
 

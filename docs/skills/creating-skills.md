@@ -156,7 +156,7 @@ State what must be true before the skill runs. This lets Claude bail out cleanly
 - Ticket is in Human testing
 ```
 
-The Team preset's seven-status workflow is enforced this way. Solo and Custom routes use the same precondition pattern with their configured statuses.
+The Team and Solo presets enforce their shipped routes this way. A Custom route needs matching status documents and guard code before it can offer the same contract.
 
 ### Body: explicit `## Workflow` steps
 

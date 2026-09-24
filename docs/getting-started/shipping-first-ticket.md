@@ -31,10 +31,10 @@ Human testing column.
 
 :::
 
-::: tip Using a Custom workflow?
+::: warning Using a Custom workflow?
 
-Follow the ordered statuses stored in `.saasfoundry.json`. Create and reuse templates with `sf workflow create`, `sf workflow save`, and `sf workflow use`; do not copy Team-only transitions into a
-different route.
+Custom templates store and synchronise ordered board stages, but v1 generates complete status documents and guards only for Team and Solo. Extend the installed workflow skill before following a custom
+route; do not assume that saving a template creates those protections.
 
 :::
 
@@ -265,8 +265,8 @@ Even for a trivial endpoint, you touched every guardrail the workflow provides:
 | In review     | PR with CI + reviewer approval      | External validation before code ships      |
 | Done          | Cleanup + confirmation              | No half-closed work leaking into the board |
 
-The next ticket follows the same **configured route**. The complexity tag (`medium` / `complex`) scales the rigor at each step, while Team, Solo, or Custom determines which statuses exist. Because the
-coding agent reads the same `.saasfoundry.json` and `sf-workflow` rules as the team, it applies the same contract.
+The next ticket follows the same **guarded preset**. The complexity tag (`medium` / `complex`) scales the rigor at each step, while Team or Solo determines which shipped route exists. A Custom
+template becomes equivalent only after its status documents and guards are implemented. The coding agent reads the same `.saasfoundry.json` and `sf-workflow` rules as the team.
 
 ## Next steps
 

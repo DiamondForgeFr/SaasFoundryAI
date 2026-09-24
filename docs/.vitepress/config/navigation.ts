@@ -104,6 +104,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       lifecycle: 'Lifecycle',
       walkthrough: 'Walkthrough',
       scannerFindings: 'Scanner findings',
+      troubleshooting: 'Troubleshooting',
       introduction: 'Introduction',
       sevenStatuses: '7-Status System',
       complexity: 'Complexity System',
@@ -192,8 +193,9 @@ const labels: Record<DocumentationLocale, Labels> = {
       introduction: 'Introduction',
       sevenStatuses: 'Workflow à 7 statuts',
       complexity: 'Système de complexité',
-      aiRules: "Règles de l'IA",
-      github: 'Intégration GitHub'
+      aiRules: 'Règles des agents',
+      github: 'Intégration GitHub',
+      troubleshooting: 'Dépannage'
     },
     interface: {
       outline: 'Sur cette page',
@@ -320,6 +322,7 @@ export const createThemeConfig = (locale: DocumentationLocale, translatedRoutes:
         text: 'v1.0.0-beta',
         items: [
           { text: nav.changelog, link: documentationLink(locale, '/changelog', translatedRoutes) },
+          { text: labels[locale].pages.troubleshooting, link: documentationLink(locale, '/troubleshooting', translatedRoutes) },
           { text: nav.contributing, link: documentationLink(locale, '/contributing/development', translatedRoutes) }
         ]
       },
