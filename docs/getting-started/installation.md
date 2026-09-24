@@ -10,7 +10,8 @@ SaaSFoundryAI supports three starting points. Choose the one that describes the 
 | An empty workspace or a new product                                  | `sf new`                                                                         | Choose the technical stack, AI harness, or both.                                                                                |
 | An existing repository without a SaaSFoundryAI manifest              | Read it first, then choose `sf new --profile harness` or a fresh `full` scaffold | A project you keep receives the harness in place. A throwaway POC is preserved as reference before a clean scaffold is created. |
 
-The detailed choices for each path are below. The [Quick Start](/getting-started/quick-start) is the shortest runnable example.
+The detailed choices for each starting situation are below. First choose [interactive CLI or assistant-driven setup](/getting-started/setup-paths); the [Quick Start](/getting-started/quick-start) is
+the shortest runnable example.
 
 ## Assistant-first setup
 
