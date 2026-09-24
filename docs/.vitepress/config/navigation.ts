@@ -96,6 +96,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       coreSkills: 'Core Skills',
       toolSkills: 'Tool Skills',
       creatingSkills: 'Creating Skills',
+      builtIn: 'Built-in capabilities',
       rbac: 'RBAC and tenancy',
       yourTools: 'Connect your tools',
       email: 'Email',
@@ -186,6 +187,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       coreSkills: 'Skills principaux',
       toolSkills: 'Skills outils',
       creatingSkills: 'Créer un skill',
+      builtIn: 'Capacités incluses',
       rbac: 'RBAC et multi-tenant',
       yourTools: 'Connecter vos outils',
       email: 'E-mail',
@@ -279,7 +281,7 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
       page(pages.toolSkills, '/skills/tool-skills'),
       page(pages.creatingSkills, '/skills/creating-skills')
     ]),
-    [prefixPath(locale, '/features/')]: group(groups.features, [page(pages.rbac, '/features/rbac'), page(pages.yourTools, '/features/your-tools')]),
+    [prefixPath(locale, '/features/')]: group(groups.features, [page(pages.builtIn, '/features/built-in'), page(pages.rbac, '/features/rbac'), page(pages.yourTools, '/features/your-tools')]),
     [prefixPath(locale, '/modules/')]: group(groups.modules, [
       page(pages.email, '/modules/email'),
       page(pages.storage, '/modules/storage'),
