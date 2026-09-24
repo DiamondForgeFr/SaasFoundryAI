@@ -18,6 +18,7 @@ type Labels = {
     cli: string
     guide: string
     skills: string
+    features: string
     modules: string
     srs: string
     workflow: string
@@ -59,6 +60,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       cli: 'CLI Commands',
       guide: 'Guide',
       skills: 'Skills',
+      features: 'SaaS foundation',
       modules: 'Modules',
       srs: 'SRS',
       workflow: 'Workflow System',
@@ -93,6 +95,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       coreSkills: 'Core Skills',
       toolSkills: 'Tool Skills',
       creatingSkills: 'Creating Skills',
+      rbac: 'RBAC and tenancy',
       email: 'Email',
       storage: 'Storage',
       analytics: 'Analytics',
@@ -144,6 +147,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       cli: 'Commandes CLI',
       guide: 'Guide',
       skills: 'Skills',
+      features: 'Fondation SaaS',
       modules: 'Modules',
       srs: 'SRS',
       workflow: 'Workflow de livraison',
@@ -178,6 +182,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       coreSkills: 'Skills principaux',
       toolSkills: 'Skills outils',
       creatingSkills: 'Créer un skill',
+      rbac: 'RBAC et multi-tenant',
       email: 'E-mail',
       storage: 'Stockage',
       analytics: 'Analytics',
@@ -267,6 +272,7 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
       page(pages.toolSkills, '/skills/tool-skills'),
       page(pages.creatingSkills, '/skills/creating-skills')
     ]),
+    [prefixPath(locale, '/features/')]: group(groups.features, [page(pages.rbac, '/features/rbac')]),
     [prefixPath(locale, '/modules/')]: group(groups.modules, [
       page(pages.email, '/modules/email'),
       page(pages.storage, '/modules/storage'),
