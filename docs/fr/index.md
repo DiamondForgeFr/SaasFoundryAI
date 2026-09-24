@@ -168,6 +168,7 @@ Chaque commande respecte la même configuration `.saasfoundry.json`. Le workflow
 - **[Commencer avec votre IA →](/getting-started/installation)** — une phrase confiée à un assistant, sans terminal.
 - **[Utiliser le CLI →](/getting-started/quick-start)** — deux commandes, 60 secondes.
 - **[Livrer votre premier ticket →](/getting-started/first-project)** — un parcours complet avec un exemple réel.
+- **[Garder les exigences traçables →](/fr/srs/centralization)** — laisser l'agent structurer le SRS sans créer un silo privé supplémentaire.
 - **[Comprendre la philosophie →](/workflow/introduction)** — pourquoi ce workflow existe et comment il reste fiable.
 
 ---
