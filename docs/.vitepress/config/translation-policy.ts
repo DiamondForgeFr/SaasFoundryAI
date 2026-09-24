@@ -1,10 +1,9 @@
 export type LocaleParityMode = 'staged' | 'strict'
 
 /**
- * Keep this in staged mode while the v1 documentation epic is translating page families.
- * Ticket #793 switches it to strict only after every public English route has a French peer.
+ * Ticket #793 completed route parity. New public English or French pages now require a peer.
  */
-export const documentationLocaleParityMode: LocaleParityMode = 'staged'
+export const documentationLocaleParityMode: LocaleParityMode = 'strict'
 
 export type LocaleParity = {
   missingTranslations: string[]

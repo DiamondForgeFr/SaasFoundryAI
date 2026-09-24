@@ -15,7 +15,7 @@ There are seven of them.
 | [`sf-git-merge`](#sf-git-merge)                     | "merge the branches", "resolve conflicts"                         | Context-aware conflict resolution                                       |
 | [`sf-utils-fix-errors`](#sf-utils-fix-errors)       | "fix errors", "fix typescript", "fix eslint"                      | Fans out across the codebase to resolve ESLint + TS errors              |
 | [`sf-utils-fix-grammar`](#sf-utils-fix-grammar)     | "fix grammar", "spellcheck the docs"                              | Grammar / spelling pass on markdown and comments (preserves formatting) |
-| [`sf-workflow`](#sf-workflow)                       | "workflow status", "next step", "complexity", "detect complexity" | The 7-status lifecycle engine — every ticket flows through this skill   |
+| [`sf-workflow`](#sf-workflow)                       | "workflow status", "next step", "complexity", "detect complexity" | Runs the configured lifecycle and its transition guards                 |
 
 ## `sf-git-commit`
 
@@ -43,23 +43,24 @@ blocked. The skill respects that, never uses `--no-verify`.
 
 ## `sf-git-create-pr`
 
-Opens a pull request from the current feature branch to the release branch defined in `.saasfoundry.json → workflow.releaseBranch` (usually `master`).
+Opens a pull request from the current feature branch to `.saasfoundry.json → workflow.prTargetBranch` (usually `develop`).
 
 **What the generated PR includes**:
 
 - Title in the same conventional-commit format: `feat(#42): add /api/version endpoint`
 - Body with a summary, the commit list, and a test-plan checklist
 - A back-link to the workflow ticket
-- A CI trigger — the PR arrives green or not at all
+- The appropriate CI trigger for a draft or review-ready PR
 
 **Preconditions it enforces**:
 
 - Working tree is clean (no uncommitted changes)
 - Current branch has been pushed
 - Base branch exists on remote
-- The ticket has passed through Human Testing (per the 7-status workflow)
+- The ticket has completed AI testing before the Team workflow opens its draft PR for functional validation
 
-If any precondition fails, the skill explains what's missing and stops. It does not bypass the workflow.
+If any precondition fails, the skill explains what's missing and stops. It does not bypass the workflow. In the Team preset, the same draft PR is marked ready after functional validation and before
+the ticket enters code review. In the Solo preset, PR review is the human gate.
 
 ## `sf-git-fix-pr-comments`
 
@@ -111,8 +112,9 @@ The most important core skill — and the one you will invoke least often explic
 **What it does**:
 
 - Reads the ticket's complexity label (`bug` / `low` / `medium` / `complex`) and adjusts ceremony
-- For each status (Backlog → Ready → In progress → AI testing → Human testing → In review → Done), knows the mandatory actions and the exit conditions
-- Enforces the no-skip rule — you cannot go from In progress straight to In review
+- Reads the configured preset: Team uses seven statuses, Solo uses five, and Custom uses the route saved by the project
+- Knows the mandatory actions and exit conditions of every configured status
+- Enforces the configured route — an agent cannot invent an unapproved shortcut
 - Invokes the relevant **workflow tool skill** (`sf-tool-github-projects`, `sf-tool-jira`, etc.) to actually move the ticket on your board
 
 **Explicit usage**:
@@ -127,7 +129,10 @@ The most important core skill — and the one you will invoke least often explic
 **Configuration is in `.saasfoundry.json`** — branch names, PR target, status names, commit format. `sf-workflow` never hardcodes any of them. If you change the workflow (e.g. renaming "Human testing"
 to "QA"), edit `.saasfoundry.json` and re-run `sf update` — the skill picks up the new names automatically.
 
-See [Workflow System](/workflow/introduction) for the full conceptual model and [7-Status System](/workflow/7-status-system) for what happens at each step.
+The Team preset separates **Human testing**, the functional validation of a draft PR, from **In review**, the code review of a ready PR. Solo removes the separate Human testing status and uses PR
+review as its human gate.
+
+See [Workflow System](/workflow/introduction) for all three workflow choices and [Team 7-Status System](/workflow/7-status-system) for the complete preset.
 
 ## Checking a skill's source
 
@@ -141,10 +146,11 @@ The front-matter at the top of each `SKILL.md` declares:
 
 - `name` — the identifier used for `/name` invocation
 - `description` — what the skill does + auto-trigger keywords
-- `model` — which Claude tier to use (haiku for quick tasks, sonnet for richer ones)
-- `allowed-tools` — what the skill is permitted to do (`Bash(git :*)`, `Bash(npm :*)`, …)
+- optional host-specific metadata, such as a preferred model
+- `allowed-tools`, when the host supports it — what the skill may invoke (`Bash(git :*)`, `Bash(npm :*)`, …)
 
-These files are the source of truth. Reading them is the fastest way to understand what a skill will actually do before you run it.
+These files are the source of truth. Reading them is the fastest way to understand what a skill will actually do before you run it. Discovery depends on the coding-agent host: Claude Code uses
+`CLAUDE.md` and `.claude/skills`, while Codex uses `AGENTS.md` and `.agents/skills`.
 
 ## Next steps
 

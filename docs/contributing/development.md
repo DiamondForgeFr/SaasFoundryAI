@@ -7,7 +7,7 @@ installers, and migrations that generate user projects).
 
 ## Prerequisites
 
-- **Node.js ≥ 22.13** — the version pinned in `.nvmrc` and enforced in `package.json` via `engines` and `devEngines.runtime` (build fails on lower versions). `nvm use` reads the file directly.
+- **Node.js ≥ 22** — the repository's `.nvmrc` currently pins `22.15.0`; `package.json` enforces Node `>=22.0.0`. `nvm use` reads the file directly.
 - **npm ≥ 10** — also enforced via `devEngines.packageManager`.
 - **Docker + docker-compose** — required for the database in dev (`docker-compose.db.yml`) and for the Docker-based E2E test matrix in `tests/docker/`.
 - **Docker network** — create the shared external network once: `docker network create saasfoundry-network`. Without it, `docker compose up` fails on the API service in any generated project.
@@ -50,7 +50,7 @@ git clone https://github.com/DiamondForgeFr/SaasFoundryAI.git
 cd SaaSFoundryAI
 
 # 2. Install
-nvm use         # reads .nvmrc → Node 22.13+
+nvm use         # reads .nvmrc → Node 22.15.0
 npm install
 
 # 3. Build (one-shot)
@@ -82,7 +82,7 @@ sf new --project-name local-test --structure monorepo
 | `npm run test:unit`                                   | Just the unit project (fastest)                                                                       | Quick local feedback                                                  |
 | `npm run test:integration`                            | Just integration tests (filesystem builders, scaffolds, installers)                                   | When changing builders / installers                                   |
 | `npm run test:e2e`                                    | E2E tests (CLI command surface)                                                                       | When changing command wiring                                          |
-| `npm run test:pre-commit`                             | `format` + `lint` + `build` + `test` — what Husky runs on every commit (~15s)                         | Before pushing                                                        |
+| `npm run test:pre-commit`                             | `format` + `lint` + `build` + `package:check` + `test` — what Husky runs on every commit              | Before pushing                                                        |
 | `npm run test:pre-push`                               | Exact normal lifecycle lane: fresh monorepo full, fresh multirepo full, previous-release update smoke | Explicitly during AI Testing before Human Testing; record the results |
 | `npm run test:full`                                   | `test:pre-commit` + `test:pre-push` — full local validation                                           | Before declaring something done                                       |
 | `npm run test:docker` / `npm run test:docker:full`    | Exhaustive four-check lane: fresh generation and update for both topologies                           | Release, scheduled, or deep local validation                          |
@@ -118,11 +118,11 @@ A `chore:` without a ticket is rejected. Use `chore(#000): ...` only for genuine
 
 Husky installs three hooks under `.husky/`:
 
-| Hook         | What it runs                                                         | How to bypass                                                    |
-| ------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `commit-msg` | `commitlint` — rejects commits that don't match the convention above | Don't. Fix the message.                                          |
-| `pre-commit` | `npm run test:pre-commit` (format + lint + build + jest, ~15 s)      | `--no-verify` on `git commit`. Reserve for emergencies.          |
-| `pre-push`   | RC version management and WIP checks; no automatic Docker run        | Keep enabled; run heavy validation explicitly during AI Testing. |
+| Hook         | What it runs                                                             | How to bypass                                                    |
+| ------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `commit-msg` | `commitlint` — rejects commits that don't match the convention above     | Don't. Fix the message.                                          |
+| `pre-commit` | `npm run test:pre-commit` (format + lint + build + package check + Jest) | `--no-verify` on `git commit`. Reserve for emergencies.          |
+| `pre-push`   | RC version management and WIP checks; no automatic Docker run            | Keep enabled; run heavy validation explicitly during AI Testing. |
 
 If pre-commit reformats files (prettier), the commit aborts so you can stage the formatted result. **Do not amend** — `git add` the formatted files and create a new commit. The same rule appears in
 the workflow skill: pre-commit retries are the source of truth for "the commit didn't happen."

@@ -30,7 +30,7 @@ docker compose up
 
 You only have to do this once per machine. The network persists across reboots.
 
-## `npm install` fails on Node 18 / 20 / anything below 22.13
+## `npm install` rejects the Node or npm version
 
 **Symptom**
 
@@ -43,14 +43,20 @@ npm warn EBADENGINE Unsupported engine {
 
 …or a generated project's TypeScript build fails with `Cannot find name 'using'` or similar modern-syntax errors.
 
-**Cause** — Both the CLI itself and the scaffolded projects pin Node ≥ 22.13. The version is enforced via `package.json` `engines` and `devEngines.runtime`.
+**Cause** — The CLI repository and generated applications do not currently target the same exact runtime:
+
+- the CLI requires Node `>=22.0.0` and npm `>=10.0.0`; its `.nvmrc` currently pins Node `22.15.0`;
+- generated applications target Node `24.19.0` because they require npm 11.
+
+Always use the `.nvmrc` in the repository you are working in.
 
 **Fix**
 
 ```bash
-nvm install 22.13   # if you don't have it yet
-nvm use             # reads .nvmrc inside any SaaSFoundryAI repo or generated project
-node --version      # → v22.13.x or higher
+nvm install
+nvm use
+node --version
+npm --version
 ```
 
 If you cannot move off an older Node version, you can set `nvmrc` per project, but the build will keep refusing — there is no compatibility shim.
@@ -201,7 +207,7 @@ exit 5
 1. Check your Notion API token: `cat ~/.claude/credentials/notion/<account>.env` (or wherever `sf skill install` placed it). The value should start with `secret_…` and not be a placeholder.
 2. Confirm the parent page in `tools.srs.rootPage.url` is **explicitly shared with the integration** in Notion's UI. Notion's permission model is opt-in — sharing the workspace is not enough.
 3. Check outbound HTTPS to `api.notion.com` is allowed. Corporate proxies and VPC egress rules often block this without a clear error.
-4. Re-run `sf skill install sf-srs --reconfigure` if the credentials look right but the page id is stale.
+4. Re-run `sf update` and provide the SRS configuration again if the credentials look right but the stored page id is stale.
 
 The same exit-code table appears in the SRS walkthrough; this entry exists to surface it from the troubleshooting index.
 
@@ -247,7 +253,7 @@ If a lifecycle consistently times out on a known-good machine, attach its `lifec
 2. Compare against `.nvmrc`.
 3. Bring CI up to your `.nvmrc` (preferred) or downgrade locally to match CI.
 
-The CLI repo itself runs on Node 22.13 in CI. Generated projects inherit the same default.
+The CLI repository uses its Node 22 line in CI. Generated projects use their own Node 24.19 default; do not assume both repositories share one runtime pin.
 
 ## "I changed a file in `.claude/skills/<skill>/` and the drift-guard test fails"
 

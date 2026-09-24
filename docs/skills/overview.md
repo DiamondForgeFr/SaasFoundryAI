@@ -1,108 +1,104 @@
-# Skills Overview
+# Skills overview
 
-SaaSFoundryAI bundles a catalogue of **Claude Code skills** with every generated project. Skills are short, focused capabilities that Claude picks up automatically (keyword auto-trigger) or that you
-call explicitly (`/skill-name`). They are the primary way the AI stays consistent with your project's conventions.
+SaaSFoundryAI installs project-owned `sf-*` skills that explain how to work safely in the generated architecture. They are executable documentation for coding agents: workflow guards, integration
+grammar, Git operations, SRS procedures and external-tool adapters live beside the code they govern.
 
-## The `sf-` prefix, and why it matters
+## Why every project skill starts with `sf-`
 
-Every SaaSFoundryAI skill is prefixed with `sf-`:
+- `sf-workflow`, not a generic `workflow`
+- `sf-git-commit`, not a generic `commit`
+- `sf-tool-github-projects`, not a generic GitHub helper
 
-- `sf-git-commit`, not `git-commit`
-- `sf-tool-atlassian`, not `tool-atlassian`
-- `sf-workflow`, not `workflow`
+The prefix prevents a globally installed skill from silently replacing project policy. In a SaaSFoundryAI project, agents prefer the repository's `sf-*` procedure whenever both a generic and
+project-specific capability exist.
 
-The prefix is the contract that lets your project's AI agent coexist with globally installed skills without collisions. When your generated `CLAUDE.md` says "prefer `sf-*` skills", it's because a
-globally installed `git-commit` might do the wrong thing for this repo — the `sf-` variant is always the right one.
+## Skill categories
 
-## Three categories
+| Category            | Installed when               | Examples                                                                   |
+| ------------------- | ---------------------------- | -------------------------------------------------------------------------- |
+| Core                | Every harness installation   | `sf-git-commit`, `sf-git-create-pr`, `sf-utils-fix-errors`                 |
+| Workflow            | A workflow is configured     | `sf-workflow` plus the selected board skill                                |
+| Integration grammar | A generated app is managed   | `sf-integration-rules`                                                     |
+| SRS                 | SRS is enabled               | `sf-srs` and its backend adapter                                           |
+| Optional tool       | Selected during setup/update | `sf-tool-context7`, `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma` |
 
-| Category          | Installed when                                            | Credentials                       | Examples                                                                                                              |
-| ----------------- | --------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Core**          | Always — every generated project                          | None                              | `sf-git-commit`, `sf-utils-fix-errors`, `sf-workflow`                                                                 |
-| **Tool**          | Opt-in during `sf new` or via `sf update --add-modules`   | Sometimes                         | `sf-tool-context7`, `sf-tool-atlassian`, `sf-tool-notion`                                                             |
-| **Workflow tool** | One installed per project, matches your chosen board tool | None (uses `gh` / project tokens) | `sf-tool-github-projects` today; `sf-tool-jira`, `sf-tool-linear`, `sf-tool-notion`, `sf-tool-clickup` on the roadmap |
+## One source, several agent entrypoints
 
-See [Core Skills](/skills/core-skills) for the always-installed set, [Tool Skills](/skills/tool-skills) for the opt-ins, and [Creating Skills](/skills/creating-skills) for writing your own.
+Claude Code remains the compatibility source during the multi-agent transition:
 
-## Where skills live
-
-In a generated **multirepo** project, each app owns its own copy:
-
-```
-apps/api/.claude/
-├── skills/              # Core skills
-└── skills-optional/     # Tool skills you enabled
-apps/web/.claude/
-├── skills/              # Same set as API
-└── skills-optional/     # Same set as API
+```text
+.claude/skills/          # managed source used by Claude Code and guarded scripts
+.agents/skills/          # shared copies for Codex and other declared agent profiles
+CLAUDE.md                # Claude entrypoint
+AGENTS.md                # portable/Codex entrypoint; points back to project rules
+GEMINI.md                # Gemini entrypoint when selected
 ```
 
-In a **monorepo**, skills are centralised at the root:
+The exact files depend on the declared profiles in `.saasfoundry.json`. `sf agents list`, `sf agents doctor` and `sf status --agent-friendly --no-network` report declarations and file presence. They
+do not claim that a host discovered skills, executed hooks or received credentials; verify those behaviors in the actual host.
 
-```
-.claude/
-├── skills/              # Shared across apps/api + apps/web
-└── skills-optional/
-```
+Generated multirepos place the managed harness where each repository needs it. Monorepos can centralize the shared instruction surface at the root. See [Agent coexistence](/guide/agent-coexistence)
+and [Project structure](/guide/project-structure) for the exact topology.
 
-Either way, Claude Code discovers them automatically — you never have to point it at a path.
+## How an agent uses a skill
 
-## How skills are invoked
+1. Read the project's instruction entrypoint.
+2. Inspect `.saasfoundry.json` for topology, modules, agent profiles and workflow.
+3. Select the matching `sf-*` skill from the declared skill root.
+4. Read its complete `SKILL.md` and referenced status/reference files.
+5. Execute guarded scripts rather than recreating their side effects manually.
 
-**Auto-trigger** — Claude activates a skill when it spots relevant keywords in your message:
+Some hosts support keyword-based discovery or slash commands; others require the agent to read the skill explicitly. SaaSFoundryAI documents both the desired capability and the host limitation instead
+of pretending every runtime behaves like Claude Code.
 
-| You say                            | Skill auto-loaded     |
-| ---------------------------------- | --------------------- |
-| "commit these changes"             | `sf-git-commit`       |
-| "fix the typescript errors"        | `sf-utils-fix-errors` |
-| "create a PR"                      | `sf-git-create-pr`    |
-| "what's the status of ticket #42?" | `sf-workflow`         |
-| "use context7 for the NestJS docs" | `sf-tool-context7`    |
+## Workflow skill and board adapters
 
-**Explicit** — type `/skill-name` to force a skill to load:
+`sf-workflow` owns the delivery semantics. A board skill performs the actual ticket operations.
 
-```
-/sf-git-commit
-/sf-workflow status 42
-/sf-tool-atlassian jira issue PROJ-123
-```
+| Adapter                   | v1 status                                                  |
+| ------------------------- | ---------------------------------------------------------- |
+| `sf-tool-github-projects` | Complete v1 delivery contract                              |
+| Jira adapter              | Experimental; no promise of full guard or hierarchy parity |
+| Linear adapter            | Experimental; no promise of full guard or hierarchy parity |
+| Notion                    | Complete v1 SRS backend; not a complete workflow tracker   |
 
-**Chained** — a skill can call another. `sf-workflow` uses `sf-tool-github-projects` under the hood to transition ticket statuses on your board; you never touch the GraphQL yourself.
+The workflow skill reads the configured status sequence, including the seven-status team preset, the five-status Solo preset or a custom template. It never needs a separate “advanced” workflow skill:
+complexity controls analysis and review depth inside the one workflow.
 
-## How the CLI keeps skills in sync
-
-`sf update` propagates skill evolutions exactly like any other scaffold file (see [Updating Projects](/guide/updating-projects)). If a new version of `sf-git-commit` ships upstream, `sf update` offers
-to replace your copy — or flags it as a conflict if you have customised it.
-
-Two invariants hold across upgrades:
-
-- **Core skills are always installed.** `sf update` will re-copy them if they are missing. You cannot uninstall a core skill short of deleting it manually.
-- **Tool skill credentials are preserved.** The skill logic lives in `.claude/skills-optional/<name>/` (subject to upgrade); the credentials live in `~/.claude/credentials/<tool>/<account>.env`
-  (user-scoped, never touched by `sf update`).
-
-## Discovery
-
-List every skill installed in the current project:
+## Discovery and diagnostics
 
 ```bash
 sf skill list
+sf skill describe sf-workflow
+sf agents list --json
+sf agents doctor codex claude-code
+sf status --agent-friendly --no-network
 ```
 
-Fetch details about a single skill (auto-trigger keywords, allowed tools, CLI entrypoint):
+To inspect the managed source directly:
 
 ```bash
-sf skill describe sf-git-commit
+cat .claude/skills/sf-workflow/SKILL.md
+cat .agents/skills/sf-workflow/SKILL.md
 ```
 
-Open the SKILL.md reference directly (most readable form):
+Use whichever path exists for the declared current host. Do not copy personal/global skills into the repository or infer consent from a discovered directory.
 
-```bash
-cat .claude/skills/sf-git-commit/SKILL.md
-```
+## Updates and local customisation
 
-## Next steps
+`sf update` compares managed skill files with the baseline recorded in `.saasfoundry.json`:
 
-- **Want to use a specific skill?** → [Core Skills](/skills/core-skills) or [Tool Skills](/skills/tool-skills)
-- **Need a skill that doesn't exist yet?** → [Creating Skills](/skills/creating-skills)
-- **Understanding the architecture?** → [Skills System guide](/guide/skills-system)
-- **Managing credentials for tool skills?** → [`sf tools` reference](/cli/sf-tools)
+- unchanged managed files can be updated automatically;
+- local edits become explicit conflicts instead of being overwritten silently;
+- credentials remain outside the repository;
+- shared agent declarations and instruction files remain reviewable changes.
+
+If a convention is specific to your product, create an `sf-*` custom skill in the project and document its ownership. See [Creating skills](/skills/creating-skills).
+
+## Continue
+
+- [Core skills](/skills/core-skills)
+- [Tool skills](/skills/tool-skills)
+- [Creating skills](/skills/creating-skills)
+- [Skills system architecture](/guide/skills-system)
+- [Agent coexistence](/guide/agent-coexistence)

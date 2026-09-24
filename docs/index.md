@@ -19,7 +19,7 @@ hero:
 
 <dl class="sf-proof-strip" aria-label="Product summary">
   <div><dt>2 foundations</dt><dd>application + delivery</dd></div>
-  <div><dt>7 guarded stages</dt><dd>canonical delivery path</dd></div>
+  <div><dt>Up to 7 guarded stages</dt><dd>complete Team delivery path</dd></div>
   <div><dt>2 topologies</dt><dd>monorepo or multirepo</dd></div>
   <div><dt>1 contract</dt><dd>.saasfoundry.json</dd></div>
 </dl>
@@ -28,21 +28,27 @@ hero:
   <span class="sf-home-eyebrow">THE DELIVERY CONTRACT</span>
   <h2>Guardrails live before the pull request.</h2>
   <p class="sf-home-lead">
-    The canonical user-facing path follows seven visible stages. Ticket nature activates explicit, guarded shortcuts for internal work, bundled changes and Epics. Humans approve intent and behavior;
-    automation verifies the code; the connected board keeps the audit trail. GitHub Projects provides the complete v1 delivery contract; Jira and Linear board adapters are experimental.
+    The team preset follows seven visible stages. Ticket nature activates explicit, guarded shortcuts for internal work, bundled changes and Epics. Humans approve intent and behavior; automation
+    verifies the code; the connected board keeps the audit trail. GitHub Projects provides the complete v1 delivery contract; Jira and Linear board adapters are experimental.
   </p>
 
-  <ol class="sf-status-flow" aria-label="Canonical seven-stage delivery workflow">
+  <ol class="sf-status-flow" aria-label="SaaSFoundry team workflow with seven stages">
     <li>Backlog</li>
-    <li class="sf-human-gate">Ready<span class="sf-gate-label">human approval</span></li>
+    <li class="sf-human-gate">Ready<span class="sf-gate-label">intent approved</span></li>
     <li>In progress</li>
     <li>AI testing</li>
-    <li class="sf-human-gate">Human testing<span class="sf-gate-label">human approval</span></li>
-    <li class="sf-human-gate">In review<span class="sf-gate-label">human approval</span></li>
+    <li class="sf-human-gate">Human testing<span class="sf-gate-label">feature testing</span></li>
+    <li class="sf-human-gate">In review<span class="sf-gate-label">code review</span></li>
     <li>Done</li>
   </ol>
 
-  <p><strong>Human gates are named and highlighted.</strong> The agent can prepare evidence and run guarded operations, but it cannot silently approve its own work.</p>
+  <p><strong>The gates say what humans actually do.</strong> Human testing validates the feature in a real runtime; In review reviews the ready pull request and its code. The agent can prepare evidence, but it cannot approve its own work.</p>
+
+  <div class="sf-workflow-choice" role="list" aria-label="Available workflow configurations">
+    <div role="listitem"><strong>Team · 7 statuses</strong><span>Separate feature testing and code review gates.</span></div>
+    <div role="listitem"><strong>Solo · 5 statuses</strong><span>No separate Human testing; PR review is the human gate.</span></div>
+    <div role="listitem"><strong>Custom</strong><span>Define named stages interactively, then save and reuse the template.</span></div>
+  </div>
 
   <dl class="sf-complexity-grid" aria-label="Complexity-adaptive rigor">
     <div><dt>bug</dt><dd>Direct fix + regression test</dd></div>

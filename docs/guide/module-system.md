@@ -84,7 +84,7 @@ Features:
 
 - ✅ Privacy-focused analytics
 - ✅ No cookies required
-- ✅ GDPR compliant
+- ✅ Privacy-minded collection that supports a GDPR-respectful configuration
 - ✅ Self-hostable
 
 Setup:

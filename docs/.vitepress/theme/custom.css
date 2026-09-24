@@ -28,6 +28,19 @@
   /* Link Colors */
   --vp-c-text-1: rgba(60, 60, 67);
   --vp-c-text-2: rgba(60, 60, 67, 0.78);
+  --sf-radius: 3px;
+}
+
+.VPButton,
+.VPNavBarMenuGroup .button,
+.VPSwitch,
+.VPSkipLink,
+.pager-link,
+.vp-doc :not(pre) > code,
+.vp-doc [class*='language-'] button.copy,
+.vp-doc .custom-block,
+.vp-doc div[class*='language-'] {
+  border-radius: var(--sf-radius) !important;
 }
 
 .dark {
@@ -127,7 +140,7 @@
   color: var(--vp-c-text-1);
   background: radial-gradient(circle at 92% 8%, rgba(255, 149, 0, 0.18), transparent 30%), linear-gradient(145deg, color-mix(in srgb, var(--vp-c-bg-soft) 94%, var(--sf-blueprint)), var(--vp-c-bg));
   border: 1px solid var(--sf-line);
-  border-radius: 24px;
+  border-radius: var(--sf-radius);
   box-shadow: 0 26px 80px rgba(15, 18, 24, 0.22);
   text-align: left;
   isolation: isolate;
@@ -185,7 +198,7 @@
   padding: 9px 13px;
   background: var(--vp-c-bg);
   border: 1px solid var(--sf-line);
-  border-radius: 999px;
+  border-radius: var(--sf-radius);
   font-family: var(--vp-font-family-mono);
   font-size: 12px;
   font-weight: 650;
@@ -220,13 +233,13 @@
 .sf-map-rails::before {
   right: 50%;
   border-right: 1px solid var(--sf-line);
-  border-radius: 0 8px 0 0;
+  border-radius: 0 var(--sf-radius) 0 0;
 }
 
 .sf-map-rails::after {
   left: 50%;
   border-left: 1px solid var(--sf-line);
-  border-radius: 8px 0 0;
+  border-radius: var(--sf-radius) 0 0;
 }
 
 .sf-map-rail {
@@ -234,7 +247,7 @@
   padding: 16px;
   background: color-mix(in srgb, var(--vp-c-bg-soft) 82%, transparent);
   border: 1px solid var(--sf-line);
-  border-radius: 16px;
+  border-radius: var(--sf-radius);
   animation: sf-node-in 0.8s ease-out both;
 }
 
@@ -273,7 +286,7 @@
   padding: 5px 7px;
   color: var(--vp-c-text-2);
   background: var(--vp-c-bg);
-  border-radius: 7px;
+  border-radius: var(--sf-radius);
   font-family: var(--vp-font-family-mono);
   font-size: 10px;
   text-align: center;
@@ -335,7 +348,7 @@
   overflow: hidden;
   background: var(--vp-c-bg-soft);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 18px;
+  border-radius: var(--sf-radius);
 }
 
 .sf-proof-strip div {
@@ -403,7 +416,7 @@
   color: var(--vp-c-text-1) !important;
   background: var(--sf-panel);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 20px;
+  border-radius: var(--sf-radius);
   text-decoration: none !important;
   transition:
     border-color 0.2s ease,
@@ -478,7 +491,7 @@
   color: var(--vp-c-text-1);
   background: var(--vp-c-bg-soft);
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--sf-radius);
   font-size: 13px;
   font-weight: 650;
   line-height: 1.25;
@@ -510,7 +523,7 @@
   color: var(--vp-c-text-1);
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 7px;
+  border-radius: var(--sf-radius);
 }
 
 .sf-convergence {
@@ -520,7 +533,7 @@
   color: var(--vp-c-text-1);
   background: var(--vp-c-brand-soft);
   border: 1px solid color-mix(in srgb, var(--sf-ember) 52%, transparent);
-  border-radius: 999px;
+  border-radius: var(--sf-radius);
   font-family: var(--vp-font-family-mono);
   font-size: 12px;
   font-weight: 700;
@@ -544,7 +557,7 @@
   color: var(--vp-c-text-2);
   background: var(--vp-c-bg-soft);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 10px;
+  border-radius: var(--sf-radius);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
@@ -582,6 +595,32 @@
   text-transform: uppercase;
 }
 
+.sf-workflow-choice {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 26px 0 8px;
+}
+
+.sf-workflow-choice > div {
+  padding: 15px;
+  background: var(--vp-c-bg-soft);
+  border-left: 3px solid var(--sf-blueprint);
+  border-radius: var(--sf-radius);
+}
+
+.sf-workflow-choice strong,
+.sf-workflow-choice span {
+  display: block;
+}
+
+.sf-workflow-choice span {
+  margin-top: 6px;
+  color: var(--vp-c-text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .sf-complexity-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -593,7 +632,7 @@
   padding: 16px;
   background: var(--vp-c-bg-soft);
   border-top: 3px solid var(--vp-c-divider);
-  border-radius: 9px;
+  border-radius: var(--sf-radius);
 }
 
 .sf-complexity-grid div:nth-child(1) {
@@ -634,7 +673,7 @@
   padding: 48px;
   overflow: hidden;
   background: radial-gradient(circle at 85% 15%, rgba(255, 180, 84, 0.22), transparent 32%), var(--sf-graphite);
-  border-radius: 24px;
+  border-radius: var(--sf-radius);
   color: rgba(255, 255, 245, 0.9);
 }
 
@@ -664,7 +703,7 @@
   padding: 10px 16px;
   color: #17191d;
   background: var(--sf-hot-metal);
-  border-radius: 999px;
+  border-radius: var(--sf-radius);
   font-size: 13px;
   font-weight: 750;
   text-decoration: none;
@@ -770,7 +809,7 @@
 
   .sf-system-map {
     padding: 18px;
-    border-radius: 18px;
+    border-radius: var(--sf-radius);
   }
 
   .sf-map-rails,
@@ -807,7 +846,8 @@
   }
 
   .sf-capability-grid,
-  .sf-complexity-grid {
+  .sf-complexity-grid,
+  .sf-workflow-choice {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -826,7 +866,8 @@
 
 @media (max-width: 359px) {
   .sf-capability-grid,
-  .sf-complexity-grid {
+  .sf-complexity-grid,
+  .sf-workflow-choice {
     grid-template-columns: minmax(0, 1fr);
   }
 }

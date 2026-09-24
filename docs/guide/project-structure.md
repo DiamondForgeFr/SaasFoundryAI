@@ -30,7 +30,11 @@ my-saas/
 ├── packages/
 │   └── shared/           # Shared code (optional)
 ├── .claude/
-│   └── skills/           # Claude skills (shared)
+│   └── skills/           # Managed compatibility source and guarded scripts
+├── .agents/
+│   └── skills/           # Shared skills for declared portable agent profiles
+├── CLAUDE.md             # Claude Code entrypoint
+├── AGENTS.md              # Portable coding-agent entrypoint
 ├── .github/
 │   └── workflows/        # CI/CD pipelines
 ├── docker-compose.*.yml  # Development services
@@ -267,9 +271,8 @@ export const envSchema = z.object({
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "test": "turbo run test",
     "test:full": "turbo run test:full",
-    "db:dev": "docker-compose -f docker-compose.db.yml up -d"
+    "db:setup:dev": "npm run db:setup:dev -w apps/api"
   }
 }
 ```
@@ -308,7 +311,7 @@ Caching and task orchestration:
 
 ```json
 {
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
@@ -329,4 +332,4 @@ Caching and task orchestration:
 
 - [Monorepo vs Multirepo](/guide/monorepo-vs-multirepo) - Choose structure
 - [Module System](/guide/module-system) - Add features
-- [Skills System](/guide/skills-system) - Claude assistance
+- [Skills System](/guide/skills-system) - coding-agent harness and shared skills

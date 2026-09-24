@@ -19,7 +19,7 @@ hero:
 
 <dl class="sf-proof-strip" aria-label="Résumé du produit">
   <div><dt>2 fondations</dt><dd>application + livraison</dd></div>
-  <div><dt>7 étapes sécurisées</dt><dd>parcours de livraison canonique</dd></div>
+  <div><dt>Jusqu'à 7 étapes sécurisées</dt><dd>parcours Team complet</dd></div>
   <div><dt>2 topologies</dt><dd>monorepo ou multirepo</dd></div>
   <div><dt>1 contrat</dt><dd>.saasfoundry.json</dd></div>
 </dl>
@@ -28,22 +28,28 @@ hero:
   <span class="sf-home-eyebrow">LE CONTRAT DE LIVRAISON</span>
   <h2>Les garde-fous vivent avant la pull request.</h2>
   <p class="sf-home-lead">
-    Le parcours canonique visible par l'utilisateur suit sept étapes. La nature du ticket active des raccourcis explicites et contrôlés pour le travail interne, les changements groupés et les Epics.
-    Les humains valident l'intention et le comportement ; l'automatisation vérifie le code ; le board connecté conserve la piste d'audit. GitHub Projects fournit le contrat de livraison v1 complet ;
+    Le preset équipe suit sept étapes visibles. La nature du ticket active des raccourcis explicites et contrôlés pour le travail interne, les changements groupés et les Epics. Les humains valident
+    l'intention et le comportement ; l'automatisation vérifie le code ; le board connecté conserve la piste d'audit. GitHub Projects fournit le contrat de livraison v1 complet ;
     les adaptateurs de board Jira et Linear sont expérimentaux.
   </p>
 
-  <ol class="sf-status-flow" aria-label="Workflow de livraison canonique en sept étapes">
+  <ol class="sf-status-flow" aria-label="Workflow SaaSFoundry équipe en sept étapes">
     <li>Backlog</li>
-    <li class="sf-human-gate">Ready<span class="sf-gate-label">validation humaine</span></li>
+    <li class="sf-human-gate">Ready<span class="sf-gate-label">intention validée</span></li>
     <li>In progress</li>
     <li>AI testing</li>
-    <li class="sf-human-gate">Human testing<span class="sf-gate-label">validation humaine</span></li>
-    <li class="sf-human-gate">In review<span class="sf-gate-label">validation humaine</span></li>
+    <li class="sf-human-gate">Human testing<span class="sf-gate-label">test fonctionnel</span></li>
+    <li class="sf-human-gate">In review<span class="sf-gate-label">revue de code</span></li>
     <li>Done</li>
   </ol>
 
-  <p><strong>Les validations humaines sont nommées et mises en évidence.</strong> L'agent peut préparer les preuves et exécuter les opérations contrôlées, mais il ne peut pas valider silencieusement son propre travail.</p>
+  <p><strong>Chaque validation dit ce que l'humain fait réellement.</strong> Human testing vérifie la fonctionnalité dans un environnement réel ; In review relit le code de la pull request prête. L'agent prépare les preuves, mais ne valide pas son propre travail.</p>
+
+  <div class="sf-workflow-choice" role="list" aria-label="Configurations de workflow disponibles">
+    <div role="listitem"><strong>Équipe · 7 statuts</strong><span>Tests fonctionnels et revue de code sont deux validations distinctes.</span></div>
+    <div role="listitem"><strong>Solo · 5 statuts</strong><span>Pas de Human testing séparé ; la revue de PR est la validation humaine.</span></div>
+    <div role="listitem"><strong>Personnalisé</strong><span>Définissez les étapes, puis enregistrez et réutilisez le template.</span></div>
+  </div>
 
   <dl class="sf-complexity-grid" aria-label="Rigueur adaptée à la complexité">
     <div><dt>bug</dt><dd>Correction directe + test de régression</dd></div>

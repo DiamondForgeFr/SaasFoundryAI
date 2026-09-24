@@ -239,12 +239,19 @@ That command gives a coding agent a deterministic, offline summary before it cha
 
 ### Complexity-adaptive delivery workflow
 
-The workflow connects each ticket to a guarded seven-status lifecycle. Complexity changes the depth of analysis, planning, testing and review without changing the meaning of the statuses.
+The harness ships two guarded presets. The team workflow separates functional feature testing from code review; the Solo workflow combines its human gate with PR review. Interactive setup can also
+define and save a custom status sequence.
 
 ```text
 Backlog → Ready → In progress → AI testing
         → Human testing → In review → Done
 ```
+
+```text
+Solo: Backlog → In progress → AI testing → In review → Done
+```
+
+In the team preset, **Human testing means feature testing** and **In review means code review**. Complexity changes the depth of analysis, planning, testing and review inside the configured phases.
 
 ```text
 bug      direct fix + regression proof
@@ -253,7 +260,8 @@ medium   structured analysis and approved plan
 complex  deep analysis and adversarial review
 ```
 
-Transitions are executed through the configured board adapter, so GitHub Projects, Jira, Notion or Linear remains the visible system of work. Start with [Workflow system](/guide/workflow-system).
+Transitions are executed through the configured board adapter. GitHub Projects provides the complete v1 contract; Jira and Linear adapters are experimental. Notion is the complete v1 SRS backend, not
+a full workflow tracker. Start with [Workflow system](/guide/workflow-system).
 
 ### Skills and integration grammar
 

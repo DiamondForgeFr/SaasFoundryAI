@@ -1,186 +1,142 @@
-# Workflow System
+# Workflow system
 
-SaaSFoundryAI includes a powerful workflow system that integrates with GitHub Projects, Jira, Notion, and Linear.
+SaaSFoundryAI's development harness turns delivery policy into project files, guarded commands and board state. Humans and coding agents read the same `.saasfoundry.json`; neither side has to
+reconstruct the process from chat history.
 
-## Overview
+## What the harness installs
 
-The workflow system provides:
+- `sf-workflow` — the router, guards and status instructions;
+- one board tool skill — `sf-tool-github-projects` for the complete v1 path;
+- branch, commit, pull-request and status policy in `.saasfoundry.json`;
+- complexity profiles for adaptive analysis and review;
+- native child-ticket, test-plan and merge-evidence rules.
 
-- 🎯 **Complexity-adaptive ceremony** - Scale rigor to risk (bug / low / medium / complex)
-- 🔁 **7-status lifecycle** - Backlog → Ready → In progress → AI testing → Human testing → In review → Done
-- 🛡️ **Non-negotiable AI rules** - Dogfooded rules that prevent half-done work and status-skipping
-- 📋 **Tool integration** - Connect to GitHub Projects, Jira, Notion, or Linear
-- 🌿 **Git automation** - Configured branch naming, commit format, and subtask linking
-- 🔧 **Template management** - Save and reuse workflow configurations (`SaaSFoundry AI` preset shipped)
-- 🔍 **Smart detection** - Auto-detect available tools based on credentials
-- ✅ **Validation** - Verify workflow sync with remote project boards
+The workflow is coding-agent neutral. Claude Code can use the one-line assistant bootstrap; Codex, Gemini CLI, Kimi Code, Qwen Code and generic hosts consume the shared instructions and installed
+`sf-*` skills according to their native capabilities.
 
-## Complexity-Adaptive Workflow
+## Choose a workflow shape
 
-Each ticket carries a complexity tag that drives how much ceremony the workflow enforces:
+### Team: `saasfoundry`
 
-| Level          | Tag                   | Process                          | Use case                  |
-| -------------- | --------------------- | -------------------------------- | ------------------------- |
-| 🐛 **bug**     | `complexity: bug`     | Direct fix + regression test     | Quick bug fixes           |
-| 🟢 **low**     | `complexity: low`     | Oneshot-style (minimal ceremony) | Simple tasks (~1-2 files) |
-| 🟡 **medium**  | `complexity: medium`  | Structured plan + validation     | Standard features         |
-| 🔴 **complex** | `complexity: complex` | Full adversarial review          | Critical / risky features |
-
-Complexity dictates whether analyze/plan phases run, how many parallel agents spawn, whether plan approval is required, and whether an adversarial `examine` phase gates AI testing.
-
-Deep dive: [Complexity System](/workflow/complexity-system).
-
-## 7-Status Lifecycle
-
-Every ticket traverses seven statuses in order — no skipping.
-
-| Order | Status        | Role                                                                   |
-| ----- | ------------- | ---------------------------------------------------------------------- |
-| 1     | Backlog       | Preparation: detect complexity, analyze context, plan, challenge specs |
-| 2     | Ready         | Queue of validated tickets awaiting assignment                         |
-| 3     | In progress   | Active development: branch, subtasks, iterative commits                |
-| 4     | AI testing    | AI runs build/lint/unit tests + (for complex) adversarial review       |
-| 5     | Human testing | Developer validates the feature behaves correctly                      |
-| 6     | In review     | Pull request open; code review in progress                             |
-| 7     | Done          | PR merged, subtasks closed, parent closed                              |
-
-Deep dive: [7-Status System](/workflow/7-status-system).
-
-## Smart Tool Detection
-
-During `sf new`, SaaSFoundryAI automatically detects which project management tools you have configured:
-
-### How it works
-
-1. **Scans credentials**: Checks `~/.claude/credentials/` for Jira, Notion, and Linear credentials
-2. **Checks GitHub CLI**: Runs `gh auth status` to detect GitHub Projects availability
-3. **Recommends tools**: Highlights available tools in the selection prompt with a ✓ icon
-
-### Benefits
-
-- ✅ **No manual searching** - See at a glance which tools are ready to use
-- ✅ **Prevents errors** - Won't offer tools that aren't configured
-- ✅ **Smart defaults** - Recommends GitHub Projects if available (no extra setup)
-- ✅ **Fast setup** - Jump straight to using your preferred tool
-
-### Example output
-
-```bash
-$ sf new
-
-🔍 Detecting available project management tools...
-
-✅ Found credentials for:
-  - github-projects (recommended)
-  - jira
-  - notion
-
-? Choose your project management tool:
-  ✓ GitHub Projects (built-in, authenticated) ← recommended
-  ✓ Jira (Atlassian, credentials found)
-  ✓ Notion (credentials found)
-  Linear
-  None (no project management integration)
+```text
+Backlog → Ready → In progress → AI testing → Human testing → In review → Done
 ```
 
-### Setup credentials
+This is the complete workflow documented throughout this site.
 
-To make tools available for detection:
+- **Human testing means feature testing:** validate behavior in a real runtime from the draft PR and test plan.
+- **In review means code review:** mark the same PR ready, run full CI and review the implementation before merge.
 
-```bash
-# GitHub Projects (recommended)
-gh auth login
+Use it when product behavior deserves a separate functional checkpoint before code review.
 
-# Jira
-sf tools add jira my-account
+### Solo: `solo`
 
-# Notion
-sf tools add notion my-account
-
-# Linear
-sf tools add linear my-account
+```text
+Backlog → In progress → AI testing → In review → Done
 ```
 
-## Quick Start
+Solo removes the separate `Ready` and `Human testing` columns. It keeps planning, implementation, pushes, test evidence, CI and merge guards. `In review` becomes the single human gate: review the PR
+and test manually there when needed.
 
-The development harness has two interfaces over the same workflow. Use the CLI when you want an explicit, scriptable command; ask your coding agent when you want it to inspect the project, explain the
-next safe action and run that command for you.
-
-| Goal                                              | CLI path                                  | Agent path                                                                            |
-| ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
-| Inspect the current project and its preconditions | `sf status --agent-friendly --no-network` | “Check this SaaSFoundry project and tell me what is blocking the next delivery step.” |
-| Inspect the workflow configuration                | `sf workflow show`                        | “Show me how this project's delivery workflow is configured.”                         |
-| Validate the workflow against the connected board | `sf workflow validate`                    | “Validate the workflow and explain any drift before changing anything.”               |
-
-Both paths read `.saasfoundry.json`, use the installed `sf-workflow` and tool skills, and respect the same complexity, approval, testing and board-status guards. The agent does not replace the CLI or
-silently bypass it: it supplies context, chooses the appropriate guarded operation and reports the result.
-
-### During Project Creation
+Select a preset during creation or while adding the harness:
 
 ```bash
-sf new
-# Answer prompts about workflow tool and preferences
+sf new my-product --profile full --workflow saasfoundry
+sf new my-product --profile harness --workflow solo
+sf update --profile harness --workflow solo
 ```
 
-### For Existing Projects
+Switch an existing managed project in place:
 
 ```bash
-sf workflow
-# Configure workflow for current project
+sf workflow use solo
+sf workflow use saasfoundry
 ```
 
-## Workflow Templates
+The command preserves the project's board, branches and URLs, replaces the status set, regenerates matching status documentation and attempts to align a configured GitHub Project.
 
-Templates let you save and reuse workflow configurations across projects.
+### Custom workflow
 
-### Create a Template
-
-```bash
-sf workflow create my-template
-# Configure: tool, branches, statuses, AI rules
-# Template saved to ~/.claude/workflows/
-```
-
-### Use a Template
+Interactive setup offers **Custom Workflow**. Define at least two named statuses, give every status a description for agent context and select its board color. Save and reuse the result:
 
 ```bash
-sf workflow use my-template
-# Applies template to current project
-```
-
-### List Templates
-
-```bash
+sf workflow save regulated-team
+sf workflow create release-train
 sf workflow list
-# Shows all available templates
+sf workflow show-template regulated-team
+sf workflow use regulated-team
 ```
 
-## Configuration
+::: warning Custom means configurable, not unguarded
 
-All workflow configuration lives in **`.saasfoundry.json`** at the project root. This file is the single source of truth — never hardcode branches, status names, or commit patterns anywhere else.
+The built-in Team and Solo presets ship purpose-built status documents and tested guards. For a custom sequence, the team owns the meaning of every phase and must retain an explicit human review
+policy.
+
+:::
+
+## The three axes are independent
+
+| Axis           | Controls                                              | Examples                                   |
+| -------------- | ----------------------------------------------------- | ------------------------------------------ |
+| Workflow shape | Which statuses exist and in what order                | team, solo, custom                         |
+| Complexity     | Analysis, planning and review depth inside the phases | bug, low, medium, complex                  |
+| Nature         | Delivery ownership and legal route                    | user-facing, internal, bundled child, Epic |
+
+A complex ticket in Solo still receives deep analysis and adversarial review; it simply has one human PR gate instead of separate feature-testing and code-review columns. A low-risk ticket in the team
+preset still passes through its configured stages, with lighter ceremony inside them.
+
+Nature adds guarded exceptions. A bundled child has no PR because its atomic commit ships in its delivery parent's PR. An Epic has neither branch nor PR; its status is derived from native children.
+
+## Pull-request lifecycle
+
+For the team preset:
+
+1. commit and push before AI testing;
+2. publish the test plan and report;
+3. create or reuse a **draft PR** before Human testing;
+4. let the developer perform functional feature testing;
+5. after approval and non-regression tests, mark the same PR ready;
+6. enter In review for code review and full CI;
+7. wait for the developer to merge;
+8. verify the merge before Done.
+
+```bash
+WORKFLOW=.claude/skills/sf-workflow/workflow-cli.sh
+
+$WORKFLOW create-pr 42 --draft
+$WORKFLOW ready-pr 42
+$WORKFLOW update-status 42 "In review"
+# developer merges
+$WORKFLOW update-status 42 Done
+```
+
+Solo can create a ready PR directly after AI testing because its In review phase is already the human gate.
+
+## Status and configuration commands
+
+```bash
+sf workflow show
+sf workflow validate
+sf workflow set-working-branch develop
+sf workflow set-ai-rules
+
+.claude/skills/sf-workflow/workflow-cli.sh status 42
+.claude/skills/sf-workflow/workflow-cli.sh update-status 42 "AI testing"
+```
+
+Never mutate the board directly to bypass a rejected transition. The rejection is evidence that an entry condition, exit condition or external proof is missing.
+
+## Manifest contract
 
 ```json
 {
-  "version": "1.0.0-beta",
-  "projectName": "my-saas",
-  "structure": "monorepo",
   "workflow": {
+    "template": "SaaSFoundry AI Workflow",
     "tool": "github-projects",
-    "template": "SaaSFoundry AI",
-    "projectUrl": "https://github.com/orgs/MyOrg/projects/1",
+    "projectUrl": "https://github.com/orgs/acme/projects/1",
     "workingBranch": "develop",
     "prTargetBranch": "develop",
-    "releaseBranch": "master",
-    "branchNaming": {
-      "feature": "feature/{N}-{description}",
-      "fix": "fix/{N}-{description}",
-      "release": "rc-{version}"
-    },
-    "commitFormat": {
-      "pattern": "<type>(#<ticket>): <description>",
-      "requireTicket": true,
-      "types": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore", "ci", "build", "revert"]
-    },
+    "requireCodeReview": true,
     "statuses": [
       { "name": "Backlog", "color": "GRAY" },
       { "name": "Ready", "color": "YELLOW" },
@@ -194,313 +150,34 @@ All workflow configuration lives in **`.saasfoundry.json`** at the project root.
 }
 ```
 
-## AI Rules
+The manifest is the source of truth. Status names, branch names and pull-request targets are not inferred from documentation examples.
 
-SaaSFoundryAI ships with non-negotiable rules baked into the generated `CLAUDE.md` and the `sf-workflow` skill. These rules keep the Human + AI loop predictable.
+## Tool support
 
-| Rule                                 | What it means                                                                                  |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Never skip a status**              | Backlog → Ready → In progress → AI testing → Human testing → In review → Done. No shortcuts.   |
-| **Commit + push before AI testing**  | Code must exist on the remote before any testing phase runs.                                   |
-| **PR only after Human testing**      | AI testing validates the build; Human testing validates the feature. PR comes after both pass. |
-| **Close subtasks as you go**         | Each subtask closes immediately after its commit lands — never batched.                        |
-| **Gate parent transitions**          | A parent ticket cannot move forward while any subtask is still open.                           |
-| **Finish one ticket before another** | No half-done work — the current in-flight ticket gets driven to Done first.                    |
-| **Subtasks must be real issues**     | Use `github-projects-cli.sh create-subtask` — never GitHub checkboxes as a substitute.         |
+| Adapter         | v1 contract                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| GitHub Projects | Complete: issues, native children, status fields, milestones, PR guards and merge evidence |
+| Jira            | Experimental: useful operations exist, full contract parity is not guaranteed              |
+| Linear          | Experimental: issue operations exist, full contract parity is not guaranteed               |
+| Notion          | SRS/documentation backend, not a complete v1 workflow tracker                              |
 
-**Note**: Tests and lint checks are **always** enforced by Husky pre-commit / pre-push hooks, regardless of workflow state.
+Run `sf status --agent-friendly --no-network` to inspect declared configuration without claiming that credentials or network access work. Use an explicit connection check only when the task needs the
+external service.
 
-Deep dive: [AI Rules](/workflow/ai-rules) for the rationale behind each rule and the failure modes they prevent.
+## SRS drafting tickets
 
-## Supported Tools
+Specification drafting is not code delivery. Tickets labelled `srs:drafting`, `srs:update` or `srs:new` stay in the board's In progress column and follow:
 
-### GitHub Projects
-
-- ✅ GraphQL API integration
-- ✅ Sub-issues support
-- ✅ Automatic status updates
-- ✅ PR linking
-- ✅ **Auto-creation** - Create new projects automatically
-
-#### Auto-Creation Feature
-
-When you select GitHub Projects during `sf new` and are authenticated with `gh` CLI, SaaSFoundryAI offers to create a new project automatically:
-
-```bash
-$ sf new
-
-? Choose your project management tool: ✓ GitHub Projects (built-in, authenticated)
-? Create a new GitHub Project automatically? Yes
-? Project name: Development Board
-
-🔨 Creating GitHub Project "Development Board"...
-✅ Project created: https://github.com/orgs/myorg/projects/1
+```text
+AI draft → Human review → Spawning → Done
 ```
 
-**How it works:**
-
-1. Detects if you're in an organization or personal repository
-2. Uses GitHub GraphQL API (`createProjectV2` mutation)
-3. Returns the project URL automatically
-4. Falls back to manual URL entry if creation fails
-
-**Requirements:**
-
-- `gh` CLI must be authenticated: `gh auth login`
-- You must have permission to create projects in the repository/org
-
-**When to use:**
-
-- ✅ Starting a new project from scratch
-- ✅ Testing SaaSFoundryAI quickly
-- ✅ Creating isolated project boards per repository
-
-**When to use manual URL:**
-
-- ✅ Using an existing project board
-- ✅ Sharing a project board across multiple repositories
-- ✅ When you don't have project creation permissions
-
-### Jira
-
-- ✅ REST API integration
-- ✅ Native sub-tasks
-- ✅ Sprint management
-- ✅ Custom fields
-
-### Notion
-
-- ✅ Database integration
-- ✅ Linked pages
-- ✅ Custom properties
-- ✅ Rich content
-
-### Linear
-
-- ✅ GraphQL API
-- ✅ Sub-issues
-- ✅ Cycles
-- ✅ Labels
-
-## Validation System
-
-SaaSFoundryAI includes a workflow validator that ensures your local configuration stays in sync with your remote project board.
-
-### Why validation matters
-
-Over time, your workflow configuration can drift from the actual project board:
-
-- 🔄 **Team renames statuses** - "In Review" becomes "Review"
-- 📊 **Board structure changes** - New statuses added, old ones removed
-- 🔧 **Configuration errors** - Typos or incorrect field mappings
-- 🚀 **Deployment issues** - Automation breaks due to config mismatch
-
-The validator detects these issues and offers automatic fixes.
-
-### What it validates
-
-#### GitHub Projects
-
-- ✅ Project URL accessibility
-- ✅ Status field existence and values
-- ✅ Repository connection
-- ✅ Project visibility
-
-#### Jira
-
-- ✅ Project key validity
-- ✅ Status workflow states
-- ✅ Required fields configuration
-- ✅ API credentials
-
-#### Notion
-
-- ✅ Database existence
-- ✅ Status property configuration
-- ✅ Required properties (Title, Status, Assignee)
-- ✅ Database sharing permissions
-
-#### Linear
-
-- ✅ Team key validity
-- ✅ Workflow states
-- ✅ Required fields
-- ✅ API token validity
-
-### How to validate
-
-```bash
-# Basic validation
-sf workflow validate
-
-# Advanced options (use skill directly)
-~/.claude/skills-optional/sf-tool-workflow-validator/validate-workflow.sh --verbose
-~/.claude/skills-optional/sf-tool-workflow-validator/validate-workflow.sh --fix
-```
-
-### Example validation output
-
-```bash
-$ sf workflow validate
-
-🔍 Validating workflow configuration...
-
-Tool: GitHub Projects
-URL: https://github.com/orgs/myorg/projects/1
-
-✅ Project accessible
-✅ Status field found
-⚠️  Status mismatch detected:
-   Local:  Backlog, Ready, In Progress, In Review, Done
-   Remote: Backlog, Todo, In Progress, Review, Complete
-
-❌ Validation failed with 1 issue(s)
-
-Run with --fix to update local config automatically.
-```
-
-### Auto-fix mode
-
-When mismatches are detected, you can auto-fix them:
-
-```bash
-~/.claude/skills-optional/sf-tool-workflow-validator/validate-workflow.sh --fix
-
-🔧 Auto-fixing workflow configuration...
-
-Updating statuses in .saasfoundry.json:
-  - Ready → Todo
-  - In Review → Review
-  - Done → Complete
-
-✅ Configuration updated and saved
-✅ Validation passed
-```
-
-**Auto-fix benefits:**
-
-- ✅ **Non-destructive** - Creates `.saasfoundry.json.backup` before changes
-- ✅ **Smart updates** - Only updates what's different
-- ✅ **Preserves settings** - Keeps all other configuration intact
-- ✅ **Audit trail** - Sets `validated: true` and `lastValidated` timestamp
-
-### When to validate
-
-- ✅ **After initial setup** - Verify everything is configured correctly
-- ✅ **Weekly** - As part of team standup or sprint planning
-- ✅ **Before deployments** - Ensure automation will work
-- ✅ **After team changes** - When someone renames statuses or fields
-- ✅ **When debugging** - If workflow automation stops working
-
-### Validation fields
-
-After successful validation, your manifest includes:
-
-```json
-{
-  "workflow": {
-    // ... other fields ...
-    "validated": true,
-    "lastValidated": "2026-03-30T14:30:00Z"
-  }
-}
-```
-
-These fields help track workflow health over time.
-
-## Git Workflow
-
-The workflow system enforces consistent git practices:
-
-### Branch Configuration
-
-Configure which branches to use for development and PRs:
-
-```json
-{
-  "workingBranch": "develop", // Branch to rebase from + PR target (default)
-  "prTargetBranch": "master" // Optional: Override PR target if different
-}
-```
-
-**Key points:**
-
-- `workingBranch`: The branch you work from (rebase + create feature branches)
-- `prTargetBranch`: Where PRs are merged (defaults to `workingBranch` if not specified)
-- In 95% of cases, both are the same (e.g., `develop`)
-- Override `prTargetBranch` only for special workflows (e.g., PR to `master` from `develop`)
-
-**Example workflows:**
-
-```bash
-# Standard workflow (most common)
-workingBranch: "develop"
-prTargetBranch: "develop"  # or omit (same as workingBranch)
-
-# Direct to production
-workingBranch: "develop"
-prTargetBranch: "master"   # PRs go directly to production
-```
-
-### Branch Naming
-
-Configured in `workflow.branchNaming`:
-
-```json
-{
-  "feature": "feature/{issue-number}-{description}",
-  "fix": "fix/{issue-number}-{description}",
-  "release": "rc-{version}"
-}
-```
-
-Example: `feature/42-user-authentication`
-
-### Commit Format
-
-Configured in `workflow.commitFormat`:
-
-```json
-{
-  "pattern": "{type}(#{number}): {description}",
-  "requireTicket": true,
-  "types": ["feat", "fix", "docs", "style", "refactor", "test", "chore"]
-}
-```
-
-Example: `feat(#42): add JWT authentication`
-
-## Commands
-
-### Project-Level Commands
-
-```bash
-sf workflow show              # Show current config
-sf workflow use <template>    # Apply template
-sf workflow set-working-branch <branch>  # Set working branch
-sf workflow set-ai-rules      # Configure AI rules
-sf workflow validate          # Validate config
-sf workflow save <name>       # Save as template
-```
-
-### Global Template Commands
-
-```bash
-sf workflow list              # List templates
-sf workflow create <name>     # Create template
-sf workflow delete <name>     # Delete template
-sf workflow show-template <name>  # Show template
-```
-
-## Best Practices
-
-1. **Use templates** - Create templates for common workflows
-2. **Enable AI rules** - Let Claude enforce workflow automatically
-3. **Consistent naming** - Use configured branch and commit formats
-4. **Status updates** - Keep issues in sync with development progress
-
-## Next Steps
-
-- Run `sf workflow --help` to see all available commands
-- Use `sf workflow create <name>` to create workflow templates
-- Configure AI rules with `sf workflow set-ai-rules`
+Use `workflow-cli.sh transition-drafting`; the CLI rejects code-path transitions for these tickets.
+
+## Continue
+
+- [Team 7-status reference](/workflow/7-status-system)
+- [Complexity system](/workflow/complexity-system)
+- [GitHub Projects integration](/workflow/github-integration)
+- [Connect your tools](/features/your-tools)
+- [CLI or assistant setup](/getting-started/setup-paths)

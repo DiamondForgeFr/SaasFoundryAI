@@ -92,7 +92,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOnOutside
   justify-content: center;
   gap: 4px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: 3px;
   color: var(--vp-c-text-2);
   font-size: 12px;
   font-weight: 600;
@@ -146,7 +146,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOnOutside
   min-width: 164px;
   padding: 6px;
   border: 1px solid var(--vp-c-divider);
-  border-radius: 10px;
+  border-radius: 3px;
   background: var(--vp-c-bg-elv, var(--vp-c-bg));
   box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
 }
@@ -157,7 +157,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOnOutside
   align-items: center;
   min-height: 36px;
   padding: 0 9px;
-  border-radius: 6px;
+  border-radius: 3px;
   color: var(--vp-c-text-2);
   font-size: 13px;
   text-decoration: none;

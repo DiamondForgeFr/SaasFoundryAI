@@ -13,7 +13,7 @@ et votre réseau.
 
 ## Avant de commencer
 
-Il vous faut Node.js 24.19.0 ou plus récent, npm 11, Git et Docker pour la configuration PostgreSQL locale recommandée. Le [guide d'installation](/getting-started/installation) couvre les dépôts
+Il vous faut Node.js 24.19.0 ou plus récent, npm 11, Git et Docker pour la configuration PostgreSQL locale recommandée. Le [guide d'installation](/fr/getting-started/installation) couvre les dépôts
 existants, l'installation globale et les profils d'agents pris en charge.
 
 ## 1. Lancez le créateur
@@ -90,9 +90,9 @@ Consultez l'[inventaire complet des capacités](/fr/features/built-in) pour les 
 
 ::: info Construisez et inspectez le premier parcours réel
 
-Continuez avec [Votre premier projet SaaS](/getting-started/first-project). Ce tutoriel couvre la structure générée, les services locaux, la création de compte, la documentation API et votre première
-fonctionnalité transverse.
+Continuez avec [Votre premier projet SaaS](/fr/getting-started/first-project). Ce tutoriel couvre la structure générée, les services locaux, la création de compte, la documentation API et votre
+première fonctionnalité transverse.
 
 :::
 
-Si vous préférez d'abord le modèle mental, lisez [Monorepo ou multirepo](/fr/guide/monorepo-vs-multirepo) et [Comment fonctionne le workflow](/guide/workflow-system).
+Si vous préférez d'abord le modèle mental, lisez [Monorepo ou multirepo](/fr/guide/monorepo-vs-multirepo) et [Comment fonctionne le workflow](/fr/guide/workflow-system).

@@ -24,15 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 #### Workflow system
 
-- 7-status complexity-adaptive workflow: `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`.
+- Two built-in presets: Team with seven statuses, and Solo with five; projects can also create, save, and reuse Custom workflows.
 - 4 complexity levels (bug / low / medium / complex) with adaptive ceremony — analyze depth, plan approval gates, adversarial review for complex tickets.
-- Smart tool detection for GitHub Projects, Jira, Notion, and Linear based on local credentials.
+- Complete GitHub Projects workflow adapter; experimental Jira and Linear adapters; complete Notion SRS backend without claiming it as a full workflow tracker.
 - GitHub Projects CLI helper (`github-projects-cli.sh`) with sub-issue linking via GraphQL.
 - Workflow enforcement: subtask closure as you go + parent-transition gating ([#79](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/79)).
 
 #### Skills ecosystem
 
-- **`sf-workflow`** — unified successor of the former `sf-workflow-apex` + `sf-workflow-apex-free` skills. Behavior now scales by complexity tag.
+- **`sf-workflow`** — one complexity-adaptive workflow skill replaces the former split workflow variants.
 - **`sf-tool-saasfoundry`** ([#18](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/18)) — catalogue-aware anti-reinvention guardrails, feedback orchestration, and discovery helpers for `sf new`
   / `sf update`.
 - Module catalogue schema with enriched metadata ([#60](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/60)).
@@ -41,7 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 #### Infrastructure
 
-- Split pre-commit / pre-push hooks for faster commits (~15s) and heavier tests on push (~2-3 min) ([#33](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/33)).
+- Split pre-commit / pre-push checks for fast local feedback and explicit Docker validation during AI testing ([#33](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/33)).
 - Codecov integration with coverage badge in README ([#33](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/33)).
 - On-disk project schema cache with `cache-clear` escape hatch ([#137](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/137)).
 - Scaffolded GitHub Projects CLI sync + drift guard ([#138](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/138)).

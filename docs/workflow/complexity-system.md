@@ -112,7 +112,7 @@ Adversarial review agents are read-only and may share the implementation checkou
 ## Quality preservation principle
 
 The complexity system is **not about cutting corners on simple tickets** — it's about preserving full rigor where rigor matters. A `low` ticket gets oneshot-quality treatment (direct, minimal
-exploration). A `complex` ticket gets apex-level treatment (deep analysis, adversarial review). Either way, the quality standard for that level is fully applied.
+exploration). A `complex` ticket gets the full treatment (deep analysis, explicit approval and adversarial review). Either way, the quality standard for that level is fully applied.
 
 ## Configuration files
 

@@ -155,7 +155,7 @@ L'agent travaille comme un contributeur dans vos outils existants. SaaSFoundryAI
 
 ## Continuer
 
-- [Introduction au workflow](/workflow/introduction)
-- [Intégration GitHub](/workflow/github-integration)
-- [Module SRS](/modules/srs)
-- [Référence `sf tools`](/cli/sf-tools)
+- [Introduction au workflow](/fr/workflow/introduction)
+- [Intégration GitHub](/fr/workflow/github-integration)
+- [Module SRS](/fr/modules/srs)
+- [Référence `sf tools`](/fr/cli/sf-tools)

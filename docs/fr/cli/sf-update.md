@@ -278,7 +278,7 @@ Des options supplémentaires existent pour les secrets et intégrations des modu
 
 ## Poursuivre le cycle
 
-- [Comprendre le modèle de mise à jour complet](/guide/updating-projects)
-- [Inspecter l'état du projet](/cli/sf-status)
+- [Comprendre le modèle de mise à jour complet](/fr/guide/updating-projects)
+- [Inspecter l'état du projet](/fr/cli/sf-status)
 - [Comparer monorepo et multirepo](/fr/guide/monorepo-vs-multirepo)
-- [Comprendre le cycle SRS](/srs/lifecycle)
+- [Comprendre le cycle SRS](/fr/srs/lifecycle)

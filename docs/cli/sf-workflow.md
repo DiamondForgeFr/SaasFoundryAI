@@ -1,6 +1,6 @@
 # sf workflow
 
-Manage workflow configuration and AI rules for the 7-status complexity-adaptive workflow system.
+Manage complexity-adaptive workflow configuration and coding-agent rules. Use the Team or Solo preset, or create, save, and reuse a Custom template.
 
 ## Usage
 
@@ -59,6 +59,9 @@ sf workflow save my-template
 
 The workflow system is complexity-adaptive: each ticket is tagged `bug | low | medium | complex`, which scales the ceremony (analyze depth, plan approval gates, adversarial review). See
 [Workflow System](/workflow/introduction) for the full lifecycle.
+
+Team separates functional feature testing (`Human testing`) from code review (`In review`). Solo removes the separate Human testing status. Custom workflows follow the ordered statuses stored in the
+manifest.
 
 ## See Also
 

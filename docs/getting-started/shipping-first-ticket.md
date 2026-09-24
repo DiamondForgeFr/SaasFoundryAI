@@ -1,21 +1,21 @@
 # Shipping Your First Ticket
 
-A hands-on walkthrough of the SaaSFoundryAI workflow, from an idea in your backlog to code merged on `master`. You will drive one real ticket through the full 7-status lifecycle — the same lifecycle
-every contributor on your project uses, human or AI.
+A hands-on walkthrough of the SaaSFoundryAI team workflow, from an idea in your backlog to a verified merge. You will drive one real ticket through the complete seven-status preset.
 
-**Time required**: ~20 minutes **Prerequisites**: a project generated with `sf new` and a GitHub Project board wired to it (or Jira / Notion / Linear — the flow is identical).
+**Time required**: ~20 minutes **Prerequisites**: a project generated with `sf new` and a GitHub Project board wired to it. GitHub Projects provides the complete v1 contract; Jira and Linear are
+experimental board adapters, while Notion is the v1 SRS backend.
 
 ## The example feature
 
 We will ship a tiny endpoint: **`GET /api/version`** returning `{ version: "1.0.0" }` from `package.json`.
 
 - Complexity: 🟢 **low** — no schema changes, no new dependencies, no security surface. Single new endpoint, under 20 lines of code.
-- Target branch: `master` (or whatever your `workflow.releaseBranch` points at).
+- Target branch: whatever `workflow.prTargetBranch` declares.
 
 This is intentionally trivial. The point is not to build something impressive — it is to see **every status** of the workflow in action, so you trust the process when you come back with a harder
 feature tomorrow.
 
-## The seven statuses at a glance
+## The Team preset at a glance
 
 ```text
 Backlog → Ready → In progress → AI testing → Human testing → In review → Done
@@ -23,6 +23,20 @@ Backlog → Ready → In progress → AI testing → Human testing → In review
 
 Each transition has a mandatory action. Skipping a status is the fastest way to ship broken code. The `sf-workflow` skill (installed with every generated project) enforces the transitions, so both you
 and your AI agent play by the same rules.
+
+::: info Using the Solo preset?
+
+Solo uses `Backlog → In progress → AI testing → In review → Done`. Follow the same implementation and evidence steps, but perform any manual feature check during PR review because Solo has no separate
+Human testing column.
+
+:::
+
+::: tip Using a Custom workflow?
+
+Follow the ordered statuses stored in `.saasfoundry.json`. Create and reuse templates with `sf workflow create`, `sf workflow save`, and `sf workflow use`; do not copy Team-only transitions into a
+different route.
+
+:::
 
 ## Step 1 — Backlog: create the ticket
 
@@ -32,7 +46,7 @@ Open your GitHub Project board and create a new issue:
 - **Body**: `Expose the current package.json version at GET /api/version. Returns { version: string }. No auth required, public endpoint.`
 - **Status column**: `Backlog`
 
-::: tip Let your AI agent do this If Claude Code is set up with the `sf-workflow` skill, you can simply say:
+::: tip Let your coding agent do this If your current agent can discover the installed `sf-workflow` skill, you can simply say:
 
 > "Create a backlog ticket: add a /api/version endpoint that returns the package.json version. Low complexity."
 
@@ -160,7 +174,8 @@ git commit -m "feat(#42): add /api/version endpoint"
 git push -u origin feature/42-version-endpoint
 ```
 
-The pre-commit hook runs Prettier, ESLint, TypeScript, and Jest. The pre-push hook runs the Docker build scenarios. **Pushing succeeds only if everything is green** — humans and AI alike.
+The pre-commit hook runs formatting, linting, the TypeScript build, package checks, and Jest. Heavy Docker lifecycle scenarios run explicitly during AI testing with `npm run test:pre-push`; the
+pre-push hook itself handles release/version and WIP guards.
 
 ## Step 6 — In progress → AI testing
 
@@ -180,7 +195,11 @@ npm run test:unit
 curl http://localhost:3500/api/version     # smoke test against the dev server
 ```
 
-The agent posts a test plan comment on the issue before running, and a summary comment after. If everything passes, it transitions the ticket to Human testing.
+The agent posts a test plan before running and a report afterwards. If everything passes, it opens or reuses a draft PR so the diff and evidence are stable during feature testing:
+
+```bash
+$CLI create-pr 42 --draft
+```
 
 ## Step 7 — AI testing → Human testing
 
@@ -188,7 +207,7 @@ The agent posts a test plan comment on the issue before running, and a summary c
 $CLI update-status 42 "Human testing"
 ```
 
-This is your turn. Start the dev servers and **verify the feature in a browser / with curl**:
+This is **feature testing**. Start the dev servers and verify the behavior in a browser or with curl; code review comes in the next phase.
 
 ```bash
 npm run dev
@@ -205,19 +224,19 @@ Check:
 
 ### If you find a bug
 
-Do **not** open the PR yet. Document the bug on the issue, fix it on the feature branch, commit, push, and **restart from AI testing**. Human testing is the last checkpoint before the PR — once you
-pass it, the code must be shippable.
+Keep the PR in draft. Document the bug on the issue, fix it on the feature branch, commit, push, and **restart from AI testing**. Reuse the same draft PR after the new evidence is posted.
 
 ## Step 8 — Human testing → In review
 
-Open the pull request using the workflow CLI (it pushes if needed and targets your release branch):
+Human testing approved the feature. Mark the existing pull request ready and enter **code review**:
 
 ```bash
-$CLI create-pr 42
+$CLI ready-pr 42
 $CLI update-status 42 "In review"
 ```
 
-The PR links back to the ticket, includes the AI test plan + summary comments in its description, and triggers CI. Add a reviewer; CI must be green and the reviewer must approve before merge.
+The ready PR links back to the ticket, carries the test evidence and starts full CI. Reviewers now inspect implementation quality; CI must be green and the required reviewers must approve before
+merge.
 
 ## Step 9 — In review → Done
 
@@ -246,12 +265,12 @@ Even for a trivial endpoint, you touched every guardrail the workflow provides:
 | In review     | PR with CI + reviewer approval      | External validation before code ships      |
 | Done          | Cleanup + confirmation              | No half-closed work leaking into the board |
 
-The next ticket — even if it is 10× larger — uses **the exact same flow**. The complexity tag (`medium` / `complex`) just scales the rigor at each step. And because your AI agent reads the same
-`.saasfoundry.json` and the same `sf-workflow` skill files as you do, it will apply the same discipline.
+The next ticket follows the same **configured route**. The complexity tag (`medium` / `complex`) scales the rigor at each step, while Team, Solo, or Custom determines which statuses exist. Because the
+coding agent reads the same `.saasfoundry.json` and `sf-workflow` rules as the team, it applies the same contract.
 
 ## Next steps
 
-- Read [Workflow System](/workflow/introduction) to understand the philosophy behind the 7 statuses.
+- Read [Workflow System](/workflow/introduction) to compare Team, Solo, and Custom workflows.
 - Read [Complexity System](/workflow/complexity-system) for the full `bug` / `low` / `medium` / `complex` contract.
 - Read [AI Rules](/workflow/ai-rules) for the eight non-negotiables the AI agent follows — and why.
 - Look at [First Project](/getting-started/first-project) for a deeper dive into the generated codebase itself.

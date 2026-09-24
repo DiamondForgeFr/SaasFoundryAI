@@ -11,8 +11,8 @@ one command.
 | **Public API**    | None (anonymous tier)       | N/A                         | `sf-tool-context7`                                     |
 | **Authenticated** | Per-service token / API key | Yes, via `sf tools use`     | `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma` |
 
-Workflow tool skills (`sf-tool-github-projects` today; `sf-tool-jira`, `sf-tool-linear`, `sf-tool-notion` workflow variant, and `sf-tool-clickup` on the roadmap) are a third bucket — installed **once
-per project**, chosen at `sf new` time, driven by your board tool's own auth (`gh auth` for GitHub, API token for the others). See [Workflow System](/workflow/introduction) for their role.
+Workflow adapters are a third category. GitHub Projects implements the complete v1 delivery contract. Jira and Linear adapters are experimental. Notion implements the complete v1 SRS backend, but is
+not a complete delivery-board adapter. See [Workflow System](/workflow/introduction) for the exact support matrix.
 
 ## Available tool skills
 
@@ -45,7 +45,8 @@ sf update --add-modules sf-skill-atlassian \
   --atlassian-domain yourcompany.atlassian.net
 ```
 
-`sf update` will write the skill directory, wire it into the scaffold's CLAUDE.md, and store credentials in `~/.claude/credentials/atlassian/<account>.env`.
+`sf update` writes the skill directory, references it from the generated agent instructions, and stores credentials in the integration's user-level credentials directory. Secrets stay outside the
+repository.
 
 ## Multi-account credentials
 
@@ -194,18 +195,17 @@ Generate the personal access token under Figma → Settings → Personal access 
 
 One workflow tool skill is installed per project, chosen at `sf new` time:
 
-| Board tool      | Skill                               | Authentication                                          | Availability    |
-| --------------- | ----------------------------------- | ------------------------------------------------------- | --------------- |
-| GitHub Projects | `sf-tool-github-projects`           | `gh auth login` (already present)                       | Available today |
-| Jira            | `sf-tool-jira`                      | Atlassian API token (shared with `sf-tool-atlassian`)   | On the roadmap  |
-| Notion          | `sf-tool-notion` (workflow variant) | Notion integration token (shared with `sf-tool-notion`) | On the roadmap  |
-| Linear          | `sf-tool-linear`                    | Linear API key                                          | On the roadmap  |
-| ClickUp         | `sf-tool-clickup`                   | ClickUp API token                                       | On the roadmap  |
+| Board tool      | Skill / responsibility              | Authentication           | Availability            |
+| --------------- | ----------------------------------- | ------------------------ | ----------------------- |
+| GitHub Projects | `sf-tool-github-projects`           | `gh auth login`          | Complete v1 workflow    |
+| Jira            | `sf-tool-jira`                      | Atlassian API token      | Experimental            |
+| Linear          | `sf-tool-linear`                    | Linear API key           | Experimental            |
+| Notion          | SRS backend, not a workflow adapter | Notion integration token | Complete v1 SRS backend |
 
 ::: info What ships today
 
-Only `sf-tool-github-projects` is in the current release. The Jira, Notion, Linear and ClickUp adapters are scheduled next — they plug in behind the same `sf-workflow` skill, so the commands you learn
-today do not change when they land.
+`sf-tool-github-projects` is the reference implementation of the complete delivery workflow. Jira and Linear remain experimental. Notion is production-ready for the SRS lifecycle, but that does not
+make it a complete status-board adapter.
 
 :::
 

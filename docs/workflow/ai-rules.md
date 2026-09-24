@@ -13,21 +13,23 @@ and exit conditions for the current status.
 
 **How to apply:** when in doubt, re-run `.claude/skills/sf-workflow/workflow-cli.sh status <ticket>` and re-read the file. Never guess.
 
-## 2. Never skip statuses
+## 2. Follow the configured route; never invent a shortcut
 
-The status progression is strictly linear: `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`. No shortcuts.
+The ordered statuses come from `.saasfoundry.json`. The team preset uses seven; the solo preset uses five; a custom workflow can define another documented sequence. The agent always follows the
+installed status documents and CLI guards.
 
 **Common violations to watch for:**
 
-- Backlog → In progress (without Ready)
-- In progress → Human testing (skipping AI testing)
-- Human testing → Done (skipping In review / PR)
-- Any status → Done before the PR is merged
+- applying the team sequence to a project configured with `solo`;
+- skipping AI testing because a change looks small;
+- treating team `Human testing` as code review instead of functional feature testing;
+- moving team `Human testing` directly to Done instead of readying the PR for code review;
+- moving any delivery ticket to Done without the merge evidence its nature requires.
 
-**Why:** each gate exists to catch a class of bugs. Skipping Ready means coding against ambiguous specs. Skipping AI testing means asking the human to find bugs a machine could catch. Skipping In
-review means merging without a second pair of eyes.
+**Why:** every configured gate catches a class of failure. The team preset separates feature testing from code review; the solo preset intentionally combines its human gate with PR review. Complexity
+changes the rigor _inside_ those phases, while nature-controlled routes handle internal work, bundled children and Epics.
 
-**How to apply:** when the agent thinks "this ticket is simple, we can skip X", it is wrong. The complexity system adjusts the _ceremony within each status_ — it never removes statuses.
+**How to apply:** run `workflow-cli.sh status <ticket>`, read the manifest sequence and current status document, then use the guarded transition. Never reconstruct a workflow from memory.
 
 ## 3. Never bypass the workflow CLI
 

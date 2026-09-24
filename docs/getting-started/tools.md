@@ -1,276 +1,157 @@
-# Development Tools
+# Development tools
 
-SaaSFoundryAI is designed for **AI-assisted collaborative development**. Here's the recommended toolset for the best experience.
+SaaSFoundryAI separates four concerns that are often mixed together: the generated application, its deterministic CLI, the development harness and the external services you choose to connect.
 
-## AI Collaboration Model
-
-SaaSFoundryAI generates projects optimized for Human + AI development:
-
-```
-┌─────────────┐
-│   Human     │ ← You write requirements, review code, make decisions
-└──────┬──────┘
-       │
-       ↓
-┌─────────────┐
-│ Claude Code │ ← AI implements features, manages git, handles workflow
-└──────┬──────┘
-       │
-       ↓
-┌─────────────┐
-│ SaaSFoundryAI │ ← Generated project with Claude-powered skills
-│   Project   │
-└─────────────┘
+```text
+coding agent ──reads──► project instructions + sf-* skills
+                              │
+                              ▼
+                         SaaSFoundry CLI
+                              │
+                              ▼
+                    generated SaaS workspace
+                              │
+              ┌───────────────┼────────────────┐
+              ▼               ▼                ▼
+        GitHub Projects    Notion SRS     optional tools
+        delivery board     requirements   design/context
 ```
 
-**Key Point**: SaaSFoundryAI is not AI-powered itself. It's a **platform that creates projects optimized for AI collaboration**.
+No single editor, terminal or AI provider is required for the generated application to run.
 
-## Required Tools
+## 1. The SaaSFoundry CLI
 
-### 1. Claude Code (Terminal)
-
-**What it is**: Anthropic's official CLI for Claude AI
-
-**Why you need it**: Provides AI assistance for:
-
-- Writing and reviewing code
-- Git operations (commits, PRs, merges)
-- Workflow management (issues, tickets, subtasks)
-- Error fixing and refactoring
-
-**Installation**:
+The CLI is the deterministic layer used by humans and agents:
 
 ```bash
-# npm
-npm install -g @anthropic-ai/claude-code
-
-# Homebrew (macOS)
-brew install anthropic/tap/claude-code
+sf new my-product
+sf status --agent-friendly --no-network
+sf modules list
+sf update
+sf workflow show
 ```
 
-**Usage**:
+It owns scaffolding, configuration, managed-file updates and diagnostics. An agent should propose and execute explicit CLI commands, not invent an undocumented parallel generator.
+
+## 2. Coding-agent hosts
+
+The harness can declare these profile identifiers:
+
+- `claude-code`
+- `codex`
+- `gemini-cli`
+- `kimi`
+- `qwen-code`
+- `generic`
+
+These identify host integrations, not model providers. A profile writes appropriate instruction entrypoints and shared skill references; it does not install the runtime, select a model, transfer
+credentials or prove native discovery.
 
 ```bash
-cd my-saas-project
-claude
-# Claude Code launches and reads project context
-# Use natural language to request code changes
+sf agents list --json
+sf agents enable codex
+sf agents replace claude-code codex --scope shared
+sf agents doctor codex claude-code
 ```
 
-**Learn more**: [Claude Code Documentation](https://docs.anthropic.com/claude-code)
+Claude Code currently has the native one-line assistant bootstrap. Other hosts begin with the CLI path and their declared profile, then follow the generated `AGENTS.md` or host-specific entrypoint.
 
-### 2. Node.js >= 22.13.0
+## 3. Project instructions and skills
 
-**Why this version**: Required for:
+The historical managed source remains under `.claude/`; portable shared copies for declared agents live under `.agents/`:
 
-- Prisma 7 (driver adapters)
-- Vite 7 (frontend bundling)
-- NestJS 11 (backend framework)
+```text
+CLAUDE.md
+AGENTS.md
+.claude/skills/sf-*/
+.agents/skills/sf-*/
+```
 
-**Installation**:
+In a SaaSFoundry project, prefer `sf-*` procedures over generic global skills. The project versions understand `.saasfoundry.json`, branch policy, topology and workflow guards.
+
+## 4. Delivery board
+
+The workflow core delegates ticket operations to a board adapter.
+
+| Board           | v1 level                                                                     |
+| --------------- | ---------------------------------------------------------------------------- |
+| GitHub Projects | Complete: issues, native children, statuses, milestones, PR and merge guards |
+| Jira            | Experimental adapter                                                         |
+| Linear          | Experimental adapter                                                         |
+| Notion          | Not a complete workflow tracker in v1                                        |
+
+GitHub authentication comes from the `gh` CLI and, for some Project V2 operations, the configured token. Credentials are never committed to `.saasfoundry.json`.
+
+### Team, Solo, and Custom
+
+The workflow shape is independent from the selected board adapter:
+
+- **Team** uses `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`. **Human testing** is functional feature testing; **In review** is code review.
+- **Solo** removes the separate Human testing status. The developer still performs any warranted functional checks during PR review before merging.
+- **Custom** follows the statuses saved in the manifest. Workflow skills read that configuration instead of forcing Team or Solo.
+
+## 5. SRS and product documentation
+
+Notion is the complete v1 SRS backend. It stores the Epic/FR/DS/TC hierarchy, supports ingestion and reconciles approved requirements into delivery tickets. Confluence and local Markdown are future
+backend targets.
+
+This SRS role is independent from the delivery board. A project can use GitHub Projects for delivery and Notion for its requirements without claiming that Notion implements the GitHub workflow
+contract.
+
+## 6. Optional context tools
+
+Optional `sf-tool-*` skills can connect the agent to library documentation, Atlassian, Notion or Figma when credentials and native tool access exist. They enrich decisions; they do not silently grant
+write access.
 
 ```bash
-# Using nvm (recommended)
-nvm install 22
-nvm use 22
-
-# Or download from nodejs.org
+sf tools list
+sf tools add notion work
+sf tools use notion work
+sf status --agent-friendly --no-network
 ```
 
-## Recommended Tools
+A successful configuration read proves only that the project declares the tool. Use an explicit connection check before depending on the remote service.
 
-### cmux (macOS Only)
+## A practical terminal layout
 
-**What it is**: Terminal multiplexer with integrated browser
+Any terminal or IDE works. A useful local arrangement is:
 
-**Why it's recommended**:
+```text
+┌─────────────────────────┬─────────────────────────┐
+│ coding agent / editor   │ web browser             │
+├─────────────────────────┼─────────────────────────┤
+│ API logs                │ web / test logs         │
+└─────────────────────────┴─────────────────────────┘
+```
 
-- ✅ **Work on multiple aspects simultaneously**
-
-  - API development in one pane
-  - Frontend in another
-  - Database in another
-  - Claude Code in all panes
-
-- ✅ **Integrated browser**
-
-  - See frontend changes instantly
-  - No need to switch apps
-  - Browser shares pane space with terminal
-
-- ✅ **Session management**
-  - Save your entire workspace
-  - Restore instantly when switching projects
-
-**Installation** (macOS only):
+Run the generated project according to its topology:
 
 ```bash
-brew install cmux
+# monorepo
+npm run dev
+
+# or per repository in a multirepo
+npm run dev --prefix apps/api
+npm run dev --prefix apps/web
 ```
 
-**Example workflow with cmux**:
+Use the ports reported by `sf status`; do not assume examples match a customised manifest.
 
-```bash
-cd my-saas-project
-cmux
+## What is safe to automate
 
-# cmux launches with multiple panes:
-# ┌─────────────┬─────────────┐
-# │ API (dev)   │ Web (dev)   │
-# ├─────────────┼─────────────┤
-# │ Claude Code │  Browser    │
-# └─────────────┴─────────────┘
-```
+- reading project state and documentation;
+- proposing commands and configuration;
+- scaffolding after explicit answers;
+- running local builds and tests;
+- preparing test plans, reports and pull requests;
+- using guarded board transitions.
 
-**Learn more**: [cmux.dev](https://cmux.dev)
+The harness still requires humans for decisions such as destructive actions, external writes, feature validation, code-review approval and merges according to the configured workflow.
 
-## Typical Development Setup
+## Continue
 
-### macOS Setup (Recommended)
-
-```bash
-# 1. Install Claude Code
-brew install anthropic/tap/claude-code
-
-# 2. Install cmux
-brew install cmux
-
-# 3. Install SaaSFoundryAI
-npm install -g saasfoundryai-cli
-
-# 4. Create project
-sf new
-
-# 5. Launch development environment
-cd my-project
-cmux
-```
-
-**In cmux**:
-
-- **Top-left pane**: `cd apps/api && npm run dev` (API server)
-- **Top-right pane**: `cd apps/web && npm run dev` (Frontend)
-- **Bottom-left pane**: `claude` (AI assistant)
-- **Bottom-right pane**: Browser → http://localhost:5173
-
-### Other Platforms Setup
-
-```bash
-# 1. Install Claude Code
-npm install -g @anthropic-ai/claude-code
-
-# 2. Install SaaSFoundryAI
-npm install -g saasfoundryai-cli
-
-# 3. Create project
-sf new
-
-# 4. Launch development
-cd my-project
-claude
-```
-
-**In separate terminals**:
-
-- Terminal 1: `cd apps/api && npm run dev`
-- Terminal 2: `cd apps/web && npm run dev`
-- Terminal 3: `claude` (AI assistant)
-- Browser: http://localhost:5173
-
-## Claude Code Skills
-
-Generated projects include Claude-powered skills in `.claude/skills/`:
-
-### Git Skills
-
-- `/commit` - Quick commit with minimal message
-- `/pr` - Create PR with auto-generated description
-- `/merge` - Context-aware conflict resolution
-
-### Workflow Skills
-
-- `sf-workflow` - Complexity-adaptive workflow (bug / low / medium / complex), auto-triggered on workflow keywords
-- Project management integration via `sf-tool-*` skills — **GitHub Projects is the adapter shipping today**; Jira, Notion, Linear and ClickUp adapters are on the roadmap
-
-### Utility Skills
-
-- `/fix-errors` - Fix all ESLint and TypeScript errors
-- `/fix-grammar` - Fix grammar while preserving formatting
-
-See: [Skills System Guide](/guide/skills-system)
-
-## IDE Integration (Optional)
-
-Claude Code works in any terminal, but can also integrate with IDEs:
-
-### VS Code
-
-- Use integrated terminal for Claude Code
-- Split panes for code + Claude
-
-### Cursor
-
-- Built-in Claude integration
-- Use SaaSFoundryAI CLI via terminal
-
-### Other IDEs
-
-- Use external terminal with Claude Code
-- No special integration needed
-
-## Docker (Development)
-
-SaaSFoundryAI includes Docker Compose for development services:
-
-```bash
-# Start PostgreSQL (in-memory for speed)
-npm run db:dev
-
-# Or manually
-docker-compose -f docker-compose.db.yml up -d
-```
-
-**Why Docker for dev?**
-
-- ✅ Consistent environment across team
-- ✅ No need to install PostgreSQL locally
-- ✅ tmpfs (in-memory) for fast I/O
-- ✅ Easy cleanup (`docker-compose down`)
-
-## Troubleshooting
-
-### Claude Code not found
-
-```bash
-# Verify installation
-claude --version
-
-# If not found, reinstall
-npm install -g @anthropic-ai/claude-code
-```
-
-### cmux not available
-
-cmux is macOS only. For other platforms:
-
-- Use tmux (Linux/macOS)
-- Use Windows Terminal (Windows)
-- Use separate terminal tabs/windows
-
-### Node version issues
-
-```bash
-# Check version
-node --version
-
-# Should be >= 22.13.0
-# If not, use nvm to upgrade
-nvm install 22
-nvm use 22
-```
-
-## Next Steps
-
-- [Quick Start](/getting-started/quick-start) - Create your first project
-- [Skills System](/guide/skills-system) - Learn Claude-powered skills
-- [Workflow System](/guide/workflow-system) - AI-assisted project management
+- [Installation](/getting-started/installation)
+- [CLI or assistant setup](/getting-started/setup-paths)
+- [Connect your tools](/features/your-tools)
+- [Agent coexistence](/guide/agent-coexistence)
+- [Skills system](/guide/skills-system)

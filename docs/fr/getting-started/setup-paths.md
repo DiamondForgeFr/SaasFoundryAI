@@ -198,8 +198,8 @@ L'assistant montre normalement cette prévisualisation avant de demander l'appli
 
 ## Continuer
 
-- [Installer les prérequis](/getting-started/installation)
-- [Suivre l'installation la plus courte](/getting-started/quick-start)
-- [Créer et inspecter un premier projet](/getting-started/first-project)
-- [Lire la référence complète de `sf new`](/cli/sf-new)
-- [Comprendre les mises à jour sûres](/cli/sf-update)
+- [Installer les prérequis](/fr/getting-started/installation)
+- [Suivre l'installation la plus courte](/fr/getting-started/quick-start)
+- [Créer et inspecter un premier projet](/fr/getting-started/first-project)
+- [Lire la référence complète de `sf new`](/fr/cli/sf-new)
+- [Comprendre les mises à jour sûres](/fr/cli/sf-update)
