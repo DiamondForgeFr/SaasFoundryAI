@@ -7,9 +7,8 @@ type Labels = {
   nav: {
     guide: string
     cli: string
-    skills: string
-    modules: string
-    srs: string
+    foundation: string
+    harness: string
     changelog: string
     contributing: string
   }
@@ -22,7 +21,6 @@ type Labels = {
     modules: string
     srs: string
     workflow: string
-    api: string
   }
   pages: Record<string, string>
   interface: {
@@ -49,9 +47,8 @@ const labels: Record<DocumentationLocale, Labels> = {
     nav: {
       guide: 'Guide',
       cli: 'CLI',
-      skills: 'Skills',
-      modules: 'Modules',
-      srs: 'SRS',
+      foundation: 'SaaS foundation',
+      harness: 'Development harness',
       changelog: 'Changelog',
       contributing: 'Contributing'
     },
@@ -59,12 +56,11 @@ const labels: Record<DocumentationLocale, Labels> = {
       gettingStarted: 'Getting Started',
       cli: 'CLI Commands',
       guide: 'Guide',
-      skills: 'Skills',
+      skills: 'Harness skills',
       features: 'SaaS foundation',
-      modules: 'Modules',
-      srs: 'SRS',
-      workflow: 'Workflow System',
-      api: 'API Reference'
+      modules: 'Application add-ons',
+      srs: 'Harness · SRS',
+      workflow: 'Harness · Workflow'
     },
     pages: {
       installation: 'Installation',
@@ -112,11 +108,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       sevenStatuses: '7-Status System',
       complexity: 'Complexity System',
       aiRules: 'AI Rules',
-      github: 'GitHub Integration',
-      types: 'Types',
-      builders: 'Builders',
-      installers: 'Installers',
-      runners: 'Runners'
+      github: 'GitHub Integration'
     },
     interface: {
       outline: 'On this page',
@@ -140,9 +132,8 @@ const labels: Record<DocumentationLocale, Labels> = {
     nav: {
       guide: 'Guide',
       cli: 'CLI',
-      skills: 'Skills',
-      modules: 'Modules',
-      srs: 'SRS',
+      foundation: 'Fondation SaaS',
+      harness: 'Harness de développement',
       changelog: 'Journal des versions',
       contributing: 'Contribuer'
     },
@@ -150,12 +141,11 @@ const labels: Record<DocumentationLocale, Labels> = {
       gettingStarted: 'Bien démarrer',
       cli: 'Commandes CLI',
       guide: 'Guide',
-      skills: 'Skills',
+      skills: 'Skills du harness',
       features: 'Fondation SaaS',
-      modules: 'Modules',
-      srs: 'SRS',
-      workflow: 'Workflow de livraison',
-      api: 'Référence API'
+      modules: 'Extensions applicatives',
+      srs: 'Harness · SRS',
+      workflow: 'Harness · Workflow'
     },
     pages: {
       installation: 'Installation',
@@ -203,11 +193,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       sevenStatuses: 'Workflow à 7 statuts',
       complexity: 'Système de complexité',
       aiRules: "Règles de l'IA",
-      github: 'Intégration GitHub',
-      types: 'Types',
-      builders: 'Builders',
-      installers: 'Installateurs',
-      runners: 'Runners'
+      github: 'Intégration GitHub'
     },
     interface: {
       outline: 'Sur cette page',
@@ -286,8 +272,7 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
       page(pages.email, '/modules/email'),
       page(pages.storage, '/modules/storage'),
       page(pages.analytics, '/modules/analytics'),
-      page(pages.pwa, '/modules/pwa'),
-      page('SRS', '/modules/srs')
+      page(pages.pwa, '/modules/pwa')
     ]),
     [prefixPath(locale, '/srs/')]: group(groups.srs, [
       page(pages.moduleOverview, '/modules/srs'),
@@ -302,12 +287,6 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
       page(pages.complexity, '/workflow/complexity-system'),
       page(pages.aiRules, '/workflow/ai-rules'),
       page(pages.github, '/workflow/github-integration')
-    ]),
-    [prefixPath(locale, '/api/')]: group(groups.api, [
-      page(pages.types, '/api/types'),
-      page(pages.builders, '/api/builders'),
-      page(pages.installers, '/api/installers'),
-      page(pages.runners, '/api/runners')
     ])
   }
 }
@@ -320,9 +299,23 @@ export const createThemeConfig = (locale: DocumentationLocale, translatedRoutes:
     nav: [
       { text: nav.guide, link: documentationLink(locale, '/guide/project-structure', translatedRoutes) },
       { text: nav.cli, link: documentationLink(locale, '/cli/sf-new', translatedRoutes) },
-      { text: nav.skills, link: documentationLink(locale, '/skills/overview', translatedRoutes) },
-      { text: nav.modules, link: documentationLink(locale, '/modules/email', translatedRoutes) },
-      { text: nav.srs, link: documentationLink(locale, '/modules/srs', translatedRoutes) },
+      {
+        text: nav.foundation,
+        items: [
+          { text: labels[locale].pages.builtIn, link: documentationLink(locale, '/features/built-in', translatedRoutes) },
+          { text: labels[locale].pages.rbac, link: documentationLink(locale, '/features/rbac', translatedRoutes) },
+          { text: labels[locale].groups.modules, link: documentationLink(locale, '/modules/email', translatedRoutes) }
+        ]
+      },
+      {
+        text: nav.harness,
+        items: [
+          { text: labels[locale].pages.workflowSystem, link: documentationLink(locale, '/guide/workflow-system', translatedRoutes) },
+          { text: labels[locale].pages.skillsSystem, link: documentationLink(locale, '/skills/overview', translatedRoutes) },
+          { text: 'SRS', link: documentationLink(locale, '/modules/srs', translatedRoutes) },
+          { text: labels[locale].pages.yourTools, link: documentationLink(locale, '/features/your-tools', translatedRoutes) }
+        ]
+      },
       {
         text: 'v1.0.0-beta',
         items: [

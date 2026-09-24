@@ -103,6 +103,18 @@ sf tools add linear my-account
 
 ## Quick Start
 
+The development harness has two interfaces over the same workflow. Use the CLI when you want an explicit, scriptable command; ask your coding agent when you want it to inspect the project, explain the
+next safe action and run that command for you.
+
+| Goal                                              | CLI path                                  | Agent path                                                                            |
+| ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| Inspect the current project and its preconditions | `sf status --agent-friendly --no-network` | “Check this SaaSFoundry project and tell me what is blocking the next delivery step.” |
+| Inspect the workflow configuration                | `sf workflow show`                        | “Show me how this project's delivery workflow is configured.”                         |
+| Validate the workflow against the connected board | `sf workflow validate`                    | “Validate the workflow and explain any drift before changing anything.”               |
+
+Both paths read `.saasfoundry.json`, use the installed `sf-workflow` and tool skills, and respect the same complexity, approval, testing and board-status guards. The agent does not replace the CLI or
+silently bypass it: it supplies context, chooses the appropriate guarded operation and reports the result.
+
 ### During Project Creation
 
 ```bash
