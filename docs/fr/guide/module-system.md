@@ -127,7 +127,7 @@ Lors de l’ajout d’un module, l’installateur :
 ```json
 {
   "modules": {
-    "emailService": "mailersend",
+    "email": { "provider": "mailersend", "version": 1 },
     "s3Setup": "docker",
     "includeAnalytics": true
   }
@@ -164,7 +164,7 @@ Stratégies :
 3. Ajoutez les marqueurs `TODO` dans les blueprints.
 4. Mettez à jour les types et les prompts.
 
-Voir [Développement — ajouter des modules](/fr/contributing/development#adding-modules).
+Voir [Développement — ajouter un module ou une compétence](/fr/contributing/development#ajouter-un-module-ou-une-competence).
 
 ## Bonnes pratiques
 

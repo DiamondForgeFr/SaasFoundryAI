@@ -124,7 +124,8 @@ comment les tickets avancent.
 
 - **Team** utilise les sept statuts. `Human testing` correspond au test fonctionnel de la fonctionnalité ; `In review` correspond ensuite à la revue de code.
 - **Solo** retire la colonne Human testing distincte. La validation fonctionnelle manuelle reste nécessaire, mais elle est réalisée pendant la revue de la PR avant le merge.
-- **Custom** permet d'adapter les statuts et leurs noms. Les garde-fous lisent la configuration du manifest plutôt que de supposer le preset Team.
+- **Custom** permet d'enregistrer et synchroniser des statuts avancés. En v1, seuls Team et Solo génèrent des documents de statut et garde-fous complets ; un parcours personnalisé exige d'étendre le
+  skill installé.
 
 Pour la V1, GitHub Projects fournit le contrat de workflow complet. Les adaptateurs Jira et Linear sont expérimentaux. Notion fournit le backend SRS V1 complet, et non un tracker de workflow complet.
 
@@ -165,7 +166,7 @@ Ne lancez pas un scaffold complet dans le dossier d'un POC et ne déplacez pas u
 Les profils identifient les outils de code et leurs surfaces de découverte d'instructions. Ils ne choisissent ni fournisseur ou nom de modèle, ni identifiant API, ni niveau de raisonnement.
 
 Les identifiants enregistrés sont `claude-code`, `codex`, `kimi`, `gemini-cli`, `qwen-code` et `generic`. Consultez la
-[matrice canonique des profils `sf agents`](/fr/cli/sf-agents#profils-doutils-et-fournisseurs-de-modeles) pour les preuves et limites actuelles.
+[matrice canonique des profils `sf agents`](/fr/cli/sf-agents#profils-d-outils-et-fournisseurs-de-modeles) pour les preuves et limites actuelles.
 
 Après l'installation :
 

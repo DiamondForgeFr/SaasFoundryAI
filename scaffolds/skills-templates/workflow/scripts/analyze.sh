@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Adaptive analysis script based on complexity level
-# Extracted from apex step-01-analyze.md
+# Workflow analysis procedure
 # Usage: analyze.sh <ticket-number> <complexity>
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -80,7 +80,7 @@ EOF
 
   medium)
     cat <<'EOF'
-STANDARD ANALYSIS (Apex-free-style):
+STANDARD ANALYSIS (structured):
 
 1. **Launch 2-4 parallel exploration agents:**
    ```
@@ -112,7 +112,7 @@ EOF
 
   complex)
     cat <<'EOF'
-DEEP ANALYSIS (Full Apex):
+DEEP ANALYSIS (maximum rigor):
 
 1. **ULTRA THINK first:**
    - What information do I actually need?

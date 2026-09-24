@@ -1,6 +1,7 @@
 # sf workflow
 
-Gérez la configuration et les règles d'agent d'un workflow adaptatif en complexité. Utilisez le preset Team ou Solo, ou créez, enregistrez et réutilisez un modèle personnalisé.
+Gérez la configuration et les règles d'agent d'un workflow adaptatif en complexité. Team et Solo sont les presets v1 protégés de bout en bout ; les modèles personnalisés constituent une surface de
+configuration avancée.
 
 ## Utilisation
 
@@ -60,8 +61,10 @@ sf workflow save my-template
 Le système adapte son niveau de contrôle à la complexité : chaque ticket est étiqueté `bug | low | medium | complex`, ce qui ajuste la profondeur de l'analyse, les validations du plan et la revue
 contradictoire. Consultez le [système de workflow](/fr/workflow/introduction) pour le cycle de vie complet.
 
-Team sépare la validation fonctionnelle (`Human testing`) de la revue de code (`In review`). Solo retire le statut Human testing distinct. Un workflow personnalisé suit l'ordre enregistré dans le
-manifest.
+Team sépare la validation fonctionnelle (`Human testing`) de la revue de code (`In review`). Solo retire le statut Human testing distinct. Un modèle personnalisé enregistre une liste ordonnée de
+statuts, mais la v1 ne génère ni documents complets ni garde-fous arbitraires pour de nouveaux noms. Étendez le skill installé avant d'en faire un contrat de livraison.
+
+`sf workflow validate` contrôle les champs locaux du manifeste en v1 ; il ne compare pas le board distant configuré.
 
 GitHub Projects fournit le workflow V1 complet. Les adaptateurs Jira et Linear restent expérimentaux ; Notion est le backend SRS V1 complet, et non un gestionnaire de workflow complet.
 

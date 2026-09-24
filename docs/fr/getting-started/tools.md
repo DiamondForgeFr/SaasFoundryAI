@@ -24,7 +24,7 @@ L'application générée n'impose aucun éditeur, terminal ou fournisseur d'IA.
 Le CLI est la couche déterministe utilisée par les humains et les agents :
 
 ```bash
-sf new my-product
+sf new --project-name my-product
 sf status --agent-friendly --no-network
 sf modules list
 sf update
@@ -92,7 +92,8 @@ Les presets décrivent le cycle de livraison, indépendamment de l'outil de tabl
 - **Team** utilise le parcours complet `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`. **Human testing** signifie test de la fonctionnalité et validation fonctionnelle
   ; **In review** signifie revue de code.
 - **Solo** supprime la colonne Human testing distincte. La personne qui développe effectue tout de même la validation fonctionnelle pendant la revue de la PR, avant le merge.
-- **Custom** utilise les statuts définis dans le manifest. Les compétences de workflow lisent cette configuration au lieu de forcer Team ou Solo.
+- **Custom** enregistre et synchronise des configurations avancées de statuts. Team et Solo restent les seuls parcours v1 possédant des documents générés complets et des garde-fous testés de bout en
+  bout.
 
 ## 5. SRS et documentation produit
 

@@ -7,7 +7,8 @@ Le workflow n'a de valeur que si l'agent respecte ses garde-fous. Ces règles so
 Avant une transition, une branche, une validation ou une pull request, l'agent lit `.saasfoundry.json`, demande le statut réel au CLI et consulte la description installée sous
 `.claude/skills/sf-workflow/statuses/`.
 
-Il ne doit pas supposer le preset : le workflow d'équipe a sept statuts, le workflow Solo en a cinq et un workflow personnalisé peut en définir d'autres.
+Il ne doit pas supposer le preset : le workflow d'équipe a sept statuts et Solo en a cinq, chacun avec ses documents et garde-fous. Un modèle personnalisé peut enregistrer d'autres statuts, mais
+l'équipe doit fournir les documents et contrôles correspondants avant que l'agent puisse les suivre en sécurité.
 
 ## 2. Ne jamais sauter un statut du workflow actif
 
@@ -39,7 +40,7 @@ Le code validé doit exister sur le dépôt distant. Sans cela, les tests ne son
 ## 5. Utiliser de vrais sous-tickets natifs
 
 La décomposition utilise des sous-issues natives, pas des cases Markdown. Un enfant normal a sa branche et sa pull request ; un enfant `nature:bundled-pr` apporte un commit atomique à la branche de
-livraison du parent.
+livraison du parent et ne possède aucune pull request individuelle.
 
 ## 6. Fermer chaque enfant à sa livraison
 
@@ -55,6 +56,8 @@ Avant `Done`, l'agent vérifie chaque sous-issue native :
 ```
 
 Tout enfant dont le statut de tableau n'est pas exactement `Done` bloque la fin du parent.
+
+Les enfants incomplets ne bloquent pas les phases AI testing, Human testing ou In review du parent. Le contrôle devient bloquant uniquement lors du passage du parent à Done.
 
 ## 8. Terminer le ticket actif avant d'en prendre un autre
 

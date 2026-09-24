@@ -39,7 +39,14 @@ sf workflow save mon-workflow
 sf workflow use mon-workflow
 ```
 
-Le résultat est enregistré dans `.saasfoundry.json`. Les compétences et les commandes lisent cette configuration ; elles ne doivent jamais supposer qu'un projet utilise forcément cinq ou sept statuts.
+Le résultat est enregistré dans `.saasfoundry.json` et peut servir à synchroniser les étapes du board.
+
+::: warning Extension avancée en v1
+
+Team et Solo sont les deux seuls parcours livrés avec des documents de statut complets et des garde-fous testés de bout en bout. Un modèle personnalisé enregistre la configuration, mais l'installateur
+ne génère pas encore les documents et contrôles propres à des noms arbitraires. Avant d'en faire un contrat de livraison, l'équipe doit donc étendre le skill installé.
+
+:::
 
 ## Philosophie
 
@@ -82,6 +89,9 @@ Toute la configuration se trouve dans `.saasfoundry.json` :
 - `workflow.projectUrl` — tableau utilisé par l'adaptateur.
 
 L'agent lit ces valeurs au lieu de coder en dur des branches, des statuts ou des formats de commit.
+
+`sf workflow validate` contrôle les champs locaux du manifeste en v1 ; il ne compare pas encore les options du board distant. Après une modification des statuts, vérifiez le board configuré
+séparément.
 
 ## Connexion aux outils
 

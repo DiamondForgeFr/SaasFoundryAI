@@ -143,7 +143,7 @@ Installed modules are tracked in `.saasfoundry.json`:
 ```json
 {
   "modules": {
-    "emailService": "mailersend",
+    "email": { "provider": "mailersend", "version": 1 },
     "s3Setup": "docker",
     "includeAnalytics": true
   }
@@ -182,7 +182,7 @@ You can create custom modules by:
 3. Adding TODO markers in blueprints
 4. Updating types and prompts
 
-See: [CLAUDE.md - Adding a New Module](/contributing/development#adding-modules)
+See: [Development — adding a module or a skill](/contributing/development#adding-a-module-or-a-skill)
 
 ## Best Practices
 

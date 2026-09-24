@@ -62,15 +62,16 @@ L’invariant portable est la procédure, pas une syntaxe particulière de comma
 
 Les skills principaux couvrent la boucle de développement répétable sans identifiants externes :
 
-| Domaine      | Exemples                                            | Responsabilité                                             |
-| ------------ | --------------------------------------------------- | ---------------------------------------------------------- |
-| Git          | `sf-git-commit`, `sf-git-create-pr`, `sf-git-merge` | Politique de branche, commit et pull request               |
-| Qualité      | `sf-utils-fix-errors`, `sf-utils-fix-grammar`       | Correction ciblée en préservant le travail sans rapport    |
-| Workflow     | `sf-workflow`                                       | Séquence d’équipe, Solo ou personnalisée et ses garde-fous |
-| Architecture | `sf-integration-rules`                              | Implémentation complète entre les couches                  |
+| Domaine      | Exemples                                            | Responsabilité                                          |
+| ------------ | --------------------------------------------------- | ------------------------------------------------------- |
+| Git          | `sf-git-commit`, `sf-git-create-pr`, `sf-git-merge` | Politique de branche, commit et pull request            |
+| Qualité      | `sf-utils-fix-errors`, `sf-utils-fix-grammar`       | Correction ciblée en préservant le travail sans rapport |
+| Workflow     | `sf-workflow`                                       | Parcours Team/Solo protégés et extension personnalisée  |
+| Architecture | `sf-integration-rules`                              | Implémentation complète entre les couches               |
 
-`sf-workflow` est un skill unique qui adapte sa rigueur à la complexité. Le preset équipe utilise sept statuts, Solo en utilise cinq, et les modèles personnalisés peuvent définir une autre séquence
-documentée. La complexité (`bug`, `low`, `medium`, `complex`) module la rigueur à l’intérieur de ce workflow ; elle ne sélectionne pas un autre skill.
+`sf-workflow` est un skill unique qui adapte sa rigueur à la complexité. Le preset équipe utilise sept statuts et Solo en utilise cinq. Les modèles personnalisés enregistrent une autre séquence, mais
+nécessitent des documents et garde-fous écrits par l'équipe avant de former un contrat de livraison. La complexité (`bug`, `low`, `medium`, `complex`) module la rigueur à l’intérieur du workflow ;
+elle ne sélectionne pas un autre skill.
 
 ## Skills d’outils et niveaux de prise en charge réels
 

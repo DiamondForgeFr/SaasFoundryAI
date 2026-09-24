@@ -113,9 +113,9 @@ La skill principale la plus importante est aussi celle que vous invoquerez le mo
 **Fonctions** :
 
 - lire l'étiquette de complexité du ticket — `bug`, `low`, `medium` ou `complex` — et adapter le niveau de contrôle ;
-- lire le preset configuré : Team utilise sept statuts, Solo en utilise cinq et Custom suit le parcours enregistré par le projet ;
-- connaître les actions obligatoires et les critères de sortie de chaque statut configuré ;
-- interdire à l'agent d'inventer un raccourci hors du parcours configuré ;
+- lire le preset configuré : Team utilise sept statuts et Solo en utilise cinq ; Custom enregistre une configuration avancée ;
+- connaître les actions obligatoires et les critères de sortie livrés pour les statuts Team et Solo ;
+- interdire à l'agent d'inventer un raccourci hors des parcours protégés ;
 - appeler la **skill d'outil du workflow** correspondante pour déplacer réellement le ticket sur le tableau.
 
 GitHub Projects porte le workflow V1 complet. Les adaptateurs Jira et Linear sont expérimentaux. Notion est le backend SRS V1 complet, pas un outil de suivi complet du workflow.
@@ -129,8 +129,8 @@ GitHub Projects porte le workflow V1 complet. Les adaptateurs Jira et Linear son
 /sf-workflow next 42                  # Quelle est exactement la prochaine action ?
 ```
 
-**La configuration réside dans `.saasfoundry.json`** : branches, cible des PR, noms des statuts et format des commits. `sf-workflow` ne les code jamais en dur. Si le workflow change, par exemple si «
-Human testing » devient « QA », modifiez `.saasfoundry.json` puis relancez `sf update` ; la skill lira automatiquement les nouveaux noms.
+**La configuration réside dans `.saasfoundry.json`** : branches, cible des PR, noms des statuts et format des commits. La politique de branche et de cible est lue depuis ce contrat. En v1, renommer
+arbitrairement un statut exige aussi des documents de statut et des garde-fous adaptés ; modifier le manifeste seul ne les génère pas.
 
 Le preset Team sépare **Human testing**, la validation fonctionnelle d'une PR brouillon, de **In review**, la revue de code d'une PR prête. Solo retire le statut Human testing séparé et utilise la
 revue de PR comme contrôle humain.

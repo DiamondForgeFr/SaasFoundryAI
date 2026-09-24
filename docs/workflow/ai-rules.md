@@ -15,8 +15,8 @@ and exit conditions for the current status.
 
 ## 2. Follow the configured route; never invent a shortcut
 
-The ordered statuses come from `.saasfoundry.json`. The team preset uses seven; the solo preset uses five; a custom workflow can define another documented sequence. The agent always follows the
-installed status documents and CLI guards.
+The ordered statuses come from `.saasfoundry.json`. The team preset uses seven and the solo preset uses five; both install matching status documents and guards. A custom template may store another
+sequence, but the team must add the corresponding documents and guard logic before an agent can safely follow it.
 
 **Common violations to watch for:**
 

@@ -24,7 +24,8 @@ Un statut n'est pas un label et la complexité n'est pas une colonne de phase. L
 - `gh` authentifié avec les droits `project` et `repo`.
 - `.saasfoundry.json` configuré avec l'URL du tableau et les branches.
 
-Le preset d'équipe attend sept statuts ; le preset Solo en attend cinq. Un workflow personnalisé utilise exactement les statuts enregistrés dans le manifeste.
+Le preset d'équipe attend sept statuts et Solo en attend cinq ; tous deux possèdent des garde-fous complets. Un modèle personnalisé peut aligner le board avec les statuts du manifeste, mais son
+parcours exige des documents et garde-fous écrits par l'équipe avant utilisation.
 
 ## Commandes de l'adaptateur
 

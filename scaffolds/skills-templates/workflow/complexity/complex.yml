@@ -43,7 +43,7 @@ testing:
 
 # AI guidance for this complexity level
 aiInstructions: |
-  This is a complex/critical feature. Maximum rigor (full apex):
+  This is a complex/critical feature. Apply maximum rigor:
 
   **Analyze Phase (DEEP):**
   - ADAPTIVE AGENT LAUNCHING: Launch 6-10 parallel agents

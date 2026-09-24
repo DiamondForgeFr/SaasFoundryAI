@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { DefaultTheme } from 'vitepress'
 import { documentationLink, localizedRoute, markdownPathToRoute, routeForPage, routeWithoutLocale } from '../../../../docs/.vitepress/config/locale-paths'
@@ -35,6 +35,41 @@ const localRoute = (link: string): string | undefined => {
 }
 
 const frenchSource = (route: string): string => resolve(repositoryRoot, 'docs/fr', route === '/' ? 'index.md' : `${route.slice(1)}.md`)
+const localeSource = (locale: 'en' | 'fr', route: string): string => resolve(repositoryRoot, 'docs', locale === 'fr' ? 'fr' : '', route === '/' ? 'index.md' : `${route.slice(1)}.md`)
+
+const vitepressSlug = (heading: string): string =>
+  heading
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u0000-\u001f]/g, '')
+    .replace(/[\s~`!@#$%^&*()\-_+=[\]{}|\\;:"'“”‘’<>,.?/]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/^(\d)/, '_$1')
+    .toLowerCase()
+
+const brokenInternalLinks = (locale: 'en' | 'fr'): string[] => {
+  const routes = locale === 'fr' ? frenchRoutes : englishRoutes
+
+  return routes.flatMap((sourceRoute) => {
+    const source = localeSource(locale, sourceRoute)
+    const content = readFileSync(source, 'utf8')
+    const links = [...content.matchAll(/(?:\]\(|href=["']|link:\s*)(\/[^\s)"']+)/g)].map((match) => match[1])
+
+    return links.flatMap((link) => {
+      const [pathWithQuery, encodedFragment] = link.split('#', 2)
+      const route = routeWithoutLocale(pathWithQuery.split('?', 1)[0])
+      if (!routes.includes(route)) return [`${sourceRoute} -> ${link} (missing route)`]
+      if (!encodedFragment) return []
+
+      const target = localeSource(locale, route)
+      if (!existsSync(target)) return [`${sourceRoute} -> ${link} (missing source)`]
+      const slugs = [...readFileSync(target, 'utf8').matchAll(/^#{1,6}\s+(.+)$/gm)].map((match) => vitepressSlug(match[1]))
+      const fragment = vitepressSlug(decodeURIComponent(encodedFragment))
+      return slugs.includes(fragment) ? [] : [`${sourceRoute} -> ${link} (missing anchor)`]
+    })
+  })
+}
 
 const crossLocaleLinks = (route: string): string[] => {
   const content = readFileSync(frenchSource(route), 'utf8')
@@ -134,5 +169,9 @@ describe('documentation navigation integrity (#796)', () => {
   it('keeps every internal link in the complete French tree inside the French locale', () => {
     const offenders = frenchRoutes.flatMap((route) => crossLocaleLinks(route).map((link) => `${route} -> ${link}`))
     expect(offenders).toEqual([])
+  })
+
+  it.each(['en', 'fr'] as const)('keeps every %s internal route and heading anchor valid', (locale) => {
+    expect(brokenInternalLinks(locale)).toEqual([])
   })
 })

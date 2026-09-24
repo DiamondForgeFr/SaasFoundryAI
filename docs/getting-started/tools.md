@@ -24,7 +24,7 @@ No single editor, terminal or AI provider is required for the generated applicat
 The CLI is the deterministic layer used by humans and agents:
 
 ```bash
-sf new my-product
+sf new --project-name my-product
 sf status --agent-friendly --no-network
 sf modules list
 sf update
@@ -88,7 +88,7 @@ The workflow shape is independent from the selected board adapter:
 
 - **Team** uses `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`. **Human testing** is functional feature testing; **In review** is code review.
 - **Solo** removes the separate Human testing status. The developer still performs any warranted functional checks during PR review before merging.
-- **Custom** follows the statuses saved in the manifest. Workflow skills read that configuration instead of forcing Team or Solo.
+- **Custom** stores and synchronises advanced status configurations. Team and Solo remain the only v1 routes with complete generated status documents and tested end-to-end guards.
 
 ## 5. SRS and product documentation
 

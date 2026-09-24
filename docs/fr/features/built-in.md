@@ -35,8 +35,8 @@ La sélection exacte est enregistrée dans `.saasfoundry.json`, afin que le CLI 
   "profile": "full",
   "structure": "monorepo",
   "modules": {
-    "harness": { "version": "1.0.0-beta" },
-    "email": { "version": "1.0.0-beta" }
+    "harness": { "version": 1 },
+    "email": { "provider": "mailersend", "version": 1 }
   }
 }
 ```
@@ -244,7 +244,7 @@ Cette commande donne à l'agent de code un résumé déterministe et hors ligne 
 ### Workflow de livraison adapté à la complexité
 
 Le harness fournit deux presets sécurisés. Le workflow équipe sépare la validation fonctionnelle de la revue de code ; le workflow Solo regroupe sa validation humaine dans la revue de PR.
-L'installation interactive permet aussi de définir et d'enregistrer une séquence personnalisée.
+L'installation interactive permet aussi de définir et d'enregistrer une séquence personnalisée comme point d'extension avancé ; Team et Solo restent les deux parcours protégés de bout en bout en v1.
 
 ```text
 Backlog → Ready → In progress → AI testing

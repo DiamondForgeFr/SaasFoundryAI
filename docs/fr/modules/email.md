@@ -76,6 +76,10 @@ Gardez `EmailService` comme interface publique. `MailerSendService` reste un dé
 
 ## Configuration
 
+### Variables d'environnement
+
+Les variables suivantes sont obligatoires en production dans `apps/api/.env` :
+
 ```env
 MAILERSEND_API_KEY="ms_prod_xxxxxxxxxxxxxxxxxxxxxxxx"
 MAILERSEND_SENDER_EMAIL="noreply@myapp.com"
@@ -109,6 +113,8 @@ Le nom et l'adresse d'expédition ne sont pas secrets et restent versionnés.
 
 ## Modèles
 
+Chaque parcours possède un modèle HTML, un modèle texte et des traductions anglaises et françaises :
+
 ```text
 apps/api/src/modules/email/
 ├── locales/
@@ -124,8 +130,17 @@ apps/api/src/modules/email/
     └── translation.service.ts
 ```
 
-Pour modifier un modèle, mettez à jour HTML et/ou texte, ajoutez les clés dans **les deux locales**, puis exécutez les tests email. Pour ajouter une langue, créez son fichier de locale, étendez le
-dispatch et ajoutez-la à l'enum Prisma `Locale`.
+### Modifier un modèle
+
+1. Modifiez `html.template.ts` et/ou `text.template.ts` pour le parcours concerné.
+2. Ajoutez chaque nouvelle clé dans **les deux fichiers** `locales/en.ts` et `locales/fr.ts`.
+3. Exécutez `npm run test:unit -- email`.
+
+### Ajouter une locale
+
+1. Créez par exemple `locales/es.ts` à côté de `en.ts` et `fr.ts`.
+2. Importez-la dans `translation.service.ts` et étendez la table de dispatch.
+3. Ajoutez la locale à l'enum Prisma `Locale` dans `prisma/schema/user.prisma`, puis synchronisez la base de développement.
 
 ## Développement local sans MailerSend
 

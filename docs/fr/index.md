@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: Démarrer avec l'agent
-      link: /fr/getting-started/setup-paths#parcours-2-—-pilote-par-assistant
+      link: /fr/getting-started/installation
     - theme: alt
       text: Utiliser le CLI
       link: /fr/getting-started/quick-start
@@ -48,7 +48,7 @@ hero:
   <div class="sf-workflow-choice" role="list" aria-label="Configurations de workflow disponibles">
     <div role="listitem"><strong>Équipe · 7 statuts</strong><span>Tests fonctionnels et revue de code sont deux validations distinctes.</span></div>
     <div role="listitem"><strong>Solo · 5 statuts</strong><span>Pas de Human testing séparé ; la revue de PR est la validation humaine.</span></div>
-    <div role="listitem"><strong>Personnalisé</strong><span>Définissez les étapes, puis enregistrez et réutilisez le template.</span></div>
+    <div role="listitem"><strong>Personnalisé · avancé</strong><span>Définissez et réutilisez les étapes du board ; complétez les documents de statut et les garde-fous avant d'utiliser ce parcours pour livrer.</span></div>
   </div>
 
   <dl class="sf-complexity-grid" aria-label="Rigueur adaptée à la complexité">
@@ -76,7 +76,7 @@ hero:
       <p>Authentification, multi-tenant, RBAC contextualisé, API typée, React, PostgreSQL et socle opérationnel fonctionnent déjà ensemble avant votre première fonctionnalité métier.</p>
       <span class="sf-card-link">Voir les capacités incluses →</span>
     </a>
-    <a class="sf-pillar sf-pillar--harness" href="/fr/getting-started/setup-paths">
+    <a class="sf-pillar sf-pillar--harness" href="/fr/guide/workflow-system">
       <span class="sf-card-index">02 / LIVRER</span>
       <h3>Harness de développement sécurisé</h3>
       <p>SRS, tickets, skills, tests, validations humaines et pull requests partagent un seul workflow. Votre agent utilise le système ; il n'invente pas un processus privé à côté.</p>
@@ -104,7 +104,7 @@ hero:
     <a href="/fr/features/built-in#experience-de-developpement-et-quality-gates">Tests, hooks & CI</a>
     <a href="/fr/features/built-in#runtime-de-production">Runtime Docker</a>
     <a href="/fr/guide/monorepo-vs-multirepo">Monorepo ou multirepo</a>
-    <a href="/fr/features/built-in#capacites-optionnelles">Extensions composables</a>
+    <a href="/fr/modules/email">Extensions composables</a>
   </div>
 </section>
 
@@ -123,7 +123,7 @@ hero:
       <span class="sf-card-link">Installer le skill agent →</span>
     </a>
     <a class="sf-path-card" href="/fr/getting-started/setup-paths#parcours-1-—-cli-interactif">
-      <code>sf new mon-produit</code>
+      <code>sf new --project-name mon-produit</code>
       <h3>Parcours CLI direct</h3>
       <p>Utilisez le questionnaire interactif ou les options scriptées. Le CLI reste déterministe, inspectable et automatisable sans modèle dans la boucle.</p>
       <span class="sf-card-link">Ouvrir le démarrage rapide →</span>

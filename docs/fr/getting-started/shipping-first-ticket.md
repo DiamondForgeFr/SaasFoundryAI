@@ -29,7 +29,8 @@ transitions afin que l'humain et l'agent suivent les mêmes règles.
 - **Team**, utilisé dans ce guide, sépare **Human testing**, le test de la fonctionnalité et sa validation fonctionnelle, de **In review**, la revue de code.
 - **Solo** suit `Backlog → In progress → AI testing → In review → Done`. Les mêmes preuves d'implémentation et de test restent nécessaires, et la validation fonctionnelle manuelle se déroule pendant
   la revue de la PR puisqu'il n'existe pas de colonne Human testing séparée.
-- **Custom** utilise les statuts définis dans le manifest. Suivez les descriptions générées pour chaque statut plutôt que de supposer les colonnes de Team.
+- **Custom** enregistre et synchronise les statuts du board, mais la v1 ne génère des documents et garde-fous complets que pour Team et Solo. Étendez le skill de workflow installé avant de suivre un
+  parcours personnalisé.
 
 :::
 

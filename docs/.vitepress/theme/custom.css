@@ -6,9 +6,9 @@
 
 :root {
   /* Brand Colors */
-  --vp-c-brand-1: #ff9500;
-  --vp-c-brand-2: #ff9500;
-  --vp-c-brand-3: #ff9500;
+  --vp-c-brand-1: #a85400;
+  --vp-c-brand-2: #8f4b00;
+  --vp-c-brand-3: #753d00;
   --vp-c-brand-soft: rgba(255, 149, 0, 0.14);
 
   /* Custom Accent */
@@ -17,12 +17,12 @@
 
   /* Home Hero */
   --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: linear-gradient(120deg, #ff9500 30%, #2d3748);
+  --vp-home-hero-name-background: linear-gradient(120deg, #a85400 30%, #2d3748);
 
   /* Button Colors */
-  --vp-button-brand-bg: #ff9500;
-  --vp-button-brand-hover-bg: #e68600;
-  --vp-button-brand-active-bg: #cc7700;
+  --vp-button-brand-bg: #a85400;
+  --vp-button-brand-hover-bg: #8f4b00;
+  --vp-button-brand-active-bg: #753d00;
   --vp-button-brand-text: #ffffff;
 
   /* Link Colors */
@@ -33,6 +33,8 @@
 
 .VPButton,
 .VPNavBarMenuGroup .button,
+.VPMenu,
+.VPMenu .VPLink,
 .VPSwitch,
 .VPSkipLink,
 .pager-link,

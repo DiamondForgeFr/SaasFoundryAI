@@ -87,6 +87,25 @@ corrections.
 ## Principe de préservation de la qualité
 
 Le système ne sert pas à rogner la qualité des petits tickets. Il évite une cérémonie disproportionnée tout en conservant toute la rigueur nécessaire aux changements risqués. Cette adaptation
-fonctionne avec le preset d'équipe, le preset Solo et les workflows personnalisés.
+fonctionne avec les presets protégés Team et Solo ; une extension Custom doit d'abord fournir ses propres documents et garde-fous de statut.
 
-Les définitions se trouvent dans `.claude/skills/sf-workflow/complexity/*.yml`. Elles règlent les étapes, les attentes de test et les instructions données à l'agent.
+## Fichiers de configuration
+
+Chaque niveau possède un fichier YAML :
+
+- `.claude/skills/sf-workflow/complexity/bug.yml` ;
+- `.claude/skills/sf-workflow/complexity/low.yml` ;
+- `.claude/skills/sf-workflow/complexity/medium.yml` ;
+- `.claude/skills/sf-workflow/complexity/complex.yml`.
+
+Ces fichiers déclarent les étapes activées, les attentes de test et les instructions narratives données à l'agent. Ils permettent à l'équipe d'ajuster la cérémonie sans changer de skill.
+
+## Changer de niveau en cours de route
+
+Si l'exploration révèle un risque différent — par exemple une contrainte de sécurité imprévue — changez le label :
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh retag 42 complex
+```
+
+Les étapes restantes s'adaptent au nouveau niveau. Une revue contradictoire devenue obligatoire est ajoutée au plan de validation restant.

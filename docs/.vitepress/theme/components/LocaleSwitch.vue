@@ -13,6 +13,7 @@ const props = withDefaults(
 
 const route = useRoute()
 const menu = ref<HTMLDetailsElement | null>(null)
+const trigger = ref<HTMLElement | null>(null)
 
 const currentRoute = computed(() => {
   const withoutLocale = route.path.replace(/^\/fr(?=\/|$)/, '') || '/'
@@ -31,11 +32,14 @@ const languageOptions = computed(() => [
   { code: 'fr' as const, shortLabel: 'FR', label: 'Français', path: pathForLocale('fr') }
 ])
 
-const menuLabel = computed(() => (props.locale === 'fr' ? 'Choisir la langue de la documentation' : 'Choose documentation language'))
+const menuLabel = computed(() => (props.locale === 'fr' ? `Choisir la langue de la documentation. Langue actuelle : Français` : `Choose documentation language. Current language: English`))
 
-const closeMenu = () => {
+const closeMenu = (restoreFocus = false) => {
   if (menu.value) menu.value.open = false
+  if (restoreFocus) trigger.value?.focus()
 }
+
+const closeOnEscape = () => closeMenu(true)
 
 const closeOnOutsideClick = (event: PointerEvent) => {
   if (menu.value?.open && !menu.value.contains(event.target as Node)) closeMenu()
@@ -46,8 +50,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOnOutside
 </script>
 
 <template>
-  <details ref="menu" class="LocaleSwitch" :class="{ 'is-screen-menu': screenMenu }" @keydown.esc.stop="closeMenu">
-    <summary class="LocaleSwitch__trigger" :aria-label="menuLabel" :title="menuLabel">
+  <details ref="menu" class="LocaleSwitch" :class="{ 'is-screen-menu': screenMenu }" @keydown.esc.stop="closeOnEscape">
+    <summary ref="trigger" class="LocaleSwitch__trigger" :aria-label="menuLabel" :title="menuLabel">
       <span>{{ locale.toUpperCase() }}</span>
       <svg class="LocaleSwitch__chevron" viewBox="0 0 12 12" aria-hidden="true">
         <path d="m3 4.75 3 3 3-3" />

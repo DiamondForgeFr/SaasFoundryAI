@@ -6,7 +6,7 @@ status list from `.saasfoundry.json`; it does not hardcode the sequence.
 ::: info Looking for the lighter flow?
 
 The `solo` preset uses five statuses: `Backlog → In progress → AI testing → In review → Done`. It removes the separate Ready and Human testing columns, and makes pull-request review the human gate.
-See [Workflow system](/workflow/introduction#saasfoundry-solo-solo-preset).
+See [Workflow system](/workflow/introduction).
 
 :::
 

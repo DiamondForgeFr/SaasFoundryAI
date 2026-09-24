@@ -12,6 +12,16 @@ const theme = read('docs/.vitepress/theme/custom.css')
 const englishRoutes = discoverLocaleRoutes('en')
 const frenchRoutes = discoverLocaleRoutes('fr')
 
+const relativeLuminance = (hex: string): number => {
+  const channels = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255).map((value) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+}
+
+const contrast = (first: string, second: string): number => {
+  const [lighter, darker] = [relativeLuminance(first), relativeLuminance(second)].sort((a, b) => b - a)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
 const localLinks = (content: string): string[] => [...content.matchAll(/(?:href=["']|link:\s*)(\/(?!\/)[^"'\s<]+)/g)].map((match) => match[1]).filter(Boolean)
 const vitepressSlug = (heading: string): string =>
   heading
@@ -106,5 +116,14 @@ describe('the bilingual product landing (#395)', () => {
     expect(theme).toContain('--sf-radius: 3px')
     expect(theme).toMatch(/\.sf-system-map[\s\S]+border-radius: var\(--sf-radius\)/)
     expect(theme).toMatch(/\.sf-workflow-choice > div[\s\S]+border-radius: var\(--sf-radius\)/)
+  })
+
+  it('keeps the light-theme brand color readable for links, focus rings and buttons', () => {
+    const brand = theme.match(/--vp-c-brand-1:\s*(#[0-9a-f]{6})/i)?.[1]
+    const button = theme.match(/--vp-button-brand-bg:\s*(#[0-9a-f]{6})/i)?.[1]
+    expect(brand).toBeDefined()
+    expect(button).toBeDefined()
+    expect(contrast(brand!, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(button!, '#ffffff')).toBeGreaterThanOrEqual(4.5)
   })
 })

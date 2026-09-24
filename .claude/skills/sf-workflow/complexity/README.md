@@ -4,12 +4,12 @@ This directory contains complexity configurations that adapt the workflow proces
 
 ## Complexity Levels
 
-| Level       | Label      | Style      | Use Case                               |
-| ----------- | ---------- | ---------- | -------------------------------------- |
-| **bug**     | 🐛 Bug Fix | Direct fix | Quick bug fixes, minimal ceremony      |
-| **low**     | 🟢 Low     | Oneshot    | Simple tasks, fast iteration           |
-| **medium**  | 🟡 Medium  | Apex-free  | Standard features, structured approach |
-| **complex** | 🔴 Complex | Full Apex  | Critical features, adversarial review  |
+| Level       | Label      | Style              | Use Case                               |
+| ----------- | ---------- | ------------------ | -------------------------------------- |
+| **bug**     | 🐛 Bug Fix | Direct fix         | Quick bug fixes, minimal ceremony      |
+| **low**     | 🟢 Low     | Oneshot            | Simple tasks, fast iteration           |
+| **medium**  | 🟡 Medium  | Structured         | Standard features, structured approach |
+| **complex** | 🔴 Complex | Deep + adversarial | Critical features, adversarial review  |
 
 ## How It Works
 
@@ -117,5 +117,5 @@ This adjusts remaining steps to match the new complexity level.
 
 - **Bug**: Fast triage, regression test
 - **Low**: Oneshot quality (minimal exploration, direct fix)
-- **Medium**: Apex-free quality (structured, no adversarial review)
-- **Complex**: Full Apex quality (deep analysis, adversarial review, comprehensive testing)
+- **Medium**: Structured quality (planned, no adversarial review)
+- **Complex**: Maximum rigor (deep analysis, adversarial review, comprehensive testing)

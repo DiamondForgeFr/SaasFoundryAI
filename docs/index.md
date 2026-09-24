@@ -47,7 +47,7 @@ hero:
   <div class="sf-workflow-choice" role="list" aria-label="Available workflow configurations">
     <div role="listitem"><strong>Team · 7 statuses</strong><span>Separate feature testing and code review gates.</span></div>
     <div role="listitem"><strong>Solo · 5 statuses</strong><span>No separate Human testing; PR review is the human gate.</span></div>
-    <div role="listitem"><strong>Custom</strong><span>Define named stages interactively, then save and reuse the template.</span></div>
+    <div role="listitem"><strong>Custom · advanced</strong><span>Define and reuse board stages; extend the installed status documents and guards before relying on a custom delivery route.</span></div>
   </div>
 
   <dl class="sf-complexity-grid" aria-label="Complexity-adaptive rigor">
@@ -122,7 +122,7 @@ hero:
       <span class="sf-card-link">Install the agent skill →</span>
     </a>
     <a class="sf-path-card" href="/getting-started/setup-paths#path-1-—-interactive-cli">
-      <code>sf new my-product</code>
+      <code>sf new --project-name my-product</code>
       <h3>Direct CLI path</h3>
       <p>Use the interactive flow or scripted flags. The CLI remains deterministic, inspectable and suitable for automation without a model in the loop.</p>
       <span class="sf-card-link">Open the CLI quick start →</span>

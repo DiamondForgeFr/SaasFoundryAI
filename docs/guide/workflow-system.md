@@ -41,9 +41,9 @@ and test manually there when needed.
 Select a preset during creation or while adding the harness:
 
 ```bash
-sf new my-product --profile full --workflow saasfoundry
-sf new my-product --profile harness --workflow solo
-sf update --profile harness --workflow solo
+sf new --project-name my-product --profile full --workflow saasfoundry
+sf new --project-name my-product --profile harness --workflow solo
+sf update --target-profile harness --workflow solo
 ```
 
 Switch an existing managed project in place:
@@ -69,8 +69,8 @@ sf workflow use regulated-team
 
 ::: warning Custom means configurable, not unguarded
 
-The built-in Team and Solo presets ship purpose-built status documents and tested guards. For a custom sequence, the team owns the meaning of every phase and must retain an explicit human review
-policy.
+The built-in Team and Solo presets are the only end-to-end guarded routes in v1. A Custom template can store and synchronise board stages, but the installer does not generate complete status documents
+or arbitrary guards for new names. The team must extend the installed skill before using that sequence as a delivery contract.
 
 :::
 
@@ -78,7 +78,7 @@ policy.
 
 | Axis           | Controls                                              | Examples                                   |
 | -------------- | ----------------------------------------------------- | ------------------------------------------ |
-| Workflow shape | Which statuses exist and in what order                | team, solo, custom                         |
+| Workflow shape | Which guarded preset or advanced extension is active  | team, solo, custom                         |
 | Complexity     | Analysis, planning and review depth inside the phases | bug, low, medium, complex                  |
 | Nature         | Delivery ownership and legal route                    | user-facing, internal, bundled child, Epic |
 
@@ -125,6 +125,8 @@ sf workflow set-ai-rules
 ```
 
 Never mutate the board directly to bypass a rejected transition. The rejection is evidence that an entry condition, exit condition or external proof is missing.
+
+In v1, `sf workflow validate` checks local manifest fields only. It does not compare remote board options, so inspect the configured board separately after changing statuses.
 
 ## Manifest contract
 

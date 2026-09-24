@@ -206,6 +206,6 @@ Les codes de sortie suivent le contrat `srs-cli.sh` : `0` succès, `2` entrée i
 
 ## Voir aussi
 
-- [Tutoriel : partir d'un code existant](/fr/srs/walkthrough#rédiger-depuis-un-code-existant)
+- [Tutoriel : partir d'un code existant](/fr/srs/walkthrough#rediger-depuis-un-code-existant)
 - [Cycle SRS : phase ai-draft](/fr/srs/lifecycle)
 - [`src/srs/scanners/types.ts`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/src/srs/scanners/types.ts)

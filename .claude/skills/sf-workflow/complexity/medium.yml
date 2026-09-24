@@ -1,6 +1,6 @@
 name: medium
 label: '🟡 Medium Complexity'
-description: 'Standard feature, apex-free style with structure'
+description: 'Standard feature with structured analysis and planning'
 
 # Status workflow
 skipStatuses: [] # All statuses
@@ -36,7 +36,7 @@ testing:
 
 # AI guidance for this complexity level
 aiInstructions: |
-  This is a medium-complexity feature. Be structured (apex-free style):
+  This is a medium-complexity feature. Use a structured approach:
 
   **Analyze Phase (STANDARD):**
   - Launch 2-4 parallel exploration agents

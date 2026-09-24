@@ -2,7 +2,7 @@
 
 Cette page décrit le protocole strict de vérification et de transfert. Pour l’installation initiale, le choix des profils, l’adoption d’un projet existant et la portée locale ou partagée des
 déclarations, commencez par [Installation](/fr/getting-started/installation). La liste canonique des profils enregistrés reste disponible dans
-[`sf agents`](/fr/cli/sf-agents#tool-profiles-and-model-providers).
+[`sf agents`](/fr/cli/sf-agents#profils-d-outils-et-fournisseurs-de-modeles).
 
 SaaSFoundryAI peut préparer un projet pour plusieurs hôtes d’agents de développement sans choisir de modèle ni prétendre savoir ce qu’un hôte a chargé. Distinguez trois niveaux de preuve :
 
