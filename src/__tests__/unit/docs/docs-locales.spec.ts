@@ -99,17 +99,13 @@ describe('documentation locale parity policy (#796)', () => {
 })
 
 describe('documentation navigation integrity (#796)', () => {
-  const knownMissingRoutesOwnedBy205 = ['/api/builders', '/api/installers', '/api/runners', '/api/types']
-
-  it.each(['en', 'fr'] as const)('points %s navigation at existing pages or explicitly tracked debt', (locale) => {
+  it.each(['en', 'fr'] as const)('points %s navigation only at existing pages', (locale) => {
     const missing = configuredLinks(locale)
       .map(localRoute)
       .filter((route): route is string => route !== undefined)
       .filter((route) => !englishRoutes.includes(route))
 
-    // #205 removes this obsolete API group. Keeping the exact list here makes any new
-    // dead link fail immediately, and makes #205 remove the allow-list when it lands.
-    expect([...new Set(missing)].sort()).toEqual(knownMissingRoutesOwnedBy205)
+    expect([...new Set(missing)].sort()).toEqual([])
   })
 
   it('keeps English and French navigation structurally aligned during staged translation', () => {

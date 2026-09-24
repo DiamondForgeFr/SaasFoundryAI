@@ -1,7 +1,7 @@
-# SRS Module (Software Requirements Specifications)
+# SRS harness capability (Software Requirements Specifications)
 
-Pluggable specification system that keeps your Epic → FR → DS → TC hierarchy in a backend of your choice (Notion today ; Confluence and local markdown on the roadmap) and drives ticket creation from
-it.
+SRS is part of the development harness. It keeps your Epic → FR → DS → TC hierarchy in a backend of your choice (Notion today; Confluence and local markdown on the roadmap) and drives ticket creation
+from it. It adds collaboration tooling to the project, not runtime code to the generated application.
 
 ## Overview
 
@@ -106,6 +106,20 @@ The installer will:
 5. (Opt-in) stamp `pendingIngestion` so the next conversational session can pick existing notes to draft from
 
 ## Usage
+
+### Choose the interface, keep the same guardrails
+
+Every SRS operation is available as a deterministic `sf srs` command and through the installed agent skill. The agent path is useful when the task needs repository context or an explanation; the CLI
+path is useful for automation and inspection. Both resolve the same configured adapter and preserve the same preview and human-approval boundaries.
+
+| Goal                                       | CLI path                                    | Agent path                                                                                          |
+| ------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Check the configured specification backend | `sf srs validate`                           | “Check whether this project's SRS backend is ready, without changing it.”                           |
+| Draft requirements from the codebase       | `sf srs draft --from codebase --path .`     | “Draft the missing requirements from this codebase, then show me the proposal without applying it.” |
+| Preview tickets for an Epic                | `sf srs spawn --epic <url-or-id> --dry-run` | “Preview the tickets this SRS Epic would create. Do not create them yet.”                           |
+| Apply an approved additive update          | `sf srs apply-update --patch <path>`        | “Apply this approved additive SRS patch and report exactly what changed.”                           |
+
+Natural-language requests do not waive confirmation. Drafting, previewing and applying remain distinct actions, and the agent must wait at the same approval gates documented by the SRS lifecycle.
 
 ### The four primary flows
 
