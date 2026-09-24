@@ -162,6 +162,7 @@ Every command respects the same `.saasfoundry.json` configuration — so the wor
 ## Ready to try?
 
 - **[Start with your AI →](/getting-started/installation)** — one line handed to an assistant, no terminal required.
+- **[Choose CLI or assistant →](/getting-started/setup-paths)** — two onboarding paths, one generated project.
 - **[Prefer the CLI →](/getting-started/quick-start)** — two commands, 60 seconds.
 - **[Ship your first ticket →](/getting-started/first-project)** — a complete walk-through with a real example.
 - **[Keep requirements traceable →](/srs/centralization)** — let the agent structure specs without creating another private silo.

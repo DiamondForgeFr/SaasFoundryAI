@@ -68,6 +68,7 @@ const labels: Record<DocumentationLocale, Labels> = {
     },
     pages: {
       installation: 'Installation',
+      setupPaths: 'CLI or assistant setup',
       developmentTools: 'Development Tools',
       quickStart: 'Quick Start',
       firstProject: 'First Project',
@@ -157,6 +158,7 @@ const labels: Record<DocumentationLocale, Labels> = {
     },
     pages: {
       installation: 'Installation',
+      setupPaths: 'Installation par CLI ou assistant',
       developmentTools: 'Outils de développement',
       quickStart: 'Démarrage rapide',
       firstProject: 'Premier projet',
@@ -240,6 +242,7 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
   return {
     [prefixPath(locale, '/getting-started/')]: group(groups.gettingStarted, [
       page(pages.installation, '/getting-started/installation'),
+      page(pages.setupPaths, '/getting-started/setup-paths'),
       page(pages.developmentTools, '/getting-started/tools'),
       page(pages.quickStart, '/getting-started/quick-start'),
       page(pages.firstProject, '/getting-started/first-project'),

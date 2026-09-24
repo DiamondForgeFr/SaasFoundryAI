@@ -2,6 +2,8 @@
 
 Get up and running with SaaSFoundryAI in 5 minutes — with an assistant, or from the terminal.
 
+Both routes are explained side by side in [CLI or assistant setup](/getting-started/setup-paths).
+
 ## Create a project with your AI assistant
 
 > Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
@@ -55,6 +57,7 @@ sf agents doctor <profile-id>
 ## What's Next?
 
 - [Installation](/getting-started/installation) - The assistant path in full, plus the CLI install
+- [CLI or assistant setup](/getting-started/setup-paths) - Compare both onboarding paths and see where they converge
 - [First Project](/getting-started/first-project) - Detailed walkthrough
 - [Project Structure](/guide/project-structure) - Understand the codebase
 - [CLI Commands](/cli/sf-new) - Learn all available commands
