@@ -164,6 +164,7 @@ Every command respects the same `.saasfoundry.json` configuration — so the wor
 - **[Start with your AI →](/getting-started/installation)** — one line handed to an assistant, no terminal required.
 - **[Prefer the CLI →](/getting-started/quick-start)** — two commands, 60 seconds.
 - **[Ship your first ticket →](/getting-started/first-project)** — a complete walk-through with a real example.
+- **[Keep requirements traceable →](/srs/centralization)** — let the agent structure specs without creating another private silo.
 - **[Read the philosophy →](/workflow/introduction)** — why this workflow exists and how it stays honest.
 
 ---

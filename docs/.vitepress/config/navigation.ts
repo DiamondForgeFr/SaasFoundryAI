@@ -102,6 +102,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       analytics: 'Analytics',
       pwa: 'Installable app (PWA)',
       moduleOverview: 'Module overview',
+      centralization: 'One source of truth',
       lifecycle: 'Lifecycle',
       walkthrough: 'Walkthrough',
       scannerFindings: 'Scanner findings',
@@ -190,6 +191,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       analytics: 'Analytics',
       pwa: 'Application installable (PWA)',
       moduleOverview: "Vue d'ensemble du module",
+      centralization: 'Une source de vérité',
       lifecycle: 'Cycle de vie',
       walkthrough: 'Parcours guidé',
       scannerFindings: 'Résultats du scanner',
@@ -284,6 +286,7 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
     ]),
     [prefixPath(locale, '/srs/')]: group(groups.srs, [
       page(pages.moduleOverview, '/modules/srs'),
+      page(pages.centralization, '/srs/centralization'),
       page(pages.lifecycle, '/srs/lifecycle'),
       page(pages.walkthrough, '/srs/walkthrough'),
       page(pages.scannerFindings, '/srs/scanner-findings')
