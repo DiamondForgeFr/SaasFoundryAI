@@ -1,63 +1,96 @@
-# Quick Start
+# Your SaaS foundation in about 60 seconds
 
-Get up and running with SaaSFoundryAI in 5 minutes — with an assistant, or from the terminal.
+Start with a production-shaped monorepo instead of spending your first sprint connecting authentication, tenants, permissions, an API, a frontend and delivery tooling.
 
-Both routes are explained side by side in [CLI or assistant setup](/getting-started/setup-paths).
+SaaSFoundry generates the foundation and records every choice in one project contract. You keep the code: extend it, replace parts of it and deploy it on your infrastructure.
 
-## Create a project with your AI assistant
+::: tip What “60 seconds” means
 
-> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
+In roughly one minute, you can choose the shape of the product and start generation. The CLI then installs dependencies and initializes the project; that final wait varies with your machine and
+network.
 
-The one-line user-scope bootstrap currently targets Claude Code. Hand it to Claude from the folder you want to work in and say what you want in your own words:
+:::
 
-> _"I want a SaaS with a client portal, file uploads and transactional email."_
+## Before you start
 
-The skill asks only what it cannot infer from that, then runs a single non-interactive `sf new …` for you. With another coding-agent host, use the terminal path once and select its registered profile.
-The three supported starting situations are explained in [Installation](/getting-started/installation).
+You need Node.js 24.19.0 or newer, npm 11, Git and Docker for the recommended local PostgreSQL setup. The [installation guide](/getting-started/installation) covers existing repositories, global
+installation and supported agent profiles.
 
-## Create a project from the terminal
+## 1. Run the creator
 
-Prefer to drive it yourself? Every answer the assistant would have gathered is a prompt in the CLI:
+No global installation is required:
 
 ```bash
-sf new
+npx saasfoundryai-cli@beta new
 ```
 
-Answer the interactive prompts:
+Prefer an AI-guided conversation? The [CLI or assistant setup guide](/getting-started/setup-paths) explains both routes. They use the same configuration engine and produce the same managed contract.
 
-1. **Installation profile**: Full for a new product; Harness for an existing repository you keep
-2. **Coding-agent profiles**: Select one or several tools that will work in the project
-3. **Project name**: `my-saas-app`
-4. **Project structure**: Monorepo (recommended)
-5. **Email service**: Choose MailerSend or none
-6. **S3 storage**: Choose manual, Docker, or credentials
-7. **Database**: Choose Docker (easiest for development)
-8. **Analytics**: Include Umami analytics (optional)
+## 2. Choose the shape
 
-## Start Development
+For a new product, choose these defaults in the interactive flow:
+
+```text
+Profile          Full — SaaS foundation + development harness
+Structure        Monorepo (recommended)
+Repository       Local
+Database         PostgreSQL with Docker
+Email            None for now
+Storage          Manual for now
+Analytics        No
+```
+
+`full` gives you both pillars of SaaSFoundry. Choose `stack` if you only want the technical foundation, or `harness` to add the delivery system to code you already keep.
+
+::: info Optional means optional
+
+MailerSend email, S3 storage, Analytics, PWA, SRS centralization and external tool skills are selected capabilities. You can add compatible modules later with `sf update`; they are not silently
+enabled in every project.
+
+:::
+
+## 3. Start the project
+
+Enter the generated directory, start its local services, initialize the database and launch both applications:
 
 ```bash
-cd my-saas-app
-npm install
+cd my-saas
+npm run services:up
+npm run db:setup:dev
 npm run dev
 ```
 
-Your app will be running at:
+Open the two local surfaces:
 
-- API: http://localhost:3500
-- Web: http://localhost:5173
+- Web application: [http://localhost:5173](http://localhost:5173)
+- API and generated documentation: [http://localhost:3500/api/docs](http://localhost:3500/api/docs)
 
-Verify the installed agent declaration:
+The CLI selects the first available ports when the defaults are already occupied. Its completion summary and `.saasfoundry.json` remain authoritative.
 
-```bash
-sf agents list
-sf agents doctor <profile-id>
-```
+## What you just got
 
-## What's Next?
+Your new repository is already wired across the browser, API and database:
 
-- [Installation](/getting-started/installation) - The assistant path in full, plus the CLI install
-- [CLI or assistant setup](/getting-started/setup-paths) - Compare both onboarding paths and see where they converge
-- [First Project](/getting-started/first-project) - Detailed walkthrough
-- [Project Structure](/guide/project-structure) - Understand the codebase
-- [CLI Commands](/cli/sf-new) - Learn all available commands
+1. **Authentication and sessions** — signup, signin, signout, confirmation and password reset with JWT, Passport, refresh tokens and `httpOnly` cookies.
+2. **A real tenant model** — platform, customer accounts, organizations and nested entities rather than a single-user demo schema.
+3. **Scoped RBAC** — platform, account and entity roles with modules, visible sections and action permissions. [Explore RBAC](/features/rbac).
+4. **Account operations** — members, invitations, custom roles, deactivation and reactivation flows already represented in the API and UI.
+5. **A typed API chain** — NestJS and Zod contracts generate OpenAPI and, in monorepo mode, a reusable API client with React Query hooks.
+6. **A modern React application** — React Router, Tailwind CSS, Radix/ShadCN-style primitives, React Query and React Hook Form already connected.
+7. **English and French UI resources** — i18next and YAML namespaces seeded for the generated product surfaces.
+8. **PostgreSQL from development to production** — Prisma with the PostgreSQL driver adapter, domain schemas, constraints, triggers and seed data.
+9. **Quality and production defaults** — ESLint, Prettier, unit/E2E/browser tests, Git hooks, multi-stage Docker images, Nginx, health checks and structured logs.
+10. **An AI delivery harness** — the `full` profile adds the manifest, project skills, integration grammar and guarded workflow that connects agents to your board and repository rules.
+
+See the [complete capability inventory](/features/built-in) for code excerpts, optional modules and links to every deeper guide.
+
+## Your next step
+
+::: info Build and inspect the first real flow
+
+Continue with [Your first SaaS project](/getting-started/first-project). It walks through the generated structure, local services, account creation, API documentation and your first cross-stack
+feature.
+
+:::
+
+If you want the mental model first, read [Monorepo vs multirepo](/guide/monorepo-vs-multirepo) and [How the workflow operates](/guide/workflow-system).
