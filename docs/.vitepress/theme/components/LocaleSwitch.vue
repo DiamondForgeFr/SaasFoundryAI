@@ -79,6 +79,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOnOutside
 <style scoped>
 .LocaleSwitch {
   position: relative;
+  display: inline-flex;
+  height: var(--vp-nav-height);
+  align-items: center;
   margin-left: 8px;
 }
 
@@ -200,7 +203,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOnOutside
 }
 
 .LocaleSwitch.is-screen-menu {
+  display: block;
   width: 100%;
+  height: auto;
   margin: 12px 0 0;
 }
 
