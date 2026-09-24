@@ -228,8 +228,8 @@ sf update --non-interactive \
   --notion-api-token "secret_..."
 ```
 
-This sets `tools.srs.pendingIngestion` in the manifest. The flag is ephemeral — on the next Claude Code session, the `sf-srs` skill sees it, drives a conversational loop to pick which legacy pages to
-draft into structured Epic / FR specs, and clears the flag once `srs-cli.sh write` succeeds.
+This sets `tools.srs.pendingIngestion` in the manifest. The flag is ephemeral — on the next supported coding-agent session, `sf-srs` drives a conversational loop to pick which legacy pages to draft
+into structured Epic / FR specs, then clears the flag after `srs-cli.sh write` succeeds.
 
 See the [SRS walkthrough](/srs/walkthrough) for a complete end-to-end tutorial.
 

@@ -1,98 +1,111 @@
-# Workflow System
+# Workflow system
 
-SaaSFoundryAI's workflow system is a **complexity-adaptive, status-driven lifecycle** designed for Human + AI collaboration. Every ticket moves through the same seven statuses, but the rigor applied
-at each step scales with the ticket's complexity tag.
+SaaSFoundryAI installs a status-driven delivery contract that humans and coding agents can both inspect. The workflow is not a prompt convention: its ordered statuses, branches, pull-request target
+and board live in `.saasfoundry.json`, while guarded CLI commands enforce transitions.
 
-## Philosophy
+## Two built-in workflows
 
-Traditional Git flows put all the guardrails at the PR stage. That works for small teams where a reviewer can mentally simulate what the author intended. It breaks down when part of the work is done
-by an AI agent that has no memory of prior decisions.
+### SaaSFoundry AI Workflow · team preset
 
-SaaSFoundryAI inverts the model: **the guardrails live in the workflow itself**. By the time a pull request exists, the code has already been planned, reviewed, tested, and validated by a human. The
-PR becomes a final sanity check, not the first line of defence.
+The complete preset separates functional validation from code review:
 
 ```text
-┌────────┐   ┌──────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────────────┐   ┌──────────────┐   ┌──────┐
-│Backlog │ → │Ready │ → │In progress  │ → │ AI testing   │ → │ Human testing   │ → │ In review    │ → │ Done │
-│(specs) │   │(queue│   │(impl +      │   │(automated +  │   │(manual dev      │   │(PR + CI +    │   │(merge│
-│        │   │      │   │ subtasks)   │   │ test plan)   │   │ validation)     │   │ reviewers)   │   │ +    │
-│        │   │      │   │             │   │              │   │                 │   │              │   │clean)│
-└────────┘   └──────┘   └─────────────┘   └──────────────┘   └─────────────────┘   └──────────────┘   └──────┘
+Backlog → Ready → In progress → AI testing → Human testing → In review → Done
+                                                       │              │
+                                               feature testing   code review
 ```
 
-## Complexity-adaptive ceremony
+- **Human testing** is feature testing. A human exercises the delivered behavior from a draft pull request and its test plan.
+- **In review** is code review. The same pull request is ready, full CI runs, reviewers inspect the implementation, and the developer merges it.
 
-Every ticket is tagged with one of four complexity levels. The tag controls how much process the AI agent applies:
+This seven-status preset is recommended for teams and for user-facing changes that benefit from an explicit functional checkpoint.
 
-| Level          | Style            | Ceremony                                                     |
-| -------------- | ---------------- | ------------------------------------------------------------ |
-| 🐛 **bug**     | Direct fix       | Skip analyze/plan. Regression test mandatory.                |
-| 🟢 **low**     | Oneshot          | Minimal analyze (2–3 files), mental plan, no approval.       |
-| 🟡 **medium**  | Structured       | 2–4 exploration agents, detailed plan, approval required.    |
-| 🔴 **complex** | Full adversarial | 6–10 agents, comprehensive plan, adversarial review (OWASP). |
+### SaaSFoundry Solo · solo preset
 
-The complexity tag lives on the ticket itself (as a GitHub label or equivalent), independent of status. See [Complexity System](/workflow/complexity-system) for the full mapping.
+The lighter preset keeps the same implementation and automated-test discipline but folds the human gate into pull-request review:
 
-## Dogfooding
+```text
+Backlog → In progress → AI testing → In review → Done
+```
 
-SaaSFoundryAI uses its own workflow to build itself. The `.saasfoundry.json`, `.claude/skills/sf-workflow/`, and `.claude/skills/sf-tool-github-projects/` directories in this repository are the exact
-same files that get scaffolded into projects created with `sf new`.
+There is no separate `Ready` or `Human testing` column. `In review` is both the human checkpoint and code review; the reviewer can also test the feature manually when needed. A project can move
+between the built-in presets with `sf workflow use saasfoundry` or `sf workflow use solo`.
 
-This matters because:
+## Custom workflows and reusable templates
 
-- If we bypass our own rules, we cannot guarantee they work for users.
-- Bugs in our workflow reach every project built with SaaSFoundryAI.
-- Usability problems we feel in our own flow are problems our users will feel tenfold.
+Interactive setup also offers **Custom Workflow**. You name and describe at least two statuses, choose their board colors, and SaaSFoundryAI writes that sequence to the manifest. You can then:
 
-The workflow is not aspirational. It's the binding contract between the human developer and the AI agent.
+```bash
+sf workflow save my-team-flow
+sf workflow create another-flow
+sf workflow list
+sf workflow use my-team-flow
+sf workflow validate
+```
+
+Saved templates retain statuses, branch policy, issue types and AI rules. Applying a template regenerates the installed workflow skill; when GitHub Projects is configured, SaaSFoundryAI also attempts
+to align the board's Status options.
+
+::: warning Guard coverage follows the installed status documents
+
+The two built-in presets ship matching status documents and tested transition guards. A custom sequence is supported as configuration, but teams must give every status a precise description and verify
+that their review policy still has an explicit human gate.
+
+:::
+
+## Three independent control axes
+
+The workflow shape is only one part of the contract:
+
+- **Preset or custom statuses** decide which phases exist.
+- **Complexity** (`bug`, `low`, `medium`, `complex`) decides how much analysis, planning and review happens inside those phases.
+- **Nature** decides the delivery path: user-facing, internal, bundled child or Epic.
+
+Nature-controlled routes are intentional, guarded exceptions rather than accidental skipped columns. For example, a bundled child contributes an atomic commit to its delivery parent's pull request,
+and an Epic owns neither a branch nor a pull request.
+
+SRS drafting tickets also use a dedicated drafting lifecycle inside the `In progress` board column: AI draft → human review → spawning → Done. They do not pretend to be code changes.
+
+## Why the guardrails start before code review
+
+Traditional Git flows often place the first serious checkpoint at the pull request. SaaSFoundryAI starts earlier:
+
+1. clarify the ticket and classify risk;
+2. approve the plan when complexity requires it;
+3. implement on the configured branch with native child tickets;
+4. commit and push before AI testing;
+5. produce a test plan and evidence;
+6. run the human gate configured by the workflow;
+7. complete code review and verify the merge before Done.
+
+The result is an audit trail that explains not only what changed, but why the change was allowed to advance.
 
 ## Source of truth
 
-All workflow configuration lives in `.saasfoundry.json` at the project root:
+The agent reads, rather than guesses, these manifest fields:
 
-- `workflow.statuses` — the ordered list of the seven statuses
-- `workflow.workingBranch` — where feature branches rebase from
-- `workflow.prTargetBranch` — the merge target for PRs
-- `workflow.branchNaming.feature` — feature branch pattern (e.g. `feature/{N}-{description}`)
-- `workflow.commitFormat.pattern` — conventional commit pattern (e.g. `<type>(#<ticket>): <description>`)
-- `workflow.projectUrl` — GitHub Projects / Jira / Notion / Linear board
+- `workflow.template` and `workflow.statuses`
+- `workflow.workingBranch` and `workflow.prTargetBranch`
+- `workflow.branchNaming` and `workflow.commitFormat`
+- `workflow.projectUrl` and `workflow.tool`
+- `aiRules`
 
-The AI agent never hardcodes branch names, status names, or commit formats — it always reads from the config file. This is what makes the workflow portable across projects.
+Run `sf workflow show` to inspect them and `sf workflow validate` to compare the manifest with the configured board.
 
-## When to use which tool
+## Tool support in v1
 
-The workflow engine is tool-agnostic — it delegates to a per-board adapter for the "move the ticket, create the sub-issue, post the comment" plumbing. The table below captures the adapters we plan to
-support and their current availability:
+| Surface         | v1 status                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| GitHub Projects | Complete delivery contract, including native sub-issues, statuses, milestones and pull-request guards |
+| Jira            | Experimental adapter; not full parity with the GitHub contract                                        |
+| Linear          | Experimental adapter; not full parity with the GitHub contract                                        |
+| Notion          | Complete SRS backend, not a complete v1 workflow tracker                                              |
 
-| Tool            | Strength                                         | Use case                                     | Availability    |
-| --------------- | ------------------------------------------------ | -------------------------------------------- | --------------- |
-| GitHub Projects | Native to the repo, free, sub-issues via GraphQL | Default for open-source + small teams        | Available today |
-| Jira            | Mature PM surface, sprints, custom fields        | Medium/large teams with existing Jira usage  | On the roadmap  |
-| Notion          | Flexible, doc-adjacent, great for product teams  | Hybrid product/engineering orgs              | On the roadmap  |
-| Linear          | Fast, opinionated, cycles                        | Startups optimising for engineering velocity | On the roadmap  |
-| ClickUp         | All-in-one PM, lightweight PM surface            | Ops-heavy teams outgrowing Trello            | On the roadmap  |
-
-::: info Today vs. roadmap
-
-The only adapter that ships today is `sf-tool-github-projects`. Jira, Notion, Linear and ClickUp adapters are scheduled next — the `sf-workflow` skill already reads `workflow.projectUrl` and routes
-commands through the configured adapter, so the day they land you flip one config entry and you are in.
-
-:::
-
-::: tip Customizable workflow coming in future versions
-
-The 7-status lifecycle is currently fixed because it encodes the patterns we have most battle-tested. Upcoming versions will expose it as configuration — rename statuses, drop optional checkpoints, or
-add team-specific stages from `.saasfoundry.json`. The generated skills and CLI already read their transitions from config, so opening up the shape is mostly a matter of surfacing the right knobs.
-
-:::
-
-The `sf-workflow` skill automatically routes commands to the right tool based on `workflow.projectUrl`. You write workflow commands once — they run against whichever adapter is wired up.
-
-See [GitHub Integration](/workflow/github-integration) for the reference implementation.
+The workflow core remains tool-neutral, but neutral interfaces do not imply equal adapter maturity. See [Connect your tools](/features/your-tools) for the detailed matrix.
 
 ## Next steps
 
-- [7-Status System](/workflow/7-status-system) — mandatory actions and exit conditions per status
-- [Complexity System](/workflow/complexity-system) — how ceremony scales with complexity
-- [AI Rules](/workflow/ai-rules) — the eight non-negotiable rules the AI agent must follow
-- [GitHub Integration](/workflow/github-integration) — how the GitHub Projects adapter works
+- [Team 7-status system](/workflow/7-status-system)
+- [Complexity system](/workflow/complexity-system)
+- [Agent rules](/workflow/ai-rules)
+- [GitHub Projects integration](/workflow/github-integration)

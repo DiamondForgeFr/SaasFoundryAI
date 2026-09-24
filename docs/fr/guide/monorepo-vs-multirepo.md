@@ -206,7 +206,7 @@ sf new --non-interactive \
 
 Pour un multirepo, remplacez `--structure monorepo` par `--structure multirepo`. Avec des remotes existants, le monorepo accepte une URL ; le multirepo accepte des URL backend et frontend séparées.
 
-Consultez [`sf new`](/cli/sf-new) pour toutes les options et [Installation par CLI ou assistant](/fr/getting-started/setup-paths) pour les deux parcours d'onboarding.
+Consultez [`sf new`](/fr/cli/sf-new) pour toutes les options et [Installation par CLI ou assistant](/fr/getting-started/setup-paths) pour les deux parcours d'onboarding.
 
 ## La topologie est conservée après la génération
 

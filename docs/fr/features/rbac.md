@@ -128,6 +128,6 @@ Ces chemins décrivent un monorepo généré. En multirepo, les mêmes fichiers 
 
 ## Continuer
 
-- [Topologie du projet](/guide/monorepo-vs-multirepo)
-- [Système de modules](/guide/module-system)
-- [Livrer votre premier ticket](/getting-started/shipping-first-ticket)
+- [Topologie du projet](/fr/guide/monorepo-vs-multirepo)
+- [Système de modules](/fr/guide/module-system)
+- [Livrer votre premier ticket](/fr/getting-started/shipping-first-ticket)

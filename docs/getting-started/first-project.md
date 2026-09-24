@@ -173,7 +173,8 @@ You should see `saasfoundry-db-dev` and `saasfoundry-s3-dev` (plus `saasfoundry-
 npm run db:setup:dev
 ```
 
-This runs Prisma migrations to create database tables.
+This runs the generated development database setup, including `prisma db push --force-reset`, and regenerates the Prisma client. It resets development data; do not use it against a production
+database.
 
 ### Start Dev Servers
 

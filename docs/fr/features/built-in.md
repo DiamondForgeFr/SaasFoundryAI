@@ -41,7 +41,7 @@ La sélection exacte est enregistrée dans `.saasfoundry.json`, afin que le CLI 
 }
 ```
 
-Découvrez comment ce contrat évolue dans [Mettre un projet à jour](/guide/updating-projects).
+Découvrez comment ce contrat évolue dans [Mettre un projet à jour](/fr/guide/updating-projects).
 
 ## Fondation SaaS
 
@@ -107,7 +107,7 @@ invitation créée → jeton émis → acceptation → rôle contextualisé attr
 compte inactif → demande → revue plateforme → compte actif
 ```
 
-Lorsque le fournisseur d'e-mail est désactivé, les messages rendus restent visibles dans les logs de développement. L'installation du module [E-mail](/modules/email) envoie les mêmes parcours via
+Lorsque le fournisseur d'e-mail est désactivé, les messages rendus restent visibles dans les logs de développement. L'installation du module [E-mail](/fr/modules/email) envoie les mêmes parcours via
 MailerSend.
 
 ### Internationalisation
@@ -172,7 +172,7 @@ le même contrat.
 schéma Zod → DTO NestJS → OpenAPI → client API généré → React Query
 ```
 
-Consultez [Structure du projet](/guide/project-structure) et [Monorepo ou multirepo](/fr/guide/monorepo-vs-multirepo).
+Consultez [Structure du projet](/fr/guide/project-structure) et [Monorepo ou multirepo](/fr/guide/monorepo-vs-multirepo).
 
 ### Application React
 
@@ -207,7 +207,7 @@ commit, les contrôles rapides avant commit et la gate plus lourde avant push.
 Docker démarre la base de développement, et une configuration Compose dédiée isole les tests de base de données de l'API. Les GitHub Actions générées tiennent compte de la topologie et peuvent limiter
 les jobs aux surfaces modifiées par une pull request.
 
-Le [guide des outils de développement](/getting-started/tools) détaille la boucle locale.
+Le [guide des outils de développement](/fr/getting-started/tools) détaille la boucle locale.
 
 ### Runtime de production
 
@@ -226,7 +226,7 @@ HEALTHCHECK CMD wget --quiet --tries=1 --spider http://localhost:80/ || exit 1
 Le CLI valide le manifeste généré avant les opérations de cycle de vie. Des migrations numérotées du manifeste et des migrations de modules ordonnées mettent à jour la configuration possédée sans
 écraser silencieusement le code de l'utilisateur.
 
-Consultez [Mettre un projet à jour](/guide/updating-projects) pour la prévisualisation, la comparaison à trois sources, les conflits et la récupération.
+Consultez [Mettre un projet à jour](/fr/guide/updating-projects) pour la prévisualisation, la comparaison à trois sources, les conflits et la récupération.
 
 ## Harness de développement
 
@@ -239,16 +239,24 @@ de dupliquer les informations du projet dans les prompts.
 sf status --claude-friendly --no-network
 ```
 
-Cette commande donne à l'agent de code un résumé déterministe et hors ligne avant toute modification. Consultez [Structure du projet](/guide/project-structure).
+Cette commande donne à l'agent de code un résumé déterministe et hors ligne avant toute modification. Consultez [Structure du projet](/fr/guide/project-structure).
 
 ### Workflow de livraison adapté à la complexité
 
-Le workflow relie chaque ticket à un cycle de sept statuts avec des gardes. La complexité change la profondeur de l'analyse, du plan, des tests et de la revue, sans changer le sens des statuts.
+Le harness fournit deux presets sécurisés. Le workflow équipe sépare la validation fonctionnelle de la revue de code ; le workflow Solo regroupe sa validation humaine dans la revue de PR.
+L'installation interactive permet aussi de définir et d'enregistrer une séquence personnalisée.
 
 ```text
 Backlog → Ready → In progress → AI testing
         → Human testing → In review → Done
 ```
+
+```text
+Solo : Backlog → In progress → AI testing → In review → Done
+```
+
+Dans le preset équipe, **Human testing désigne le test fonctionnel de la feature** et **In review désigne la revue de code**. La complexité adapte la profondeur d'analyse, de planification, de test et
+de revue à l'intérieur des phases configurées.
 
 ```text
 bug      correction directe + preuve de non-régression
@@ -257,8 +265,8 @@ medium   analyse structurée et plan approuvé
 complex  analyse approfondie et revue contradictoire
 ```
 
-Les transitions passent par l'adaptateur du board configuré : GitHub Projects, Jira, Notion ou Linear reste le système de travail visible. Commencez par
-[Workflow de livraison](/guide/workflow-system).
+Les transitions passent par l'adaptateur du board configuré. GitHub Projects fournit le contrat v1 complet ; Jira et Linear sont expérimentaux. Notion est le backend SRS v1 complet, pas un tracker de
+workflow complet. Commencez par [Workflow de livraison](/fr/guide/workflow-system).
 
 ### Skills et grammaire d'intégration
 
@@ -276,7 +284,7 @@ sont des instructions du projet, pas une application séparée cachée hors du d
 Les règles d'intégration couvrent modèle Prisma → service/contrôleur NestJS → contrat partagé → hook React Query → route/formulaire → permission RBAC, afin d'éviter qu'une fonctionnalité ne soit
 implémentée que dans une seule couche.
 
-Consultez [Système de skills](/guide/skills-system) et [Connecter vos outils](/fr/features/your-tools).
+Consultez [Système de skills](/fr/guide/skills-system) et [Connecter vos outils](/fr/features/your-tools).
 
 ### Traçabilité des spécifications à la livraison
 
@@ -289,7 +297,7 @@ exigence → mise à jour SRS approuvée → ticket réconcilié
 ```
 
 La V1 fournit le backend Notion ; les autres backends sont des cibles d'adaptateur, pas des implémentations annoncées. Consultez [Une source de vérité SRS](/fr/srs/centralization) et le
-[module SRS](/modules/srs).
+[module SRS](/fr/modules/srs).
 
 ## Capacités optionnelles
 
@@ -297,8 +305,8 @@ Optionnel signifie **pris en charge et installable**, pas activé dans chaque sc
 
 ### E-mail transactionnel
 
-Le [module E-mail](/modules/email) active MailerSend pour la confirmation de compte, la réinitialisation du mot de passe et les invitations. Sans lui, les mêmes templates et parcours restent testables
-localement via les logs de développement.
+Le [module E-mail](/fr/modules/email) active MailerSend pour la confirmation de compte, la réinitialisation du mot de passe et les invitations. Sans lui, les mêmes templates et parcours restent
+testables localement via les logs de développement.
 
 ```bash
 sf update --add-modules email \
@@ -308,7 +316,7 @@ sf update --add-modules email \
 
 ### Stockage compatible S3
 
-Le [module Stockage](/modules/storage) ajoute les uploads, URL présignées, logos d'organisation et soit un service MinIO local, soit les identifiants d'un service compatible S3 existant.
+Le [module Stockage](/fr/modules/storage) ajoute les uploads, URL présignées, logos d'organisation et soit un service MinIO local, soit les identifiants d'un service compatible S3 existant.
 
 ```bash
 sf update --add-modules storage --s3-setup docker
@@ -316,8 +324,8 @@ sf update --add-modules storage --s3-setup docker
 
 ### Analytics et installation
 
-[Analytics](/modules/analytics) ajoute le chargement Umami uniquement en production et respectueux de la vie privée. [PWA](/modules/pwa) ajoute le manifeste web, les icônes de marque et le service
-worker nécessaires à une application installable.
+[Analytics](/fr/modules/analytics) ajoute le chargement Umami uniquement en production et respectueux de la vie privée. [PWA](/fr/modules/pwa) ajoute le manifeste web, les icônes de marque et le
+service worker nécessaires à une application installable.
 
 ```bash
 sf update --add-modules analytics,pwa
@@ -338,8 +346,8 @@ Consultez [Connecter vos outils](/fr/features/your-tools) pour la matrice de sup
 
 ## Pour continuer
 
-- [Créer votre premier projet](/getting-started/first-project)
+- [Créer votre premier projet](/fr/getting-started/first-project)
 - [Comprendre les deux topologies générées](/fr/guide/monorepo-vs-multirepo)
 - [Explorer le RBAC et le multi-tenant](/fr/features/rbac)
-- [Livrer votre premier ticket](/getting-started/shipping-first-ticket)
-- [Mettre à jour sans perdre vos changements](/guide/updating-projects)
+- [Livrer votre premier ticket](/fr/getting-started/shipping-first-ticket)
+- [Mettre à jour sans perdre vos changements](/fr/guide/updating-projects)

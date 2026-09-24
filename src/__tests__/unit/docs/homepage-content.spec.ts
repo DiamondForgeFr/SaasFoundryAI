@@ -56,6 +56,7 @@ describe('the bilingual product landing (#395)', () => {
     expect(content).toContain('class="sf-capability-grid"')
     expect(content).toContain('class="sf-path-grid"')
     expect(content).toContain('class="sf-status-flow"')
+    expect(content).toContain('class="sf-workflow-choice"')
     expect(content).toContain('class="sf-complexity-grid"')
     expect(content).toContain('class="sf-evidence-grid"')
     expect(content).toContain('class="sf-final-cta"')
@@ -75,9 +76,15 @@ describe('the bilingual product landing (#395)', () => {
   it.each([
     ['English', english],
     ['French', french]
-  ])('keeps the seven-stage workflow at the hero fold on the %s landing', (_locale, content) => {
+  ])('keeps the complete Team route and workflow choices at the hero fold on the %s landing', (_locale, content) => {
     expect(content.indexOf('class="sf-status-flow"')).toBeLessThan(content.indexOf('class="sf-pillar-grid"'))
+    expect(content.indexOf('class="sf-workflow-choice"')).toBeLessThan(content.indexOf('class="sf-pillar-grid"'))
     expect(content.match(/class="sf-human-gate"/g)).toHaveLength(3)
+    expect(content).toMatch(/Team|Équipe/)
+    expect(content).toContain('Solo')
+    expect(content).toMatch(/Custom|Personnalisé/)
+    expect(content).toMatch(/feature testing|test fonctionnel/)
+    expect(content).toMatch(/code review|revue de code/)
   })
 
   it('shows the two product rails and their shared contract in the hero', () => {
@@ -93,5 +100,11 @@ describe('the bilingual product landing (#395)', () => {
     expect(systemMap).toContain('<figcaption>')
     expect(theme).toContain('@media (prefers-reduced-motion: reduce)')
     expect(theme).toMatch(/\.sf-system-map::after,[\s\S]+animation: none/)
+  })
+
+  it('uses the compact documentation radius requested for rectangular surfaces', () => {
+    expect(theme).toContain('--sf-radius: 3px')
+    expect(theme).toMatch(/\.sf-system-map[\s\S]+border-radius: var\(--sf-radius\)/)
+    expect(theme).toMatch(/\.sf-workflow-choice > div[\s\S]+border-radius: var\(--sf-radius\)/)
   })
 })

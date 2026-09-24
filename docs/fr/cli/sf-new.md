@@ -196,7 +196,7 @@ Pour le démarrage local, suivez le README généré : les commandes dépendent 
 | `--analytics` / `--no-analytics`                 | Inclure ou ignorer Analytics.                                     | -                  |
 | `--pwa` / `--no-pwa`                             | Inclure ou ignorer le support installable.                        | actif              |
 | `--advanced-skills <skills>`                     | Liste parmi `context7,atlassian,notion,figma`.                    | -                  |
-| `--srs-enable` / `--no-srs-enable`               | Activer ou ignorer le [module SRS](/modules/srs).                 | -                  |
+| `--srs-enable` / `--no-srs-enable`               | Activer ou ignorer le [module SRS](/fr/modules/srs).              | -                  |
 | `--srs-backend <backend>`                        | Backend SRS ; la V1 supporte `notion`.                            | -                  |
 | `--srs-parent-page-input <url>`                  | URL ou ID de la page racine SRS.                                  | -                  |
 | `--srs-ingest-enable` / `--no-srs-ingest-enable` | Configurer l'ingestion ponctuelle de notes existantes.            | -                  |
@@ -212,7 +212,7 @@ validées que lorsque leur module est concerné.
 
 ## Poursuivre le cycle
 
-- [Comprendre l'architecture générée](/guide/project-structure)
+- [Comprendre l'architecture générée](/fr/guide/project-structure)
 - [Comparer monorepo et multirepo](/fr/guide/monorepo-vs-multirepo)
-- [Livrer le premier ticket](/getting-started/shipping-first-ticket)
+- [Livrer le premier ticket](/fr/getting-started/shipping-first-ticket)
 - [Prévisualiser et appliquer les mises à jour](/fr/cli/sf-update)

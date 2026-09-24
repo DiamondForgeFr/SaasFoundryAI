@@ -1,19 +1,20 @@
 # Creating Skills
 
 SaaSFoundryAI ships a curated catalogue (see [Core Skills](/skills/core-skills), [Tool Skills](/skills/tool-skills)), but your project will have conventions unique to it — domain language, a custom
-release script, a deployment checklist that only makes sense for your infrastructure. Write a **custom skill** to teach Claude those conventions so every contributor (human or AI) follows them
-identically.
+release script, a deployment checklist that only makes sense for your infrastructure. Write a **custom skill** to teach your coding agent those conventions so every contributor (human or AI) follows
+them identically.
 
 This page walks through building a skill **inside your project**. For contributing a skill back to SaaSFoundryAI itself, see [Contributing](/contributing/development).
 
 ## What is a skill, in 20 seconds
 
-A skill is a directory under `.claude/skills/` containing at minimum a `SKILL.md` file. The `SKILL.md` is:
+A skill is a directory containing at minimum a `SKILL.md` file. Its location depends on the declared host: `.claude/skills/` for Claude Code and `.agents/skills/` for coding agents that use the
+portable surface, including Codex. The `SKILL.md` is:
 
-- A markdown reference Claude reads in full before acting
+- A markdown reference the coding agent reads in full before acting
 - Plus a YAML front-matter declaring the skill's metadata (name, description, allowed tools, auto-trigger keywords)
 
-When you say something that matches a skill's trigger keywords, Claude loads the full `SKILL.md` into its context before taking action. When you say `/skill-name`, the same happens explicitly.
+Discovery depends on the host. Some hosts match trigger keywords or support `/skill-name`; others follow the project instructions and read the applicable skill explicitly.
 
 ## Minimal example: `deploy-preview`
 
@@ -21,11 +22,14 @@ Let's build a skill that encapsulates your team's "deploy a preview environment"
 
 ### 1. Create the directory
 
-For a multirepo project, place it under the app that owns the behaviour (`apps/api/` if it's API-specific, `apps/web/` for frontend). For a monorepo, use the root:
+For a multirepo project, place it under the app that owns the behaviour (`apps/api/` if it's API-specific, `apps/web/` for frontend). For a monorepo, use the root. Claude Code example:
 
 ```bash
 mkdir -p .claude/skills/sf-deploy-preview
 ```
+
+For a portable skill shared with Codex, use `.agents/skills/sf-deploy-preview` and reference it from `AGENTS.md`. If multiple agents consume the skill, keep one source of truth and reviewed
+entrypoints instead of allowing two copies to drift.
 
 Note the `sf-` prefix — keep it consistent with SaaSFoundryAI's convention to avoid collisions with globally installed skills.
 
@@ -34,7 +38,7 @@ Note the `sf-` prefix — keep it consistent with SaaSFoundryAI's convention to 
 ```markdown
 ---
 name: deploy-preview
-description: Deploy a preview environment for the current feature branch. Auto-triggers on "deploy preview", "spin up preview", "ephemeral env". Use after Human testing, before opening the PR.
+description: Deploy a preview environment for the current feature branch. Auto-triggers on "deploy preview", "spin up preview", "ephemeral env". Use during Human testing on the draft PR.
 model: haiku
 allowed-tools: Bash(gh :*), Bash(fly :*), Bash(git :*)
 ---
@@ -69,7 +73,8 @@ If step 3 fails, run `fly apps destroy myapp-preview-$BRANCH` before exiting.
 - The preview name includes the branch, so concurrent previews don't collide
 ```
 
-That's it. No TypeScript, no JSON config — just markdown Claude reads. The `allowed-tools` front-matter restricts what the skill can actually invoke (in this case, `gh`, `fly`, `git` — nothing else).
+That's it. No TypeScript, no JSON config — just Markdown the agent reads. On hosts that support it, `allowed-tools` restricts what the skill can invoke. Fields such as `model` are host-specific and
+must not be presented as portable guarantees.
 
 ### 3. Optional: add a CLI script
 
@@ -92,7 +97,7 @@ This is the pattern used by `sf-tool-github-projects`, `sf-tool-atlassian`, and 
 
 ### 4. Test by invocation
 
-Open Claude Code in the project and try both invocation paths:
+In Claude Code, try both invocation paths:
 
 ```
 > /sf-deploy-preview
@@ -105,6 +110,8 @@ should load the skill and execute the workflow. Say naturally:
 ```
 
 should hit the auto-trigger keywords and load the skill without the explicit `/` prefix.
+
+In Codex or another host, inspect the declared profile with `sf agents doctor`, then request the capability in natural language. The existence of a file does not prove native discovery.
 
 ### 5. Commit
 
@@ -132,10 +139,10 @@ description: Helps with deployments
 **Better**:
 
 ```yaml
-description: Deploy a preview environment for the current feature branch. Auto-triggers on "deploy preview", "spin up preview", "ephemeral env". Use after Human testing, before opening the PR.
+description: Deploy a preview environment for the current feature branch. Auto-triggers on "deploy preview", "spin up preview", "ephemeral env". Use during Human testing on the draft PR.
 ```
 
-Include auto-trigger keywords inline so Claude has them in one place.
+Include auto-trigger keywords inline when the selected host uses them.
 
 ### Body: lead with preconditions
 
@@ -149,7 +156,7 @@ State what must be true before the skill runs. This lets Claude bail out cleanly
 - Ticket is in Human testing
 ```
 
-The SaaSFoundryAI 7-status workflow is enforced exactly this way.
+The Team preset's seven-status workflow is enforced this way. Solo and Custom routes use the same precondition pattern with their configured statuses.
 
 ### Body: explicit `## Workflow` steps
 

@@ -1,156 +1,108 @@
-# 7-Status System
+# Team workflow: the 7-status system
 
-Every SaaSFoundryAI ticket moves through seven statuses. Each status has **mandatory actions** that must be completed before the ticket can transition to the next status, and **exit conditions** that
-gate the transition. The AI agent reads the status description file (`.claude/skills/sf-workflow/statuses/<N>-<name>.md`) before taking any action.
+The `saasfoundry` preset is the complete team workflow. Every delivery status has mandatory actions and exit conditions in `.claude/skills/sf-workflow/statuses/`. The workflow CLI reads the ordered
+status list from `.saasfoundry.json`; it does not hardcode the sequence.
 
-## Overview
+::: info Looking for the lighter flow?
 
-| #   | Status            | Role                                                     |
-| --- | ----------------- | -------------------------------------------------------- |
-| 1   | **Backlog**       | Preparation — detect complexity, analyse, plan, validate |
-| 2   | **Ready**         | Queue of validated tickets awaiting pickup               |
-| 3   | **In progress**   | Active development with child-ticket delivery + commits  |
-| 4   | **AI testing**    | Automated validation + test plan execution               |
-| 5   | **Human testing** | Manual validation by the human developer                 |
-| 6   | **In review**     | PR creation + green CI + reviewer approval               |
-| 7   | **Done**          | Merge finalisation + branch cleanup                      |
+The `solo` preset uses five statuses: `Backlog → In progress → AI testing → In review → Done`. It removes the separate Ready and Human testing columns, and makes pull-request review the human gate.
+See [Workflow system](/workflow/introduction#saasfoundry-solo-solo-preset).
 
-An `sf-epic` is an aggregate rather than a delivery ticket. It has no branch or PR and stays `In progress` while its children move through testing and review. The first child entering `In progress`
-moves the Epic through `Ready` to `In progress`; the last child reaching `Done` moves it to `Done`. Epics may span multiple milestones because milestone scope belongs to their delivery children.
+:::
 
-## 1. Backlog
+## The seven stages
 
-**Entry:** a new idea, feature request, or bug is raised.
+| #   | Status            | What happens                                                  | Human meaning                             |
+| --- | ----------------- | ------------------------------------------------------------- | ----------------------------------------- |
+| 1   | **Backlog**       | Clarify the problem, detect complexity, analyse and plan      | Approve the intent and plan when required |
+| 2   | **Ready**         | Keep validated, prioritised work available for pickup         | Confirm which ticket starts               |
+| 3   | **In progress**   | Branch, child tickets, implementation, commits and push       | Follow delivery progress                  |
+| 4   | **AI testing**    | Test plan, automated checks, adversarial review when required | Receive reproducible evidence             |
+| 5   | **Human testing** | Test the feature from the draft PR in a real runtime          | **Feature testing**                       |
+| 6   | **In review**     | Ready PR, full CI, review comments and approval               | **Code review**                           |
+| 7   | **Done**          | Verify merge, close the ticket and clean branches             | Accept the delivered result               |
 
-**Mandatory actions (in order):**
+## 1. Backlog — clarify before coding
 
-1. Read the ticket thoroughly.
-2. **Detect complexity** — the agent suggests 🐛 / 🟢 / 🟡 / 🔴 based on files impacted, keywords (auth / payment / security → complex), and risk. The developer has final say.
-3. **Analyse** (adaptive by complexity) — skipped for bug, minimal for low, standard for medium, deep for complex.
-4. **Plan** (adaptive) — skipped for bug, mental for low, file-by-file detailed for medium, comprehensive with dependencies for complex. Medium and complex plans require explicit approval.
-5. **Challenge the specs** — ask clarifying questions, surface uncovered edge cases, validate the technical approach.
-6. Ensure the ticket has a clear problem statement, acceptance criteria, technical context, and a complexity tag.
+The agent reads the issue and current codebase, assigns one complexity label (`bug`, `low`, `medium`, `complex`) and adapts its analysis. Medium and complex plans require explicit approval before
+implementation.
 
-**Exit conditions:**
+Exit requires a clear problem, acceptance criteria, technical context and complexity. No branch or implementation starts in Backlog.
 
-- Complexity tag set on the ticket label
-- Analysis complete (if required by complexity)
-- Plan approved (if required)
-- Developer validates specs are complete
+## 2. Ready — the validated queue
 
-**Do NOT** create a branch, start coding, or skip complexity detection while in Backlog.
+Ready means the ticket can start immediately, not that an agent may silently claim it. The developer assigns the ticket or explicitly confirms pickup. The workflow then creates the configured feature
+branch and moves to In progress.
 
-## 2. Ready
+## 3. In progress — deliver traceable work
 
-**Entry:** specs are validated and the ticket is prioritised.
+The agent reads branch and commit policy from the manifest, creates native GitHub sub-issues when decomposition is useful, and implements on the feature branch.
 
-**Mandatory actions:**
+- A normal child owns its own branch and pull request.
+- A `nature:bundled-pr` child contributes one atomic commit to its delivery parent's branch.
+- An Epic is an aggregate: it owns no branch and no pull request.
 
-1. Wait for the developer to assign the ticket, or confirm with them which ticket to take.
-2. Otherwise do nothing — Ready is a queue.
+Before AI testing, the implementation must compile, lint, pass the relevant tests, be committed and be pushed. Testing unpushed code is forbidden because nobody else can reproduce or inspect it.
 
-**Exit conditions:**
+## 4. AI testing — build the evidence
 
-- Developer asks the agent to work on the ticket, OR
-- Agent receives explicit confirmation to take it
+The agent publishes a test plan, runs the configured automated and manual scenarios, documents results, and fixes failures before proceeding. Complex work also receives independent adversarial review.
 
-## 3. In progress
+For a user-facing ticket, the agent then opens or reuses a **draft pull request**. The draft contains the diff, test plan and current evidence but does not start ready-PR CI yet. This gives Human
+testing a stable artifact to validate.
 
-**Entry:** developer assigns the ticket.
+## 5. Human testing — feature testing
 
-**Mandatory actions (in order):**
+Human testing answers: **does the feature behave correctly for its users?**
 
-1. **Read config from `.saasfoundry.json`** — working branch and branch naming pattern.
-2. **Create the feature branch** — checkout working branch, pull rebase, create `feature/{N}-{description}`.
-3. Move the ticket's board status to "In progress".
-4. **Create child tickets** — break the work into atomic child tickets via `github-projects-cli.sh create-subtask <parent> "<title>"`. Children must be **native GitHub sub-issues** linked via the
-   GraphQL sub-issue relationship, never markdown checkboxes.
-5. Implement iteratively. A normal child owns its branch and PR; a `nature:bundled-pr` child is one atomic commit on the parent's branch.
-6. **Close each child immediately after its delivery is verified** — normal child after PR merge, bundled child after its commit is validated. Verify with `gh issue view <child> --json state`.
-7. Push commits to remote **before** requesting the transition to AI testing.
+The developer uses the draft PR, test instructions and a real runtime to exercise the behavior. This is not code review. If a bug appears, the ticket returns to AI testing after the fix, push and full
+retest.
 
-**Exit conditions:**
+After approval, required non-regression tests are committed and pushed. The same pull request is then marked ready for review.
 
-- Parent implementation is pushed; child tickets continue through their own lifecycle as needed
-- All commits pushed to remote
-- Code is ready to be tested
+## 6. In review — code review
 
-## 4. AI testing
+In review answers: **is this implementation safe, maintainable and ready to merge?**
 
-**Entry:** code pushed and ready for testing.
+The pull request is no longer a draft. Full CI runs; reviewers inspect the code and architecture; the agent addresses comments and reruns validation after changes. The ticket stays In review until
+approvals are present, CI is green, and the developer merges the PR.
 
-**Mandatory actions:**
+## 7. Done — verified merge, then cleanup
 
-1. **Generate the test plan** — post as a ticket comment. Setup / scenarios / expected results / non-regression checks.
-2. Move the board status to "AI testing".
-3. **Run automated tests** — build, lint, type-check, unit tests.
-4. **Execute the test plan manually** — verify every scenario, document issues.
-5. If issues surface: fix → commit → push → restart from step 3.
+Done requires evidence that the pull request is merged into the configured target branch. The workflow also checks native children: a parent cannot become Done while a child is unfinished.
 
-**Exit conditions:**
+After verification, the agent closes the issue, synchronises the configured working branch and removes only branches or worktrees that are known to be merged and no longer in use.
 
-- All automated checks green
-- Every test plan scenario validated
-- No open blockers
+## Nature-controlled routes
 
-## 5. Human testing
+Not every ticket is a user-facing delivery ticket:
 
-**Entry:** AI testing passed.
+| Nature               | Controlled route                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `nature:user-facing` | Full team path including feature testing and code review                                         |
+| `nature:internal`    | May skip the separate feature-testing gate; still requires review policy and merge evidence      |
+| `nature:bundled-pr`  | Child reaches Done after its atomic commit is validated on the parent's branch; no individual PR |
+| Epic                 | Status derives from native children; no branch or PR                                             |
 
-**Mandatory actions:**
+These paths are encoded in the workflow guards. They are not permission to invent arbitrary shortcuts.
 
-1. Wait for the human developer to test manually. Stay available for questions.
-2. **If the developer finds bugs:** summarise the fix plan as a comment, implement, commit, push, and return to AI testing (re-run all automated checks).
-3. **If the developer validates ✅:** before creating the PR, add non-regression tests — E2E (Playwright) for complex features, unit regression tests for edge-case bug fixes, none for typos/docs/CSS.
-4. Verify tests pass locally (`npm run test:e2e`), commit with `test(#{N}): ...`, and push.
+## SRS drafting is a separate lifecycle
 
-**Exit conditions:**
+Tickets labelled `srs:drafting`, `srs:update` or `srs:new` remain in the board's In progress column while they move through:
 
-- Developer validates the feature
-- Non-regression tests created and pushed (where applicable)
+```text
+AI draft → Human review → Spawning → Done
+```
 
-## 6. In review
+Use `workflow-cli.sh transition-drafting`; code-path transitions to AI testing, Human testing or In review are rejected.
 
-**Entry:** human validation complete, tests pushed.
+## Why the gates matter
 
-**Mandatory actions:**
+- Backlog protects intent.
+- Ready protects ownership and prioritisation.
+- AI testing protects the human from machine-detectable regressions.
+- Human testing protects product behavior.
+- In review protects code quality and integration.
+- Done protects the truth of the board by requiring a verified merge and completed children.
 
-1. **Create the PR** — title matches the ticket, description links the ticket, copies the test plan, lists tests added.
-2. Assign reviewers and link the PR to the ticket.
-3. Move the board status to "In review".
-4. **Monitor CI** — if red, analyse, fix, push, wait for green.
-5. **Monitor review comments** — answer questions, implement requested changes, add tests if requested.
-6. Wait for approval and green CI.
-
-**Exit conditions:**
-
-- PR approved by all required reviewers
-- CI fully green
-
-## 7. Done
-
-**Entry:** PR merged by the developer.
-
-**Mandatory actions:**
-
-1. Move the board status to "Done".
-2. **Local branch cleanup** — checkout working branch, pull rebase, delete the feature branch.
-3. **Rebase other in-progress branches** against the updated working branch; resolve conflicts if necessary; `git push --force-with-lease`.
-
-**Exit conditions:**
-
-- Ticket marked Done on the board
-- Feature branch deleted locally
-- Other in-progress branches rebased
-
-## Why the gating matters
-
-The status progression is **not a suggestion**. Each gate protects a real invariant:
-
-- Backlog → Ready gates on specs being ready, so the agent doesn't start coding against ambiguous requirements.
-- Done gates on child completion, so the board never shows a parent marked Done while child tickets are still open or unfinished.
-- AI testing → Human testing gates on automated checks, so the human doesn't waste time hunting for bugs the machine could have caught.
-- Human testing → In review gates on non-regression tests, so a merged feature can't regress silently later.
-- In review → Done gates on green CI + reviewer approval, so nothing ships without a second pair of eyes.
-
-Skipping any of these gates is how bugs reach production. See [AI Rules](/workflow/ai-rules) for the enforcement contract.
+See [Agent rules](/workflow/ai-rules) for the operational invariants and [Complexity system](/workflow/complexity-system) for adaptive rigor.

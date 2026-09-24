@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { DefaultTheme } from 'vitepress'
 import { documentationLink, localizedRoute, markdownPathToRoute, routeForPage, routeWithoutLocale } from '../../../../docs/.vitepress/config/locale-paths'
 import { discoverLocaleRoutes } from '../../../../docs/.vitepress/config/locale-routes'
@@ -6,6 +8,7 @@ import { documentationLocaleParityMode, evaluateLocaleParity, type LocaleParityM
 
 const englishRoutes = discoverLocaleRoutes('en')
 const frenchRoutes = discoverLocaleRoutes('fr')
+const repositoryRoot = resolve(__dirname, '../../../..')
 
 const collectSidebarLinks = (items: DefaultTheme.SidebarItem[]): string[] =>
   items.flatMap((item) => [item.link, ...(item.items ? collectSidebarLinks(item.items) : [])]).filter((link): link is string => Boolean(link))
@@ -29,6 +32,15 @@ const configuredLinks = (locale: 'en' | 'fr'): string[] => {
 const localRoute = (link: string): string | undefined => {
   if (!link.startsWith('/') || link.startsWith('//')) return undefined
   return routeWithoutLocale(link.split(/[?#]/, 1)[0])
+}
+
+const frenchSource = (route: string): string => resolve(repositoryRoot, 'docs/fr', route === '/' ? 'index.md' : `${route.slice(1)}.md`)
+
+const crossLocaleLinks = (route: string): string[] => {
+  const content = readFileSync(frenchSource(route), 'utf8')
+  return [...content.matchAll(/(?:\]\(|href=["']|link:\s*)(\/[^\s)"'#?]*)/g)]
+    .map((match) => match[1])
+    .filter((link) => link !== '/' && !link.startsWith('/fr/') && !link.startsWith('/assets/') && !link.startsWith('/favicon') && !link.startsWith('/logo'))
 }
 
 describe('documentation locale routes (#796)', () => {
@@ -108,13 +120,19 @@ describe('documentation navigation integrity (#796)', () => {
     expect([...new Set(missing)].sort()).toEqual([])
   })
 
-  it('keeps English and French navigation structurally aligned during staged translation', () => {
+  it('keeps English and French navigation structurally aligned', () => {
     const englishLinks = configuredLinks('en')
       .map((link) => routeWithoutLocale(link))
       .sort()
-    const frenchLinks = configuredLinks('fr')
-      .map((link) => routeWithoutLocale(link))
-      .sort()
+    const configuredFrenchLinks = configuredLinks('fr')
+    expect(configuredFrenchLinks.every((link) => link.startsWith('/fr/'))).toBe(true)
+
+    const frenchLinks = configuredFrenchLinks.map((link) => routeWithoutLocale(link)).sort()
     expect(frenchLinks).toEqual(englishLinks)
+  })
+
+  it('keeps every internal link in the complete French tree inside the French locale', () => {
+    const offenders = frenchRoutes.flatMap((route) => crossLocaleLinks(route).map((link) => `${route} -> ${link}`))
+    expect(offenders).toEqual([])
   })
 })

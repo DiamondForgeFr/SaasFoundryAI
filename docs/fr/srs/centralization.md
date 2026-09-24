@@ -200,7 +200,7 @@ Désactiver le détecteur n'est pas une migration de données. Les pages Notion 
 
 ## Continuer
 
-- [Suivre le parcours Notion](/srs/walkthrough)
-- [Comprendre le cycle de rédaction](/srs/lifecycle)
-- [Lire le contrat des résultats de scanner](/srs/scanner-findings)
+- [Suivre le parcours Notion](/fr/srs/walkthrough)
+- [Comprendre le cycle de rédaction](/fr/srs/lifecycle)
+- [Lire le contrat des résultats de scanner](/fr/srs/scanner-findings)
 - [Voir comment vos outils restent les sources de vérité](/fr/features/your-tools)
