@@ -2,26 +2,27 @@
 layout: home
 hero:
   name: SaaSFoundryAI
-  text: Livrez le produit. Pas le boilerplate.
+  text: L'ingénierie robuste, dès le premier jour.
   tagline: >-
-    Une fondation SaaS prête pour la production et un harness de développement indépendant des fournisseurs, conçus pour que les humains et plusieurs agents IA livrent selon les mêmes règles.
+    Un harness de développement déterministe pour des équipes mixtes — développeurs et agents IA — accompagné d'une fondation SaaS prête pour la production. Utilisez-les séparément ou ensemble, sans
+    reconstruire la stack ni les pratiques qui rendent le logiciel fiable.
   actions:
     - theme: brand
-      text: Démarrer avec l'agent
+      text: Explorer le harness
+      link: /fr/guide/workflow-system
+    - theme: alt
+      text: Créer un SaaS
       link: /fr/getting-started/installation
     - theme: alt
-      text: Utiliser le CLI
-      link: /fr/getting-started/quick-start
-    - theme: alt
-      text: Explorer le système
+      text: Voir la fondation
       link: /fr/features/built-in
 ---
 
 <dl class="sf-proof-strip" aria-label="Résumé du produit">
-  <div><dt>2 fondations</dt><dd>application + livraison</dd></div>
-  <div><dt>Jusqu'à 7 étapes sécurisées</dt><dd>parcours Team complet</dd></div>
-  <div><dt>6 profils d'agents</dt><dd>un seul harness partagé</dd></div>
-  <div><dt>1 contrat</dt><dd>.saasfoundry.json</dd></div>
+  <div><dt>Tout projet SaaS</dt><dd>un harness déterministe</dd></div>
+  <div><dt>Jusqu'à 7 étapes sécurisées</dt><dd>le craftsmanship rendu opérationnel</dd></div>
+  <div><dt>6 profils d'agents</dt><dd>un contrat d'équipe mixte</dd></div>
+  <div><dt>1 fondation prête</dt><dd>accélérateur SaaS optionnel</dd></div>
 </dl>
 
 <section class="sf-home-section">
@@ -62,25 +63,25 @@ hero:
 </section>
 
 <section class="sf-home-section">
-  <span class="sf-home-eyebrow">LE MODÈLE PRODUIT</span>
-  <h2>Deux systèmes qui n'auraient jamais dû être séparés.</h2>
+  <span class="sf-home-eyebrow">UTILISEZ L'UN · COMBINEZ LES DEUX</span>
+  <h2>Indépendants par conception. Plus rapides ensemble.</h2>
   <p class="sf-home-lead">
-    La plupart des générateurs s'arrêtent après avoir créé des fichiers. La plupart des workflows IA commencent sans comprendre l'application qu'ils modifient. SaaSFoundryAI relie les deux : une
-    véritable architecture SaaS sur laquelle construire et un harness de livraison qui rend chaque changement traçable.
+    Apportez le harness à tout projet SaaS pour rendre déterministes les pratiques d'ingénierie éprouvées. Utilisez l'architecture préconçue seule lorsque vous avez besoin du socle produit commun.
+    Combinez les deux pour démarrer avec une livraison robuste et un logiciel robuste, sans réimplémenter l'un ou l'autre.
   </p>
 
   <div class="sf-pillar-grid">
+    <a class="sf-pillar sf-pillar--harness" href="/fr/guide/workflow-system">
+      <span class="sf-card-index">01 / HARNESS</span>
+      <h3>Harness de développement déterministe</h3>
+      <p>Les pratiques de livraison exemplaires deviennent un système projet inspectable. Développeurs et agents IA travaillent dans la même équipe avec des SRS, tickets, skills, tests, validations humaines et pull requests partagés.</p>
+      <span class="sf-card-link">Explorer le harness →</span>
+    </a>
     <a class="sf-pillar" href="/fr/features/built-in">
-      <span class="sf-card-index">01 / CONSTRUIRE</span>
-      <h3>Fondation SaaS de production</h3>
+      <span class="sf-card-index">02 / FONDATION</span>
+      <h3>Fondation SaaS prête pour la production</h3>
       <p>Authentification, multi-tenant, RBAC contextualisé, API typée, React, PostgreSQL et socle opérationnel fonctionnent déjà ensemble avant votre première fonctionnalité métier.</p>
       <span class="sf-card-link">Voir les capacités incluses →</span>
-    </a>
-    <a class="sf-pillar sf-pillar--harness" href="/fr/guide/workflow-system">
-      <span class="sf-card-index">02 / LIVRER</span>
-      <h3>Harness de développement sécurisé</h3>
-      <p>SRS, tickets, skills, tests, validations humaines et pull requests partagent un seul workflow entre Claude Code, Codex et les autres hôtes d'agents déclarés.</p>
-      <span class="sf-card-link">Explorer le harness →</span>
     </a>
   </div>
 </section>
@@ -178,11 +179,11 @@ hero:
 
 <section class="sf-final-cta">
   <span class="sf-home-eyebrow">COMMENCEZ À VOTRE NIVEAU</span>
-  <h2>Apportez l'idée produit. Gardez les standards d'ingénierie.</h2>
-  <p>Utilisez votre agent pour le parcours guidé ou restez dans le terminal. Les deux commencent avec la même fondation de production et terminent dans le même workflow sécurisé.</p>
+  <h2>Choisissez la couche utile. Gardez les standards d'ingénierie.</h2>
+  <p>Adoptez le harness dans un SaaS existant, partez de la fondation de production ou combinez les deux. Les décisions d'ingénierie communes restent explicites et reproductibles.</p>
   <div class="sf-final-actions">
-    <a href="/fr/getting-started/setup-paths#parcours-2-—-pilote-par-assistant">Construire avec votre agent →</a>
-    <a href="/fr/getting-started/quick-start">Commencer avec le CLI →</a>
-    <a href="/fr/features/built-in">Inspecter chaque capacité →</a>
+    <a href="/fr/guide/workflow-system">Adopter le harness →</a>
+    <a href="/fr/getting-started/installation">Générer la fondation →</a>
+    <a href="/fr/features/built-in">Inspecter les capacités SaaS →</a>
   </div>
 </section>

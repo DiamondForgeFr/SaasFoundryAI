@@ -109,6 +109,18 @@ describe('the bilingual product landing (#395)', () => {
     expect(systemMap).toContain('Fondation SaaS')
     expect(systemMap).toContain('Harness de développement')
     expect(systemMap).toContain('.saasfoundry.json')
+    expect(systemMap.indexOf('sf-map-rail--harness')).toBeLessThan(systemMap.indexOf('sf-map-rail--foundation'))
+  })
+
+  it.each([
+    ['English', english, 'Robust engineering, from day one.', 'any SaaS codebase', 'independently', 'href="/features/built-in"'],
+    ['French', french, "L'ingénierie robuste, dès le premier jour.", 'tout projet SaaS', 'séparément', 'href="/fr/features/built-in"']
+  ])('positions the harness first and both products as independent in %s', (_locale, content, headline, anyProject, independence, foundationLink) => {
+    expect(content).toContain(headline)
+    expect(content.toLowerCase()).toContain(anyProject.toLowerCase())
+    expect(content).toContain(independence)
+    expect(content.indexOf('sf-pillar--harness')).toBeLessThan(content.indexOf(foundationLink))
+    expect(content).not.toMatch(/Ship the product\. Not the boilerplate|Livrez le produit\. Pas le boilerplate|should never have been separated|n'auraient jamais dû être séparés/)
   })
 
   it.each([
@@ -120,7 +132,7 @@ describe('the bilingual product landing (#395)', () => {
       expect(setup).toContain(profile)
     }
 
-    expect(landing).toMatch(/provider-neutral|indépendant des fournisseurs/)
+    expect(landing).toMatch(/provider-neutral|indépendants? des fournisseurs/i)
     expect(landing).toMatch(/reasoning[- ]effort|effort\s+de\s+raisonnement/)
     expect(landing).toMatch(/host integration|hôte ou une intégration/)
     expect(setup).toMatch(/provider \+ runtime \+ model \+ reasoning-effort|fournisseur \+ runtime \+ modèle \+ effort de raisonnement/)

@@ -2,26 +2,27 @@
 layout: home
 hero:
   name: SaaSFoundryAI
-  text: Ship the product. Not the boilerplate.
+  text: Robust engineering, from day one.
   tagline: >-
-    A production-ready SaaS foundation and a provider-neutral development harness, designed together so humans and multiple coding agents can deliver on the same terms.
+    A deterministic development harness for mixed human–AI teams, paired with a production-ready SaaS foundation. Use either independently or combine them, without rebuilding the stack and practices
+    behind reliable software.
   actions:
     - theme: brand
-      text: Build with your agent
+      text: Explore the harness
+      link: /guide/workflow-system
+    - theme: alt
+      text: Start a SaaS project
       link: /getting-started/installation
     - theme: alt
-      text: Start with the CLI
-      link: /getting-started/quick-start
-    - theme: alt
-      text: Explore the system
+      text: Inspect the foundation
       link: /features/built-in
 ---
 
 <dl class="sf-proof-strip" aria-label="Product summary">
-  <div><dt>2 foundations</dt><dd>application + delivery</dd></div>
-  <div><dt>Up to 7 guarded stages</dt><dd>complete Team delivery path</dd></div>
-  <div><dt>6 agent profiles</dt><dd>one shared harness</dd></div>
-  <div><dt>1 contract</dt><dd>.saasfoundry.json</dd></div>
+  <div><dt>Any SaaS codebase</dt><dd>one deterministic harness</dd></div>
+  <div><dt>Up to 7 guarded stages</dt><dd>craftsmanship made operational</dd></div>
+  <div><dt>6 agent profiles</dt><dd>one mixed-team contract</dd></div>
+  <div><dt>1 ready foundation</dt><dd>optional SaaS accelerator</dd></div>
 </dl>
 
 <section class="sf-home-section">
@@ -61,25 +62,25 @@ hero:
 </section>
 
 <section class="sf-home-section">
-  <span class="sf-home-eyebrow">THE PRODUCT MODEL</span>
-  <h2>Two systems that should never have been separated.</h2>
+  <span class="sf-home-eyebrow">USE ONE · COMBINE BOTH</span>
+  <h2>Independent by design. Faster together.</h2>
   <p class="sf-home-lead">
-    Most generators stop after creating files. Most AI workflows start without understanding the application they modify. SaaSFoundryAI connects both sides: a real SaaS architecture to build on,
-    and a delivery harness that keeps every change traceable.
+    Bring the harness to any SaaS codebase to make proven engineering practices deterministic. Use the prebuilt architecture on its own when you need the common product foundation. Combine both to
+    start with robust delivery and robust software—without reimplementing either.
   </p>
 
   <div class="sf-pillar-grid">
+    <a class="sf-pillar sf-pillar--harness" href="/guide/workflow-system">
+      <span class="sf-card-index">01 / HARNESS</span>
+      <h3>Deterministic development harness</h3>
+      <p>Exemplary delivery practices become an inspectable project system. Developers and AI agents work as one team through shared SRS, tickets, skills, tests, human gates and pull requests.</p>
+      <span class="sf-card-link">Explore the harness →</span>
+    </a>
     <a class="sf-pillar" href="/features/built-in">
-      <span class="sf-card-index">01 / BUILD</span>
-      <h3>Production SaaS foundation</h3>
+      <span class="sf-card-index">02 / FOUNDATION</span>
+      <h3>Production-ready SaaS foundation</h3>
       <p>Authentication, tenancy, scoped RBAC, typed APIs, React, PostgreSQL and the operational baseline already work together before your first business feature.</p>
       <span class="sf-card-link">See what is built in →</span>
-    </a>
-    <a class="sf-pillar sf-pillar--harness" href="/guide/workflow-system">
-      <span class="sf-card-index">02 / DELIVER</span>
-      <h3>Guarded development harness</h3>
-      <p>SRS, tickets, skills, tests, human gates and pull requests share one workflow across Claude Code, Codex and other declared coding-agent hosts.</p>
-      <span class="sf-card-link">Explore the harness →</span>
     </a>
   </div>
 </section>
@@ -177,11 +178,11 @@ hero:
 
 <section class="sf-final-cta">
   <span class="sf-home-eyebrow">START AT YOUR ALTITUDE</span>
-  <h2>Bring the product idea. Keep the engineering standards.</h2>
-  <p>Use your coding agent for the guided path or stay in the terminal. Both start with the same production foundation and end inside the same guarded workflow.</p>
+  <h2>Choose the layer you need. Keep the engineering standards.</h2>
+  <p>Adopt the harness in an existing SaaS, start from the production foundation, or combine both. The common engineering decisions stay explicit and reproducible.</p>
   <div class="sf-final-actions">
-    <a href="/getting-started/installation">Build with your agent →</a>
-    <a href="/getting-started/quick-start">Start with the CLI →</a>
-    <a href="/features/built-in">Inspect every capability →</a>
+    <a href="/guide/workflow-system">Adopt the harness →</a>
+    <a href="/getting-started/installation">Generate the foundation →</a>
+    <a href="/features/built-in">Inspect SaaS capabilities →</a>
   </div>
 </section>

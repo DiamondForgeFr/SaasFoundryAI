@@ -8,26 +8,26 @@ const isFrench = computed(() => page.value.relativePath.startsWith('fr/'))
 const copy = computed(() =>
   isFrench.value
     ? {
-        eyebrow: 'LE SYSTÈME COMPLET',
-        title: 'Une idée entre. Un produit fiable sort.',
-        input: 'Votre produit',
+        eyebrow: 'DEUX PRODUITS, UN CONTRAT',
+        title: 'Indépendants par conception. Plus rapides ensemble.',
+        input: 'Votre projet SaaS',
         foundation: 'Fondation SaaS',
         foundationItems: ['Auth', 'RBAC', 'Données', 'Interface'],
         harness: 'Harness de développement',
         harnessItems: ['SRS', 'Tickets', 'Tests', 'Validation'],
-        output: 'Prêt à livrer',
-        caption: 'Deux rails coordonnés par un même contrat : .saasfoundry.json'
+        output: 'Prêt à évoluer',
+        caption: 'Adoptez un rail ou combinez les deux sous le même contrat : .saasfoundry.json'
       }
     : {
-        eyebrow: 'THE COMPLETE SYSTEM',
-        title: 'One idea enters. A dependable product leaves.',
-        input: 'Your product',
+        eyebrow: 'TWO PRODUCTS, ONE CONTRACT',
+        title: 'Independent by design. Faster together.',
+        input: 'Your SaaS project',
         foundation: 'SaaS foundation',
         foundationItems: ['Auth', 'RBAC', 'Data', 'Interface'],
         harness: 'Development harness',
         harnessItems: ['SRS', 'Tickets', 'Tests', 'Approval'],
-        output: 'Ready to ship',
-        caption: 'Two coordinated rails, governed by one contract: .saasfoundry.json'
+        output: 'Ready to evolve',
+        caption: 'Adopt either rail or combine both under one contract: .saasfoundry.json'
       }
 )
 </script>
@@ -45,23 +45,23 @@ const copy = computed(() =>
     </div>
 
     <div class="sf-map-rails">
-      <div class="sf-map-rail sf-map-rail--foundation">
-        <div class="sf-map-rail-title">
-          <span aria-hidden="true">01</span>
-          <strong>{{ copy.foundation }}</strong>
-        </div>
-        <ul>
-          <li v-for="item in copy.foundationItems" :key="item">{{ item }}</li>
-        </ul>
-      </div>
-
       <div class="sf-map-rail sf-map-rail--harness">
         <div class="sf-map-rail-title">
-          <span aria-hidden="true">02</span>
+          <span aria-hidden="true">01</span>
           <strong>{{ copy.harness }}</strong>
         </div>
         <ul>
           <li v-for="item in copy.harnessItems" :key="item">{{ item }}</li>
+        </ul>
+      </div>
+
+      <div class="sf-map-rail sf-map-rail--foundation">
+        <div class="sf-map-rail-title">
+          <span aria-hidden="true">02</span>
+          <strong>{{ copy.foundation }}</strong>
+        </div>
+        <ul>
+          <li v-for="item in copy.foundationItems" :key="item">{{ item }}</li>
         </ul>
       </div>
     </div>
