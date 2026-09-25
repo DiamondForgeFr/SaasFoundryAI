@@ -4,7 +4,7 @@ hero:
   name: SaaSFoundryAI
   text: Ship the product. Not the boilerplate.
   tagline: >-
-    A production-ready SaaS foundation and a guarded development harness, designed together so human and AI contributors can deliver on the same terms.
+    A production-ready SaaS foundation and a provider-neutral development harness, designed together so humans and multiple coding agents can deliver on the same terms.
   actions:
     - theme: brand
       text: Build with your agent
@@ -20,7 +20,7 @@ hero:
 <dl class="sf-proof-strip" aria-label="Product summary">
   <div><dt>2 foundations</dt><dd>application + delivery</dd></div>
   <div><dt>Up to 7 guarded stages</dt><dd>complete Team delivery path</dd></div>
-  <div><dt>2 topologies</dt><dd>monorepo or multirepo</dd></div>
+  <div><dt>6 agent profiles</dt><dd>one shared harness</dd></div>
   <div><dt>1 contract</dt><dd>.saasfoundry.json</dd></div>
 </dl>
 
@@ -78,10 +78,35 @@ hero:
     <a class="sf-pillar sf-pillar--harness" href="/guide/workflow-system">
       <span class="sf-card-index">02 / DELIVER</span>
       <h3>Guarded development harness</h3>
-      <p>SRS, tickets, skills, tests, human gates and pull requests share one workflow. Your agent operates the system; it does not invent a private process beside it.</p>
+      <p>SRS, tickets, skills, tests, human gates and pull requests share one workflow across Claude Code, Codex and other declared coding-agent hosts.</p>
       <span class="sf-card-link">Explore the harness →</span>
     </a>
   </div>
+</section>
+
+<section class="sf-home-section">
+  <span class="sf-home-eyebrow">MULTI-AGENT · PROVIDER-NEUTRAL</span>
+  <h2>One project contract. The right execution for each subtask.</h2>
+  <p class="sf-home-lead">
+    SaaSFoundryAI is not tied to Claude Code. The harness shares project rules with six coding-agent profiles, while its execution planner treats provider, runtime, model and reasoning effort as
+    qualified candidates. Workflow complexity decides when delegation and independent review are required; the planner can then compare only what the active host actually exposes.
+  </p>
+
+  <div class="sf-agent-grid" role="list" aria-label="Supported coding-agent profiles">
+    <span role="listitem">Claude Code</span><span role="listitem">Codex</span><span role="listitem">Gemini CLI</span>
+    <span role="listitem">Kimi Code</span><span role="listitem">Qwen Code</span><span role="listitem">Generic host</span>
+  </div>
+
+  <ol class="sf-execution-flow" aria-label="Adaptive execution planning flow">
+    <li><strong>Classify</strong><span>mechanical, implementation, architecture or security</span></li>
+    <li><strong>Require</strong><span>capabilities, context, privacy and minimum effort</span></li>
+    <li><strong>Qualify</strong><span>provider + runtime + model + effort candidates</span></li>
+    <li><strong>Plan</strong><span>primary agent, independent validation, retries and fallbacks</span></li>
+    <li><strong>Authorize</strong><span>exact cost, budget, approvals and host dispatch</span></li>
+  </ol>
+
+  <p class="sf-boundary-note"><strong>The v1 boundary:</strong> SaaSFoundry ships the provider-neutral planning and safety contracts. The active host remains responsible for exposing and dispatching real agents and models; SaaSFoundry never installs provider accounts, copies credentials or invents unavailable candidates.</p>
+  <p><a href="/guide/agent-coexistence">See how agent hosts coexist →</a> · <a href="/guide/execution-planning">Inspect adaptive execution planning →</a></p>
 </section>
 
 <section class="sf-home-section">

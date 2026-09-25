@@ -4,7 +4,7 @@ hero:
   name: SaaSFoundryAI
   text: Livrez le produit. Pas le boilerplate.
   tagline: >-
-    Une fondation SaaS prête pour la production et un harness de développement sécurisé, conçus ensemble pour que les humains et les agents IA livrent selon les mêmes règles.
+    Une fondation SaaS prête pour la production et un harness de développement indépendant des fournisseurs, conçus pour que les humains et plusieurs agents IA livrent selon les mêmes règles.
   actions:
     - theme: brand
       text: Démarrer avec l'agent
@@ -20,7 +20,7 @@ hero:
 <dl class="sf-proof-strip" aria-label="Résumé du produit">
   <div><dt>2 fondations</dt><dd>application + livraison</dd></div>
   <div><dt>Jusqu'à 7 étapes sécurisées</dt><dd>parcours Team complet</dd></div>
-  <div><dt>2 topologies</dt><dd>monorepo ou multirepo</dd></div>
+  <div><dt>6 profils d'agents</dt><dd>un seul harness partagé</dd></div>
   <div><dt>1 contrat</dt><dd>.saasfoundry.json</dd></div>
 </dl>
 
@@ -79,10 +79,35 @@ hero:
     <a class="sf-pillar sf-pillar--harness" href="/fr/guide/workflow-system">
       <span class="sf-card-index">02 / LIVRER</span>
       <h3>Harness de développement sécurisé</h3>
-      <p>SRS, tickets, skills, tests, validations humaines et pull requests partagent un seul workflow. Votre agent utilise le système ; il n'invente pas un processus privé à côté.</p>
+      <p>SRS, tickets, skills, tests, validations humaines et pull requests partagent un seul workflow entre Claude Code, Codex et les autres hôtes d'agents déclarés.</p>
       <span class="sf-card-link">Explorer le harness →</span>
     </a>
   </div>
+</section>
+
+<section class="sf-home-section">
+  <span class="sf-home-eyebrow">MULTI-AGENT · INDÉPENDANT DES FOURNISSEURS</span>
+  <h2>Un seul contrat projet. La bonne exécution pour chaque sous-tâche.</h2>
+  <p class="sf-home-lead">
+    SaaSFoundryAI n'est pas lié à Claude Code. Le harness partage les règles du projet avec six profils d'agents de code, tandis que son planificateur traite fournisseur, runtime, modèle et effort de
+    raisonnement comme des candidats qualifiés. La complexité du workflow détermine quand déléguer et exiger une revue indépendante ; le planificateur compare ensuite uniquement ce que l'hôte actif expose réellement.
+  </p>
+
+  <div class="sf-agent-grid" role="list" aria-label="Profils d'agents de code pris en charge">
+    <span role="listitem">Claude Code</span><span role="listitem">Codex</span><span role="listitem">Gemini CLI</span>
+    <span role="listitem">Kimi Code</span><span role="listitem">Qwen Code</span><span role="listitem">Hôte générique</span>
+  </div>
+
+  <ol class="sf-execution-flow" aria-label="Parcours de planification d'exécution adaptative">
+    <li><strong>Classifier</strong><span>mécanique, implémentation, architecture ou sécurité</span></li>
+    <li><strong>Exiger</strong><span>capacités, contexte, confidentialité et effort minimal</span></li>
+    <li><strong>Qualifier</strong><span>candidats fournisseur + runtime + modèle + effort</span></li>
+    <li><strong>Planifier</strong><span>agent principal, validation indépendante, retries et replis</span></li>
+    <li><strong>Autoriser</strong><span>coût exact, budget, approbations et dispatch par l'hôte</span></li>
+  </ol>
+
+  <p class="sf-boundary-note"><strong>La frontière v1 :</strong> SaaSFoundry livre les contrats de planification et de sécurité indépendants des fournisseurs. L'hôte actif reste responsable d'exposer et de lancer les agents et modèles réels ; SaaSFoundry n'installe aucun compte fournisseur, ne copie aucun identifiant et n'invente aucun candidat indisponible.</p>
+  <p><a href="/fr/guide/agent-coexistence">Comprendre la coexistence des hôtes →</a> · <a href="/fr/guide/execution-planning">Explorer la planification adaptative →</a></p>
 </section>
 
 <section class="sf-home-section">

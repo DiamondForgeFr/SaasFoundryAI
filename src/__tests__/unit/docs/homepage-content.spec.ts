@@ -7,6 +7,8 @@ const root = resolve(__dirname, '../../../..')
 const read = (path: string): string => readFileSync(resolve(root, path), 'utf8')
 const english = read('docs/index.md')
 const french = read('docs/fr/index.md')
+const englishSetup = read('docs/getting-started/setup-paths.md')
+const frenchSetup = read('docs/fr/getting-started/setup-paths.md')
 const systemMap = read('docs/.vitepress/theme/components/FoundrySystemMap.vue')
 const theme = read('docs/.vitepress/theme/custom.css')
 const englishRoutes = discoverLocaleRoutes('en')
@@ -68,6 +70,8 @@ describe('the bilingual product landing (#395)', () => {
     expect(content).toContain('class="sf-status-flow"')
     expect(content).toContain('class="sf-workflow-choice"')
     expect(content).toContain('class="sf-complexity-grid"')
+    expect(content).toContain('class="sf-agent-grid"')
+    expect(content).toContain('class="sf-execution-flow"')
     expect(content).toContain('class="sf-evidence-grid"')
     expect(content).toContain('class="sf-final-cta"')
   })
@@ -103,6 +107,23 @@ describe('the bilingual product landing (#395)', () => {
     expect(systemMap).toContain('Fondation SaaS')
     expect(systemMap).toContain('Harness de développement')
     expect(systemMap).toContain('.saasfoundry.json')
+  })
+
+  it.each([
+    ['English', english, englishSetup],
+    ['French', french, frenchSetup]
+  ])('makes multi-agent support and adaptive execution explicit in %s', (_locale, landing, setup) => {
+    for (const profile of ['Claude Code', 'Codex', 'Gemini CLI', 'Kimi Code', 'Qwen Code']) {
+      expect(landing).toContain(profile)
+      expect(setup).toContain(profile)
+    }
+
+    expect(landing).toMatch(/provider-neutral|indépendant des fournisseurs/)
+    expect(landing).toMatch(/reasoning effort|effort\s+de\s+raisonnement/)
+    expect(landing).toMatch(/active host|hôte actif/)
+    expect(setup).toMatch(/provider \+ runtime \+ model \+ reasoning-effort|fournisseur \+ runtime \+ modèle \+ effort de raisonnement/)
+    expect(setup).toMatch(/primary agent|agent principal/)
+    expect(setup).toMatch(/independent validation|validation indépendante/)
   })
 
   it('keeps the foundry map accessible when motion is reduced', () => {

@@ -7,10 +7,10 @@ Les deux parcours utilisent le même moteur de configuration et les mêmes insta
 
 ## Choisir son parcours
 
-| Choix                    | Idéal quand                                                                                                                  | Ce que vous contrôlez                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **CLI interactif**       | Vous découvrez SaaSFoundryAI, souhaitez voir chaque choix applicable ou préférez travailler uniquement dans le terminal.     | Chaque question et le récapitulatif final modifiable.                         |
-| **Piloté par assistant** | Vous utilisez déjà Claude Code, savez décrire le produit souhaité ou voulez des recommandations fondées sur un POC existant. | L'intention, la commande proposée et l'approbation explicite avant exécution. |
+| Choix                    | Idéal quand                                                                                                                                 | Ce que vous contrôlez                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **CLI interactif**       | Vous découvrez SaaSFoundryAI, souhaitez voir chaque choix applicable ou préférez travailler uniquement dans le terminal.                    | Chaque question et le récapitulatif final modifiable.                         |
+| **Piloté par assistant** | Vous utilisez un agent de code pris en charge, savez décrire le produit souhaité ou voulez des recommandations fondées sur un POC existant. | L'intention, la commande proposée et l'approbation explicite avant exécution. |
 
 Aucun parcours n'est plus puissant que l'autre. Le parcours assistant pilote le CLI par la conversation ; ce n'est pas un générateur différent.
 
@@ -74,10 +74,10 @@ npx saasfoundryai-cli@beta skill install --yes --force
 
 Le skill orchestre ensuite le même CLI. Il ne répond jamais aux questions Inquirer interactives et ne génère jamais les fichiers du scaffold à la main.
 
-::: info Autres agents de code
+::: info Bootstrap Claude-first, projet multi-agent
 
-Les harness générés peuvent déclarer des profils Codex, Gemini CLI, Kimi Code, Qwen Code, Claude Code et générique. Cette capacité est distincte du bootstrap en une phrase ci-dessus. Pour un autre
-hôte, lancez une première fois le CLI interactif, sélectionnez son profil, puis ouvrez le projet généré avec cet hôte.
+La phrase de bootstrap ci-dessus est propre à Claude ; le harness généré ne l'est pas. Un même projet peut déclarer Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code et un profil générique. Pour un
+autre hôte, lancez une première fois le CLI interactif, sélectionnez son profil, puis ouvrez le projet généré avec cet hôte. Consultez le registre courant avec `sf agents catalog --json`.
 
 :::
 
@@ -132,6 +132,36 @@ L'assistant construit une intention structurée et la passe dans la table de fla
 le plan plutôt que de modifier une chaîne shell opaque.
 
 Seule une approbation explicite autorise l'exécution. En mode `--non-interactive`, une valeur manquante provoque un échec au lieu d'ouvrir une question cachée.
+
+### Deux registres, un plan adaptatif
+
+SaaSFoundry sépare l'outil qui lit le dépôt des exécutions de modèles disponibles dans cet outil, puis construit un plan à partir des deux registres :
+
+| Couche                         | Ce que SaaSFoundry enregistre                                                                                                                       | Ce qu'il ne suppose pas                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Profil d'agent de code**     | Comment Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code ou un hôte générique découvre les instructions du projet et les skills partagées.      | Que l'outil est installé, authentifié ou capable de délégation native.          |
+| **Candidat d'exécution**       | Une combinaison fournisseur + runtime + modèle + effort de raisonnement exposée par l'hôte actif, avec capacités, confidentialité, prix et preuves. | Qu'un profil déclaré expose un fournisseur, un modèle ou un identifiant précis. |
+| **Plan d'exécution adaptatif** | La tentative principale, la validation indépendante, les nouvelles tentatives bornées et les replis requis pour une sous-tâche.                     | Qu'un candidat non qualifié ou indisponible puisse être lancé automatiquement.  |
+
+```text
+sous-tâche → risque et capacités → effort de raisonnement minimal
+           → candidats fournisseur/runtime/modèle qualifiés
+           → agent principal + validation indépendante + retries/replis
+           → budget et approbations → dispatch par l'hôte actif
+```
+
+Un travail mécanique peut rester direct avec un effort faible. Une implémentation peut exiger un candidat d'effort moyen et des contrôles automatisés. L'architecture ou la sécurité relève l'effort
+minimal et peut imposer des contextes d'agents indépendants ainsi que des tests renforcés. Le workflow adapte aussi la délégation à la complexité du ticket : aucune pour un travail simple, plusieurs
+contextes d'exploration pour un ticket moyen, puis analyse spécialisée et revue contradictoire pour un ticket complexe lorsque l'hôte permet et autorise la délégation.
+
+::: warning Frontière de responsabilité v1
+
+SaaSFoundry livre les contrats indépendants des fournisseurs pour la classification, les candidats, la planification, le coût, le budget, les reprises et les explications. L'hôte de l'agent de code
+actif doit encore exposer et lancer les candidats réels. SaaSFoundry n'installe aucun compte fournisseur, ne déplace pas les identifiants entre les hôtes et ne prétend pas qu'un profil déclaré a
+chargé un modèle particulier. Consultez [la coexistence des agents](/fr/guide/agent-coexistence), [les candidats d'exécution](/fr/guide/execution-candidates) et
+[la planification d'exécution](/fr/guide/execution-planning).
+
+:::
 
 ### Valeurs sûres et secrets
 

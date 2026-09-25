@@ -7,10 +7,10 @@ Both paths use the same configuration engine and installers. They produce the sa
 
 ## Choose your path
 
-| Choose               | Best when                                                                                                           | You control                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Interactive CLI**  | You are discovering SaaSFoundryAI, want to see every applicable choice, or prefer a terminal-only workflow.         | Each prompt and the final editable recap.                                 |
-| **Assistant-driven** | You already use Claude Code, can describe the desired product, or want recommendations grounded in an existing POC. | The intent, the proposed command, and explicit approval before execution. |
+| Choose               | Best when                                                                                                                | You control                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| **Interactive CLI**  | You are discovering SaaSFoundryAI, want to see every applicable choice, or prefer a terminal-only workflow.              | Each prompt and the final editable recap.                                 |
+| **Assistant-driven** | You use a supported coding agent, can describe the desired product, or want recommendations grounded in an existing POC. | The intent, the proposed command, and explicit approval before execution. |
 
 Neither path is more capable. The assistant path is a conversational controller for the CLI, not a separate generator.
 
@@ -72,10 +72,10 @@ npx saasfoundryai-cli@beta skill install --yes --force
 
 The skill then orchestrates the same CLI. It never answers interactive Inquirer prompts and never writes scaffold files by hand.
 
-::: info Other coding agents
+::: info Claude-first bootstrap, multi-agent project
 
-Generated harnesses can declare Codex, Gemini CLI, Kimi Code, Qwen Code, Claude Code, and generic profiles. That is separate from the one-line bootstrap above. For another host, run the interactive
-CLI once, select its profile, then open the generated project in that host.
+The bootstrap sentence above is Claude-specific; the generated harness is not. It can declare Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and a generic profile in the same project. For
+another host, run the interactive CLI once, select its profile, then open the generated project in that host. Inspect the current registry with `sf agents catalog --json`.
 
 :::
 
@@ -129,6 +129,35 @@ The assistant builds a structured intent and passes it through the skill's versi
 plan rather than editing an opaque shell string.
 
 Only explicit approval authorizes execution. Missing values in `--non-interactive` mode fail instead of falling back to hidden prompts.
+
+### Two registries, one adaptive plan
+
+SaaSFoundry separates the tool that reads the repository from the model execution available inside that tool, then builds a plan from both registries:
+
+| Layer                       | What SaaSFoundry records                                                                                                              | What it does not assume                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Coding-agent profile**    | How Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code or a generic host discovers project instructions and shared skills.          | That the tool is installed, authenticated or capable of native delegation.    |
+| **Execution candidate**     | A provider + runtime + model + reasoning-effort combination exposed by the active host, with capability, privacy, price and evidence. | That a configured profile exposes a particular provider, model or credential. |
+| **Adaptive execution plan** | The primary attempt, independent validation, bounded retries and fallbacks required for one task.                                     | That an unqualified or unavailable candidate may be dispatched automatically. |
+
+```text
+subtask → risk and capabilities → minimum reasoning effort
+        → qualified provider/runtime/model candidates
+        → primary agent + independent validation + retries/fallbacks
+        → budget and approval gates → dispatch by the active host
+```
+
+Mechanical work can remain direct and low-effort. Implementation can require a medium-effort candidate and automated checks. Architecture or security work raises the minimum effort and can require
+independent agent contexts and stronger tests. The workflow also scales delegation by ticket complexity: none for low work, several exploration contexts for medium work, and specialized analysis plus
+adversarial review for complex work when the host supports and authorizes delegation.
+
+::: warning V1 responsibility boundary
+
+SaaSFoundry ships the provider-neutral classification, candidate, planning, cost, budget, retry and explanation contracts. The active coding-agent host must still expose and dispatch the real
+candidates. SaaSFoundry does not install provider accounts, move credentials between hosts or claim that a declared agent profile has loaded a particular model. See
+[agent coexistence](/guide/agent-coexistence), [execution candidates](/guide/execution-candidates) and [execution planning](/guide/execution-planning).
+
+:::
 
 ### Safe defaults and secrets
 

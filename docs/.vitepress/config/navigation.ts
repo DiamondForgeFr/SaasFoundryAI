@@ -313,6 +313,8 @@ export const createThemeConfig = (locale: DocumentationLocale, translatedRoutes:
         text: nav.harness,
         items: [
           { text: labels[locale].pages.workflowSystem, link: documentationLink(locale, '/guide/workflow-system', translatedRoutes) },
+          { text: labels[locale].pages.agentCoexistence, link: documentationLink(locale, '/guide/agent-coexistence', translatedRoutes) },
+          { text: labels[locale].pages.executionPlanning, link: documentationLink(locale, '/guide/execution-planning', translatedRoutes) },
           { text: labels[locale].pages.skillsSystem, link: documentationLink(locale, '/skills/overview', translatedRoutes) },
           { text: 'SRS', link: documentationLink(locale, '/modules/srs', translatedRoutes) },
           { text: labels[locale].pages.yourTools, link: documentationLink(locale, '/features/your-tools', translatedRoutes) }
