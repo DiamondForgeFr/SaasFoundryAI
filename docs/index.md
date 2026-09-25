@@ -86,15 +86,15 @@ hero:
 
 <section class="sf-home-section">
   <span class="sf-home-eyebrow">MULTI-AGENT · PROVIDER-NEUTRAL</span>
-  <h2>One project contract. The right execution for each subtask.</h2>
+  <h2>One project contract. Two complementary agentic layers.</h2>
   <p class="sf-home-lead">
-    SaaSFoundryAI is not tied to Claude Code. The harness shares project rules with six coding-agent profiles, while its execution planner treats provider, runtime, model and reasoning effort as
-    qualified candidates. Workflow complexity decides when delegation and independent review are required; the planner can then compare only what the active host actually exposes.
+    SaaSFoundryAI is not tied to Claude Code. The harness shares project rules with six coding-agent profiles. Separately, provider-neutral execution contracts let a host integration classify a
+    subtask and qualify provider, runtime, model and reasoning-effort candidates that it explicitly supplies. Workflow complexity drives operational delegation and independent review today.
   </p>
 
   <div class="sf-agent-grid" role="list" aria-label="Supported coding-agent profiles">
     <span role="listitem">Claude Code</span><span role="listitem">Codex</span><span role="listitem">Gemini CLI</span>
-    <span role="listitem">Kimi Code</span><span role="listitem">Qwen Code</span><span role="listitem">Generic host</span>
+    <span role="listitem">Kimi Code</span><span role="listitem">Qwen Code</span><span role="listitem">Generic coding agent</span>
   </div>
 
   <ol class="sf-execution-flow" aria-label="Adaptive execution planning flow">
@@ -102,10 +102,10 @@ hero:
     <li><strong>Require</strong><span>capabilities, context, privacy and minimum effort</span></li>
     <li><strong>Qualify</strong><span>provider + runtime + model + effort candidates</span></li>
     <li><strong>Plan</strong><span>primary agent, independent validation, retries and fallbacks</span></li>
-    <li><strong>Authorize</strong><span>exact cost, budget, approvals and host dispatch</span></li>
+    <li><strong>Integrate</strong><span>host-supplied candidates, budget, approval and dispatch</span></li>
   </ol>
 
-  <p class="sf-boundary-note"><strong>The v1 boundary:</strong> SaaSFoundry ships the provider-neutral planning and safety contracts. The active host remains responsible for exposing and dispatching real agents and models; SaaSFoundry never installs provider accounts, copies credentials or invents unavailable candidates.</p>
+  <p class="sf-boundary-note"><strong>The v1 boundary:</strong> these two layers are not automatically wired together. The <code>sf</code> CLI does not route each subtask to a model. A host or integration must supply execution candidates, invoke the planning contracts and dispatch the selected agent or model; SaaSFoundry never installs provider accounts, copies credentials or invents unavailable candidates.</p>
   <p><a href="/guide/agent-coexistence">See how agent hosts coexist →</a> · <a href="/guide/execution-planning">Inspect adaptive execution planning →</a></p>
 </section>
 

@@ -133,33 +133,35 @@ le plan plutôt que de modifier une chaîne shell opaque.
 
 Seule une approbation explicite autorise l'exécution. En mode `--non-interactive`, une valeur manquante provoque un échec au lieu d'ouvrir une question cachée.
 
-### Deux registres, un plan adaptatif
+### Deux couches agentiques complémentaires
 
-SaaSFoundry sépare l'outil qui lit le dépôt des exécutions de modèles disponibles dans cet outil, puis construit un plan à partir des deux registres :
+SaaSFoundry documente l'outil qui lit le dépôt séparément des exécutions de modèles disponibles dans cet outil. Lorsqu'une intégration hôte utilise la planification d'exécution, elle doit fournir
+explicitement les candidats et appeler les contrats de planification ; le registre des agents de code n'alimente pas automatiquement le planificateur :
 
-| Couche                         | Ce que SaaSFoundry enregistre                                                                                                                       | Ce qu'il ne suppose pas                                                         |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **Profil d'agent de code**     | Comment Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code ou un hôte générique découvre les instructions du projet et les skills partagées.      | Que l'outil est installé, authentifié ou capable de délégation native.          |
-| **Candidat d'exécution**       | Une combinaison fournisseur + runtime + modèle + effort de raisonnement exposée par l'hôte actif, avec capacités, confidentialité, prix et preuves. | Qu'un profil déclaré expose un fournisseur, un modèle ou un identifiant précis. |
-| **Plan d'exécution adaptatif** | La tentative principale, la validation indépendante, les nouvelles tentatives bornées et les replis requis pour une sous-tâche.                     | Qu'un candidat non qualifié ou indisponible puisse être lancé automatiquement.  |
+| Couche                        | Ce que SaaSFoundry enregistre                                                                                                                       | Ce qu'il ne suppose pas                                                         |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Profil d'agent de code**    | Comment Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code ou un hôte générique découvre les instructions du projet et les skills partagées.      | Que l'outil est installé, authentifié ou capable de délégation native.          |
+| **Candidat d'exécution**      | Une combinaison fournisseur + runtime + modèle + effort de raisonnement exposée par l'hôte actif, avec capacités, confidentialité, prix et preuves. | Qu'un profil déclaré expose un fournisseur, un modèle ou un identifiant précis. |
+| **Contrats de planification** | La tentative principale, la validation indépendante, les nouvelles tentatives bornées et les replis qu'une intégration peut planifier.              | Que le CLI invoque ces contrats ou lance automatiquement un candidat.           |
 
 ```text
-sous-tâche → risque et capacités → effort de raisonnement minimal
+intégration hôte fournit les candidats et invoque les contrats
+           → risque et capacités de la sous-tâche → effort minimal
            → candidats fournisseur/runtime/modèle qualifiés
            → agent principal + validation indépendante + retries/replis
            → budget et approbations → dispatch par l'hôte actif
 ```
 
-Un travail mécanique peut rester direct avec un effort faible. Une implémentation peut exiger un candidat d'effort moyen et des contrôles automatisés. L'architecture ou la sécurité relève l'effort
-minimal et peut imposer des contextes d'agents indépendants ainsi que des tests renforcés. Le workflow adapte aussi la délégation à la complexité du ticket : aucune pour un travail simple, plusieurs
-contextes d'exploration pour un ticket moyen, puis analyse spécialisée et revue contradictoire pour un ticket complexe lorsque l'hôte permet et autorise la délégation.
+Ces contrats peuvent exprimer qu'un travail mécanique reste direct avec un effort faible, qu'une implémentation exige un candidat d'effort moyen et des contrôles automatisés, ou que l'architecture et
+la sécurité relèvent l'effort minimal. Indépendamment, le workflow opérationnel adapte la délégation à la complexité du ticket : aucune pour un travail simple, plusieurs contextes d'exploration pour
+un ticket moyen, puis analyse spécialisée et revue contradictoire pour un ticket complexe lorsque l'hôte permet et autorise la délégation. La v1 ne relie pas automatiquement ces deux mécanismes.
 
 ::: warning Frontière de responsabilité v1
 
-SaaSFoundry livre les contrats indépendants des fournisseurs pour la classification, les candidats, la planification, le coût, le budget, les reprises et les explications. L'hôte de l'agent de code
-actif doit encore exposer et lancer les candidats réels. SaaSFoundry n'installe aucun compte fournisseur, ne déplace pas les identifiants entre les hôtes et ne prétend pas qu'un profil déclaré a
-chargé un modèle particulier. Consultez [la coexistence des agents](/fr/guide/agent-coexistence), [les candidats d'exécution](/fr/guide/execution-candidates) et
-[la planification d'exécution](/fr/guide/execution-planning).
+SaaSFoundry livre les contrats indépendants des fournisseurs pour la classification, les candidats, la planification, le coût, le budget, les reprises et les explications. Aucune commande `sf`
+actuelle ne relie automatiquement la complexité du workflow ou le registre des agents de code à ce planificateur. Un hôte ou une intégration doit fournir les candidats, invoquer les contrats et lancer
+le résultat. SaaSFoundry n'installe aucun compte fournisseur, ne déplace pas les identifiants entre les hôtes et ne prétend pas qu'un profil déclaré a chargé un modèle particulier. Consultez
+[la coexistence des agents](/fr/guide/agent-coexistence), [les candidats d'exécution](/fr/guide/execution-candidates) et [la planification d'exécution](/fr/guide/execution-planning).
 
 :::
 
