@@ -74,8 +74,8 @@ The skill then orchestrates the same CLI. It never answers interactive Inquirer 
 
 ::: info Claude-first bootstrap, multi-agent project
 
-The bootstrap sentence above is Claude-specific; the generated harness is not. It can declare Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and a generic profile in the same project. For
-another host, run the interactive CLI once, select its profile, then open the generated project in that host. Inspect the current registry with `sf agents catalog --json`.
+The bootstrap sentence above is Claude-specific; the generated harness is not. It can declare Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and the Generic coding agent profile in the same
+project. For another host, run the interactive CLI once, select its profile, then open the generated project in that host. Inspect the current registry with `sf agents catalog --json`.
 
 :::
 
@@ -130,32 +130,35 @@ plan rather than editing an opaque shell string.
 
 Only explicit approval authorizes execution. Missing values in `--non-interactive` mode fail instead of falling back to hidden prompts.
 
-### Two registries, one adaptive plan
+### Two complementary agentic layers
 
-SaaSFoundry separates the tool that reads the repository from the model execution available inside that tool, then builds a plan from both registries:
+SaaSFoundry documents the tool that reads the repository separately from the model execution available inside that tool. When a host integration uses execution planning, it must explicitly supply the
+candidates and call the planning contracts; the coding-agent registry is not an automatic planner input:
 
-| Layer                       | What SaaSFoundry records                                                                                                              | What it does not assume                                                       |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **Coding-agent profile**    | How Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code or a generic host discovers project instructions and shared skills.          | That the tool is installed, authenticated or capable of native delegation.    |
-| **Execution candidate**     | A provider + runtime + model + reasoning-effort combination exposed by the active host, with capability, privacy, price and evidence. | That a configured profile exposes a particular provider, model or credential. |
-| **Adaptive execution plan** | The primary attempt, independent validation, bounded retries and fallbacks required for one task.                                     | That an unqualified or unavailable candidate may be dispatched automatically. |
+| Layer                            | What SaaSFoundry records                                                                                                               | What it does not assume                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Coding-agent profile**         | How Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code or the Generic coding agent discovers project instructions and shared skills. | That the tool is installed, authenticated or capable of native delegation.    |
+| **Execution candidate**          | A provider + runtime + model + reasoning-effort combination exposed by the active host, with capability, privacy, price and evidence.  | That a configured profile exposes a particular provider, model or credential. |
+| **Execution-planning contracts** | The primary attempt, independent validation, bounded retries and fallbacks an integration can plan for one task.                       | That the CLI invokes those contracts or dispatches a candidate automatically. |
 
 ```text
-subtask → risk and capabilities → minimum reasoning effort
+host integration supplies candidates and invokes the contracts
+        → subtask risk and capabilities → minimum reasoning effort
         → qualified provider/runtime/model candidates
         → primary agent + independent validation + retries/fallbacks
         → budget and approval gates → dispatch by the active host
 ```
 
-Mechanical work can remain direct and low-effort. Implementation can require a medium-effort candidate and automated checks. Architecture or security work raises the minimum effort and can require
-independent agent contexts and stronger tests. The workflow also scales delegation by ticket complexity: none for low work, several exploration contexts for medium work, and specialized analysis plus
-adversarial review for complex work when the host supports and authorizes delegation.
+These planning contracts can express that mechanical work remains direct and low-effort, implementation requires a medium-effort candidate and automated checks, or architecture and security raise the
+minimum effort. Independently, the operational workflow scales delegation by ticket complexity: none for low work, several exploration contexts for medium work, and specialized analysis plus
+adversarial review for complex work when the host supports and authorizes delegation. V1 does not include an automatic bridge between these mechanisms.
 
 ::: warning V1 responsibility boundary
 
-SaaSFoundry ships the provider-neutral classification, candidate, planning, cost, budget, retry and explanation contracts. The active coding-agent host must still expose and dispatch the real
-candidates. SaaSFoundry does not install provider accounts, move credentials between hosts or claim that a declared agent profile has loaded a particular model. See
-[agent coexistence](/guide/agent-coexistence), [execution candidates](/guide/execution-candidates) and [execution planning](/guide/execution-planning).
+SaaSFoundry ships the provider-neutral classification, candidate, planning, cost, budget, retry and explanation contracts. No current `sf` command connects workflow complexity or the coding-agent
+registry to that planner automatically. A host or integration must supply candidates, invoke the contracts and dispatch the result. SaaSFoundry does not install provider accounts, move credentials
+between hosts or claim that a declared agent profile has loaded a particular model. See [agent coexistence](/guide/agent-coexistence), [execution candidates](/guide/execution-candidates) and
+[execution planning](/guide/execution-planning).
 
 :::
 

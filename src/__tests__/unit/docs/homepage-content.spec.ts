@@ -9,6 +9,8 @@ const english = read('docs/index.md')
 const french = read('docs/fr/index.md')
 const englishSetup = read('docs/getting-started/setup-paths.md')
 const frenchSetup = read('docs/fr/getting-started/setup-paths.md')
+const agentProfiles = JSON.parse(read('src/harness/agent-profiles.json')) as { profiles: Record<string, { displayName: string }> }
+const agentProfileNames = Object.values(agentProfiles.profiles).map(({ displayName }) => displayName)
 const systemMap = read('docs/.vitepress/theme/components/FoundrySystemMap.vue')
 const theme = read('docs/.vitepress/theme/custom.css')
 const englishRoutes = discoverLocaleRoutes('en')
@@ -119,11 +121,22 @@ describe('the bilingual product landing (#395)', () => {
     }
 
     expect(landing).toMatch(/provider-neutral|indépendant des fournisseurs/)
-    expect(landing).toMatch(/reasoning effort|effort\s+de\s+raisonnement/)
-    expect(landing).toMatch(/active host|hôte actif/)
+    expect(landing).toMatch(/reasoning[- ]effort|effort\s+de\s+raisonnement/)
+    expect(landing).toMatch(/host integration|hôte ou une intégration/)
     expect(setup).toMatch(/provider \+ runtime \+ model \+ reasoning-effort|fournisseur \+ runtime \+ modèle \+ effort de raisonnement/)
     expect(setup).toMatch(/primary agent|agent principal/)
     expect(setup).toMatch(/independent validation|validation indépendante/)
+    expect(landing).toMatch(/not automatically wired together|ne sont pas reliées automatiquement/)
+    expect(setup).toMatch(/does not include an automatic bridge|ne relie pas automatiquement/)
+  })
+
+  it('derives the English agent-profile claim from the canonical registry', () => {
+    expect(agentProfileNames).toHaveLength(6)
+    for (const displayName of agentProfileNames) {
+      expect(english).toContain(displayName)
+      expect(englishSetup).toContain(displayName)
+    }
+    expect(french).toContain('Agent de code générique')
   })
 
   it('keeps the foundry map accessible when motion is reduced', () => {

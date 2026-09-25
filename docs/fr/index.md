@@ -87,15 +87,15 @@ hero:
 
 <section class="sf-home-section">
   <span class="sf-home-eyebrow">MULTI-AGENT · INDÉPENDANT DES FOURNISSEURS</span>
-  <h2>Un seul contrat projet. La bonne exécution pour chaque sous-tâche.</h2>
+  <h2>Un seul contrat projet. Deux couches agentiques complémentaires.</h2>
   <p class="sf-home-lead">
-    SaaSFoundryAI n'est pas lié à Claude Code. Le harness partage les règles du projet avec six profils d'agents de code, tandis que son planificateur traite fournisseur, runtime, modèle et effort de
-    raisonnement comme des candidats qualifiés. La complexité du workflow détermine quand déléguer et exiger une revue indépendante ; le planificateur compare ensuite uniquement ce que l'hôte actif expose réellement.
+    SaaSFoundryAI n'est pas lié à Claude Code. Le harness partage les règles du projet avec six profils d'agents de code. Séparément, des contrats d'exécution indépendants des fournisseurs permettent
+    à une intégration hôte de classifier une sous-tâche et de qualifier les candidats fournisseur, runtime, modèle et effort de raisonnement qu'elle fournit explicitement. Aujourd'hui, la complexité du workflow pilote la délégation opérationnelle et la revue indépendante.
   </p>
 
   <div class="sf-agent-grid" role="list" aria-label="Profils d'agents de code pris en charge">
     <span role="listitem">Claude Code</span><span role="listitem">Codex</span><span role="listitem">Gemini CLI</span>
-    <span role="listitem">Kimi Code</span><span role="listitem">Qwen Code</span><span role="listitem">Hôte générique</span>
+    <span role="listitem">Kimi Code</span><span role="listitem">Qwen Code</span><span role="listitem">Agent de code générique</span>
   </div>
 
   <ol class="sf-execution-flow" aria-label="Parcours de planification d'exécution adaptative">
@@ -103,10 +103,10 @@ hero:
     <li><strong>Exiger</strong><span>capacités, contexte, confidentialité et effort minimal</span></li>
     <li><strong>Qualifier</strong><span>candidats fournisseur + runtime + modèle + effort</span></li>
     <li><strong>Planifier</strong><span>agent principal, validation indépendante, retries et replis</span></li>
-    <li><strong>Autoriser</strong><span>coût exact, budget, approbations et dispatch par l'hôte</span></li>
+    <li><strong>Intégrer</strong><span>candidats fournis par l'hôte, budget, approbation et dispatch</span></li>
   </ol>
 
-  <p class="sf-boundary-note"><strong>La frontière v1 :</strong> SaaSFoundry livre les contrats de planification et de sécurité indépendants des fournisseurs. L'hôte actif reste responsable d'exposer et de lancer les agents et modèles réels ; SaaSFoundry n'installe aucun compte fournisseur, ne copie aucun identifiant et n'invente aucun candidat indisponible.</p>
+  <p class="sf-boundary-note"><strong>La frontière v1 :</strong> ces deux couches ne sont pas reliées automatiquement. Le CLI <code>sf</code> ne route pas chaque sous-tâche vers un modèle. Un hôte ou une intégration doit fournir les candidats d'exécution, invoquer les contrats de planification et lancer l'agent ou le modèle sélectionné ; SaaSFoundry n'installe aucun compte fournisseur, ne copie aucun identifiant et n'invente aucun candidat indisponible.</p>
   <p><a href="/fr/guide/agent-coexistence">Comprendre la coexistence des hôtes →</a> · <a href="/fr/guide/execution-planning">Explorer la planification adaptative →</a></p>
 </section>
 
