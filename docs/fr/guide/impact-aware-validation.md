@@ -34,7 +34,7 @@ Le classifieur tient compte du profil du dépôt. Un chemin n'a pas le même sen
 | Markdown ou `docs/` uniquement                                          | Garde-fous et contrôles de documentation                               | Build produit, tests unitaires/E2E, couverture, cycle de vie |
 | Source Web générée                                                      | Contrôles frontend et cycle de vie concerné                            | Contrôles propres au backend                                 |
 | Source API générée                                                      | Contrôles backend et cycle de vie concerné                             | Contrôles propres au frontend                                |
-| Package partagé ou contrat API généré du monorepo                       | Frontend + backend + partagé + cycle de vie                            | Aucun consommateur du contrat n'est ignoré                   |
+| Package partagé ou contrat API généré du monorepo                       | Suite partagée (consommateurs frontend + backend) et cycle de vie      | Aucun consommateur du contrat n'est ignoré                   |
 | Contrat du harness ou du scaffold                                       | Contrôles harness/scaffold et cycle de vie si la sortie générée change | Travail propre à la documentation                            |
 | Lockfile, configuration racine, workflow, classifieur ou chemin inconnu | Validation complète                                                    | Rien : l'ambiguïté élargit la validation                     |
 
@@ -85,6 +85,10 @@ Les filtres de chemins ne décident pas si le workflow existe. Le classifieur s'
 Pour les pull requests et les merge groups, GitHub Actions charge le classifieur depuis le commit de base de confiance. Une PR ne peut donc pas affaiblir ses propres règles afin d'éviter des tests. Le
 premier déploiement dans un dépôt qui ne possède pas encore le classifieur exécute volontairement le plan complet.
 
+Le fichier de workflow reste toutefois du code de la pull request. Protégez `.github/workflows/`, les scripts de validation canoniques et `CODEOWNERS` par une revue obligatoire des Code Owners avec
+invalidation des approbations obsolètes, ou imposez le contrôle via un workflow obligatoire au niveau de l'organisation et stocké hors du dépôt. SaaSFoundryAI dépose les règles de propriété pour son
+propre dépôt, mais les paramètres GitHub restent la frontière d'application. Ne remplacez pas ce mécanisme par `pull_request_target` si du code de la pull request est exécuté.
+
 La protection de branche vise un contrôle stable : **`CI / Required gate`**. Il vérifie la version du contrat, les sorties booléennes et la concordance entre le plan demandé et le résultat du job. Un
 job sélectionné absent ou en échec fait échouer ce contrôle.
 
@@ -94,7 +98,7 @@ Les tests du dépôt vérifient la sélection elle-même, pas un pourcentage mar
 
 - un changement de documentation désactive frontend, backend, couverture et cycle de vie ;
 - un fichier de documentation indexé exclut une modification source non indexée ;
-- les changements API, Web et partagés se propagent à leurs vrais consommateurs ;
+- les changements API, Web et partagés se propagent à leurs vrais consommateurs sans rejouer des wrappers équivalents ;
 - une modification racine ou de workflow sélectionne la commande complète ;
 - les projets monorepo et multirepo reçoivent des classifieurs identiques ;
 - le cycle de la version précédente prouve que `sf update` dépose les deux profils multirepo et reste idempotent.

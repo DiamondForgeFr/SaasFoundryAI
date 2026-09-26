@@ -39,6 +39,20 @@ function change(file: string, status = 'M', oldPath: string | null = null) {
   return { status, oldPath, path: file }
 }
 
+function validationCommands(overrides: Record<string, string[][]> = {}): Record<string, string[][]> {
+  return {
+    guards: [['npm', 'run', 'guard']],
+    docs: [['npm', 'run', 'docs']],
+    frontend: [['npm', 'run', 'frontend']],
+    backend: [['npm', 'run', 'backend']],
+    shared: [['npm', 'run', 'shared']],
+    harnessScaffold: [['npm', 'run', 'harness']],
+    lifecycle: [['npm', 'run', 'lifecycle']],
+    full: [['npm', 'run', 'full']],
+    ...overrides
+  }
+}
+
 function initRepository(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-impact-'))
   execFileSync('git', ['init', '-q'], { cwd: dir })
@@ -86,6 +100,20 @@ describe('impact classifier path contract', () => {
     expect(result.lanes.shared.run).toBe(true)
     expect(result.lanes.backend.run).toBe(true)
     expect(result.lanes.frontend.run).toBe(true)
+    expect(result.lanes.lifecycle.run).toBe(true)
+    expect(result.full).toBe(false)
+    expect(result.plan.frontend).toBe(false)
+    expect(result.plan.backend).toBe(false)
+    expect(result.plan.shared).toBeUndefined()
+  })
+
+  it('does not turn a confident union of selective lanes into release-grade full validation', () => {
+    const result = classify('monorepo', [change('README.md'), change('packages/shared-types/src/user.ts'), change('AGENTS.md')])
+    expect(result.mode).toBe('selective')
+    expect(result.full).toBe(false)
+    expect(result.lanes.docs.run).toBe(true)
+    expect(result.lanes.shared.run).toBe(true)
+    expect(result.lanes.harnessScaffold.run).toBe(true)
     expect(result.lanes.lifecycle.run).toBe(true)
   })
 
@@ -201,14 +229,12 @@ describe('impact classifier Git adapter and outputs', () => {
       JSON.stringify({
         version: 1,
         profile: 'api',
-        commands: {
-          guards: [['npm', 'run', 'guard']],
+        commands: validationCommands({
           docs: [
             ['npm', 'run', 'guard'],
             ['npm', 'run', 'docs']
-          ],
-          full: [['npm', 'run', 'full']]
-        }
+          ]
+        })
       })
     )
     const output = execFileSync('node', [RUNNER, '--base', base, '--head', head, '--config', config, '--dry-run'], { cwd: dir, encoding: 'utf8' })
@@ -235,12 +261,7 @@ describe('impact classifier Git adapter and outputs', () => {
       JSON.stringify({
         version: 1,
         profile: 'web',
-        commands: {
-          guards: [['npm', 'run', 'guard']],
-          docs: [['npm', 'run', 'docs']],
-          frontend: [['npm', 'run', 'frontend']],
-          full: [['npm', 'run', 'full']]
-        }
+        commands: validationCommands()
       })
     )
 
@@ -264,13 +285,7 @@ describe('impact classifier Git adapter and outputs', () => {
       JSON.stringify({
         version: 1,
         profile: 'monorepo',
-        commands: {
-          guards: [['npm', 'run', 'guard']],
-          frontend: [['npm', 'run', 'frontend']],
-          backend: [['npm', 'run', 'backend']],
-          lifecycle: [['npm', 'run', 'lifecycle']],
-          full: [['npm', 'run', 'full']]
-        }
+        commands: validationCommands()
       })
     )
 
@@ -278,5 +293,42 @@ describe('impact classifier Git adapter and outputs', () => {
     expect(output).toContain('> npm run full')
     expect(output).not.toContain('> npm run guard')
     expect(output).not.toContain('> npm run lifecycle')
+  })
+
+  it('rejects missing command lanes instead of passing a full fallback with no work', () => {
+    dir = initRepository()
+    writeFileSync(path.join(dir, 'README.md'), 'base\n')
+    const head = commitAll(dir, 'base')
+    const config = path.join(dir, 'validation.json')
+    writeFileSync(config, JSON.stringify({ version: 1, profile: 'web', commands: {} }))
+
+    const result = spawnSync('node', [RUNNER, '--base', head, '--head', head, '--config', config, '--full', '--dry-run'], { cwd: dir, encoding: 'utf8' })
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('Invalid impact-validation command lanes')
+  })
+
+  it('executes staged validation in the staged snapshot, not against unstaged fixes', () => {
+    dir = initRepository()
+    writeFileSync(path.join(dir, 'README.md'), 'base\n')
+    writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        scripts: Object.fromEntries(
+          ['guard', 'docs', 'frontend', 'backend', 'shared', 'harness', 'lifecycle', 'full'].map((name) => [
+            name,
+            `node -e "const fs=require('fs');if(fs.readFileSync('README.md','utf8')!=='staged\\n')process.exit(1)"`
+          ])
+        )
+      })
+    )
+    writeFileSync(path.join(dir, 'validation.json'), JSON.stringify({ version: 1, profile: 'web', commands: validationCommands() }))
+    commitAll(dir, 'base')
+    writeFileSync(path.join(dir, 'README.md'), 'staged\n')
+    execFileSync('git', ['add', 'README.md'], { cwd: dir })
+    writeFileSync(path.join(dir, 'README.md'), 'unstaged fix\n')
+
+    const result = spawnSync('node', [RUNNER, '--staged', '--config', path.join(dir, 'validation.json')], { cwd: dir, encoding: 'utf8' })
+    expect(result.status).toBe(0)
+    expect(readFileSync(path.join(dir, 'README.md'), 'utf8')).toBe('unstaged fix\n')
   })
 })

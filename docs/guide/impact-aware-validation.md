@@ -34,7 +34,7 @@ The classifier takes the repository profile into account. A path has a different
 | Markdown or `docs/` only                                          | Safety guards and documentation checks                                  | Product build, unit/E2E, coverage, lifecycle  |
 | Generated Web source                                              | Frontend checks and the relevant lifecycle                              | Backend-only checks                           |
 | Generated API source                                              | Backend checks and the relevant lifecycle                               | Frontend-only checks                          |
-| Monorepo shared package or generated API contract                 | Frontend + backend + shared + lifecycle                                 | Nothing that consumes the contract is skipped |
+| Monorepo shared package or generated API contract                 | Shared fan-out suite (frontend + backend consumers) and lifecycle       | Nothing that consumes the contract is skipped |
 | Harness or scaffold contract                                      | Harness/scaffold checks and lifecycle where generated output can change | Unrelated documentation-only work             |
 | Lockfile, root build config, workflow, classifier or unknown path | Full validation                                                         | Nothing — ambiguity fails wide                |
 
@@ -85,6 +85,10 @@ Path filters do not decide whether the workflow exists. The classifier always ru
 For pull requests and merge groups, GitHub Actions loads the classifier from the trusted base commit. A pull request cannot weaken its own classification rules and then use those weaker rules to skip
 tests. The first rollout into a repository without the classifier deliberately runs full.
 
+The workflow file itself is still pull-request code. Protect `.github/workflows/`, the canonical validation scripts, and `CODEOWNERS` with required Code Owner review and stale-approval dismissal, or
+enforce the gate through an organization-level required workflow stored outside the repository. SaaSFoundryAI deposits owner rules for its own repository, but GitHub repository settings remain the
+enforcement boundary. Do not replace this with `pull_request_target` while executing pull-request code.
+
 Branch protection targets one stable check: **`CI / Required gate`**. That gate verifies the contract version, validates boolean outputs and compares the job result with the requested plan. A selected
 job that fails or disappears fails the gate; an unexpected job result also fails it.
 
@@ -94,7 +98,7 @@ The repository tests assert the selection itself, not a marketing percentage:
 
 - a docs-only change has frontend, backend, coverage and lifecycle disabled;
 - a staged docs change excludes an unstaged source edit;
-- API, Web and shared changes fan out to their real consumers;
+- API, Web and shared changes fan out to their real consumers without rerunning equivalent wrapper commands;
 - a root/workflow change selects the configured full command;
 - fresh monorepo and multirepo projects receive byte-identical classifiers;
 - the previous-release lifecycle proves that `sf update` deposits both multirepo profiles and remains idempotent.

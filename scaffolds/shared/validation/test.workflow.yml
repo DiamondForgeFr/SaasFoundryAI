@@ -2,14 +2,14 @@ name: Tests
 
 on:
   push:
-    branches: [{{CI_PR_BRANCHES}}, 'rc-*']
+    branches: {{CI_PUSH_BRANCHES_JSON}}
     tags: ['v*', 'rc-*']
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-    branches: [{{CI_PR_BRANCHES}}]
+    branches: {{CI_PR_BRANCHES_JSON}}
   merge_group:
     types: [checks_requested]
-    branches: [{{CI_PR_BRANCHES}}]
+    branches: {{CI_PR_BRANCHES_JSON}}
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
@@ -59,6 +59,7 @@ jobs:
           GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           GROUP_BASE_REF: ${{ github.event.merge_group.base_ref }}
           PUSH_BEFORE: ${{ github.event.before }}
+          MAIN_BRANCH: {{VALIDATION_MAIN_BRANCH_JSON}}
         run: |
           set -euo pipefail
           base="$SHA"
@@ -76,7 +77,7 @@ jobs:
               range_mode="three-dot"
               trusted_base="$PR_BASE_SHA"
               if [[ "$PR_DRAFT" == "true" ]]; then deferred="true"; fi
-              if [[ "$PR_BASE_REF" == "{{MAIN_BRANCH}}" ]]; then
+              if [[ "$PR_BASE_REF" == "$MAIN_BRANCH" ]]; then
                 force_full="true"
                 force_reason="RELEASE_TARGET_FULL"
               fi
@@ -85,7 +86,7 @@ jobs:
               base="$GROUP_BASE_SHA"
               head="$GROUP_HEAD_SHA"
               trusted_base="$GROUP_BASE_SHA"
-              if [[ "$GROUP_BASE_REF" == "refs/heads/{{MAIN_BRANCH}}" || "$GROUP_BASE_REF" == "{{MAIN_BRANCH}}" ]]; then
+              if [[ "$GROUP_BASE_REF" == "refs/heads/$MAIN_BRANCH" || "$GROUP_BASE_REF" == "$MAIN_BRANCH" ]]; then
                 force_full="true"
                 force_reason="RELEASE_TARGET_FULL"
               fi
@@ -93,7 +94,7 @@ jobs:
             push)
               base="$PUSH_BEFORE"
               head="$SHA"
-              if [[ "$REF" == "refs/heads/{{MAIN_BRANCH}}" || "$REF" == refs/heads/rc-* || "$REF" == refs/tags/v* || "$REF" == refs/tags/rc-* ]]; then
+              if [[ "$REF" == "refs/heads/$MAIN_BRANCH" || "$REF" == refs/heads/rc-* || "$REF" == refs/tags/v* || "$REF" == refs/tags/rc-* ]]; then
                 force_full="true"
                 force_reason="RELEASE_EVENT_FULL"
               fi
@@ -156,8 +157,8 @@ jobs:
               echo "full=true"
               echo "guards=$selected"
               echo "docs=$selected"
-              echo "frontend=$selected"
-              echo "backend=$selected"
+              echo "frontend=false"
+              echo "backend=false"
               echo "shared=$selected"
               echo "harness_scaffold=$selected"
               echo "lifecycle=$selected"
@@ -175,8 +176,13 @@ jobs:
   validate:
     name: CI / Impact validation
     needs: classify
-    if: needs.classify.outputs.execute == 'true'
+    if: >-
+      needs.classify.outputs.execute == 'true' &&
+      (needs.classify.outputs.guards == 'true' || needs.classify.outputs.docs == 'true' ||
+       needs.classify.outputs.frontend == 'true' || needs.classify.outputs.backend == 'true' ||
+       needs.classify.outputs.shared == 'true' || needs.classify.outputs.harness_scaffold == 'true')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -186,34 +192,62 @@ jobs:
           node-version-file: '.nvmrc'
           cache: npm
       - run: npm ci --no-warnings
-      - name: Full validation
-        if: needs.classify.outputs.full == 'true'
-        run: npm run test:full
+        env:
+          SF_SKIP_PLAYWRIGHT_INSTALL: '1'
       - name: Minimal safety guards
-        if: needs.classify.outputs.full != 'true' && needs.classify.outputs.guards == 'true'
+        if: needs.classify.outputs.guards == 'true'
         run: npm run test:impact:guards
       - name: Documentation validation
-        if: needs.classify.outputs.full != 'true' && needs.classify.outputs.docs == 'true'
+        if: needs.classify.outputs.docs == 'true'
         run: npm run test:impact:docs
       - name: Frontend validation
-        if: needs.classify.outputs.full != 'true' && needs.classify.outputs.frontend == 'true'
+        if: needs.classify.outputs.frontend == 'true'
         run: npm run test:impact:frontend
       - name: Backend validation
-        if: needs.classify.outputs.full != 'true' && needs.classify.outputs.backend == 'true'
+        if: needs.classify.outputs.backend == 'true'
         run: npm run test:impact:backend
       - name: Shared-contract validation
-        if: needs.classify.outputs.full != 'true' && needs.classify.outputs.shared == 'true'
+        if: needs.classify.outputs.shared == 'true'
         run: npm run test:impact:shared
       - name: Harness validation
-        if: needs.classify.outputs.full != 'true' && needs.classify.outputs.harness_scaffold == 'true'
+        if: needs.classify.outputs.harness_scaffold == 'true'
         run: npm run test:impact:harness
+
+  lifecycle:
+    name: CI / Lifecycle validation
+    needs: classify
+    if: needs.classify.outputs.execute == 'true' && needs.classify.outputs.lifecycle == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d test_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci --no-warnings
       - name: Lifecycle validation
-        if: needs.classify.outputs.full != 'true' && needs.classify.outputs.lifecycle == 'true'
         run: npm run test:impact:lifecycle
 
   required_gate:
     name: CI / Required gate
-    needs: [classify, validate]
+    needs: [classify, validate, lifecycle]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -223,14 +257,29 @@ jobs:
           CLASSIFY_RESULT: ${{ needs.classify.result }}
           CONTRACT_VERSION: ${{ needs.classify.outputs.contract_version }}
           EXECUTE: ${{ needs.classify.outputs.execute }}
+          FULL: ${{ needs.classify.outputs.full }}
+          GUARDS: ${{ needs.classify.outputs.guards }}
+          DOCS: ${{ needs.classify.outputs.docs }}
+          FRONTEND: ${{ needs.classify.outputs.frontend }}
+          BACKEND: ${{ needs.classify.outputs.backend }}
+          SHARED: ${{ needs.classify.outputs.shared }}
+          HARNESS_SCAFFOLD: ${{ needs.classify.outputs.harness_scaffold }}
+          LIFECYCLE: ${{ needs.classify.outputs.lifecycle }}
           VALIDATE_RESULT: ${{ needs.validate.result }}
+          LIFECYCLE_RESULT: ${{ needs.lifecycle.result }}
           MODE: ${{ needs.classify.outputs.mode }}
           REASON_CODE: ${{ needs.classify.outputs.reason_code }}
         run: |
           set -euo pipefail
           failed=0
-          wanted="skipped"
-          if [[ "$EXECUTE" == "true" ]]; then wanted="success"; fi
+
+          expect_result() {
+            local label="$1" expected="$2" actual="$3"
+            local wanted="skipped"
+            if [[ "$expected" == "true" ]]; then wanted="success"; fi
+            printf '%-24s expected=%-8s actual=%s\n' "$label" "$wanted" "$actual"
+            if [[ "$actual" != "$wanted" ]]; then failed=1; fi
+          }
 
           if [[ "$CLASSIFY_RESULT" != "success" ]]; then
             echo "Classifier result is $CLASSIFY_RESULT, expected success."
@@ -240,14 +289,22 @@ jobs:
             echo "Unsupported or missing classifier contract: $CONTRACT_VERSION"
             failed=1
           fi
-          if [[ "$EXECUTE" != "true" && "$EXECUTE" != "false" ]]; then
-            echo "Malformed execute output: $EXECUTE"
-            failed=1
+          for value in "$EXECUTE" "$FULL" "$GUARDS" "$DOCS" "$FRONTEND" "$BACKEND" "$SHARED" "$HARNESS_SCAFFOLD" "$LIFECYCLE"; do
+            if [[ "$value" != "true" && "$value" != "false" ]]; then
+              echo "Malformed boolean output: $value"
+              failed=1
+            fi
+          done
+
+          validate_expected="false"
+          if [[ "$EXECUTE" == "true" && ("$GUARDS" == "true" || "$DOCS" == "true" || "$FRONTEND" == "true" || "$BACKEND" == "true" || "$SHARED" == "true" || "$HARNESS_SCAFFOLD" == "true") ]]; then
+            validate_expected="true"
           fi
-          if [[ "$VALIDATE_RESULT" != "$wanted" ]]; then
-            echo "Validation result is $VALIDATE_RESULT, expected $wanted."
-            failed=1
-          fi
+          lifecycle_expected="false"
+          if [[ "$EXECUTE" == "true" && "$LIFECYCLE" == "true" ]]; then lifecycle_expected="true"; fi
+
+          expect_result "impact validation" "$validate_expected" "$VALIDATE_RESULT"
+          expect_result "lifecycle validation" "$lifecycle_expected" "$LIFECYCLE_RESULT"
 
           echo "Mode: $MODE — reason: $REASON_CODE"
           if [[ "$failed" -ne 0 ]]; then

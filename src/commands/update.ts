@@ -349,6 +349,34 @@ export interface FileUpdate {
   expectedCurrentHash?: string
 }
 
+const IMPACT_VALIDATION_BUNDLE = [
+  'package.json',
+  '.husky/pre-commit',
+  '.github/workflows/test.yml',
+  '.saasfoundry/validation.json',
+  'scripts/saasfoundry/impact-classifier.mjs',
+  'scripts/saasfoundry/run-impact-validation.mjs'
+] as const
+
+/**
+ * The validation hook, workflow, scripts and package commands are one runtime
+ * contract. If one member conflicts with a user edit, sidecar every changed
+ * member instead of activating a half-updated bundle that cannot run.
+ */
+export function enforceAtomicImpactValidationBundles(updates: FileUpdate[]): FileUpdate[] {
+  const marker = '.saasfoundry/validation.json'
+  const prefixes = updates.map(({ path }) => (path === marker ? '' : path.endsWith(`/${marker}`) ? path.slice(0, -(marker.length + 1)) : null)).filter((prefix): prefix is string => prefix !== null)
+
+  const membersByPrefix = new Map(prefixes.map((prefix) => [prefix, new Set(IMPACT_VALIDATION_BUNDLE.map((path) => (prefix ? `${prefix}/${path}` : path)))]))
+  const conflicted = new Set([...membersByPrefix.entries()].filter(([, members]) => updates.some((update) => members.has(update.path) && update.action === 'conflict')).map(([prefix]) => prefix))
+
+  if (conflicted.size === 0) return updates
+  return updates.map((update) => {
+    const bundleConflict = [...conflicted].some((prefix) => membersByPrefix.get(prefix)?.has(update.path))
+    return bundleConflict && update.action !== 'remove' ? { ...update, action: 'conflict' as const } : update
+  })
+}
+
 /**
  * Re-generate the project in a temporary directory using the current CLI version
  * with the same options from the manifest. All side effects (npm install, git init) are skipped.
@@ -1194,10 +1222,12 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           // Three-way comparison
           spinner.text = 'Comparing files...'
           const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
-          const updates = computeFileUpdates(
-            withoutSharedAgentHashes(manifest.fileHashes, protectClaude),
-            withoutSharedAgentHashes(currentHashes, protectClaude),
-            withoutSharedAgentHashes(targetHashes, protectClaude)
+          const updates = enforceAtomicImpactValidationBundles(
+            computeFileUpdates(
+              withoutSharedAgentHashes(manifest.fileHashes, protectClaude),
+              withoutSharedAgentHashes(currentHashes, protectClaude),
+              withoutSharedAgentHashes(targetHashes, protectClaude)
+            )
           )
 
           if (updates.length === 0) {
