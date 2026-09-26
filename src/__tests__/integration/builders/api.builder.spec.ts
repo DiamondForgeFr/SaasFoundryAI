@@ -41,6 +41,9 @@ describe('createApiApp (integration)', () => {
 
       expect(result).toBe(true)
       await expectFileExists(join(tempDir, 'apps/test-project-api/src/main.ts'))
+      await expectFileExists(join(tempDir, 'apps/test-project-api/.saasfoundry/validation.json'))
+      await expectFileExists(join(tempDir, 'apps/test-project-api/scripts/saasfoundry/impact-classifier.mjs'))
+      await expect(readFile(join(tempDir, 'apps/test-project-api/.husky/pre-commit'), 'utf8')).resolves.toContain('npm run test:staged')
     })
 
     it('should update package.json with project name', async () => {

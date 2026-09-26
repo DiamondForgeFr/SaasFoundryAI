@@ -40,6 +40,9 @@ describe('createMonorepoRoot (integration)', () => {
 
     expect(result).toBe(true)
     await expectFileExists(join(tempDir, 'package.json'))
+    await expectFileExists(join(tempDir, '.saasfoundry/validation.json'))
+    await expectFileExists(join(tempDir, 'scripts/saasfoundry/impact-classifier.mjs'))
+    await expect(readFile(join(tempDir, '.husky/pre-commit'), 'utf8')).resolves.toContain('npm run test:staged')
   })
 
   /**
