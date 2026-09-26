@@ -10,6 +10,7 @@ import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
+import { installImpactValidation } from './impact-validation'
 
 export async function createWebApp(params: CreateWebAppParams) {
   const targetDir = params.targetDir ?? '.'
@@ -140,6 +141,8 @@ export async function renderWebApp({
     deploymentYmlContent = applyProjectIdentity(deploymentYmlContent, projectName)
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
+
+  if (!isMonorepo) await installImpactValidation(webPath, 'web')
 
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
   const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')

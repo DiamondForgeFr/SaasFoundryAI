@@ -2,79 +2,45 @@ import { execFileSync, spawnSync } from 'child_process'
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
-import { runInNewContext } from 'vm'
 import { load } from 'js-yaml'
 
 const ROOT = resolve(__dirname, '../../../..')
-const FILES = [
-  '.github/workflows/test.yml',
-  'scaffolds/blueprints/api/.github/workflows/test.yml',
-  'scaffolds/blueprints/web/.github/workflows/test.yml',
-  'scaffolds/overlays/monorepo/root/.github/workflows/test.yml'
-]
+const FILES = ['.github/workflows/test.yml', 'scaffolds/shared/validation/test.workflow.yml']
 interface Workflow {
   on: { pull_request: { types: string[]; branches: string[] }; push?: { branches: string[]; tags?: string[] }; schedule?: unknown; workflow_dispatch?: unknown }
   concurrency: { group: string; 'cancel-in-progress': boolean }
-  jobs: Record<string, { if: string; needs?: string | string[] }>
-}
-
-function permits(expression: string, event: string, draft: boolean, base = 'develop', ref = 'refs/heads/develop', prepareResult = 'success'): boolean {
-  return Boolean(
-    runInNewContext(expression, {
-      startsWith: (value: string, prefix: string) => value.startsWith(prefix),
-      github: { event_name: event, base_ref: base, ref, event: { pull_request: { draft } } },
-      needs: { lifecycle_prepare: { result: prepareResult } }
-    })
-  )
+  jobs: Record<string, { if?: string; needs?: string | string[] }>
 }
 
 describe.each(FILES)('%s draft validation policy', (file) => {
-  const workflow = load(readFileSync(join(ROOT, file), 'utf8').replaceAll('{{CI_PR_BRANCHES}}', 'develop, master')) as Workflow
-  const impactAware = file === '.github/workflows/test.yml'
+  const workflow = load(
+    readFileSync(join(ROOT, file), 'utf8').replaceAll('{{CI_PR_BRANCHES}}', 'develop, master').replaceAll('{{MAIN_BRANCH}}', 'master').replaceAll('{{VALIDATION_PROFILE}}', 'monorepo')
+  ) as Workflow
   it('handles draft creation, feedback pushes, reopening, promotion and returning to draft', () => {
     expect(workflow.on.pull_request.types).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft']))
     expect(workflow.on.pull_request.branches).toEqual(expect.arrayContaining(['develop', 'master']))
-    const expectedGroup = impactAware
-      ? '${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref || github.run_id }}'
-      : '${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'
+    const expectedGroup = '${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref || github.run_id }}'
     expect(workflow.concurrency).toEqual({ group: expectedGroup, 'cancel-in-progress': true })
   })
   it('skips every job on a draft PR, including dependency installation and Docker matrix resolution', () => {
     expect(Object.keys(workflow.jobs).length).toBeGreaterThan(0)
-    if (impactAware) {
-      expect(workflow.jobs.classify.if).toBeUndefined()
-      expect(workflow.jobs.required_gate.if).toBe('always()')
-      for (const [name, job] of Object.entries(workflow.jobs)) {
-        if (name === 'classify' || name === 'required_gate') continue
-        expect(job.if).toContain('needs.classify.outputs.')
-      }
-      return
-    }
-    for (const job of Object.values(workflow.jobs)) {
-      expect(job.if).toBeDefined()
-      expect(permits(job.if, 'pull_request', true)).toBe(false)
+    expect(workflow.jobs.classify.if).toBeUndefined()
+    expect(workflow.jobs.required_gate.if).toBe('always()')
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      if (name === 'classify' || name === 'required_gate') continue
+      expect(job.if).toContain('needs.classify.outputs.')
     }
   })
   it('runs validation for ready PRs while preserving Docker target branch selection', () => {
-    if (impactAware) {
-      expect(workflow.jobs.classify).toBeDefined()
-      expect(workflow.jobs.required_gate.needs).toEqual(expect.arrayContaining(['classify', 'lifecycle']))
-      return
-    }
-    for (const job of Object.values(workflow.jobs)) {
-      for (const base of ['develop', 'master']) {
-        expect(permits(job.if, 'pull_request', false, base)).toBe(true)
-      }
-    }
+    expect(workflow.jobs.classify).toBeDefined()
+    expect(workflow.jobs.required_gate.needs).toEqual(expect.arrayContaining(['classify']))
   })
-  if (impactAware) {
-    it('keeps ordinary pushes fast and routes RC tags, schedules and manual runs to the full lifecycle lane', () => {
-      expect(workflow.on.push?.branches).toEqual(['master', 'develop', 'rc-*'])
-      expect(workflow.on.push?.tags).toEqual(['v*', 'rc-*'])
-      expect(workflow.on.schedule).toBeDefined()
-      expect(workflow.on.workflow_dispatch).toBeNull()
-    })
-  }
+  it('keeps ordinary pushes selective and routes release, schedule and manual surfaces through classification', () => {
+    expect(workflow.on.push?.branches).toEqual(expect.arrayContaining(['master', 'develop', 'rc-*']))
+    expect(workflow.on.push?.tags).toEqual(['v*', 'rc-*'])
+    expect(workflow.on.schedule).toBeDefined()
+    expect(workflow.on.workflow_dispatch).toBeNull()
+  })
 })
 
 describe('pre-push validation policy', () => {

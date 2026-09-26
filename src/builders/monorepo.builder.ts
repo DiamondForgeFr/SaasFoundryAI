@@ -9,6 +9,7 @@ import { DEFAULT_PORTS } from '../ports'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
+import { installImpactValidation } from './impact-validation'
 
 export async function createMonorepoRoot(params: CreateMonorepoRootParams) {
   const targetDir = params.targetDir ?? '.'
@@ -98,6 +99,8 @@ export async function renderMonorepoRoot({
 
   // The root CLAUDE.md tells the AI where the API docs live.
   await replaceInFile(at('CLAUDE.md'), [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
+
+  await installImpactValidation(targetDir, 'monorepo')
 
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
   const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')

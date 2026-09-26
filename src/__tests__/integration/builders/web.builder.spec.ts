@@ -40,6 +40,9 @@ describe('createWebApp (integration)', () => {
 
       expect(result).toBe(true)
       await expectFileExists(join(tempDir, 'apps/test-project-web/src/main.tsx'))
+      await expectFileExists(join(tempDir, 'apps/test-project-web/.saasfoundry/validation.json'))
+      await expectFileExists(join(tempDir, 'apps/test-project-web/scripts/saasfoundry/impact-classifier.mjs'))
+      await expect(readFile(join(tempDir, 'apps/test-project-web/.husky/pre-commit'), 'utf8')).resolves.toContain('npm run test:staged')
     })
 
     it('should update package.json with project name', async () => {
