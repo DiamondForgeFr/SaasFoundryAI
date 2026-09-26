@@ -50,14 +50,16 @@ describe('lifecycle workflow contract', () => {
     expect(workflow).toContain('docker load --input')
   })
 
-  it('routes ordinary PRs to normal and schedule, manual and RC tags to full', () => {
-    expect(workflow).toContain('if [[ "${{ github.event_name }}" == "pull_request" ]]; then lane=normal; fi')
-    expect(workflow).toContain("tags: ['rc-*']")
-    expect(workflow).toContain('branches: [master, develop]')
+  it('takes the lifecycle lane from the classifier and forces release surfaces to full', () => {
+    expect(workflow).toContain('LIFECYCLE_LANE: ${{ needs.classify.outputs.lifecycle_lane }}')
+    expect(workflow).toContain('--lane "$LIFECYCLE_LANE"')
+    expect(workflow).toContain("tags: ['v*', 'rc-*']")
+    expect(workflow).toContain("branches: [master, develop, 'rc-*']")
     expect(workflow).toContain('schedule:')
     expect(workflow).toContain('workflow_dispatch:')
-    expect(workflow).toContain("startsWith(github.ref, 'refs/tags/rc-')")
-    expect(workflow).not.toContain("startsWith(github.ref, 'refs/heads/rc-')")
+    expect(workflow).toContain('"$REF" == refs/heads/rc-*')
+    expect(workflow).toContain('"$REF" == refs/tags/v*')
+    expect(workflow).toContain('"$REF" == refs/tags/rc-*')
   })
 
   it('uses exact matrix check names and the isolated Docker/artifact contract', () => {

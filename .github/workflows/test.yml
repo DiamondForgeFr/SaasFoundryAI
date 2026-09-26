@@ -2,10 +2,13 @@ name: Tests
 
 on:
   push:
-    branches: [master, develop]
-    tags: ['rc-*']
+    branches: [master, develop, 'rc-*']
+    tags: ['v*', 'rc-*']
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    branches: [master, develop]
+  merge_group:
+    types: [checks_requested]
     branches: [master, develop]
   schedule:
     - cron: '0 3 * * 1'
@@ -15,13 +18,206 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.ref) }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
+  classify:
+    name: CI / Classify impact
+    runs-on: ubuntu-latest
+    outputs:
+      contract_version: ${{ steps.classify.outputs.contract_version }}
+      mode: ${{ steps.classify.outputs.mode }}
+      execute: ${{ steps.classify.outputs.execute }}
+      full: ${{ steps.classify.outputs.full }}
+      guards: ${{ steps.classify.outputs.guards }}
+      docs: ${{ steps.classify.outputs.docs }}
+      frontend: ${{ steps.classify.outputs.frontend }}
+      backend: ${{ steps.classify.outputs.backend }}
+      shared: ${{ steps.classify.outputs.shared }}
+      harness_scaffold: ${{ steps.classify.outputs.harness_scaffold }}
+      lifecycle: ${{ steps.classify.outputs.lifecycle }}
+      core_tests: ${{ steps.classify.outputs.core_tests }}
+      coverage: ${{ steps.classify.outputs.coverage }}
+      lifecycle_lane: ${{ steps.classify.outputs.lifecycle_lane }}
+      reason_code: ${{ steps.classify.outputs.reason_code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: resolve
+        name: Resolve trusted range and policy
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          GROUP_BASE_REF: ${{ github.event.merge_group.base_ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base="$SHA"
+          head="$SHA"
+          range_mode="two-dot"
+          force_full="false"
+          force_reason="EVENT_FORCED_FULL"
+          deferred="false"
+          trusted_base=""
+
+          case "$EVENT_NAME" in
+            pull_request)
+              base="$PR_BASE_SHA"
+              head="$PR_HEAD_SHA"
+              range_mode="three-dot"
+              trusted_base="$PR_BASE_SHA"
+              if [[ "$PR_DRAFT" == "true" ]]; then deferred="true"; fi
+              if [[ "$PR_BASE_REF" == "master" ]]; then
+                force_full="true"
+                force_reason="RELEASE_TARGET_FULL"
+              fi
+              ;;
+            merge_group)
+              base="$GROUP_BASE_SHA"
+              head="$GROUP_HEAD_SHA"
+              trusted_base="$GROUP_BASE_SHA"
+              if [[ "$GROUP_BASE_REF" == "refs/heads/master" || "$GROUP_BASE_REF" == "master" ]]; then
+                force_full="true"
+                force_reason="RELEASE_TARGET_FULL"
+              fi
+              ;;
+            push)
+              base="$PUSH_BEFORE"
+              head="$SHA"
+              if [[ "$REF" == "refs/heads/master" || "$REF" == refs/heads/rc-* || "$REF" == refs/tags/v* || "$REF" == refs/tags/rc-* ]]; then
+                force_full="true"
+                force_reason="RELEASE_EVENT_FULL"
+              fi
+              ;;
+            schedule|workflow_dispatch)
+              force_full="true"
+              force_reason="EVENT_FORCED_FULL"
+              ;;
+            *)
+              force_full="true"
+              force_reason="UNKNOWN_EVENT_FULL"
+              ;;
+          esac
+
+          classifier="$GITHUB_WORKSPACE/scaffolds/shared/validation/impact-classifier.mjs"
+          if [[ -n "$trusted_base" ]]; then
+            classifier="$RUNNER_TEMP/impact-classifier.mjs"
+            if ! git show "${trusted_base}:scaffolds/shared/validation/impact-classifier.mjs" > "$classifier"; then
+              classifier=""
+            fi
+          fi
+
+          {
+            echo "base=$base"
+            echo "head=$head"
+            echo "range_mode=$range_mode"
+            echo "force_full=$force_full"
+            echo "force_reason=$force_reason"
+            echo "deferred=$deferred"
+            echo "classifier=$classifier"
+          } >> "$GITHUB_OUTPUT"
+
+      - id: classify
+        name: Classify impact from the trusted contract
+        shell: bash
+        env:
+          BASE: ${{ steps.resolve.outputs.base }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head }}
+          RANGE_MODE: ${{ steps.resolve.outputs.range_mode }}
+          FORCE_FULL: ${{ steps.resolve.outputs.force_full }}
+          FORCE_REASON: ${{ steps.resolve.outputs.force_reason }}
+          DEFERRED: ${{ steps.resolve.outputs.deferred }}
+          CLASSIFIER: ${{ steps.resolve.outputs.classifier }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLASSIFIER" || ! -s "$CLASSIFIER" ]]; then
+            if [[ "$DEFERRED" == "true" ]]; then
+              mode="deferred"
+              execute="false"
+              selected="false"
+              lifecycle_lane="none"
+            else
+              mode="fallback-full"
+              execute="true"
+              selected="true"
+              lifecycle_lane="full"
+            fi
+            {
+              echo "contract_version=1"
+              echo "mode=$mode"
+              echo "execute=$execute"
+              echo "full=true"
+              echo "guards=$selected"
+              echo "docs=$selected"
+              echo "frontend=$selected"
+              echo "backend=$selected"
+              echo "shared=$selected"
+              echo "harness_scaffold=$selected"
+              echo "lifecycle=$selected"
+              echo "core_tests=$selected"
+              echo "coverage=$selected"
+              echo "lifecycle_lane=$lifecycle_lane"
+              echo "reason_code=TRUSTED_CLASSIFIER_UNAVAILABLE_FULL"
+            } >> "$GITHUB_OUTPUT"
+            echo "Trusted-base classifier unavailable; selecting the full matrix."
+            exit 0
+          fi
+
+          args=(--profile saasfoundry --base "$BASE" --head "$HEAD_SHA" --range-mode "$RANGE_MODE" --github-output "$GITHUB_OUTPUT")
+          if [[ "$FORCE_FULL" == "true" ]]; then args+=(--force-full --force-reason "$FORCE_REASON"); fi
+          if [[ "$DEFERRED" == "true" ]]; then args+=(--deferred); fi
+          node "$CLASSIFIER" "${args[@]}"
+
+  guards:
+    name: Minimal safety guards
+    needs: classify
+    if: needs.classify.outputs.guards == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run test:impact-contract
+
+  docs:
+    name: Documentation build and integrity
+    needs: classify
+    if: needs.classify.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:build
+      - run: npm run test:docs-integrity
+
   unit:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Unit Tests
+    needs: classify
+    if: needs.classify.outputs.core_tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,8 +231,9 @@ jobs:
       - run: npm run test:unit
 
   integration:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Integration Tests
+    needs: classify
+    if: needs.classify.outputs.core_tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,8 +247,9 @@ jobs:
       - run: npm run test:integration
 
   e2e:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: E2E Tests
+    needs: classify
+    if: needs.classify.outputs.core_tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,9 +262,10 @@ jobs:
       - run: npm ci
       - run: npm run test:e2e
 
-  lint:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    name: Lint & Type Check
+  lint_build:
+    name: Lint, build and package
+    needs: classify
+    if: needs.classify.outputs.core_tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,24 +280,10 @@ jobs:
       - run: npm run package:check
       - run: npm run lint
 
-  docs:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    name: Docs Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run docs:build
-
   coverage:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Coverage
+    needs: classify
+    if: needs.classify.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -118,12 +303,9 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   lifecycle_prepare:
-    if: >-
-      (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rc-'))
     name: Prepare lifecycle image
+    needs: classify
+    if: needs.classify.outputs.lifecycle == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -140,10 +322,9 @@ jobs:
       - id: lane
         name: Resolve lifecycle lane
         shell: bash
-        run: |
-          lane=full
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then lane=normal; fi
-          echo "matrix={\"include\":$(npx tsx tests/docker/list-scenarios.ts --json --lane "$lane")}" >> "$GITHUB_OUTPUT"
+        env:
+          LIFECYCLE_LANE: ${{ needs.classify.outputs.lifecycle_lane }}
+        run: echo "matrix={\"include\":$(npx tsx tests/docker/list-scenarios.ts --json --lane "$LIFECYCLE_LANE")}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - name: Build lifecycle image once
         uses: docker/build-push-action@v6
@@ -163,8 +344,8 @@ jobs:
           retention-days: 1
 
   lifecycle:
-    needs: lifecycle_prepare
-    if: needs.lifecycle_prepare.result == 'success' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    needs: [classify, lifecycle_prepare]
+    if: needs.classify.outputs.lifecycle == 'true' && needs.lifecycle_prepare.result == 'success'
     name: ${{ matrix.check }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeoutMinutes }}
@@ -214,3 +395,75 @@ jobs:
           name: lifecycle-failure-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.check }}
           path: ${{ runner.temp }}/lifecycle-artifacts
           retention-days: 7
+
+  required_gate:
+    name: CI / Required gate
+    needs: [classify, guards, docs, unit, integration, e2e, lint_build, coverage, lifecycle_prepare, lifecycle]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the requested validation plan completed
+        shell: bash
+        env:
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          CONTRACT_VERSION: ${{ needs.classify.outputs.contract_version }}
+          EXECUTE: ${{ needs.classify.outputs.execute }}
+          EXPECT_GUARDS: ${{ needs.classify.outputs.guards }}
+          EXPECT_DOCS: ${{ needs.classify.outputs.docs }}
+          EXPECT_CORE: ${{ needs.classify.outputs.core_tests }}
+          EXPECT_COVERAGE: ${{ needs.classify.outputs.coverage }}
+          EXPECT_LIFECYCLE: ${{ needs.classify.outputs.lifecycle }}
+          GUARDS_RESULT: ${{ needs.guards.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          UNIT_RESULT: ${{ needs.unit.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          LINT_BUILD_RESULT: ${{ needs.lint_build.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          LIFECYCLE_PREPARE_RESULT: ${{ needs.lifecycle_prepare.result }}
+          LIFECYCLE_RESULT: ${{ needs.lifecycle.result }}
+          MODE: ${{ needs.classify.outputs.mode }}
+          REASON_CODE: ${{ needs.classify.outputs.reason_code }}
+        run: |
+          set -euo pipefail
+          failed=0
+
+          expect_result() {
+            local label="$1" expected="$2" actual="$3"
+            local wanted="skipped"
+            if [[ "$expected" == "true" ]]; then wanted="success"; fi
+            printf '%-24s expected=%-8s actual=%s\n' "$label" "$wanted" "$actual"
+            if [[ "$actual" != "$wanted" ]]; then failed=1; fi
+          }
+
+          if [[ "$CLASSIFY_RESULT" != "success" ]]; then
+            echo "Classifier result is $CLASSIFY_RESULT, expected success."
+            failed=1
+          fi
+          if [[ "$CONTRACT_VERSION" != "1" ]]; then
+            echo "Unsupported or missing classifier contract: $CONTRACT_VERSION"
+            failed=1
+          fi
+          for value in "$EXECUTE" "$EXPECT_GUARDS" "$EXPECT_DOCS" "$EXPECT_CORE" "$EXPECT_COVERAGE" "$EXPECT_LIFECYCLE"; do
+            if [[ "$value" != "true" && "$value" != "false" ]]; then
+              echo "Malformed boolean output: $value"
+              failed=1
+            fi
+          done
+
+          expect_result guards "$EXPECT_GUARDS" "$GUARDS_RESULT"
+          expect_result docs "$EXPECT_DOCS" "$DOCS_RESULT"
+          expect_result unit "$EXPECT_CORE" "$UNIT_RESULT"
+          expect_result integration "$EXPECT_CORE" "$INTEGRATION_RESULT"
+          expect_result e2e "$EXPECT_CORE" "$E2E_RESULT"
+          expect_result lint_build "$EXPECT_CORE" "$LINT_BUILD_RESULT"
+          expect_result coverage "$EXPECT_COVERAGE" "$COVERAGE_RESULT"
+          expect_result lifecycle_prepare "$EXPECT_LIFECYCLE" "$LIFECYCLE_PREPARE_RESULT"
+          expect_result lifecycle "$EXPECT_LIFECYCLE" "$LIFECYCLE_RESULT"
+
+          echo "Mode: $MODE — reason: $REASON_CODE"
+          if [[ "$failed" -ne 0 ]]; then
+            echo "::error::The executed jobs do not match the requested validation plan."
+            exit 1
+          fi
+          echo "Validation plan completed successfully."

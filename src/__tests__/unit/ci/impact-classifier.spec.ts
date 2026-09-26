@@ -220,4 +220,63 @@ describe('impact classifier Git adapter and outputs', () => {
     expect(full).toContain('> npm run full')
     expect(full).not.toContain('> npm run docs')
   })
+
+  it('classifies the staged tree without including unstaged edits', () => {
+    dir = initRepository()
+    writeFileSync(path.join(dir, 'README.md'), 'base\n')
+    writeFileSync(path.join(dir, 'source.ts'), 'base\n')
+    commitAll(dir, 'base')
+    writeFileSync(path.join(dir, 'README.md'), 'staged docs\n')
+    execFileSync('git', ['add', 'README.md'], { cwd: dir })
+    writeFileSync(path.join(dir, 'source.ts'), 'unstaged source\n')
+    const config = path.join(dir, 'validation.json')
+    writeFileSync(
+      config,
+      JSON.stringify({
+        version: 1,
+        profile: 'web',
+        commands: {
+          guards: [['npm', 'run', 'guard']],
+          docs: [['npm', 'run', 'docs']],
+          frontend: [['npm', 'run', 'frontend']],
+          full: [['npm', 'run', 'full']]
+        }
+      })
+    )
+
+    const output = execFileSync('node', [RUNNER, '--staged', '--config', config, '--dry-run'], { cwd: dir, encoding: 'utf8' })
+    expect(output).toContain('Staged tree: HEAD..')
+    expect(output).toContain('> npm run guard')
+    expect(output).toContain('> npm run docs')
+    expect(output).not.toContain('> npm run frontend')
+    expect(output).not.toContain('> npm run full')
+  })
+
+  it('uses the configured full command whenever classification expands to every lane', () => {
+    dir = initRepository()
+    writeFileSync(path.join(dir, 'README.md'), 'base\n')
+    const base = commitAll(dir, 'base')
+    writeFileSync(path.join(dir, 'package.json'), '{}\n')
+    const head = commitAll(dir, 'root contract')
+    const config = path.join(dir, 'validation.json')
+    writeFileSync(
+      config,
+      JSON.stringify({
+        version: 1,
+        profile: 'monorepo',
+        commands: {
+          guards: [['npm', 'run', 'guard']],
+          frontend: [['npm', 'run', 'frontend']],
+          backend: [['npm', 'run', 'backend']],
+          lifecycle: [['npm', 'run', 'lifecycle']],
+          full: [['npm', 'run', 'full']]
+        }
+      })
+    )
+
+    const output = execFileSync('node', [RUNNER, '--base', base, '--head', head, '--config', config, '--dry-run'], { cwd: dir, encoding: 'utf8' })
+    expect(output).toContain('> npm run full')
+    expect(output).not.toContain('> npm run guard')
+    expect(output).not.toContain('> npm run lifecycle')
+  })
 })
