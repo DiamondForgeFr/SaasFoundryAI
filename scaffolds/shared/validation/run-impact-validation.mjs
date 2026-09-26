@@ -8,10 +8,11 @@ import { pathToFileURL } from 'node:url'
 import { classifyChanges, readGitChanges } from './impact-classifier.mjs'
 
 function parseArgs(argv) {
-  const options = { rangeMode: 'two-dot', full: false, dryRun: false, config: '.saasfoundry/validation.json' }
+  const options = { rangeMode: 'two-dot', full: false, staged: false, dryRun: false, config: '.saasfoundry/validation.json' }
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index]
     if (name === '--full') options.full = true
+    else if (name === '--staged') options.staged = true
     else if (name === '--dry-run') options.dryRun = true
     else if (['--base', '--head', '--range-mode', '--config'].includes(name)) {
       const value = argv[++index]
@@ -19,7 +20,8 @@ function parseArgs(argv) {
       options[name.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value
     } else throw new Error(`Unknown argument: ${name}`)
   }
-  if (!options.base || !options.head) throw new Error('--base and --head are required.')
+  if (options.staged && (options.base || options.head)) throw new Error('--staged cannot be combined with --base or --head.')
+  if (!options.staged && (!options.base || !options.head)) throw new Error('--base and --head are required unless --staged is used.')
   return options
 }
 
@@ -49,7 +51,7 @@ function selectedLanes(result) {
 }
 
 function commandsFor(config, result, explicitFull) {
-  if (explicitFull && config.commands.full) return config.commands.full
+  if ((explicitFull || result.full) && config.commands.full) return config.commands.full
   const commands = selectedLanes(result).flatMap((lane) => config.commands[lane] || [])
   const seen = new Set()
   return commands.filter((command) => {
@@ -67,6 +69,13 @@ function renderCommand(command) {
 export function run(argv = process.argv.slice(2), cwd = process.cwd()) {
   const options = parseArgs(argv)
   const config = readConfig(options.config)
+  if (options.staged) {
+    const head = spawnSync('git', ['write-tree'], { cwd, encoding: 'utf8' })
+    if (head.error || head.status !== 0) throw new Error((head.stderr || head.error?.message || 'git write-tree failed').trim())
+    options.base = 'HEAD'
+    options.head = head.stdout.trim()
+    console.log(`Staged tree: ${options.base}..${options.head}`)
+  }
   let changes = []
   let fallback = null
   if (!options.full) {

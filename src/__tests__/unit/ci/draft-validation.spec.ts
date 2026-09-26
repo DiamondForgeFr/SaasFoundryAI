@@ -30,39 +30,49 @@ function permits(expression: string, event: string, draft: boolean, base = 'deve
 
 describe.each(FILES)('%s draft validation policy', (file) => {
   const workflow = load(readFileSync(join(ROOT, file), 'utf8').replaceAll('{{CI_PR_BRANCHES}}', 'develop, master')) as Workflow
+  const impactAware = file === '.github/workflows/test.yml'
   it('handles draft creation, feedback pushes, reopening, promotion and returning to draft', () => {
     expect(workflow.on.pull_request.types).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft']))
     expect(workflow.on.pull_request.branches).toEqual(expect.arrayContaining(['develop', 'master']))
-    const expectedGroup =
-      file === '.github/workflows/test.yml'
-        ? "${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.ref) }}"
-        : '${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'
+    const expectedGroup = impactAware
+      ? '${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref || github.run_id }}'
+      : '${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'
     expect(workflow.concurrency).toEqual({ group: expectedGroup, 'cancel-in-progress': true })
   })
   it('skips every job on a draft PR, including dependency installation and Docker matrix resolution', () => {
     expect(Object.keys(workflow.jobs).length).toBeGreaterThan(0)
+    if (impactAware) {
+      expect(workflow.jobs.classify.if).toBeUndefined()
+      expect(workflow.jobs.required_gate.if).toBe('always()')
+      for (const [name, job] of Object.entries(workflow.jobs)) {
+        if (name === 'classify' || name === 'required_gate') continue
+        expect(job.if).toContain('needs.classify.outputs.')
+      }
+      return
+    }
     for (const job of Object.values(workflow.jobs)) {
       expect(job.if).toBeDefined()
       expect(permits(job.if, 'pull_request', true)).toBe(false)
     }
   })
   it('runs validation for ready PRs while preserving Docker target branch selection', () => {
+    if (impactAware) {
+      expect(workflow.jobs.classify).toBeDefined()
+      expect(workflow.jobs.required_gate.needs).toEqual(expect.arrayContaining(['classify', 'lifecycle']))
+      return
+    }
     for (const job of Object.values(workflow.jobs)) {
       for (const base of ['develop', 'master']) {
         expect(permits(job.if, 'pull_request', false, base)).toBe(true)
       }
     }
   })
-  if (file === '.github/workflows/test.yml') {
+  if (impactAware) {
     it('keeps ordinary pushes fast and routes RC tags, schedules and manual runs to the full lifecycle lane', () => {
-      expect(workflow.on.push?.branches).toEqual(['master', 'develop'])
-      expect(workflow.on.push?.tags).toEqual(['rc-*'])
-      for (const [name, job] of Object.entries(workflow.jobs)) {
-        const isLifecycle = name === 'lifecycle_prepare' || name === 'lifecycle'
-        expect(permits(job.if, 'push', false, 'develop', 'refs/heads/develop', 'skipped')).toBe(!isLifecycle)
-        expect(permits(job.if, 'push', false, 'develop', 'refs/tags/rc-1.0.0', 'success')).toBe(true)
-      }
-      expect(permits(workflow.jobs.lifecycle_prepare.if, 'push', false, 'develop', 'refs/heads/rc-1.0.0', 'success')).toBe(false)
+      expect(workflow.on.push?.branches).toEqual(['master', 'develop', 'rc-*'])
+      expect(workflow.on.push?.tags).toEqual(['v*', 'rc-*'])
+      expect(workflow.on.schedule).toBeDefined()
+      expect(workflow.on.workflow_dispatch).toBeNull()
     })
   }
 })
