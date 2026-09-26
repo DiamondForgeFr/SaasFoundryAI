@@ -21,7 +21,7 @@ it('keeps repositories created by pre-commit tests isolated from the committing 
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GIT_DIR: join(repo, '.git'), GIT_INDEX_FILE: join(repo, '.git/index'), SF_TEST_REMOTE: remote, SF_TEST_ARGS: args },
       stdio: 'pipe'
     })
-    expect(readFileSync(args, 'utf8').trim()).toBe('run test:pre-commit')
+    expect(readFileSync(args, 'utf8').trim()).toBe('run test:staged')
     expect(execFileSync('git', ['-C', repo, 'rev-parse', '--is-bare-repository'], { encoding: 'utf8' }).trim()).toBe('false')
     expect(execFileSync('git', ['--git-dir', remote, 'rev-parse', '--is-bare-repository'], { encoding: 'utf8' }).trim()).toBe('true')
   } finally {
