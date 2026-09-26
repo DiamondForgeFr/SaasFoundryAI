@@ -227,7 +227,8 @@ describe('generated project smoke tests', () => {
     it('should substitute branch placeholders in CI workflows', async () => {
       const testYml = await readFile(join(paths.apiPath, '.github/workflows/test.yml'), 'utf8')
       const deployYml = await readFile(join(paths.apiPath, '.github/workflows/deployment.yml'), 'utf8')
-      expect(testYml).toContain('branches: [develop, main]')
+      expect(testYml).toContain('branches: ["develop","main"]')
+      expect(testYml).toContain('MAIN_BRANCH: "main"')
       expect(deployYml).toContain('branches: [main]')
       expect(deployYml).toContain('--branch=main')
       for (const content of [testYml, deployYml]) {
@@ -289,7 +290,8 @@ describe('generated project smoke tests', () => {
     it('should substitute branch placeholders in root CI workflows', async () => {
       const testYml = await readFile(join(paths.projectDir, '.github/workflows/test.yml'), 'utf8')
       const deployApiYml = await readFile(join(paths.projectDir, '.github/workflows/deployment-api.yml'), 'utf8')
-      expect(testYml).toContain('branches: [develop, main]')
+      expect(testYml).toContain('branches: ["develop","main"]')
+      expect(testYml).toContain('MAIN_BRANCH: "main"')
       expect(deployApiYml).toContain('branches: [main]')
       expect(deployApiYml).toContain('--branch=main')
       for (const content of [testYml, deployApiYml]) {

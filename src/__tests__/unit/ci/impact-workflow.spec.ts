@@ -6,6 +6,7 @@ import { load } from 'js-yaml'
 const ROOT = path.resolve(__dirname, '../../../..')
 const WORKFLOW_PATH = path.join(ROOT, '.github/workflows/test.yml')
 const VALIDATION_PATH = path.join(ROOT, '.saasfoundry/validation.json')
+const CODEOWNERS_PATH = path.join(ROOT, '.github/CODEOWNERS')
 
 interface Job {
   if?: string
@@ -39,6 +40,13 @@ describe('impact-aware SaaSFoundry CI contract', () => {
     expect(source).toContain('git show "${trusted_base}:scaffolds/shared/validation/impact-classifier.mjs"')
     expect(source).toContain('TRUSTED_CLASSIFIER_UNAVAILABLE_FULL')
     expect(source).toContain('--range-mode "$RANGE_MODE"')
+  })
+
+  it('declares owner review boundaries for mutable workflow policy', () => {
+    const codeowners = readFileSync(CODEOWNERS_PATH, 'utf8')
+    expect(codeowners).toContain('/.github/CODEOWNERS @AGachet')
+    expect(codeowners).toContain('/.github/workflows/ @AGachet')
+    expect(codeowners).toContain('/scaffolds/shared/validation/ @AGachet')
   })
 
   it('keeps draft runs visible while deferring every expensive lane', () => {

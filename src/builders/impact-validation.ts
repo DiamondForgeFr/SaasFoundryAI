@@ -6,6 +6,15 @@ import { blueprintsPath } from '../types'
 
 export type ImpactValidationProfile = 'monorepo' | 'api' | 'web'
 
+export function impactValidationPlaceholders(mainBranch: string, workingBranch?: string): Record<string, string> {
+  const pullRequestBranches = [...new Set([workingBranch || mainBranch, mainBranch])]
+  return {
+    VALIDATION_MAIN_BRANCH_JSON: JSON.stringify(mainBranch),
+    CI_PR_BRANCHES_JSON: JSON.stringify(pullRequestBranches),
+    CI_PUSH_BRANCHES_JSON: JSON.stringify([...pullRequestBranches, 'rc-*'])
+  }
+}
+
 const VALIDATION_SOURCE = resolve(blueprintsPath, '../shared/validation')
 
 const PROFILE_SCRIPTS: Record<ImpactValidationProfile, Record<string, string>> = {

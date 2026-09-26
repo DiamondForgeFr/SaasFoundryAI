@@ -2,11 +2,20 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { installImpactValidation, ImpactValidationProfile } from '../../../builders/impact-validation'
+import { load } from 'js-yaml'
+
+import { impactValidationPlaceholders, installImpactValidation, ImpactValidationProfile } from '../../../builders/impact-validation'
 
 const ROOT = path.resolve(__dirname, '../../../..')
 const CLASSIFIER = path.join(ROOT, 'scaffolds/shared/validation/impact-classifier.mjs')
 const RUNNER = path.join(ROOT, 'scaffolds/shared/validation/run-impact-validation.mjs')
+
+it('serializes branch placeholders as YAML-safe JSON data instead of shell source', () => {
+  const placeholders = impactValidationPlaceholders('$(echo${IFS}PWN>&2)', 'feature/[review]')
+  expect(JSON.parse(placeholders.VALIDATION_MAIN_BRANCH_JSON)).toBe('$(echo${IFS}PWN>&2)')
+  expect(JSON.parse(placeholders.CI_PR_BRANCHES_JSON)).toEqual(['feature/[review]', '$(echo${IFS}PWN>&2)'])
+  expect(JSON.parse(placeholders.CI_PUSH_BRANCHES_JSON)).toEqual(['feature/[review]', '$(echo${IFS}PWN>&2)', 'rc-*'])
+})
 
 describe.each<ImpactValidationProfile>(['monorepo', 'api', 'web'])('%s generated impact validation', (profile) => {
   let target: string
@@ -55,9 +64,20 @@ describe.each<ImpactValidationProfile>(['monorepo', 'api', 'web'])('%s generated
     const workflow = await readFile(path.join(target, '.github/workflows/test.yml'), 'utf8')
     expect(workflow).toContain(`--profile ${profile}`)
     expect(workflow).not.toContain('{{VALIDATION_PROFILE}}')
-    expect(workflow).toContain('{{CI_PR_BRANCHES}}')
-    expect(workflow).toContain('{{MAIN_BRANCH}}')
+    expect(workflow).toContain('{{CI_PR_BRANCHES_JSON}}')
+    expect(workflow).toContain('{{CI_PUSH_BRANCHES_JSON}}')
+    expect(workflow).toContain('{{VALIDATION_MAIN_BRANCH_JSON}}')
+    expect(workflow).not.toContain('== "{{MAIN_BRANCH}}"')
     expect(workflow).toContain('scripts/saasfoundry/impact-classifier.mjs')
+    expect(workflow).toContain('services:\n      postgres:')
+    expect(workflow).toContain('needs: [classify, validate, lifecycle]')
+    expect(workflow).toContain('Malformed boolean output')
     expect(workflow).toContain('name: CI / Required gate')
+
+    const rendered = workflow
+      .replaceAll('{{VALIDATION_MAIN_BRANCH_JSON}}', JSON.stringify('main'))
+      .replaceAll('{{CI_PR_BRANCHES_JSON}}', JSON.stringify(['develop', 'main']))
+      .replaceAll('{{CI_PUSH_BRANCHES_JSON}}', JSON.stringify(['develop', 'main', 'rc-*']))
+    expect(() => load(rendered)).not.toThrow()
   })
 })

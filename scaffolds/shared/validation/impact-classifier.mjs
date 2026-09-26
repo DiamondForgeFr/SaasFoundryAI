@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 export const CONTRACT_VERSION = 1
 export const PROFILES = ['saasfoundry', 'monorepo', 'api', 'web']
 export const IMPACT_LANES = ['docs', 'frontend', 'backend', 'shared', 'harnessScaffold', 'lifecycle']
+const FULL_ESCALATION = Symbol('fullEscalation')
 
 const FULL_LANES = {
   saasfoundry: IMPACT_LANES,
@@ -90,6 +91,7 @@ function addMany(lanes, selected, code, paths) {
 }
 
 function enableFull(lanes, profile, code, paths = []) {
+  lanes[FULL_ESCALATION] = true
   addMany(lanes, FULL_LANES[profile], code, paths)
 }
 
@@ -121,8 +123,8 @@ function classifySaaSFoundryPath(path, lanes) {
 
 function classifyMonorepoPath(path, lanes) {
   if (isWorkflowOrClassifier(path) || ROOT_FULL_FILES.has(path)) return enableFull(lanes, 'monorepo', 'ROOT_OR_VALIDATION_FULL', [path])
-  if (isDocumentation(path)) return addLane(lanes, 'docs', 'DOCS_PATH', [path])
   if (isHarness(path)) return addLane(lanes, 'harnessScaffold', 'HARNESS_PATH', [path])
+  if (isDocumentation(path)) return addLane(lanes, 'docs', 'DOCS_PATH', [path])
   if (path.startsWith('apps/api/')) return addMany(lanes, ['backend', 'lifecycle'], 'API_PATH', [path])
   if (path.startsWith('apps/web/')) return addMany(lanes, ['frontend', 'lifecycle'], 'WEB_PATH', [path])
   if (path.startsWith('packages/')) return addMany(lanes, ['frontend', 'backend', 'shared', 'lifecycle'], 'SHARED_FANOUT', [path])
@@ -132,8 +134,8 @@ function classifyMonorepoPath(path, lanes) {
 
 function classifyApiPath(path, lanes) {
   if (isWorkflowOrClassifier(path) || ROOT_FULL_FILES.has(path)) return enableFull(lanes, 'api', 'ROOT_OR_VALIDATION_FULL', [path])
-  if (isDocumentation(path)) return addLane(lanes, 'docs', 'DOCS_PATH', [path])
   if (isHarness(path)) return addLane(lanes, 'harnessScaffold', 'HARNESS_PATH', [path])
+  if (isDocumentation(path)) return addLane(lanes, 'docs', 'DOCS_PATH', [path])
   if (path.startsWith('src/shared-') || path.startsWith('src/shared/')) return addMany(lanes, ['backend', 'shared', 'lifecycle'], 'SHARED_FANOUT', [path])
   if (path.startsWith('src/') || path.startsWith('prisma/') || path.startsWith('test') || path.startsWith('scripts/')) {
     return addMany(lanes, ['backend', 'lifecycle'], 'API_PATH', [path])
@@ -143,8 +145,8 @@ function classifyApiPath(path, lanes) {
 
 function classifyWebPath(path, lanes) {
   if (isWorkflowOrClassifier(path) || ROOT_FULL_FILES.has(path)) return enableFull(lanes, 'web', 'ROOT_OR_VALIDATION_FULL', [path])
-  if (isDocumentation(path)) return addLane(lanes, 'docs', 'DOCS_PATH', [path])
   if (isHarness(path)) return addLane(lanes, 'harnessScaffold', 'HARNESS_PATH', [path])
+  if (isDocumentation(path)) return addLane(lanes, 'docs', 'DOCS_PATH', [path])
   if (path.startsWith('src/shared-') || path.startsWith('src/shared/')) return addMany(lanes, ['frontend', 'shared', 'lifecycle'], 'SHARED_FANOUT', [path])
   if (path.startsWith('src/') || path.startsWith('public/') || path.startsWith('tests/') || path.startsWith('scripts/')) {
     return addMany(lanes, ['frontend', 'lifecycle'], 'WEB_PATH', [path])
@@ -190,14 +192,17 @@ export function classifyChanges({ profile, base, head, rangeMode = 'two-dot', ch
 
   for (const lane of Object.values(lanes)) lane.reasons.sort((a, b) => a.code.localeCompare(b.code))
   const mode = deferred ? 'deferred' : fallbackCode ? 'fallback-full' : forceFull ? 'forced-full' : 'selective'
-  const full = Boolean(fallbackCode || forceFull || FULL_LANES[profile].every((lane) => lanes[lane].run))
+  const full = Boolean(fallbackCode || forceFull || lanes[FULL_ESCALATION])
   const execute = !deferred
   const run = (lane) => execute && lanes[lane].run
   const plan = {
     guards: execute,
     docs: run('docs'),
-    frontend: run('frontend'),
-    backend: run('backend'),
+    // The shared command is deliberately the fan-out command for generated
+    // projects. Keep the semantic lane reasons, but do not execute the same
+    // build/lint/test suite again through frontend/backend wrappers.
+    frontend: run('frontend') && !lanes.shared.run,
+    backend: run('backend') && !lanes.shared.run,
     coreTests: execute && (full || lanes.shared.run || lanes.harnessScaffold.run),
     coverage: execute && (full || lanes.shared.run),
     harnessScaffold: run('harnessScaffold'),
@@ -229,7 +234,7 @@ export function readGitChanges({ base, head, rangeMode, cwd = process.cwd() }) {
   git(['rev-parse', '--verify', `${base}^{tree}`], cwd)
   git(['rev-parse', '--verify', `${head}^{tree}`], cwd)
   const range = rangeMode === 'three-dot' ? `${base}...${head}` : `${base}..${head}`
-  const output = git(['diff', '--name-status', '-z', '--find-renames', '--find-copies', range, '--'], cwd)
+  const output = git(['diff', '--name-status', '-z', '--find-renames', '--find-copies', '--find-copies-harder', range, '--'], cwd)
   const fields = output.split('\0')
   if (fields.at(-1) === '') fields.pop()
   const changes = []
