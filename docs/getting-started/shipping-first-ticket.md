@@ -174,8 +174,9 @@ git commit -m "feat(#42): add /api/version endpoint"
 git push -u origin feature/42-version-endpoint
 ```
 
-The pre-commit hook runs formatting, linting, the TypeScript build, package checks, and Jest. Heavy Docker lifecycle scenarios run explicitly during AI testing with `npm run test:pre-push`; the
-pre-push hook itself handles release/version and WIP guards.
+The pre-commit hook classifies the staged paths with `npm run test:staged` and runs only their configured, read-only validation lanes. For this API endpoint it selects backend checks and the relevant
+lifecycle signal; a documentation-only commit does not launch the product matrix. Heavy lifecycle evidence still runs explicitly during AI testing, while the pre-push hook handles release/version and
+WIP guards.
 
 ## Step 6 — In progress → AI testing
 

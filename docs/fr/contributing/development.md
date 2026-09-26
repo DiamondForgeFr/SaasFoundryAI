@@ -71,20 +71,26 @@ sf new --project-name local-test --structure monorepo
 | ----------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------ |
 | `npm run build`                                       | Compile TypeScript dans `dist/`                                      | Avant publication ou exécution autonome          |
 | `npm run dev`                                         | Compilation incrémentale `tsc -w`                                    | Pendant le développement                         |
-| `npm run format`                                      | Prettier sur les sources et la documentation                         | Avant commit                                     |
+| `npm run format`                                      | Applique Prettier aux sources et à la documentation                  | Avant d'indexer une modification de formatage    |
+| `npm run format:check`                                | Vérifie Prettier sans modifier les fichiers                          | Validation de formatage en lecture seule         |
 | `npm run lint`                                        | ESLint avec `eslint.config.mjs`                                      | Avant commit                                     |
 | `npm test`                                            | Projets Jest unit, integration, e2e et smoke                         | Pendant l'itération                              |
 | `npm run test:unit`                                   | Tests unitaires                                                      | Feedback rapide                                  |
 | `npm run test:integration`                            | Builders, scaffolds et installateurs                                 | Après modification de génération                 |
 | `npm run test:e2e`                                    | Surface des commandes CLI                                            | Après modification du câblage CLI                |
-| `npm run test:pre-commit`                             | format + lint + build + contrôle du package + Jest                   | Contrôle déclenché par le hook de commit         |
+| `npm run test:staged`                                 | Classe l'index Git et exécute uniquement les voies nécessaires       | Contrôle déclenché par le hook de commit         |
+| `npm run test:impact -- --base <ref> --head <ref>`    | Classe une plage Git et exécute les voies configurées                | Validation locale ciblée ou équivalente à la CI  |
+| `npm run test:pre-commit`                             | Alias de compatibilité vers `test:staged`                            | Outillage local existant                         |
 | `npm run test:pre-push`                               | Voie normale : monorepo full, multirepo full, update précédent smoke | Explicitement pendant `AI testing`               |
-| `npm run test:full`                                   | pré-commit puis pré-push                                             | Avant de déclarer une livraison terminée         |
+| `npm run test:full`                                   | Format, lint, build, package, Jest et matrice Docker complète        | Release, classifieur ou validation approfondie   |
 | `npm run test:docker:full`                            | Voie exhaustive génération + update, deux topologies                 | Release, planification ou validation approfondie |
 | `npm run test:docker:list -- --lane normal`           | Liste scénarios, profondeur navigateur et budget                     | Inspection du contrat CI                         |
 | `npm run test:docker:scenario -- <name> --depth full` | Exécute un seul cycle avec l'image partagée                          | Reproduction ciblée                              |
 
 La durée dépend de la machine et du cache ; fiez-vous aux artefacts de timing plutôt qu'à une estimation figée dans la documentation.
+
+Le classifieur élargit vers le plan complet en cas de lockfile, de configuration racine, de changement du workflow ou du classifieur, de chemin inconnu ou de plage Git invalide. Consultez
+[Validation adaptée à l'impact](/fr/guide/impact-aware-validation) pour la matrice et les commandes d'inspection.
 
 ## Commits conventionnels
 
@@ -113,13 +119,13 @@ N'utilisez pas `#000` comme échappatoire. Même la maintenance du dépôt doit 
 | Hook         | Exécution                                                  |
 | ------------ | ---------------------------------------------------------- |
 | `commit-msg` | vérification du format par commitlint                      |
-| `pre-commit` | `npm run test:pre-commit`                                  |
+| `pre-commit` | `npm run test:staged`, en lecture seule                    |
 | `pre-push`   | validations RC/tag et WIP ; aucun cycle Docker automatique |
 
-Si Prettier modifie des fichiers, le commit est interrompu. Ajoutez les fichiers formatés et créez un nouveau commit ; n'amendez pas le commit précédent.
+Le hook de pre-commit ne réécrit jamais les fichiers. Si `format:check` échoue, exécutez `npm run format`, inspectez et indexez le résultat, puis relancez le commit.
 
-Les branches/tags RC, les exécutions planifiées et les lancements manuels utilisent la voie exhaustive. Les pushes ordinaires sur `develop` et `master` ne répètent pas les builds Docker.
-`npm run test:pre-push` est exécuté et documenté pendant `AI testing`.
+Les branches et tags RC, les cibles de release protégées, les exécutions planifiées et les lancements manuels utilisent la voie exhaustive. Les pushes ordinaires et les PR prêtes classent leur plage
+Git et ne démarrent que les voies sélectionnées. La validation de cycle de vie exigée par le ticket reste exécutée et documentée pendant `AI testing`.
 
 Dans le workflow d'équipe, la PR de `Human testing` reste en brouillon pour la validation fonctionnelle. Après approbation et ajout des tests de non-régression requis,
 `workflow-cli.sh ready-pr <ticket>` la rend prête et déclenche la CI complète. `draft-pr <ticket>` permet de revenir en validation fonctionnelle.
