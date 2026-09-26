@@ -215,6 +215,35 @@ describe('enforceAtomicImpactValidationBundles', () => {
     ]
     expect(enforceAtomicImpactValidationBundles(updates)).toEqual(updates)
   })
+
+  it('discovers a later validation bundle release from any changed member', () => {
+    const updates: FileUpdate[] = [
+      { path: 'apps/acme-api/.github/workflows/test.yml', action: 'update' },
+      { path: 'apps/acme-api/.husky/pre-commit', action: 'update' }
+    ]
+    const baseHashes = {
+      'apps/acme-api/package.json': 'package-base',
+      'apps/acme-api/.github/workflows/test.yml': 'workflow-old',
+      'apps/acme-api/.husky/pre-commit': 'hook-old'
+    }
+    const currentHashes = { ...baseHashes, 'apps/acme-api/package.json': 'package-user' }
+    const targetHashes = { ...baseHashes, 'apps/acme-api/.github/workflows/test.yml': 'workflow-new', 'apps/acme-api/.husky/pre-commit': 'hook-new' }
+
+    expect(enforceAtomicImpactValidationBundles(updates, { baseHashes, currentHashes, targetHashes })).toEqual([
+      { path: 'apps/acme-api/.github/workflows/test.yml', action: 'conflict' },
+      { path: 'apps/acme-api/.husky/pre-commit', action: 'conflict' },
+      { path: 'apps/acme-api/package.json', action: 'conflict' }
+    ])
+  })
+
+  it('does not surface an unchanged user-modified bundle member by itself', () => {
+    const baseHashes = { 'package.json': 'package-base', 'README.md': 'readme-old' }
+    const currentHashes = { 'package.json': 'package-user', 'README.md': 'readme-old' }
+    const targetHashes = { 'package.json': 'package-base', 'README.md': 'readme-new' }
+    const updates: FileUpdate[] = [{ path: 'README.md', action: 'update' }]
+
+    expect(enforceAtomicImpactValidationBundles(updates, { baseHashes, currentHashes, targetHashes })).toEqual(updates)
+  })
 })
 
 describe('applyFileUpdates (conflict strategies)', () => {

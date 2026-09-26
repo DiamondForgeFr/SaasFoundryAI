@@ -307,6 +307,18 @@ describe('impact classifier Git adapter and outputs', () => {
     expect(result.stderr).toContain('Invalid impact-validation command lanes')
   })
 
+  it('rejects option-like npm script names that could turn validation into a no-op', () => {
+    dir = initRepository()
+    writeFileSync(path.join(dir, 'README.md'), 'base\n')
+    const head = commitAll(dir, 'base')
+    const config = path.join(dir, 'validation.json')
+    writeFileSync(config, JSON.stringify({ version: 1, profile: 'web', commands: validationCommands({ full: [['npm', 'run', '--if-present']] }) }))
+
+    const result = spawnSync('node', [RUNNER, '--base', head, '--head', head, '--config', config, '--full', '--dry-run'], { cwd: dir, encoding: 'utf8' })
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('Invalid command list for lane full')
+  })
+
   it('executes staged validation in the staged snapshot, not against unstaged fixes', () => {
     dir = initRepository()
     writeFileSync(path.join(dir, 'README.md'), 'base\n')
