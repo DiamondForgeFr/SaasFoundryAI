@@ -41,6 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 #### Infrastructure
 
+- Impact-aware local and GitHub validation for SaaSFoundryAI and generated monorepo/multirepo projects, with a conservative full fallback and one stable required gate
+  ([#797](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/797)).
 - Split pre-commit / pre-push checks for fast local feedback and explicit Docker validation during AI testing ([#33](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/33)).
 - Codecov integration with coverage badge in README ([#33](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/33)).
 - On-disk project schema cache with `cache-clear` escape hatch ([#137](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/137)).

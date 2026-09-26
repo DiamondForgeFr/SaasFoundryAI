@@ -71,6 +71,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       firstTicket: 'Shipping Your First Ticket',
       projectStructure: 'Project Structure',
       topology: 'Monorepo vs Multirepo',
+      impactValidation: 'Impact-aware validation',
       agentCoexistence: 'Agent Coexistence',
       hostCapabilities: 'Host Capabilities',
       localProfiles: 'Local Execution Profiles',
@@ -157,6 +158,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       firstTicket: 'Livrer votre premier ticket',
       projectStructure: 'Structure du projet',
       topology: 'Monorepo ou multirepo',
+      impactValidation: "Validation adaptée à l'impact",
       agentCoexistence: 'Coexistence des agents',
       hostCapabilities: "Capacités de l'hôte",
       localProfiles: "Profils d'exécution locale",
@@ -245,6 +247,7 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
     [prefixPath(locale, '/guide/')]: group(groups.guide, [
       page(pages.projectStructure, '/guide/project-structure'),
       page(pages.topology, '/guide/monorepo-vs-multirepo'),
+      page(pages.impactValidation, '/guide/impact-aware-validation'),
       page(pages.agentCoexistence, '/guide/agent-coexistence'),
       page(pages.hostCapabilities, '/guide/host-capabilities'),
       page(pages.localProfiles, '/guide/local-execution-profiles'),

@@ -43,6 +43,8 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 #### Infrastructure
 
+- Validation locale et GitHub adaptée à l'impact pour SaaSFoundryAI et les projets monorepo/multirepo générés, avec fallback complet conservateur et contrôle obligatoire stable
+  ([#797](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/797)).
 - Contrôles pré-commit rapides et validation Docker explicite pendant `AI testing` ([#33](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/33)).
 - Couverture Codecov et badge associé.
 - Cache local du schéma avec commande de purge ([#137](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/137)).

@@ -76,21 +76,25 @@ sf new --project-name local-test --structure monorepo
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `npm run build`                                       | `tsc` — emits `dist/`                                                                                 | Before publishing or running the CLI standalone                       |
 | `npm run dev`                                         | `tsc -w` — incremental compile while editing                                                          | While developing                                                      |
-| `npm run format`                                      | Prettier on `**/*.{js,jsx,ts,tsx,json,css,md}` (respects `.prettierignore`)                           | Before pushing — Husky's pre-commit will retry it                     |
+| `npm run format`                                      | Writes Prettier formatting for sources and documentation                                              | Before staging a formatting change                                    |
+| `npm run format:check`                                | Checks Prettier formatting without modifying files                                                    | Read-only formatting validation                                       |
 | `npm run lint`                                        | ESLint with the flat config in `eslint.config.mjs`                                                    | Before pushing                                                        |
 | `npm test`                                            | Jest across all four projects (`unit`, `integration`, `e2e`, `smoke`)                                 | While iterating                                                       |
 | `npm run test:unit`                                   | Just the unit project (fastest)                                                                       | Quick local feedback                                                  |
 | `npm run test:integration`                            | Just integration tests (filesystem builders, scaffolds, installers)                                   | When changing builders / installers                                   |
 | `npm run test:e2e`                                    | E2E tests (CLI command surface)                                                                       | When changing command wiring                                          |
-| `npm run test:pre-commit`                             | `format` + `lint` + `build` + `package:check` + `test` — what Husky runs on every commit              | Before pushing                                                        |
+| `npm run test:staged`                                 | Classifies the staged snapshot and runs only its configured validation lanes                          | What Husky runs before every commit                                   |
+| `npm run test:impact -- --base <ref> --head <ref>`    | Classifies a Git range and executes its configured validation lanes                                   | Targeted local or CI-equivalent validation                            |
+| `npm run test:pre-commit`                             | Compatibility alias for `test:staged`                                                                 | Existing local tooling                                                |
 | `npm run test:pre-push`                               | Exact normal lifecycle lane: fresh monorepo full, fresh multirepo full, previous-release update smoke | Explicitly during AI Testing before Human Testing; record the results |
-| `npm run test:full`                                   | `test:pre-commit` + `test:pre-push` — full local validation                                           | Before declaring something done                                       |
+| `npm run test:full`                                   | Format check, lint, build, package check, all Jest projects, and the full Docker lifecycle matrix     | Releases, classifier changes, and final deep validation               |
 | `npm run test:docker` / `npm run test:docker:full`    | Exhaustive four-check lane: fresh generation and update for both topologies                           | Release, scheduled, or deep local validation                          |
 | `npm run test:docker:normal`                          | The same three-check lane used by ordinary non-draft PRs                                              | Required AI Testing validation                                        |
 | `npm run test:docker:list -- --lane normal`           | Lists stable check name, scenario, browser depth, and outer budget                                    | Inspecting the CI contract                                            |
 | `npm run test:docker:scenario -- <name> --depth full` | Builds the shared image once and runs one lifecycle                                                   | Targeted reproduction                                                 |
 
-Pre-commit runs in ~15 seconds; if it stalls, prettier is reformatting a large file (most often a `.md` you just changed).
+The impact classifier fails wide: lockfiles, root build configuration, workflow/classifier changes, unknown paths, and invalid ranges select full validation. See
+[Impact-aware validation](/guide/impact-aware-validation) for the path matrix and dry-run commands.
 
 ## Conventional commits + commitlint
 
@@ -118,17 +122,16 @@ A `chore:` without a ticket is rejected. Use `chore(#000): ...` only for genuine
 
 Husky installs three hooks under `.husky/`:
 
-| Hook         | What it runs                                                             | How to bypass                                                    |
-| ------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| `commit-msg` | `commitlint` — rejects commits that don't match the convention above     | Don't. Fix the message.                                          |
-| `pre-commit` | `npm run test:pre-commit` (format + lint + build + package check + Jest) | `--no-verify` on `git commit`. Reserve for emergencies.          |
-| `pre-push`   | RC version management and WIP checks; no automatic Docker run            | Keep enabled; run heavy validation explicitly during AI Testing. |
+| Hook         | What it runs                                                            | How to bypass                                                    |
+| ------------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `commit-msg` | `commitlint` — rejects commits that don't match the convention above    | Don't. Fix the message.                                          |
+| `pre-commit` | `npm run test:staged` — read-only validation selected from staged paths | `--no-verify` on `git commit`. Reserve for emergencies.          |
+| `pre-push`   | RC version management and WIP checks; no automatic Docker run           | Keep enabled; run heavy validation explicitly during AI Testing. |
 
-If pre-commit reformats files (prettier), the commit aborts so you can stage the formatted result. **Do not amend** — `git add` the formatted files and create a new commit. The same rule appears in
-the workflow skill: pre-commit retries are the source of truth for "the commit didn't happen."
+The pre-commit hook never rewrites files. If `format:check` fails, run `npm run format`, inspect and stage the result, then create the commit again.
 
-RC branch/tag pushes, weekly schedules, and manual runs execute the exhaustive lane. Ordinary `develop`/`master` pushes do not repeat Docker builds. Run `npm run test:pre-push` during AI Testing
-before opening the Human Testing draft PR.
+RC branches and tags, protected release targets, weekly schedules, and manual runs execute the exhaustive lane. Ordinary working-branch pushes and ready PRs classify their Git range and start only the
+selected lanes. Run and record the ticket's required lifecycle validation during AI Testing before opening the Human Testing draft PR.
 
 Draft PRs provide the diff and manual test plan without running test/build CI. After human approval, push the required non-regression tests and use `workflow-cli.sh ready-pr <ticket>` to start full
 CI. Later ready-PR pushes rerun it; `draft-pr <ticket>` returns the PR to draft for further human testing and cancels obsolete CI.
