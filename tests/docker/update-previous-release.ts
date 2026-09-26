@@ -291,7 +291,9 @@ async function assertDeposits(projectRoot: string): Promise<void> {
     [web, 'web']
   ] as const) {
     const workflow = await readFile(join(path, '.github', 'workflows', 'test.yml'), 'utf8')
-    if (!workflow.includes(`--profile ${profile}`) || workflow.includes('{{')) throw new Error(`The updated ${profile} workflow is incomplete or still contains placeholders.`)
+    if (!workflow.includes(`--profile ${profile}`) || workflow.includes('{{MAIN_BRANCH}}') || workflow.includes('{{CI_PR_BRANCHES}}') || workflow.includes('{{VALIDATION_PROFILE}}')) {
+      throw new Error(`The updated ${profile} workflow is incomplete or still contains project placeholders.`)
+    }
     const packageJson = JSON.parse(await readFile(join(path, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
     if (packageJson.scripts?.['test:staged'] !== 'npm run test:impact -- --staged') throw new Error(`The updated ${profile} package is missing staged impact validation.`)
   }
