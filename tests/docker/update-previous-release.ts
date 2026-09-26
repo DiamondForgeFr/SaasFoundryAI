@@ -267,8 +267,36 @@ async function assertDeposits(projectRoot: string): Promise<void> {
     requireRegularFile(join(api, 'src', 'modules', 'storage', 'storage.module.ts')),
     requireRegularFile(join(web, 'src', 'lib', 'analytics', 'analytics.ts')),
     requireRegularFile(join(web, 'pwa.config.ts')),
-    requireRegularFile(join(web, 'public', 'pwa-192x192.png'))
+    requireRegularFile(join(web, 'public', 'pwa-192x192.png')),
+    requireRegularFile(join(api, 'scripts', 'saasfoundry', 'impact-classifier.mjs')),
+    requireRegularFile(join(api, 'scripts', 'saasfoundry', 'run-impact-validation.mjs')),
+    requireRegularFile(join(api, '.saasfoundry', 'validation.json')),
+    requireRegularFile(join(api, '.github', 'workflows', 'test.yml')),
+    requireRegularFile(join(web, 'scripts', 'saasfoundry', 'impact-classifier.mjs')),
+    requireRegularFile(join(web, 'scripts', 'saasfoundry', 'run-impact-validation.mjs')),
+    requireRegularFile(join(web, '.saasfoundry', 'validation.json')),
+    requireRegularFile(join(web, '.github', 'workflows', 'test.yml'))
   ])
+
+  const apiClassifier = await readFile(join(api, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))
+  const webClassifier = await readFile(join(web, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))
+  if (!apiClassifier.equals(webClassifier)) throw new Error('The updated multirepo apps received different impact-classifier contracts.')
+
+  const apiValidation = JSON.parse(await readFile(join(api, '.saasfoundry', 'validation.json'), 'utf8')) as { profile?: string }
+  const webValidation = JSON.parse(await readFile(join(web, '.saasfoundry', 'validation.json'), 'utf8')) as { profile?: string }
+  if (apiValidation.profile !== 'api' || webValidation.profile !== 'web') throw new Error('The updated multirepo apps received incorrect validation profiles.')
+
+  for (const [path, profile] of [
+    [api, 'api'],
+    [web, 'web']
+  ] as const) {
+    const workflow = await readFile(join(path, '.github', 'workflows', 'test.yml'), 'utf8')
+    if (!workflow.includes(`--profile ${profile}`) || workflow.includes('{{MAIN_BRANCH}}') || workflow.includes('{{CI_PR_BRANCHES}}') || workflow.includes('{{VALIDATION_PROFILE}}')) {
+      throw new Error(`The updated ${profile} workflow is incomplete or still contains project placeholders.`)
+    }
+    const packageJson = JSON.parse(await readFile(join(path, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
+    if (packageJson.scripts?.['test:staged'] !== 'npm run test:impact -- --staged') throw new Error(`The updated ${profile} package is missing staged impact validation.`)
+  }
 }
 
 async function assertHistoricalSourceCanaries(projectRoot: string, expected: ReadonlyMap<string, Buffer>): Promise<void> {

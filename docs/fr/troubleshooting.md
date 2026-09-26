@@ -134,20 +134,20 @@ Pour remapper, modifiez la variable `PORT` de l'API, `server.port` du frontend o
 ✖ scope may not be empty [scope-empty]
 ```
 
-ou Prettier reformate des fichiers et demande de les ajouter à nouveau.
+ou la vérification de formatage en lecture seule échoue sur l'index Git.
 
 **Contrôles**
 
 | Hook         | Contrôle                                                                                                 |
 | ------------ | -------------------------------------------------------------------------------------------------------- |
 | `commit-msg` | `commitlint` : `<type>(#<ticket>): <description>`                                                        |
-| `pre-commit` | format, lint, build, vérification du package et suite Jest                                               |
+| `pre-commit` | `npm run test:staged`, validation ciblée et en lecture seule de l'index Git                              |
 | `pre-push`   | cohérence RC/tag et vérifications WIP ; les cycles Docker sont lancés explicitement pendant `AI testing` |
 
 **Correction**
 
 - Utilisez un message comme `feat(#317): calibrate SRS intent detector`.
-- Si Prettier a modifié les fichiers, ajoutez-les puis créez un **nouveau** commit. Le commit interrompu n'existe pas ; `--amend` modifierait le commit précédent.
+- Si Prettier signale un écart, exécutez `npm run format`, inspectez et indexez les modifications, puis relancez le commit. Le hook ne réécrit pas les fichiers.
 - Corrigez les erreurs ESLint ou TypeScript, puis recommencez.
 - N'utilisez pas `--no-verify` pour contourner une erreur ordinaire.
 

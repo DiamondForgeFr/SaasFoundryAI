@@ -9,6 +9,7 @@ import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
+import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
 export async function createApiApp(params: CreateApiAppParams) {
   const targetDir = params.targetDir ?? '.'
@@ -208,9 +209,16 @@ export async function renderApiApp({
     [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
   ])
 
+  if (!isMonorepo) await installImpactValidation(apiPath, 'api')
+
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
-  const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')
-  await substitutePlaceholdersInFiles([`${apiPath}/.github/workflows/test.yml`, deploymentYmlPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
+  const ciPrBranchList = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])]
+  const ciPrBranches = ciPrBranchList.join(', ')
+  await substitutePlaceholdersInFiles([`${apiPath}/.github/workflows/test.yml`, deploymentYmlPath], {
+    MAIN_BRANCH: mainBranch,
+    CI_PR_BRANCHES: ciPrBranches,
+    ...impactValidationPlaceholders(mainBranch, workflow?.workingBranch)
+  })
 
   return true
 }

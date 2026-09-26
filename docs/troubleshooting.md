@@ -150,10 +150,10 @@ To pin a port at generation time instead, pass `--db-port` / `--api-port` / `--w
 ✖ scope may not be empty [scope-empty]
 ```
 
-…or pre-commit reformats files and tells you to re-stage:
+…or the staged snapshot fails a read-only formatting check:
 
 ```
-✖ Files were formatted by prettier — please git add the result and re-commit
+Code style issues found in the above file(s). Run Prettier with --write to fix.
 ```
 
 **Cause** — Three Husky hooks gate every commit:
@@ -161,14 +161,13 @@ To pin a port at generation time instead, pass `--db-port` / `--api-port` / `--w
 | Hook         | What it checks                                                                                  |
 | ------------ | ----------------------------------------------------------------------------------------------- |
 | `commit-msg` | `commitlint` — `<type>(#<ticket>): <description>` shape                                         |
-| `pre-commit` | `npm run test:pre-commit` — format + lint + build + jest                                        |
+| `pre-commit` | `npm run test:staged` — impact-selected, read-only staged validation                            |
 | `pre-push`   | RC version/tag availability validation and WIP checks; Docker runs explicitly during AI Testing |
 
 **Fix**
 
 - **commitlint failure** — Rewrite the commit message with the right shape: `feat(#317): SRS calibration` etc. The ticket scope is required.
-- **Prettier reformatted** — `git add` the formatted files and create a **new** commit. Do **not** `--amend`: the previous commit did happen, you would amend the wrong snapshot. See
-  `.claude/skills/sf-workflow/SKILL.md` for the official rationale.
+- **Prettier check failed** — Run `npm run format`, inspect the changes, stage them, and create the commit again. The hook itself never rewrites files.
 - **ESLint / TS error** — Read the output, fix the reported line, re-stage, re-commit. `--no-verify` exists but every reviewer will ask why.
 
 ## "GH not authenticated" / `gh auth status` fails

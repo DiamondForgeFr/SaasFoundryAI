@@ -10,6 +10,7 @@ import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
+import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
 export async function createWebApp(params: CreateWebAppParams) {
   const targetDir = params.targetDir ?? '.'
@@ -141,9 +142,16 @@ export async function renderWebApp({
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
 
+  if (!isMonorepo) await installImpactValidation(webPath, 'web')
+
   // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
-  const ciPrBranches = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])].join(', ')
-  await substitutePlaceholdersInFiles([`${webPath}/.github/workflows/test.yml`, deploymentYmlPath], { MAIN_BRANCH: mainBranch, CI_PR_BRANCHES: ciPrBranches })
+  const ciPrBranchList = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])]
+  const ciPrBranches = ciPrBranchList.join(', ')
+  await substitutePlaceholdersInFiles([`${webPath}/.github/workflows/test.yml`, deploymentYmlPath], {
+    MAIN_BRANCH: mainBranch,
+    CI_PR_BRANCHES: ciPrBranches,
+    ...impactValidationPlaceholders(mainBranch, workflow?.workingBranch)
+  })
 
   // Update storage enabled flag in .env
   if (s3Setup !== 'manual') {

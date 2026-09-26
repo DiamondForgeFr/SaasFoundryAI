@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { applyFileUpdates, computeFileUpdates, FileUpdate, moduleSelectionPrefill, refreshProjectHashes } from '../../../commands/update'
+import { applyFileUpdates, computeFileUpdates, enforceAtomicImpactValidationBundles, FileUpdate, moduleSelectionPrefill, refreshProjectHashes } from '../../../commands/update'
 import { hashFileContent } from '../../../utils'
 
 describe('moduleSelectionPrefill', () => {
@@ -184,6 +184,65 @@ describe('computeFileUpdates (three-way merge)', () => {
       expect(findUpdate(updates, 'new-file.ts')?.action).toBe('add')
       expect(findUpdate(updates, 'to-remove.ts')?.action).toBe('remove')
     })
+  })
+})
+
+describe('enforceAtomicImpactValidationBundles', () => {
+  it('sidecars every changed member when a generated package contract conflicts', () => {
+    const updates: FileUpdate[] = [
+      { path: 'apps/acme-api/package.json', action: 'conflict' },
+      { path: 'apps/acme-api/.github/workflows/test.yml', action: 'update' },
+      { path: 'apps/acme-api/.husky/pre-commit', action: 'update' },
+      { path: 'apps/acme-api/.saasfoundry/validation.json', action: 'add' },
+      { path: 'apps/acme-api/scripts/saasfoundry/impact-classifier.mjs', action: 'add' },
+      { path: 'README.md', action: 'update' }
+    ]
+
+    expect(enforceAtomicImpactValidationBundles(updates)).toEqual([
+      { path: 'apps/acme-api/package.json', action: 'conflict' },
+      { path: 'apps/acme-api/.github/workflows/test.yml', action: 'conflict' },
+      { path: 'apps/acme-api/.husky/pre-commit', action: 'conflict' },
+      { path: 'apps/acme-api/.saasfoundry/validation.json', action: 'conflict' },
+      { path: 'apps/acme-api/scripts/saasfoundry/impact-classifier.mjs', action: 'conflict' },
+      { path: 'README.md', action: 'update' }
+    ])
+  })
+
+  it('keeps an independently updatable validation bundle unchanged', () => {
+    const updates: FileUpdate[] = [
+      { path: '.saasfoundry/validation.json', action: 'add' },
+      { path: '.github/workflows/test.yml', action: 'update' }
+    ]
+    expect(enforceAtomicImpactValidationBundles(updates)).toEqual(updates)
+  })
+
+  it('discovers a later validation bundle release from any changed member', () => {
+    const updates: FileUpdate[] = [
+      { path: 'apps/acme-api/.github/workflows/test.yml', action: 'update' },
+      { path: 'apps/acme-api/.husky/pre-commit', action: 'update' }
+    ]
+    const baseHashes = {
+      'apps/acme-api/package.json': 'package-base',
+      'apps/acme-api/.github/workflows/test.yml': 'workflow-old',
+      'apps/acme-api/.husky/pre-commit': 'hook-old'
+    }
+    const currentHashes = { ...baseHashes, 'apps/acme-api/package.json': 'package-user' }
+    const targetHashes = { ...baseHashes, 'apps/acme-api/.github/workflows/test.yml': 'workflow-new', 'apps/acme-api/.husky/pre-commit': 'hook-new' }
+
+    expect(enforceAtomicImpactValidationBundles(updates, { baseHashes, currentHashes, targetHashes })).toEqual([
+      { path: 'apps/acme-api/.github/workflows/test.yml', action: 'conflict' },
+      { path: 'apps/acme-api/.husky/pre-commit', action: 'conflict' },
+      { path: 'apps/acme-api/package.json', action: 'conflict' }
+    ])
+  })
+
+  it('does not surface an unchanged user-modified bundle member by itself', () => {
+    const baseHashes = { 'package.json': 'package-base', 'README.md': 'readme-old' }
+    const currentHashes = { 'package.json': 'package-user', 'README.md': 'readme-old' }
+    const targetHashes = { 'package.json': 'package-base', 'README.md': 'readme-new' }
+    const updates: FileUpdate[] = [{ path: 'README.md', action: 'update' }]
+
+    expect(enforceAtomicImpactValidationBundles(updates, { baseHashes, currentHashes, targetHashes })).toEqual(updates)
   })
 })
 

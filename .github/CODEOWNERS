@@ -1,0 +1,7 @@
+# Validation policy must be approved by the repository owner. Branch protection
+# must require Code Owner review and dismiss stale approvals for this to enforce
+# the trusted-workflow boundary documented under impact-aware validation.
+/.github/CODEOWNERS @AGachet
+/.github/workflows/ @AGachet
+/scaffolds/shared/validation/ @AGachet
+/.saasfoundry/validation.json @AGachet

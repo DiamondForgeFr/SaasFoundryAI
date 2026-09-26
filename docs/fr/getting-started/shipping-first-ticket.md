@@ -173,8 +173,9 @@ git commit -m "feat(#42): add /api/version endpoint"
 git push -u origin feature/42-version-endpoint
 ```
 
-Le hook de pre-commit exécute Prettier, ESLint, TypeScript et Jest. La validation Docker lourde est exécutée explicitement pendant AI testing avant Human testing ; ne supposez pas qu'un simple push
-l'a déjà couverte.
+Le hook de pre-commit classe les chemins indexés avec `npm run test:staged` et n'exécute que les voies de validation nécessaires, sans modifier les fichiers. Pour cet endpoint API, il sélectionne les
+contrôles backend et le signal de cycle de vie concerné ; un commit limité à la documentation ne lance pas la matrice produit. Les preuves de cycle de vie lourdes restent exécutées explicitement
+pendant AI testing avant Human testing.
 
 ## Étape 6 — In progress → AI testing
 
