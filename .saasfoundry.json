@@ -22,19 +22,7 @@
     "commitFormat": {
       "pattern": "<type>(#<ticket>): <description>",
       "requireTicket": true,
-      "types": [
-        "feat",
-        "fix",
-        "docs",
-        "style",
-        "refactor",
-        "perf",
-        "test",
-        "chore",
-        "ci",
-        "build",
-        "revert"
-      ]
+      "types": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "chore", "ci", "build", "revert"]
     },
     "statuses": [
       {
@@ -99,22 +87,14 @@
         "name": "SaaSFoundryAI-srs"
       },
       "scan": {
-        "exclude": [
-          "scaffolds/",
-          "docs/",
-          ".claude/",
-          ".srs-audit/"
-        ]
+        "exclude": ["scaffolds/", "docs/", ".claude/", ".srs-audit/"]
       }
     }
   },
   "modules": {
     "harness": {
       "version": 1,
-      "agents": [
-        "claude-code",
-        "codex"
-      ]
+      "agents": ["claude-code", "codex"]
     }
   },
   "fileHashes": {
