@@ -14,7 +14,11 @@ interface Workflow {
 
 describe.each(FILES)('%s draft validation policy', (file) => {
   const workflow = load(
-    readFileSync(join(ROOT, file), 'utf8').replaceAll('{{CI_PR_BRANCHES}}', 'develop, master').replaceAll('{{MAIN_BRANCH}}', 'master').replaceAll('{{VALIDATION_PROFILE}}', 'monorepo')
+    readFileSync(join(ROOT, file), 'utf8')
+      .replaceAll('{{CI_PR_BRANCHES_JSON}}', JSON.stringify(['develop', 'master']))
+      .replaceAll('{{CI_PUSH_BRANCHES_JSON}}', JSON.stringify(['master', 'develop', 'rc-*']))
+      .replaceAll('{{VALIDATION_MAIN_BRANCH_JSON}}', JSON.stringify('master'))
+      .replaceAll('{{VALIDATION_PROFILE}}', 'monorepo')
   ) as Workflow
   it('handles draft creation, feedback pushes, reopening, promotion and returning to draft', () => {
     expect(workflow.on.pull_request.types).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft']))

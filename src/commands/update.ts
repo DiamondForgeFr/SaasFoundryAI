@@ -349,6 +349,12 @@ export interface FileUpdate {
   expectedCurrentHash?: string
 }
 
+interface FileHashComparison {
+  baseHashes: Record<string, string>
+  currentHashes: Record<string, string>
+  targetHashes: Record<string, string>
+}
+
 const IMPACT_VALIDATION_BUNDLE = [
   'package.json',
   '.husky/pre-commit',
@@ -363,18 +369,46 @@ const IMPACT_VALIDATION_BUNDLE = [
  * contract. If one member conflicts with a user edit, sidecar every changed
  * member instead of activating a half-updated bundle that cannot run.
  */
-export function enforceAtomicImpactValidationBundles(updates: FileUpdate[]): FileUpdate[] {
-  const marker = '.saasfoundry/validation.json'
-  const prefixes = updates.map(({ path }) => (path === marker ? '' : path.endsWith(`/${marker}`) ? path.slice(0, -(marker.length + 1)) : null)).filter((prefix): prefix is string => prefix !== null)
+export function enforceAtomicImpactValidationBundles(updates: FileUpdate[], hashes?: FileHashComparison): FileUpdate[] {
+  const prefixFor = (path: string): string | null => {
+    for (const member of IMPACT_VALIDATION_BUNDLE) {
+      if (path === member) return ''
+      if (path.endsWith(`/${member}`)) return path.slice(0, -(member.length + 1))
+    }
+    return null
+  }
+  const prefixes = new Set(updates.map(({ path }) => prefixFor(path)).filter((prefix): prefix is string => prefix !== null))
+  const membersByPrefix = new Map([...prefixes].map((prefix) => [prefix, new Set(IMPACT_VALIDATION_BUNDLE.map((path) => (prefix ? `${prefix}/${path}` : path)))]))
+  const conflictsByPrefix = new Map<string, Set<string>>()
 
-  const membersByPrefix = new Map(prefixes.map((prefix) => [prefix, new Set(IMPACT_VALIDATION_BUNDLE.map((path) => (prefix ? `${prefix}/${path}` : path)))]))
-  const conflicted = new Set([...membersByPrefix.entries()].filter(([, members]) => updates.some((update) => members.has(update.path) && update.action === 'conflict')).map(([prefix]) => prefix))
+  for (const [prefix, members] of membersByPrefix) {
+    const conflicts = new Set(updates.filter((update) => members.has(update.path) && update.action === 'conflict').map((update) => update.path))
+    if (hashes) {
+      for (const path of members) {
+        const base = hashes.baseHashes[path]
+        const target = hashes.targetHashes[path]
+        const current = hashes.currentHashes[path]
+        // A validation-bundle member can remain byte-identical in the new
+        // template while the user has changed or deleted it. Keep that
+        // divergence visible so another member cannot update around it.
+        if (base && target && base === target && current !== base) conflicts.add(path)
+      }
+    }
+    if (conflicts.size > 0) conflictsByPrefix.set(prefix, conflicts)
+  }
 
-  if (conflicted.size === 0) return updates
-  return updates.map((update) => {
-    const bundleConflict = [...conflicted].some((prefix) => membersByPrefix.get(prefix)?.has(update.path))
-    return bundleConflict && update.action !== 'remove' ? { ...update, action: 'conflict' as const } : update
+  if (conflictsByPrefix.size === 0) return updates
+  const result = updates.map((update) => {
+    const prefix = prefixFor(update.path)
+    return prefix !== null && conflictsByPrefix.has(prefix) && update.action !== 'remove' ? { ...update, action: 'conflict' as const } : update
   })
+  const present = new Set(result.map((update) => update.path))
+  for (const conflicts of conflictsByPrefix.values()) {
+    for (const path of conflicts) {
+      if (!present.has(path)) result.push({ path, action: 'conflict' })
+    }
+  }
+  return result
 }
 
 /**
@@ -1222,13 +1256,12 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           // Three-way comparison
           spinner.text = 'Comparing files...'
           const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
-          const updates = enforceAtomicImpactValidationBundles(
-            computeFileUpdates(
-              withoutSharedAgentHashes(manifest.fileHashes, protectClaude),
-              withoutSharedAgentHashes(currentHashes, protectClaude),
-              withoutSharedAgentHashes(targetHashes, protectClaude)
-            )
-          )
+          const comparableHashes = {
+            baseHashes: withoutSharedAgentHashes(manifest.fileHashes, protectClaude),
+            currentHashes: withoutSharedAgentHashes(currentHashes, protectClaude),
+            targetHashes: withoutSharedAgentHashes(targetHashes, protectClaude)
+          }
+          const updates = enforceAtomicImpactValidationBundles(computeFileUpdates(comparableHashes.baseHashes, comparableHashes.currentHashes, comparableHashes.targetHashes), comparableHashes)
 
           if (updates.length === 0) {
             spinner.succeed(chalk.green('No template changes to apply.'))

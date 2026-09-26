@@ -45,7 +45,7 @@ function readConfig(path, cwd) {
           command.length < 3 ||
           command[0] !== 'npm' ||
           command[1] !== 'run' ||
-          !/^[A-Za-z0-9:_-]+$/.test(command[2]) ||
+          !/^[A-Za-z0-9_:][A-Za-z0-9:_-]*$/.test(command[2]) ||
           command.some((part) => typeof part !== 'string')
       )
     ) {
