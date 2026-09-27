@@ -45,14 +45,25 @@ describe('workflow sync-pr-review (#658)', () => {
     dir = mkdtempSync(path.join(tmpdir(), 'sf-sync-review-'))
     await mkdir(path.join(dir, 'bin'))
     await mkdir(path.join(dir, '.claude/skills/sf-tool-github-projects'), { recursive: true })
-    await writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { tool: 'github-projects', workingBranch: 'develop' } }))
+    await writeFile(
+      path.join(dir, '.saasfoundry.json'),
+      JSON.stringify({
+        workflow: {
+          tool: 'github-projects',
+          workingBranch: 'develop',
+          prTargetBranch: 'develop',
+          releaseBranch: 'master',
+          branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' }
+        }
+      })
+    )
     await writeFile(path.join(dir, 'event.json'), JSON.stringify(event))
     log = path.join(dir, 'calls')
     const gh = `#!/bin/bash
 printf 'gh %s\\n' "$*" >> "$CALLS"
 case "$1 $2" in
   'pr view') [ "$FETCH_FAIL" = 1 ] && exit 1; printf '%s' "$LIVE";;
-  'pr list') printf '%s' "$LIVE" | jq '[{number,headRefName,isDraft}]';;
+  'pr list') printf '%s' "$LIVE" | jq '[{number,headRefName,baseRefName,isDraft,body,closingIssuesReferences}]';;
   *) echo 'unexpected gh request' >&2; exit 1;;
 esac
 `
@@ -107,6 +118,59 @@ esac
     expect(calls()).toContain(`gh pr view 100 --repo ${repo}`)
     expect(calls()).toContain('tool update-status 42 In review')
     expect(calls()).not.toContain('graphql')
+  })
+  it('moves the single verified release ticket for the configured RC into review', async () => {
+    const releaseEvent = {
+      ...event,
+      pull_request: {
+        ...event.pull_request,
+        head: { ...event.pull_request.head, ref: 'rc-1.0.0' },
+        base: { ...event.pull_request.base, ref: 'master' }
+      }
+    }
+    const releaseLive = {
+      ...live,
+      headRefName: 'rc-1.0.0',
+      baseRefName: 'master'
+    }
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify(releaseEvent))
+
+    expect((await run({ LIVE: JSON.stringify(releaseLive) })).code).toBe(0)
+    expect(calls()).toContain('tool update-status 42 In review')
+  })
+  it.each([
+    [[]],
+    [
+      [
+        { number: 42, url: `https://github.com/${repo}/issues/42` },
+        { number: 43, url: `https://github.com/${repo}/issues/43` }
+      ]
+    ],
+    [[{ number: 42, url: 'https://github.com/Other/Repo/issues/42' }]]
+  ] as Array<[Array<{ number: number; url: string }>]>)('rejects a release PR without exactly one same-repository closing ticket: %j', async (closingIssuesReferences) => {
+    const releaseEvent = {
+      ...event,
+      pull_request: {
+        ...event.pull_request,
+        head: { ...event.pull_request.head, ref: 'rc-1.0.0' },
+        base: { ...event.pull_request.base, ref: 'master' }
+      }
+    }
+    const releaseLive = {
+      ...live,
+      headRefName: 'rc-1.0.0',
+      baseRefName: 'master',
+      closingIssuesReferences
+    }
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify(releaseEvent))
+
+    expect((await run({ LIVE: JSON.stringify(releaseLive) })).code).toBe(2)
+    expect(changedTicket()).toBe(false)
+  })
+  it('rejects a conventional feature branch targeting the release branch before any GitHub call', async () => {
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, pull_request: { ...event.pull_request, base: { ...event.pull_request.base, ref: 'master' } } }))
+    expect((await run()).code).toBe(2)
+    expect(calls()).toBe('')
   })
   it.each(['In review', 'Done'])('is idempotent when ticket is %s', async (status) => {
     expect((await run({ STATUS: status })).code).toBe(0)

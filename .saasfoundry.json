@@ -139,6 +139,6 @@
     ".agents/skills/sf-workflow/statuses/5-human-testing.md": "3b99530974d8fa72f4578c31f037565e4e9be882f0471cc14854e67162c5e42a",
     ".agents/skills/sf-workflow/statuses/6-in-review.md": "45ef602930b687818f4b32f1ed1544bf152a7115ad0d87c8ee7a27c5c83a1ec5",
     ".agents/skills/sf-workflow/statuses/7-done.md": "998216a270f6c80bb530c5c3d58e41bad05680b174c2477da36afdb11ce5e3fc",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "8800a91650e5a7347d8e98c89206e19a923449f12df89633d929947b9225fb0f"
+    ".agents/skills/sf-workflow/workflow-cli.sh": "8b391fe1fd86ea77f1d3f2bbae8b50b0d20fe483410e7073e5be02e04ebbe8bf"
   }
 }

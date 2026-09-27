@@ -843,13 +843,21 @@ sync_pr_review() {
   fi
   load_config
   [[ "$WORKFLOW_TOOL" == github-projects ]] || { echo "Error: review synchronization requires github-projects." >&2; return 2; }
-  local event live target_branch
-  target_branch=$(jq -er '.workflow.prTargetBranch // .workflow.workingBranch // "develop"' .saasfoundry.json) || return 2
-  event=$(jq -ce --arg repo "$repo" --argjson n "$pr_number" --arg base "$target_branch" '
-    select(.action == "ready_for_review" and .number == $n and .repository.full_name == $repo)
+  local event live
+  event=$(jq -ce --arg repo "$repo" --argjson n "$pr_number" --slurpfile manifest .saasfoundry.json '
+    def literal:
+      explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
+        then [92,$c] else [$c] end) | flatten | implode;
+    ($manifest[0].workflow.prTargetBranch // $manifest[0].workflow.workingBranch // "develop") as $target_branch
+    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
+    | (($manifest[0].workflow.branchNaming.release // "rc-{version}")
+      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
+    | select(.action == "ready_for_review" and .number == $n and .repository.full_name == $repo)
     | .pull_request
     | select(.number == $n and .state == "open" and .draft == false
-      and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .base.ref == $base)
+      and .base.repo.full_name == $repo and .head.repo.full_name == $repo
+      and (.base.ref == $target_branch
+        or (.base.ref == $release_branch and (.head.ref | test($release_pattern)))))
     | select((.head.ref | type) == "string" and (.head.sha | test("^[0-9a-f]{40}$"))
       and (.base.sha | test("^[0-9a-f]{40}$")))
     | {number, head: .head.ref, headSha: .head.sha, base: .base.ref, baseSha: .base.sha}
@@ -880,22 +888,34 @@ sync_pr_review() {
     echo "Skipped stale ready event: live PR state, repository or target branch changed; no ticket changed."
     return 0
   fi
-  local ticket
-  ticket=$(jq -er --arg branch "$(echo "$live" | jq -r .headRefName)" '
+  local ticket server=${GITHUB_SERVER_URL:-https://github.com}
+  ticket=$(echo "$live" | jq -er --slurpfile manifest .saasfoundry.json --arg server "${server%/}" --arg repo "$repo" '
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
         then [92,$c] else [$c] end) | flatten | implode;
     def pattern_piece: split("{description}") | map(literal) | join(".+");
-    [.workflow.branchNaming.feature // "feature/{N}-{description}",
-     .workflow.branchNaming.fix // "fix/{N}-{description}"]
+    . as $live
+    | [$manifest[0].workflow.branchNaming.feature // "feature/{N}-{description}",
+       $manifest[0].workflow.branchNaming.fix // "fix/{N}-{description}"]
     | map(select(type == "string") | split("{N}") | select(length == 2)
       | "^" + (.[0] | pattern_piece) + "(?<ticket>[1-9][0-9]*)" + (.[1] | pattern_piece) + "$")
-    | [.[] as $pattern | $branch | try capture($pattern).ticket catch empty]
-    | unique | if length == 1 then .[0] else error("Ambiguous ticket branch") end
-  ' .saasfoundry.json 2>/dev/null) || {
-    echo "Error: PR branch does not identify one ticket under the configured naming patterns." >&2; return 2;
+    | [.[] as $pattern | $live.headRefName | try capture($pattern).ticket catch empty]
+    | unique as $branch_tickets
+    | (($manifest[0].workflow.branchNaming.release // "rc-{version}")
+      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
+    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
+    | if ($branch_tickets | length) == 1 then $branch_tickets[0]
+      elif ($branch_tickets | length) > 1 then error("Ambiguous ticket branch")
+      elif ($live.headRefName | test($release_pattern)) and $live.baseRefName == $release_branch then
+        [$live.closingIssuesReferences[]
+          | select(.url == ($server + "/" + $repo + "/issues/" + (.number | tostring)))
+          | .number | tostring]
+        | unique
+        | if length == 1 then .[0] else error("Ambiguous release ticket") end
+      else error("Unrecognized ticket branch") end
+  ' 2>/dev/null) || {
+    echo "Error: PR does not identify exactly one verified ticket under the configured branch or release rules." >&2; return 2;
   }
-  local server=${GITHUB_SERVER_URL:-https://github.com}
   if ! echo "$live" | jq -e --argjson n "$ticket" --arg url "${server%/}/${repo}/issues/${ticket}" '
     any(.closingIssuesReferences[]; .number == $n and .url == $url)
   ' >/dev/null 2>&1; then
