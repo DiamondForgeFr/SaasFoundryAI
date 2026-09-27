@@ -17,11 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # pull_request_target supplies the trusted default-branch commit.
-      # Never check out the PR head or an arbitrary PR target branch.
-      - uses: actions/checkout@v4
+      # workflow_sha is the trusted commit that supplied this default-branch
+      # workflow. github.sha would instead point at the PR base (master for an
+      # RC) and could load a stale lifecycle CLI.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
       - name: Sync the linked ticket through the guarded workflow
         env:
