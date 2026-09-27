@@ -194,6 +194,19 @@ describe('sf-workflow CLI — PR-existence guard (→ In Review)', () => {
     expect(res.code).toBe(0)
   })
 
+  it('allows an explicit closing directive when GitHub omits release PR closing references', async () => {
+    sandbox = await buildSandbox('[{"number":807,"isDraft":true,"headRefName":"rc-1.0.0","baseRefName":"master","body":"Summary\\n\\nCloses #42\\n","closingIssuesReferences":[]}]')
+    const res = await runCli(['update-status', '42', 'Human testing'], sandbox)
+    expect(res.code).toBe(0)
+  })
+
+  it('does not mistake an incidental release PR issue mention for a closing directive', async () => {
+    sandbox = await buildSandbox('[{"number":807,"isDraft":true,"headRefName":"rc-1.0.0","baseRefName":"master","body":"Evidence: #42","closingIssuesReferences":[]}]')
+    const res = await runCli(['update-status', '42', 'Human testing'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('has no open PR')
+  })
+
   it.each([
     ['develop', [{ number: 42 }]],
     ['master', [{ number: 488 }]],

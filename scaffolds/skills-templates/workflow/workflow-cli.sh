@@ -716,7 +716,7 @@ check_pr_existence_guard() {
     echo "Error: nature:bundled-pr tickets cannot enter Human Testing or In Review; use AI Testing → Done." >&2
     return 1
   fi
-  payload=$(gh pr list --state open --limit 1000 --json number,headRefName,baseRefName,isDraft,closingIssuesReferences 2>/dev/null) || {
+  payload=$(gh pr list --state open --limit 1000 --json number,headRefName,baseRefName,isDraft,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to verify PR state; no status transition was made." >&2; return 1;
   }
   matches=$(echo "$payload" | jq -ce --arg t "$ticket" --slurpfile manifest .saasfoundry.json '
@@ -738,8 +738,12 @@ check_pr_existence_guard() {
           ((.headRefName | type) == "string"
             and (.headRefName | test($release_pattern))
             and .baseRefName == $release_branch
-            and ((.closingIssuesReferences // []) | type) == "array"
-            and any((.closingIssuesReferences // [])[]; (.number | tostring) == $t))
+            and (
+              (((.closingIssuesReferences // []) | type) == "array"
+                and any((.closingIssuesReferences // [])[]; (.number | tostring) == $t))
+              or
+              ((.body // "") | test("(?im)^\\s*(close[sd]?|fix(e[sd])?|resolve[sd]?)\\s+#" + $t + "(\\s|$)"))
+            ))
         )]
       else error("Expected PR array") end') || {
     echo "Error: invalid PR response; no status transition was made." >&2; return 1;
