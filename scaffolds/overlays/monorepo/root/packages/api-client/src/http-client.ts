@@ -41,6 +41,14 @@ export function setApiBaseUrl(resolver: string | (() => string)): void {
  */
 let onUnauthorized: (() => void) | null = null
 
+const ACCOUNT_DISABLED_MESSAGE = 'This account is disabled'
+
+const isSessionInvalidatingUnauthorized = (status: number, body: unknown): boolean => {
+  if (status !== 401) return false
+  if (typeof body !== 'object' || body === null || !('message' in body)) return true
+  return (body as { message?: unknown }).message !== ACCOUNT_DISABLED_MESSAGE
+}
+
 export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler
 }
@@ -87,10 +95,12 @@ export const apiClientMutator = async <T>(config: ApiClientRequestConfig): Promi
 
   const response = await fetch(url, init)
 
-  if (response.status === 401 && onUnauthorized) onUnauthorized()
-
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}))
+    // A disabled account keeps a valid authentication cookie and must retain authMe so the
+    // application can route to /account/reactivation. Genuine auth failures still tear down
+    // the cached session through the registered handler.
+    if (isSessionInvalidatingUnauthorized(response.status, errorBody) && onUnauthorized) onUnauthorized()
     const error = new Error(
       typeof errorBody === 'object' && errorBody !== null && 'message' in errorBody
         ? String((errorBody as { message: unknown }).message)
