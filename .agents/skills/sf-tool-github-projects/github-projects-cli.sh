@@ -1238,7 +1238,7 @@ pr_branch_context() {
 # Empty JSON array is a known absence; failed/malformed/ambiguous reads are errors.
 read_branch_pr() {
   local payload
-  payload=$(gh pr list --head "$CURRENT_BRANCH" --state open --limit 100 --json number,url,headRefName,headRefOid,isDraft,baseRefName,isCrossRepository,closingIssuesReferences 2>/dev/null) || {
+  payload=$(gh pr list --head "$CURRENT_BRANCH" --state open --limit 100 --json number,url,headRefName,headRefOid,isDraft,baseRefName,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to read open PRs. Retry after restoring GitHub access." >&2; return 1;
   }
   BRANCH_PRS=$(echo "$payload" | jq -ce --arg branch "$CURRENT_BRANCH" '
@@ -1251,21 +1251,15 @@ read_branch_pr() {
     echo "Error: ambiguous or incomplete PR state for ${CURRENT_BRANCH}." >&2; return 1;
   }
   if [[ "$PR_CONTEXT_KIND" == release ]]; then
-    local repo server issue_prefix issue_url
-    repo=$(get_repo_owner_name)
-    server=${GITHUB_SERVER_URL:-https://github.com}
-    issue_prefix="${server%/}/${repo}/issues/"
-    issue_url="${issue_prefix}${PR_TICKET}"
-    if [[ -z "$repo" ]] || ! echo "$BRANCH_PRS" | jq -e \
-      --arg base "$PR_TARGET_BRANCH" --arg prefix "$issue_prefix" --arg issue "$issue_url" '
+    if ! echo "$BRANCH_PRS" | jq -e \
+      --arg base "$PR_TARGET_BRANCH" --arg ticket "$PR_TICKET" '
         length == 1
         and .[0].baseRefName == $base
         and .[0].isCrossRepository == false
-        and ([.[] | .closingIssuesReferences[]?
-          | select((.url | type) == "string" and (.url | startswith($prefix)))]
-          | length == 1 and .[0].url == $issue)
+        and ([.[] | .body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]]
+          | unique) == [$ticket]
       ' >/dev/null 2>&1; then
-      echo "Error: release PR must target ${PR_TARGET_BRANCH} and close exactly ticket #${PR_TICKET} in this repository." >&2
+      echo "Error: release PR must target ${PR_TARGET_BRANCH} and contain exactly 'Closes #${PR_TICKET}'." >&2
       return 1
     fi
   fi

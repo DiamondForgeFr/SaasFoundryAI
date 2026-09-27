@@ -13,6 +13,7 @@ const releasePr = {
   headRefName: 'rc-1.0.0',
   baseRefName: 'master',
   isCrossRepository: false,
+  body: 'Release candidate\n\nCloses #42',
   closingIssuesReferences: [{ number: 42, url: 'https://github.com/FakeOrg/FakeRepo/issues/42' }]
 }
 
@@ -114,22 +115,14 @@ esac
     expect((await run(['ready-pr', '42'], { BRANCH: 'rc-1.0.0', PRS: JSON.stringify([releasePr]) })).code).toBe(0)
     expect(calls()).toContain('pr ready 123')
   })
-  it.each([
-    { baseRefName: 'develop' },
-    { isCrossRepository: true },
-    { closingIssuesReferences: [] },
-    { closingIssuesReferences: [{ number: 43, url: 'https://github.com/FakeOrg/FakeRepo/issues/43' }] },
-    {
-      closingIssuesReferences: [
-        { number: 42, url: 'https://github.com/FakeOrg/FakeRepo/issues/42' },
-        { number: 43, url: 'https://github.com/FakeOrg/FakeRepo/issues/43' }
-      ]
+  it.each([{ baseRefName: 'develop' }, { isCrossRepository: true }, { body: '' }, { body: 'Closes #43' }, { body: 'Closes #42\nCloses #43' }, { body: 'Resolves #42' }])(
+    'refuses a release PR with an unverified delivery link: %j',
+    async (changes) => {
+      const result = await run(['ready-pr', '42'], { BRANCH: 'rc-1.0.0', PRS: JSON.stringify([{ ...releasePr, ...changes }]) })
+      expect(result.code).not.toBe(0)
+      expect(calls()).not.toContain('pr ready')
     }
-  ])('refuses a release PR with an unverified delivery link: %j', async (changes) => {
-    const result = await run(['ready-pr', '42'], { BRANCH: 'rc-1.0.0', PRS: JSON.stringify([{ ...releasePr, ...changes }]) })
-    expect(result.code).not.toBe(0)
-    expect(calls()).not.toContain('pr ready')
-  })
+  )
   it.each([
     { PRS: '[]' },
     { PRS: JSON.stringify([pr, { ...pr, number: 124 }]) },

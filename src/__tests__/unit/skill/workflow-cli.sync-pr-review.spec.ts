@@ -34,6 +34,7 @@ const live = {
   headRepository: { name: 'FakeRepo' },
   headRepositoryOwner: { login: 'FakeOrg' },
   isCrossRepository: false,
+  body: 'Delivery\n\nCloses #42',
   closingIssuesReferences: [{ number: 42, url: `https://github.com/${repo}/issues/42` }]
 }
 
@@ -131,23 +132,15 @@ esac
     const releaseLive = {
       ...live,
       headRefName: 'rc-1.0.0',
-      baseRefName: 'master'
+      baseRefName: 'master',
+      closingIssuesReferences: []
     }
     await writeFile(path.join(dir, 'event.json'), JSON.stringify(releaseEvent))
 
     expect((await run({ LIVE: JSON.stringify(releaseLive) })).code).toBe(0)
     expect(calls()).toContain('tool update-status 42 In review')
   })
-  it.each([
-    [[]],
-    [
-      [
-        { number: 42, url: `https://github.com/${repo}/issues/42` },
-        { number: 43, url: `https://github.com/${repo}/issues/43` }
-      ]
-    ],
-    [[{ number: 42, url: 'https://github.com/Other/Repo/issues/42' }]]
-  ] as Array<[Array<{ number: number; url: string }>]>)('rejects a release PR without exactly one same-repository closing ticket: %j', async (closingIssuesReferences) => {
+  it.each([[''], ['Closes #42\nCloses #43'], ['Resolves #42']] as Array<[string]>)('rejects a release PR without exactly one explicit closing directive: %j', async (body) => {
     const releaseEvent = {
       ...event,
       pull_request: {
@@ -160,7 +153,8 @@ esac
       ...live,
       headRefName: 'rc-1.0.0',
       baseRefName: 'master',
-      closingIssuesReferences
+      body,
+      closingIssuesReferences: []
     }
     await writeFile(path.join(dir, 'event.json'), JSON.stringify(releaseEvent))
 

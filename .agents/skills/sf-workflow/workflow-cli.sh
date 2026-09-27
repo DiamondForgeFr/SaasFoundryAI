@@ -830,7 +830,9 @@ show_next_status() {
 # Main command dispatcher
 # Ready-for-review events run from the trusted base checkout, never PR code.
 # The branch convention identifies the only ticket eligible for synchronization;
-# GitHub's live native issue references confirm the association independently.
+# GitHub's live native issue references confirm ordinary delivery branches. Release
+# PRs target a non-default branch, so GitHub does not populate that field for them;
+# an exact `Closes #N` directive in the live PR body is their guarded association.
 sync_pr_review() {
   if [[ "$#" -ne 1 || ! "$1" =~ ^[1-9][0-9]*$ ]]; then
     echo "Usage: workflow-cli.sh sync-pr-review <pr-number>" >&2
@@ -865,7 +867,7 @@ sync_pr_review() {
     echo "Error: event is malformed, stale, cross-repository or not ready_for_review; no ticket changed." >&2
     return 2
   }
-  live=$(gh pr view "$pr_number" --repo "$repo" --json number,url,state,isDraft,headRefName,headRefOid,baseRefName,baseRefOid,headRepository,headRepositoryOwner,isCrossRepository,closingIssuesReferences 2>/dev/null) || {
+  live=$(gh pr view "$pr_number" --repo "$repo" --json number,url,state,isDraft,headRefName,headRefOid,baseRefName,baseRefOid,headRepository,headRepositoryOwner,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to fetch live PR metadata; no ticket changed." >&2; return 2;
   }
   if ! echo "$live" | jq -e '
@@ -874,7 +876,7 @@ sync_pr_review() {
     and (.headRefName | type) == "string" and (.baseRefName | type) == "string"
     and (.headRefOid | test("^[0-9a-f]{40}$")) and (.baseRefOid | test("^[0-9a-f]{40}$"))
     and (.headRepositoryOwner.login | type) == "string" and (.headRepository.name | type) == "string"
-    and (.closingIssuesReferences | type) == "array"
+    and (.body | type) == "string" and (.closingIssuesReferences | type) == "array"
   ' >/dev/null 2>&1; then
     echo "Error: malformed live PR metadata; no ticket changed." >&2
     return 2
@@ -907,19 +909,25 @@ sync_pr_review() {
     | if ($branch_tickets | length) == 1 then $branch_tickets[0]
       elif ($branch_tickets | length) > 1 then error("Ambiguous ticket branch")
       elif ($live.headRefName | test($release_pattern)) and $live.baseRefName == $release_branch then
-        [$live.closingIssuesReferences[]
-          | select(.url == ($server + "/" + $repo + "/issues/" + (.number | tostring)))
-          | .number | tostring]
+        [$live.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]]
         | unique
         | if length == 1 then .[0] else error("Ambiguous release ticket") end
       else error("Unrecognized ticket branch") end
   ' 2>/dev/null) || {
     echo "Error: PR does not identify exactly one verified ticket under the configured branch or release rules." >&2; return 2;
   }
-  if ! echo "$live" | jq -e --argjson n "$ticket" --arg url "${server%/}/${repo}/issues/${ticket}" '
-    any(.closingIssuesReferences[]; .number == $n and .url == $url)
+  if ! echo "$live" | jq -e --slurpfile manifest .saasfoundry.json --argjson n "$ticket" --arg url "${server%/}/${repo}/issues/${ticket}" '
+    def literal:
+      explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
+        then [92,$c] else [$c] end) | flatten | implode;
+    (($manifest[0].workflow.branchNaming.release // "rc-{version}")
+      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
+    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
+    | if (.headRefName | test($release_pattern)) and .baseRefName == $release_branch then
+        ([.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] | unique) == [($n | tostring)]
+      else any(.closingIssuesReferences[]; .number == $n and .url == $url) end
   ' >/dev/null 2>&1; then
-    echo "Error: PR has no verified native closing reference to ticket #${ticket}; no ticket changed." >&2
+    echo "Error: PR has no verified closing association to ticket #${ticket}; no ticket changed." >&2
     return 2
   fi
   local status labels nature GH_REPO="$repo"
