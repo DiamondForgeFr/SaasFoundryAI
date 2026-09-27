@@ -41,7 +41,7 @@ scaffolding, modules, workflow, tickets. There is no CLI to learn first.
 
 ```bash
 # Installs the tool-saasfoundry skill at user scope, into ~/.claude/skills/tool-saasfoundry/
-npx saasfoundryai-cli@beta skill install --yes --force
+npx saasfoundryai-cli skill install --yes --force
 
 # Use --project instead to commit the skill with the repo and share it with the team
 ```
@@ -191,10 +191,10 @@ Every step above has a CLI equivalent, and driving it yourself is a supported pa
 
 ```bash
 # Execute directly (no global install needed)
-npx saasfoundryai-cli@beta new
+npx saasfoundryai-cli new
 
 # OR install the CLI globally
-npm install -g saasfoundryai-cli@beta
+npm install -g saasfoundryai-cli
 sf new       # or: saasfoundry new
 ```
 
@@ -369,7 +369,7 @@ The CLI tracks your project with a `.saasfoundry.json` manifest:
 
 ```json
 {
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "structure": "monorepo",
   "modules": {
     "emailService": "mailersend",

@@ -186,8 +186,13 @@ Releases run from `master`. RC Git hooks validate state but never mutate commits
 2. Before the first push, run `npm version X.Y.Z --no-git-tag-version`, update the changelog, and commit both with the release ticket scope.
 3. Push the RC branch and open its PR to `master`. The branch version must match `X.Y.Z`, and the full Docker matrix must pass.
 4. Merge with a merge commit, update the local `master`, verify its exact commit and package contents, then create and push the annotated `vX.Y.Z` tag.
-5. Publish `saasfoundryai-cli@X.Y.Z` from that verified `master` commit and confirm the `latest` dist-tag.
+5. Wait for the tag CI, then dispatch **Publish stable package** from and for the exact `vX.Y.Z` tag with `gh workflow run publish-stable.yml --ref vX.Y.Z -f tag=vX.Y.Z`. The protected
+   `npm-production` environment must hold the one-use or granular `NPM_TOKEN`; the workflow verifies the event ref, tag and package identity before running
+   `npm publish --provenance --access public --tag latest`.
 6. Synchronize the release commit back to `develop` and verify a clean global install.
+
+The `npm-production` environment should require a maintainer review. The first publish needs the token to claim the package; after the package exists, configure npm trusted publishing and remove the
+stored token. Never dispatch the workflow from a branch or before the tag's exhaustive CI is green.
 
 The v1 release also has divergent legacy `master` history. Its RC branch must first record that history with `git merge -s ours --no-ff origin/master`; see release ticket #488 for the verified
 commands. Do not use `-X ours`, which can retain non-conflicting stale files.

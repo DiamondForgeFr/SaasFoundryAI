@@ -19,7 +19,7 @@ Aucun parcours n'est plus puissant que l'autre. Le parcours assistant pilote le 
 Partez du dossier qui doit contenir le nouveau projet :
 
 ```bash
-npx saasfoundryai-cli@beta new
+npx saasfoundryai-cli new
 # ou, après une installation globale :
 sf new
 ```
@@ -69,7 +69,7 @@ Le bootstrap assistant en une phrase est aujourd'hui natif pour **Claude Code** 
 Il installe le skill utilisateur `tool-saasfoundry` avec :
 
 ```bash
-npx saasfoundryai-cli@beta skill install --yes --force
+npx saasfoundryai-cli skill install --yes --force
 ```
 
 Le skill orchestre ensuite le même CLI. Il ne répond jamais aux questions Inquirer interactives et ne génère jamais les fichiers du scaffold à la main.

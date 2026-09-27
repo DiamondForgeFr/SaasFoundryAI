@@ -19,7 +19,7 @@ Neither path is more capable. The assistant path is a conversational controller 
 Start from the folder that should contain the new project:
 
 ```bash
-npx saasfoundryai-cli@beta new
+npx saasfoundryai-cli new
 # or, after a global install:
 sf new
 ```
@@ -67,7 +67,7 @@ The one-line assistant bootstrap is currently native to **Claude Code**:
 It installs the user-scoped `tool-saasfoundry` skill with:
 
 ```bash
-npx saasfoundryai-cli@beta skill install --yes --force
+npx saasfoundryai-cli skill install --yes --force
 ```
 
 The skill then orchestrates the same CLI. It never answers interactive Inquirer prompts and never writes scaffold files by hand.

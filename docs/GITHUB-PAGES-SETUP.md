@@ -16,7 +16,7 @@ The near-term answer for users is **not** this site: the built documentation shi
 
 ```bash
 npm run docs:dev     # http://localhost:5176
-npm run docs:build   # static output in docs/.vitepress/dist
+npm run docs:build   # static output in docs-dist
 npm run docs:preview
 ```
 

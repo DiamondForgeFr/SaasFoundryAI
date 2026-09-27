@@ -21,7 +21,7 @@ existants, l'installation globale et les profils d'agents pris en charge.
 Aucune installation globale n'est nécessaire :
 
 ```bash
-npx saasfoundryai-cli@beta new
+npx saasfoundryai-cli new
 ```
 
 Vous préférez une conversation guidée par l'IA ? Le guide [Installation par CLI ou assistant](/fr/getting-started/setup-paths) explique les deux parcours. Ils utilisent le même moteur de configuration

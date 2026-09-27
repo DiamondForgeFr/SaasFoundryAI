@@ -22,7 +22,7 @@ For Claude Code, give the assistant this line from the folder you want to work i
 The current user-scope bootstrap installs `tool-saasfoundry` into Claude Code's skill directory:
 
 ```bash
-npx saasfoundryai-cli@beta skill install --yes --force
+npx saasfoundryai-cli skill install --yes --force
 ```
 
 Use `--project` to place that meta-skill in the repository for review and team sharing.
@@ -44,13 +44,13 @@ Generated projects use npm workspaces and a `package-lock.json`. yarn and pnpm a
 You can execute the CLI without a global install:
 
 ```bash
-npx saasfoundryai-cli@beta new
+npx saasfoundryai-cli new
 ```
 
 Or install it globally:
 
 ```bash
-npm install -g saasfoundryai-cli@beta
+npm install -g saasfoundryai-cli
 sf --version
 ```
 

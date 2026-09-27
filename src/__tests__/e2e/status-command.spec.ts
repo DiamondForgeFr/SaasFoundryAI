@@ -87,7 +87,12 @@ describe('status command (E2E)', () => {
   })
 
   it('accepts both compiled CLI aliases with identical output and failure semantics', () => {
-    const run = (...args: string[]) => spawnSync(process.execPath, [join(CLI_ROOT, 'bin/sf.js'), 'status', '--no-network', ...args], { cwd: tempDir, encoding: 'utf8' })
+    const run = (...args: string[]) =>
+      spawnSync(process.execPath, [join(CLI_ROOT, 'bin/sf.js'), 'status', '--no-network', ...args], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        env: { ...process.env, SF_SKILL_NO_WARN: '1' }
+      })
     const neutral = run('--agent-friendly')
     const legacy = run('--claude-friendly')
     expect(neutral.status).toBe(0)
