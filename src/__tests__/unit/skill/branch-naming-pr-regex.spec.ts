@@ -8,25 +8,27 @@ const CLI = path.resolve(REPO_ROOT, '.claude/skills/sf-workflow/workflow-cli.sh'
 const TEMPLATE_CLI = path.resolve(REPO_ROOT, 'scaffolds/skills-templates/workflow/workflow-cli.sh')
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lock the generated branch-naming convention to the PR-resolution regex.
-//
-// THE BUG THIS GUARDS AGAINST: sf-workflow's get_open_pr_for_ticket() resolves a
-// ticket's open PR via `^(feature|fix)/<ticket>(-|$)`, which REQUIRES the ticket
-// number immediately after the prefix. If DEFAULT_BRANCH_NAMING ever drops the
-// `{N}` ticket prefix (the historical `fix/{name}` form), a branch built from the
-// convention never matches → the In-Review / Done PR guards mis-fire and users are
-// forced to set SF_WORKFLOW_BYPASS_* on every ticket. This test ties both sides
-// together so the regression cannot reappear silently from either edit.
+// Lock the generated branch-naming convention to the manifest-driven PR
+// resolver. The historical resolver hard-coded the feature/fix prefix and could
+// stop matching a custom convention even though the manifest declared it valid.
+// The CLI now derives anchored expressions from branchNaming for ordinary
+// delivery and release PRs.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Rebuild the JS equivalent of the shell regex straight from the CLI source, so a
-// change to the regex shape (not just the convention) also trips this test.
-function regexForTicket(cliPath: string, ticket: string): RegExp {
-  const src = readFileSync(cliPath, 'utf8')
-  // Matches: test("^(feature|fix)/" + $t + "(-|$)")
-  const m = src.match(/test\("(\^\([^"]+\)\/)"\s*\+\s*\$t\s*\+\s*"(\([^"]+\))"\)/)
-  if (!m) throw new Error(`Could not locate the PR-resolution regex in ${cliPath}`)
-  return new RegExp(`${m[1]}${ticket}${m[2]}`)
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^{}$()|[\]\\]/g, '\\$&')
+}
+
+function regexFromPattern(pattern: string, ticket: string): RegExp {
+  const source = pattern
+    .split(/(\{(?:N|ticket|number|issue-number)\}|\{(?:description|name)\}|\{version\})/)
+    .map((part) => {
+      if (/^\{(?:N|ticket|number|issue-number)\}$/.test(part)) return escapeRegex(ticket)
+      if (/^\{(?:description|name|version)\}$/.test(part)) return '.+'
+      return escapeRegex(part)
+    })
+    .join('')
+  return new RegExp('^' + source + '$')
 }
 
 // Render a branchNaming pattern into a concrete branch name with a fake ticket.
@@ -34,14 +36,14 @@ function renderBranch(pattern: string, ticket: string, slug: string): string {
   return pattern.replace(/\{(N|ticket|number|issue-number)\}/g, ticket).replace(/\{(description|name)\}/g, slug)
 }
 
-describe('branchNaming defaults stay in lock-step with the PR-resolution regex', () => {
+describe('branchNaming defaults stay in lock-step with the manifest-driven PR resolver', () => {
   const FAKE_TICKET = '123'
 
   it.each([
     ['feature', DEFAULT_BRANCH_NAMING.feature],
     ['fix', DEFAULT_BRANCH_NAMING.fix]
-  ])('a %s branch built from the convention matches ^(feature|fix)/<ticket>(-|$)', (_type, pattern) => {
-    const regex = regexForTicket(CLI, FAKE_TICKET)
+  ])('a %s branch built from the convention matches its anchored manifest pattern', (_type, pattern) => {
+    const regex = regexFromPattern(pattern, FAKE_TICKET)
     const branch = renderBranch(pattern, FAKE_TICKET, 'do-the-thing')
 
     // The ticket prefix must actually be substituted (no leftover placeholder).
@@ -53,21 +55,41 @@ describe('branchNaming defaults stay in lock-step with the PR-resolution regex',
   it.each([
     ['feature', DEFAULT_BRANCH_NAMING.feature],
     ['fix', DEFAULT_BRANCH_NAMING.fix]
-  ])('a %s branch WITHOUT the ticket prefix does NOT match (the original bug)', (_type, pattern) => {
-    const regex = regexForTicket(CLI, FAKE_TICKET)
+  ])('a %s branch without the ticket prefix does not match', (_type, pattern) => {
+    const regex = regexFromPattern(pattern, FAKE_TICKET)
     const prefix = pattern.split('/')[0] // "feature" | "fix"
     const noTicketBranch = `${prefix}/some-change`
 
     expect(noTicketBranch).not.toMatch(regex)
   })
 
-  it('the template CLI and the installed CLI carry the same PR-resolution regex', () => {
-    // The skill ships from scaffolds/skills-templates/workflow → regenerating it
-    // must not silently re-introduce a divergent regex.
-    expect(regexForTicket(TEMPLATE_CLI, FAKE_TICKET).source).toBe(regexForTicket(CLI, FAKE_TICKET).source)
+  it('the installed and template CLIs resolve feature, fix, and release patterns from the manifest', () => {
+    for (const cliPath of [CLI, TEMPLATE_CLI]) {
+      const source = readFileSync(cliPath, 'utf8')
+      expect(source).toContain('workflow.branchNaming.feature')
+      expect(source).toContain('workflow.branchNaming.fix')
+      expect(source).toContain('workflow.branchNaming.release')
+      expect(source).toContain('N|ticket|number|issue-number')
+      expect(source).toContain('description|name')
+      expect(source).toContain('split("{version}")')
+    }
   })
 
-  it('both branchNaming defaults place the ticket immediately after the prefix', () => {
+  it('the release default matches RC branches and rejects feature branches', () => {
+    const regex = regexFromPattern(DEFAULT_BRANCH_NAMING.release, FAKE_TICKET)
+    expect('rc-1.0.0').toMatch(regex)
+    expect('feature/123-release').not.toMatch(regex)
+  })
+
+  it.each([
+    ['work/{ticket}-{name}', 'work/123-change'],
+    ['repair/{description}-ticket-{issue-number}', 'repair/change-ticket-123'],
+    ['feature/{number}', 'feature/123']
+  ])('supports legacy and ticket-only branch conventions: %s', (pattern, branch) => {
+    expect(branch).toMatch(regexFromPattern(pattern, FAKE_TICKET))
+  })
+
+  it('both delivery defaults place the ticket immediately after the prefix', () => {
     for (const pattern of [DEFAULT_BRANCH_NAMING.feature, DEFAULT_BRANCH_NAMING.fix]) {
       // Structural assertion independent of the placeholder token name: the
       // segment right after "feature/" or "fix/" must be the ticket placeholder.

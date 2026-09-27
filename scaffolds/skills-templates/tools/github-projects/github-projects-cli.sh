@@ -31,6 +31,7 @@ load_config() {
 
   PROJECT_URL=$(jq -r '.workflow.projectUrl // empty' .saasfoundry.json)
   WORKING_BRANCH=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
+  DELIVERY_TARGET_BRANCH=$(jq -r '.workflow.prTargetBranch // .workflow.workingBranch // "develop"' .saasfoundry.json)
 
   # Parse owner + project number from PROJECT_URL in one pass. Supported shapes:
   #   https://github.com/orgs/{owner}/projects/{number}
@@ -1208,19 +1209,53 @@ cmd_get_ticket() {
 
 # Resolve only the current ticket branch. Never promote another developer's PR.
 pr_branch_context() {
-  local ticket=$1
+  local ticket=$1 allow_release=${2:-false}
   [[ "$ticket" =~ ^[1-9][0-9]*$ ]] || { echo "Error: ticket must be a positive issue number." >&2; return 1; }
   load_config
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD) || return 1
-  local feature fix
-  feature=$(jq -r '.workflow.branchNaming.feature // "feature/{N}-{description}"' .saasfoundry.json)
-  fix=$(jq -r '.workflow.branchNaming.fix // "fix/{N}-{description}"' .saasfoundry.json)
-  feature=${feature//\{N\}/$ticket}
-  fix=${fix//\{N\}/$ticket}
-  feature=${feature//\{description\}/*}
-  fix=${fix//\{description\}/*}
-  if [[ "$CURRENT_BRANCH" == "$WORKING_BRANCH" || "$CURRENT_BRANCH" == "HEAD" ]] ||
-    { [[ "$CURRENT_BRANCH" != $feature ]] && [[ "$CURRENT_BRANCH" != $fix ]]; }; then
+  local feature fix release branch_patterns
+  branch_patterns=$(jq -ce --arg ticket "$ticket" '
+    def literal:
+      explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
+        then [92,$c] else [$c] end) | flatten | implode;
+    def delivery_pattern($ticket):
+      if type != "string" then error("delivery branch pattern must be a string")
+      elif ([scan("\\{(?:N|ticket|number|issue-number)\\}")] | length) != 1
+        then error("delivery branch pattern requires exactly one ticket placeholder")
+      elif ([scan("\\{(?:description|name)\\}")] | length) > 1
+        then error("delivery branch pattern allows at most one description placeholder")
+      else
+        gsub("\\{(?:N|ticket|number|issue-number)\\}"; $ticket)
+        | gsub("\\{(?:description|name)\\}"; "\u0000")
+        | split("\u0000") | map(literal) | join(".+") | "^" + . + "$"
+      end;
+    def release_pattern:
+      if type != "string" then error("release branch pattern must be a string")
+      elif (split("{version}") | length) != 2
+        then error("release branch pattern requires exactly one {version}")
+      else split("{version}") | map(literal) | join(".+") | "^" + . + "$"
+      end;
+    [(.workflow.branchNaming.feature // "feature/{N}-{description}" | delivery_pattern($ticket)),
+     (.workflow.branchNaming.fix // "fix/{N}-{description}" | delivery_pattern($ticket)),
+     (.workflow.branchNaming.release // "rc-{version}" | release_pattern)]
+    | if length == 3 and all(.[]; type == "string") then .
+      else error("incomplete branch naming contract") end
+  ' .saasfoundry.json) || {
+    echo "Error: invalid workflow.branchNaming contract: feature/fix require exactly one ticket placeholder and at most one description placeholder; release requires exactly one {version}." >&2
+    return 1
+  }
+  feature=$(jq -r '.[0]' <<< "$branch_patterns")
+  fix=$(jq -r '.[1]' <<< "$branch_patterns")
+  release=$(jq -r '.[2]' <<< "$branch_patterns")
+  PR_TICKET=$ticket
+  PR_CONTEXT_KIND=""
+  PR_TARGET_BRANCH=$DELIVERY_TARGET_BRANCH
+  if [[ "$CURRENT_BRANCH" =~ $feature || "$CURRENT_BRANCH" =~ $fix ]]; then
+    PR_CONTEXT_KIND=delivery
+  elif [[ "$allow_release" == true && "$CURRENT_BRANCH" =~ $release ]]; then
+    PR_CONTEXT_KIND=release
+    PR_TARGET_BRANCH=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
+  else
     echo "Error: current branch does not match ticket #${ticket}'s configured branch naming." >&2
     return 1
   fi
@@ -1229,18 +1264,35 @@ pr_branch_context() {
 # Empty JSON array is a known absence; failed/malformed/ambiguous reads are errors.
 read_branch_pr() {
   local payload
-  payload=$(gh pr list --head "$CURRENT_BRANCH" --state open --limit 100 --json number,url,headRefName,headRefOid,isDraft 2>/dev/null) || {
+  payload=$(gh pr list --head "$CURRENT_BRANCH" --state open --limit 100 --json number,url,title,headRefName,headRefOid,isDraft,baseRefName,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to read open PRs. Retry after restoring GitHub access." >&2; return 1;
   }
   BRANCH_PRS=$(echo "$payload" | jq -ce --arg branch "$CURRENT_BRANCH" '
     if type != "array" then error("Expected PR array") else
       [.[] | select(.headRefName == $branch)] end
     | if length > 1 then error("Ambiguous PRs") else . end
-    | if all(.[]; (.number | type) == "number" and (.url | type) == "string"
+    | if all(.[]; (.number | type) == "number" and (.url | type) == "string" and (.title | type) == "string"
         and (.headRefOid | type) == "string" and (.isDraft | type) == "boolean")
       then . else error("Incomplete PR state") end') || {
     echo "Error: ambiguous or incomplete PR state for ${CURRENT_BRANCH}." >&2; return 1;
   }
+  if ! echo "$BRANCH_PRS" | jq -e \
+      --arg base "$PR_TARGET_BRANCH" --arg ticket "$PR_TICKET" --arg kind "$PR_CONTEXT_KIND" '
+        length == 0
+        or (length == 1
+          and .[0].baseRefName == $base
+          and .[0].isCrossRepository == false
+          and ($kind != "release"
+            or ((.[0].title | test("^\\[#" + $ticket + "\\](?:\\s|$)|^[[:alnum:]_.-]+\\(#" + $ticket + "\\)(?:!)?:"))
+              and [.[] | .body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$ticket])))
+      ' >/dev/null 2>&1; then
+    if [[ "$PR_CONTEXT_KIND" == release ]]; then
+      echo "Error: release PR must target ${PR_TARGET_BRANCH}, use a [#${PR_TICKET}] or type(#${PR_TICKET}): title, and contain exactly 'Closes #${PR_TICKET}'." >&2
+    else
+      echo "Error: delivery PR must target ${PR_TARGET_BRANCH} in the same repository." >&2
+    fi
+    return 1
+  fi
 }
 
 verify_pr_head() {
@@ -1262,7 +1314,7 @@ cmd_create_pr() {
   local TICKET_NUMBER=$1
   local draft_args=()
   [[ "${2:-}" == "--draft" ]] && draft_args=(--draft)
-  pr_branch_context "$TICKET_NUMBER" || return 1
+  pr_branch_context "$TICKET_NUMBER" true || return 1
   ISSUE_TITLE=$(gh issue view "$TICKET_NUMBER" --json title --jq ".title" 2>/dev/null) || return 1
   [[ -n "$ISSUE_TITLE" ]] || { echo "Error: Could not find issue #${TICKET_NUMBER}" >&2; return 1; }
 
@@ -1300,9 +1352,11 @@ cmd_create_pr() {
     return 0
   fi
 
-  local PR_CREATE_STATUS=0 PR_OUTPUT PR_URL
+  local PR_CREATE_STATUS=0 PR_OUTPUT PR_URL PR_BODY
+  PR_BODY="Resolves #${TICKET_NUMBER}"
+  [[ "$PR_CONTEXT_KIND" == release ]] && PR_BODY="Closes #${TICKET_NUMBER}"
   PR_OUTPUT=$(gh pr create --title "[#${TICKET_NUMBER}] $ISSUE_TITLE" \
-    --body "Resolves #${TICKET_NUMBER}" --base "$WORKING_BRANCH" "${draft_args[@]}" 2>&1) || PR_CREATE_STATUS=$?
+    --body "$PR_BODY" --base "$PR_TARGET_BRANCH" "${draft_args[@]}" 2>&1) || PR_CREATE_STATUS=$?
   PR_URL=$(echo "$PR_OUTPUT" | grep -oE 'https://[^[:space:]]+/pull/[0-9]+' | head -n 1 || true)
   if [[ "$PR_CREATE_STATUS" -eq 0 && -n "$PR_URL" ]]; then
     echo -e "${GREEN}✓ Pull request created${NC}"
@@ -1321,7 +1375,7 @@ cmd_set_pr_draft() {
     echo "Usage: $0 ${action}-pr <ticket-number>" >&2
     return 1
   fi
-  pr_branch_context "$1" || return 1
+  pr_branch_context "$1" true || return 1
   read_branch_pr || return 1
   [[ $(echo "$BRANCH_PRS" | jq length) -eq 1 ]] || { echo "Error: no open PR for ticket #$1 on ${CURRENT_BRANCH}." >&2; return 1; }
   verify_pr_head || return 1

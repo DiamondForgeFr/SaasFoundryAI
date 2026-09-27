@@ -10,6 +10,10 @@ const execFileP = promisify(execFile)
 const REPO_ROOT = path.resolve(__dirname, '../../../..')
 const CLI = path.resolve(REPO_ROOT, '.claude/skills/sf-workflow/workflow-cli.sh')
 const BASH = '/bin/bash'
+const releaseMergeOid = 'c'.repeat(40)
+const releaseHeadOid = 'd'.repeat(40)
+const releaseTreeOid = 'e'.repeat(40)
+const syncMergeOid = 'f'.repeat(40)
 
 // The PR-merged guard blocks `update-status N Done` while an open PR exists for
 // the ticket — the rule is "Done means merged to develop, not reviewer
@@ -19,7 +23,18 @@ const BASH = '/bin/bash'
 
 async function buildSandbox(
   prListPayload: string,
-  options: { ghExitCode?: number; mergedPrListPayload?: string } = {}
+  options: {
+    ghExitCode?: number
+    mergedPrListPayload?: string
+    mergeCommitMessage?: string
+    mergeCommitApiPayload?: string
+    rcCommitApiPayload?: string
+    syncPrListPayload?: string
+    syncCommitApiPayload?: string
+    syncStatus?: string
+    branchNaming?: { feature: string; fix: string; release: string }
+    prTargetBranch?: string
+  } = {}
 ): Promise<{
   dir: string
   env: NodeJS.ProcessEnv
@@ -41,7 +56,14 @@ async function buildSandbox(
       workflow: {
         tool: 'github-projects',
         projectUrl: 'https://github.com/orgs/FakeOrg/projects/42',
-        workingBranch: 'develop'
+        workingBranch: 'develop',
+        prTargetBranch: options.prTargetBranch ?? 'develop',
+        releaseBranch: 'master',
+        branchNaming: options.branchNaming ?? {
+          feature: 'feature/{N}-{description}',
+          fix: 'fix/{N}-{description}',
+          release: 'rc-{version}'
+        }
       }
     })
   )
@@ -79,6 +101,34 @@ esac
   const exitCode = options.ghExitCode ?? 0
   const escaped = prListPayload.replace(/'/g, "'\\''")
   const mergedEscaped = (options.mergedPrListPayload ?? '[]').replace(/'/g, "'\\''")
+  const mergeCommitApiPayload = (
+    options.mergeCommitApiPayload ??
+    JSON.stringify({
+      message: options.mergeCommitMessage ?? '[#42] Release SaaSFoundryAI',
+      tree: { sha: releaseTreeOid },
+      parents: [{ sha: 'a'.repeat(40) }, { sha: releaseHeadOid }]
+    })
+  ).replace(/'/g, "'\\''")
+  const rcCommitApiPayload = (options.rcCommitApiPayload ?? JSON.stringify({ message: 'RC head', tree: { sha: releaseTreeOid }, parents: [] })).replace(/'/g, "'\\''")
+  const syncPrListPayload = (
+    options.syncPrListPayload ??
+    JSON.stringify([
+      {
+        number: 808,
+        headRefName: 'master',
+        headRefOid: releaseMergeOid,
+        baseRefName: 'develop',
+        mergedAt: '2026-09-27T21:00:00Z',
+        mergeCommit: { oid: syncMergeOid },
+        body: 'Technical release synchronization',
+        isCrossRepository: false
+      }
+    ])
+  ).replace(/'/g, "'\\''")
+  const syncCommitApiPayload = (
+    options.syncCommitApiPayload ?? JSON.stringify({ message: 'chore: synchronize release', tree: { sha: releaseTreeOid }, parents: [{ sha: 'b'.repeat(40) }, { sha: releaseMergeOid }] })
+  ).replace(/'/g, "'\\''")
+  const syncStatus = options.syncStatus ?? 'ahead'
   const ghShim = `#!/bin/bash
 printf '%s\\n' "$*" >> '${ghLogPath}'
 if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
@@ -86,11 +136,31 @@ if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
     echo "gh: simulated failure" >&2
     exit ${exitCode}
   fi
-  if [ "$4" = "merged" ]; then
+  if [[ " $* " == *" --base develop "* && " $* " == *" --head master "* ]]; then
+    printf '%s' '${syncPrListPayload}'
+  elif [ "$4" = "merged" ]; then
     printf '%s' '${mergedEscaped}'
   else
     printf '%s' '${escaped}'
   fi
+  exit 0
+fi
+if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
+  printf '%s' 'FakeOrg/FakeRepo'
+  exit 0
+fi
+if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+  printf '%s' "\${RELEASE_ISSUE_STATE:-CLOSED}"
+  exit 0
+fi
+if [ "$1" = "api" ]; then
+  case "$2" in
+    */git/commits/${releaseMergeOid}) printf '%s' '${mergeCommitApiPayload}';;
+    */git/commits/${releaseHeadOid}) printf '%s' '${rcCommitApiPayload}';;
+    */git/commits/${syncMergeOid}) printf '%s' '${syncCommitApiPayload}';;
+    */compare/*) printf '%s' '${syncStatus}';;
+    *) exit 1;;
+  esac
   exit 0
 fi
 exit 0
@@ -136,7 +206,7 @@ describe('sf-workflow CLI — PR-merged guard', () => {
   })
 
   it('blocks "Done" when an open PR exists for the ticket (feature/<N>-…)', async () => {
-    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing"}]')
+    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing","baseRefName":"develop","body":"","mergedAt":null}]')
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(2)
     expect(res.stderr).toContain('open PR (#333)')
@@ -147,14 +217,14 @@ describe('sf-workflow CLI — PR-merged guard', () => {
   })
 
   it('blocks "Done" when an open PR exists on a fix/<N>-… branch', async () => {
-    sandbox = await buildSandbox('[{"number":410,"headRefName":"fix/42-broken-link"}]')
+    sandbox = await buildSandbox('[{"number":410,"headRefName":"fix/42-broken-link","baseRefName":"develop","body":"","mergedAt":null}]')
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(2)
     expect(res.stderr).toContain('open PR (#410)')
   })
 
   it('blocks "Done" when the ticket has no open or verified merged PR', async () => {
-    sandbox = await buildSandbox('[{"number":999,"headRefName":"feature/77-other-ticket"}]')
+    sandbox = await buildSandbox('[{"number":999,"headRefName":"feature/77-other-ticket","baseRefName":"develop","body":"","mergedAt":null}]')
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(2)
     expect(res.stderr).toContain('no verified merged PR')
@@ -163,15 +233,176 @@ describe('sf-workflow CLI — PR-merged guard', () => {
   })
 
   it('allows "Done" only for a matching PR verified merged into develop', async () => {
-    sandbox = await buildSandbox('[]', { mergedPrListPayload: '[{"number":333,"headRefName":"feature/42-do-the-thing","baseRefName":"develop","mergedAt":"2026-09-09T10:00:00Z"}]' })
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: '[{"number":333,"headRefName":"feature/42-do-the-thing","baseRefName":"develop","body":"","mergedAt":"2026-09-09T10:00:00Z"}]'
+    })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(0)
     const toolCalls = readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))
     expect(toolCalls).toHaveLength(1)
   })
 
+  it('resolves delivery branches from a non-default manifest convention', async () => {
+    sandbox = await buildSandbox('[{"number":333,"headRefName":"work/item-42-do-the-thing","baseRefName":"develop","body":"","mergedAt":null}]', {
+      branchNaming: {
+        feature: 'work/item-{ticket}-{name}',
+        fix: 'repair/{description}-ticket-{number}',
+        release: 'candidate/{version}'
+      }
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('open PR (#333)')
+  })
+
+  it('accepts a ticket-only branch convention and the configured PR target', async () => {
+    sandbox = await buildSandbox('[]', {
+      prTargetBranch: 'integration',
+      branchNaming: {
+        feature: 'feature/{ticket}',
+        fix: 'fix/{ticket}',
+        release: 'rc-{version}'
+      },
+      mergedPrListPayload: '[{"number":333,"headRefName":"feature/42","baseRefName":"integration","body":"","mergedAt":"2026-09-09T10:00:00Z"}]'
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(0)
+  })
+
+  it('resolves release branches from a non-default manifest convention', async () => {
+    sandbox = await buildSandbox('[]', {
+      branchNaming: {
+        feature: 'work/item-{ticket}-{name}',
+        fix: 'repair/{description}-ticket-{number}',
+        release: 'candidate/{version}'
+      },
+      mergedPrListPayload: `[{"number":807,"headRefName":"candidate/1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(0)
+  })
+
+  it('blocks "Done" while the configured release PR is still open', async () => {
+    sandbox = await buildSandbox('[{"number":807,"headRefName":"rc-1.0.0","baseRefName":"master","body":"Release candidate\\n\\nCloses #42","mergedAt":null}]')
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('open PR (#807)')
+  })
+
+  it('allows "Done" for a verified RC merged into the configured release branch', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Release candidate\\n\\nCloses #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(0)
+    expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toHaveLength(1)
+  })
+
+  it.each([{ baseRefName: 'develop' }, { body: '' }, { body: 'Closes #43' }, { body: 'Closes #42\nCloses #43' }, { body: 'Closes #42\nCloses #42' }, { body: 'Resolves #42' }, { mergedAt: null }])(
+    'rejects an unverified merged release PR: %j',
+    async (changes) => {
+      const releasePr = {
+        number: 807,
+        headRefName: 'rc-1.0.0',
+        baseRefName: 'master',
+        body: 'Release candidate\n\nCloses #42',
+        mergedAt: '2026-09-27T20:00:00Z',
+        headRefOid: releaseHeadOid,
+        mergeCommit: { oid: releaseMergeOid },
+        ...changes
+      }
+      sandbox = await buildSandbox('[]', { mergedPrListPayload: JSON.stringify([releasePr]) })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('no verified merged PR')
+    }
+  )
+
+  it('rejects a release body redirected to a ticket absent from the immutable merge title', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergeCommitMessage: '[#43] Different ticket'
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('immutable merge title')
+    expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toEqual([])
+  })
+
+  it('rejects a release merge commit that copied the closing directive from the PR body', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergeCommitMessage: '[#42] Release\n\nCloses #42'
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('embeds a closing directive')
+  })
+
+  it('rejects squash/rebase release integration without the two-parent RC merge', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergeCommitApiPayload: JSON.stringify({ message: '[#42] Release', tree: { sha: releaseTreeOid }, parents: [{ sha: 'a'.repeat(40) }] })
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('two-parent merge commit')
+  })
+
+  it('keeps a merged release In review until its commit is merged back into the working branch', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      syncStatus: 'diverged'
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('not an ancestor')
+    expect(res.stderr).toContain('merge the release branch back')
+  })
+
+  it('rejects a fast-forward or direct-push release synchronization without a two-parent PR merge', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      syncCommitApiPayload: JSON.stringify({ message: 'Fast-forward sync', tree: { sha: releaseTreeOid }, parents: [{ sha: releaseMergeOid }] })
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('two-parent merge commit')
+  })
+
+  it('rejects a release synchronization PR carrying a ticket-closing directive', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      syncPrListPayload: JSON.stringify([
+        {
+          number: 808,
+          headRefName: 'master',
+          headRefOid: releaseMergeOid,
+          baseRefName: 'develop',
+          mergedAt: '2026-09-27T21:00:00Z',
+          mergeCommit: { oid: syncMergeOid },
+          body: 'Closes #42',
+          isCrossRepository: false
+        }
+      ])
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('No unique clean master')
+  })
+
+  it('rejects a release merge whose tree differs from the immutable RC head', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      rcCommitApiPayload: JSON.stringify({ message: 'RC head', tree: { sha: 'f'.repeat(40) }, parents: [] })
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('differs from the verified RC tree')
+  })
+
   it('does not query gh for non-Done / non-In-Review targets (guard short-circuits)', async () => {
-    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing"}]')
+    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing","baseRefName":"develop","body":"","mergedAt":null}]')
     const res = await runCli(['update-status', '42', 'Ready'], sandbox)
     expect(res.code).toBe(0)
     const ghCalls = readLog(sandbox.ghLogPath)
@@ -179,14 +410,14 @@ describe('sf-workflow CLI — PR-merged guard', () => {
   })
 
   it('matches case-insensitively: "done" is treated as Done', async () => {
-    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing"}]')
+    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing","baseRefName":"develop","body":"","mergedAt":null}]')
     const res = await runCli(['update-status', '42', 'done'], sandbox)
     expect(res.code).toBe(2)
     expect(res.stderr).toContain('open PR (#333)')
   })
 
   it('bypasses the guard when SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1', async () => {
-    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing"}]')
+    sandbox = await buildSandbox('[{"number":333,"headRefName":"feature/42-do-the-thing","baseRefName":"develop","body":"","mergedAt":null}]')
     const res = await runCli(['update-status', '42', 'Done'], sandbox, { SF_WORKFLOW_BYPASS_PR_MERGED_GUARD: '1' })
     expect(res.code).toBe(0)
     const toolCalls = readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))
@@ -202,10 +433,10 @@ describe('sf-workflow CLI — PR-merged guard', () => {
   })
 
   it('does not match a different ticket number that happens to be a prefix (ticket 4 vs 42)', async () => {
-    // headRefName "feature/420-foo" must NOT count as the open PR for ticket 42:
-    // the regex anchors on `^(feature|fix)/<N>(-|$)` so 42 only matches `feature/42-…` or `feature/42`.
-    sandbox = await buildSandbox('[{"number":888,"headRefName":"feature/420-other"}]', {
-      mergedPrListPayload: '[{"number":333,"headRefName":"feature/42-done","baseRefName":"develop","mergedAt":"2026-09-09T10:00:00Z"}]'
+    // headRefName "feature/420-foo" must not count as ticket 42 because the
+    // anchored matcher is rendered from the complete manifest pattern.
+    sandbox = await buildSandbox('[{"number":888,"headRefName":"feature/420-other","baseRefName":"develop","body":"","mergedAt":null}]', {
+      mergedPrListPayload: '[{"number":333,"headRefName":"feature/42-done","baseRefName":"develop","body":"","mergedAt":"2026-09-09T10:00:00Z"}]'
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(0)
