@@ -50,7 +50,13 @@ async function buildSandbox(
       workflow: {
         tool: 'github-projects',
         projectUrl: 'https://github.com/orgs/FakeOrg/projects/42',
-        workingBranch: 'develop'
+        workingBranch: 'develop',
+        releaseBranch: 'master',
+        branchNaming: {
+          feature: 'feature/{N}-{description}',
+          fix: 'fix/{N}-{description}',
+          release: 'rc-{version}'
+        }
       }
     })
   )
@@ -180,6 +186,23 @@ describe('sf-workflow CLI — PR-existence guard (→ In Review)', () => {
     sandbox = await buildSandbox('[{"number":556,"isDraft":false,"headRefName":"fix/42-broken"}]', { natureLabel: 'internal' })
     const res = await runCli(['update-status', '42', 'In review'], sandbox)
     expect(res.code).toBe(0)
+  })
+
+  it('allows Human Testing for a linked draft release PR targeting the release branch', async () => {
+    sandbox = await buildSandbox('[{"number":807,"isDraft":true,"headRefName":"rc-1.0.0","baseRefName":"master","closingIssuesReferences":[{"number":42}]}]')
+    const res = await runCli(['update-status', '42', 'Human testing'], sandbox)
+    expect(res.code).toBe(0)
+  })
+
+  it.each([
+    ['develop', [{ number: 42 }]],
+    ['master', [{ number: 488 }]],
+    ['master', []]
+  ])('rejects a release PR with base %s and closing issues %j', async (baseRefName, closingIssuesReferences) => {
+    sandbox = await buildSandbox(JSON.stringify([{ number: 807, isDraft: true, headRefName: 'rc-1.0.0', baseRefName, closingIssuesReferences }]))
+    const res = await runCli(['update-status', '42', 'Human testing'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('has no open PR')
   })
 
   it('does not query gh for non-In-Review targets (guard short-circuits)', async () => {

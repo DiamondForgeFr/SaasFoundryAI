@@ -716,7 +716,7 @@ check_pr_existence_guard() {
     echo "Error: nature:bundled-pr tickets cannot enter Human Testing or In Review; use AI Testing → Done." >&2
     return 1
   fi
-  payload=$(gh pr list --state open --limit 1000 --json number,headRefName,isDraft 2>/dev/null) || {
+  payload=$(gh pr list --state open --limit 1000 --json number,headRefName,baseRefName,isDraft,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to verify PR state; no status transition was made." >&2; return 1;
   }
   matches=$(echo "$payload" | jq -ce --arg t "$ticket" --slurpfile manifest .saasfoundry.json '
@@ -728,8 +728,19 @@ check_pr_existence_guard() {
        $manifest[0].workflow.branchNaming.fix // "fix/{N}-{description}"]
     | map(select(type == "string") | split("{N}") | select(length == 2) | join($t)
       | split("{description}") | map(literal) | join(".+") | "^" + . + "$") as $patterns
+    | (($manifest[0].workflow.branchNaming.release // "rc-{version}")
+      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
+    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
     | if ($payload | type) == "array" then
-        [$payload[] | select(.headRefName as $branch | any($patterns[]; . as $pattern | $branch | test($pattern)))]
+        [$payload[] | select(
+          (.headRefName as $branch | any($patterns[]; . as $pattern | $branch | test($pattern)))
+          or
+          ((.headRefName | type) == "string"
+            and (.headRefName | test($release_pattern))
+            and .baseRefName == $release_branch
+            and ((.closingIssuesReferences // []) | type) == "array"
+            and any((.closingIssuesReferences // [])[]; (.number | tostring) == $t))
+        )]
       else error("Expected PR array") end') || {
     echo "Error: invalid PR response; no status transition was made." >&2; return 1;
   }
