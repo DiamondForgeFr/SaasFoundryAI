@@ -1208,19 +1208,28 @@ cmd_get_ticket() {
 
 # Resolve only the current ticket branch. Never promote another developer's PR.
 pr_branch_context() {
-  local ticket=$1
+  local ticket=$1 allow_release=${2:-false}
   [[ "$ticket" =~ ^[1-9][0-9]*$ ]] || { echo "Error: ticket must be a positive issue number." >&2; return 1; }
   load_config
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD) || return 1
-  local feature fix
+  local feature fix release
   feature=$(jq -r '.workflow.branchNaming.feature // "feature/{N}-{description}"' .saasfoundry.json)
   fix=$(jq -r '.workflow.branchNaming.fix // "fix/{N}-{description}"' .saasfoundry.json)
+  release=$(jq -r '.workflow.branchNaming.release // "rc-{version}"' .saasfoundry.json)
   feature=${feature//\{N\}/$ticket}
   fix=${fix//\{N\}/$ticket}
   feature=${feature//\{description\}/*}
   fix=${fix//\{description\}/*}
-  if [[ "$CURRENT_BRANCH" == "$WORKING_BRANCH" || "$CURRENT_BRANCH" == "HEAD" ]] ||
-    { [[ "$CURRENT_BRANCH" != $feature ]] && [[ "$CURRENT_BRANCH" != $fix ]]; }; then
+  release=${release//\{version\}/?*}
+  PR_TICKET=$ticket
+  PR_CONTEXT_KIND=""
+  PR_TARGET_BRANCH=$WORKING_BRANCH
+  if [[ "$CURRENT_BRANCH" == $feature || "$CURRENT_BRANCH" == $fix ]]; then
+    PR_CONTEXT_KIND=delivery
+  elif [[ "$allow_release" == true && "$CURRENT_BRANCH" == $release ]]; then
+    PR_CONTEXT_KIND=release
+    PR_TARGET_BRANCH=$(jq -r '.workflow.releaseBranch // "master"' .saasfoundry.json)
+  else
     echo "Error: current branch does not match ticket #${ticket}'s configured branch naming." >&2
     return 1
   fi
@@ -1229,7 +1238,7 @@ pr_branch_context() {
 # Empty JSON array is a known absence; failed/malformed/ambiguous reads are errors.
 read_branch_pr() {
   local payload
-  payload=$(gh pr list --head "$CURRENT_BRANCH" --state open --limit 100 --json number,url,headRefName,headRefOid,isDraft 2>/dev/null) || {
+  payload=$(gh pr list --head "$CURRENT_BRANCH" --state open --limit 100 --json number,url,headRefName,headRefOid,isDraft,baseRefName,isCrossRepository,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to read open PRs. Retry after restoring GitHub access." >&2; return 1;
   }
   BRANCH_PRS=$(echo "$payload" | jq -ce --arg branch "$CURRENT_BRANCH" '
@@ -1241,6 +1250,25 @@ read_branch_pr() {
       then . else error("Incomplete PR state") end') || {
     echo "Error: ambiguous or incomplete PR state for ${CURRENT_BRANCH}." >&2; return 1;
   }
+  if [[ "$PR_CONTEXT_KIND" == release ]]; then
+    local repo server issue_prefix issue_url
+    repo=$(get_repo_owner_name)
+    server=${GITHUB_SERVER_URL:-https://github.com}
+    issue_prefix="${server%/}/${repo}/issues/"
+    issue_url="${issue_prefix}${PR_TICKET}"
+    if [[ -z "$repo" ]] || ! echo "$BRANCH_PRS" | jq -e \
+      --arg base "$PR_TARGET_BRANCH" --arg prefix "$issue_prefix" --arg issue "$issue_url" '
+        length == 1
+        and .[0].baseRefName == $base
+        and .[0].isCrossRepository == false
+        and ([.[] | .closingIssuesReferences[]?
+          | select((.url | type) == "string" and (.url | startswith($prefix)))]
+          | length == 1 and .[0].url == $issue)
+      ' >/dev/null 2>&1; then
+      echo "Error: release PR must target ${PR_TARGET_BRANCH} and close exactly ticket #${PR_TICKET} in this repository." >&2
+      return 1
+    fi
+  fi
 }
 
 verify_pr_head() {
@@ -1321,7 +1349,7 @@ cmd_set_pr_draft() {
     echo "Usage: $0 ${action}-pr <ticket-number>" >&2
     return 1
   fi
-  pr_branch_context "$1" || return 1
+  pr_branch_context "$1" true || return 1
   read_branch_pr || return 1
   [[ $(echo "$BRANCH_PRS" | jq length) -eq 1 ]] || { echo "Error: no open PR for ticket #$1 on ${CURRENT_BRANCH}." >&2; return 1; }
   verify_pr_head || return 1

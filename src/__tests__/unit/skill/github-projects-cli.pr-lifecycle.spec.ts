@@ -8,6 +8,13 @@ import { promisify } from 'node:util'
 const exec = promisify(execFile)
 const CLI = path.resolve(__dirname, '../../../../.claude/skills/sf-tool-github-projects/github-projects-cli.sh')
 const pr = { number: 123, url: 'https://github.com/FakeOrg/FakeRepo/pull/123', headRefName: 'feature/42-work', headRefOid: 'abc123', isDraft: true }
+const releasePr = {
+  ...pr,
+  headRefName: 'rc-1.0.0',
+  baseRefName: 'master',
+  isCrossRepository: false,
+  closingIssuesReferences: [{ number: 42, url: 'https://github.com/FakeOrg/FakeRepo/issues/42' }]
+}
 
 // Exercise real Bash control flow with observable Git/GitHub boundaries. No network.
 describe('GitHub PR draft lifecycle (#655)', () => {
@@ -17,12 +24,13 @@ describe('GitHub PR draft lifecycle (#655)', () => {
   beforeEach(async () => {
     dir = mkdtempSync(path.join(tmpdir(), 'sf-pr-lifecycle-'))
     await mkdir(path.join(dir, 'bin'))
-    await writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { workingBranch: 'develop' } }))
+    await writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { workingBranch: 'develop', releaseBranch: 'master', branchNaming: { release: 'rc-{version}' } } }))
     log = path.join(dir, 'calls')
     const gh = `#!/bin/bash
 printf '%s\\n' "$*" >> "$CALLS"
 case "$1 $2" in
   'issue view') echo 'Sample ticket';;
+  'repo view') echo 'FakeOrg/FakeRepo';;
   'pr list')
     [ "$FETCH_FAIL" = 1 ] && exit 1
     if [ -f "$READY_MARKER" ] && [ "$READY_NOOP" != 1 ]; then
@@ -96,6 +104,30 @@ esac
   })
   it('keeps an existing draft idempotently', async () => {
     expect((await run(['draft-pr', '42'])).code).toBe(0)
+    expect(calls()).not.toContain('pr ready')
+  })
+  it('returns the configured release PR to draft when it closes exactly the ticket', async () => {
+    expect((await run(['draft-pr', '42'], { BRANCH: 'rc-1.0.0', PRS: JSON.stringify([{ ...releasePr, isDraft: false }]) })).code).toBe(0)
+    expect(calls()).toContain('pr ready 123 --undo')
+  })
+  it('promotes the configured release PR when it closes exactly the ticket', async () => {
+    expect((await run(['ready-pr', '42'], { BRANCH: 'rc-1.0.0', PRS: JSON.stringify([releasePr]) })).code).toBe(0)
+    expect(calls()).toContain('pr ready 123')
+  })
+  it.each([
+    { baseRefName: 'develop' },
+    { isCrossRepository: true },
+    { closingIssuesReferences: [] },
+    { closingIssuesReferences: [{ number: 43, url: 'https://github.com/FakeOrg/FakeRepo/issues/43' }] },
+    {
+      closingIssuesReferences: [
+        { number: 42, url: 'https://github.com/FakeOrg/FakeRepo/issues/42' },
+        { number: 43, url: 'https://github.com/FakeOrg/FakeRepo/issues/43' }
+      ]
+    }
+  ])('refuses a release PR with an unverified delivery link: %j', async (changes) => {
+    const result = await run(['ready-pr', '42'], { BRANCH: 'rc-1.0.0', PRS: JSON.stringify([{ ...releasePr, ...changes }]) })
+    expect(result.code).not.toBe(0)
     expect(calls()).not.toContain('pr ready')
   })
   it.each([
