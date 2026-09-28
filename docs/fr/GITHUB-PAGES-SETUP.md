@@ -1,16 +1,22 @@
 # Publier la documentation
 
-## Situation actuelle
+GitHub Pages est configuré pour ce dépôt avec **GitHub Actions** comme source. Le workflow `Deploy Documentation` construit les deux langues et publie le site statique à l'adresse
+`https://diamondforgefr.github.io/SaasFoundryAI/`.
 
-**Le site n'a encore jamais été déployé.** La documentation se construit localement, mais GitHub Pages n'est pas activé sur le dépôt :
+## Publier une révision validée
 
-| Point                      | État                                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------------------- |
-| GitHub Pages               | non activé — `gh api repos/DiamondForgeFr/SaasFoundryAI/pages` retourne actuellement 404 |
-| chemin de base             | `/`, adapté au serveur local et à un futur domaine personnalisé                          |
-| déclencheur de déploiement | manuel uniquement, pour ne pas faire échouer une release avant l'activation de Pages     |
+1. Mergez la modification documentaire dans `develop` via sa pull request relue.
+2. Ouvrez **Actions → Deploy Documentation → Run workflow** et sélectionnez `develop`.
+3. Attendez la réussite des jobs `build` et `deploy`.
+4. Vérifiez l'[accueil anglais](https://diamondforgefr.github.io/SaasFoundryAI/), l'[accueil français](https://diamondforgefr.github.io/SaasFoundryAI/fr/) et un guide d'installation dans chaque
+   langue.
 
-La documentation incluse dans le package npm reste la voie disponible en v1 : `sf docs` la sert localement, sans réseau.
+L'environnement `github-pages` n'autorise actuellement les déploiements **que depuis `develop`**. Une branche de fonctionnalité peut construire le site, mais son job de déploiement sera refusé par
+cette protection. Ne l'assouplissez pas pour prévisualiser une pull request : utilisez `npm run docs:dev` ou `npm run docs:preview`.
+
+Le workflow reste volontairement manuel pendant la première publication et la revue. Si la documentation doit ensuite être publiée automatiquement après les merges, ajoutez un déclencheur `push` pour
+la branche de publication choisie dans `.github/workflows/deploy-docs.yml` et réexaminez la règle de branche. Évitez de déclencher depuis `develop` et `master` simultanément : un push plus ancien
+pourrait remplacer une documentation plus récente.
 
 ## La consulter localement
 
@@ -20,38 +26,25 @@ npm run docs:build   # sortie statique dans docs-dist
 npm run docs:preview
 ```
 
-Le port **5176** est défini dans `docs/.vitepress/config.mts`. Il évite le port 5173 utilisé par le frontend d'une application générée, afin que les deux puissent fonctionner en parallèle.
+Le serveur de développement utilise le port **5176**, laissant 5173 au frontend d'une application générée. La CLI inclut aussi cette documentation : `sf docs` la sert hors ligne à la racine d'un
+serveur local.
 
-## Activer la publication
+## Chemin de base
 
-1. Dans le dépôt : **Settings** → **Pages** → **Source** → **GitHub Actions**. Cette opération est manuelle et réservée aux propriétaires.
-2. Lancez une première fois `Deploy Documentation` depuis l'onglet Actions grâce à `workflow_dispatch`.
-3. Vérifiez le déploiement et les routes anglaises et françaises.
-4. Réactivez ensuite le bloc `push` commenté dans `.github/workflows/deploy-docs.yml` si les releases doivent publier automatiquement la documentation.
+Le workflow Pages récupère le bon préfixe auprès de `actions/configure-pages`. Pour le site du dépôt, il construit avec `/SaasFoundryAI/` (respectez la casse du dépôt). Les builds locaux et inclus
+dans le package utilisent `/` par défaut. Si un domaine personnalisé est configuré plus tard, l'action fournira `/` sans modifier le code. La favicon, les liens canoniques et les liens entre langues
+suivent le même préfixe.
 
-## Pourquoi `base` vaut `/`
+Pour reproduire localement le build du site du dépôt :
 
-La documentation sert deux contextes racine : la copie incluse dans le package et, plus tard, un domaine personnalisé.
-
-Un site de projet `github.io/<repo>/` demanderait au contraire :
-
-```ts
-base: '/SaasFoundryAI/'
+```bash
+SF_DOCS_BASE=/SaasFoundryAI/ npm run docs:build
 ```
 
-Respectez la casse exacte `SaasFoundryAI`, et adaptez également le `href` de la favicon dans la même configuration.
+## Domaine personnalisé plus tard
 
-## Domaine personnalisé
+1. Pointez le `CNAME` DNS du sous-domaine choisi vers `diamondforgefr.github.io`.
+2. Renseignez ce domaine dans **Settings → Pages → Custom domain**, vérifiez le DNS et activez HTTPS.
+3. Conservez un fichier `CNAME` correspondant dans `docs/public/` si la configuration Pages l'exige, puis vérifiez une nouvelle exécution du workflow et tous les liens.
 
-1. Configurez le DNS :
-
-   ```text
-   CNAME: docs.example.com → diamondforgefr.github.io
-   ```
-
-2. Dans **Settings** → **Pages** → **Custom domain**, saisissez le domaine et activez **Enforce HTTPS**.
-3. Ajoutez un fichier `CNAME` dans `docs/public/`, contenant ce domaine, afin que le prochain déploiement conserve la configuration.
-
-Avec un domaine personnalisé, `base: '/'` reste correct.
-
-Le précédent placeholder `https://docs.saasfoundry.io` n'est ni enregistré ni configuré dans le dépôt. Le domaine public doit être choisi et provisionné explicitement avant d'être annoncé.
+N'annoncez pas un nom de domaine provisoire avant de l'avoir enregistré et configuré.
