@@ -5,6 +5,7 @@ export type { DocumentationLocale } from './locale-paths'
 
 type Labels = {
   nav: {
+    install: string
     guide: string
     cli: string
     foundation: string
@@ -45,6 +46,7 @@ type Labels = {
 const labels: Record<DocumentationLocale, Labels> = {
   en: {
     nav: {
+      install: 'Install',
       guide: 'Guide',
       cli: 'CLI',
       foundation: 'SaaS foundation',
@@ -63,6 +65,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       workflow: 'Harness · Workflow'
     },
     pages: {
+      installHarness: 'Set up the harness',
       installation: 'Installation',
       setupPaths: 'CLI or assistant setup',
       developmentTools: 'Development Tools',
@@ -132,6 +135,7 @@ const labels: Record<DocumentationLocale, Labels> = {
   },
   fr: {
     nav: {
+      install: 'Installer',
       guide: 'Guide',
       cli: 'CLI',
       foundation: 'Fondation SaaS',
@@ -150,6 +154,7 @@ const labels: Record<DocumentationLocale, Labels> = {
       workflow: 'Harness · Workflow'
     },
     pages: {
+      installHarness: 'Installer le harness',
       installation: 'Installation',
       setupPaths: 'Installation par CLI ou assistant',
       developmentTools: 'Outils de développement',
@@ -233,6 +238,7 @@ const createSidebar = (locale: DocumentationLocale, translatedRoutes: readonly s
 
   return {
     [prefixPath(locale, '/getting-started/')]: group(groups.gettingStarted, [
+      page(pages.installHarness, '/getting-started/install-harness'),
       page(pages.installation, '/getting-started/installation'),
       page(pages.setupPaths, '/getting-started/setup-paths'),
       page(pages.developmentTools, '/getting-started/tools'),
@@ -302,6 +308,7 @@ export const createThemeConfig = (locale: DocumentationLocale, translatedRoutes:
   return {
     logo: '/icon.svg',
     nav: [
+      { text: nav.install, link: documentationLink(locale, '/getting-started/install-harness', translatedRoutes) },
       { text: nav.guide, link: documentationLink(locale, '/guide/project-structure', translatedRoutes) },
       { text: nav.cli, link: documentationLink(locale, '/cli/sf-new', translatedRoutes) },
       {

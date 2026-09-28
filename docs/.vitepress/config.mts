@@ -3,22 +3,16 @@ import { discoverLocaleRoutes, localizedRoute, routeForPage } from './config/loc
 import { createThemeConfig } from './config/navigation'
 
 const translatedRoutes = discoverLocaleRoutes('fr')
+const base = process.env.SF_DOCS_BASE || '/'
+const publishedRoute = (route: string): string => `${base}${route.replace(/^\//, '')}`
 
 export default defineConfig({
   title: 'SaaSFoundryAI',
   description: 'Production-ready SaaS foundation and guarded delivery harness for human + AI teams',
   lang: 'en-US',
-  /**
-   * Served from the root, not from a repository subpath.
-   *
-   * This said `/SaaSFoundryAI/` while the repository is `SaasFoundryAI` — a casing mismatch
-   * nobody could have caught, because the site has never been deployed. Rather than fix the
-   * casing and keep a subpath, `/` is the value that serves both things this documentation
-   * is actually for: the copy bundled in the npm package, served from the root of a local
-   * static server (#626), and a custom domain later. A `github.io/<repo>/` project site is
-   * the only shape that would need the subpath back, and it is not the plan (#624).
-   */
-  base: '/',
+  // The bundled `sf docs` build and a future custom domain stay at `/`.
+  // GitHub Pages sets SF_DOCS_BASE to the repository subpath until that domain exists.
+  base,
 
   /**
    * Built outside `.vitepress/` so the output can ship in the npm package.
@@ -39,12 +33,12 @@ export default defineConfig({
   // The tab icon is a THIRD asset on purpose: at 16px the S and F on the cube faces
   // stop being letters and start being dirt, so the favicon drops them. `icon.svg`
   // keeps them for the nav bar, where there is enough room to read them. See #567.
-  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]],
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }]],
 
   transformHead({ pageData }) {
     const current = routeForPage(pageData.relativePath)
-    const englishRoute = localizedRoute('en', current.route)
-    const frenchRoute = localizedRoute('fr', current.route)
+    const englishRoute = publishedRoute(localizedRoute('en', current.route))
+    const frenchRoute = publishedRoute(localizedRoute('fr', current.route))
     const canonical = current.locale === 'fr' ? frenchRoute : englishRoute
     const alternate = [
       ['link', { rel: 'canonical', href: canonical }],

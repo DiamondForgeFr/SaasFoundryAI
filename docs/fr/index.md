@@ -8,14 +8,14 @@ hero:
     reconstruire la stack ni les pratiques qui rendent le logiciel fiable.
   actions:
     - theme: brand
-      text: Explorer le harness
+      text: Installer le harness
+      link: /fr/getting-started/install-harness
+    - theme: alt
+      text: Explorer le workflow
       link: /fr/guide/workflow-system
     - theme: alt
       text: Créer un SaaS
       link: /fr/getting-started/installation
-    - theme: alt
-      text: Voir la fondation
-      link: /fr/features/built-in
 ---
 
 <dl class="sf-proof-strip" aria-label="Résumé du produit">
@@ -60,6 +60,7 @@ hero:
   </dl>
 
   <p><strong>Payez pour la rigueur, pas pour le cérémonial.</strong> Le processus s'adapte au risque : une coquille ne consomme pas le même contexte ni le même budget de revue qu'une modification des autorisations.</p>
+  <p><a href="./getting-started/install-harness.html">Installer le harness dans votre dépôt →</a></p>
 </section>
 
 <section class="sf-home-section">
@@ -71,19 +72,20 @@ hero:
   </p>
 
   <div class="sf-pillar-grid">
-    <a class="sf-pillar sf-pillar--harness" href="/fr/guide/workflow-system">
+    <a class="sf-pillar sf-pillar--harness" href="./guide/workflow-system.html">
       <span class="sf-card-index">01 / HARNESS</span>
       <h3>Harness de développement déterministe</h3>
       <p>Les pratiques de livraison exemplaires deviennent un système projet inspectable. Développeurs et agents IA travaillent dans la même équipe avec des SRS, tickets, skills, tests, validations humaines et pull requests partagés.</p>
       <span class="sf-card-link">Explorer le harness →</span>
     </a>
-    <a class="sf-pillar" href="/fr/features/built-in">
+    <a class="sf-pillar" href="./features/built-in.html">
       <span class="sf-card-index">02 / FONDATION</span>
       <h3>Fondation SaaS prête pour la production</h3>
       <p>Authentification, multi-tenant, RBAC contextualisé, API typée, React, PostgreSQL et socle opérationnel fonctionnent déjà ensemble avant votre première fonctionnalité métier.</p>
       <span class="sf-card-link">Voir les capacités incluses →</span>
     </a>
   </div>
+  <p><a href="./getting-started/install-harness.html">Adopter le harness dans un projet existant →</a></p>
 </section>
 
 <section class="sf-home-section">
@@ -108,7 +110,8 @@ hero:
   </ol>
 
   <p class="sf-boundary-note"><strong>La frontière v1 :</strong> ces deux couches ne sont pas reliées automatiquement. Le CLI <code>sf</code> ne route pas chaque sous-tâche vers un modèle. Un hôte ou une intégration doit fournir les candidats d'exécution, invoquer les contrats de planification et lancer l'agent ou le modèle sélectionné ; SaaSFoundry n'installe aucun compte fournisseur, ne copie aucun identifiant et n'invente aucun candidat indisponible.</p>
-  <p><a href="/fr/guide/agent-coexistence">Comprendre la coexistence des hôtes →</a> · <a href="/fr/guide/execution-planning">Explorer la planification adaptative →</a></p>
+  <p><a href="./guide/agent-coexistence.html">Comprendre la coexistence des hôtes →</a> · <a href="./guide/execution-planning.html">Explorer la planification adaptative →</a></p>
+  <p><a href="./getting-started/install-harness.html">Installer le harness partagé →</a></p>
 </section>
 
 <section class="sf-home-section">
@@ -119,18 +122,18 @@ hero:
   </p>
 
   <div class="sf-capability-grid">
-    <a href="/fr/features/built-in#authentification-et-cycle-de-session">Authentification & sessions</a>
-    <a href="/fr/features/built-in#modele-tenant-compte-et-entite">Modèle tenant & compte</a>
-    <a href="/fr/features/rbac">RBAC contextualisé</a>
-    <a href="/fr/features/built-in#invitations-et-reactivation-de-compte">Invitations & réactivation</a>
-    <a href="/fr/features/built-in#postgresql-et-prisma">PostgreSQL & Prisma</a>
-    <a href="/fr/features/built-in#contrat-d-api-type">Contrat API typé</a>
-    <a href="/fr/features/built-in#application-react">Application React</a>
-    <a href="/fr/features/built-in#internationalisation">Internationalisation</a>
-    <a href="/fr/features/built-in#experience-de-developpement-et-quality-gates">Tests, hooks & CI</a>
-    <a href="/fr/features/built-in#runtime-de-production">Runtime Docker</a>
-    <a href="/fr/guide/monorepo-vs-multirepo">Monorepo ou multirepo</a>
-    <a href="/fr/modules/email">Extensions composables</a>
+    <a href="./features/built-in.html#authentification-et-cycle-de-session">Authentification & sessions</a>
+    <a href="./features/built-in.html#modele-tenant-compte-et-entite">Modèle tenant & compte</a>
+    <a href="./features/rbac.html">RBAC contextualisé</a>
+    <a href="./features/built-in.html#invitations-et-reactivation-de-compte">Invitations & réactivation</a>
+    <a href="./features/built-in.html#postgresql-et-prisma">PostgreSQL & Prisma</a>
+    <a href="./features/built-in.html#contrat-d-api-type">Contrat API typé</a>
+    <a href="./features/built-in.html#application-react">Application React</a>
+    <a href="./features/built-in.html#internationalisation">Internationalisation</a>
+    <a href="./features/built-in.html#experience-de-developpement-et-quality-gates">Tests, hooks & CI</a>
+    <a href="./features/built-in.html#runtime-de-production">Runtime Docker</a>
+    <a href="./guide/monorepo-vs-multirepo.html">Monorepo ou multirepo</a>
+    <a href="./modules/email.html">Extensions composables</a>
   </div>
 </section>
 
@@ -142,13 +145,13 @@ hero:
   </p>
 
   <div class="sf-path-grid">
-    <a class="sf-path-card" href="/fr/getting-started/setup-paths#parcours-2-—-pilote-par-assistant">
+    <a class="sf-path-card" href="./getting-started/setup-paths.html#parcours-2-—-pilote-par-assistant">
       <code>« Crée mon espace SaaS »</code>
       <h3>Parcours assisté par un agent</h3>
       <p>Décrivez le résultat. Votre agent lit le projet, ne demande que les décisions manquantes, puis pilote les commandes SaaSFoundry explicites.</p>
       <span class="sf-card-link">Installer le skill agent →</span>
     </a>
-    <a class="sf-path-card" href="/fr/getting-started/setup-paths#parcours-1-—-cli-interactif">
+    <a class="sf-path-card" href="./getting-started/setup-paths.html#parcours-1-—-cli-interactif">
       <code>sf new --project-name mon-produit</code>
       <h3>Parcours CLI direct</h3>
       <p>Utilisez le questionnaire interactif ou les options scriptées. Le CLI reste déterministe, inspectable et automatisable sans modèle dans la boucle.</p>
@@ -182,8 +185,8 @@ hero:
   <h2>Choisissez la couche utile. Gardez les standards d'ingénierie.</h2>
   <p>Adoptez le harness dans un SaaS existant, partez de la fondation de production ou combinez les deux. Les décisions d'ingénierie communes restent explicites et reproductibles.</p>
   <div class="sf-final-actions">
-    <a href="/fr/guide/workflow-system">Adopter le harness →</a>
-    <a href="/fr/getting-started/installation">Générer la fondation →</a>
-    <a href="/fr/features/built-in">Inspecter les capacités SaaS →</a>
+    <a href="./getting-started/install-harness.html">Installer le harness →</a>
+    <a href="./getting-started/installation.html">Générer la fondation →</a>
+    <a href="./features/built-in.html">Inspecter les capacités SaaS →</a>
   </div>
 </section>

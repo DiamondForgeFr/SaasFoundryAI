@@ -8,14 +8,14 @@ hero:
     behind reliable software.
   actions:
     - theme: brand
-      text: Explore the harness
+      text: Set up the harness
+      link: /getting-started/install-harness
+    - theme: alt
+      text: Explore the workflow
       link: /guide/workflow-system
     - theme: alt
       text: Start a SaaS project
       link: /getting-started/installation
-    - theme: alt
-      text: Inspect the foundation
-      link: /features/built-in
 ---
 
 <dl class="sf-proof-strip" aria-label="Product summary">
@@ -59,6 +59,7 @@ hero:
   </dl>
 
   <p><strong>Pay for rigor, not theatre.</strong> Ceremony scales with risk, so a typo does not consume the same context and review budget as an authorization change.</p>
+  <p><a href="./getting-started/install-harness.html">Set up the harness in your repository →</a></p>
 </section>
 
 <section class="sf-home-section">
@@ -70,19 +71,20 @@ hero:
   </p>
 
   <div class="sf-pillar-grid">
-    <a class="sf-pillar sf-pillar--harness" href="/guide/workflow-system">
+    <a class="sf-pillar sf-pillar--harness" href="./guide/workflow-system.html">
       <span class="sf-card-index">01 / HARNESS</span>
       <h3>Deterministic development harness</h3>
       <p>Exemplary delivery practices become an inspectable project system. Developers and AI agents work as one team through shared SRS, tickets, skills, tests, human gates and pull requests.</p>
       <span class="sf-card-link">Explore the harness →</span>
     </a>
-    <a class="sf-pillar" href="/features/built-in">
+    <a class="sf-pillar" href="./features/built-in.html">
       <span class="sf-card-index">02 / FOUNDATION</span>
       <h3>Production-ready SaaS foundation</h3>
       <p>Authentication, tenancy, scoped RBAC, typed APIs, React, PostgreSQL and the operational baseline already work together before your first business feature.</p>
       <span class="sf-card-link">See what is built in →</span>
     </a>
   </div>
+  <p><a href="./getting-started/install-harness.html">Use the harness with your existing codebase →</a></p>
 </section>
 
 <section class="sf-home-section">
@@ -107,7 +109,8 @@ hero:
   </ol>
 
   <p class="sf-boundary-note"><strong>The v1 boundary:</strong> these two layers are not automatically wired together. The <code>sf</code> CLI does not route each subtask to a model. A host or integration must supply execution candidates, invoke the planning contracts and dispatch the selected agent or model; SaaSFoundry never installs provider accounts, copies credentials or invents unavailable candidates.</p>
-  <p><a href="/guide/agent-coexistence">See how agent hosts coexist →</a> · <a href="/guide/execution-planning">Inspect adaptive execution planning →</a></p>
+  <p><a href="./guide/agent-coexistence.html">See how agent hosts coexist →</a> · <a href="./guide/execution-planning.html">Inspect adaptive execution planning →</a></p>
+  <p><a href="./getting-started/install-harness.html">Install the shared harness →</a></p>
 </section>
 
 <section class="sf-home-section">
@@ -118,18 +121,18 @@ hero:
   </p>
 
   <div class="sf-capability-grid">
-    <a href="/features/built-in#authentication-and-session-lifecycle">Authentication & sessions</a>
-    <a href="/features/built-in#tenant-account-and-entity-model">Tenant & account model</a>
-    <a href="/features/rbac">Scoped RBAC</a>
-    <a href="/features/built-in#invitations-and-account-reactivation">Invitations & reactivation</a>
-    <a href="/features/built-in#postgresql-and-prisma">PostgreSQL & Prisma</a>
-    <a href="/features/built-in#typed-api-contract">Typed API contract</a>
-    <a href="/features/built-in#react-application">React application</a>
-    <a href="/features/built-in#internationalization">Internationalization</a>
-    <a href="/features/built-in#developer-experience-and-quality-gates">Tests, hooks & CI</a>
-    <a href="/features/built-in#production-runtime">Docker runtime</a>
-    <a href="/guide/monorepo-vs-multirepo">Monorepo or multirepo</a>
-    <a href="/modules/email">Composable add-ons</a>
+    <a href="./features/built-in.html#authentication-and-session-lifecycle">Authentication & sessions</a>
+    <a href="./features/built-in.html#tenant-account-and-entity-model">Tenant & account model</a>
+    <a href="./features/rbac.html">Scoped RBAC</a>
+    <a href="./features/built-in.html#invitations-and-account-reactivation">Invitations & reactivation</a>
+    <a href="./features/built-in.html#postgresql-and-prisma">PostgreSQL & Prisma</a>
+    <a href="./features/built-in.html#typed-api-contract">Typed API contract</a>
+    <a href="./features/built-in.html#react-application">React application</a>
+    <a href="./features/built-in.html#internationalization">Internationalization</a>
+    <a href="./features/built-in.html#developer-experience-and-quality-gates">Tests, hooks & CI</a>
+    <a href="./features/built-in.html#production-runtime">Docker runtime</a>
+    <a href="./guide/monorepo-vs-multirepo.html">Monorepo or multirepo</a>
+    <a href="./modules/email.html">Composable add-ons</a>
   </div>
 </section>
 
@@ -141,13 +144,13 @@ hero:
   </p>
 
   <div class="sf-path-grid">
-    <a class="sf-path-card" href="/getting-started/setup-paths#path-2-—-assistant-driven">
+    <a class="sf-path-card" href="./getting-started/setup-paths.html#path-2-—-assistant-driven">
       <code>“Create my SaaS workspace”</code>
       <h3>Agent-assisted path</h3>
       <p>Describe the outcome. Your coding agent reads the project, asks only for missing decisions, then drives the explicit SaaSFoundry commands.</p>
       <span class="sf-card-link">Install the agent skill →</span>
     </a>
-    <a class="sf-path-card" href="/getting-started/setup-paths#path-1-—-interactive-cli">
+    <a class="sf-path-card" href="./getting-started/setup-paths.html#path-1-—-interactive-cli">
       <code>sf new --project-name my-product</code>
       <h3>Direct CLI path</h3>
       <p>Use the interactive flow or scripted flags. The CLI remains deterministic, inspectable and suitable for automation without a model in the loop.</p>
@@ -181,8 +184,8 @@ hero:
   <h2>Choose the layer you need. Keep the engineering standards.</h2>
   <p>Adopt the harness in an existing SaaS, start from the production foundation, or combine both. The common engineering decisions stay explicit and reproducible.</p>
   <div class="sf-final-actions">
-    <a href="/guide/workflow-system">Adopt the harness →</a>
-    <a href="/getting-started/installation">Generate the foundation →</a>
-    <a href="/features/built-in">Inspect SaaS capabilities →</a>
+    <a href="./getting-started/install-harness.html">Set up the harness →</a>
+    <a href="./getting-started/installation.html">Generate the foundation →</a>
+    <a href="./features/built-in.html">Inspect SaaS capabilities →</a>
   </div>
 </section>

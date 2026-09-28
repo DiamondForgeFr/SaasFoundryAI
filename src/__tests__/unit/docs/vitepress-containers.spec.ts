@@ -94,29 +94,26 @@ describe('VitePress containers in docs/', () => {
 /**
  * #624 — the site had never been deployed, so nothing had ever exercised its base path.
  *
- * `base` said `/SaaSFoundryAI/` while the repository is `SaasFoundryAI`, and the favicon
- * `href` carried the same prefix as a second, independent literal. Two places holding the
- * same path by hand is the shape that drifts: the invariant below is that they agree,
- * whichever value is chosen.
+ * The bundled docs use `/`, while GitHub Pages needs `/SaasFoundryAI/` until a custom
+ * domain is configured. The favicon and head links must derive from the selected base.
  */
 describe('the documentation base path and its assets agree (#624)', () => {
   const config = readFileSync(path.resolve(__dirname, '../../../../docs/.vitepress/config.mts'), 'utf8')
+  const workflow = readFileSync(path.resolve(__dirname, '../../../../.github/workflows/deploy-docs.yml'), 'utf8')
 
   // Only the executed config, not the comment explaining what the old value was.
   const code = config.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
 
-  const base = code.match(/^\s*base:\s*'([^']+)'/m)?.[1]
-
-  it('declares a base', () => {
-    expect(base).toBeDefined()
+  it('uses the root locally and accepts a Pages-specific base at build time', () => {
+    expect(code).toContain("const base = process.env.SF_DOCS_BASE || '/'")
+    expect(code).toMatch(/^\s*base,$/m)
+    expect(workflow).toContain('uses: actions/configure-pages@v5')
+    expect(workflow).toContain('SF_DOCS_BASE: ${{ steps.pages.outputs.base_path }}/')
   })
 
-  it('prefixes every absolute asset href with the base, or with nothing when the base is the root', () => {
-    const hrefs = [...code.matchAll(/href:\s*'(\/[^']*)'/g)].map((m) => m[1])
-    expect(hrefs.length).toBeGreaterThan(0)
-    for (const href of hrefs) {
-      expect(href.startsWith(base!)).toBe(true)
-    }
+  it('derives favicon and locale head links from the selected base', () => {
+    expect(code).toContain('href: `${base}favicon.svg`')
+    expect(code).toContain('publishedRoute(localizedRoute(')
   })
 
   it('never carries a repository subpath the repository does not have', () => {

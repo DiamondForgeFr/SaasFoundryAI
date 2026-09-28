@@ -71,6 +71,21 @@
   width: auto;
 }
 
+.VPNavBarMenuLink[href*='install-harness'] {
+  align-self: center;
+  border: 1px solid var(--vp-c-brand-1);
+  border-radius: var(--sf-radius);
+  color: var(--vp-c-brand-1);
+  height: 34px;
+  line-height: 1;
+  padding: 0 10px;
+}
+
+.VPNavBarMenuLink[href*='install-harness']:hover,
+.VPNavBarMenuLink[href*='install-harness']:focus-visible {
+  background: var(--vp-c-brand-soft);
+}
+
 /* Replaced by LocaleSwitch so untranslated routes can fall back safely instead of 404ing. */
 .VPNavBarTranslations,
 .VPNavScreenTranslations {
