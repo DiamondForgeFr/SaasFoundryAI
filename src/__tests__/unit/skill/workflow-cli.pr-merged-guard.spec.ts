@@ -15,6 +15,7 @@ const releaseHeadOid = 'd'.repeat(40)
 const releaseTreeOid = 'e'.repeat(40)
 const syncMergeOid = 'f'.repeat(40)
 const releasePrTitle = 'chore(#42): release SaaSFoundryAI v1.0.0'
+const fixtureRepository = 'FakeOrg/FakeRepo'
 
 function releasePrFixture(overrides: Record<string, unknown> = {}) {
   return {
@@ -174,7 +175,7 @@ if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
   exit 0
 fi
 if [ "$1" = "repo" ] && [ "$2" = "view" ]; then
-  printf '%s' 'FakeOrg/FakeRepo'
+  printf '%s' '${fixtureRepository}'
   exit 0
 fi
 if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
@@ -199,6 +200,7 @@ exit 0
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    GITHUB_REPOSITORY: fixtureRepository,
     PWD: dir,
     PATH: `${binDir}:${process.env.PATH ?? ''}`
   }
@@ -325,6 +327,25 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(0)
     expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toHaveLength(1)
+  })
+
+  it('rejects a release PR when the explicit GitHub repository context differs', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture())
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox, { GITHUB_REPOSITORY: 'OtherOrg/OtherRepo' })
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('not verified as a same-repository PR')
+    expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toEqual([])
+  })
+
+  it('falls back to gh repo view when GitHub repository context is absent', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture())
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox, { GITHUB_REPOSITORY: '' })
+    expect(res.code).toBe(0)
+    expect(readLog(sandbox.ghLogPath)).toContain('repo view --json nameWithOwner --jq .nameWithOwner')
   })
 
   it.each(['[#42] Custom release title', 'chore(#42)!: custom release title'])('keeps accepting a legacy ticket-aware custom merge title: %s', async (mergeCommitMessage) => {
