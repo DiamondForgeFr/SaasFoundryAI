@@ -1,16 +1,20 @@
 # Publishing the documentation
 
-## Where it stands today
+GitHub Pages is configured for this repository with **GitHub Actions** as its source. The `Deploy Documentation` workflow builds both languages and publishes the static site at
+`https://diamondforgefr.github.io/SaasFoundryAI/`.
 
-**The site has never been deployed.** It builds — `npm run docs:build` completes in a few seconds — but nothing has ever published it, and three things had to be true before anything could:
+## Publish a validated revision
 
-|                    |                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| GitHub Pages       | **not enabled** on this repository — `gh api repos/DiamondForgeFr/SaasFoundryAI/pages` returns 404          |
-| the base path      | said `/SaaSFoundryAI/` while the repository is `SaasFoundryAI` — fixed, see below                           |
-| the deploy trigger | fired on `master` and on `v*`, so the v1 cut would have run a deploy that could only fail — now manual only |
+1. Merge the documentation change into `develop` through its reviewed pull request.
+2. Open **Actions → Deploy Documentation → Run workflow** and select `develop`.
+3. Wait for both the `build` and `deploy` jobs to succeed.
+4. Check the [English home](https://diamondforgefr.github.io/SaasFoundryAI/), [French home](https://diamondforgefr.github.io/SaasFoundryAI/fr/), and an installation guide in each language.
 
-The near-term answer for users is **not** this site: the built documentation ships inside the npm package and `sf docs` opens it with no network (#626). Publishing online comes after.
+The `github-pages` environment currently permits deployments **only from `develop`**. A feature branch can build successfully but its deploy job will be rejected by that protection rule. Do not weaken
+the rule just to preview a pull request; use `npm run docs:dev` or `npm run docs:preview` for review instead.
+
+The workflow is intentionally manual while the first publication and review are completed. If publication should later follow merges automatically, add a `push` trigger for the chosen publishing
+branch in `.github/workflows/deploy-docs.yml` and review the branch policy together. Avoid triggering from both `develop` and `master`: an older push could replace newer documentation.
 
 ## Read it locally
 
@@ -20,34 +24,23 @@ npm run docs:build   # static output in docs-dist
 npm run docs:preview
 ```
 
-The dev server runs on **5176**, set in `docs/.vitepress/config.mts`. That is deliberate: 5173 is the port a _generated project's_ web app uses, and the two should be able to run side by side.
+The dev server uses **5176** so a generated project's web app can use 5173 at the same time. The CLI also bundles this documentation: `sf docs` serves it offline from the root of a local server.
 
-## Turning publication on
+## Base path
 
-1. Repository **Settings** → **Pages** → **Source** → **GitHub Actions**. This is manual and owner-only; no workflow can do it.
-2. Run `Deploy Documentation` once from the Actions tab (`workflow_dispatch`) and confirm it succeeds.
-3. Only then, restore the `push` trigger in `.github/workflows/deploy-docs.yml` — the commented block is right there — so the cut publishes the docs along with the release.
+The Pages workflow gets the correct base path from `actions/configure-pages`. For the repository site it builds with `/SaasFoundryAI/` (respect the repository's casing). Local and packaged builds
+default to `/`. If a custom domain is configured later, the action supplies `/` without a source edit. The favicon, canonical links and locale alternates use the same base.
 
-## The base path, and why it is `/`
+To reproduce the repository-site build locally:
 
-`base` is `/` rather than a repository subpath. That serves the two things this documentation is actually for: the copy bundled in the npm package, served from the root of a local static server, and a
-custom domain later.
+```bash
+SF_DOCS_BASE=/SaasFoundryAI/ npm run docs:build
+```
 
-**A `github.io/<repo>/` project site is the one shape that would need a subpath back.** If that becomes the plan, set `base: '/SaasFoundryAI/'` — note the casing, which is `SaasFoundryAI`, not
-`SaaSFoundryAI` — and fix the favicon `href` in the same file, which carries the same prefix.
+## Custom domain later
 
-## Custom domain
+1. Point the chosen subdomain's DNS `CNAME` to `diamondforgefr.github.io`.
+2. Enter that domain under **Settings → Pages → Custom domain**, verify DNS, and enable HTTPS.
+3. Keep a matching `CNAME` file in `docs/public/` if required by the Pages deployment configuration, then verify another workflow run and all links.
 
-1. Configure DNS:
-
-   ```
-   CNAME: docs.example.com → diamondforgefr.github.io
-   ```
-
-2. **Settings** → **Pages** → **Custom domain**, enter the domain, and check **Enforce HTTPS**.
-3. Add a `CNAME` file to `docs/public/` holding the domain, or GitHub drops the setting on the next deploy.
-
-With a custom domain, `base: '/'` is already correct and needs no change.
-
-> The CLI has printed `https://docs.saasfoundry.io (coming soon)` since before any of this existed. That name is not registered or configured anywhere — pick the domain deliberately when publication
-> actually happens, rather than inheriting it from a placeholder.
+Do not announce a placeholder hostname before it is registered and configured.
