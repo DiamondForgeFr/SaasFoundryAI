@@ -7,9 +7,6 @@ const ROOT = resolve(__dirname, '../../..')
 
 describe('compiled sf agents commands', () => {
   let project: string
-  beforeAll(() => {
-    execFileSync(process.execPath, [join(ROOT, 'node_modules/typescript/bin/tsc')], { cwd: ROOT, stdio: 'pipe' })
-  })
   beforeEach(async () => {
     project = await mkdtemp(join(tmpdir(), 'sf-agents-cli-'))
     await writeFile(

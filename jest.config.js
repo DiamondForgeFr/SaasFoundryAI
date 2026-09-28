@@ -23,6 +23,7 @@ module.exports = {
       roots: ['<rootDir>/src'],
       testMatch: ['<rootDir>/src/__tests__/integration/**/*.spec.ts'],
       testPathIgnorePatterns: ['/node_modules/', '/dist/', '/scaffolds/', '/.turbo/', '/coverage/'],
+      globalSetup: '<rootDir>/jest.cli.global-setup.js',
       setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
       globals: { TEST_TIMEOUT: 30000 }
     },
@@ -33,6 +34,7 @@ module.exports = {
       roots: ['<rootDir>/src'],
       testMatch: ['<rootDir>/src/__tests__/e2e/**/*.spec.ts'],
       testPathIgnorePatterns: ['/node_modules/', '/dist/', '/scaffolds/', '/.turbo/', '/coverage/'],
+      globalSetup: '<rootDir>/jest.cli.global-setup.js',
       setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
       globals: { TEST_TIMEOUT: 60000 }
     },

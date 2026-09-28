@@ -28,16 +28,6 @@ describe('compiled multi-agent coexistence in generated-layout fixtures (#651)',
   let project: string
   let commandEnv: NodeJS.ProcessEnv
 
-  beforeAll(() => {
-    execFileSync(process.execPath, [join(ROOT, 'node_modules/typescript/bin/tsc')], {
-      cwd: ROOT,
-      stdio: 'pipe',
-      timeout: CHILD_TIMEOUT,
-      maxBuffer: MAX_BUFFER,
-      env: { ...inheritedToolEnvironment(), CI: 'true' }
-    })
-  })
-
   beforeEach(async () => {
     sandbox = await mkdtemp(join(tmpdir(), 'sf-agent-coexistence-'))
     project = join(sandbox, 'project')

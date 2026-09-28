@@ -79,13 +79,6 @@ describe('sf update --adopt-legacy', () => {
   }
 
   beforeAll(async () => {
-    execFileSync(process.execPath, [join(CLI_ROOT, 'node_modules/typescript/bin/tsc')], {
-      cwd: CLI_ROOT,
-      env: { ...process.env, HUSKY: '0' },
-      stdio: 'pipe',
-      timeout: CHILD_TIMEOUT,
-      maxBuffer: MAX_BUFFER
-    })
     fixtureBytes = await readFile(FIXTURE)
   })
 

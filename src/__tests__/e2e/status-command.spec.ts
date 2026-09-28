@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { statusCommand } from '../../commands/status'
 import { writeManifest } from '../../utils'
 import type { SaaSFoundryManifest } from '../../types'
-import { execFileSync, spawnSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import { resolve } from 'path'
 
 const CLI_ROOT = resolve(__dirname, '../../..')
@@ -29,10 +29,6 @@ describe('status command (E2E)', () => {
   let tempDir: string
   let originalCwd: string
   let originalExitCode: typeof process.exitCode
-
-  beforeAll(() => {
-    execFileSync(process.execPath, [join(CLI_ROOT, 'node_modules/typescript/bin/tsc')], { cwd: CLI_ROOT, stdio: 'pipe' })
-  })
 
   beforeEach(async () => {
     tempDir = join(tmpdir(), `sf-e2e-status-${Date.now()}-${Math.random().toString(36).slice(2)}`)
