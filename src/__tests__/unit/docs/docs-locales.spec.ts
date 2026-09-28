@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { DefaultTheme } from 'vitepress'
-import { documentationLink, localizedRoute, markdownPathToRoute, routeForPage, routeWithoutLocale } from '../../../../docs/.vitepress/config/locale-paths'
+import { documentationLink, languageSwitchRoute, localizedRoute, markdownPathToRoute, routeForPage, routeWithoutLocale } from '../../../../docs/.vitepress/config/locale-paths'
 import { discoverLocaleRoutes } from '../../../../docs/.vitepress/config/locale-routes'
 import { createThemeConfig } from '../../../../docs/.vitepress/config/navigation'
 import { documentationLocaleParityMode, evaluateLocaleParity, type LocaleParityMode } from '../../../../docs/.vitepress/config/translation-policy'
@@ -104,6 +104,20 @@ describe('documentation locale routes (#796)', () => {
     expect(documentationLink('fr', '/', ['/'])).toBe('/fr/')
     expect(documentationLink('fr', '/guide/setup', ['/'])).toBe('/guide/setup')
     expect(documentationLink('fr', '/guide/setup', ['/', '/guide/setup'])).toBe('/fr/guide/setup')
+  })
+
+  it.each([
+    ['index.md', '/', '/fr/'],
+    ['fr/index.md', '/', '/fr/'],
+    ['guide/project-structure.md', '/guide/project-structure.html', '/fr/guide/project-structure.html'],
+    ['fr/guide/project-structure.md', '/guide/project-structure.html', '/fr/guide/project-structure.html']
+  ])('switches %s without carrying a hosting base or duplicate locale', (source, english, french) => {
+    expect(languageSwitchRoute(source, 'en', frenchRoutes)).toBe(english)
+    expect(languageSwitchRoute(source, 'fr', frenchRoutes)).toBe(french)
+  })
+
+  it('sends an untranslated page to the French home instead of a missing route', () => {
+    expect(languageSwitchRoute('guide/project-structure.md', 'fr', ['/'])).toBe('/fr/')
   })
 
   it('inventories both public locale trees', () => {
