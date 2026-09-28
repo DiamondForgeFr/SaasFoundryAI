@@ -8,12 +8,6 @@ const ROOT = resolve(__dirname, '../../..')
 describe('compiled shared harness installer', () => {
   let project: string
 
-  beforeAll(() => {
-    // The E2E CI job runs independently of the build job. Exercise the shipped
-    // JavaScript and resource paths, not Jest's TypeScript module loader.
-    execFileSync(process.execPath, [join(ROOT, 'node_modules/typescript/bin/tsc')], { cwd: ROOT, stdio: 'pipe' })
-  })
-
   beforeEach(async () => {
     project = await mkdtemp(join(tmpdir(), 'sf-agent-e2e-'))
   })

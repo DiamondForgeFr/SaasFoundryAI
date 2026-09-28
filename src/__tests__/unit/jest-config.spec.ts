@@ -1,13 +1,25 @@
+import { readFileSync, readdirSync } from 'fs'
+import { join, resolve } from 'path'
+
 interface JestProject {
   displayName: string
+  globalSetup?: string
   setupFilesAfterEnv?: string[]
   globals?: Record<string, unknown>
 }
 
 // jest.config.js ships no type declaration, and adding one for a config file read
 // by a single spec would be ceremony.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const config = require('../../../jest.config') as { projects: JestProject[] }
+const COMPILED_CLI_SUITES = [resolve(__dirname, '../integration'), resolve(__dirname, '../e2e')]
+
+function listSpecs(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) return listSpecs(path)
+    return entry.name.endsWith('.spec.ts') ? [path] : []
+  })
+}
 
 describe('jest configuration', () => {
   it('declares all four projects', () => {
@@ -36,6 +48,29 @@ describe('jest configuration', () => {
   it('does not leave any project on the 5s default', () => {
     for (const project of config.projects) {
       expect(typeof project.globals?.['TEST_TIMEOUT']).toBe('number')
+    }
+  })
+
+  it('compiles the CLI once through a shared integration and E2E global setup', () => {
+    const projectsWithGlobalSetup = config.projects.filter((project) => project.globalSetup !== undefined)
+
+    expect(projectsWithGlobalSetup).toEqual([
+      expect.objectContaining({
+        displayName: 'integration',
+        globalSetup: '<rootDir>/jest.cli.global-setup.js'
+      }),
+      expect.objectContaining({
+        displayName: 'e2e',
+        globalSetup: '<rootDir>/jest.cli.global-setup.js'
+      })
+    ])
+  })
+
+  it('does not compile TypeScript independently inside integration or E2E specs', () => {
+    for (const suite of COMPILED_CLI_SUITES) {
+      for (const spec of listSpecs(suite)) {
+        expect(readFileSync(spec, 'utf8')).not.toContain('typescript/bin/tsc')
+      }
     }
   })
 })
