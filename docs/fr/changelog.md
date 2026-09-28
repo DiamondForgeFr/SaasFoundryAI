@@ -6,6 +6,8 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
+## [1.0.0] - 2026-09-27
+
 ### Ajouts
 
 #### Commandes CLI

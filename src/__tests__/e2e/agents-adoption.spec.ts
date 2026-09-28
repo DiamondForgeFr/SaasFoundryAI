@@ -9,10 +9,6 @@ const CLI = join(ROOT, 'bin/sf.js')
 describe('compiled sf agents adopt command', () => {
   let project: string
 
-  beforeAll(() => {
-    execFileSync(process.execPath, [join(ROOT, 'node_modules/typescript/bin/tsc')], { cwd: ROOT, stdio: 'pipe' })
-  })
-
   beforeEach(async () => {
     project = await mkdtemp(join(tmpdir(), 'sf-agents-adopt-'))
   })

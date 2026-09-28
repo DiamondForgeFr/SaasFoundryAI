@@ -16,7 +16,7 @@ La documentation incluse dans le package npm reste la voie disponible en v1 : `s
 
 ```bash
 npm run docs:dev     # http://localhost:5176
-npm run docs:build   # sortie statique dans docs/.vitepress/dist
+npm run docs:build   # sortie statique dans docs-dist
 npm run docs:preview
 ```
 

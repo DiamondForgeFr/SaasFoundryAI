@@ -602,7 +602,7 @@ is_done_target() {
 get_pr_for_ticket() {
   local ticket=$1 state=$2 payload
   payload=$(gh pr list --state "$state" --limit 1000 \
-    --json number,headRefName,headRefOid,baseRefName,body,mergedAt,mergeCommit 2>/dev/null) || return 1
+    --json number,title,headRefName,headRefOid,headRepository,headRepositoryOwner,isCrossRepository,baseRefName,body,mergedAt,mergeCommit 2>/dev/null) || return 1
   echo "$payload" | jq -r \
     --arg t "$ticket" --arg working "$WORKING_BRANCH" --arg state "$state" \
     --slurpfile manifest .saasfoundry.json '
@@ -630,22 +630,50 @@ get_pr_for_ticket() {
       | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
       | if ($payload | type) == "array" then
           [$payload[]
-           | (((.headRefName | type) == "string"
+           | ((.headRefName | type) == "string"
                and (.headRefName | test($release_pattern))
                and .baseRefName == $release_branch
-               and [.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t])) as $is_release
+               and [.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t]) as $is_release
            | select(
-               ((.headRefName as $branch
-                 | any($delivery_patterns[]; . as $pattern | $branch | test($pattern)))
-                 and .baseRefName == $delivery_branch)
-               or $is_release)
-           | select(($state != "merged") or (((.mergedAt | type) == "string") and ((.mergedAt | length) > 0)))
-           | if $state == "merged" and $is_release then
-               select((.mergeCommit.oid | type) == "string" and (.mergeCommit.oid | test("^[0-9a-f]{40}$"))
-                 and (.headRefOid | type) == "string" and (.headRefOid | test("^[0-9a-f]{40}$")))
-               | "\(.number)\t\(.mergeCommit.oid)\t\(.headRefOid)"
-             else (.number | tostring) end]
-          | .[0] // empty
+               (
+                 (.headRefName | type) == "string"
+                 and (.headRefName as $branch
+                   | any($delivery_patterns[]; . as $pattern | $branch | test($pattern)))
+                 and .baseRefName == $delivery_branch
+               ) or $is_release
+             )
+           | {pr: ., is_release: $is_release}] as $matches
+          | if $state == "merged" then
+              ($matches | map(select(.is_release))) as $release_matches
+              | if ($release_matches | length) > 0 then
+                  if any($release_matches[];
+                    ((.pr.mergedAt | try fromdateiso8601 catch null) | type) != "number")
+                  then error("Merged release PR is missing mergedAt")
+                  else ($release_matches | sort_by(.pr.mergedAt | fromdateiso8601) | reverse) as $ordered
+                    | if (($ordered | length) > 1
+                        and ($ordered[0].pr.mergedAt | fromdateiso8601) == ($ordered[1].pr.mergedAt | fromdateiso8601))
+                      then error("Latest release PR is ambiguous")
+                      else $ordered[0].pr
+                        | if ((.number | type) == "number"
+                          and (.mergeCommit.oid | type) == "string" and (.mergeCommit.oid | test("^[0-9a-f]{40}$"))
+                          and (.headRefOid | type) == "string" and (.headRefOid | test("^[0-9a-f]{40}$"))
+                          and (.headRefName | type) == "string" and (.headRefName | test("[\\t\\r\\n]") | not)
+                          and .isCrossRepository == false
+                          and (.headRepositoryOwner.login | type) == "string" and (.headRepositoryOwner.login | test("^[A-Za-z0-9_.-]+$"))
+                          and (.headRepository.name | type) == "string" and (.headRepository.name | test("^[A-Za-z0-9._-]+$"))
+                          and (.title | type) == "string" and (.title | length) > 0 and (.title | test("[\\t\\r\\n]") | not))
+                          then "\(.number)\t\(.mergeCommit.oid)\t\(.headRefOid)\t\(.headRefName)\t\(.headRepositoryOwner.login)\t\(.headRepository.name)\t\(.title)"
+                          else error("Latest release PR metadata is incomplete or unsafe") end
+                      end
+                  end
+                else [$matches[]
+                  | select(.is_release | not)
+                  | .pr
+                  | select((.mergedAt | type) == "string" and (.mergedAt | length) > 0)
+                  | (.number | tostring)][0] // empty
+                end
+            else [$matches[] | (.pr.number | tostring)][0] // empty
+            end
         else error("Expected PR array") end
     '
 }
@@ -718,15 +746,21 @@ check_pr_merged_guard() {
     return 1
   fi
   if [[ "$merged_pr" == *$'\t'* ]]; then
-    local release_pr merge_sha rc_head_sha repo merge_commit rc_commit merge_message working_branch release_branch
-    local sync_pr_payload sync_match sync_merge_sha sync_commit sync_status
-    IFS=$'\t' read -r release_pr merge_sha rc_head_sha <<< "$merged_pr"
+    local release_pr merge_sha rc_head_sha release_head_ref release_head_owner release_head_repo release_pr_title
+    local repo merge_commit rc_commit merge_message merge_first_line expected_github_message
+    local working_branch release_branch
+    local sync_pr_payload sync_match sync_merge_sha sync_commit sync_message sync_status
+    IFS=$'\t' read -r release_pr merge_sha rc_head_sha release_head_ref release_head_owner release_head_repo release_pr_title <<< "$merged_pr"
     repo=${GITHUB_REPOSITORY:-}
     if [[ -z "$repo" ]]; then
       repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
         echo "Error: unable to resolve the repository for immutable release-ticket verification." >&2
         return 1
       }
+    fi
+    if [[ "$repo" != */* || "${release_head_owner}/${release_head_repo}" != "$repo" ]]; then
+      echo "Error: release PR #${release_pr} is not verified as a same-repository PR; no status transition was made." >&2
+      return 1
     fi
     merge_commit=$(gh api "repos/${repo}/git/commits/${merge_sha}" 2>/dev/null) || {
       echo "Error: unable to verify the immutable release merge commit; no status transition was made." >&2
@@ -753,7 +787,7 @@ check_pr_merged_guard() {
     working_branch=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
     release_branch=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
     sync_pr_payload=$(gh pr list --state merged --base "$working_branch" --head "$release_branch" --limit 100 \
-      --json number,headRefName,headRefOid,baseRefName,mergedAt,mergeCommit,body,isCrossRepository 2>/dev/null) || {
+      --json number,headRefName,headRefOid,baseRefName,mergedAt,mergeCommit,body,closingIssuesReferences,isCrossRepository 2>/dev/null) || {
       echo "Error: unable to verify the release synchronization PR; no status transition was made." >&2
       return 1
     }
@@ -761,7 +795,8 @@ check_pr_merged_guard() {
       [.[]
        | select(.headRefName == $head and .baseRefName == $base and .headRefOid == $release)
        | select(.isCrossRepository == false and (.mergedAt | type) == "string" and (.mergedAt | length) > 0)
-       | select(([.body // "" | scan("(?im)^\\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#[1-9][0-9]*\\s*$")] | length) == 0)
+       | select((.closingIssuesReferences | type) == "array" and (.closingIssuesReferences | length) == 0)
+       | select(([.body // "" | scan("(?i)(?:^|[^[:alnum:]_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*")] | length) == 0)
        | select((.mergeCommit.oid | type) == "string" and (.mergeCommit.oid | test("^[0-9a-f]{40}$")))]
       | if length == 1 then .[0] else error("Expected exactly one release synchronization PR") end
     ' <<< "$sync_pr_payload" 2>/dev/null) || {
@@ -774,9 +809,15 @@ check_pr_merged_guard() {
       return 1
     }
     if ! jq -e --arg release "$merge_sha" '
-      (.parents | type) == "array" and (.parents | length) == 2 and .parents[1].sha == $release
+      (.message | type) == "string"
+      and (.parents | type) == "array" and (.parents | length) == 2 and .parents[1].sha == $release
     ' <<< "$sync_commit" >/dev/null 2>&1; then
       echo -e "${RED}✗ Release synchronization was not integrated with a two-parent merge commit whose second parent is the release commit — cannot transition to 'Done'.${NC}" >&2
+      return 1
+    fi
+    sync_message=$(jq -r '.message' <<< "$sync_commit")
+    if printf '%s\n' "$sync_message" | grep -Eqi '(^|[^[:alnum:]_])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*'; then
+      echo -e "${RED}✗ Release synchronization merge commit embeds a closing directive — cannot transition to 'Done'.${NC}" >&2
       return 1
     fi
     sync_status=$(gh api "repos/${repo}/compare/${sync_merge_sha}...${working_branch}" --jq .status 2>/dev/null) || {
@@ -788,11 +829,19 @@ check_pr_merged_guard() {
       return 1
     fi
     merge_message=$(jq -r '.message' <<< "$merge_commit")
-    if ! printf '%s\n' "$merge_message" | head -n 1 | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
+    merge_first_line=${merge_message%%$'\n'*}
+    expected_github_message=$(printf 'Merge pull request #%s from %s/%s\n\n%s' \
+      "$release_pr" "$release_head_owner" "$release_head_ref" "$release_pr_title")
+    if [[ "$merge_message" == "$expected_github_message" ]]; then
+      if ! printf '%s\n' "$release_pr_title" | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
+        echo -e "${RED}✗ Verified release PR #${release_pr} does not have a ticket-aware title for #${ticket} — cannot transition to 'Done'.${NC}" >&2
+        return 1
+      fi
+    elif ! printf '%s\n' "$merge_first_line" | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
       echo -e "${RED}✗ Release PR body and immutable merge title do not agree on ticket #${ticket} — cannot transition to 'Done'.${NC}" >&2
       return 1
     fi
-    if printf '%s\n' "$merge_message" | grep -Eqi "^[[:space:]]*(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[1-9][0-9]*[[:space:]]*$"; then
+    if printf '%s\n' "$merge_message" | grep -Eqi '(^|[^[:alnum:]_])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*'; then
       echo -e "${RED}✗ Release merge commit embeds a closing directive that would close the ticket during working-branch synchronization — cannot transition to 'Done'.${NC}" >&2
       return 1
     fi

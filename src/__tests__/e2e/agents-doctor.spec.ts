@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join, relative, resolve } from 'path'
@@ -8,10 +8,6 @@ const CLI = join(ROOT, 'bin/sf.js')
 
 describe('compiled sf agents doctor command', () => {
   let project: string
-
-  beforeAll(() => {
-    execFileSync(process.execPath, [join(ROOT, 'node_modules/typescript/bin/tsc')], { cwd: ROOT, stdio: 'pipe' })
-  })
 
   beforeEach(async () => {
     project = await mkdtemp(join(tmpdir(), 'sf-agents-doctor-'))

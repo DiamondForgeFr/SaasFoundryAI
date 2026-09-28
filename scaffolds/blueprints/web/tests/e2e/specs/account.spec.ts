@@ -97,6 +97,25 @@ test.describe('Account Management Flow', () => {
     await expect(page.getByTestId(selectors.accountOverview.roles.blockId)).toBeVisible()
   })
 
+  test('should preserve the authenticated session when an account request reports a disabled account', async ({ page }) => {
+    await setupAuthenticatedUser(page as CustomPage, 'admin')
+    await (page as CustomPage).mockRoute(testApi.account.URL, async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'This account is disabled' })
+      })
+    })
+
+    const disabledResponse = page.waitForResponse((response) => response.url().includes(`/api/accounts/${testData.accountId}`) && response.status() === 401)
+    await page.goto(selectors.URL)
+    await disabledResponse
+
+    await expect(page).not.toHaveURL(/\/signin/)
+    const authMe = await page.evaluate(() => localStorage.getItem('authMe'))
+    expect(authMe).not.toBeNull()
+  })
+
   test('should not have translation keys in the page', async ({ page }) => {
     await setupAuthenticatedUser(page as CustomPage, 'admin')
     await page.goto(selectors.URL)

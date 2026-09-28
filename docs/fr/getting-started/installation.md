@@ -22,7 +22,7 @@ Avec Claude Code, transmettez cette phrase à l'assistant depuis le dossier de t
 Le bootstrap actuel au niveau utilisateur installe `tool-saasfoundry` dans le dossier de skills de Claude Code :
 
 ```bash
-npx saasfoundryai-cli@beta skill install --yes --force
+npx saasfoundryai-cli skill install --yes --force
 ```
 
 Utilisez `--project` pour placer cette méta-skill dans le dépôt afin de la relire et de la partager avec l'équipe.
@@ -44,13 +44,13 @@ Les projets générés utilisent les workspaces npm et un `package-lock.json`. y
 Vous pouvez exécuter le CLI sans installation globale :
 
 ```bash
-npx saasfoundryai-cli@beta new
+npx saasfoundryai-cli new
 ```
 
 Ou l'installer globalement :
 
 ```bash
-npm install -g saasfoundryai-cli@beta
+npm install -g saasfoundryai-cli
 sf --version
 ```
 

@@ -21,7 +21,7 @@ installation and supported agent profiles.
 No global installation is required:
 
 ```bash
-npx saasfoundryai-cli@beta new
+npx saasfoundryai-cli new
 ```
 
 Prefer an AI-guided conversation? The [CLI or assistant setup guide](/getting-started/setup-paths) explains both routes. They use the same configuration engine and produce the same managed contract.
