@@ -21,7 +21,8 @@ describe('PR review board synchronization workflow', () => {
     expect(job.if).toBe('github.event.pull_request.head.repo.full_name == github.repository')
     const checkout = job.steps.filter((step) => step.uses?.startsWith('actions/checkout@'))
     expect(checkout).toHaveLength(1)
-    expect(checkout[0].with).toEqual({ ref: '${{ github.sha }}', 'persist-credentials': false })
+    expect(checkout[0].with).toEqual({ ref: '${{ github.workflow_sha }}', 'persist-credentials': false })
+    expect(source).not.toContain('ref: ${{ github.sha }}')
     expect(checkout[0].env).toBeUndefined()
   })
   it('passes event data as arguments, requires the dedicated token and delegates to the guarded CLI', () => {

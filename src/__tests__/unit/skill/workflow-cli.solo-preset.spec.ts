@@ -64,7 +64,7 @@ esac
   const binDir = path.join(dir, 'bin')
   await mkdir(binDir, { recursive: true })
   const ghPath = path.join(binDir, 'gh')
-  writeFileSync(ghPath, `#!/bin/bash\necho '[{"number":1,"headRefName":"feature/277-work","isDraft":false}]'\n`)
+  writeFileSync(ghPath, `#!/bin/bash\necho '[{"number":1,"headRefName":"feature/277-work","baseRefName":"develop","isDraft":false}]'\n`)
   chmodSync(ghPath, 0o755)
   const env: NodeJS.ProcessEnv = { ...process.env, PWD: dir, PATH: `${binDir}:${process.env.PATH}` }
   return { dir, env, cleanup: () => rm(dir, { recursive: true, force: true }) }

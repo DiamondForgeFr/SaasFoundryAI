@@ -13,9 +13,10 @@ const base = 'b'.repeat(40)
 const event = {
   action: 'ready_for_review',
   number: 100,
-  repository: { full_name: repo },
+  repository: { full_name: repo, default_branch: 'develop' },
   pull_request: {
     number: 100,
+    title: '[#42] Delivery',
     state: 'open',
     draft: false,
     head: { ref: 'feature/42-work', sha: head, repo: { full_name: repo } },
@@ -25,6 +26,7 @@ const event = {
 const live = {
   number: 100,
   url: `https://github.com/${repo}/pull/100`,
+  title: '[#42] Delivery',
   state: 'OPEN',
   isDraft: false,
   headRefName: 'feature/42-work',
@@ -125,6 +127,7 @@ esac
       ...event,
       pull_request: {
         ...event.pull_request,
+        body: 'Delivery\n\nCloses #42',
         head: { ...event.pull_request.head, ref: 'rc-1.0.0' },
         base: { ...event.pull_request.base, ref: 'master' }
       }
@@ -140,25 +143,172 @@ esac
     expect((await run({ LIVE: JSON.stringify(releaseLive) })).code).toBe(0)
     expect(calls()).toContain('tool update-status 42 In review')
   })
-  it.each([[''], ['Closes #42\nCloses #43'], ['Resolves #42']] as Array<[string]>)('rejects a release PR without exactly one explicit closing directive: %j', async (body) => {
+  it('validates a clean release-to-working-branch synchronization PR without moving a ticket', async () => {
+    const syncEvent = {
+      ...event,
+      pull_request: {
+        ...event.pull_request,
+        title: 'chore: synchronize released code into develop',
+        body: 'Technical post-release synchronization.',
+        head: { ...event.pull_request.head, ref: 'master' },
+        base: { ...event.pull_request.base, ref: 'develop' }
+      }
+    }
+    const syncLive = {
+      ...live,
+      title: syncEvent.pull_request.title,
+      headRefName: 'master',
+      baseRefName: 'develop',
+      body: syncEvent.pull_request.body,
+      closingIssuesReferences: []
+    }
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify(syncEvent))
+
+    const result = await run({ LIVE: JSON.stringify(syncLive) })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('no ticket transition is required')
+    expect(calls()).toContain(`gh pr view 100 --repo ${repo}`)
+    expect(changedTicket()).toBe(false)
+  })
+  it('rejects a release synchronization PR that could close a delivery ticket', async () => {
+    const syncEvent = {
+      ...event,
+      pull_request: {
+        ...event.pull_request,
+        title: 'chore: synchronize released code into develop',
+        body: 'Closes #42',
+        head: { ...event.pull_request.head, ref: 'master' },
+        base: { ...event.pull_request.base, ref: 'develop' }
+      }
+    }
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify(syncEvent))
+
+    expect((await run()).code).toBe(2)
+    expect(calls()).toBe('')
+    expect(changedTicket()).toBe(false)
+  })
+  it('rejects a release title that cannot be preserved as an immutable ticket marker', async () => {
     const releaseEvent = {
       ...event,
       pull_request: {
         ...event.pull_request,
+        title: 'Release without ticket marker',
+        body: 'Delivery\n\nCloses #42',
         head: { ...event.pull_request.head, ref: 'rc-1.0.0' },
         base: { ...event.pull_request.base, ref: 'master' }
       }
     }
     const releaseLive = {
       ...live,
+      title: 'Release without ticket marker',
       headRefName: 'rc-1.0.0',
       baseRefName: 'master',
-      body,
       closingIssuesReferences: []
     }
     await writeFile(path.join(dir, 'event.json'), JSON.stringify(releaseEvent))
 
     expect((await run({ LIVE: JSON.stringify(releaseLive) })).code).toBe(2)
+    expect(changedTicket()).toBe(false)
+  })
+  it('uses the exact body association for a delivery target that is not the default branch', async () => {
+    await writeFile(
+      path.join(dir, '.saasfoundry.json'),
+      JSON.stringify({
+        workflow: {
+          tool: 'github-projects',
+          workingBranch: 'develop',
+          prTargetBranch: 'integration',
+          releaseBranch: 'master',
+          branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' }
+        }
+      })
+    )
+    await writeFile(
+      path.join(dir, 'event.json'),
+      JSON.stringify({
+        ...event,
+        repository: { ...event.repository, default_branch: 'main' },
+        pull_request: {
+          ...event.pull_request,
+          body: 'Delivery\n\nResolves #42',
+          base: { ...event.pull_request.base, ref: 'integration' }
+        }
+      })
+    )
+    const integrationLive = {
+      ...live,
+      baseRefName: 'integration',
+      body: 'Delivery\n\nResolves #42',
+      closingIssuesReferences: []
+    }
+    expect((await run({ LIVE: JSON.stringify(integrationLive) })).code).toBe(0)
+    expect(calls()).toContain('tool update-status 42 In review')
+  })
+  it('does not misclassify a feature PR when delivery and release targets are the same branch', async () => {
+    await writeFile(
+      path.join(dir, '.saasfoundry.json'),
+      JSON.stringify({
+        workflow: {
+          tool: 'github-projects',
+          workingBranch: 'master',
+          prTargetBranch: 'master',
+          releaseBranch: 'master',
+          branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' }
+        }
+      })
+    )
+    await writeFile(
+      path.join(dir, 'event.json'),
+      JSON.stringify({
+        ...event,
+        repository: { ...event.repository, default_branch: 'master' },
+        pull_request: { ...event.pull_request, base: { ...event.pull_request.base, ref: 'master' } }
+      })
+    )
+    expect((await run({ LIVE: JSON.stringify({ ...live, baseRefName: 'master' }) })).code).toBe(0)
+    expect(calls()).toContain('tool update-status 42 In review')
+  })
+  it.each([[''], ['Closes #42\nCloses #43'], ['Closes #42\nCloses #42'], ['Resolves #42']] as Array<[string]>)(
+    'rejects a release PR without exactly one explicit closing directive: %j',
+    async (body) => {
+      const releaseEvent = {
+        ...event,
+        pull_request: {
+          ...event.pull_request,
+          body,
+          head: { ...event.pull_request.head, ref: 'rc-1.0.0' },
+          base: { ...event.pull_request.base, ref: 'master' }
+        }
+      }
+      const releaseLive = {
+        ...live,
+        headRefName: 'rc-1.0.0',
+        baseRefName: 'master',
+        body,
+        closingIssuesReferences: []
+      }
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify(releaseEvent))
+
+      expect((await run({ LIVE: JSON.stringify(releaseLive) })).code).toBe(2)
+      expect(changedTicket()).toBe(false)
+    }
+  )
+  it('ignores a release ready event when the live ticket association changed', async () => {
+    const releaseEvent = {
+      ...event,
+      pull_request: {
+        ...event.pull_request,
+        body: 'Delivery\n\nCloses #42',
+        head: { ...event.pull_request.head, ref: 'rc-1.0.0' },
+        base: { ...event.pull_request.base, ref: 'master' }
+      }
+    }
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify(releaseEvent))
+    const result = await run({
+      LIVE: JSON.stringify({ ...live, headRefName: 'rc-1.0.0', baseRefName: 'master', body: 'Delivery\n\nCloses #43', closingIssuesReferences: [] })
+    })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('Skipped stale')
     expect(changedTicket()).toBe(false)
   })
   it('rejects a conventional feature branch targeting the release branch before any GitHub call', async () => {
@@ -193,9 +343,11 @@ esac
     expect(result.stdout).toContain('Skipped stale')
     expect(changedTicket()).toBe(false)
   })
-  it.each([{ headRefOid: 'c'.repeat(40) }, { baseRefOid: 'd'.repeat(40) }])('synchronizes after ordinary commit advancement: %j', async (change) => {
-    expect((await run({ LIVE: JSON.stringify({ ...live, ...change }) })).code).toBe(0)
-    expect(changedTicket()).toBe(true)
+  it.each([{ headRefOid: 'c'.repeat(40) }, { baseRefOid: 'd'.repeat(40) }])('ignores a stale ready event after commit movement: %j', async (change) => {
+    const result = await run({ LIVE: JSON.stringify({ ...live, ...change }) })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('Skipped stale')
+    expect(changedTicket()).toBe(false)
   })
   it.each([
     { FETCH_FAIL: '1' },
@@ -230,7 +382,7 @@ esac
         workflow: {
           tool: 'github-projects',
           workingBranch: 'develop',
-          branchNaming: { feature: 'task.v1/{N}_{description}', fix: 'bug/{N}-{description}' }
+          branchNaming: { feature: 'task.v1/{ticket}_{name}', fix: 'bug/{number}-{description}' }
         }
       })
     )
@@ -239,6 +391,7 @@ esac
     expect(changedTicket()).toBe(true)
   })
   it('never trusts executable PR text to choose another ticket', async () => {
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, pull_request: { ...event.pull_request, title: '#99' } }))
     const result = await run({ LIVE: JSON.stringify({ ...live, body: 'Resolves #99\n$(touch /tmp/unsafe-sync)', title: '#99' }) })
     expect(result.code).toBe(0)
     expect(calls()).toContain('tool update-status 42 In review')

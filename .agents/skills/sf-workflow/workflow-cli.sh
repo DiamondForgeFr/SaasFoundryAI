@@ -595,44 +595,67 @@ is_done_target() {
   [[ "$normalized" == "done" ]]
 }
 
-# SANITY — this regex and `.saasfoundry.json` → workflow.branchNaming must stay
-# in lock-step. The match below REQUIRES a ticket number right after the prefix
-# (`feature/<ticket>-…` / `fix/<ticket>-…`). The generated branchNaming defaults
-# are therefore `feature/{N}-{description}` / `fix/{N}-{description}` (DEFAULT_BRANCH_NAMING
-# in src/prompts/workflow.prompts.ts). If you ever drop the `{N}` ticket prefix from
-# branchNaming, this guard stops matching and silently forces SF_WORKFLOW_BYPASS_*
-# on every ticket. A non-regression test locks both sides together
-# (src/__tests__/unit/skill/branch-naming-pr-regex.spec.ts). Do NOT change the regex
-# to "fix" a mismatch — realign branchNaming instead.
+# Resolve a ticket's delivery PR from manifest conventions. Ordinary feature/fix
+# PRs must target the working branch. Release tickets use the configured RC
+# pattern, target the release branch, and carry exactly one explicit `Closes #N`
+# directive because GitHub omits native closing references for non-default bases.
+get_pr_for_ticket() {
+  local ticket=$1 state=$2 payload
+  payload=$(gh pr list --state "$state" --limit 1000 \
+    --json number,headRefName,headRefOid,baseRefName,body,mergedAt,mergeCommit 2>/dev/null) || return 1
+  echo "$payload" | jq -r \
+    --arg t "$ticket" --arg working "$WORKING_BRANCH" --arg state "$state" \
+    --slurpfile manifest .saasfoundry.json '
+      def literal:
+        explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
+          then [92,$c] else [$c] end) | flatten | implode;
+      def delivery_pattern($ticket):
+        select(type == "string")
+        | select(([scan("\\{(?:N|ticket|number|issue-number)\\}")] | length) == 1)
+        | select(([scan("\\{(?:description|name)\\}")] | length) <= 1)
+        | gsub("\\{(?:N|ticket|number|issue-number)\\}"; $ticket)
+        | gsub("\\{(?:description|name)\\}"; "\u0000")
+        | split("\u0000") | map(literal) | join(".+") | "^" + . + "$";
+      def release_pattern:
+        select(type == "string")
+        | if (split("{version}") | length) == 2
+          then split("{version}") | map(literal) | join(".+") | "^" + . + "$"
+          else error("Release branch pattern must contain exactly one {version}") end;
+      . as $payload
+      | [$manifest[0].workflow.branchNaming.feature // "feature/{N}-{description}",
+         $manifest[0].workflow.branchNaming.fix // "fix/{N}-{description}"]
+      | map(delivery_pattern($t)) as $delivery_patterns
+      | ($manifest[0].workflow.prTargetBranch // $manifest[0].workflow.workingBranch // $working) as $delivery_branch
+      | ($manifest[0].workflow.branchNaming.release // "rc-{version}" | release_pattern) as $release_pattern
+      | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
+      | if ($payload | type) == "array" then
+          [$payload[]
+           | (((.headRefName | type) == "string"
+               and (.headRefName | test($release_pattern))
+               and .baseRefName == $release_branch
+               and [.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t])) as $is_release
+           | select(
+               ((.headRefName as $branch
+                 | any($delivery_patterns[]; . as $pattern | $branch | test($pattern)))
+                 and .baseRefName == $delivery_branch)
+               or $is_release)
+           | select(($state != "merged") or (((.mergedAt | type) == "string") and ((.mergedAt | length) > 0)))
+           | if $state == "merged" and $is_release then
+               select((.mergeCommit.oid | type) == "string" and (.mergeCommit.oid | test("^[0-9a-f]{40}$"))
+                 and (.headRefOid | type) == "string" and (.headRefOid | test("^[0-9a-f]{40}$")))
+               | "\(.number)\t\(.mergeCommit.oid)\t\(.headRefOid)"
+             else (.number | tostring) end]
+          | .[0] // empty
+        else error("Expected PR array") end
+    '
+}
+
 get_open_pr_for_ticket() {
-  # Prints the PR number of the FIRST open PR whose head branch matches
-  # `feature/<ticket>-…` or `fix/<ticket>-…` (the conventions enforced by
-  # `.saasfoundry.json` → workflow.branchNaming). Empty if none.
-  # Returns 0 on clean fetch (even when no PR exists), 1 on fetch error.
-  local ticket=$1
-  local payload
-  payload=$(gh pr list --state open --limit 1000 --json number,headRefName 2>/dev/null) || return 1
-  echo "$payload" | jq -r --arg t "$ticket" '
-    if type == "array" then
-      [.[] | select(.headRefName | type == "string" and test("^(feature|fix)/" + $t + "(-|$)")) | .number] | .[0] // empty
-    else error("Expected PR array") end
-  '
+  get_pr_for_ticket "$1" open
 }
 
 get_merged_pr_for_ticket() {
-  # Prints the first matching PR confirmed merged into the configured working
-  # branch. Returns 1 for request or malformed-response failures.
-  local ticket=$1 payload
-  payload=$(gh pr list --state merged --limit 1000 --json number,headRefName,baseRefName,mergedAt 2>/dev/null) || return 1
-  echo "$payload" | jq -r --arg t "$ticket" --arg base "$WORKING_BRANCH" '
-    if type == "array" then
-      [.[]
-       | select(.headRefName | type == "string" and test("^(feature|fix)/" + $t + "(-|$)"))
-       | select(.baseRefName == $base)
-       | select(.mergedAt | type == "string" and length > 0)
-       | .number] | .[0] // empty
-    else error("Expected PR array") end
-  '
+  get_pr_for_ticket "$1" merged
 }
 
 check_pr_merged_guard() {
@@ -673,7 +696,7 @@ check_pr_merged_guard() {
   if [[ -n "$pr_number" ]]; then
     echo -e "${RED}✗ Ticket #${ticket} has an open PR (#${pr_number}) — cannot transition to 'Done'.${NC}" >&2
     echo "" >&2
-    echo "  An open PR means '${WORKING_BRANCH}' doesn't have the commits yet." >&2
+    echo "  An open PR means its configured target branch doesn't have the commits yet." >&2
     echo "  The PR merge event is what should trigger 'Done' — not reviewer approval." >&2
     echo "" >&2
     echo "  Current ticket should stay in 'In review'. After PR merge:" >&2
@@ -689,10 +712,90 @@ check_pr_merged_guard() {
     return 1
   }
   if [[ -z "$merged_pr" ]]; then
-    echo -e "${RED}✗ Ticket #${ticket} has no verified merged PR into '${WORKING_BRANCH}' — cannot transition to 'Done'.${NC}" >&2
+    echo -e "${RED}✗ Ticket #${ticket} has no verified merged PR into its configured working or release branch — cannot transition to 'Done'.${NC}" >&2
     echo "  Open and merge the ticket PR before marking the ticket Done." >&2
     echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1" >&2
     return 1
+  fi
+  if [[ "$merged_pr" == *$'\t'* ]]; then
+    local release_pr merge_sha rc_head_sha repo merge_commit rc_commit merge_message working_branch release_branch
+    local sync_pr_payload sync_match sync_merge_sha sync_commit sync_status
+    IFS=$'\t' read -r release_pr merge_sha rc_head_sha <<< "$merged_pr"
+    repo=${GITHUB_REPOSITORY:-}
+    if [[ -z "$repo" ]]; then
+      repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
+        echo "Error: unable to resolve the repository for immutable release-ticket verification." >&2
+        return 1
+      }
+    fi
+    merge_commit=$(gh api "repos/${repo}/git/commits/${merge_sha}" 2>/dev/null) || {
+      echo "Error: unable to verify the immutable release merge commit; no status transition was made." >&2
+      return 1
+    }
+    rc_commit=$(gh api "repos/${repo}/git/commits/${rc_head_sha}" 2>/dev/null) || {
+      echo "Error: unable to verify the immutable RC head; no status transition was made." >&2
+      return 1
+    }
+    if ! jq -e --arg head "$rc_head_sha" '
+      (.message | type) == "string"
+      and (.tree.sha | type) == "string" and (.tree.sha | test("^[0-9a-f]{40}$"))
+      and (.parents | type) == "array" and (.parents | length) == 2
+      and .parents[1].sha == $head
+    ' <<< "$merge_commit" >/dev/null 2>&1; then
+      echo -e "${RED}✗ Release PR #${release_pr} was not integrated with a two-parent merge commit preserving the RC head — cannot transition to 'Done'.${NC}" >&2
+      return 1
+    fi
+    if ! jq -e --arg tree "$(jq -r '.tree.sha' <<< "$merge_commit")" \
+      '(.tree.sha | type) == "string" and .tree.sha == $tree' <<< "$rc_commit" >/dev/null 2>&1; then
+      echo -e "${RED}✗ Release merge tree differs from the verified RC tree — cannot transition to 'Done'.${NC}" >&2
+      return 1
+    fi
+    working_branch=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
+    release_branch=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
+    sync_pr_payload=$(gh pr list --state merged --base "$working_branch" --head "$release_branch" --limit 100 \
+      --json number,headRefName,headRefOid,baseRefName,mergedAt,mergeCommit,body,isCrossRepository 2>/dev/null) || {
+      echo "Error: unable to verify the release synchronization PR; no status transition was made." >&2
+      return 1
+    }
+    sync_match=$(jq -ce --arg head "$release_branch" --arg base "$working_branch" --arg release "$merge_sha" '
+      [.[]
+       | select(.headRefName == $head and .baseRefName == $base and .headRefOid == $release)
+       | select(.isCrossRepository == false and (.mergedAt | type) == "string" and (.mergedAt | length) > 0)
+       | select(([.body // "" | scan("(?im)^\\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#[1-9][0-9]*\\s*$")] | length) == 0)
+       | select((.mergeCommit.oid | type) == "string" and (.mergeCommit.oid | test("^[0-9a-f]{40}$")))]
+      | if length == 1 then .[0] else error("Expected exactly one release synchronization PR") end
+    ' <<< "$sync_pr_payload" 2>/dev/null) || {
+      echo -e "${RED}✗ No unique clean ${release_branch} → ${working_branch} synchronization PR preserves release commit ${merge_sha} — cannot transition to 'Done'.${NC}" >&2
+      return 1
+    }
+    sync_merge_sha=$(jq -r '.mergeCommit.oid' <<< "$sync_match")
+    sync_commit=$(gh api "repos/${repo}/git/commits/${sync_merge_sha}" 2>/dev/null) || {
+      echo "Error: unable to verify the immutable release synchronization merge commit; no status transition was made." >&2
+      return 1
+    }
+    if ! jq -e --arg release "$merge_sha" '
+      (.parents | type) == "array" and (.parents | length) == 2 and .parents[1].sha == $release
+    ' <<< "$sync_commit" >/dev/null 2>&1; then
+      echo -e "${RED}✗ Release synchronization was not integrated with a two-parent merge commit whose second parent is the release commit — cannot transition to 'Done'.${NC}" >&2
+      return 1
+    fi
+    sync_status=$(gh api "repos/${repo}/compare/${sync_merge_sha}...${working_branch}" --jq .status 2>/dev/null) || {
+      echo "Error: unable to verify release synchronization ancestry; no status transition was made." >&2
+      return 1
+    }
+    if [[ "$sync_status" != "identical" && "$sync_status" != "ahead" ]]; then
+      echo -e "${RED}✗ Release synchronization merge is not an ancestor of ${working_branch}; merge the release branch back with a merge commit before 'Done'.${NC}" >&2
+      return 1
+    fi
+    merge_message=$(jq -r '.message' <<< "$merge_commit")
+    if ! printf '%s\n' "$merge_message" | head -n 1 | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
+      echo -e "${RED}✗ Release PR body and immutable merge title do not agree on ticket #${ticket} — cannot transition to 'Done'.${NC}" >&2
+      return 1
+    fi
+    if printf '%s\n' "$merge_message" | grep -Eqi "^[[:space:]]*(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[1-9][0-9]*[[:space:]]*$"; then
+      echo -e "${RED}✗ Release merge commit embeds a closing directive that would close the ticket during working-branch synchronization — cannot transition to 'Done'.${NC}" >&2
+      return 1
+    fi
   fi
   return 0
 }
@@ -723,27 +826,34 @@ check_pr_existence_guard() {
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
         then [92,$c] else [$c] end) | flatten | implode;
+    def delivery_pattern($ticket):
+      select(type == "string")
+      | select(([scan("\\{(?:N|ticket|number|issue-number)\\}")] | length) == 1)
+      | select(([scan("\\{(?:description|name)\\}")] | length) <= 1)
+      | gsub("\\{(?:N|ticket|number|issue-number)\\}"; $ticket)
+      | gsub("\\{(?:description|name)\\}"; "\u0000")
+      | split("\u0000") | map(literal) | join(".+") | "^" + . + "$";
+    def release_pattern:
+      select(type == "string")
+      | if (split("{version}") | length) == 2
+        then split("{version}") | map(literal) | join(".+") | "^" + . + "$"
+        else error("Release branch pattern must contain exactly one {version}") end;
     . as $payload
     | [$manifest[0].workflow.branchNaming.feature // "feature/{N}-{description}",
        $manifest[0].workflow.branchNaming.fix // "fix/{N}-{description}"]
-    | map(select(type == "string") | split("{N}") | select(length == 2) | join($t)
-      | split("{description}") | map(literal) | join(".+") | "^" + . + "$") as $patterns
-    | (($manifest[0].workflow.branchNaming.release // "rc-{version}")
-      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
-    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
+    | map(delivery_pattern($t)) as $patterns
+    | ($manifest[0].workflow.prTargetBranch // $manifest[0].workflow.workingBranch // "develop") as $delivery_branch
+    | ($manifest[0].workflow.branchNaming.release // "rc-{version}" | release_pattern) as $release_pattern
+    | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
     | if ($payload | type) == "array" then
         [$payload[] | select(
-          (.headRefName as $branch | any($patterns[]; . as $pattern | $branch | test($pattern)))
+          ((.headRefName as $branch | any($patterns[]; . as $pattern | $branch | test($pattern)))
+            and .baseRefName == $delivery_branch)
           or
           ((.headRefName | type) == "string"
             and (.headRefName | test($release_pattern))
             and .baseRefName == $release_branch
-            and (
-              (((.closingIssuesReferences // []) | type) == "array"
-                and any((.closingIssuesReferences // [])[]; (.number | tostring) == $t))
-              or
-              ((.body // "") | test("(?im)^\\s*(close[sd]?|fix(e[sd])?|resolve[sd]?)\\s+#" + $t + "(\\s|$)"))
-            ))
+            and [.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t])
         )]
       else error("Expected PR array") end') || {
     echo "Error: invalid PR response; no status transition was made." >&2; return 1;
@@ -850,28 +960,54 @@ sync_pr_review() {
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
         then [92,$c] else [$c] end) | flatten | implode;
-    ($manifest[0].workflow.prTargetBranch // $manifest[0].workflow.workingBranch // "develop") as $target_branch
-    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
-    | (($manifest[0].workflow.branchNaming.release // "rc-{version}")
-      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
-    | select(.action == "ready_for_review" and .number == $n and .repository.full_name == $repo)
+    def release_pattern:
+      select(type == "string")
+      | if (split("{version}") | length) == 2
+        then split("{version}") | map(literal) | join(".+") | "^" + . + "$"
+        else error("Release branch pattern must contain exactly one {version}") end;
+    ($manifest[0].workflow.workingBranch // "develop") as $working_branch
+    | ($manifest[0].workflow.prTargetBranch // $working_branch) as $target_branch
+    | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
+    | ($manifest[0].workflow.branchNaming.release // "rc-{version}" | release_pattern) as $release_pattern
+    | select(.action == "ready_for_review" and .number == $n and .repository.full_name == $repo
+      and (.repository.default_branch | type) == "string" and (.repository.default_branch | length) > 0)
+    | .repository.default_branch as $default_branch
     | .pull_request
     | select(.number == $n and .state == "open" and .draft == false
       and .base.repo.full_name == $repo and .head.repo.full_name == $repo
       and (.base.ref == $target_branch
-        or (.base.ref == $release_branch and (.head.ref | test($release_pattern)))))
+        or (.base.ref == $release_branch and (.head.ref | test($release_pattern)))
+        or ($release_branch != $working_branch and .base.ref == $working_branch and .head.ref == $release_branch)))
     | select((.head.ref | type) == "string" and (.head.sha | test("^[0-9a-f]{40}$"))
       and (.base.sha | test("^[0-9a-f]{40}$")))
-    | {number, head: .head.ref, headSha: .head.sha, base: .base.ref, baseSha: .base.sha}
+    | (if $release_branch != $working_branch and .base.ref == $working_branch and .head.ref == $release_branch then "sync"
+       elif .base.ref == $release_branch and (.head.ref | test($release_pattern)) then "release"
+       else "delivery" end) as $kind
+    | select(if $kind == "sync" then
+        ([.body // "" | scan("(?im)^\\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#([1-9][0-9]*)\\s*$")] | length) == 0
+      else true end)
+    | {number, title, kind: $kind, head: .head.ref, headSha: .head.sha, base: .base.ref, baseSha: .base.sha,
+       defaultBranch: $default_branch,
+       body: (if $kind == "sync" then (.body // "") else null end),
+       bodyVerb: (if $kind == "release" then "closes"
+         elif .base.ref != $default_branch then "resolves" else null end),
+       bodyTicket: (if $kind == "release" then
+         ([.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]]
+          | if length == 1 then .[0] else error("Invalid release ticket association") end)
+       elif $kind == "sync" then null
+       elif .base.ref != $default_branch then
+         ([.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]]
+          | if length == 1 then .[0] else error("Invalid non-default delivery ticket association") end)
+       else null end)}
   ' "$event_path" 2>/dev/null) || {
     echo "Error: event is malformed, stale, cross-repository or not ready_for_review; no ticket changed." >&2
     return 2
   }
-  live=$(gh pr view "$pr_number" --repo "$repo" --json number,url,state,isDraft,headRefName,headRefOid,baseRefName,baseRefOid,headRepository,headRepositoryOwner,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
+  live=$(gh pr view "$pr_number" --repo "$repo" --json number,url,title,state,isDraft,headRefName,headRefOid,baseRefName,baseRefOid,headRepository,headRepositoryOwner,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to fetch live PR metadata; no ticket changed." >&2; return 2;
   }
   if ! echo "$live" | jq -e '
-    (.number | type) == "number" and (.state == "OPEN" or .state == "CLOSED" or .state == "MERGED")
+    (.number | type) == "number" and (.title | type) == "string" and (.state == "OPEN" or .state == "CLOSED" or .state == "MERGED")
     and (.isDraft | type) == "boolean" and (.isCrossRepository | type) == "boolean"
     and (.headRefName | type) == "string" and (.baseRefName | type) == "string"
     and (.headRefOid | test("^[0-9a-f]{40}$")) and (.baseRefOid | test("^[0-9a-f]{40}$"))
@@ -882,12 +1018,27 @@ sync_pr_review() {
     return 2
   fi
   if ! echo "$live" | jq -e --argjson event "$event" --arg repo "$repo" '
-    .number == $event.number and .state == "OPEN" and .isDraft == false and .isCrossRepository == false
+    .number == $event.number and .title == $event.title and .state == "OPEN" and .isDraft == false and .isCrossRepository == false
     and .headRefName == $event.head and .baseRefName == $event.base
+    and .headRefOid == $event.headSha and .baseRefOid == $event.baseSha
+    and (if $event.kind == "sync" then
+        .body == $event.body
+        and ([.body | scan("(?im)^\\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#([1-9][0-9]*)\\s*$")] | length) == 0
+        and (.closingIssuesReferences | length) == 0
+      elif $event.bodyVerb == null then true
+      elif $event.bodyVerb == "closes" then
+        [.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$event.bodyTicket]
+      elif $event.bodyVerb == "resolves" then
+        [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$event.bodyTicket]
+      else false end)
     and ((.headRepositoryOwner.login + "/" + .headRepository.name) == $repo)
     and (.closingIssuesReferences | type) == "array"
   ' >/dev/null 2>&1; then
     echo "Skipped stale ready event: live PR state, repository or target branch changed; no ticket changed."
+    return 0
+  fi
+  if [[ "$(echo "$event" | jq -r .kind)" == sync ]]; then
+    echo "Validated release-to-working-branch synchronization PR; no ticket transition is required."
     return 0
   fi
   local ticket server=${GITHUB_SERVER_URL:-https://github.com}
@@ -895,22 +1046,32 @@ sync_pr_review() {
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
         then [92,$c] else [$c] end) | flatten | implode;
-    def pattern_piece: split("{description}") | map(literal) | join(".+");
+    def pattern_piece: split("\u0000") | map(literal) | join(".+");
+    def ticket_pattern:
+      select(type == "string")
+      | select(([scan("\\{(?:N|ticket|number|issue-number)\\}")] | length) == 1)
+      | select(([scan("\\{(?:description|name)\\}")] | length) <= 1)
+      | gsub("\\{(?:N|ticket|number|issue-number)\\}"; "\u0001")
+      | gsub("\\{(?:description|name)\\}"; "\u0000")
+      | split("\u0001")
+      | "^" + (.[0] | pattern_piece) + "(?<ticket>[1-9][0-9]*)" + (.[1] | pattern_piece) + "$";
+    def release_pattern:
+      select(type == "string")
+      | if (split("{version}") | length) == 2
+        then split("{version}") | map(literal) | join(".+") | "^" + . + "$"
+        else error("Release branch pattern must contain exactly one {version}") end;
     . as $live
     | [$manifest[0].workflow.branchNaming.feature // "feature/{N}-{description}",
        $manifest[0].workflow.branchNaming.fix // "fix/{N}-{description}"]
-    | map(select(type == "string") | split("{N}") | select(length == 2)
-      | "^" + (.[0] | pattern_piece) + "(?<ticket>[1-9][0-9]*)" + (.[1] | pattern_piece) + "$")
+    | map(ticket_pattern)
     | [.[] as $pattern | $live.headRefName | try capture($pattern).ticket catch empty]
     | unique as $branch_tickets
-    | (($manifest[0].workflow.branchNaming.release // "rc-{version}")
-      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
-    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
+    | ($manifest[0].workflow.branchNaming.release // "rc-{version}" | release_pattern) as $release_pattern
+    | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
     | if ($branch_tickets | length) == 1 then $branch_tickets[0]
       elif ($branch_tickets | length) > 1 then error("Ambiguous ticket branch")
       elif ($live.headRefName | test($release_pattern)) and $live.baseRefName == $release_branch then
         [$live.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]]
-        | unique
         | if length == 1 then .[0] else error("Ambiguous release ticket") end
       else error("Unrecognized ticket branch") end
   ' 2>/dev/null) || {
@@ -920,12 +1081,18 @@ sync_pr_review() {
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
         then [92,$c] else [$c] end) | flatten | implode;
-    (($manifest[0].workflow.branchNaming.release // "rc-{version}")
-      | split("{version}") | map(literal) | join(".+") | "^" + . + "$") as $release_pattern
-    | ($manifest[0].workflow.releaseBranch // "master") as $release_branch
+    def release_pattern:
+      select(type == "string")
+      | if (split("{version}") | length) == 2
+        then split("{version}") | map(literal) | join(".+") | "^" + . + "$"
+        else error("Release branch pattern must contain exactly one {version}") end;
+    ($manifest[0].workflow.branchNaming.release // "rc-{version}" | release_pattern) as $release_pattern
+    | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
     | if (.headRefName | test($release_pattern)) and .baseRefName == $release_branch then
-        ([.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] | unique) == [($n | tostring)]
-      else any(.closingIssuesReferences[]; .number == $n and .url == $url) end
+        (.title | test("^\\[#" + ($n | tostring) + "\\](?:\\s|$)|^[[:alnum:]_.-]+\\(#" + ($n | tostring) + "\\)(?:!)?:"))
+        and [.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [($n | tostring)]
+      else (any(.closingIssuesReferences[]; .number == $n and .url == $url)
+        or [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [($n | tostring)]) end
   ' >/dev/null 2>&1; then
     echo "Error: PR has no verified closing association to ticket #${ticket}; no ticket changed." >&2
     return 2
