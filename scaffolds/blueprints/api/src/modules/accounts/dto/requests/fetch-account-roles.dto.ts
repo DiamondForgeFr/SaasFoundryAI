@@ -11,7 +11,7 @@ export enum RoleOrderBy {
 export class FetchAccountRolesDto extends PaginationRequestDto {
   @ApiProperty({
     description: 'Search term to filter roles',
-    example: 'admin',
+    example: 'account-admin',
     required: false
   })
   @IsOptional()

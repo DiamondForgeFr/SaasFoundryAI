@@ -12,7 +12,7 @@ import request from 'supertest'
  */
 import { AccountAccessModule } from '@common/services/account-access/account-access.module'
 import { LoggerModule } from '@common/services/logger/logger.module'
-import { cleanupTestUser } from '@common/tests/e2e/utils/setup-test-user'
+import { cleanupTestUser, setupTestUser } from '@common/tests/e2e/utils/setup-test-user'
 import { EnvModule } from '@configs/env/env.module'
 import { PrismaModule } from '@configs/prisma/prisma.module'
 import { PrismaService } from '@configs/prisma/services/prisma.service'
@@ -51,6 +51,16 @@ describe('Auth Module (e2e)', () => {
     lastname: 'Wayne'
   }
 
+  // A pre-existing platform-admin so our test user follows the regular account-admin signup flow.
+  // The bootstrap rule promotes the FIRST confirmed user (when no platform-admin exists) to
+  // platform-admin with no account — a different flow than the one this suite exercises.
+  const platformAdminSeed = {
+    email: 'platform-admin-seed@diamondforge.fr',
+    password: 'platformadminseedpassword',
+    firstname: 'Platform',
+    lastname: 'Admin'
+  }
+
   // Variables to store tokens and user ID
   let userId: string
   let accountId: string
@@ -73,11 +83,15 @@ describe('Auth Module (e2e)', () => {
 
     // Create a supertest agent that will maintain cookies between requests
     agent = request.agent(app.getHttpServer())
+
+    // Seed an existing platform-admin so the bootstrap rule doesn't promote our test user.
+    await setupTestUser(prismaService, { ...platformAdminSeed, roles: ['platform-admin'] })
   })
 
   afterAll(async () => {
-    // Clean up test user with the common utility
+    // Clean up test users with the common utility
     await cleanupTestUser(prismaService, testUser.email)
+    await cleanupTestUser(prismaService, platformAdminSeed.email)
 
     await prismaService.$disconnect()
     await app.close()
@@ -226,7 +240,7 @@ describe('Auth Module (e2e)', () => {
       expect(response.body.people.firstname).toBe(testUser.firstname)
       expect(response.body.people.lastname).toBe(testUser.lastname)
       expect(response.body.email).toBe(testUser.email)
-      expect(response.body.roles).toEqual(['admin'])
+      expect(response.body.roles).toEqual(['account-admin'])
 
       // Verify account information
       expect(response.body.accounts).toBeInstanceOf(Array)

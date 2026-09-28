@@ -3,6 +3,14 @@
  */
 import { queryClient } from '@/lib/react-query/query-client'
 
+const ACCOUNT_DISABLED_MESSAGE = 'This account is disabled'
+
+const isSessionInvalidatingUnauthorized = (status: number, body: unknown): boolean => {
+  if (status !== 401) return false
+  if (typeof body !== 'object' || body === null || !('message' in body)) return true
+  return (body as { message?: unknown }).message !== ACCOUNT_DISABLED_MESSAGE
+}
+
 /**
  * API Client using native Fetch API
  */
@@ -60,16 +68,23 @@ const apiClient = {
 
       // HTTP error handling
       if (!response.ok) {
-        // Specific handling for 401 errors (unauthorized)
-        if (response.status === 401) {
+        const errorData = await response.json().catch(() => ({}))
+
+        // A disabled account is still an authenticated session: keep authMe so the route guard
+        // can send the user to the reactivation flow. Other 401s still invalidate the session.
+        if (isSessionInvalidatingUnauthorized(response.status, errorData)) {
           // Invalidate authentication status
           queryClient.setQueryData(['authMe'], null)
           localStorage.removeItem('authMe')
         }
 
-        // Get error message from API if available
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `HTTP Error ${response.status}`)
+        // Get error message from API if available. Expose `status`/`body` on the thrown error
+        // (same shape as the monorepo api-client mutator) so callers like persistAuthMe can
+        // distinguish session-invalidating statuses (401/403/404) from transient failures.
+        const error = new Error(errorData.message || `HTTP Error ${response.status}`) as Error & { status: number; body: unknown }
+        error.status = response.status
+        error.body = errorData
+        throw error
       }
 
       // Check if response is empty
@@ -104,6 +119,40 @@ const apiClient = {
 
   delete<T>(endpoint: string, customHeaders = {}): Promise<T> {
     return this.request<T>(endpoint, 'DELETE', undefined, { headers: customHeaders })
+  },
+
+  async upload<T>(endpoint: string, file: File, fieldName = 'file'): Promise<T> {
+    const baseApiUrl = '/api'
+    const url = `${baseApiUrl}${endpoint}`
+    const formData = new FormData()
+    formData.append(fieldName, file)
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        if (isSessionInvalidatingUnauthorized(response.status, errorData)) {
+          queryClient.setQueryData(['authMe'], null)
+          localStorage.removeItem('authMe')
+        }
+        const error = new Error(errorData.message || `HTTP Error ${response.status}`) as Error & { status: number; body: unknown }
+        error.status = response.status
+        error.body = errorData
+        throw error
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) return (await response.json()) as T
+      return {} as T
+    } catch (error) {
+      console.error('API Upload Error:', error)
+      throw error
+    }
   }
 }
 

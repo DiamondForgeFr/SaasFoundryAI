@@ -1,0 +1,88 @@
+{
+  "name": "{{PROJECT_NAME}}",
+  "version": "1.0.0",
+  "description": "{{PROJECT_NAME}} is just an amazing SaaSFoundryAI project",
+  "private": true,
+  "packageManager": "npm@11.19.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agachet/saasfoundry.git"
+  },
+  "homepage": "https://github.com/agachet/saasfoundry/#readme",
+  "bugs": {
+    "url": "https://github.com/agachet/saasfoundry/issues"
+  },
+  "engines": {
+    "node": ">=22.13.0",
+    "npm": ">=11.0.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=22.13.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.0.0",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=./apps/api",
+    "dev:web": "turbo run dev --filter=./apps/web",
+    "format": "turbo run format",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "type-check": "turbo run type-check",
+    "test:unit": "turbo run test:unit",
+    "test:e2e": "turbo run test:e2e",
+    "test:full": "turbo run test:full",
+    "codegen": "turbo run codegen",
+    "codegen:api-client": "npm run codegen -w @{{PROJECT_NAME}}/api-client",
+    "codegen:check": "./scripts/check-codegen-drift.sh",
+    "db:setup:dev": "npm run db:setup:dev -w apps/api",
+    "db:init:test": "npm run db:init:test -w apps/api",
+    "services:up": "npm run services:up -w apps/api",
+    "services:down": "npm run services:down -w apps/api",
+    "services:reset": "npm run services:reset -w apps/api",
+    "version:manage": "./scripts/tag-manager.sh \"$(git symbolic-ref --short HEAD)\"",
+    "prepare": "if [ \"$HUSKY\" != \"0\" ]; then husky; fi",
+    "postinstall": "if [ \"$HUSKY\" != \"0\" ] && [ -d './scripts' ]; then find ./scripts -type f -name '*.sh' -exec chmod +x {} +; fi"
+  },
+  "keywords": [
+    "{{PROJECT_NAME}}",
+    "saasfoundry",
+    "monorepo",
+    "turborepo"
+  ],
+  "devDependencies": {
+    "@commitlint/cli": "21.2.2",
+    "@commitlint/config-conventional": "21.2.2",
+    "eslint": "10.3.0",
+    "eslint-plugin-prettier": "5.5.5",
+    "globals": "17.6.0",
+    "husky": "9.1.7",
+    "prettier": "3.8.3",
+    "turbo": "2.10.11",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.59.1"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "2.4.0"
+    },
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    },
+    "prisma": {
+      "mysql2": "3.24.4"
+    }
+  }
+}

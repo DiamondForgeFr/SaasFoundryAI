@@ -3,7 +3,7 @@
  */
 import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
-import { Locale, OrganizationType } from '@prisma/client'
+import { Locale, OrganizationType } from '@/generated/prisma/client'
 import cookieParser from 'cookie-parser'
 import * as dotenv from 'dotenv'
 import request from 'supertest'
@@ -75,7 +75,7 @@ describe('Invitation Module (e2e)', () => {
       password: 'TestPassword123',
       firstname: 'Invitation',
       lastname: 'Manager',
-      roles: ['admin'],
+      roles: ['account-admin'],
       permissions: ['USER_ACCOUNTS_INVITATION', 'USER_ENTITIES_INVITATION', 'USER_ROLE_ALLOCATION']
     })
 

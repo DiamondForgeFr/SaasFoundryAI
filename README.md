@@ -1,7 +1,9 @@
 <div align="center">
 
-[![Open Source](https://img.shields.io/badge/Open%20Source-2D3748?style=for-the-badge&logo=github&logoColor=white)](https://github.com/AGachet/saasfoundry)
+[![Open Source](https://img.shields.io/badge/Open%20Source-2D3748?style=for-the-badge&logo=github&logoColor=white)](https://github.com/DiamondForgeFr/SaasFoundryAI)
 [![License](https://img.shields.io/badge/License-MIT-2D3748?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/saasfoundryai-cli?style=for-the-badge&logo=npm&label=CLI&color=CB3837)](https://www.npmjs.com/package/saasfoundryai-cli)
+[![codecov](https://img.shields.io/codecov/c/github/DiamondForgeFr/SaasFoundryAI?style=for-the-badge&logo=codecov&logoColor=white&label=Coverage)](https://codecov.io/gh/DiamondForgeFr/SaasFoundryAI)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -12,51 +14,119 @@
 
 <div align="center">
   <br /><br />
-  <img src="https://raw.githubusercontent.com/AGachet/SaaSFoundry/refs/heads/master/docs/assets/logo.png" alt="SaaSFoundry Logo" width="300"/>
+  <!-- Relative on purpose. An absolute raw URL has to name a branch, and any branch
+       named here is wrong somewhere: master lags develop by hundreds of commits, so a
+       new asset path 404s there until the release merge — which is exactly how this
+       line broke when it moved from docs/assets/logo.png to a file master has never
+       seen. A relative path resolves against whatever ref the reader is on, so it works
+       on every branch, before and after the cut.
+       npmjs.com rewrites relative README links against the repository field; if it
+       turns out not to, docs/assets/logo.png is the same lockup and is still there.
+       Verify the npm page right after the first publish — see #488. -->
+  <img src="docs/public/logo-full.svg" alt="SaaSFoundryAI" width="420"/>
   <br /><br />
 </div>
 
-# 🌟 What is SaaSFoundry?
+# SaaSFoundryAI
 
-SaaSFoundry is a comprehensive, production-ready development platform for building modern SaaS applications. Far beyond a simple boilerplate, it's a complete ecosystem with CLI tools, automated
-workflows, and integrated best practices. Born from the development of [BillMate Backend](https://github.com/AGachet/billmate-backend) and
-[BillMate Frontend](https://github.com/AGachet/billmate-frontend), this open-source project provides a robust foundation for startups, freelancers, and developers looking to create scalable, secure,
-and maintainable SaaS solutions in a TypeScript environment.
+**Give this line to your AI assistant:**
+
+> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
+
+Then open the folder you want to work in and describe your product in your own words. The assistant installs the skill, asks you what it still needs to know, and drives everything after that —
+scaffolding, modules, workflow, tickets. There is no CLI to learn first.
+
+<details>
+<summary><b>What your assistant does with that line</b></summary>
+
+```bash
+# Installs the tool-saasfoundry skill at user scope, into ~/.claude/skills/tool-saasfoundry/
+npx saasfoundryai-cli skill install --yes --force
+
+# Use --project instead to commit the skill with the repo and share it with the team
+```
+
+From there the skill takes over: it reads `.saasfoundry.json` when there is one, drives `sf` **non-interactively**, and never answers the interactive prompts on your behalf. The full contract is in
+[Skills System](docs/guide/skills-system.md) and [`sf skill`](docs/cli/sf-skill.md).
+
+</details>
+
+The one-line user-scope bootstrap currently targets Claude Code. Codex, Gemini CLI, Kimi Code, Qwen Code, and other hosts can use the CLI path, then select their coding-agent profiles for the
+generated harness. See [Installation](docs/getting-started/installation.md) for the exact path.
+
+### Choose your starting point
+
+| You have                                         | Start with                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| A managed project containing `.saasfoundry.json` | `sf status`, then `sf update` or `sf agents`                           |
+| An empty workspace or a new product              | `sf new` and choose `full`, `harness`, or `stack`                      |
+| An existing repository you will keep             | Read it first, then install `--profile harness` in place               |
+| A throwaway POC you will rebuild                 | Preserve it under `POC/`, then create a clean `full` project beside it |
+
+The [installation guide](docs/getting-started/installation.md) explains these routes, local versus shared agent declarations, and platform limitations. The canonical profile matrix remains in
+[`sf agents`](docs/cli/sf-agents.md#tool-profiles-and-model-providers).
+
+**Prefer a terminal?** The CLI is a first-class path, not a fallback — see [Quick Start](#-quick-start).
+
+## 🌟 What is SaaSFoundryAI?
+
+SaaSFoundryAI is a comprehensive, production-ready CLI for building modern SaaS applications. Far beyond a simple boilerplate, it's a complete ecosystem with modular architecture, automated workflows,
+and integrated best practices. This open-source project provides a robust foundation for startups, freelancers, and developers looking to create scalable, secure, and maintainable SaaS solutions with
+TypeScript full-stack development.
 
 ### 🎯 Key Features
 
 - **Full-Stack Development Platform**
 
-  - [NestJS Backend](scaffolds/blueprints/api/README.md) with modular design
-  - [React Frontend](scaffolds/blueprints/web/README.md) with optimized performance
-  - Docker containerization
+  - [NestJS 11 Backend](scaffolds/blueprints/api/README.md) with modular design
+  - [React 19 Frontend](scaffolds/blueprints/web/README.md) with React Router v7
+  - Monorepo or Multi-repo architecture support
+  - Docker containerization with multi-stage builds
   - Automated deployment workflows
-  - CLI-based project configuration and scaffolding
-  - End-to-end testing infrastructure with auto-mounted databases
+  - CLI-based project configuration and scaffolding (`sf new`, `sf update`)
+  - End-to-end testing infrastructure with Playwright
+
+- **Modular Architecture**
+
+  - **Email Service** - MailerSend integration for transactional emails
+  - **S3 Storage** - AWS S3 integration for file uploads and management
+  - **Analytics** - Umami analytics integration for privacy-focused tracking
+  - **Shared packages** - Auto-generated `packages/shared-types`, `shared-validation`, `shared-config`, `ui-primitives`, and a typed `api-client` derived from OpenAPI (monorepo)
+  - Install modules during project creation OR add them later with `sf update`
+  - Three-way merge system for safe template updates
 
 - **Security First**
 
-  - JWT authentication system
+  - JWT authentication with Passport
   - Role-based access control (RBAC)
   - Granular permissions management
-  - Secure API endpoints
+  - Secure API endpoints with Zod 4 schemas (shared end-to-end via `nestjs-zod` + `shared-validation`)
 
 - **Developer Experience**
 
-  - Pre-built React hooks for business logic
-  - Adaptive preloading and cache management
-  - Comprehensive Git hooks for code quality
-  - Database migration scripts
+  - Typed `api-client` package generated from OpenAPI — no more hand-written hooks drifting from the backend
+  - Pre-built React hooks for API integration, wrapped on top of the typed client
+  - React Query for data fetching and caching
+  - Comprehensive Git hooks with Husky (commitlint, pre-push checks)
+  - Prisma 7 with driver adapters and multi-file schemas
+  - Path aliases and optimized imports
+  - i18next for internationalization
 
 - **Production Ready**
-  - Version management system
-  - Automated deployment pipeline
-  - Health monitoring
-  - Logging and error tracking
+  - Version management with automated tagging
+  - GitHub Actions deployment pipeline
+  - Health monitoring endpoints
+  - Winston logging with daily rotation
+  - PostgreSQL 16 with Docker support
+  - Nginx reverse proxy configuration
+  - Automated OpenAPI documentation generation
+  - **Manifest validation** — `.saasfoundry.json` ships with a JSON Schema (draft-07) and is validated by ajv on every CLI invocation; typos surface as actionable errors instead of silent drift
+  - **Cross-version migration framework** — breaking changes to the manifest or to a module's installed file set ship through a numbered migration registry; `sf update` runs them automatically and
+    falls back to `.saasfoundry.new` sidecars on user-edited files
 
 ## 🔧 Prerequisites
 
-To fully leverage SaaSFoundry's capabilities, the following tools are strongly recommended:
+To fully leverage SaaSFoundryAI's capabilities, the following tools are strongly recommended:
 
 ### 🐳 Docker
 
@@ -102,41 +172,61 @@ add-zsh-hook chpwd load-nvmrc
 load-nvmrcexport PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 🌈 Peacock (Optional)
-
-Peacock is a Visual Studio Code extension that helps identify and distinguish projects by colorizing your workspace:
-
-```bash
-# For VS Code
-# Install from VS Code marketplace: "johnpapa.vscode-peacock"
-
-# For other compatible IDEs (like Cursor)
-# Check the respective marketplace for Peacock or similar workspace colorizing extensions
-```
-
-This extension is particularly useful when working with multiple repositories simultaneously, offering visual differentiation between frontend and backend workspaces.
-
-After installing these tools, you'll be ready to fully utilize all SaaSFoundry features, including containerized development environments and proper Node.js version management across projects.
+After installing these tools, you'll be ready to fully utilize all SaaSFoundryAI features, including containerized development environments and proper Node.js version management across projects.
 
 ## 🚀 Quick Start
 
-1. **Create a new project using the integrated CLI**
+### Creating a new project — with your AI assistant
+
+Hand it the line at the top of this README, move into the folder you want to work in, then say what you want in your own words:
+
+> _"I want a SaaS with a client portal, file uploads and transactional email."_
+
+The skill asks only what it cannot infer, turns your answers into a single non-interactive `sf new …` invocation, shows you the plan, and runs it. The same skill covers what comes after — modules with
+`sf update`, the board with `sf workflow`.
+
+### Creating a new project — from the terminal
+
+Every step above has a CLI equivalent, and driving it yourself is a supported path rather than a fallback:
 
 ```bash
 # Execute directly (no global install needed)
-npx saasfoundry-cli@beta new
+npx saasfoundryai-cli new
 
 # OR install the CLI globally
-npm install -g saasfoundry-cli@beta
+npm install -g saasfoundryai-cli
 sf new       # or: saasfoundry new
 ```
 
-2. **Choose your starting point**
+The CLI will guide you through:
 
-- [Backend](scaffolds/blueprints/api/README.md)
-- [Frontend](scaffolds/blueprints/web/README.md)
+- **Project structure** - Monorepo (default) or Multi-repo
+- **Database setup** - Docker (recommended), Manual, or AWS RDS credentials
+- **Optional modules**:
+  - Email service (MailerSend)
+  - S3 Storage (AWS S3)
+  - Analytics (Umami)
 
-3. **Follow the detailed documentation** Each component has its own README with specific instructions and best practices.
+### Adding Modules to Existing Projects
+
+```bash
+# Add modules to an existing SaaSFoundryAI project
+cd your-project
+sf update
+
+# The CLI will:
+# 1. Detect installed modules from .saasfoundry.json
+# 2. Show available modules to install
+# 3. Safely merge updates using three-way comparison
+# 4. Update dependencies and environment files
+```
+
+### Getting Started
+
+- [Backend Documentation](scaffolds/blueprints/api/README.md)
+- [Frontend Documentation](scaffolds/blueprints/web/README.md)
+
+Each component has its own README with specific instructions and best practices.
 
 ## 🛠️ Project Structure
 
@@ -146,8 +236,8 @@ sf new       # or: saasfoundry new
 <table>
 <tr>
 <th>
-<h3>🔀 Multi-repository</h3>
-<p><i>(Mono-repository comming soon)</i><p>
+<h3>📦 Monorepo (Default)</h3>
+<p><i>Recommended for most projects</i></p>
 </th>
 </tr>
 <tr>
@@ -155,36 +245,35 @@ sf new       # or: saasfoundry new
 
 ```
 yourproject/
-└── 📂 apps/
-    ├── 📂 yourproject-api/        # NestJS Backend API
-    │   ├── 🔵 src/
-    │   │   ├── 🔵 common/         # fitlers, services...
-    │   │   ├── 🔵 configs/        # Api docs, db, env, test...
-    │   │   └── 🔵 modules/        # controllers, services, tests...
-    │   │
-    │   ├── 🔵 docs/               # Generated API documentation
-    │   ├── 🔵 logs/               # API logs
-    │   ├── 🔵 scripts/            # db, tag manager, test init
-    │   ├── 🔵 tests/
-    │   ├── 🔵 prisma/
-    │   └── 🔵 docker-compose.yml  # Docker ready
-    │
-    ├── 📂 yourproject-db/          # PSQL database
-    │   └── 🟢 docker-compose.db.yml
-    │
-    └── 📂 yourproject-web/         # React Frontend
-        ├── 🟠 src/
-        │   ├── components          # layout, nav, ui (shadcn, custom)
-        │   ├── pages               # private / public
-        │   ├── locales             # auth.yml, common.yml...
-        │   ├── router              # guard, routes, lazy-pages...
-        │   ├── hooks               # api / ui / ...
-        │   └── utils
-        │
-        ├── 🟠 scripts/            # db, tag manager, test init
-        ├── 🟠 public/
-        └── 🟠 tests/
-
+├── 📂 apps/
+│   ├── 📂 api/              # NestJS Backend
+│   │   ├── 🔵 src/
+│   │   │   ├── common/      # filters, services
+│   │   │   ├── configs/     # db, env, test
+│   │   │   └── modules/     # features
+│   │   ├── 🔵 docs/         # Generated API documentation
+│   │   ├── 🔵 prisma/
+│   │   ├── 🔵 scripts/      # db, tag manager, test init
+│   │   └── 🔵 tests/
+│   │
+│   └── 📂 web/              # React Frontend
+│       ├── 🟠 src/
+│       │   ├── components   # layout, nav, ui (shadcn, custom)
+│       │   ├── pages        # private / public
+│       │   ├── locales      # auth.yml, common.yml...
+│       │   ├── hooks        # api / ui / ...
+│       │   └── router       # guard, routes, lazy-pages...
+│       ├── 🟠 public/
+│       └── 🟠 tests/
+│
+├── 📂 infra/
+│   ├── dev-services/        # Docker compose
+│   ├── db/                  # Database
+│   └── s3/                  # MinIO (optional)
+│
+├── .saasfoundry.json        # Manifest
+├── turbo.json               # Monorepo config
+└── package.json
 ```
 
 </td>
@@ -192,9 +281,119 @@ yourproject/
 </table>
 </div>
 
-> **💡 Tip**: Choose multi-repo for separate deployment cycles or mono-repo for tightly coupled projects with shared components.
+> **💡 Tip**: Monorepo provides shared tooling and simplified dependency management with Turborepo.
 
-## 💡 Why SaaSFoundry?
+<div align="center">
+<table>
+<tr>
+<th>
+<h3>🔀 Multi-repository</h3>
+<p><i>For separate deployments</i></p>
+</th>
+</tr>
+<tr>
+<td>
+
+```
+📂 apps/
+├── 📂 yourproject-api/      # NestJS Backend API
+│   ├── 🔵 src/
+│   │   ├── common/          # filters, services...
+│   │   ├── configs/         # Api docs, db, env, test...
+│   │   └── modules/         # controllers, services, tests...
+│   ├── 🔵 docs/             # Generated API documentation
+│   ├── 🔵 logs/             # API logs
+│   ├── 🔵 scripts/          # db, tag manager, test init
+│   ├── 🔵 prisma/
+│   ├── 🔵 tests/
+│   ├── 🔵 docker-compose.yml  # Production deployment
+│   ├── 🔵 docker-compose.dev-services.yml  # Local dev (DB + S3)
+│   └── .saasfoundry.json    # Manifest
+│
+└── 📂 yourproject-web/      # React Frontend
+    ├── 🟠 src/
+    │   ├── components       # layout, nav, ui (shadcn, custom)
+    │   ├── pages            # private / public
+    │   ├── locales          # auth.yml, common.yml...
+    │   ├── router           # guard, routes, lazy-pages...
+    │   ├── hooks            # api / ui / ...
+    │   └── utils
+    ├── 🟠 public/
+    ├── 🟠 scripts/          # tag manager
+    ├── 🟠 tests/
+    └── .saasfoundry.json    # Manifest
+```
+
+</td>
+</tr>
+</table>
+</div>
+
+> **💡 Tip**: Multi-repo allows independent deployment cycles and version control. Dev services (DB, S3) are embedded in the API via `docker-compose.dev-services.yml` for easy local development.
+
+## 🧩 Optional Modules
+
+SaaSFoundryAI includes optional modules that can be added during project creation or later with `sf update`:
+
+### 📧 Email Service (MailerSend)
+
+- Transactional email integration
+- Pre-configured templates for auth flows (verification, password reset, invitations)
+- Easy-to-use service layer in NestJS
+- Test mode for development
+
+### 📦 S3 Storage (AWS S3)
+
+- File upload and management
+- Organization logo uploads (multi-tenancy ready)
+- Pre-built API endpoints and React hooks
+- Works with AWS S3 or MinIO (local development)
+
+### 📊 Analytics (Umami)
+
+- Privacy-focused analytics
+- Self-hosted or cloud options
+- Pre-integrated in React app
+- GDPR compliant
+
+### 📱 Installable app (PWA)
+
+- Installs as a desktop application from the browser — its own window, no address bar, Dock/taskbar icon
+- Web-standards based (Web App Manifest + service worker), so it also covers mobile home screens
+- On by default, declinable with `--no-pwa`
+- Offline is shell-only: the app starts without a network, API calls always go to the network
+
+### 🔄 Update System
+
+The CLI tracks your project with a `.saasfoundry.json` manifest:
+
+```json
+{
+  "version": "1.0.0",
+  "structure": "monorepo",
+  "modules": {
+    "emailService": "mailersend",
+    "s3Setup": "docker",
+    "includeAnalytics": true
+  },
+  "fileHashes": { ... }
+}
+```
+
+When running `sf update`:
+
+1. **Detects** installed modules and CLI version
+2. **Regenerates** project structure in temp directory
+3. **Compares** three versions (base, current, target)
+4. **Merges** changes safely:
+   - Unchanged user files → preserved
+   - Unchanged template, modified locally → kept as-is
+   - Changed template, unchanged locally → auto-updated
+   - Both changed → conflict saved as `.saasfoundry.new`
+
+This ensures your customizations are never lost during updates.
+
+## 💡 Why SaaSFoundryAI?
 
 ### For Startups
 
@@ -214,6 +413,240 @@ yourproject/
 - **Developer Experience**: Streamlined development with integrated tools
 - **Community**: Open-source collaboration and ecosystem
 
+## 🤖 AI-First Development
+
+SaaSFoundryAI is designed as a **hybrid development platform** that combines professional-grade tooling with AI-assisted workflows. Generated projects support traditional team development and one or
+several declared coding-agent tools.
+
+### ✨ Built for coding-agent coexistence
+
+Every SaaSFoundryAI project includes:
+
+#### 📝 Shared project instructions
+
+- **Project-specific context** for immediate AI understanding
+- **Architecture documentation** with tech stack, conventions, and patterns
+- **Module system documentation** for dynamic feature installation
+- **Git workflow guidelines** with conventional commits and branching strategy
+- **Agent entrypoints** through `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md`, driven by the declared profiles
+
+#### 🛠️ Pre-configured Development Environment
+
+- **Path aliases** optimized for AI code generation
+- **Validation schemas** (Zod) for type-safe AI-generated code
+- **Modular structure** that AI can navigate and extend easily
+- **Consistent naming conventions** across backend and frontend
+
+#### 🔄 Professional Workflows + AI
+
+- **Git hooks** (Husky) enforce code quality on AI-generated commits
+- **Automated tests** validate AI changes (unit, E2E, integration)
+- **CI/CD pipelines** run checks on every AI-assisted PR
+- **Type safety** (TypeScript + Prisma) catches AI mistakes early
+- **ESLint + Prettier** auto-format AI-generated code
+
+### 🎯 SaaSFoundryAI skills system
+
+SaaSFoundryAI projects come with a **skills library** that teaches configured coding agents the project's conventions, workflows, and integrations. The existing `.claude/skills/` tree remains the
+common source during the additive compatibility phase; declared shared profiles receive reviewed `.agents/skills/` copies or references. Add the assistant-facing meta-skill with `sf skill install`
+(currently Claude-native), and manage project profiles with `sf agents`.
+
+#### 🎯 SRS auto-suggestion (when the SRS module is enabled)
+
+When you install the SRS skill (`sf-srs`) on a project, supported prompt hooks can classify each request with a deterministic intent detector. If you describe a user need, a feature, a design
+decision, or a test condition, the configured agent is directed to propose an SRS update before writing code. Hosts without a verified native hook apply the same procedure from the shared project
+instructions. The classifier is conservative (precision ≈ 1.0, recall ≈ 0.94 on a 64-prompt calibration set) and ships with three opt-out paths.
+
+#### 📦 Core Skills (Always Installed)
+
+**Git Workflows:**
+
+- **`sf-git-commit`** — Quick commit and push with conventional commit format
+- **`sf-git-create-pr`** — Create a PR with auto-generated title and description
+- **`sf-git-fix-pr-comments`** — Fetch PR review comments and implement all requested changes
+- **`sf-git-merge`** — Merge branches with context-aware conflict resolution
+
+**Code Quality:**
+
+- **`sf-utils-fix-errors`** — Fix ESLint and TypeScript errors in parallel via sub-agents
+- **`sf-utils-fix-grammar`** — Fix grammar and spelling in one or many files while preserving formatting
+
+#### 🎛️ Workflow Skill (Installed When a Workflow Is Configured)
+
+- **`sf-workflow`** — Complexity-adaptive development workflow (`Backlog → Ready → In progress → AI testing → Human testing → In review → Done`). Adapts rigor by ticket complexity (Quick / Feature /
+  Epic) and works against GitHub Projects, Jira, Notion, or Linear. Configuration lives in `.saasfoundry.json` — never hardcoded in the skill.
+
+#### 🔧 Tool Skills (Paired With Your Issue Tracker)
+
+Each tool skill gives the configured coding agent a first-class shell CLI (no MCP) for reading and writing tickets in your chosen tracker:
+
+- **`sf-tool-github-projects`** — GitHub Projects V2 (issues, subtasks, status, complexity labels)
+- **`sf-tool-jira`** — Jira tickets, sprints, boards
+- **`sf-tool-notion`** — Notion database tasks and properties
+- **`sf-tool-linear`** — Linear issues and cycles
+
+Credentials live in each tool's `.env` file — or under `~/.claude/credentials/<tool>/<account>.env` when you run multiple accounts — and are never committed.
+
+#### 🚀 Optional Advanced Skills
+
+Added during `sf new` or later with `sf update`:
+
+- **`sf-tool-context7`** — Real-time, version-specific documentation from 1000+ libraries (free public API, prevents hallucinated or deprecated APIs)
+- **`sf-tool-atlassian`** — Broader Jira + Confluence access (wiki pages, boards, sprints) beyond just tickets
+- **`sf-tool-notion`** (advanced) — Notion pages, databases, views, comments across a full workspace, beyond ticketing
+- **`sf-tool-figma`** — Figma files, components, FigJam boards, design-to-code
+
+#### 🧰 SaaSFoundryAI Meta-Skill
+
+- **`tool-saasfoundry`** — Teaches an assistant to drive the `sf` CLI itself: scaffold new projects, add or remove modules, read project state from `.saasfoundry.json`, file module requests, report
+  CLI or scaffold bugs, and vote on community proposals. Install with `sf skill install` (project or user scope).
+
+#### ⚙️ Skills Configuration
+
+**During project creation (`sf new`):**
+
+```bash
+sf new
+# ... project setup questions ...
+
+📚 Advanced Skills (Optional)
+? Select advanced skills to install
+  ◯ Context7  - Up-to-date library documentation
+  ◯ Atlassian - Jira/Confluence integration
+  ◯ Notion    - Notion workspace integration
+  ◯ Figma     - Figma design system integration
+```
+
+**Adding skills later (`sf update`):**
+
+```bash
+sf update
+
+# Detects available skills not yet installed
+? Which modules would you like to add?
+  ◯ Advanced Skill: Context7
+  ◉ Advanced Skill: Notion
+  ◯ Advanced Skill: Figma
+```
+
+#### 🔐 Credential Management
+
+- Each skill stores credentials in its own `.env` file (project-scoped)
+- Multi-account setups keep tokens under `~/.claude/credentials/<tool>/<account>.env`
+- Credentials are **never** committed to git (`.gitignore` protected)
+- When Claude needs a skill without credentials, it prompts you to configure it
+
+### 🚀 Quick Start for AI Development
+
+#### 1. **Open the project in a configured coding agent**
+
+```bash
+# After generating your project
+cd your-project
+code .  # or cursor .
+
+# Read the entrypoint reported by sf new: CLAUDE.md, AGENTS.md, or GEMINI.md
+sf agents list
+sf status --agent-friendly --no-network
+```
+
+#### 2. **Common AI Development Commands**
+
+```bash
+# Add a new module
+"Add email service with MailerSend"
+
+# Implement features
+"Create a new user profile endpoint with avatar upload"
+"Add a dark mode toggle to the settings page"
+
+# Fix and improve
+"Fix all TypeScript errors"  # Triggers utils-fix-errors skill
+"Add validation to the login form"
+
+# Git workflows
+"Commit these changes"  # Triggers git-commit skill
+"Create a PR for this feature"  # Triggers git-create-pr skill
+
+# Advanced skills (if configured)
+"Get the latest React Router v7 documentation"  # Uses tool-context7
+"Create a Jira ticket for this bug"  # Uses tool-atlassian
+"Generate code from this Figma design"  # Uses tool-figma
+```
+
+#### 3. **AI-Assisted Workflows**
+
+**Feature Development:**
+
+1. Ask a configured coding agent to implement the feature
+2. AI generates code following project conventions
+3. Git hooks validate commit message format
+4. Pre-push hooks run tests automatically
+5. CI/CD validates the changes
+6. The agent can create the PR with the required description
+
+**Code Review:**
+
+1. The agent reads PR comments from GitHub
+2. Implements requested changes
+3. Runs tests to validate fixes
+4. Updates PR with new commits
+
+### 🎯 Best Practices
+
+#### ✅ DO
+
+- **Use CLAUDE.md** - Keep it updated with project decisions
+- **Leverage skills** - Core skills are always available, configure advanced skills as needed
+- **Trust the guards** - Let tests and CI/CD catch issues
+- **Iterate with AI** - Use AI for rapid prototyping, then refine
+- **Review AI code** - Especially for security-sensitive areas
+- **Configure Context7** - Avoid hallucinated APIs with up-to-date library docs
+
+#### ❌ DON'T
+
+- **Skip tests** - AI-generated code must pass all tests
+- **Bypass hooks** - Don't use `--no-verify` on AI commits
+- **Ignore types** - TypeScript errors indicate AI misunderstandings
+- **Over-rely** - Review critical business logic carefully
+- **Forget context** - Update CLAUDE.md when architecture changes
+
+### 📚 AI + Traditional Dev Harmony
+
+SaaSFoundryAI ensures AI assistance **enhances** rather than replaces professional practices:
+
+| Traditional Practice | AI Enhancement                                        |
+| -------------------- | ----------------------------------------------------- |
+| Code reviews         | AI implements PR feedback automatically               |
+| Testing              | AI generates test cases, humans verify coverage       |
+| Documentation        | AI drafts docs, humans ensure accuracy                |
+| Refactoring          | AI suggests improvements, humans approve              |
+| Debugging            | AI identifies patterns, humans understand root causes |
+
+### 🔐 Security & Quality
+
+All AI-generated code passes through:
+
+- **Zod validation** - Runtime type checking
+- **ESLint rules** - Code quality standards
+- **Unit tests** - Business logic verification
+- **E2E tests** - User flow validation
+- **TypeScript** - Compile-time type safety
+- **Git hooks** - Pre-commit and pre-push checks
+- **CI/CD** - Automated deployment validation
+
+### 📖 Learning Path
+
+1. **Start small** - Use AI for simple features first
+2. **Understand patterns** - Learn from AI-generated code
+3. **Customize CLAUDE.md** - Add project-specific context
+4. **Create skills** - Build custom AI workflows
+5. **Share learnings** - Document successful AI patterns
+
+---
+
+**Ready to build with AI?** Generated projects include the shared instructions, skills, diagnostics, and workflow needed by the coding-agent profiles you select.
+
 ## 🤝 Contributing
 
 We welcome contributions! Whether you're fixing bugs, improving documentation, or adding new features, your help is appreciated.
@@ -224,23 +657,36 @@ We welcome contributions! Whether you're fixing bugs, improving documentation, o
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### Shipping a breaking change?
+
+Manifest field renames, restructured `modules.<x>` blocks, or any change that would corrupt a project scaffolded with an older CLI version go through the migration framework. Read
+[`.claude/docs/migration-framework.md`](.claude/docs/migration-framework.md) before opening the PR — it covers the registry pattern, the file naming convention, and the golden-fixture test you need to
+ship alongside the migration.
+
 ### Commit Message Guidelines
 
-We follow conventional commits for better versioning and changelog generation. While you can bypass checks with `--no-verify`, we encourage following these guidelines:
+We follow conventional commits enforced by commitlint. The format is `<type>(#<ticket>): <description>` — the ticket scope is **required**, header is capped at 100 characters.
 
 - `feat:` New features
 - `fix:` Bug fixes
 - `docs:` Documentation changes
 - `style:` Code style changes
 - `refactor:` Code refactoring
+- `perf:` Performance improvements
 - `test:` Adding tests
 - `chore:` Maintenance tasks
+- `ci:` Continuous integration changes
+- `build:` Build system changes
+- `revert:` Reverts a previous commit
+
+Examples: `feat(#317): SRS intent-detector calibration`, `fix(#292): apply prettier normalization`. See [Development guide](docs/contributing/development.md) for the full contributor workflow.
 
 ## 📚 Documentation
 
-Detailed documentation is available at [saasfoundry.diamondforge.fr](https://saasfoundry.diamondforge.fr) (coming soon).
+Detailed documentation lives in [`docs/`](docs/) — getting started, CLI reference, modules, SRS, workflow skills, troubleshooting. Browse it locally with `npm run docs:dev`; the hosted site goes up
+with the first stable release.
 
-📦 Available on npm: [saasfoundry-cli](https://www.npmjs.com/package/saasfoundry-cli)
+📦 Available on npm: [saasfoundryai-cli](https://www.npmjs.com/package/saasfoundryai-cli)
 
 ## 📄 License
 
@@ -255,5 +701,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-  Made with ❤️ by the SaaSFoundry Team
+  Made with ❤️ by the SaaSFoundryAI Team
 </div>

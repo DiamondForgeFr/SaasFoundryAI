@@ -1,865 +1,92 @@
 import chalk from 'chalk'
-import crypto from 'crypto'
-import fs from 'fs'
-import { copy } from 'fs-extra'
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import inquirer from 'inquirer'
+import { mkdir, writeFile } from 'fs/promises'
 import ora from 'ora'
-import { resolve } from 'path'
-import { exec } from 'shelljs'
-
-/**
- * Types
- */
-interface DbCredentials {
-  host: string
-  port: string
-  user: string
-  password: string
-  database: string
-  dbType: 'postgresql' | 'sql'
-}
-
-interface Answers {
-  projectName: string
-  projectDescription: string
-  isMonorepo: boolean
-  setupRepo: 'local' | 'create' | 'existing'
-  gitProvider?: 'GitHub' | 'GitLab'
-  mainBranch: 'main' | 'master'
-  monorepoUrl?: string
-  backendRepoUrl: string
-  frontendRepoUrl?: string
-  dbSetup: 'docker' | 'credentials' | 'manual'
-  dbCredentials?: DbCredentials
-  initDb: boolean
-  emailService: 'none' | 'mailersend'
-  mailersendApiKey?: string
-  mailersendSenderEmail?: string
-  mailersendSenderName?: string
-}
-
-interface CreateApiAppParams {
-  isMonorepo: boolean
-  projectName: string
-  projectDescription: string
-  backendRepoUrl: string
-  dbCredentials?: DbCredentials
-  mainBranch: string
-  emailService: 'none' | 'mailersend'
-  mailersendApiKey?: string
-  mailersendSenderEmail?: string
-  mailersendSenderName?: string
-}
-
-interface CreateWebAppParams {
-  isMonorepo: boolean
-  projectName: string
-  projectDescription: string
-  frontendRepoUrl: string
-  mainBranch: string
-}
-
-interface CreateDbAppParams {
-  isMonorepo: boolean
-  projectName: string
-  dbCredentials?: DbCredentials
-}
-
-// Paths
-const blueprintsPath = resolve(__dirname, '../../scaffolds/blueprints')
-const overlaysPath = resolve(__dirname, '../../scaffolds/overlays')
-
-/**
- * Generate a secure random string for JWT secrets
- * @param length Length of the secret (default: 64)
- * @returns A secure random string
- */
-function generateJwtSecret(length: number = 64): string {
-  return crypto.randomBytes(length).toString('hex')
-}
-
-/**
- * Set default values for database credentials if they are empty
- */
-function setDefaultDbCredentials(credentials?: DbCredentials): DbCredentials | undefined {
-  if (!credentials) return undefined
-
-  // define db type first
-  const dbType = credentials.dbType || 'postgresql'
-
-  return {
-    dbType,
-    host: credentials.host || 'localhost',
-    port: credentials.port || (dbType === 'postgresql' ? '5435' : '1433'),
-    user: credentials.user || 'db_dev_user',
-    password: credentials.password || 'db_dev_password',
-    database: credentials.database || 'db_dev'
-  }
-}
-
-/**
- * Get user inputs
- */
-async function getUserStartProjectInputs() {
-  const answers = await inquirer.prompt<Answers>([
-    {
-      type: 'input',
-      name: 'projectName',
-      message: 'What is the name of your project?',
-      validate: (input: string) => {
-        if (!input) return 'Project name is required'
-        if (!/^[a-z0-9-]+$/.test(input)) {
-          return 'Project name can only contain lowercase letters, numbers, and hyphens'
-        }
-        return true
-      }
-    },
-    {
-      type: 'input',
-      name: 'projectDescription',
-      message: 'What is the description of your project?',
-      default: (answers: Answers) => `${answers.projectName} is just an amazing SaaSFoundry project`
-    },
-    {
-      type: 'list',
-      name: 'mainBranch',
-      message: 'Which main branch name do you prefer?',
-      choices: [
-        { name: 'main', value: 'main' },
-        { name: 'master', value: 'master' }
-      ],
-      default: 'main'
-    },
-    {
-      type: 'list',
-      name: 'isMonorepo',
-      message: 'How would you like to structure your project?',
-      choices: [
-        { name: 'Monorepo: Single Git repository for Backend and Frontend (centralized management) - Coming soon', value: true, disabled: true },
-        { name: 'Multirepo: Separate Git repositories for Backend and Frontend (independent management)', value: false }
-      ],
-      default: false
-    },
-    {
-      type: 'list',
-      name: 'setupRepo',
-      message: 'Do you have already a remote repository?',
-      choices: [
-        { name: 'Not yet, just setup on local', value: 'local' },
-        { name: "Yes, I'll give you the link", value: 'existing' }
-      ],
-      when: (answers: Answers) => answers.isMonorepo
-    },
-    {
-      type: 'list',
-      name: 'setupRepo',
-      message: 'Do you have already remote repositories?',
-      choices: [
-        { name: 'Not yet, just setup on local for both', value: 'local' },
-        { name: "Yes, I'll give you the links", value: 'existing' }
-      ],
-      when: (answers: Answers) => !answers.isMonorepo
-    },
-    {
-      type: 'input',
-      name: 'monorepoUrl',
-      message: 'Enter your existing monorepo Git URL',
-      when: (answers: Answers) => answers.isMonorepo && answers.setupRepo === 'existing',
-      validate: (input: string) => {
-        if (!input) return 'Git URL is required'
-        return true
-      }
-    },
-    {
-      type: 'input',
-      name: 'backendRepoUrl',
-      message: 'Enter your existing backend Git URL',
-      when: (answers: Answers) => !answers.isMonorepo && answers.setupRepo === 'existing',
-      validate: (input: string) => {
-        if (!input) return 'Backend Git URL is required'
-        return true
-      },
-      default: 'https://github.com/agachet/saasfoundry'
-    },
-    {
-      type: 'input',
-      name: 'frontendRepoUrl',
-      message: 'Enter your existing frontend Git URL',
-      when: (answers: Answers) => !answers.isMonorepo && answers.setupRepo === 'existing',
-      validate: (input: string) => {
-        if (!input) return 'Frontend Git URL is required'
-        return true
-      },
-      default: 'https://github.com/agachet/saasfoundry'
-    },
-    {
-      type: 'list',
-      name: 'dbSetup',
-      message: 'Do you want to set up a development database with Docker? (you must have docker installed)',
-      choices: [
-        {
-          name: 'Yes (create a docker-compose.db.yml file)',
-          value: 'docker'
-        },
-        {
-          name: "No, let's just connect api to my db following these credentials",
-          value: 'credentials'
-        },
-        { name: "No I'll do it later", value: 'manual' }
-      ]
-    },
-    {
-      type: 'list',
-      name: 'dbCredentials.dbType',
-      message: 'Which database technology are you using?',
-      choices: [
-        { name: 'PostgreSQL', value: 'postgresql' },
-        { name: 'SQL Server', value: 'sql' }
-      ],
-      when: (answers: Answers) => answers.dbSetup === 'credentials',
-      default: 'postgresql'
-    },
-    {
-      type: 'input',
-      name: 'dbCredentials.host',
-      message: 'Database host',
-      when: (answers: Answers) => answers.dbSetup === 'credentials'
-    },
-    {
-      type: 'input',
-      name: 'dbCredentials.port',
-      message: 'Database port',
-      when: (answers: Answers) => answers.dbSetup === 'credentials'
-    },
-    {
-      type: 'input',
-      name: 'dbCredentials.user',
-      message: 'Database user',
-      when: (answers: Answers) => answers.dbSetup === 'docker' || answers.dbSetup === 'credentials',
-      default: 'db_dev_user'
-    },
-    {
-      type: 'input',
-      name: 'dbCredentials.password',
-      message: 'Database password',
-      when: (answers: Answers) => answers.dbSetup === 'docker' || answers.dbSetup === 'credentials',
-      default: 'db_dev_password'
-    },
-    {
-      type: 'input',
-      name: 'dbCredentials.database',
-      message: 'Database name',
-      when: (answers: Answers) => answers.dbSetup === 'docker' || answers.dbSetup === 'credentials',
-      default: 'db_dev'
-    },
-    {
-      type: 'list',
-      name: 'emailService',
-      message: 'For your transactional emails (account creation, password reset, etc.), which service would you like to set up?',
-      choices: [
-        { name: 'None, just set up the logic', value: 'none' },
-        { name: 'MailerSend [free, 3000 emails/month]', value: 'mailersend' }
-      ],
-      default: 'mailersend'
-    }
-  ])
-
-  if (answers.emailService === 'mailersend') {
-    console.log(chalk.yellow('\nYou need to create an account on MailerSend to get your API key.'))
-    console.log(chalk.yellow('Note: The following link is an affiliate link. We appreciate your support of the SaaSFoundry project by signing up through this link.'))
-    console.log(chalk.yellow('Opening https://www.mailersend.com?ref=52o9lkySkTka in your browser in few seconds...'))
-
-    // Wait a few seconds before opening the URL
-    await new Promise((resolve) => setTimeout(resolve, 4000))
-
-    // Open the URL in the default browser
-    await exec(`open https://www.mailersend.com/signup?ref=52o9lkySkTka`)
-
-    const { ready } = await inquirer.prompt<{ ready: boolean }>([
-      {
-        type: 'confirm',
-        name: 'ready',
-        message: 'Are you ready to configure your MailerSend credentials?',
-        default: true
-      }
-    ])
-
-    if (ready) {
-      const mailerSendAnswers = await inquirer.prompt<Answers>([
-        {
-          type: 'input',
-          name: 'mailersendApiKey',
-          message: 'Enter your MailerSend API key',
-          validate: (input: string) => {
-            if (!input) return 'API key is required'
-            return true
-          }
-        },
-        {
-          type: 'input',
-          name: 'mailersendSenderEmail',
-          message: 'Enter your MailerSend sender email',
-          default: `noreply@${answers.projectName.toLowerCase().replace(/\s+/g, '')}.com`,
-          validate: (input: string) => {
-            if (!input) return 'Sender email is required'
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)) return 'Please enter a valid email address'
-            return true
-          }
-        },
-        {
-          type: 'input',
-          name: 'mailersendSenderName',
-          message: 'Enter your MailerSend sender name',
-          default: answers.projectName.charAt(0).toUpperCase() + answers.projectName.slice(1),
-          validate: (input: string) => {
-            if (!input) return 'Sender name is required'
-            return true
-          }
-        }
-      ])
-
-      return { ...answers, ...mailerSendAnswers }
-    } else {
-      console.log(chalk.yellow('\nThe email service logic will be set up but disabled until you implement your own service.'))
-    }
-  }
-
-  return answers
-}
-
-/**
- * Step functions
- */
-async function createApiApp({
-  isMonorepo,
-  projectName,
-  projectDescription,
-  backendRepoUrl,
-  dbCredentials,
-  mainBranch,
-  emailService,
-  mailersendApiKey,
-  mailersendSenderEmail,
-  mailersendSenderName
-}: CreateApiAppParams) {
-  try {
-    // Create the API app directory
-    const apiPath = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
-
-    await copy(resolve(blueprintsPath, 'api'), apiPath)
-    if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/api'), apiPath, { overwrite: true })
-    else await copy(resolve(overlaysPath, 'monorepo/api'), apiPath, { overwrite: true })
-
-    // Update package.json
-    const packageJsonPath = `${apiPath}/package.json`
-    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
-    packageJson.name = `${projectName}-api`
-    packageJson.description = projectDescription
-    packageJson.repository.url = backendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
-    packageJson.keywords = [projectName, 'saasfoundry', 'backend', 'nest', 'prisma']
-    await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
-    await exec(`npm install --prefix ${apiPath} > /dev/null 2>&1`)
-
-    // Update .env
-    const envPath = `${apiPath}/.env`
-    let envContent = await readFile(envPath, 'utf8')
-
-    // Generate JWT secrets
-    const jwtSecrets = {
-      auth: generateJwtSecret(),
-      refresh: generateJwtSecret(),
-      invitation: generateJwtSecret(),
-      confirmAccount: generateJwtSecret(),
-      resetPassword: generateJwtSecret()
-    }
-
-    // Update JWT secrets in .env
-    envContent = envContent
-      .replace(/JWT_SECRET_AUTH=.*$/m, `JWT_SECRET_AUTH="${jwtSecrets.auth}"`)
-      .replace(/JWT_SECRET_REFRESH=.*$/m, `JWT_SECRET_REFRESH="${jwtSecrets.refresh}"`)
-      .replace(/JWT_SECRET_INVITATION=.*$/m, `JWT_SECRET_INVITATION="${jwtSecrets.invitation}"`)
-      .replace(/JWT_SECRET_CONFIRM_ACCOUNT=.*$/m, `JWT_SECRET_CONFIRM_ACCOUNT="${jwtSecrets.confirmAccount}"`)
-      .replace(/JWT_SECRET_RESET_PASSWORD=.*$/m, `JWT_SECRET_RESET_PASSWORD="${jwtSecrets.resetPassword}"`)
-
-    // Update email templates with project name
-    const enLocalePath = `${apiPath}/src/modules/email/locales/en.ts`
-    const frLocalePath = `${apiPath}/src/modules/email/locales/fr.ts`
-
-    if (await fileExists(enLocalePath)) {
-      let enLocaleContent = await readFile(enLocalePath, 'utf8')
-      enLocaleContent = enLocaleContent.replace(/SaaSFoundry/g, projectName.toUpperCase())
-      await writeFile(enLocalePath, enLocaleContent)
-    }
-
-    if (await fileExists(frLocalePath)) {
-      let frLocaleContent = await readFile(frLocalePath, 'utf8')
-      frLocaleContent = frLocaleContent.replace(/SaaSFoundry/g, projectName.toUpperCase())
-      await writeFile(frLocalePath, frLocaleContent)
-    }
-
-    // Update database credentials if provided
-    if (dbCredentials) {
-      const { host, port, user, password, database, dbType } = dbCredentials
-      envContent = envContent
-        .replace(/DATABASE_URL=.*$/m, `DATABASE_URL="${dbType}://${user}:${password}@${host}:${port}/${database}"`)
-        .replace(/DIRECT_URL=.*$/m, `DIRECT_URL="${dbType}://${user}:${password}@${host}:${port}/${database}"`)
-    }
-
-    // Update MailerSend configuration if selected
-    if (emailService === 'mailersend') {
-      // Copy MailerSend service to the API email services directory
-      const mailerSendServicePath = resolve(overlaysPath, 'modules/email/services/mailersend.service.ts')
-      const apiServicesPath = `${apiPath}/src/modules/email/services`
-      await copy(mailerSendServicePath, `${apiServicesPath}/mailersend.service.ts`)
-
-      // Uncomment email sending code in auth.service.ts and env.service.ts
-      const authServicePath = `${apiPath}/src/modules/auth/services/auth.service.ts`
-      let authServiceContent = await readFile(authServicePath, 'utf8')
-      authServiceContent = authServiceContent.replace(/\/\/ TODO mailer-service-active: /g, '').replace(/console\.log\('sendAccountConfirmationEmail', locale\)\n/g, '')
-      await writeFile(authServicePath, authServiceContent)
-
-      // Uncomment invitation sending code in invitation.service.ts
-      const invitationServicePath = `${apiPath}/src/modules/invitation/services/invitation.service.ts`
-      let invitationServiceContent = await readFile(invitationServicePath, 'utf8')
-      invitationServiceContent = invitationServiceContent.replace(/\/\/ TODO mailer-service-active: /g, '').replace(/console\.log\('sendInvitationEmail', locale\)\n/g, '')
-      await writeFile(invitationServicePath, invitationServiceContent)
-
-      // Uncomment email configuration in env.service.ts
-      const envServicePath = `${apiPath}/src/configs/env/services/env.service.ts`
-      let envServiceContent = await readFile(envServicePath, 'utf8')
-      envServiceContent = envServiceContent.replace(/\/\/ TODO mailer-service-active: /g, '')
-      await writeFile(envServicePath, envServiceContent)
-
-      // Uncomment email sending code in email.service.ts
-      const emailServicePath = `${apiPath}/src/modules/email/services/email.service.ts`
-      let emailServiceContent = await readFile(emailServicePath, 'utf8')
-      emailServiceContent = emailServiceContent
-        .replace(/\/\/ /g, '')
-        .replace(/console\.log\('html', html\)\n/g, '')
-        .replace(/console\.log\('text', text\)\n/g, '')
-      await writeFile(emailServicePath, emailServiceContent)
-
-      // Update email.module.ts to include MailerSendService
-      const emailModulePath = `${apiPath}/src/modules/email/email.module.ts`
-      let emailModuleContent = await readFile(emailModulePath, 'utf8')
-
-      // Add import for MailerSendService
-      emailModuleContent = emailModuleContent.replace(
-        /import { TranslationService } from '@modules\/email\/services\/translation.service'/,
-        `import { TranslationService } from '@modules/email/services/translation.service'\nimport { MailerSendService } from '@modules/email/services/mailersend.service'`
-      )
-
-      // Add MailerSendService to providers array
-      emailModuleContent = emailModuleContent.replace(/providers: \[EmailService, EnvConfig, TranslationService\]/, `providers: [EmailService, EnvConfig, TranslationService, MailerSendService]`)
-
-      await writeFile(emailModulePath, emailModuleContent)
-
-      // Rename email.service.disabled-spec.ts to email.service.spec.ts
-      const emailServiceSpecPath = `${apiPath}/src/modules/email/tests/unit/email.service.disabled-spec.ts`
-      const emailServiceSpecNewPath = `${apiPath}/src/modules/email/tests/unit/email.service.spec.ts`
-      if (await fileExists(emailServiceSpecPath)) await rename(emailServiceSpecPath, emailServiceSpecNewPath)
-
-      // Update deployment.yml to uncomment MailerSend configuration
-      const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
-      if (await fileExists(deploymentYmlPath)) {
-        let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
-        deploymentYmlContent = deploymentYmlContent
-          .replace(/# MAILERSEND_API_KEY=.*$/m, `MAILERSEND_API_KEY=\\"\${{ secrets.MAILERSEND_API_KEY }}\\"`)
-          .replace(/# MAILERSEND_SENDER_EMAIL=.*$/m, `MAILERSEND_SENDER_EMAIL=\\"${mailersendSenderEmail}\\"`)
-          .replace(/# MAILERSEND_SENDER_NAME=.*$/m, `MAILERSEND_SENDER_NAME=\\"${mailersendSenderName}\\"`)
-        await writeFile(deploymentYmlPath, deploymentYmlContent)
-      }
-
-      envContent = envContent
-        .replace(/# MAILERSEND_API_KEY=.*$/m, `MAILERSEND_API_KEY="${mailersendApiKey}"`)
-        .replace(/# MAILERSEND_SENDER_EMAIL=.*$/m, `MAILERSEND_SENDER_EMAIL="${mailersendSenderEmail}"`)
-        .replace(/# MAILERSEND_SENDER_NAME=.*$/m, `MAILERSEND_SENDER_NAME="${mailersendSenderName}"`)
-
-      // Update .env.test
-      const envTestPath = `${apiPath}/.env.test`
-      let envTestContent = await readFile(envTestPath, 'utf8')
-      envTestContent = envTestContent
-        .replace(/# MAILERSEND_API_KEY=.*$/m, `MAILERSEND_API_KEY="ms_test_fake_key_12345abcdef67890ghijklmnopqrstuvwxyz"`)
-        .replace(/# MAILERSEND_SENDER_EMAIL=.*$/m, `MAILERSEND_SENDER_EMAIL="${mailersendSenderEmail}"`)
-        .replace(/# MAILERSEND_SENDER_NAME=.*$/m, `MAILERSEND_SENDER_NAME="${mailersendSenderName}"`)
-      await writeFile(envTestPath, envTestContent)
-    }
-
-    await writeFile(envPath, envContent)
-
-    // Update Docker network name in docker-compose.yml
-    const dockerComposePath = `${apiPath}/docker-compose.yml`
-    if (await fileExists(dockerComposePath)) {
-      let dockerComposeContent = await readFile(dockerComposePath, 'utf8')
-      dockerComposeContent = dockerComposeContent.replace(/saasfoundry-network/g, `${projectName}-network`).replace(/saasfoundry-api/g, `${projectName}-api`)
-      await writeFile(dockerComposePath, dockerComposeContent)
-    }
-
-    // Update network name in GitHub Actions deployment.yml
-    const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
-    if (await fileExists(deploymentYmlPath)) {
-      let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
-      deploymentYmlContent = deploymentYmlContent.replace(/saasfoundry-network/g, `${projectName}-network`)
-      await writeFile(deploymentYmlPath, deploymentYmlContent)
-    }
-
-    // Initialize Git repository
-    if (!isMonorepo) {
-      await exec(`git init ${apiPath} > /dev/null 2>&1`)
-      await exec(`git -C ${apiPath} checkout -b ${mainBranch} > /dev/null 2>&1`)
-      if (backendRepoUrl) await exec(`git -C ${apiPath} remote add origin ${backendRepoUrl} > /dev/null 2>&1`)
-      await exec(`git -C ${apiPath} add . > /dev/null 2>&1`)
-      await exec(`git -C ${apiPath} commit -m "Initial commit" > /dev/null 2>&1`)
-    }
-
-    return true
-  } catch (error) {
-    throw error
-  }
-}
-
-async function createDbApp({ isMonorepo, projectName, dbCredentials }: CreateDbAppParams) {
-  try {
-    // Copy the DB app directory
-    const dbPath = isMonorepo ? 'apps/db' : `apps/${projectName}-db`
-    await copy(resolve(blueprintsPath, 'db'), dbPath)
-
-    // Update DB credentials
-    const templatePath = resolve(blueprintsPath, 'db/docker-compose.db.yml')
-    const templateContent = await readFile(templatePath, 'utf8')
-
-    const { user, password, database } = dbCredentials || {
-      user: 'db_dev_user',
-      password: 'db_dev_password',
-      database: 'db_dev'
-    }
-
-    const customizedContent = templateContent
-      .replace(/container_name:.*$/m, `container_name: ${projectName}-db-dev`)
-      .replace(/POSTGRES_USER:.*$/m, `POSTGRES_USER: ${user}`)
-      .replace(/POSTGRES_PASSWORD:.*$/m, `POSTGRES_PASSWORD: ${password}`)
-      .replace(/POSTGRES_DB:.*$/m, `POSTGRES_DB: ${database}`)
-      .replace(/test: \[.*\]/m, `test: ['CMD-SHELL', 'pg_isready -U ${user} -d ${database}']`)
-      .replace(/saasfoundry-network/g, `${projectName}-network`)
-
-    await writeFile(`${dbPath}/docker-compose.db.yml`, customizedContent)
-
-    return true
-  } catch (error) {
-    throw error
-  }
-}
-
-async function createWebApp({ isMonorepo, projectName, projectDescription, frontendRepoUrl, mainBranch }: CreateWebAppParams) {
-  try {
-    // Create the WEB app directory
-    const webPath = isMonorepo ? 'apps/web' : `apps/${projectName}-web`
-
-    await copy(resolve(blueprintsPath, 'web'), webPath)
-    if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/web'), webPath, { overwrite: true })
-    else await copy(resolve(overlaysPath, 'monorepo/web'), webPath, { overwrite: true })
-
-    // Update package.json
-    const packageJsonPath = `${webPath}/package.json`
-    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
-    packageJson.name = `${projectName}-api`
-    packageJson.description = projectDescription
-    packageJson.repository.url = frontendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
-    packageJson.keywords = [projectName, 'saasfoundry', 'backend', 'nest', 'prisma']
-    await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
-    await exec(`npm install --prefix ${webPath} > /dev/null 2>&1`)
-
-    // Update Docker network name in docker-compose.yml
-    const dockerComposePath = `${webPath}/docker-compose.yml`
-    if (await fileExists(dockerComposePath)) {
-      let dockerComposeContent = await readFile(dockerComposePath, 'utf8')
-      dockerComposeContent = dockerComposeContent.replace(/saasfoundry-network/g, `${projectName}-network`).replace(/saasfoundry-web/g, `${projectName}-web`)
-      await writeFile(dockerComposePath, dockerComposeContent)
-    }
-
-    // Update network name in GitHub Actions deployment.yml
-    const deploymentYmlPath = `${webPath}/.github/workflows/deployment.yml`
-    if (await fileExists(deploymentYmlPath)) {
-      let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
-      deploymentYmlContent = deploymentYmlContent.replace(/saasfoundry-network/g, `${projectName}-network`)
-      await writeFile(deploymentYmlPath, deploymentYmlContent)
-    }
-
-    // Initialize Git repository
-    if (!isMonorepo) {
-      await exec(`git init ${webPath} > /dev/null 2>&1`)
-      await exec(`git -C ${webPath} checkout -b ${mainBranch} > /dev/null 2>&1`)
-      if (frontendRepoUrl) await exec(`git -C ${webPath} remote add origin ${frontendRepoUrl} > /dev/null 2>&1`)
-      await exec(`git -C ${webPath} add . > /dev/null 2>&1`)
-      await exec(`git -C ${webPath} commit -m "Initial commit" > /dev/null 2>&1`)
-    }
-
-    return true
-  } catch (error) {
-    throw error
-  }
-}
-
-async function initAndStartDb(projectName: string, dbSetup: 'docker' | 'credentials' | 'manual', isMonorepo: boolean, spinner: ReturnType<typeof ora>) {
-  try {
-    spinner.text = 'Initializing and starting database...'
-
-    if (dbSetup === 'docker') {
-      // Create network if it doesn't exist
-      await exec(`docker network create ${projectName}-network > /dev/null 2>&1 || true`)
-      // Start the database
-      const dbPath = isMonorepo ? 'apps/db' : `apps/${projectName}-db`
-      await exec(`docker-compose -f ${dbPath}/docker-compose.db.yml up -d > /dev/null 2>&1`)
-    }
-
-    // Initialize the database with required configurations
-    spinner.text = 'Configuring database...'
-    const apiPath = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
-    await exec(`npm run db:update:dev init_data_base_config --prefix ${apiPath} -- --wf --wt --wds 2> /dev/null || npm run db:update:dev init_data_base_config --prefix ${apiPath} -- --wf --wt --wds`)
-
-    return true
-  } catch (error) {
-    throw error
-  }
-}
-
-/**
- * Waits for a server to be ready by checking its health endpoint
- * @param url The health endpoint URL to check
- * @param timeout Maximum time to wait in milliseconds
- * @returns Promise that resolves when the server is ready
- */
-async function waitForServer(url: string, timeout: number = 30000): Promise<void> {
-  const startTime = Date.now()
-  const checkInterval = 1000 // Check every second
-
-  while (Date.now() - startTime < timeout) {
-    try {
-      const response = await fetch(url)
-      if (response.ok) {
-        return
-      }
-    } catch {
-      // Server not ready yet, continue waiting
-    }
-    await new Promise((resolve) => setTimeout(resolve, checkInterval))
-  }
-
-  throw new Error(`Server at ${url} did not become ready within ${timeout}ms`)
-}
-
-/**
- * Opens a new terminal tab or window with contextual directory and optional command
- * @param directory The directory to open the terminal in
- * @param command Optional command to run after changing to the directory
- * @param description Description for the spinner (e.g., "Opening terminal..." or "Starting backend...")
- * @returns Promise<boolean> indicating success or failure
- */
-async function openTerminal(directory: string, options?: { command?: string; description?: string }): Promise<boolean> {
-  const { command, description } = options || {}
-  const spinnerText = description || (command ? `Running command in terminal...` : `Opening terminal...`)
-  const spinner = ora(spinnerText).start()
-
-  try {
-    // Get the absolute path
-    const absolutePath = `${process.cwd()}/${directory}`
-    let success = false
-
-    // Check if we're in WSL
-    const isWsl = process.platform === 'linux' && process.env.WSL_DISTRO_NAME
-    const platform = isWsl ? 'wsl' : process.platform
-
-    // Use different commands based on the operating system
-    switch (platform) {
-      case 'darwin': {
-        // macOS - try iTerm2 first, then fallback to Terminal.app
-        try {
-          // Check if iTerm2 is installed
-          await exec('osascript -e "tell application \\"iTerm\\" to version"', { silent: true })
-
-          // iTerm2 is installed, use a more permissive approach for new tab
-          const script = `
-          tell application "iTerm"
-            tell current window
-              create tab with default profile
-              tell current session
-                write text "cd ${absolutePath}${command ? ` && ${command}` : ''}"
-              end tell
-            end tell
-          end tell
-        `
-          await exec(`osascript -e '${script}'`)
-          success = true
-        } catch {
-          // iTerm2 not found or error, use Terminal.app
-          await exec(
-            `osascript -e 'tell application "Terminal" to tell application "System Events" to keystroke "t" using {command down}' -e 'tell application "Terminal" to do script "cd ${absolutePath}${command ? ` && ${command}` : ''}" in front window'`
-          )
-          success = true
-        }
-        break
-      }
-      case 'win32': {
-        // Windows - check for Windows Terminal
-        const hasWindowsTerminal = (await exec('where wt.exe', { silent: true }).code) === 0
-
-        if (hasWindowsTerminal) {
-          // Windows Terminal
-          if (command) {
-            await exec(`wt.exe -w 0 nt -d "${absolutePath}" cmd /k ${command}`)
-          } else {
-            await exec(`wt.exe -w 0 nt -d "${absolutePath}"`)
-          }
-          success = true
-        } else {
-          // Fallback to cmd
-          await exec(`start cmd.exe /K "cd ${absolutePath}${command ? ` && ${command}` : ''}"`)
-          success = true
-        }
-        break
-      }
-      case 'wsl': {
-        // WSL - use the default shell
-        if (command) await exec(`cd ${absolutePath} && ${command}`)
-        else await exec(`cd ${absolutePath}`)
-        success = true
-        break
-      }
-      default: {
-        // Linux - try to detect current terminal
-        const terminals = [
-          {
-            name: 'gnome-terminal',
-            command: (path: string, cmd?: string) =>
-              cmd ? `gnome-terminal --tab --working-directory="${path}" -- bash -c "${cmd}; bash"` : `gnome-terminal --tab --working-directory="${path}" -- bash`
-          },
-          { name: 'konsole', command: (path: string, cmd?: string) => (cmd ? `konsole --new-tab --workdir "${path}" -e bash -c "${cmd}; bash"` : `konsole --new-tab --workdir "${path}"`) },
-          { name: 'xterm', command: (path: string, cmd?: string) => (cmd ? `xterm -e "cd ${path} && ${cmd}; bash"` : `xterm -e "cd ${path} && bash"`) }
-        ]
-
-        for (const terminal of terminals) {
-          try {
-            if (command) {
-              await exec(terminal.command(absolutePath, command))
-            } else {
-              await exec(terminal.command(absolutePath))
-            }
-            success = true
-            break
-          } catch {
-            // Try next terminal
-            continue
-          }
-        }
-      }
-    }
-
-    if (success) {
-      spinner.succeed(chalk.green(command ? `Command started in new terminal tab` : `Terminal opened successfully`))
-    } else {
-      spinner.fail(chalk.red(`Failed to open terminal`))
-    }
-
-    return success
-  } catch (error) {
-    spinner.fail(chalk.red(`Failed to open terminal`))
-    console.error('Failed to open terminal', error)
-    return false
-  }
-}
-
-/**
- * Generates a shell command for initializing Husky and setting up script permissions
- * Uses semicolons instead of && for better AppleScript compatibility
- * @returns A shell command string that handles Husky installation and script permissions
- */
-function getHuskySetupCommand(extraCommand: string = ''): string {
-  const huskyCommand = ['npx husky install', 'chmod -R +x .husky 2>/dev/null || true', 'chmod -R +x ./scripts/*.sh 2>/dev/null || true']
-
-  if (extraCommand) {
-    huskyCommand.push(extraCommand)
-  }
-
-  return huskyCommand.join('; ')
-}
-
-/**
- * Starts the backend server in a new terminal tab
- */
-async function startBackend(projectName: string, isMonorepo: boolean, newTerminal: boolean = false): Promise<void> {
-  const apiPath = isMonorepo ? 'apps/api' : `apps/${projectName}-api`
-
-  if (!newTerminal) {
-    // Start in current terminal
-    exec(`cd ${apiPath} && npm run dev`)
-    return
-  }
-  try {
-    const success = await openTerminal(apiPath, {
-      command: getHuskySetupCommand('npm run dev'),
-      description: 'Starting backend in new terminal...'
-    })
-
-    if (!success) {
-      console.error('Failed to start backend in new terminal tab')
-      process.exit(1)
-    }
-  } catch (error) {
-    console.error('Failed to start backend in new terminal tab', error)
-    process.exit(1)
-  }
-}
-
-/**
- * Starts the frontend server in a new terminal tab
- */
-async function startFrontend(projectName: string, isMonorepo: boolean, newTerminal: boolean = false): Promise<void> {
-  const webPath = isMonorepo ? 'apps/web' : `apps/${projectName}-web`
-
-  if (!newTerminal) {
-    // Start in current terminal
-    exec(`cd ${webPath} && npm run dev`)
-    return
-  }
-
-  try {
-    const success = await openTerminal(webPath, {
-      command: getHuskySetupCommand('npm run dev'),
-      description: 'Starting frontend in new terminal...'
-    })
-
-    if (!success) {
-      console.error('Failed to start frontend in new terminal tab')
-      process.exit(1)
-    }
-  } catch (error) {
-    console.error('Failed to start frontend in new terminal tab', error)
-    process.exit(1)
-  }
-}
-
-/**
- * Check if a file exists
- */
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.promises.access(filePath, fs.constants.F_OK)
-    return true
-  } catch {
-    return false
-  }
-}
+import { execSync } from 'child_process'
+import terminalLink from 'terminal-link'
+
+import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
+import { runConfigSession } from '../config-engine/session'
+import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
+import { ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug } from '../installers/harness-provisioning'
+import { pwaInstallerMeta } from '../installers/pwa.installer'
+import { installSkills } from '../installers/skills.installer'
+import { installSelectedAgentInstructions, writeMultirepoAgentManifests } from '../installers/agent-topology'
+import { installSrsSkill } from '../installers/srs-skill.installer'
+import { initAndStartDb } from '../runners/database.runner'
+import { initAndStartS3 } from '../runners/s3.runner'
+import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '../runners/server.runner'
+import { bootstrapSrs } from '../runners/srs.runner'
+import { getHuskySetupCommand, openTerminal } from '../runners/terminal.runner'
+import { languageConfigFromAnswers } from '../language'
+import { targetManifestVersion } from '../migrations/manifest/registry'
+import { resolvePorts } from '../ports'
+import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
+import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
+import { Answers, manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
+import type { HarnessAgent } from '../harness/agent-registry'
+import { upsertEnvKey } from '../utils/env-file'
+import { ensureGitignorePatterns } from '../utils/gitignore'
+import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
+import { version as cliVersion } from '../../package.json'
+import { buildManifestTools } from './new.manifest-tools'
+import { agentProfileLines, documentationLines, labelColumn, projectUrlLines } from './new.summary'
+import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 
 /**
  * Main function
  */
-export async function newCommand() {
-  // Chat with user
-  const startProjectAnswers = await getUserStartProjectInputs()
+export async function newCommand(opts: NewCommandOptions = {}) {
+  // Verify Node.js version before proceeding
+  checkNodeVersion()
+
+  const prefill = buildPrefillFromOptions(opts)
+  const nonInteractive = opts.nonInteractive === true
+
+  // Chat with user — collection runs through the config-engine session;
+  // everything below this line is pure execution on the validated config.
+  const { config: startProjectAnswers } = await runConfigSession({ renderer: inquirerRenderer, prefill, nonInteractive })
+  // A scripted caller that omits --agents retains the historical implicit
+  // Claude-only declaration. Interactive users reviewed the checkbox choice,
+  // so their selection is explicit and belongs in the manifest.
+  if (nonInteractive && opts.agents === undefined) startProjectAnswers.agents = undefined
+
+  // Harness profile: install the AI harness onto the existing repository and
+  // stop — no scaffold, no project directory, no post-setup services.
+  if (startProjectAnswers.profile === 'harness') {
+    await runHarnessInstall(startProjectAnswers)
+    return
+  }
+
+  /**
+   * Ports, resolved before a single file is written.
+   *
+   * Read from `opts` rather than from the credentials, because `setDefaultDbCredentials`
+   * below fills an empty port with 5435 — after which "the user asked for 5435" and "the
+   * user asked for nothing" are the same value, and a default that must scan looks like a
+   * flag that must not.
+   */
+  const ports = await resolvePorts({
+    dbSetup: startProjectAnswers.dbSetup,
+    s3Setup: startProjectAnswers.s3Setup,
+    requested: {
+      db: opts.dbPort ?? startProjectAnswers.dbCredentials?.port,
+      api: opts.apiPort,
+      web: opts.webPort
+    }
+  })
+
+  // The flat shape the builders and the manifest consume. `ports` keeps the richer one —
+  // which default each port moved off — because the closing summary has to say so (#585).
+  // The storage entries are absent unless this project hosts its own MinIO (#623).
+  const projectPorts = { db: ports.db.port, api: ports.api.port, web: ports.web.port, s3: ports.s3?.port, s3Console: ports.s3Console?.port }
+  const apiDocsUrl = `http://localhost:${projectPorts.api}/api/docs`
+  const webUrl = `http://localhost:${projectPorts.web}`
 
   // Set default values for database credentials
-  if (startProjectAnswers.dbCredentials) startProjectAnswers.dbCredentials = setDefaultDbCredentials(startProjectAnswers.dbCredentials)
+  if (startProjectAnswers.dbCredentials) {
+    startProjectAnswers.dbCredentials = setDefaultDbCredentials({ ...startProjectAnswers.dbCredentials, port: String(ports.db.port) })
+  }
 
   /**
    * Project setup
@@ -871,7 +98,8 @@ export async function newCommand() {
   }).start()
 
   // Calculate total steps
-  const totalSteps = 3 + (startProjectAnswers.dbSetup === 'docker' ? 1 : 0) + (startProjectAnswers.setupRepo !== 'local' ? 1 : 0)
+  const hasDevServices = startProjectAnswers.dbSetup === 'docker' || startProjectAnswers.s3Setup === 'docker'
+  const totalSteps = 3 + (hasDevServices ? 1 : 0) + (startProjectAnswers.isMonorepo ? 1 : 0)
   let currentStep = 0
 
   const updateProgress = () => {
@@ -880,11 +108,11 @@ export async function newCommand() {
     spinner.text = `Setting up your project... ${percentage}%`
   }
 
-  try {
-    // Disable console logs during setup to keep the UI clean
-    const originalConsoleLog = console.log
-    const originalConsoleError = console.error
+  // Disable console logs during setup to keep the UI clean
+  const originalConsoleLog = console.log
+  const originalConsoleError = console.error
 
+  try {
     console.log = (message) => {
       // Only allow critical errors to pass through
       if (message && typeof message === 'string' && message.includes('ERROR')) {
@@ -908,152 +136,349 @@ export async function newCommand() {
     process.chdir(startProjectAnswers.projectName)
     updateProgress()
 
-    // Create API app
-    spinner.text = 'Setting up API application...'
-    await createApiApp({
+    spinner.text = 'Rendering technical stack...'
+    await renderTechnicalStack({ targetDir: '.', config: startProjectAnswers, ports: projectPorts, externalEffects: true })
+    currentStep = totalSteps
+    spinner.text = 'Setting up your project... 100%'
+
+    // Install Claude Code skills
+    spinner.text = 'Installing Claude Code skills...'
+    const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
+    const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
+    await installSkills({
       isMonorepo: startProjectAnswers.isMonorepo,
+      apiPath,
+      webPath,
       projectName: startProjectAnswers.projectName,
-      projectDescription: startProjectAnswers.projectDescription,
-      backendRepoUrl: startProjectAnswers.backendRepoUrl,
-      dbCredentials: startProjectAnswers.dbCredentials,
+      version: cliVersion,
       mainBranch: startProjectAnswers.mainBranch,
-      emailService: startProjectAnswers.emailService,
-      mailersendApiKey: startProjectAnswers.mailersendApiKey,
-      mailersendSenderEmail: startProjectAnswers.mailersendSenderEmail,
-      mailersendSenderName: startProjectAnswers.mailersendSenderName
+      advancedSkills: startProjectAnswers.advancedSkills,
+      context7ApiKey: startProjectAnswers.context7ApiKey,
+      atlassianEmail: startProjectAnswers.atlassianEmail,
+      atlassianApiToken: startProjectAnswers.atlassianApiToken,
+      atlassianSite: startProjectAnswers.atlassianSite,
+      atlassianCloudId: startProjectAnswers.atlassianCloudId,
+      notionApiToken: startProjectAnswers.notionApiToken,
+      notionApiVersion: startProjectAnswers.notionApiVersion,
+      figmaApiToken: startProjectAnswers.figmaApiToken
     })
-    updateProgress()
 
-    // Create DB app
-    if (startProjectAnswers.dbSetup === 'docker') {
-      spinner.text = 'Setting up database application...'
-      await createDbApp({
-        isMonorepo: startProjectAnswers.isMonorepo,
-        projectName: startProjectAnswers.projectName,
-        dbCredentials: startProjectAnswers.dbCredentials
-      })
-      updateProgress()
-    }
+    // SRS bootstrap (skill install + Notion pages creation) — opt-in
+    const srsTools = await bootstrapSrsWorkspace(startProjectAnswers, (text) => {
+      spinner.text = text
+    })
 
-    // Create WEB app
-    spinner.text = 'Setting up web application...'
-    await createWebApp({
-      isMonorepo: startProjectAnswers.isMonorepo,
+    // Generate .saasfoundry.json manifest with file hashes
+    spinner.text = 'Computing file hashes for update tracking...'
+    const fileHashes = await computeFileHashes('.')
+    const manifest: SaaSFoundryManifest = {
+      $schema: manifestSchemaUrl,
+      manifestVersion: targetManifestVersion(),
+      version: cliVersion,
+      generatedAt: new Date().toISOString(),
+      structure: startProjectAnswers.isMonorepo ? 'monorepo' : 'multirepo',
       projectName: startProjectAnswers.projectName,
-      projectDescription: startProjectAnswers.projectDescription,
-      frontendRepoUrl: startProjectAnswers.backendRepoUrl,
-      mainBranch: startProjectAnswers.mainBranch
-    })
-    updateProgress()
-
-    // Restore console.log
-    console.log = originalConsoleLog
-    console.error = originalConsoleError
+      mainBranch: startProjectAnswers.mainBranch,
+      ports: projectPorts,
+      modules: {
+        email: { provider: startProjectAnswers.emailService, version: 1 },
+        s3Setup: startProjectAnswers.s3Setup,
+        dbSetup: startProjectAnswers.dbSetup,
+        includeAnalytics: startProjectAnswers.includeAnalytics,
+        advancedSkills: startProjectAnswers.advancedSkills || [],
+        // Every scaffolded profile deposits harness artefacts (core skills +
+        // docs at minimum — stack profile included) — track them so sf update
+        // can refresh the deposits on any profile.
+        harness: { version: harnessInstallerMeta.currentVersion, managed: startProjectAnswers.profile !== 'stack' },
+        // Recorded only when installed, so `--no-pwa` leaves no trace and the
+        // dispatcher has nothing to replay. Its presence IS the enabled flag.
+        ...((startProjectAnswers.includePwa ?? true) ? { pwa: { version: pwaInstallerMeta.currentVersion } } : {})
+      },
+      language: languageConfigFromAnswers(startProjectAnswers),
+      workflow: startProjectAnswers.workflow,
+      aiRules: startProjectAnswers.aiRules,
+      fileHashes,
+      tools: buildManifestTools(srsTools, startProjectAnswers)
+    }
+    const selectedAgents = (startProjectAnswers as Answers & { agents?: HarnessAgent[] }).agents
+    if (selectedAgents?.length) {
+      manifest.modules = {
+        ...manifest.modules,
+        harness: { ...manifest.modules?.harness, version: manifest.modules?.harness?.version ?? harnessInstallerMeta.currentVersion, agents: selectedAgents }
+      }
+    }
+    await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
+    await writeMultirepoAgentManifests(manifest, startProjectAnswers.projectName)
+    await installSelectedAgentInstructions(manifest, startProjectAnswers.projectName, selectedAgents)
 
     spinner.succeed(chalk.green('Project setup completed successfully'))
   } catch (error) {
     spinner.fail(chalk.red('Failed to setup project'))
-    console.error(error)
+    console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
+  } finally {
+    console.log = originalConsoleLog
+    console.error = originalConsoleError
   }
 
   /**
    * Project start
    */
-  // Propose to start DB if using Docker or if credentials are provided
-  if (startProjectAnswers.dbSetup === 'docker' || startProjectAnswers.dbSetup === 'credentials') {
-    const { startDb } = await inquirer.prompt<{ startDb: boolean }>([
-      {
-        type: 'confirm',
-        name: 'startDb',
-        message: 'Do you want to initialize and start the database now?',
-        default: true
-      }
-    ])
+  const needsDbInit = startProjectAnswers.dbSetup === 'docker' || startProjectAnswers.dbSetup === 'credentials'
 
-    if (startDb) {
-      const dbSpinner = ora('Starting and initializing database...').start()
+  /**
+   * Steps that were attempted and did not work.
+   *
+   * `servicesOk` lived inside the post-setup block and gated one thing: whether to offer
+   * starting the apps. It never reached the closing banner or the exit code, so a failed
+   * database init still printed "successfully set up" with clickable URLs and returned 0
+   * — to the user, and to every agent and CI job driving this command. See #590.
+   */
+  const failedSteps: { step: string; fix: string }[] = []
 
-      try {
-        await initAndStartDb(startProjectAnswers.projectName, startProjectAnswers.dbSetup, startProjectAnswers.isMonorepo, dbSpinner)
-        dbSpinner.succeed(chalk.green('Database initialized and started successfully'))
+  /**
+   * What actually came up, as opposed to what was asked for.
+   *
+   * The closing screen used to build its URLs from the configuration alone, so it could not
+   * tell a live address from a dead one and printed both identically. It also never learned
+   * which apps the user chose to start, so "only backend" still advertised the frontend
+   * (#622). These three carry the observation down to the summary.
+   */
+  let appsRequested: 'all' | 'backend' | 'frontend' | 'none' = 'none'
+  let apiUp = false
+  let webUp = false
+  const needsS3Start = startProjectAnswers.s3Setup === 'docker'
+  const needsServiceSetup = needsDbInit || needsS3Start
 
-        // If database started successfully, propose to start apps
-        const { startApps } = await inquirer.prompt<{
-          startApps: 'backend' | 'frontend' | 'all' | 'none'
-        }>([
-          {
-            type: 'list',
-            name: 'startApps',
-            message: 'Do you want to start apps?',
-            choices: [
-              { name: 'Yes, start all', value: 'all' },
-              { name: 'Yes, only backend', value: 'backend' },
-              { name: 'Yes, only frontend', value: 'frontend' },
-              { name: "No, I'll do it myself", value: 'none' }
-            ],
-            default: 'backend'
-          }
-        ])
-
-        if (startApps === 'backend' || startApps === 'all') await startBackend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
-        if (startApps === 'frontend' || startApps === 'all') await startFrontend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true)
-
-        // If user didn't choose to start the backend, open a contextualized terminal for it
-        if (startApps !== 'backend' && startApps !== 'all') {
-          const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
-          await openTerminal(apiPath, {
-            command: getHuskySetupCommand(),
-            description: 'Opening terminal for backend...'
-          })
-        }
-
-        // If user didn't choose to start the frontend, open a contextualized terminal for it
-        if (startApps !== 'frontend' && startApps !== 'all') {
-          const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
-          await openTerminal(webPath, {
-            command: getHuskySetupCommand(),
-            description: 'Opening terminal for frontend...'
-          })
-        }
-
-        // Open browser with API docs if backend is started
-        if (startApps === 'backend' || startApps === 'all') {
-          try {
-            console.log(chalk.blue('Waiting for backend to be ready...'))
-            await waitForServer('http://localhost:3500/api/health')
-
-            console.log(chalk.blue('Opening API documentation in browser...'))
-            const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            await exec(`${openCommand} http://localhost:3500/api/docs`)
-          } catch {
-            console.warn(chalk.yellow('Could not open browser automatically. Please navigate to http://localhost:3500/api/docs'))
-          }
-        }
-
-        // Open browser with frontend if frontend is started
-        if (startApps === 'frontend' || startApps === 'all') {
-          try {
-            console.log(chalk.blue('Waiting for frontend to be ready...'))
-            await waitForServer('http://localhost:5173')
-
-            console.log(chalk.blue('Opening frontend application in browser...'))
-            const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-            await exec(`${openCommand} http://localhost:5173`)
-          } catch {
-            console.warn(chalk.yellow('Could not open browser automatically. Please navigate to http://localhost:5173'))
-          }
-        }
-      } catch (error) {
-        dbSpinner.fail(chalk.red('Failed to start database'))
-        console.error(error)
-      }
+  if (needsServiceSetup) {
+    // Build a question that accurately describes what will happen
+    let initMessage: string
+    if (needsDbInit && needsS3Start) {
+      initMessage = 'Do you want to start dev services and initialize the database now?'
+    } else if (needsS3Start) {
+      initMessage = 'Do you want to start dev services (MinIO) now?'
     } else {
-      // User doesn't want to start DB, let's open terminals for both apps
-      const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
-      const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
+      initMessage = 'Do you want to initialize the database now?'
+    }
 
+    let startServices: boolean
+    if (opts.startServices !== undefined) {
+      startServices = opts.startServices
+    } else if (nonInteractive) {
+      startServices = false
+    } else {
+      ;({ startServices } = await inquirer.prompt<{ startServices: boolean }>([
+        {
+          type: 'confirm',
+          name: 'startServices',
+          message: initMessage,
+          default: true
+        }
+      ]))
+    }
+
+    if (startServices) {
+      let servicesOk = true
+
+      // Initialize database (start container if Docker, then run migrations)
+      if (needsDbInit) {
+        const dbSpinner = ora(startProjectAnswers.dbSetup === 'docker' ? 'Starting database and running initial setup...' : 'Initializing database...').start()
+
+        try {
+          await initAndStartDb(startProjectAnswers.projectName, startProjectAnswers.dbSetup, startProjectAnswers.isMonorepo, dbSpinner, startProjectAnswers.dbCredentials?.port)
+          dbSpinner.succeed(chalk.green('Database initialized successfully'))
+        } catch (error) {
+          dbSpinner.fail(chalk.red('Failed to initialize database'))
+          console.error(error)
+          servicesOk = false
+          failedSteps.push({
+            step: 'Database initialization',
+            fix: `cd ${startProjectAnswers.projectName} && docker compose -f ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}/docker-compose.dev-services.yml up -d db-dev && npm run db:setup:dev --prefix ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}`
+          })
+        }
+      }
+
+      // Start S3 independently from database
+      if (needsS3Start) {
+        const s3Spinner = ora('Starting MinIO S3 storage...').start()
+        try {
+          await initAndStartS3(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, s3Spinner)
+          s3Spinner.succeed(chalk.green('MinIO S3 storage started successfully'))
+          console.log(chalk.blue(`MinIO Console available at: http://localhost:${projectPorts.s3Console ?? 9001}`))
+        } catch (error) {
+          s3Spinner.fail(chalk.red('Failed to start MinIO S3 storage'))
+          console.error(error)
+          failedSteps.push({
+            step: 'MinIO S3 storage',
+            fix: `docker compose -f ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}/docker-compose.dev-services.yml up -d s3-dev s3-init`
+          })
+        }
+      }
+
+      // Propose to start apps
+      if (servicesOk) {
+        let startApps: 'backend' | 'frontend' | 'all' | 'none'
+        if (opts.startApps !== undefined) {
+          startApps = opts.startApps
+        } else if (nonInteractive) {
+          startApps = 'none'
+        } else {
+          ;({ startApps } = await inquirer.prompt<{
+            startApps: 'backend' | 'frontend' | 'all' | 'none'
+          }>([
+            {
+              type: 'list',
+              name: 'startApps',
+              message: 'Do you want to start apps?',
+              choices: [
+                { name: 'Yes, start all', value: 'all' },
+                { name: 'Yes, only backend', value: 'backend' },
+                { name: 'Yes, only frontend', value: 'frontend' },
+                { name: "No, I'll do it myself", value: 'none' }
+              ],
+              default: 'backend'
+            }
+          ]))
+        }
+
+        /**
+         * A launch that did not launch is a failed step, not a silent one.
+         *
+         * The runners now verify the port instead of trusting that an emulator accepted a
+         * keystroke, so they can finally fail — and a failure here has to land in the same
+         * `failedSteps` collector as the database and MinIO, or it reaches the user as four
+         * URLs that answer nothing (#621, and #590 for why this collector exists).
+         */
+        const appsFix = startProjectAnswers.isMonorepo
+          ? `cd ${startProjectAnswers.projectName} && ${{ all: 'npm run dev', backend: 'npm run dev:api', frontend: 'npm run dev:web' }[startApps as 'all' | 'backend' | 'frontend']}`
+          : `cd ${startProjectAnswers.projectName} && npm run dev --prefix apps/${startProjectAnswers.projectName}-api`
+        try {
+          appsRequested = startApps
+          if (startProjectAnswers.isMonorepo) {
+            if (startApps !== 'none') await startMonorepoApps(startApps, { api: projectPorts.api, web: projectPorts.web })
+          } else {
+            if (startApps === 'backend' || startApps === 'all') await startBackend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true, projectPorts.api)
+            if (startApps === 'frontend' || startApps === 'all') await startFrontend(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, true, projectPorts.web)
+
+            // If user didn't choose to start the backend, open a contextualized terminal for it
+            if (!nonInteractive && startApps !== 'backend' && startApps !== 'all') {
+              const apiPath = `apps/${startProjectAnswers.projectName}-api`
+              await openTerminal(apiPath, {
+                command: getHuskySetupCommand(),
+                description: 'Opening terminal for backend...'
+              })
+            }
+
+            // If user didn't choose to start the frontend, open a contextualized terminal for it
+            if (!nonInteractive && startApps !== 'frontend' && startApps !== 'all') {
+              const webPath = `apps/${startProjectAnswers.projectName}-web`
+              await openTerminal(webPath, {
+                command: getHuskySetupCommand(),
+                description: 'Opening terminal for frontend...'
+              })
+            }
+          }
+        } catch (error) {
+          console.error(error)
+          failedSteps.push({ step: 'Starting the apps', fix: appsFix })
+        }
+
+        // Open browsers in order: GitHub Board → API Docs → Frontend
+        // This ensures the frontend is the active tab at the end
+
+        // 1. Open GitHub Project board first if configured
+        if (!nonInteractive && startProjectAnswers.workflow?.projectUrl) {
+          try {
+            const boardUrl = `${startProjectAnswers.workflow.projectUrl}?layout=board`
+            console.log(chalk.blue('Opening GitHub Project board in browser...'))
+            const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+            execSync(`${openCommand} "${boardUrl}"`)
+          } catch {
+            console.warn(chalk.yellow(`Could not open GitHub Project automatically. Please navigate to ${startProjectAnswers.workflow.projectUrl}?layout=board`))
+          }
+        }
+
+        /**
+         * A dead server and a stubborn browser are not the same event.
+         *
+         * Both used to land in one `catch` printing "Could not open browser automatically",
+         * so a total boot failure read as a cosmetic nuisance — the day this was found, the
+         * API was not running at all and the screen said the browser would not open (#622).
+         *
+         * Splitting them also fixes the order: there is no point asking a browser to open a
+         * page that nothing is serving.
+         */
+        // 2. Open API docs if backend is started
+        if (!nonInteractive && (startApps === 'backend' || startApps === 'all')) {
+          console.log(chalk.blue('Waiting for backend to be ready...'))
+          try {
+            await waitForServer(`http://localhost:${projectPorts.api}/api/health`)
+            apiUp = true
+          } catch {
+            console.warn(chalk.yellow(`The API never answered on http://localhost:${projectPorts.api} — it is not running.`))
+          }
+
+          if (apiUp) {
+            try {
+              console.log(chalk.blue('Opening API documentation in browser...'))
+              const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+              execSync(`${openCommand} ${apiDocsUrl}`)
+            } catch {
+              console.warn(chalk.yellow(`Could not open your browser — the API documentation is at ${apiDocsUrl}`))
+            }
+          }
+        }
+
+        // 3. Open frontend last (will be the active tab)
+        if (!nonInteractive && (startApps === 'frontend' || startApps === 'all')) {
+          console.log(chalk.blue('Waiting for frontend to be ready...'))
+          try {
+            await waitForServer(webUrl)
+            webUp = true
+          } catch {
+            console.warn(chalk.yellow(`The web app never answered on ${webUrl} — it is not running.`))
+          }
+
+          if (webUp) {
+            try {
+              console.log(chalk.blue('Opening frontend application in browser...'))
+              const openCommand = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open'
+              execSync(`${openCommand} ${webUrl}`)
+            } catch {
+              console.warn(chalk.yellow(`Could not open your browser — the web app is at ${webUrl}`))
+            }
+          }
+        }
+      }
+    } else if (!nonInteractive) {
+      // User doesn't want to start services, open terminals
       console.log(chalk.blue('Opening terminals for your project...'))
+
+      if (startProjectAnswers.isMonorepo) {
+        await openTerminal('.', { description: 'Opening terminal at monorepo root...' })
+      } else {
+        const apiPath = `apps/${startProjectAnswers.projectName}-api`
+        const webPath = `apps/${startProjectAnswers.projectName}-web`
+
+        await openTerminal(apiPath, {
+          command: getHuskySetupCommand(),
+          description: 'Opening terminal for backend...'
+        })
+        await openTerminal(webPath, {
+          command: getHuskySetupCommand(),
+          description: 'Opening terminal for frontend...'
+        })
+      }
+    }
+  } else if (!nonInteractive) {
+    // Nothing to start (DB=manual, S3=manual/credentials), open terminals
+    console.log(chalk.blue('Opening terminals for your project...'))
+
+    if (startProjectAnswers.isMonorepo) {
+      await openTerminal('.', { description: 'Opening terminal at monorepo root...' })
+    } else {
+      const apiPath = `apps/${startProjectAnswers.projectName}-api`
+      const webPath = `apps/${startProjectAnswers.projectName}-web`
 
       await openTerminal(apiPath, {
         command: getHuskySetupCommand(),
@@ -1064,29 +489,264 @@ export async function newCommand() {
         description: 'Opening terminal for frontend...'
       })
     }
-  } else {
-    // User chose manual DB setup, let's open terminals for both apps
-    const apiPath = startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`
-    const webPath = startProjectAnswers.isMonorepo ? 'apps/web' : `apps/${startProjectAnswers.projectName}-web`
-
-    console.log(chalk.blue('Opening terminals for your project...'))
-
-    await openTerminal(apiPath, {
-      command: getHuskySetupCommand(),
-      description: 'Opening terminal for backend...'
-    })
-    await openTerminal(webPath, {
-      command: getHuskySetupCommand(),
-      description: 'Opening terminal for frontend...'
-    })
   }
 
-  // Display success message with project name
+  // A step was attempted and did not work. The project exists and is one step short, so
+  // nothing is rolled back — but it must not be announced as ready, and the exit code has
+  // to say so too: for an agent driving this command, the code is the whole signal.
+  if (failedSteps.length > 0) {
+    console.log('\n')
+    console.log(chalk.yellow('='.repeat(80)))
+    console.log(
+      chalk.yellow.bold(`⚠  Your project "${startProjectAnswers.projectName}" was created, but ${failedSteps.length === 1 ? 'one step did' : `${failedSteps.length} steps did`} not complete.`)
+    )
+    console.log(chalk.yellow('='.repeat(80)))
+    console.log('\n')
+    console.log(chalk.gray('  Everything was written to disk. What is missing:'))
+    console.log()
+    for (const { step, fix } of failedSteps) {
+      console.log(chalk.yellow(`  ✗ ${step}`))
+      console.log(chalk.gray(`    finish it with:  ${fix}`))
+      console.log()
+    }
+    console.log(chalk.gray('  Finish all of it with one command:  ') + chalk.cyan('sf resume'))
+    console.log()
+    console.log(chalk.gray('  The URLs below will work once those steps do.'))
+    console.log('\n')
+    // Not process.exit: let stdout flush and the rest of the summary print.
+    process.exitCode = 1
+  } else {
+    console.log('\n')
+    console.log(chalk.green('='.repeat(80)))
+    console.log(chalk.green.bold(`🚀 Congratulations! Your project "${startProjectAnswers.projectName}" has been successfully set up by SaaSFoundryAI!`))
+    console.log(chalk.green.bold(`🌍 It's now ready to become the next SaaS that will conquer the world!`))
+    console.log(chalk.green.bold(`🧠 "What are we going to do tonight, Brain?" "The same thing we do every night, Pinky - try to take over the world!"`))
+    console.log(chalk.green('='.repeat(80)))
+    console.log('\n')
+  }
+
+  /**
+   * Two lists, and the line between them is what can be read versus what is running.
+   *
+   * This section used to hold one entry — a link to a site that had never been deployed —
+   * while the API reference sat in the URL list among the services. So on a run where the
+   * apps did not start, the only documentation on screen was the one that needed them.
+   * Local paths lead now: no port, no boot and no network can make `./README.md` wrong.
+   */
+  console.log(chalk.cyan('📚 Documentation & Resources:'))
+  const docLines = documentationLines({
+    isMonorepo: startProjectAnswers.isMonorepo,
+    projectName: startProjectAnswers.projectName,
+    apiPort: projectPorts.api,
+    hasHarness: startProjectAnswers.profile !== 'stack'
+  })
+  const docColumn = labelColumn(docLines.map((l) => ({ label: l.label, url: l.target })))
+  for (const line of docLines) {
+    const target = line.target.startsWith('http') ? terminalLink(line.target, line.target, { fallback: () => chalk.blue(line.target) }) : chalk.blue(line.target)
+    console.log(chalk.gray(docColumn({ label: line.label, url: line.target })) + target + (line.condition ? chalk.gray(`   (${line.condition})`) : ''))
+  }
+  console.log()
+
+  console.log(chalk.cyan('🤖 Configured coding-agent profiles (runtime not checked):'))
+  for (const profile of agentProfileLines((startProjectAnswers as Answers & { agents?: HarnessAgent[] }).agents)) {
+    console.log(chalk.gray(`  • ${profile.displayName} (${profile.id}) — ${profile.instructionFile}`))
+  }
+  console.log()
+
+  console.log(chalk.cyan('🔗 Your Project URLs:'))
+  const urlLines = projectUrlLines({
+    ports,
+    s3Setup: startProjectAnswers.s3Setup,
+    dbSetup: startProjectAnswers.dbSetup,
+    dbCredentials: startProjectAnswers.dbCredentials,
+    projectUrl: startProjectAnswers.workflow?.projectUrl,
+    // Omitted when nothing was attempted: no liveness was observed, so none is claimed.
+    apps: appsRequested === 'none' && !apiUp && !webUp ? undefined : { requested: appsRequested, apiUp, webUp }
+  })
+  const column = labelColumn(urlLines)
+  for (const line of urlLines) {
+    const link = terminalLink(line.url, line.url, { fallback: () => chalk.blue(line.url) })
+    // A dead address is dimmed and named. Printing it in the same ink as a working one is
+    // what made a failed boot look like a finished setup (#622).
+    const address = line.unreachable ? chalk.dim(line.url) : link
+    const suffix = line.unreachable ? chalk.red(`   ✗ ${line.unreachable}`) : line.note ? chalk.yellow(`   ← ${line.note}`) : ''
+    console.log(chalk.gray(column(line)) + address + suffix)
+  }
+
   console.log('\n')
   console.log(chalk.green('='.repeat(80)))
-  console.log(chalk.green.bold(`🚀 Congratulations! Your project "${startProjectAnswers.projectName}" has been successfully set up by SaaSFoundry!`))
-  console.log(chalk.green.bold(`🌍 It's now ready to become the next SaaS that will conquer the world!`))
-  console.log(chalk.green.bold(`🧠 "What are we going to do tonight, Brain?" "The same thing we do every night, Pinky - try to take over the world!"`))
-  console.log(chalk.green('='.repeat(80)))
   console.log('\n')
+}
+
+/**
+ * SRS workspace bootstrap shared by the scaffold and harness install paths:
+ * skill deposit, Notion root page creation, optional pending-ingestion stamp,
+ * token persistence to .env (gitignored).
+ */
+async function bootstrapSrsWorkspace(startProjectAnswers: Answers, onProgress: (text: string) => void): Promise<SrsToolConfig | undefined> {
+  if (!startProjectAnswers.srsEnable) return undefined
+
+  const missing: string[] = []
+  if (!startProjectAnswers.srsBackend) missing.push('srsBackend (--srs-backend)')
+  if (!startProjectAnswers.srsParentPageInput) missing.push('srsParentPageInput (--srs-parent-page-input)')
+  if (!startProjectAnswers.notionApiToken) missing.push('notionApiToken (--notion-api-token)')
+  if (startProjectAnswers.srsIngestEnable && !startProjectAnswers.srsIngestParentInput) {
+    missing.push('srsIngestParentInput (--srs-ingest-parent-input)')
+  }
+  if (missing.length > 0) {
+    throw new Error(`SRS bootstrap was enabled but the following values are missing: ${missing.join(', ')}. Either provide them or pass --no-srs-enable.`)
+  }
+
+  onProgress('Bootstrapping SRS workspace...')
+  await installSrsSkill({ targetPath: '.' })
+  const adapter = new NotionSrsAdapter({
+    apiToken: startProjectAnswers.notionApiToken!,
+    notionVersion: startProjectAnswers.notionApiVersion
+  })
+  const result = await bootstrapSrs({
+    projectName: startProjectAnswers.projectName,
+    parentInput: startProjectAnswers.srsParentPageInput!,
+    adapter
+  })
+  const srsTools: SrsToolConfig = {
+    enabled: true,
+    backend: startProjectAnswers.srsBackend!,
+    rootPage: result.rootPage
+  }
+
+  // Optional ingestion flag — resolve the source parent and record pendingIngestion.
+  if (startProjectAnswers.srsIngestEnable) {
+    onProgress('Resolving SRS ingestion source page...')
+    const sourceParent = await adapter.resolveParent(startProjectAnswers.srsIngestParentInput!)
+    srsTools.pendingIngestion = {
+      sourceBackend: 'notion',
+      sourceParent: { id: sourceParent.id, url: sourceParent.url ?? '', name: sourceParent.name },
+      createdAt: new Date().toISOString()
+    }
+  }
+
+  upsertEnvKey('.env', 'NOTION_API_TOKEN', startProjectAnswers.notionApiToken!)
+  if (startProjectAnswers.notionApiVersion) {
+    upsertEnvKey('.env', 'NOTION_API_VERSION', startProjectAnswers.notionApiVersion)
+  }
+  ensureGitignorePatterns('.gitignore', ['.env', '.env.local', '.env*.local'])
+
+  return srsTools
+}
+
+/**
+ * Harness-profile execution: deposit the AI harness onto the existing
+ * repository (cwd) and write a minimal `cli` manifest. Harness-only manifests
+ * retain deposit baselines but omit scaffold module markers, so `sf update`
+ * refreshes the harness without attempting stack regeneration.
+ */
+async function runHarnessInstall(config: Answers): Promise<void> {
+  if (await fileExists('.saasfoundry.json')) {
+    throw new Error('This project already has a .saasfoundry.json — use `sf update` to add modules or `sf workflow` to adjust the workflow configuration.')
+  }
+
+  const spinner = ora({ text: 'Installing the AI harness...', spinner: 'dots' }).start()
+
+  // Best-effort provisioning notes, surfaced after the spinner stops.
+  const provisioning: string[] = []
+
+  try {
+    spinner.text = 'Installing skills and workflow artefacts...'
+    const agentReport = await installHarness({
+      targetPath: '.',
+      projectName: config.projectName,
+      version: cliVersion,
+      mainBranch: config.mainBranch,
+      workflow: config.workflow,
+      advancedSkills: config.advancedSkills,
+      agents: config.agents
+    })
+
+    const srsTools = await bootstrapSrsWorkspace(config, (text) => {
+      spinner.text = text
+    })
+
+    spinner.text = 'Writing .saasfoundry.json...'
+    const manifest: SaaSFoundryManifest = {
+      $schema: manifestSchemaUrl,
+      manifestVersion: targetManifestVersion(),
+      version: cliVersion,
+      generatedAt: new Date().toISOString(),
+      structure: 'cli',
+      projectName: config.projectName,
+      mainBranch: config.mainBranch,
+      // Harness deposits are versioned + hash-tracked (scoped to .claude/skills
+      // and .claude/docs) so `sf update` can refresh them conflict-aware.
+      modules: {
+        harness: {
+          version: harnessInstallerMeta.currentVersion,
+          managed: true,
+          ...(config.agents?.length ? { agents: config.agents } : {})
+        },
+        advancedSkills: config.advancedSkills ?? []
+      },
+      language: languageConfigFromAnswers(config),
+      fileHashes: { ...(await computeHarnessFileHashes('.')), ...(agentReport?.fileHashes ?? {}) },
+      workflow: config.workflow,
+      aiRules: config.aiRules,
+      tools: buildManifestTools(srsTools, config)
+    }
+    await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
+
+    // Provision the workflow's prerequisites on the existing repo so it's
+    // immediately runnable: the declared working branch and the guard labels
+    // (#474). Both are best-effort — a git/gh hiccup must not fail the install.
+    if (manifest.workflow && manifest.workflow.tool !== 'none') {
+      spinner.text = 'Provisioning workflow branch + labels...'
+
+      const branch = ensureWorkingBranch({ workingBranch: manifest.workflow.workingBranch, mainBranch: manifest.mainBranch })
+      if (branch.action === 'created') {
+        provisioning.push(
+          branch.pushed
+            ? chalk.green(`✓ Created and pushed working branch "${branch.branch}"`)
+            : chalk.yellow(`⚠️  Created working branch "${branch.branch}" locally — push it manually (${branch.reason === 'no-remote' ? 'no remote configured' : 'push failed'})`)
+        )
+      } else if (branch.action === 'skipped' && branch.reason === 'not-a-git-repo') {
+        provisioning.push(chalk.yellow('⚠️  Not a git repository — skipped working-branch creation'))
+      }
+
+      if (manifest.workflow.tool === 'github-projects') {
+        const slug = resolveRepoSlug()
+        if (slug) {
+          const labels = ensureWorkflowLabels(slug, { srs: Boolean(manifest.tools?.srs?.enabled) })
+          if (labels.created.length > 0) provisioning.push(chalk.green(`✓ Created ${labels.created.length} workflow label${labels.created.length > 1 ? 's' : ''} on ${slug}`))
+          if (labels.failed.length > 0) provisioning.push(chalk.yellow(`⚠️  ${labels.failed.length} label(s) could not be created on ${slug} — check 'gh auth status' (repo scope)`))
+        } else {
+          provisioning.push(chalk.yellow("⚠️  Could not resolve the GitHub repo — skipped label creation (run 'gh auth login')"))
+        }
+      }
+    }
+
+    spinner.succeed(chalk.green('AI harness installed'))
+  } catch (error) {
+    spinner.fail(chalk.red('Failed to install the AI harness'))
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
+
+  if (provisioning.length > 0) {
+    console.log()
+    for (const line of provisioning) console.log(`  ${line}`)
+  }
+
+  console.log()
+  const profiles = agentProfileLines(config.agents)
+  console.log(chalk.cyan('Configured coding-agent profiles (runtime not checked):'))
+  for (const profile of profiles) {
+    console.log(chalk.gray(`  • ${profile.displayName} (${profile.id}) — ${profile.instructionFile}`))
+  }
+  console.log()
+  console.log(chalk.cyan('Next steps:'))
+  console.log(chalk.gray('  • sf status --agent-friendly --no-network  — verify project preconditions'))
+  console.log(chalk.gray(`  • sf agents doctor ${profiles.map((profile) => profile.id).join(' ')}  — inspect configured support without changing the project`))
+  console.log(chalk.gray('  • open the project in a configured coding agent and follow its entrypoint above'))
+  if (config.workflow && config.workflow.tool !== 'none') {
+    console.log(chalk.gray('  • .claude/skills/sf-workflow/SKILL.md  — workflow documentation'))
+  }
+  console.log()
 }

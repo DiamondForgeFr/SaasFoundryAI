@@ -46,9 +46,8 @@ COPY package.json ./
 COPY package-lock.json ./
 COPY prisma ./prisma
 
-# Install dependencies and copy Prisma client from builder
+# Install production dependencies
 RUN npm ci --omit=dev --ignore-scripts && npm rebuild bcrypt --build-from-source
-COPY --from=builder --chown=ci-deploy:users /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy built application
 COPY --from=builder --chown=ci-deploy:users /app/dist ./dist

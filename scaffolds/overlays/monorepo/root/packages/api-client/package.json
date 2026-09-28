@@ -1,0 +1,38 @@
+{
+  "name": "@{{PROJECT_NAME}}/api-client",
+  "version": "0.0.1",
+  "description": "Auto-generated typed React Query client emitted from apps/api OpenAPI spec",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./http-client": {
+      "types": "./src/http-client.ts",
+      "default": "./src/http-client.ts"
+    },
+    "./generated/*": {
+      "types": "./src/generated/*.ts",
+      "default": "./src/generated/*.ts"
+    }
+  },
+  "scripts": {
+    "codegen": "orval --config ./orval.config.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "5.100.8",
+    "@types/react": "19.2.14",
+    "orval": "8.28.1",
+    "react": "19.2.5",
+    "typescript": "6.0.3"
+  }
+}

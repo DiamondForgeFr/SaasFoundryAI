@@ -3,10 +3,12 @@
  */
 import { ApiProperty } from '@nestjs/swagger'
 
+import type { InvitationAccountRef, InvitationEntityRef, InvitationListItem, InvitationRoleRef } from '@shared-types/index'
+
 /**
  * Declaration
  */
-export class InvitationAccountDto {
+export class InvitationAccountDto implements InvitationAccountRef {
   @ApiProperty({
     description: 'Account ID',
     example: 'clb3x5jqw0000356grby2a5bj'
@@ -20,7 +22,7 @@ export class InvitationAccountDto {
   name: string
 }
 
-export class InvitationEntityDto {
+export class InvitationEntityDto implements InvitationEntityRef {
   @ApiProperty({
     description: 'Entity ID',
     example: 'clb3x5jqw0000356grby2a5bj'
@@ -34,7 +36,7 @@ export class InvitationEntityDto {
   name: string
 }
 
-export class InvitationRoleDto {
+export class InvitationRoleDto implements InvitationRoleRef {
   @ApiProperty({
     description: 'Role ID',
     example: 1
@@ -48,7 +50,7 @@ export class InvitationRoleDto {
   name: string
 }
 
-export class InvitationListItemDto {
+export class InvitationListItemDto implements InvitationListItem {
   @ApiProperty({
     description: 'Invitation ID',
     example: 'clb3x5jqw0000356grby2a5bj'

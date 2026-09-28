@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0-beta",
+  "generatedAt": "2026-04-01T00:00:00.000Z",
+  "structure": "multirepo",
+  "projectName": "fixture-app",
+  "modules": {
+    "emailService": "mailersend",
+    "s3Setup": "docker",
+    "dbSetup": "docker",
+    "includeAnalytics": false,
+    "advancedSkills": []
+  },
+  "workflow": {
+    "tool": "github-projects"
+  }
+}

@@ -1,0 +1,26 @@
+# Docker build context filter for Dockerfile.test
+node_modules/
+dist/
+.git/
+.turbo/
+coverage/
+docs/
+.vitepress/
+.tmp/
+.claude/output/
+.codex/
+/.claude/
+/.agents/
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+playwright-report/
+test-results/
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.npmrc
+.DS_Store

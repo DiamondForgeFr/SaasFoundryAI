@@ -44,24 +44,33 @@ export interface EntityTestData {
  * @returns The created entity data
  */
 export async function setupTestEntity(prisma: PrismaService, config: EntityTestConfig): Promise<EntityTestData> {
-  // Create the entity
+  // Create the entity — functional keys only. The entity carries NO name/description (D-ENT-6);
+  // its human identity is resolved from the attached typed profile (Organization).
   const entity = await prisma.entity.create({
     data: {
-      name: config.name,
-      description: config.description || null,
       isActive: config.isActive ?? true,
-      accountId: config.accountId,
-      organizationId: config.organizationId || null
+      accountId: config.accountId
     }
   })
 
+  // Attach the organization profile to the entity via the inverted FK. The resolved name/description
+  // come from that profile.
+  let profile: { name: string; description: string | null } | null = null
+  if (config.organizationId) {
+    const org = await prisma.organization.update({
+      where: { id: config.organizationId },
+      data: { entityId: entity.id }
+    })
+    profile = { name: org.name, description: org.description }
+  }
+
   return {
     id: entity.id,
-    name: entity.name,
-    description: entity.description,
+    name: profile?.name ?? config.name,
+    description: profile?.description ?? config.description ?? null,
     isActive: entity.isActive,
     accountId: entity.accountId,
-    organizationId: entity.organizationId
+    organizationId: config.organizationId || null
   }
 }
 
@@ -78,28 +87,24 @@ export async function cleanupTestEntity(prisma: PrismaService, entityId: string)
 }
 
 /**
- * Create an entity DTO for API requests
+ * Create an entity DTO for API requests. An entity carries no name/description of its own (D-ENT-6) —
+ * those live on the linked organization profile, so the create payload only references the org.
  * @param accountId The account ID to link to
  * @param organizationId The organization ID to link to (optional)
- * @param name Custom name (optional)
+ * @param _name Deprecated — kept for call-site compatibility; the entity name comes from its profile.
  * @returns Entity creation DTO
  */
 export function createEntityDto(
   accountId: string,
   organizationId?: string,
-  name?: string
+  _name?: string
 ): {
-  name: string
   accountId: string
   organizationId?: string
-  description?: string
-  isActive?: boolean
 } {
   return {
-    name: name || `Test Entity ${Date.now()}`,
     accountId,
-    organizationId,
-    description: 'Entity created for E2E testing'
+    organizationId
   }
 }
 

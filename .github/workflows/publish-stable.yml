@@ -1,0 +1,87 @@
+name: Publish stable package
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact stable tag to publish (for example v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-stable-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify tag and publish with provenance
+    runs-on: ubuntu-latest
+    environment: npm-production
+    steps:
+      - name: Checkout the requested tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js and npm registry
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Verify stable tag and package identity
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Only stable vX.Y.Z tags can be published: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ]]; then
+            echo "Dispatch this workflow from $RELEASE_TAG, not from $GITHUB_REF." >&2
+            exit 1
+          fi
+
+          if [[ "$(git tag --points-at HEAD --list "$RELEASE_TAG")" != "$RELEASE_TAG" ]]; then
+            echo "HEAD is not the requested tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "v$package_version" != "$RELEASE_TAG" ]]; then
+            echo "package.json version $package_version does not match $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          status=0
+          npm view "$package_name@$package_version" version >"$RUNNER_TEMP/npm-view.out" 2>"$RUNNER_TEMP/npm-view.err" || status=$?
+          if [[ "$status" -eq 0 ]]; then
+            echo "$package_name@$package_version already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+          if ! grep -q 'E404' "$RUNNER_TEMP/npm-view.err"; then
+            cat "$RUNNER_TEMP/npm-view.err" >&2
+            exit "$status"
+          fi
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify package boundary
+        run: npm run package:check
+
+      - name: Publish stable package with provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public --tag latest

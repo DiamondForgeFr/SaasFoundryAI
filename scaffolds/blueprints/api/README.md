@@ -1,4 +1,4 @@
-# 🚀 SaaSFoundry API
+# 🚀 SaaSFoundryAI API
 
 <div align="center">
 
@@ -11,7 +11,7 @@
 
 ## 📝 Description
 
-SaaSFoundry API is a modular NestJS backend boilerplate, offering a robust and scalable architecture for modern SaaS application development. Built with best practices and cutting-edge technologies.
+SaaSFoundryAI API is a modular NestJS backend boilerplate, offering a robust and scalable architecture for modern SaaS application development. Built with best practices and cutting-edge technologies.
 
 ### 🛠️ Tech Stack
 
@@ -47,8 +47,8 @@ cp .env.test .env
 docker network create saasfoundry-network
 docker-compose -f ../db/docker-compose.db-dev.yml up -d
 
-# 5. Initialize database
-npm run db:update:dev init_data_base_config -- --wf --wt --wds
+# 5. Initialize database (migration-free: db push --force-reset + apply prisma/sql/*)
+npm run db:setup:dev
 
 # 6. Launch the application
 npm run dev
@@ -136,8 +136,6 @@ src/
 - Git hooks for quality
 - Integrated Swagger documentation
 
-
-
 ## 🏷️ Version & Deployment Management
 
 ### Tag Manager
@@ -190,18 +188,15 @@ The project includes a comprehensive GitHub Actions workflow for automated deplo
 #### Deployment Steps
 
 1. **Test Verification**
-
    - Checks if tests have passed
    - Blocks deployment if tests fail
 
 2. **Version Tag Creation**
-
    - Automatically creates version tags based on `package.json`
    - Handles version bump commits
    - Manages tag updates and conflicts
 
 3. **Docker Image Management**
-
    - Builds and pushes to GitHub Container Registry (GHCR)
    - Tags images with:
      - Version number
@@ -226,13 +221,11 @@ The deployment process automatically sets up:
 ### Best Practices
 
 1. **Version Management**
-
    - Always use release candidate branches for version updates
    - Follow semantic versioning principles
    - Use pre-release tags for testing
 
 2. **Deployment**
-
    - Ensure all tests pass before deployment
    - Monitor deployment logs for issues
    - Use the provided health checks

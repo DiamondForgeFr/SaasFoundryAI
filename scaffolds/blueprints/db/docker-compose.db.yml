@@ -2,12 +2,12 @@ services:
   db-dev:
     image: postgres:16-alpine
     container_name: saasfoundry-db-dev
-    restart: 'no' # No need for auto-restart for dev tests
+    restart: unless-stopped
     environment:
       POSTGRES_USER: db_dev_user
       POSTGRES_PASSWORD: db_dev_password
       POSTGRES_DB: db_dev
-      # Config optimized for dev tests
+      # Config tuned for dev (perf relaxed; data persisted via named volume below)
       POSTGRES_INITDB_ARGS: '--nosync'
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRESQL_SHARED_BUFFERS: 128MB
@@ -21,8 +21,8 @@ services:
       synchronous_commit=off -c full_page_writes=off
     ports:
       - '5435:5432'
-    tmpfs:
-      - /var/lib/postgresql/data:rw,noexec,nosuid,size=500m # Use tmpfs instead of a volume
+    volumes:
+      - db-dev-data:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U db_dev_user -d db_dev']
       interval: 5s

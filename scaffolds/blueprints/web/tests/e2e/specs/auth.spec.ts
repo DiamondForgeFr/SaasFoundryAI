@@ -59,8 +59,8 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByLabel(selectors.fields.email)).toBeVisible()
     await expect(page.getByLabel(selectors.fields.password)).toBeVisible()
     await expect(page.getByRole('button', selectors.signIn.cta.validate)).toBeVisible()
-    await expect(page.getByRole('link', selectors.signIn.cta.forgotPassword)).toBeVisible()
-    await expect(page.getByRole('link', selectors.signIn.cta.signUp)).toBeVisible()
+    await expect(page.getByRole('button', selectors.signIn.cta.forgotPassword)).toBeVisible()
+    await expect(page.getByRole('button', selectors.signIn.cta.signUp)).toBeVisible()
   })
 
   test('should handle signin errors', async ({ page }) => {
@@ -250,8 +250,8 @@ test.describe('Authentication Flow', () => {
     // Navigate to the dashboard
     await page.goto(selectors.dashboard.URL)
 
-    // Verify that the user is logged in
-    await expect(page.getByText(testApi.meAdmin.success.body.email)).toBeVisible()
+    // Verify that the user is logged in (sidebar user trigger shows full name + role)
+    await expect(page.getByRole('button', selectors.dashboard.cta.userMenu)).toBeVisible()
 
     // Click on the user menu and sign out
     await page.getByRole('button', selectors.dashboard.cta.userMenu).click()
@@ -303,7 +303,7 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByRole('heading', selectors.resetPasswordRequest.title)).toBeVisible()
     await expect(page.getByLabel(selectors.fields.email)).toBeVisible()
     await expect(page.getByRole('button', selectors.resetPasswordRequest.cta.validate)).toBeVisible()
-    await expect(page.getByRole('link', selectors.resetPasswordRequest.cta.backToSignIn)).toBeVisible()
+    await expect(page.getByRole('button', selectors.resetPasswordRequest.cta.backToSignIn)).toBeVisible()
 
     // Test with empty email
     await page.getByRole('button', selectors.resetPasswordRequest.cta.validate).click()
@@ -332,7 +332,7 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByText(selectors.resetPasswordRequest.success.subtitle)).toBeVisible()
     await expect(page.getByText(testData.email)).toBeVisible()
     await expect(page.getByText(selectors.resetPasswordRequest.success.description)).toBeVisible()
-    await expect(page.getByRole('link', selectors.resetPasswordRequest.cta.backToSignIn)).toBeVisible()
+    await expect(page.getByRole('button', selectors.resetPasswordRequest.cta.backToSignIn)).toBeVisible()
   })
 
   test('should handle password reset with token', async ({ page }) => {
@@ -364,12 +364,12 @@ test.describe('Authentication Flow', () => {
     expect(elements.length).toBe(0)
 
     await expect(page.getByText(selectors.errors.missingToken)).toBeVisible()
-    await expect(page.getByRole('link', selectors.resetPassword.cta.askForNewLink)).toBeVisible()
+    await expect(page.getByRole('button', selectors.resetPassword.cta.askForNewLink)).toBeVisible()
 
     // Test with invalid token (too short)
     await page.goto(`${selectors.resetPassword.URL}?resetPasswordToken=short`)
     await expect(page.getByText(selectors.errors.invalidToken)).toBeVisible()
-    await expect(page.getByRole('link', selectors.resetPassword.cta.askForNewLink)).toBeVisible()
+    await expect(page.getByRole('button', selectors.resetPassword.cta.askForNewLink)).toBeVisible()
 
     // Test with valid token
     await page.goto(`${selectors.resetPassword.URL}?resetPasswordToken=${testData.resetPasswordToken}`)
@@ -408,7 +408,7 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByText(selectors.resetPassword.success.title)).toBeVisible()
     await expect(page.getByText(selectors.resetPassword.success.subtitle)).toBeVisible()
     await expect(page.getByText(selectors.resetPassword.success.description)).toBeVisible()
-    await expect(page.getByRole('link', selectors.resetPassword.cta.backToSignIn)).toBeVisible()
+    await expect(page.getByRole('button', selectors.resetPassword.cta.backToSignIn)).toBeVisible()
   })
 
   test('should initialize guest access when not logged in', async ({ page }) => {
@@ -447,5 +447,27 @@ test.describe('Authentication Flow', () => {
     })
     expect(guestAccess).toBeTruthy()
     expect(JSON.parse(guestAccess!)).toEqual(testApi.guest.success.body)
+  })
+
+  test('should clear a stale session and redirect to /signin when /me is no longer valid', async ({ page }) => {
+    // Simulate a login left in localStorage by a previous run (e.g. before a DB reset): the
+    // snapshot is present, but the server no longer recognises the session.
+    await page.addInitScript((staleMe) => {
+      localStorage.setItem('authMe', JSON.stringify(staleMe))
+    }, testApi.meAdmin.success.body)
+
+    // /me now reports the session is gone (bad token / deleted user or account).
+    await (page as CustomPage).mockRoute(testApi.meAdmin.URL, async (route) => {
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Unauthorized' }) })
+    })
+
+    // Hitting a protected route must NOT keep the phantom session alive.
+    await page.goto(selectors.dashboard.URL)
+
+    // The guards bounce to /signin once the stale snapshot is purged…
+    await expect(page).toHaveURL(/.*\/signin/, { timeout: 5000 })
+    // …and the stale snapshot is gone from localStorage.
+    const authMe = await page.evaluate(() => localStorage.getItem('authMe'))
+    expect(authMe).toBeNull()
   })
 })

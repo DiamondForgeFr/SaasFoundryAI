@@ -2,7 +2,7 @@
  * Resources
  */
 import { BadRequestException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
-import { OrganizationType } from '@prisma/client'
+import { OrganizationType } from '@/generated/prisma/client'
 
 /**
  * Dependencies
@@ -11,6 +11,7 @@ import { AccountAccessService } from '@common/services/account-access/account-ac
 import { Logger } from '@common/services/logger/logger.service'
 import { PrismaService } from '@configs/prisma/services/prisma.service'
 import { OrganizationService } from '@modules/organizations/services/organization.service'
+// TODO storage-service-active: import { StorageService } from '@modules/storage/services/storage.service'
 
 /**
  * Test infrastructure
@@ -38,6 +39,15 @@ class OrganizationServiceTest extends ServiceTestBase<OrganizationService> {
       { provide: PrismaService, useValue: mockPrismaService },
       { provide: Logger, useValue: mockLogger },
       { provide: AccountAccessService, useValue: mockAccountAccessService }
+      // TODO storage-service-active: ,{
+      // TODO storage-service-active:   provide: StorageService,
+      // TODO storage-service-active:   useValue: {
+      // TODO storage-service-active:     uploadFile: jest.fn(),
+      // TODO storage-service-active:     deleteFile: jest.fn(),
+      // TODO storage-service-active:     extractKeyFromUrl: jest.fn(),
+      // TODO storage-service-active:     buildKey: jest.fn()
+      // TODO storage-service-active:   }
+      // TODO storage-service-active: }
     ]
   }
 

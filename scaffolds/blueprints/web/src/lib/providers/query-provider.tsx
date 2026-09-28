@@ -9,6 +9,7 @@ import { ReactNode } from 'react'
  * Dependencies
  */
 import { useGuest } from '@/hooks/api/auth'
+import { persistAuthMe } from '@/hooks/api/auth/utils/persistAuthMe'
 
 /**
  * TS Types
@@ -18,10 +19,22 @@ interface QueryProviderProps {
 }
 
 /**
- * Cached data
+ * Cached data — rehydrate the cached /me snapshot so the first paint after a refresh has
+ * the user's identity available immediately. Then schedule a background refresh so any
+ * staleness (account deactivation, role change, module toggle that happened between the last
+ * mutation persisting the snapshot and now) corrects itself within seconds.
+ *
+ * `useMe` is declared with `enabled: false`, so without this background refresh the cache
+ * would live indefinitely on whatever state the localStorage snapshot was last written in.
  */
 const cachedMe = localStorage.getItem('authMe')
-if (cachedMe) queryClient.setQueryData(['authMe'], JSON.parse(cachedMe))
+if (cachedMe) {
+  queryClient.setQueryData(['authMe'], JSON.parse(cachedMe))
+  // Re-validate the cached session against the server. `persistAuthMe` purges the stale snapshot
+  // on a session-invalidating response (bad token / deleted user/account → 401/403/404) and keeps
+  // it on a transient network error.
+  void persistAuthMe(queryClient)
+}
 
 /**
  * React declaration

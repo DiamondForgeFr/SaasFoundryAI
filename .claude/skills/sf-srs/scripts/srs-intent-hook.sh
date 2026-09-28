@@ -1,0 +1,1 @@
+../../../../scaffolds/skills-templates/sf-srs/scripts/srs-intent-hook.sh

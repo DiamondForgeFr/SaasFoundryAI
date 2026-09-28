@@ -1,0 +1,46 @@
+breadcrumb:
+  tk_platform_: Plateforme
+
+modules:
+  tk_title_: Modules
+  tk_description_: Activez ou désactivez les modules de la plateforme. Un module désactivé est invisible dans le set de permissions de tous les utilisateurs.
+  tk_subtitle_: '{{active}} modules actifs sur {{total}}'
+  tk_platform-only_: Admin plateforme
+  tk_search-placeholder_: Rechercher un module ou une permission…
+  tk_empty_: Aucun module ne correspond au filtre
+  tk_active_: Actif
+  tk_inactive_: Inactif
+  tk_activate_: Activer ce module
+  tk_deactivate_: Désactiver ce module
+  tk_permissions_: permissions
+  tk_sub-modules_: sous-modules
+  tk_no-permissions_: Aucune permission définie pour ce module.
+  tk_locked_: Verrouillé
+  tk_locked-tooltip_: Ce module ne peut pas être désactivé — sans lui, les admins plateforme perdent l'accès à cette page.
+  tk_view_: Voir
+  detail:
+    tk_overview_: Vue du module
+    tk_module-permissions_: Permissions du module
+    tk_module-permissions-hint_: Permissions accordées directement par le module, indépendamment de tout sous-module.
+    tk_sub-modules_: Sous-modules
+    tk_hidden_: Masqué
+    tk_search-placeholder_: Rechercher une permission ou un sous-module…
+    tk_no-results_: Aucun résultat
+    tk_close_: Fermer
+    tk_inactive-hint_: Ce sous-module est désactivé — lui et ses permissions sont invisibles dans le set de permissions de tous les utilisateurs.
+    tk_sub-locked-tooltip_: Les sous-modules de la console plateforme ne peuvent pas être désactivés — cela verrouillerait les admins plateforme.
+  kpi:
+    tk_total_: Total modules
+    tk_total-sub_: '{{permissions}} permissions dans le catalogue'
+    tk_active_: Actifs
+    tk_inactive_: Inactifs
+    tk_inactive-none_: Tous les modules sont en ligne
+    tk_inactive-some_: Invisibles pour tous les utilisateurs
+  filters:
+    tk_all_: Tous
+    tk_status-all_: Tous
+    tk_status-active_: Actifs
+    tk_status-inactive_: Inactifs
+    tk_type-placeholder_: Filtrer par type
+    tk_type-selected_: Types
+    tk_type-empty_: Aucun type ne correspond

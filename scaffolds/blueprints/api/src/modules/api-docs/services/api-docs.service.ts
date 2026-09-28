@@ -4,6 +4,7 @@
 import { INestApplication, Injectable, Logger } from '@nestjs/common'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { cleanupOpenApiDoc } from 'nestjs-zod'
 import { join } from 'path'
 
 /**
@@ -33,7 +34,11 @@ export class ApiDocsService {
         .addBearerAuth()
         .build()
 
-      this.document = SwaggerModule.createDocument(app, config)
+      // Held in a local const rather than read back off the field: TypeScript 6 no longer
+      // keeps a mutable class property narrowed across the intervening calls, so
+      // `return this.document` is `OpenAPIObject | null` by the time it is reached.
+      const document = cleanupOpenApiDoc(SwaggerModule.createDocument(app, config))
+      this.document = document
 
       // Create docs directory at project root
       const docsPath = join(process.cwd(), 'docs')
@@ -47,7 +52,7 @@ export class ApiDocsService {
       }
 
       // Write openapi.json file
-      writeFileSync(apiDocsPath, JSON.stringify(this.document, null, 2))
+      writeFileSync(apiDocsPath, JSON.stringify(document, null, 2))
       this.logger.log(`OpenAPI documentation generated and saved to: ${apiDocsPath}`)
 
       // Check if index.html exists, if not create it
@@ -56,7 +61,7 @@ export class ApiDocsService {
         this.generateStoplightHtml(indexHtmlPath)
       }
 
-      return this.document
+      return document
     } catch (error) {
       this.logger.error(`Failed to generate OpenAPI documentation: ${error.message}`)
       throw error
@@ -73,7 +78,7 @@ export class ApiDocsService {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>SaaSFoundry API Documentation</title>
+        <title>SaaSFoundryAI API Documentation</title>
 
         <!-- Stoplight Elements styles -->
         <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">

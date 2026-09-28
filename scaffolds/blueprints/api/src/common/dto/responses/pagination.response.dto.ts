@@ -25,7 +25,8 @@ export class PaginationMetaDto {
 export class PaginatedResponseDto<T> {
   @ApiProperty({
     description: 'List of items',
-    isArray: true
+    type: 'array',
+    items: { type: 'object' }
   })
   items: T[]
 

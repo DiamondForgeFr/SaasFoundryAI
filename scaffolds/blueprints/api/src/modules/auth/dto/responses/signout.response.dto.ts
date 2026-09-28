@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-export class SignOutResponseDto {
+import type { MessageResponse } from '@shared-types/index'
+
+export class SignOutResponseDto implements MessageResponse {
   @ApiProperty({
     description: 'Success message',
     example: 'Successfully signed out'

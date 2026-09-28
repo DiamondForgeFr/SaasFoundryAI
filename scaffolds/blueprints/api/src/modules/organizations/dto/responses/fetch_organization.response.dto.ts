@@ -2,12 +2,14 @@
  * Resources
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { OrganizationType } from '@prisma/client'
+import { OrganizationType } from '@/generated/prisma/client'
+
+import type { Organization } from '@shared-types/index'
 
 /**
  * Declaration
  */
-export class FetchOrganizationResponseDto {
+export class FetchOrganizationResponseDto implements Organization {
   @ApiProperty({
     description: 'Organization unique identifier',
     example: '123e4567-e89b-12d3-a456-426614174000'
@@ -42,6 +44,14 @@ export class FetchOrganizationResponseDto {
     nullable: true
   })
   website: string | null
+
+  @ApiPropertyOptional({
+    description: 'Organization logo URL',
+    example: 'https://s3.example.com/org/logo.png',
+    required: false,
+    nullable: true
+  })
+  logoUrl: string | null
 
   @ApiProperty({
     description: 'Organization creation date',

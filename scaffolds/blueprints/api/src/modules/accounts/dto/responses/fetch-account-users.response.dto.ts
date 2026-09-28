@@ -5,8 +5,7 @@ import { AccountUserDto } from './fetch_account.response.dto'
 export class FetchAccountUsersResponseDto extends PaginatedResponseDto<AccountUserDto> {
   @ApiProperty({
     description: 'Users data',
-    type: [AccountUserDto],
-    isArray: true
+    type: [AccountUserDto]
   })
   items: AccountUserDto[]
 }

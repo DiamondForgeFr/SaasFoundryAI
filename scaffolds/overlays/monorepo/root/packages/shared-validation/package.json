@@ -1,0 +1,22 @@
+{
+  "name": "@{{PROJECT_NAME}}/shared-validation",
+  "version": "0.0.1",
+  "description": "Shared Zod validation schemas consumed by NestJS DTOs and React Hook Form",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "4.4.2"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

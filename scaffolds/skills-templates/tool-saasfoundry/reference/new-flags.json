@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "Source of truth for the sf new command surface used by the tool-saasfoundry skill. Each entry maps an intent JSON field to its corresponding --flag on `sf new`. Both plan-new.sh and the skill's discovery conversation read this file \u2014 keep them in sync by editing here, never by hardcoding flag names elsewhere.",
+  "command": "sf new",
+  "alwaysAppend": [
+    "--non-interactive"
+  ],
+  "fields": {
+    "projectName": {
+      "flag": "--project-name",
+      "type": "string",
+      "required": true,
+      "description": "Project name in kebab-case"
+    },
+    "projectDescription": {
+      "flag": "--project-description",
+      "type": "string",
+      "required": false,
+      "description": "Free-text project description"
+    },
+    "structure": {
+      "flag": "--structure",
+      "type": "enum",
+      "values": [
+        "monorepo",
+        "multirepo"
+      ],
+      "required": true,
+      "description": "Monorepo (single repo) vs multirepo (backend + frontend split)"
+    },
+    "mainBranch": {
+      "flag": "--main-branch",
+      "type": "enum",
+      "values": [
+        "main",
+        "master"
+      ],
+      "required": false,
+      "default": "main"
+    },
+    "setupRepo": {
+      "flag": "--setup-repo",
+      "type": "enum",
+      "values": [
+        "local",
+        "existing"
+      ],
+      "required": false,
+      "default": "local"
+    },
+    "monorepoUrl": {
+      "flag": "--monorepo-url",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "structure=monorepo AND setupRepo=existing"
+    },
+    "backendRepoUrl": {
+      "flag": "--backend-repo-url",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "structure=multirepo AND setupRepo=existing"
+    },
+    "frontendRepoUrl": {
+      "flag": "--frontend-repo-url",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "structure=multirepo AND setupRepo=existing"
+    },
+    "dbSetup": {
+      "flag": "--db-setup",
+      "type": "enum",
+      "values": [
+        "docker",
+        "credentials",
+        "manual"
+      ],
+      "required": false,
+      "default": "docker"
+    },
+    "dbType": {
+      "flag": "--db-type",
+      "type": "enum",
+      "values": [
+        "postgresql",
+        "sql"
+      ],
+      "required": false,
+      "default": "postgresql"
+    },
+    "dbHost": {
+      "flag": "--db-host",
+      "type": "string",
+      "required": false
+    },
+    "dbPort": {
+      "flag": "--db-port",
+      "type": "string",
+      "required": false
+    },
+    "dbUser": {
+      "flag": "--db-user",
+      "type": "string",
+      "required": false
+    },
+    "dbPassword": {
+      "flag": "--db-password",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "dbName": {
+      "flag": "--db-name",
+      "type": "string",
+      "required": false
+    },
+    "emailService": {
+      "flag": "--email-service",
+      "type": "enum",
+      "values": [
+        "none",
+        "mailersend"
+      ],
+      "required": false,
+      "default": "none"
+    },
+    "mailersendApiKey": {
+      "flag": "--mailersend-api-key",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "mailersendSenderEmail": {
+      "flag": "--mailersend-sender-email",
+      "type": "string",
+      "required": false
+    },
+    "mailersendSenderName": {
+      "flag": "--mailersend-sender-name",
+      "type": "string",
+      "required": false
+    },
+    "s3Setup": {
+      "flag": "--s3-setup",
+      "type": "enum",
+      "values": [
+        "docker",
+        "credentials",
+        "manual"
+      ],
+      "required": false
+    },
+    "s3Endpoint": {
+      "flag": "--s3-endpoint",
+      "type": "string",
+      "required": false
+    },
+    "s3AccessKey": {
+      "flag": "--s3-access-key",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "s3SecretKey": {
+      "flag": "--s3-secret-key",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "s3Bucket": {
+      "flag": "--s3-bucket",
+      "type": "string",
+      "required": false
+    },
+    "s3Region": {
+      "flag": "--s3-region",
+      "type": "string",
+      "required": false
+    },
+    "analytics": {
+      "flag": "--analytics",
+      "negationFlag": "--no-analytics",
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "advancedSkills": {
+      "flag": "--advanced-skills",
+      "type": "csv",
+      "values": [
+        "context7",
+        "atlassian",
+        "notion",
+        "figma"
+      ],
+      "required": false,
+      "description": "Comma-separated list of advanced skills to install"
+    },
+    "agents": {
+      "flag": "--agents",
+      "type": "csv",
+      "values": [
+        "claude-code",
+        "codex",
+        "kimi",
+        "gemini-cli",
+        "qwen-code",
+        "generic"
+      ],
+      "required": false,
+      "description": "Comma-separated coding-tool profiles to declare in the generated harness. Omission preserves the legacy implicit Claude Code declaration."
+    },
+    "context7ApiKey": {
+      "flag": "--context7-api-key",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "atlassianEmail": {
+      "flag": "--atlassian-email",
+      "type": "string",
+      "required": false
+    },
+    "atlassianApiToken": {
+      "flag": "--atlassian-api-token",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "atlassianSite": {
+      "flag": "--atlassian-site",
+      "type": "string",
+      "required": false
+    },
+    "atlassianCloudId": {
+      "flag": "--atlassian-cloud-id",
+      "type": "string",
+      "required": false
+    },
+    "notionApiToken": {
+      "flag": "--notion-api-token",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "notionApiVersion": {
+      "flag": "--notion-api-version",
+      "type": "string",
+      "required": false
+    },
+    "figmaApiToken": {
+      "flag": "--figma-api-token",
+      "type": "string",
+      "required": false,
+      "secret": true
+    },
+    "srsEnable": {
+      "flag": "--srs-enable",
+      "negationFlag": "--no-srs-enable",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Opt-in SRS bootstrap. When true, requires srsBackend, srsParentPageInput, and a Notion token."
+    },
+    "srsBackend": {
+      "flag": "--srs-backend",
+      "type": "enum",
+      "values": [
+        "notion"
+      ],
+      "required": false,
+      "requiresWhen": "srsEnable=true",
+      "description": "Backend hosting the SRS workspace. V1 supports Notion only."
+    },
+    "srsParentPageInput": {
+      "flag": "--srs-parent-page-input",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "srsEnable=true",
+      "description": "URL or ID of the Notion parent page that will host the SRS root page. Must be shared with the Notion integration."
+    },
+    "srsIngestEnable": {
+      "flag": "--srs-ingest-enable",
+      "negationFlag": "--no-srs-ingest-enable",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "requiresWhen": "srsEnable=true",
+      "description": "Opt-in to ingest existing notes / specs into the SRS after bootstrap. Stamps `tools.srs.pendingIngestion` in the manifest ; the sf-srs skill runs the ingestion conversation next time you open the project in Claude Code."
+    },
+    "srsIngestParentInput": {
+      "flag": "--srs-ingest-parent-input",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "srsIngestEnable=true",
+      "description": "URL or ID of the Notion parent page that contains the existing notes to ingest. Must be shared with the Notion integration."
+    },
+    "workflow": {
+      "flag": "--workflow",
+      "negationFlag": "--no-workflow",
+      "type": "string",
+      "required": false,
+      "description": "Workflow preset name, or 'none' / --no-workflow to skip"
+    },
+    "startServices": {
+      "flag": "--start-services",
+      "negationFlag": "--no-start-services",
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "startApps": {
+      "flag": "--start-apps",
+      "type": "enum",
+      "values": [
+        "all",
+        "backend",
+        "frontend",
+        "none"
+      ],
+      "required": false,
+      "default": "none"
+    },
+    "profile": {
+      "flag": "--profile",
+      "type": "enum",
+      "values": [
+        "full",
+        "harness",
+        "stack"
+      ],
+      "required": false,
+      "default": "full",
+      "description": "What to install: full (stack + AI harness), harness (AI layer onto an existing project), stack (technical base only)"
+    },
+    "pwa": {
+      "flag": "--pwa",
+      "negationFlag": "--no-pwa",
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Make the generated app installable as a desktop application (web manifest + service worker)"
+    }
+  },
+  "recommendations": {
+    "structure": {
+      "monorepo": "Default for solo devs, small teams, and projects where backend+frontend ship together. Single repo simplifies CI, versioning, and PR scope.",
+      "multirepo": "Choose when backend and frontend are owned by different teams, deploy on independent schedules, or need per-side access controls."
+    },
+    "emailService": {
+      "mailersend": "Recommend when the project needs transactional email (password reset, invites, receipts). The module ships ready-to-use templates.",
+      "none": "Default for prototypes, internal tools, or when email is already handled upstream."
+    },
+    "s3Setup": {
+      "docker": "Default for local development \u2014 spins up MinIO via docker-compose.",
+      "credentials": "Choose for staging/prod against AWS S3 or an S3-compatible provider (R2, Backblaze, DigitalOcean Spaces).",
+      "manual": "Choose when infra is provisioned outside SaaSFoundryAI and credentials come from an external secret manager."
+    },
+    "analytics": {
+      "true": "Recommend when tracking user activity or business metrics matters early. Installs a privacy-respecting analytics module.",
+      "false": "Default for MVPs \u2014 adding analytics later via `sf update --add-modules analytics` is a one-liner."
+    },
+    "srsEnable": {
+      "true": "Recommend when product requirements should be centralised for AI agents. Creates a Notion root page where Epics are hosted as direct children, under a parent page shared with the integration.",
+      "false": "Default \u2014 opt-in later via `sf update --add-modules srs --srs-backend notion --srs-parent-page-input <urlOrId>`."
+    },
+    "srsIngestEnable": {
+      "true": "Recommend when the user already has legacy notes / specs in Notion they want imported as Epics / FRs. The CLI only records the intent ; the sf-srs skill drives the actual ingestion conversationally on next Claude Code open.",
+      "false": "Default \u2014 the user can always ingest notes later by setting `tools.srs.pendingIngestion` manually or re-running `sf new`."
+    },
+    "profile": {
+      "full": "Default. The user is starting from nothing, or from a throwaway POC they do not intend to keep. Scaffolds the technical stack AND the AI harness.",
+      "harness": "The user already has a codebase they are keeping. Deposits the AI layer (workflow, skills, SRS) onto the existing repository \u2014 no stack is scaffolded, no project directory is created. Ask before assuming: a POC the user wants to rewrite is a `full` case, a POC they want to build on is a `harness` case.",
+      "stack": "The user wants the technical base without the AI collaboration layer. Rare \u2014 confirm it is deliberate rather than a misunderstanding of what the harness does."
+    },
+    "pwa": {
+      "true": "Default. Costs nothing to a user who ignores it \u2014 a manifest and a service worker, invisible unless installed. No credentials, no external service.",
+      "false": "Recommend only when the product should deliberately not be installable, or when the author wants to own the service-worker strategy themselves."
+    }
+  }
+}

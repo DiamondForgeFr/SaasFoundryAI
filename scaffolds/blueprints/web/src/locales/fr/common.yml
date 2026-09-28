@@ -45,11 +45,13 @@ actions:
   tk_activate_: Activer
   tk_deactivate_: Désactiver
   tk_cancel_: Annuler
+  tk_confirm_: Confirmer
   tk_send_: Envoyer
   tk_resend_: Renvoyer
 
 fields:
   errors:
+    tk_invalid-url_: URL invalide — doit inclure http:// ou https://
     tk_locale_: Locale invalide
     tk_required_: Ce champ est requis
     tk_minLength_: Ce champ ne respecte pas la longueur minimale

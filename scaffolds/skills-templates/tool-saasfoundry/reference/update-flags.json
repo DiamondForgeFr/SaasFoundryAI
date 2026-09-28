@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "Source of truth for the sf update command surface used by the tool-saasfoundry skill. Each entry maps an intent JSON field to its corresponding --flag on `sf update`. Both plan-update.sh and the skill's discovery conversation read this file — keep them in sync by editing here, never by hardcoding flag names elsewhere. sf update is ADD-ONLY today; module removal is not yet supported by the CLI.",
+  "command": "sf update",
+  "alwaysAppend": ["--non-interactive"],
+  "fields": {
+    "targetProfile": {
+      "flag": "--target-profile",
+      "type": "enum",
+      "values": ["full"],
+      "required": false,
+      "description": "Add the missing managed capability so an eligible harness-only or stack-only project becomes full. V1 never removes a capability or changes an existing stack topology."
+    },
+    "projectDescription": {
+      "flag": "--project-description",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "targetProfile is full and the technical stack is absent; otherwise the CLI derives a description from projectName"
+    },
+    "structure": {
+      "flag": "--structure",
+      "type": "enum",
+      "values": ["monorepo", "multirepo"],
+      "required": false,
+      "requiresWhen": "targetProfile is full and the technical stack is absent"
+    },
+    "dbSetup": {
+      "flag": "--db-setup",
+      "type": "enum",
+      "values": ["docker", "credentials", "manual"],
+      "required": false,
+      "requiresWhen": "targetProfile is full and the technical stack is absent"
+    },
+    "dbType": { "flag": "--db-type", "type": "enum", "values": ["postgresql", "sql"], "required": false },
+    "dbHost": { "flag": "--db-host", "type": "string", "required": false, "requiresWhen": "dbSetup is credentials" },
+    "dbPort": { "flag": "--db-port", "type": "string", "required": false, "requiresWhen": "dbSetup is credentials" },
+    "dbUser": { "flag": "--db-user", "type": "string", "required": false, "requiresWhen": "dbSetup is credentials" },
+    "dbPassword": { "flag": "--db-password", "env": "SF_UPDATE_DB_PASSWORD", "type": "string", "required": false, "secret": true, "requiresWhen": "dbSetup is credentials" },
+    "dbName": { "flag": "--db-name", "type": "string", "required": false, "requiresWhen": "dbSetup is credentials" },
+    "apiPort": { "flag": "--api-port", "type": "string", "required": false },
+    "webPort": { "flag": "--web-port", "type": "string", "required": false },
+    "emailService": {
+      "flag": "--email-service",
+      "type": "enum",
+      "values": ["none", "mailersend"],
+      "required": false,
+      "requiresWhen": "targetProfile is full and the technical stack is absent"
+    },
+    "addModules": {
+      "flag": "--add-modules",
+      "type": "csv",
+      "values": [
+        "email",
+        "storage",
+        "analytics",
+        "harness",
+        "srs",
+        "sf-skill-context7",
+        "sf-skill-atlassian",
+        "sf-skill-notion",
+        "sf-skill-figma"
+      ],
+      "required": false,
+      "description": "Comma-separated list of modules to add. Values must come from `sf modules list --json` and must not already appear in .saasfoundry.json."
+    },
+    "dryRun": {
+      "flag": "--dry-run",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Preview the plan without mutating files. Pair with json=true for stable machine-readable stdout. Always recommend this first."
+    },
+    "json": {
+      "flag": "--json",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "requiresWhen": "dryRun is true",
+      "description": "Emit one stable versioned JSON object on stdout. Use with --dry-run; diagnostics go to stderr."
+    },
+    "acceptTemplateUpdates": {
+      "flag": "--accept-template-updates",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Auto-apply non-conflicting template updates without prompting."
+    },
+    "conflictStrategy": {
+      "flag": "--conflict-strategy",
+      "type": "enum",
+      "values": ["keep", "replace", "save-new"],
+      "required": false,
+      "default": "save-new",
+      "description": "How three-way merge conflicts are handled. save-new preserves both sides, keep ignores upstream changes, replace overwrites local edits."
+    },
+    "mailersendApiKey": {
+      "flag": "--mailersend-api-key",
+      "type": "string",
+      "required": false,
+      "secret": true,
+      "env": "SF_UPDATE_MAILERSEND_API_KEY",
+      "requiresWhen": "addModules includes email or targetProfile is full with emailService mailersend"
+    },
+    "mailersendSenderEmail": {
+      "flag": "--mailersend-sender-email",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "addModules includes email or targetProfile is full with emailService mailersend"
+    },
+    "mailersendSenderName": {
+      "flag": "--mailersend-sender-name",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "addModules includes email or targetProfile is full with emailService mailersend"
+    },
+    "s3Setup": {
+      "flag": "--s3-setup",
+      "type": "enum",
+      "values": ["docker", "credentials", "manual"],
+      "required": false,
+      "requiresWhen": "addModules includes storage or targetProfile is full and the technical stack is absent"
+    },
+    "s3Endpoint": { "flag": "--s3-endpoint", "type": "string", "required": false },
+    "s3AccessKey": { "flag": "--s3-access-key", "env": "SF_UPDATE_S3_ACCESS_KEY", "type": "string", "required": false, "secret": true },
+    "s3SecretKey": { "flag": "--s3-secret-key", "env": "SF_UPDATE_S3_SECRET_KEY", "type": "string", "required": false, "secret": true },
+    "s3Bucket": { "flag": "--s3-bucket", "type": "string", "required": false },
+    "s3Region": { "flag": "--s3-region", "type": "string", "required": false },
+    "analytics": {
+      "flag": "--analytics",
+      "negationFlag": "--no-analytics",
+      "type": "boolean",
+      "required": false,
+      "requiresWhen": "targetProfile is full and the technical stack is absent"
+    },
+    "pwa": {
+      "flag": "--pwa",
+      "negationFlag": "--no-pwa",
+      "type": "boolean",
+      "required": false,
+      "requiresWhen": "targetProfile is full and the technical stack is absent"
+    },
+    "context7ApiKey": { "flag": "--context7-api-key", "env": "SF_UPDATE_CONTEXT7_API_KEY", "type": "string", "required": false, "secret": true },
+    "atlassianEmail": { "flag": "--atlassian-email", "type": "string", "required": false },
+    "atlassianApiToken": { "flag": "--atlassian-api-token", "env": "SF_UPDATE_ATLASSIAN_API_TOKEN", "type": "string", "required": false, "secret": true },
+    "atlassianSite": { "flag": "--atlassian-site", "type": "string", "required": false },
+    "atlassianCloudId": { "flag": "--atlassian-cloud-id", "type": "string", "required": false },
+    "notionApiToken": { "flag": "--notion-api-token", "env": "SF_UPDATE_NOTION_API_TOKEN", "type": "string", "required": false, "secret": true },
+    "notionApiVersion": { "flag": "--notion-api-version", "type": "string", "required": false },
+    "figmaApiToken": { "flag": "--figma-api-token", "env": "SF_UPDATE_FIGMA_API_TOKEN", "type": "string", "required": false, "secret": true },
+    "srsBackend": {
+      "flag": "--srs-backend",
+      "type": "enum",
+      "values": ["notion"],
+      "required": false,
+      "requiresWhen": "addModules includes srs",
+      "description": "Backend hosting the SRS workspace. V1 supports Notion only."
+    },
+    "srsParentPageInput": {
+      "flag": "--srs-parent-page-input",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "addModules includes srs",
+      "description": "URL or ID of the parent page (Notion) that will host the SRS root page. The page must be shared with the Notion integration."
+    }
+  },
+  "recommendations": {
+    "dryRun": {
+      "true": "Always recommend `--dry-run` first so the user sees the template-merge plan before files are mutated. Run the real command only after explicit approval.",
+      "false": "Only skip dry-run if the user explicitly says 'just do it' and the addition is one small module with no template merge risk."
+    },
+    "conflictStrategy": {
+      "save-new": "Default — the safest option: conflicting files are written as `.saasfoundry.new` next to the originals so the user can diff and reconcile.",
+      "keep": "Choose when the user has significant local edits they do not want touched by a template update.",
+      "replace": "Choose only when the user wants the latest upstream version and is okay losing local edits to conflicting files."
+    },
+    "modules": {
+      "harness": "Compatibility spelling for a stack-only project becoming full. Prefer targetProfile=full in new plans so status, CLI and guidance share one capability transition.",
+      "email": "Recommend adding when the app now needs transactional email (password reset, invites, receipts). Requires a mailersend API key.",
+      "storage": "Recommend adding when the app needs file uploads (logos, user docs). Docker setup for local dev, credentials for staging/prod.",
+      "analytics": "Recommend adding when tracking user activity or business metrics becomes relevant. Self-hosted Umami, production-only.",
+      "srs": "Recommend adding when product requirements should be centralised for AI agents (User flows, Functional Requirements). V1 bootstraps a Notion workspace under a parent page shared with the Notion integration.",
+      "sf-skill-context7": "Recommend adding when the project relies on third-party libs and needs up-to-date doc retrieval for the AI agent.",
+      "sf-skill-atlassian": "Recommend adding when issues/pages live in Jira or Confluence and the AI agent should read/write them.",
+      "sf-skill-notion": "Recommend adding when product specs or knowledge base live in Notion.",
+      "sf-skill-figma": "Recommend adding when design hand-off goes through Figma files."
+    }
+  }
+}

@@ -5,30 +5,32 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 /**
  * Dependencies
  */
 import { useIsSessionActive } from '@/hooks/auth/useIsSession'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
+import { decodeJwtPayload } from '@/hooks/auth/useTokenDecoder'
 import { extractTokenFromUrl } from '@/utils/tokenExtractor'
 
 /**
  * Components
  */
+import { ThemeToggleButton } from '@/components/theme/theme-toggle-button'
 import { Logo } from '@/components/ui/custom/logo'
+import { FloatingLabelInput, FloatingLabelPasswordInput } from '@/components/ui/custom/floating-label-input'
+import { WaveButton } from '@/components/ui/custom/wave-button'
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert'
-import { Button } from '@/components/ui/shadcn/button'
 import { Card } from '@/components/ui/shadcn/card'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/shadcn/form'
-import { Input } from '@/components/ui/shadcn/input'
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/shadcn/form'
 import { Separator } from '@/components/ui/shadcn/separator'
 
 /**
  * Icons
  */
-import { AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 
 /**
  * API
@@ -36,78 +38,78 @@ import { AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { useSignIn, useSignInSchema, type SignInPayloadDto } from '@/hooks/api/auth'
 
 /**
+ * Helpers
+ */
+function capitalize(s: string) {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/**
+ * Live default for the account name shown during first-login. Falls back through
+ * firstname+lastname → firstname → email user-part → "Main account".
+ */
+function suggestAccountName(firstname?: string, lastname?: string, email?: string): string {
+  const fn = firstname?.trim()
+  const ln = lastname?.trim()
+  if (fn && ln) return `${capitalize(fn)} ${capitalize(ln)}'s account`
+  if (fn) return `${capitalize(fn)}'s account`
+  const e = email?.trim()
+  if (e && e.includes('@')) {
+    const userPart = e.split('@')[0].split('+')[0]
+    const firstToken = userPart.split(/[._-]/)[0]
+    if (firstToken) return `${capitalize(firstToken)}'s account`
+  }
+  return 'Main account'
+}
+
+/**
  * React declaration
  */
 export function SignIn() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const flipClass = (location.state as { flip?: string })?.flip === 'left' ? 'auth-flip-left' : ''
   const { t: tAuth } = useTranslation('auth')
   const { t: tCommon } = useTranslation('common')
   const [authError, setAuthError] = useState<string | null>(null)
   const [confirmAccountToken] = useState(() => extractTokenFromUrl('confirmAccountToken'))
-  const [isFirstLogin, setIsFirstLogin] = useState(false)
-  const [tokenProcessed, setTokenProcessed] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
+
+  // Decode token once on mount
+  const tokenData = confirmAccountToken ? decodeJwtPayload<{ firstname?: string; lastname?: string; email?: string }>(confirmAccountToken) : null
+  const isFirstLogin = !!confirmAccountToken
 
   // React Query mutation
   const signInMutation = useSignIn()
   const { isSessionActive } = useIsSessionActive()
-  const { hasModuleAccess } = useModuleAccess()
+  const { hasModuleAccess, awaitsPlatformAdmin } = useModuleAccess()
 
   // Create form with schema
   const schemas = useSignInSchema()
   const form = useForm<SignInPayloadDto>({
     resolver: zodResolver(schemas.payload),
     defaultValues: {
-      email: '',
+      email: tokenData?.email || '',
       password: '',
-      firstname: '',
-      lastname: ''
+      firstname: tokenData?.firstname || '',
+      lastname: tokenData?.lastname || '',
+      accountName: ''
     }
   })
 
-  // Toggle password visibility
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword)
-  }
-
-  // Decode the token to extract information if necessary
+  // Auto-suggest the account name based on the user's identity, but only on the first-login
+  // step (where the new account is provisioned). Skipped during platform bootstrap — the first
+  // user becomes platform-admin with no account, so the field is hidden and any value would
+  // be discarded server-side anyway.
+  const watchedFirstname = form.watch('firstname')
+  const watchedLastname = form.watch('lastname')
+  const watchedEmail = form.watch('email')
   useEffect(() => {
-    if (confirmAccountToken) {
-      try {
-        // Try to decode the token if possible to extract information
-        // Note: this implementation is simplified and depends on the actual token structure
-        // It may be necessary to use a library like jwt-decode
-        // or call an API to get the token information
-        const tokenParts = confirmAccountToken.split('.')
-        if (tokenParts.length === 3) {
-          const tokenPayload = JSON.parse(atob(tokenParts[1]))
-          const extractedData = {
-            firstname: tokenPayload.firstname,
-            lastname: tokenPayload.lastname,
-            email: tokenPayload.email
-          }
-
-          // Update form values with the extracted data
-          if (extractedData.email) {
-            form.setValue('email', extractedData.email)
-          }
-          if (extractedData.firstname) {
-            form.setValue('firstname', extractedData.firstname)
-          }
-          if (extractedData.lastname) {
-            form.setValue('lastname', extractedData.lastname)
-          }
-        }
-        setIsFirstLogin(true)
-        setTokenProcessed(true)
-      } catch (error) {
-        console.error('Erreur lors du décodage du token', error)
-        setTokenProcessed(true)
-      }
-    } else {
-      setTokenProcessed(true)
-    }
-  }, [confirmAccountToken, form])
+    if (!isFirstLogin || awaitsPlatformAdmin) return
+    if (form.formState.dirtyFields.accountName) return
+    const suggested = suggestAccountName(watchedFirstname, watchedLastname, watchedEmail)
+    form.setValue('accountName', suggested, { shouldDirty: false })
+  }, [isFirstLogin, awaitsPlatformAdmin, watchedFirstname, watchedLastname, watchedEmail, form])
 
   // Redirect on successful login
   useEffect(() => {
@@ -132,6 +134,12 @@ export function SignIn() {
         payload.firstname = values.firstname
         payload.lastname = values.lastname
       }
+      // Carry the (auto-suggested or user-edited) account name through to the activation
+      // so the freshly-provisioned account gets a meaningful, searchable identity. Skipped
+      // during platform bootstrap — no account is created in that flow.
+      if (isFirstLogin && !awaitsPlatformAdmin && values.accountName?.trim()) {
+        payload.accountName = values.accountName.trim()
+      }
     }
 
     // Use React Query mutation
@@ -143,21 +151,7 @@ export function SignIn() {
   }
 
   // Reusable form field
-  const renderFormField = ({
-    name,
-    label,
-    placeholder = '',
-    type = 'text',
-    autoComplete = '',
-    tabIndex
-  }: {
-    name: keyof SignInPayloadDto
-    label: string
-    placeholder?: string
-    type?: string
-    autoComplete?: string
-    tabIndex?: number
-  }) => {
+  const renderFormField = ({ name, label, type = 'text', autoComplete = '', tabIndex }: { name: keyof SignInPayloadDto; label: string; type?: string; autoComplete?: string; tabIndex?: number }) => {
     const inputId = `input-${name}`
     return (
       <FormField
@@ -165,35 +159,24 @@ export function SignIn() {
         name={name}
         render={({ field }) => (
           <FormItem>
-            {name === 'password' ? (
-              <div className="flex items-center justify-between">
-                <FormLabel htmlFor={inputId}>{label}</FormLabel>
-                {hasModuleAccess('USER_ACCOUNT_PASSWORD_RECOVERY') && (
-                  <Link to="/reset-password-request" className="text-sm font-medium text-blue-600 hover:text-blue-500">
-                    {tAuth('callToAction.tk_forgotPassword_')}
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <FormLabel htmlFor={inputId}>{label}</FormLabel>
-            )}
             <FormControl>
               {name === 'password' ? (
-                <div className="relative">
-                  <Input id={inputId} placeholder={placeholder} type={showPassword ? 'text' : 'password'} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
-                  <button
-                    type="button"
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700 focus:outline-none"
-                    onClick={togglePasswordVisibility}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+                <FloatingLabelPasswordInput id={inputId} label={label} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
               ) : (
-                <Input id={inputId} placeholder={placeholder} type={type} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
+                <FloatingLabelInput id={inputId} label={label} type={type} autoComplete={autoComplete} tabIndex={tabIndex} {...field} />
               )}
             </FormControl>
+            {name === 'password' && hasModuleAccess('USER_ACCOUNT_PASSWORD_RECOVERY') && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => navigate('/reset-password-request', { state: { flip: 'up' } })}
+                  className="cursor-pointer text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  {tAuth('callToAction.tk_forgotPassword_')}
+                </button>
+              </div>
+            )}
             <FormMessage />
           </FormItem>
         )}
@@ -201,96 +184,119 @@ export function SignIn() {
     )
   }
 
-  // Afficher un état de chargement pendant le traitement du token
-  if (!tokenProcessed) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md p-8">
-          <div className="text-center">
-            <p>{tCommon('loading.tk_loading_')}</p>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex h-screen flex-col items-center bg-gray-50">
+    <div className="relative flex h-screen flex-col items-center bg-muted">
+      <div className="absolute top-4 right-4">
+        <ThemeToggleButton />
+      </div>
       <Logo isLong className="max-w-xs px-4 py-20" />
-      <Card className="w-full max-w-md p-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">{tAuth('signin.tk_title_')}</h2>
-          <p className="mt-2 text-sm text-gray-600">{tAuth('signin.tk_description_')}</p>
-        </div>
+      <Card className={`glow-card w-full max-w-md px-8 py-8 ${flipClass}`}>
+        <div className="igw-glow" aria-hidden="true" />
+        <div className="igw-border" aria-hidden="true" />
+        <div className="relative z-10">
+          <div className="text-center mb-6">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">
+              {tAuth(isFirstLogin ? (awaitsPlatformAdmin ? 'signin.tk_bootstrapTitle_' : 'signin.tk_activateTitle_') : 'signin.tk_title_')}
+            </h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {tAuth(isFirstLogin ? (awaitsPlatformAdmin ? 'signin.tk_bootstrapDescription_' : 'signin.tk_activateDescription_') : 'signin.tk_description_')}
+            </p>
+          </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-6">
-            {(authError || signInMutation.isError) && (
-              <Alert className="bg-red-50 text-red-800">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5" />
-                  <AlertDescription>{authError || tAuth('signin.tk_authError_')}</AlertDescription>
-                </div>
-              </Alert>
-            )}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+              {(authError || signInMutation.isError) && (
+                <Alert className="bg-destructive/10 text-destructive">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5" />
+                    <AlertDescription>{authError || tAuth('signin.tk_authError_')}</AlertDescription>
+                  </div>
+                </Alert>
+              )}
 
-            {isFirstLogin && confirmAccountToken && (
-              <div className="grid grid-cols-2 gap-4">
-                {renderFormField({
-                  name: 'firstname',
-                  placeholder: tCommon('user.tk_firstNamePlaceholder_'),
-                  label: tCommon('user.tk_firstName_'),
-                  tabIndex: 1
-                })}
-                {renderFormField({
-                  name: 'lastname',
-                  placeholder: tCommon('user.tk_lastNamePlaceholder_'),
-                  label: tCommon('user.tk_lastName_'),
-                  tabIndex: 2
-                })}
-              </div>
-            )}
+              {isFirstLogin && confirmAccountToken && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    {renderFormField({
+                      name: 'firstname',
+                      label: tCommon('user.tk_firstName_'),
+                      tabIndex: 1
+                    })}
+                    {renderFormField({
+                      name: 'lastname',
+                      label: tCommon('user.tk_lastName_'),
+                      tabIndex: 2
+                    })}
+                  </div>
+                  {!awaitsPlatformAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="accountName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <FloatingLabelInput
+                              id="input-accountName"
+                              label={tAuth('signin.tk_account-name_')}
+                              tabIndex={3}
+                              {...field}
+                              onChange={(e) => {
+                                // Mark dirty so the auto-suggest stops overwriting once the user edits.
+                                form.setValue('accountName', e.target.value, { shouldDirty: true })
+                              }}
+                            />
+                          </FormControl>
+                          <p className="text-[11px] text-muted-foreground">{tAuth('signin.tk_account-name-hint_')}</p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </>
+              )}
 
-            {renderFormField({
-              name: 'email',
-              label: tCommon('user.tk_email_'),
-              placeholder: tCommon('user.tk_emailPlaceholder_'),
-              type: 'email',
-              autoComplete: 'email',
-              tabIndex: isFirstLogin ? 3 : 1
-            })}
-            {renderFormField({
-              name: 'password',
-              label: tAuth('fields.tk_password_'),
-              type: 'password',
-              autoComplete: 'current-password',
-              tabIndex: isFirstLogin ? 4 : 2
-            })}
+              {renderFormField({
+                name: 'email',
+                label: tCommon('user.tk_email_'),
+                type: 'email',
+                autoComplete: 'email',
+                tabIndex: isFirstLogin ? 4 : 1
+              })}
+              {renderFormField({
+                name: 'password',
+                label: tAuth('fields.tk_password_'),
+                type: 'password',
+                autoComplete: 'current-password',
+                tabIndex: isFirstLogin ? 5 : 2
+              })}
 
-            <Button type="submit" className="w-full" disabled={signInMutation.isLoading} tabIndex={isFirstLogin ? 5 : 3}>
-              {signInMutation.isLoading ? tCommon('loading.tk_loadingSignin_') : tAuth('callToAction.tk_signin_')}
-            </Button>
+              <WaveButton type="submit" className="mt-7" disabled={signInMutation.isLoading} tabIndex={isFirstLogin ? 6 : 3}>
+                {signInMutation.isLoading ? tCommon('loading.tk_loadingSignin_') : tAuth('callToAction.tk_signin_')}
+              </WaveButton>
 
-            {hasModuleAccess('USER_ACCOUNT_CREATION') && (
-              <>
-                <div className="flex items-center justify-center">
-                  <Separator className="w-1/3" />
-                  <span className="mx-4 text-sm text-gray-500">{tCommon('other.tk_or_')}</span>
-                  <Separator className="w-1/3" />
-                </div>
+              {hasModuleAccess('USER_ACCOUNT_CREATION') && (
+                <>
+                  <div className="flex items-center gap-3 my-4">
+                    <Separator className="flex-1" />
+                    <span className="text-xs text-muted-foreground">{tCommon('other.tk_or_')}</span>
+                    <Separator className="flex-1" />
+                  </div>
 
-                <div className="text-center">
-                  <p className="text-sm text-gray-600">
-                    {tAuth('signin.tk_noAccount_')}{' '}
-                    <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
+                  <p className="text-center text-sm text-muted-foreground">
+                    New here?{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/signup', { state: { flip: 'right' } })}
+                      className="cursor-pointer font-semibold text-primary hover:text-primary/80 transition-colors"
+                    >
                       {tAuth('callToAction.tk_signup_')}
-                    </Link>
+                    </button>
                   </p>
-                </div>
-              </>
-            )}
-          </form>
-        </Form>
+                </>
+              )}
+            </form>
+          </Form>
+        </div>
       </Card>
     </div>
   )

@@ -2,7 +2,7 @@
  * Utility for setting up test organization data for E2E tests
  */
 import { PrismaService } from '@configs/prisma/services/prisma.service'
-import { OrganizationType } from '@prisma/client'
+import { OrganizationType } from '@/generated/prisma/client'
 
 /**
  * Organization test data configuration

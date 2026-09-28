@@ -1,0 +1,48 @@
+services:
+  s3-dev:
+    image: minio/minio:latest
+    container_name: saasfoundry-s3-dev
+    restart: 'no'
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - s3-dev-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - saasfoundry-network
+
+  s3-init:
+    image: minio/mc:latest
+    container_name: saasfoundry-s3-init
+    depends_on:
+      s3-dev:
+        condition: service_healthy
+    # `set -e` makes the container exit non-zero if anything fails — previously the script
+    # finished with `exit 0` regardless, so a transient 502 on `mc alias set` (which can
+    # happen even after MinIO's healthcheck passes) silently dropped the bucket creation.
+    # The retry loop covers the few seconds between MinIO becoming "healthy" and being
+    # truly ready to accept S3 commands.
+    entrypoint: >
+      /bin/sh -c " set -e; until mc alias set myminio http://s3-dev:9000 minioadmin minioadmin >/dev/null 2>&1; do
+        echo 'Waiting for MinIO to accept alias setup...'; sleep 1;
+      done; mc mb --ignore-existing myminio/saasfoundry-uploads; mc anonymous set download myminio/saasfoundry-uploads; "
+    networks:
+      - saasfoundry-network
+
+volumes:
+  s3-dev-data:
+    driver: local
+
+networks:
+  saasfoundry-network:
+    external: true

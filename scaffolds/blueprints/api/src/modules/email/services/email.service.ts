@@ -3,7 +3,7 @@
  */
 import { Logger } from '@common/services/logger/logger.service'
 import { Injectable } from '@nestjs/common'
-import { Locale } from '@prisma/client'
+import { Locale } from '@/generated/prisma/client'
 
 /**
  * Dependencies
@@ -41,9 +41,9 @@ export class EmailService {
       const confirmationUrl = `${this.envConfig.get('FRONTEND_URL')}/signin?confirmAccountToken=${confirmationToken}`
       const html = getAccountConfirmationHtmlTemplate(confirmationUrl, this.translationService, locale, firstName)
       const text = getAccountConfirmationTextTemplate(confirmationUrl, this.translationService, locale, firstName)
+      void html
+      void text
 
-      console.log('html', html)
-      console.log('text', text)
       // await this.sendEmail({
       //   to: email,
       //   subject: this.translationService.getTranslation(locale, 'accountConfirmation').subject,
@@ -64,9 +64,9 @@ export class EmailService {
       const resetUrl = `${this.envConfig.get('FRONTEND_URL')}/reset-password?resetPasswordToken=${resetToken}`
       const html = getPasswordResetHtmlTemplate(resetUrl, this.translationService, locale, firstName)
       const text = getPasswordResetTextTemplate(resetUrl, this.translationService, locale, firstName)
+      void html
+      void text
 
-      console.log('html', html)
-      console.log('text', text)
       // await this.sendEmail({
       //   to: email,
       //   subject: this.translationService.getTranslation(locale, 'passwordReset').subject,
@@ -87,6 +87,8 @@ export class EmailService {
       const invitationUrl = `${this.envConfig.get('FRONTEND_URL')}/user-invitation?invitationToken=${invitationToken}`
       const html = getInvitationHtmlTemplate(invitationUrl, this.translationService, locale, inviterName, inviteeName)
       const text = getInvitationTextTemplate(invitationUrl, this.translationService, locale, inviterName, inviteeName)
+      void html
+      void text
 
       // await this.sendEmail({
       //   to: email,

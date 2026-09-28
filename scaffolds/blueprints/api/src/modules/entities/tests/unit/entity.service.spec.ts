@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 
 /**
  * Dependencies
@@ -44,7 +44,12 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
     // Configure additional Prisma mocks with proper typing
     const prismaServiceAny = mockPrismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
     prismaServiceAny.organization = {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn()
+    }
+    prismaServiceAny.organizationAccountLink = {
+      create: jest.fn()
     }
     prismaServiceAny.entity = {
       create: jest.fn(),
@@ -79,8 +84,6 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
   testCreateEntity(): void {
     describe('createEntity', () => {
       const createEntityDto = {
-        name: 'Test Entity',
-        description: 'Test Entity Description',
         accountId: mockAccount.id,
         organizationId: mockOrganization.id
       }
@@ -90,6 +93,7 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
           this.accountAccessService.validateUserAccountAccess.mockResolvedValue(mockUserAccountLink)
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.organization.findUnique.mockResolvedValue(mockOrganization)
+          prismaServiceAny.organization.update.mockResolvedValue(mockOrganization)
           prismaServiceAny.entity.create.mockResolvedValue(mockEntity)
         })
 
@@ -98,13 +102,14 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
             // Act
             const result = await this.service.createEntity(mockUser.id, createEntityDto)
 
-            // Assert
+            // Assert — the entity's human identity is now resolved from its profile (D-ENT-6),
+            // so name/description come from the attached organization, not the entity row.
             expect(result).toEqual(
               expect.objectContaining({
                 id: mockEntity.id,
-                name: mockEntity.name,
+                name: mockOrganization.name,
                 isActive: mockEntity.isActive,
-                description: mockEntity.description,
+                description: mockOrganization.description,
                 organization: expect.objectContaining({
                   id: mockOrganization.id,
                   name: mockOrganization.name
@@ -118,13 +123,16 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
             expect(prismaServiceAny.organization.findUnique).toHaveBeenCalledWith({
               where: { id: mockOrganization.id }
             })
+            // The entity row no longer carries name/description (D-ENT-6) — only functional keys.
             expect(prismaServiceAny.entity.create).toHaveBeenCalledWith({
               data: expect.objectContaining({
-                name: createEntityDto.name,
-                description: createEntityDto.description,
-                accountId: createEntityDto.accountId,
-                organizationId: createEntityDto.organizationId
+                accountId: createEntityDto.accountId
               })
+            })
+            // With the inverted 1:1, the existing organization is attached to the entity via its entityId FK.
+            expect(prismaServiceAny.organization.update).toHaveBeenCalledWith({
+              where: { id: mockOrganization.id },
+              data: { entityId: mockEntity.id }
             })
           })
         })
@@ -176,6 +184,8 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
       const mockEntityWithUsers = {
         ...mockEntity,
         account: mockAccount,
+        // The entity's name is resolved from its profile (D-ENT-6), so attach the organization.
+        organization: mockOrganization,
         users: [
           {
             userId: '1',
@@ -195,7 +205,12 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
 
       describe('when successful', () => {
         const successScenario = TestScenario.create('successful update', async () => {
-          this.accountAccessService.validateUserAccountAccess.mockResolvedValue(mockUserAccountLink)
+          // B3b — updateEntityUsers now authorizes via the entity-level helper (subtree authority).
+          this.accountAccessService.validateUserEntityAccess.mockResolvedValue({
+            entity: { id: mockEntity.id, accountId: mockAccount.id, parentEntityId: null, isActive: true },
+            userId: mockUser.id,
+            via: 'account-admin'
+          })
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.entity.findUnique.mockResolvedValue(mockEntityWithUsers)
           prismaServiceAny.userEntityLink.deleteMany.mockResolvedValue({ count: 1 })
@@ -230,7 +245,7 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
             // Assert
             expect(result).toEqual({
               id: mockEntity.id,
-              name: mockEntity.name,
+              name: mockOrganization.name,
               users: [
                 expect.objectContaining({
                   id: '2',
@@ -243,7 +258,7 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
             })
 
             // Verify
-            expect(this.accountAccessService.validateUserAccountAccess).toHaveBeenCalledWith(mockUser.id, mockAccount.id, expect.any(String))
+            expect(this.accountAccessService.validateUserEntityAccess).toHaveBeenCalledWith(mockUser.id, mockEntity.id, expect.any(String))
             const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
             expect(prismaServiceAny.userEntityLink.deleteMany).toHaveBeenCalled()
             expect(prismaServiceAny.userEntityLink.createMany).toHaveBeenCalled()
@@ -262,19 +277,23 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
           await TestAssertions.assertThrows(() => this.service.updateEntityUsers(mockUser.id, 'non-existent-id', ['2']), NotFoundException)
         })
 
-        it('should throw UnauthorizedException if user does not have access to account', async () => {
-          // Arrange
-          this.accountAccessService.validateUserAccountAccess.mockRejectedValue(new UnauthorizedException())
+        it('should throw when the user has no authority over the entity (B3b)', async () => {
+          // Arrange — the entity-level authority helper rejects (e.g. entity outside the caller's subtree).
+          this.accountAccessService.validateUserEntityAccess.mockRejectedValue(new ForbiddenException())
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.entity.findUnique.mockResolvedValue(mockEntityWithUsers)
 
           // Act & Assert
-          await TestAssertions.assertThrows(() => this.service.updateEntityUsers(mockUser.id, mockEntity.id, ['2']), UnauthorizedException)
+          await TestAssertions.assertThrows(() => this.service.updateEntityUsers(mockUser.id, mockEntity.id, ['2']), ForbiddenException)
         })
 
         it('should throw BadRequestException if removing all users would leave account without active users', async () => {
           // Arrange
-          this.accountAccessService.validateUserAccountAccess.mockResolvedValue(mockUserAccountLink)
+          this.accountAccessService.validateUserEntityAccess.mockResolvedValue({
+            entity: { id: mockEntity.id, accountId: mockAccount.id, parentEntityId: null, isActive: true },
+            userId: mockUser.id,
+            via: 'account-admin'
+          })
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.entity.findUnique.mockResolvedValue(mockEntityWithUsers)
           prismaServiceAny.userAccountLink.findMany.mockResolvedValue([])
@@ -286,7 +305,11 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
 
         it('should handle database error gracefully', async () => {
           // Arrange
-          this.accountAccessService.validateUserAccountAccess.mockResolvedValue(mockUserAccountLink)
+          this.accountAccessService.validateUserEntityAccess.mockResolvedValue({
+            entity: { id: mockEntity.id, accountId: mockAccount.id, parentEntityId: null, isActive: true },
+            userId: mockUser.id,
+            via: 'account-admin'
+          })
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           prismaServiceAny.entity.findUnique.mockResolvedValue(mockEntityWithUsers)
           prismaServiceAny.userAccountLink.findMany.mockResolvedValue([{ userId: '3', accountId: mockAccount.id }])

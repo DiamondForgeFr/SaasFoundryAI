@@ -13,8 +13,9 @@ export class MockManager {
   /**
    * Create and register a named mock
    */
-  createMock<T extends (...args: unknown[]) => unknown>(name: string, implementation?: T): jest.Mock<ReturnType<T>, Parameters<T>> {
-    const mock = jest.fn(implementation) as jest.Mock<ReturnType<T>, Parameters<T>>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createMock<T extends (...args: any[]) => any>(name: string, implementation?: T): jest.Mock<ReturnType<T>, Parameters<T>> {
+    const mock = jest.fn(implementation) as unknown as jest.Mock<ReturnType<T>, Parameters<T>>
     this.mocks.set(name, mock)
     return mock
   }
@@ -22,7 +23,8 @@ export class MockManager {
   /**
    * Get a registered mock by name
    */
-  getMock<T extends (...args: unknown[]) => unknown>(name: string): jest.Mock<ReturnType<T>, Parameters<T>> | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getMock<T extends (...args: any[]) => any>(name: string): jest.Mock<ReturnType<T>, Parameters<T>> | undefined {
     return this.mocks.get(name) as jest.Mock<ReturnType<T>, Parameters<T>> | undefined
   }
 
@@ -85,7 +87,8 @@ export class TestAssertions {
   /**
    * Assert that a function throws a specific error
    */
-  static async assertThrows<T extends Error>(fn: () => Promise<unknown> | unknown, errorClass: new (...args: unknown[]) => T, expectedMessage?: string): Promise<T> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  static async assertThrows<T extends Error>(fn: () => Promise<unknown> | unknown, errorClass: new (...args: any[]) => T, expectedMessage?: string): Promise<T> {
     try {
       await fn()
       throw new Error(`Expected function to throw ${errorClass.name}, but it didn't throw`)

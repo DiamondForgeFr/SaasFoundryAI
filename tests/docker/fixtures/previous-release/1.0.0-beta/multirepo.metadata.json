@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "fixture": {
+    "file": "multirepo.fixture.json.gz",
+    "sha256": "a570b16e4743e800681ee64cfbf4664fc1f55999f7385b7acc306751c84fe74d",
+    "compressedBytes": 1074842,
+    "entryCount": 317,
+    "totalBytes": 2769757,
+    "executableEntries": 13,
+    "treeSha256": "56e2e06eac4da26f2ff2eaa31b1ff3aa3321c6a17e110977b7c9a77241b2417d"
+  },
+  "source": {
+    "package": "saasfoundry-cli",
+    "version": "1.0.0-beta",
+    "integrity": "sha512-DDUIM7+rPrtsOCwZVjasSiUlEG7cmTelxMN0wxT0JEUffWXmwSl4mdccVdVw574RoFxydBBEn0yYto3Dtfs34A==",
+    "shasum": "4dd553bf5c026dfc7502e3d54f8bbc53746b6cf8",
+    "gitHead": "1a682d7ecfa76edcc20af0604da962b06a9c92a7",
+    "archiveSha256": "b1abb454495a6a0732f3187beb94298a2c3c79d5f98c376949c577736a1c633b",
+    "tarballFile": "saasfoundry-cli-1.0.0-beta.tgz",
+    "npmSpec": "saasfoundry-cli@1.0.0-beta"
+  },
+  "capture": {
+    "method": "published-newCommand-with-recorded-inquirer-answers",
+    "publishedCliWasInteractive": true,
+    "captureUsedPty": false,
+    "commanderWrapperBehavior": "The published bin only dispatches sf new to newCommand; the capture invokes that exact published export with the recorded prompt answers.",
+    "platform": "darwin-arm64",
+    "node": "v22.15.0",
+    "npm": "10.9.2",
+    "timezone": "UTC",
+    "locale": "C.UTF-8"
+  },
+  "generationInputs": {
+    "projectName": "previous-release",
+    "projectDescription": "Immutable SaaSFoundry previous-release fixture",
+    "mainBranch": "main",
+    "isMonorepo": false,
+    "setupRepo": "local",
+    "dbSetup": "manual",
+    "emailService": "none"
+  },
+  "sanitization": {
+    "policy": "generated-artifact-removal-and-explicit-secret-sentinel-rewrite",
+    "removed": ["apps/previous-release-api/.git/", "apps/previous-release-api/node_modules/", "apps/previous-release-web/.git/", "apps/previous-release-web/node_modules/"],
+    "retainedPublishedCacheCanaries": ["apps/previous-release-web/playwright-report/index.html", "apps/previous-release-web/test-results/.last-run.json"],
+    "retainedPublishedCacheReason": "These files shipped in the published scaffold and are required by the verified legacy-adoption inventory.",
+    "contentRewrites": [
+      {
+        "path": "apps/previous-release-api/.env",
+        "beforeSha256": "2957bb799bd8622de915775b3290a93ee789b0d9c02af7a1939ce0750dfac82c",
+        "beforeSha256Scope": "SHA-256 after replacing each generated 128-hex secret with <generated-random-secret>; raw random secret hashes are intentionally not persisted.",
+        "afterSha256": "2569d64921cf5395f67ffee989508261598daed517373af5b4b8edb3f9f2df2b",
+        "reason": "The published generator creates five random JWT secrets. Fixed, non-secret fixture sentinels make the source archive deterministic and safe to commit."
+      }
+    ]
+  },
+  "limitations": { "supportedTopology": "multirepo", "monorepo": "The published beta disabled monorepo in its prompt. No authentic beta monorepo fixture exists." }
+}

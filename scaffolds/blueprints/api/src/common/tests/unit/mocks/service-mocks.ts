@@ -21,12 +21,18 @@ export const mockPrismaService = {
     create: jest.fn() as MockedFunction<PrismaClientMethod>,
     update: jest.fn() as MockedFunction<PrismaClientMethod>,
     findFirst: jest.fn() as MockedFunction<PrismaClientMethod>,
-    findMany: jest.fn() as MockedFunction<PrismaClientMethod>
+    findMany: jest.fn() as MockedFunction<PrismaClientMethod>,
+    count: jest.fn() as MockedFunction<PrismaClientMethod>
   },
   account: {
     findUnique: jest.fn() as MockedFunction<PrismaClientMethod>,
     create: jest.fn() as MockedFunction<PrismaClientMethod>,
-    update: jest.fn() as MockedFunction<PrismaClientMethod>
+    update: jest.fn() as MockedFunction<PrismaClientMethod>,
+    count: jest.fn() as MockedFunction<PrismaClientMethod>
+  },
+  invitation: {
+    count: jest.fn() as MockedFunction<PrismaClientMethod>,
+    findMany: jest.fn() as MockedFunction<PrismaClientMethod>
   },
   organization: {
     findUnique: jest.fn() as MockedFunction<PrismaClientMethod>,
@@ -56,6 +62,13 @@ export const mockPrismaService = {
     findMany: jest.fn() as MockedFunction<PrismaClientMethod>,
     deleteMany: jest.fn() as MockedFunction<PrismaClientMethod>
   },
+  userRoleAssignment: {
+    count: jest.fn() as MockedFunction<PrismaClientMethod>,
+    create: jest.fn() as MockedFunction<PrismaClientMethod>,
+    createMany: jest.fn() as MockedFunction<PrismaClientMethod>,
+    findMany: jest.fn() as MockedFunction<PrismaClientMethod>,
+    deleteMany: jest.fn() as MockedFunction<PrismaClientMethod>
+  },
   organizationAccountLink: {
     create: jest.fn() as MockedFunction<PrismaClientMethod>
   },
@@ -79,7 +92,12 @@ export const mockPrismaService = {
 }
 
 export const mockAccountAccessService = {
-  validateUserAccountAccess: jest.fn()
+  validateUserAccountAccess: jest.fn(),
+  validateUserEntityAccess: jest.fn(),
+  resolveVisibleEntityIdsForAccount: jest.fn(),
+  getSubtreeEntityIds: jest.fn(),
+  isPlatformAdmin: jest.fn(),
+  isAccountAdminOn: jest.fn()
 }
 
 export const mockJwtService = {

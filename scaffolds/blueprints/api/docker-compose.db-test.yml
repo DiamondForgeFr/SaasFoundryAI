@@ -1,3 +1,4 @@
+name: saasfoundry-db-test
 services:
   db-test:
     image: postgres:16-alpine

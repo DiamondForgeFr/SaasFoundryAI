@@ -1,0 +1,70 @@
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.59.1-noble@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53
+
+# Use the same Ubuntu/glibc and Node 24 runtime in both stages. Copying
+# node_modules built on Alpine/musl into the Playwright image is not portable,
+# especially once a dependency gains a native binary.
+FROM ${PLAYWRIGHT_IMAGE} AS cli-builder
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+WORKDIR /cli
+
+# Install dependencies first so source changes retain the dependency layer.
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+
+COPY tsconfig.json ./
+COPY src/ ./src/
+COPY scaffolds/ ./scaffolds/
+COPY bin/ ./bin/
+RUN npm run build
+
+# The official image carries all three matching browsers and their Ubuntu
+# dependencies. The npm package is installed separately below, as required by
+# Playwright's image contract.
+FROM ${PLAYWRIGHT_IMAGE} AS test-runner
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# bcrypt needs Python/build tools, Prisma needs OpenSSL, and the lifecycle
+# runtime starts one isolated PostgreSQL 16 cluster per container. PGDATA is
+# deliberately absent here: no mutable database cluster is baked into the
+# image, and the runtime owns initialisation and teardown.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    build-essential \
+    git \
+    openssl \
+    postgresql-16 \
+    postgresql-client-16 \
+    python3 \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+ENV HUSKY=0
+ENV CI=true
+ENV npm_config_loglevel=error
+ENV DATABASE_URL="postgresql://test:test@localhost:5432/test"
+ENV CLI_PATH=/cli
+ENV WORKSPACE_DIR=/workspace/projects
+ENV SF_TEST_ARTIFACTS_DIR=/artifacts
+
+# Install the harness runtime from its dedicated lock before copying frequently
+# changing tests and fixtures. The metadata version is checked again by a unit
+# drift guard.
+COPY tests/docker/playwright-runtime.json /tmp/playwright-runtime.json
+COPY tests/docker/runtime/package.json tests/docker/runtime/package-lock.json ./
+RUN npm ci --ignore-scripts \
+  && PLAYWRIGHT_VERSION="$(node -p 'require("/tmp/playwright-runtime.json").playwright.version')" \
+  && node -e "const expected=require('/tmp/playwright-runtime.json').playwright.version; const actual=require('@playwright/test/package.json').version; if(actual!==expected) throw new Error('Playwright runtime drift: '+actual+' != '+expected)"
+
+COPY --from=cli-builder /cli /cli
+COPY tests/docker/ /workspace/
+
+LABEL org.saasfoundry.playwright.version="1.59.1" \
+  org.saasfoundry.playwright.image="mcr.microsoft.com/playwright:v1.59.1-noble" \
+  org.saasfoundry.playwright.manifest-digest="sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53"
+
+ENTRYPOINT ["node", "--import", "tsx", "/workspace/generate-and-build.ts"]

@@ -148,16 +148,6 @@
         "description": "Invalidate user session and clear authentication tokens.",
         "operationId": "AuthController_signOut",
         "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SignOutDto"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "",
@@ -253,7 +243,7 @@
     },
     "/api/auth/me": {
       "get": {
-        "description": "Retrieve the profile of the currently authenticated user. Requires USER_ACCOUNT_MANAGEMENT module and USER_PROFILE_VIEW_OWN permission.",
+        "description": "Retrieve the profile of the currently authenticated user. Requires a valid session; an authenticated user may always view their own profile.",
         "operationId": "AuthController_getMe",
         "parameters": [],
         "responses": {
@@ -297,6 +287,397 @@
         "summary": "Get guest user",
         "tags": [
           "Authentication"
+        ]
+      }
+    },
+    "/api/accounts": {
+      "get": {
+        "description": "Paginated, searchable list of every account on the platform. Restricted to users holding the PLATFORM_ACCOUNTS section.",
+        "operationId": "AccountController_fetchAllAccounts",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "withPendingReactivation",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of accounts"
+          },
+          "403": {
+            "description": "User does not have the required platform section"
+          }
+        },
+        "summary": "List all accounts (platform reach)",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/permissions/catalog": {
+      "get": {
+        "description": "Drives the role-builder UI: returns every module + its permissions with their applicable scopes.",
+        "operationId": "AccountController_fetchPermissionsCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List the permissions catalog grouped by module",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/system/roles": {
+      "get": {
+        "description": "Returns roles whose accountId is NULL — the system templates available to every account. Used by the platform-admin browsing the Roles tab without a specific account selected.",
+        "operationId": "AccountController_fetchSystemRoles",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List platform-wide system roles",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/overview": {
+      "get": {
+        "description": "Aggregated KPIs + recent users / entities across every account, plus the system roles catalog.",
+        "operationId": "AccountController_fetchPlatformOverview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Platform-wide overview",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/users": {
+      "get": {
+        "description": "Cross-account user listing — each user appears once with their aggregated account/entity attachments. Supports search, status filter and a multi-account-only flag.",
+        "operationId": "AccountController_fetchPlatformUsers",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "isActive",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "accountScope",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "accountIds",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "roleIds",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Platform-wide users (deduplicated)",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/modules": {
+      "get": {
+        "operationId": "AccountController_fetchPlatformModules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List every platform module with its permissions and activation status",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/reactivation-requests": {
+      "get": {
+        "description": "Defaults to PENDING. Use ?status=APPROVED|REJECTED to view archived requests.",
+        "operationId": "AccountController_fetchPlatformReactivationRequests",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List reactivation requests (platform-admin)",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/reactivation-requests/{requestId}/approve": {
+      "post": {
+        "description": "Re-enables the account in the same transaction and clears the deactivation provenance.",
+        "operationId": "AccountController_approveReactivationRequest",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve a reactivation request",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/reactivation-requests/{requestId}/reject": {
+      "post": {
+        "description": "Account stays disabled. A note explaining the decision is required.",
+        "operationId": "AccountController_rejectReactivationRequest",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Reject a reactivation request",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/modules/{moduleId}": {
+      "patch": {
+        "operationId": "AccountController_togglePlatformModule",
+        "parameters": [
+          {
+            "name": "moduleId",
+            "required": true,
+            "in": "path",
+            "description": "Module ID",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Toggle a module activation status (platform-admin only)",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/modules/{moduleId}/sub-modules/{subModuleId}": {
+      "patch": {
+        "operationId": "AccountController_toggleSubModule",
+        "parameters": [
+          {
+            "name": "moduleId",
+            "required": true,
+            "in": "path",
+            "description": "Parent module ID",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "subModuleId",
+            "required": true,
+            "in": "path",
+            "description": "Sub-module ID",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Toggle a sub-module activation status (platform-admin only)",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/own": {
+      "post": {
+        "description": "Multi-account feature — an account admin with ACCOUNT_OWN_CREATE creates a brand-new account they automatically become admin of. Independent account (no parent/child).",
+        "operationId": "AccountController_createOwnAccount",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create an additional account owned by the current user",
+        "tags": [
+          "Accounts"
         ]
       }
     },
@@ -359,6 +740,7 @@
             "in": "query",
             "description": "Page number",
             "schema": {
+              "minimum": 1,
               "example": 1,
               "type": "number"
             }
@@ -369,6 +751,7 @@
             "in": "query",
             "description": "Number of items per page",
             "schema": {
+              "minimum": 1,
               "example": 10,
               "type": "number"
             }
@@ -537,6 +920,7 @@
             "in": "query",
             "description": "Page number",
             "schema": {
+              "minimum": 1,
               "example": 1,
               "type": "number"
             }
@@ -547,6 +931,7 @@
             "in": "query",
             "description": "Number of items per page",
             "schema": {
+              "minimum": 1,
               "example": 10,
               "type": "number"
             }
@@ -569,7 +954,8 @@
             "schema": {
               "type": "array",
               "items": {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               }
             }
           },
@@ -653,6 +1039,7 @@
             "in": "query",
             "description": "Page number",
             "schema": {
+              "minimum": 1,
               "example": 1,
               "type": "number"
             }
@@ -663,6 +1050,7 @@
             "in": "query",
             "description": "Number of items per page",
             "schema": {
+              "minimum": 1,
               "example": 10,
               "type": "number"
             }
@@ -673,7 +1061,7 @@
             "in": "query",
             "description": "Search term to filter roles",
             "schema": {
-              "example": "admin",
+              "example": "account-admin",
               "type": "string"
             }
           },
@@ -720,6 +1108,120 @@
           }
         },
         "summary": "Fetch account roles",
+        "tags": [
+          "Accounts"
+        ]
+      },
+      "post": {
+        "description": "Create a non-system role attached to the given account. Permissions must be compatible with the chosen scope.",
+        "operationId": "AccountController_createCustomRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a custom role",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/platform/roles": {
+      "post": {
+        "description": "Creates a non-system role visible to every account on the platform — alongside the seeded system templates. Body scope can be PLATFORM, ACCOUNT or ENTITY: the resulting role is a reusable template at that scope tier.",
+        "operationId": "AccountController_createPlatformCustomRole",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a global template role (platform-admin only)",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/roles/{roleId}": {
+      "patch": {
+        "operationId": "AccountController_updateCustomRole",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "Role ID",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a custom role",
+        "tags": [
+          "Accounts"
+        ]
+      },
+      "delete": {
+        "operationId": "AccountController_deleteCustomRole",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "Role ID",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a custom role",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/roles/{roleId}/status": {
+      "patch": {
+        "description": "Service-layer enforces the matrix: platform-admin can toggle any role except platform-admin (self-lockout); account-admin can toggle only their own custom roles.",
+        "operationId": "AccountController_toggleRoleStatus",
+        "parameters": [
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "description": "Role ID",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Activate / deactivate a role",
         "tags": [
           "Accounts"
         ]
@@ -772,6 +1274,100 @@
           }
         },
         "summary": "Update account status",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/{id}/reactivation-requests/latest": {
+      "get": {
+        "description": "Returns the most recent request (any status), or null. Used by the disabled-account banner.",
+        "operationId": "AccountController_fetchLatestReactivationRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Latest reactivation request for this account",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/{id}/reactivation-requests": {
+      "post": {
+        "description": "Account-admin of a self-deactivated account asks a platform-admin to re-enable it. Body must include a justification message.",
+        "operationId": "AccountController_createReactivationRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Submit a reactivation request",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/accounts/{id}/users/{userId}": {
+      "patch": {
+        "description": "Update a user attached to this account: their isActive flag and/or their scoped role assignments.",
+        "operationId": "AccountController_updateAccountUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "description": "Target user ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update account user",
         "tags": [
           "Accounts"
         ]
@@ -905,6 +1501,63 @@
         ]
       }
     },
+    "/api/organizations/{id}/logo": {
+      "post": {
+        "description": "Upload a logo image for the organization.",
+        "operationId": "OrganizationController_uploadLogo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Organization ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Logo file (jpeg, png, webp, svg — max 5MB)",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Logo image file"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logo uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchOrganizationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file type or size"
+          }
+        },
+        "summary": "Upload organization logo",
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
     "/api/entities": {
       "post": {
         "description": "Create a new entity and link it to an account and organization.",
@@ -939,6 +1592,65 @@
           }
         },
         "summary": "Create entity",
+        "tags": [
+          "Entities"
+        ]
+      }
+    },
+    "/api/entities/own": {
+      "post": {
+        "description": "Multi-entity feature — an entity-admin with ENTITY_OWN_CREATE creates a brand-new entity inside the same parent account, becoming entity-admin of it.",
+        "operationId": "EntitiesController_createOwnEntity",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEntityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The entity has been successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateEntityResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create an additional entity owned by the current user",
+        "tags": [
+          "Entities"
+        ]
+      }
+    },
+    "/api/entities/{id}": {
+      "patch": {
+        "description": "Update an entity name/description/isActive and its profile organization fields.",
+        "operationId": "EntitiesController_updateEntity",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Entity ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update entity",
         "tags": [
           "Entities"
         ]
@@ -1059,6 +1771,60 @@
         ]
       }
     },
+    "/api/invitations/platform/account-owners": {
+      "get": {
+        "description": "Returns every PENDING (SENT or EXPIRED) account-owner invitation on the platform — invitations with zero account/entity targets that, on acceptance, spin up a new account. Restricted to platform-admins.",
+        "operationId": "InvitationController_getPlatformAccountOwnerInvitations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInvitationsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List platform-wide account-owner invitations",
+        "tags": [
+          "Invitations"
+        ]
+      }
+    },
+    "/api/invitations/{id}": {
+      "delete": {
+        "description": "Cancel a pending invitation. Only the inviter can cancel their own invitation. Idempotent for already-finalized invitations.",
+        "operationId": "InvitationController_cancelInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation canceled"
+          },
+          "401": {
+            "description": "Unauthorized — not the inviter"
+          },
+          "404": {
+            "description": "Invitation not found"
+          }
+        },
+        "summary": "Cancel invitation",
+        "tags": [
+          "Invitations"
+        ]
+      }
+    },
     "/api/invitations/accept": {
       "post": {
         "description": "Accept an invitation and complete account setup.",
@@ -1097,15 +1863,84 @@
           "Invitations"
         ]
       }
+    },
+    "/api/users/me/preferences": {
+      "get": {
+        "description": "Retrieve the authenticated user own preferences (locale, avatar URL).",
+        "operationId": "UserController_getMyPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token."
+          },
+          "404": {
+            "description": "User not found."
+          }
+        },
+        "summary": "Get my preferences",
+        "tags": [
+          "Users"
+        ]
+      },
+      "patch": {
+        "description": "Partial update of the authenticated user own preferences. Omitted fields are left untouched.",
+        "operationId": "UserController_updateMyPreferences",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPreferencesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token."
+          },
+          "404": {
+            "description": "User not found."
+          }
+        },
+        "summary": "Update my preferences",
+        "tags": [
+          "Users"
+        ]
+      }
     }
   },
   "info": {
-    "title": "SaaSFoundry API",
+    "title": "SaaSFoundryAI API",
     "description": "An open-source solution for managing clients, invoices, and financial tasks.",
     "version": "1.0.0",
     "contact": {
-      "name": "SaaSFoundry Team",
-      "url": "https://github.com/agachet/saasfoundry",
+      "name": "SaaSFoundryAI Team",
+      "url": "https://github.com/DiamondForgeFr/SaasFoundryAI",
       "email": "anthony.gachet@diamondforge.fr"
     },
     "license": {
@@ -1127,41 +1962,31 @@
       "SignUpDto": {
         "type": "object",
         "properties": {
-          "firstname": {
-            "type": "string",
-            "description": "First name of the user (optional during signup)",
-            "example": "John"
-          },
-          "lastname": {
-            "type": "string",
-            "description": "Last name of the user (optional during signup)",
-            "example": "Doe"
-          },
           "email": {
             "type": "string",
-            "description": "Email address of the user",
-            "example": "john.doe@example.com",
-            "format": "email"
+            "minLength": 1,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "password": {
             "type": "string",
-            "description": "User password",
-            "example": "NewPassword123",
-            "minLength": 6,
+            "minLength": 8,
             "maxLength": 40,
-            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[a-zA-Z\\d]{8,}$"
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$"
           },
           "locale": {
             "type": "string",
-            "description": "User locale preference",
-            "example": "EN",
-            "default": "EN"
+            "enum": [
+              "EN",
+              "FR"
+            ]
           }
         },
         "required": [
           "email",
           "password"
-        ]
+        ],
+        "additionalProperties": false
       },
       "SignUpResponseDto": {
         "type": "object",
@@ -1186,44 +2011,41 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "User email address",
-            "example": "user@example.com",
-            "format": "email"
+            "minLength": 1,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "password": {
             "type": "string",
-            "description": "User password",
-            "example": "mySecurePassword123",
             "minLength": 6,
             "maxLength": 40
           },
           "confirmAccountToken": {
-            "type": "string",
-            "description": "Account confirmation token (only required when validating a new account)",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-            "maxLength": 500
+            "type": "string"
           },
           "firstname": {
-            "type": "string",
-            "description": "First name (required during first login)",
-            "example": "John"
+            "type": "string"
           },
           "lastname": {
+            "type": "string"
+          },
+          "accountName": {
             "type": "string",
-            "description": "Last name (required during first login)",
-            "example": "Doe"
+            "maxLength": 100
           },
           "locale": {
             "type": "string",
-            "description": "User locale preference",
-            "example": "EN",
-            "default": "EN"
+            "enum": [
+              "EN",
+              "FR"
+            ]
           }
         },
         "required": [
           "email",
           "password"
-        ]
+        ],
+        "additionalProperties": false
       },
       "SignInResponseDto": {
         "type": "object",
@@ -1231,19 +2053,6 @@
           "userId": {
             "type": "string",
             "description": "Authenticated user ID",
-            "example": "123e4567-e89b-12d3-a456-426614174000"
-          }
-        },
-        "required": [
-          "userId"
-        ]
-      },
-      "SignOutDto": {
-        "type": "object",
-        "properties": {
-          "userId": {
-            "type": "string",
-            "description": "ID of the user to sign out",
             "example": "123e4567-e89b-12d3-a456-426614174000"
           }
         },
@@ -1269,14 +2078,15 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "Email address of the user requesting password reset",
-            "example": "user@example.com",
-            "format": "email"
+            "minLength": 1,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           }
         },
         "required": [
           "email"
-        ]
+        ],
+        "additionalProperties": false
       },
       "RequestPasswordResetResponseDto": {
         "type": "object",
@@ -1301,29 +2111,25 @@
         "properties": {
           "resetPasswordToken": {
             "type": "string",
-            "description": "Token received by email for password reset",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            "minLength": 1
           },
           "password": {
             "type": "string",
-            "description": "New password (must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number)",
-            "example": "NewPassword123",
-            "minLength": 6,
+            "minLength": 8,
             "maxLength": 40,
-            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[a-zA-Z\\d]{8,}$"
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$"
           },
           "confirmPassword": {
             "type": "string",
-            "description": "Confirm the new password (must match password field)",
-            "example": "NewPassword123",
-            "minLength": 6
+            "minLength": 1
           }
         },
         "required": [
           "resetPasswordToken",
           "password",
           "confirmPassword"
-        ]
+        ],
+        "additionalProperties": false
       },
       "ResetPasswordResponseDto": {
         "type": "object",
@@ -1342,21 +2148,111 @@
         "type": "object",
         "properties": {
           "firstname": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "First name",
-            "example": "John",
-            "nullable": true
+            "example": "John"
           },
           "lastname": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Last name",
-            "example": "Doe",
-            "nullable": true
+            "example": "Doe"
           }
         },
         "required": [
           "firstname",
           "lastname"
+        ]
+      },
+      "RoleAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Assignment unique identifier"
+          },
+          "roleId": {
+            "type": "number",
+            "description": "Role identifier"
+          },
+          "roleName": {
+            "type": "string",
+            "description": "Role name"
+          },
+          "scope": {
+            "enum": [
+              "PLATFORM",
+              "ACCOUNT",
+              "ENTITY"
+            ],
+            "type": "string",
+            "description": "Role scope"
+          },
+          "accountId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Account ID this assignment targets (only when scope = ACCOUNT)"
+          },
+          "entityId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Entity ID this assignment targets (only when scope = ENTITY)"
+          },
+          "modules": {
+            "description": "Modules accessible through this assignment",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subModules": {
+            "description": "Sub-modules (visible sections) granted by this assignment",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "description": "Permissions granted by this assignment",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "roleId",
+          "roleName",
+          "scope",
+          "accountId",
+          "entityId",
+          "modules",
+          "subModules",
+          "permissions"
+        ]
+      },
+      "CurrentScopeDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "PLATFORM",
+              "ACCOUNT",
+              "ENTITY"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Target id (account/entity); null for PLATFORM"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
         ]
       },
       "AccountDto": {
@@ -1373,21 +2269,31 @@
             "example": "Main account"
           },
           "description": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Account description",
-            "example": "This is the main account for managing finances",
-            "nullable": true
+            "example": "This is the main account for managing finances"
           },
           "isActive": {
             "type": "boolean",
             "description": "Account active status",
             "example": true
+          },
+          "deactivatedByScope": {
+            "nullable": true,
+            "enum": [
+              "PLATFORM",
+              "ACCOUNT_OWNER"
+            ],
+            "type": "string",
+            "description": "When inactive, indicates whether platform-admin or the account-owner disabled the account"
           }
         },
         "required": [
           "id",
           "name",
-          "isActive"
+          "isActive",
+          "deactivatedByScope"
         ]
       },
       "OrganizationDto": {
@@ -1407,6 +2313,31 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "EntityAccountRefDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Parent account unique identifier",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "name": {
+            "type": "string",
+            "description": "Parent account name",
+            "example": "Main account"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Parent account active status",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "isActive"
         ]
       },
       "EntityDto": {
@@ -1433,11 +2364,22 @@
             "example": "123e4567-e89b-12d3-a456-426614174000"
           },
           "organization": {
-            "description": "Organization information",
             "nullable": true,
+            "description": "Organization information",
+            "type": "object",
             "allOf": [
               {
                 "$ref": "#/components/schemas/OrganizationDto"
+              }
+            ]
+          },
+          "account": {
+            "nullable": true,
+            "description": "Parent account summary (id, name, active state) — lets the UI surface the account a user is indirectly linked to through this entity",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EntityAccountRefDto"
               }
             ]
           }
@@ -1448,6 +2390,30 @@
           "isActive",
           "accountId",
           "organization"
+        ]
+      },
+      "UserPreferencesSummaryDto": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "enum": [
+              "EN",
+              "FR"
+            ],
+            "type": "string",
+            "description": "User preferred locale (matches the Prisma Locale enum)",
+            "example": "EN"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Avatar URL pointing to the storage bucket; null when the user has no custom avatar",
+            "example": "https://cdn.example.com/avatars/123.png"
+          }
+        },
+        "required": [
+          "locale",
+          "avatarUrl"
         ]
       },
       "MeResponseDto": {
@@ -1471,8 +2437,23 @@
               }
             ]
           },
+          "roleAssignments": {
+            "description": "Scoped role assignments",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleAssignmentDto"
+            }
+          },
+          "currentScope": {
+            "description": "Server-elected default scope (clients may switch)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CurrentScopeDto"
+              }
+            ]
+          },
           "roles": {
-            "description": "User roles",
+            "description": "Legacy flat union of role names",
             "example": [
               "USER",
               "ADMIN",
@@ -1480,22 +2461,34 @@
             ],
             "type": "array",
             "items": {
-              "type": "array"
+              "type": "string"
             }
           },
           "modules": {
-            "description": "Accessible modules for the user",
+            "description": "Legacy flat union of module names",
             "example": [
               "USER_ACCOUNT_PASSWORD_RECOVERY",
               "USER_ACCOUNT_CREATION"
             ],
             "type": "array",
             "items": {
-              "type": "array"
+              "type": "string"
+            }
+          },
+          "subModules": {
+            "description": "Legacy flat union of sub-module names",
+            "example": [
+              "OVERVIEW",
+              "USERS",
+              "ROLES"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "permissions": {
-            "description": "User permissions",
+            "description": "Legacy flat union of permission names",
             "example": [
               "USER_ACCOUNT_CREATE_OWN",
               "PASSWORD_RECOVERY_LINK_REQUEST_OWN",
@@ -1503,7 +2496,7 @@
             ],
             "type": "array",
             "items": {
-              "type": "array"
+              "type": "string"
             }
           },
           "accounts": {
@@ -1520,6 +2513,14 @@
               "$ref": "#/components/schemas/EntityDto"
             }
           },
+          "preferences": {
+            "description": "User preferences (locale, avatar URL)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserPreferencesSummaryDto"
+              }
+            ]
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string",
@@ -1531,11 +2532,15 @@
           "userId",
           "email",
           "people",
+          "roleAssignments",
+          "currentScope",
           "roles",
           "modules",
+          "subModules",
           "permissions",
           "accounts",
           "entities",
+          "preferences",
           "createdAt"
         ]
       },
@@ -1549,7 +2554,7 @@
             ],
             "type": "array",
             "items": {
-              "type": "array"
+              "type": "string"
             }
           },
           "modules": {
@@ -1560,7 +2565,7 @@
             ],
             "type": "array",
             "items": {
-              "type": "array"
+              "type": "string"
             }
           },
           "permissions": {
@@ -1571,14 +2576,271 @@
             ],
             "type": "array",
             "items": {
-              "type": "array"
+              "type": "string"
             }
+          },
+          "awaitsPlatformAdmin": {
+            "type": "boolean",
+            "description": "True while no platform-admin exists yet. Lets the front adapt the first-login UI (e.g. skip the account-name field). The actual role promotion stays server-side.",
+            "example": false
           }
         },
         "required": [
           "roles",
           "modules",
-          "permissions"
+          "permissions",
+          "awaitsPlatformAdmin"
+        ]
+      },
+      "EntityWithOrganizationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Entity ID",
+            "example": "cmagp5dy70001t84nzb9t39j8"
+          },
+          "name": {
+            "type": "string",
+            "description": "Entity name",
+            "example": "Main Office"
+          },
+          "organization": {
+            "nullable": true,
+            "description": "Associated organization",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrganizationDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "AccountUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User ID",
+            "example": "cmagp5dy70001t84nzb9t39j6"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email",
+            "example": "john.doe@example.com"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "User active status",
+            "example": true
+          },
+          "people": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "firstname": {
+                "type": "string",
+                "nullable": true
+              },
+              "lastname": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "firstname",
+              "lastname"
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
+          "entities": {
+            "description": "Entities the user is linked to",
+            "example": [
+              {
+                "id": "cmagp5dy70001t84nzb9t39j8",
+                "name": "Main Office",
+                "organization": {
+                  "id": "org123",
+                  "name": "Acme Corp"
+                }
+              }
+            ],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityWithOrganizationDto"
+            }
+          },
+          "isDirectlyLinked": {
+            "type": "boolean",
+            "description": "Whether the user is directly linked to the account",
+            "example": true
+          },
+          "pendingKind": {
+            "nullable": true,
+            "enum": [
+              "invited",
+              "awaiting-confirmation"
+            ],
+            "type": "string",
+            "description": "Pending state, derived from data: \"invited\" = inactive with a pending received invitation (awaiting signup); \"awaiting-confirmation\" = inactive self-signup with no invitation (awaiting email confirmation); null = active.",
+            "example": "invited"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation date",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "lastLoginAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Last login date — null when the user has never logged in (e.g. just-invited).",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Last update date",
+            "example": "2024-01-01T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "isActive",
+          "roles",
+          "entities",
+          "isDirectlyLinked",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AccountRoleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "Role ID",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "Role name",
+            "example": "Admin"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Role description",
+            "example": "Administrator with full access"
+          },
+          "scope": {
+            "enum": [
+              "PLATFORM",
+              "ACCOUNT",
+              "ENTITY"
+            ],
+            "type": "string",
+            "description": "Scope at which this role can be assigned",
+            "example": "ACCOUNT"
+          },
+          "isSystem": {
+            "type": "boolean",
+            "description": "Whether the role is a system template (cannot be edited or deleted)",
+            "example": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Role active status",
+            "example": true
+          },
+          "isGlobal": {
+            "type": "boolean",
+            "description": "Whether the role is a global template (accountId NULL)",
+            "example": false
+          },
+          "modules": {
+            "description": "Names of the modules this role grants access to",
+            "example": [
+              "ACCOUNT_ADMINISTRATION"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subModules": {
+            "description": "Names of the sub-modules (read-visibility sections) this role grants",
+            "example": [
+              "USERS",
+              "ROLES"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "description": "Names of the permissions granted by this role",
+            "example": [
+              "ACCOUNT_USER_MANAGEMENT"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation date",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Last update date",
+            "example": "2024-01-01T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "isSystem",
+          "isActive",
+          "isGlobal",
+          "modules",
+          "subModules",
+          "permissions",
+          "createdAt",
+          "updatedAt"
         ]
       },
       "CollectionResponseDto": {
@@ -1589,10 +2851,10 @@
             "description": "Total number of items in the collection"
           },
           "values": {
-            "description": "Collection items",
             "type": "array",
+            "description": "Collection items",
             "items": {
-              "type": "array"
+              "type": "object"
             }
           }
         },
@@ -1615,7 +2877,8 @@
             "example": "Acme Corp"
           },
           "description": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Account description",
             "example": "Main account for Acme Corporation"
           },
@@ -1635,6 +2898,16 @@
             "type": "string",
             "description": "Last update date",
             "example": "2024-01-01T00:00:00.000Z"
+          },
+          "pendingInvitations": {
+            "type": "number",
+            "description": "Count of pending invitations awaiting signup (SENT/EXPIRED invitations targeting this account or its entities).",
+            "example": 2
+          },
+          "pendingSignups": {
+            "type": "number",
+            "description": "Count of pending self-signups awaiting email confirmation (inactive users linked to this account with no pending received invitation).",
+            "example": 1
           },
           "users": {
             "description": "Account users",
@@ -1667,6 +2940,8 @@
           "isActive",
           "createdAt",
           "updatedAt",
+          "pendingInvitations",
+          "pendingSignups",
           "users",
           "entities",
           "roles"
@@ -1677,12 +2952,22 @@
         "properties": {
           "pagination": {
             "type": "object",
-            "description": "Pagination information",
-            "example": {
-              "current": 1,
-              "limit": 10,
-              "total": 5
-            }
+            "properties": {
+              "current": {
+                "type": "number"
+              },
+              "limit": {
+                "type": "number"
+              },
+              "total": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "current",
+              "limit",
+              "total"
+            ]
           },
           "count": {
             "type": "number",
@@ -1701,7 +2986,7 @@
           "items": {
             "description": "Users data",
             "items": {
-              "type": "array"
+              "type": "object"
             },
             "type": "array"
           },
@@ -1719,13 +3004,73 @@
           "meta"
         ]
       },
+      "AccountEntityListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Entity ID",
+            "example": "cmagp5dy70001t84nzb9t39j8"
+          },
+          "name": {
+            "type": "string",
+            "description": "Entity name",
+            "example": "Main Office"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Entity description"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the entity is active",
+            "example": true
+          },
+          "organization": {
+            "nullable": true,
+            "description": "Associated organization",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrganizationDto"
+              }
+            ]
+          },
+          "userCount": {
+            "type": "number",
+            "description": "Number of active users directly linked to this entity",
+            "example": 4
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation date",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Last update date",
+            "example": "2024-01-01T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "isActive",
+          "userCount",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "FetchAccountEntitiesResponseDto": {
         "type": "object",
         "properties": {
           "items": {
             "description": "List of entities",
             "items": {
-              "type": "array"
+              "type": "object"
             },
             "type": "array"
           },
@@ -1749,7 +3094,7 @@
           "items": {
             "description": "List of roles",
             "items": {
-              "type": "array"
+              "type": "object"
             },
             "type": "array"
           },
@@ -1813,47 +3158,13 @@
             ],
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,}$"
             }
           }
         },
         "required": [
           "userIds"
-        ]
-      },
-      "AccountUserDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "User ID",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          },
-          "email": {
-            "type": "string",
-            "description": "User email",
-            "example": "john.doe@example.com"
-          },
-          "isActive": {
-            "type": "boolean",
-            "description": "User active status",
-            "example": true
-          },
-          "people": {
-            "description": "User personal information",
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PeopleDto"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "email",
-          "isActive",
-          "people"
         ]
       },
       "UpdateAccountUsersResponseDto": {
@@ -1896,26 +3207,32 @@
             "example": "Acme Corporation"
           },
           "type": {
-            "type": "string",
-            "description": "Organization type",
-            "example": "COMPANY",
             "enum": [
               "COMPANY",
               "ASSOCIATION",
               "COMMUNITY"
-            ]
+            ],
+            "type": "string",
+            "description": "Organization type",
+            "example": "COMPANY"
           },
           "description": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Organization description",
-            "example": "A leading technology company",
-            "nullable": true
+            "example": "A leading technology company"
           },
           "website": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Organization website",
-            "example": "https://www.acme.com",
-            "nullable": true
+            "example": "https://www.acme.com"
+          },
+          "logoUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Organization logo URL",
+            "example": "https://s3.example.com/org/logo.png"
           },
           "createdAt": {
             "format": "date-time",
@@ -1943,13 +3260,11 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Organization name",
-            "example": "Acme Corporation"
+            "minLength": 1,
+            "maxLength": 100
           },
           "type": {
             "type": "string",
-            "description": "Organization type",
-            "example": "COMPANY",
             "enum": [
               "COMPANY",
               "ASSOCIATION",
@@ -1958,38 +3273,37 @@
           },
           "accountId": {
             "type": "string",
-            "description": "Account ID that this organization belongs to",
-            "example": "123e4567-e89b-12d3-a456-426614174000"
+            "minLength": 1
           },
           "description": {
             "type": "string",
-            "description": "Organization description",
-            "example": "A leading technology company"
+            "maxLength": 255
           },
           "website": {
             "type": "string",
-            "description": "Organization website",
-            "example": "https://www.acme.com"
+            "maxLength": 100
+          },
+          "logoUrl": {
+            "type": "string",
+            "maxLength": 500
           }
         },
         "required": [
           "name",
           "type",
           "accountId"
-        ]
+        ],
+        "additionalProperties": false
       },
       "UpdateOrganizationDto": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "description": "Organization name",
-            "example": "Acme Corporation"
+            "maxLength": 100
           },
           "type": {
             "type": "string",
-            "description": "Organization type",
-            "example": "COMPANY",
             "enum": [
               "COMPANY",
               "ASSOCIATION",
@@ -1998,49 +3312,68 @@
           },
           "description": {
             "type": "string",
-            "description": "Organization description",
-            "example": "A leading technology company"
+            "maxLength": 255
           },
           "website": {
             "type": "string",
-            "description": "Organization website",
-            "example": "https://www.acme.com"
+            "maxLength": 100
+          },
+          "logoUrl": {
+            "type": "string",
+            "maxLength": 500
           }
         },
-        "required": [
-          "name",
-          "type"
-        ]
+        "additionalProperties": false
       },
       "CreateEntityDto": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "The name of the entity",
-            "example": "Finance Department"
-          },
-          "description": {
-            "type": "string",
-            "description": "The description of the entity",
-            "example": "Handles all financial operations"
-          },
-          "organizationId": {
-            "type": "string",
-            "description": "The ID of the organization this entity belongs to",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          },
           "accountId": {
             "type": "string",
-            "description": "The ID of the account this entity belongs to",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+            "minLength": 1
+          },
+          "parentEntityId": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "organization": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 100
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "COMPANY",
+                  "ASSOCIATION",
+                  "COMMUNITY"
+                ]
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "website": {
+                "type": "string",
+                "maxLength": 100
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
-          "name",
-          "organizationId",
           "accountId"
-        ]
+        ],
+        "additionalProperties": false
       },
       "EntityUserDto": {
         "type": "object",
@@ -2166,7 +3499,8 @@
             ],
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,}$"
             }
           }
         },
@@ -2205,53 +3539,53 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "Email address of the person to invite",
-            "example": "john.doe@example.com"
+            "minLength": 1,
+            "maxLength": 100,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "firstname": {
             "type": "string",
-            "description": "Optional first name of the invited person",
-            "example": "John"
+            "maxLength": 30
           },
           "lastname": {
             "type": "string",
-            "description": "Optional last name of the invited person",
-            "example": "Doe"
+            "maxLength": 30
           },
           "roleIds": {
-            "description": "Optional list of role IDs to assign to the invited user",
             "type": "array",
             "items": {
               "type": "number"
             }
           },
           "accountIds": {
-            "description": "Optional list of account IDs to directly link the invited user to",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
           "entityIds": {
-            "description": "Optional list of entity IDs to link the invited user to",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
+          "accountName": {
+            "type": "string",
+            "maxLength": 100
+          },
           "locale": {
             "type": "string",
-            "description": "Preferred locale for the invited user",
             "enum": [
               "EN",
               "FR"
-            ],
-            "default": "FR"
+            ]
           }
         },
         "required": [
           "email"
-        ]
+        ],
+        "additionalProperties": false
       },
       "InvitationResponseDto": {
         "type": "object",
@@ -2426,38 +3760,77 @@
         "properties": {
           "invitationToken": {
             "type": "string",
-            "description": "Invitation token received by email",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            "minLength": 1
           },
           "password": {
             "type": "string",
-            "description": "Password for the new account",
-            "example": "SecureP@ssword123"
+            "minLength": 8,
+            "maxLength": 40,
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$"
           },
           "firstname": {
             "type": "string",
-            "description": "First name of the user (can override the suggested value)",
-            "example": "John"
+            "maxLength": 30
           },
           "lastname": {
             "type": "string",
-            "description": "Last name of the user (can override the suggested value)",
-            "example": "Doe"
+            "maxLength": 30
           },
           "locale": {
             "type": "string",
-            "description": "Preferred locale for the user (can override the suggested value)",
             "enum": [
               "EN",
               "FR"
-            ],
-            "default": "FR"
+            ]
           }
         },
         "required": [
           "invitationToken",
           "password"
+        ],
+        "additionalProperties": false
+      },
+      "UserPreferencesDto": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "enum": [
+              "EN",
+              "FR"
+            ],
+            "type": "string",
+            "description": "User preferred locale (matches the Prisma Locale enum)",
+            "example": "EN"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Avatar URL pointing to the storage bucket; null when the user has no custom avatar",
+            "example": "https://cdn.example.com/avatars/123.png"
+          }
+        },
+        "required": [
+          "locale",
+          "avatarUrl"
         ]
+      },
+      "UpdateUserPreferencesDto": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string",
+            "enum": [
+              "EN",
+              "FR"
+            ]
+          },
+          "avatarUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

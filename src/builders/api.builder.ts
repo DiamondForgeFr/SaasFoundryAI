@@ -1,0 +1,246 @@
+import { copy } from 'fs-extra'
+import { chmod, readFile, rm, writeFile } from 'fs/promises'
+import { join, resolve } from 'path'
+
+import { installEmailModule } from '../installers/email.installer'
+import { installStorageModule } from '../installers/storage.installer'
+import { installWorkflowArtifacts } from '../installers/harness.installer'
+import { DEFAULT_PORTS } from '../ports'
+import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
+import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
+import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
+
+export async function createApiApp(params: CreateApiAppParams) {
+  const targetDir = params.targetDir ?? '.'
+  const result = await renderApiApp({ ...params, targetDir })
+  if (params.externalEffects !== false) await provisionApiApp({ ...params, targetDir })
+  return result
+}
+
+/** Render the API candidate without running package, Prisma or Git commands. */
+export async function renderApiApp({
+  targetDir,
+  isMonorepo,
+  projectName,
+  projectDescription,
+  backendRepoUrl,
+  dbCredentials,
+  mainBranch,
+  emailService,
+  mailersendApiKey,
+  mailersendSenderEmail,
+  mailersendSenderName,
+  s3Setup,
+  s3Credentials,
+  workflow,
+  ports
+}: CreateApiAppParams & { targetDir: string }) {
+  validateProjectName(projectName)
+
+  // A project scaffolded before ports were chosen runs on these, so they are also
+  // what an absent block has to mean everywhere it is read.
+  const { api: apiPort, web: webPort } = ports ?? DEFAULT_PORTS
+
+  // Create the API app directory
+  const apiPath = join(targetDir, isMonorepo ? 'apps/api' : `apps/${projectName}-api`)
+
+  await copy(resolve(blueprintsPath, 'api'), apiPath)
+  if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/api'), apiPath, { overwrite: true })
+  else {
+    await copy(resolve(overlaysPath, 'monorepo/api'), apiPath, { overwrite: true })
+    // Remove per-app CI workflows (monorepo uses root-level workflows)
+    await rm(`${apiPath}/.github`, { recursive: true, force: true })
+    // Point ESLint custom rule to monorepo root shared file
+    const eslintConfigPath = `${apiPath}/eslint.config.mjs`
+    let eslintConfig = await readFile(eslintConfigPath, 'utf8')
+    eslintConfig = eslintConfig.replace(`'./eslint-rules/no-version-prefix.mjs'`, `'../../eslint-rules/no-version-prefix.mjs'`)
+    await writeFile(eslintConfigPath, eslintConfig)
+    // Substitute {{PROJECT_NAME}} in shared-* wiring (workspace deps + wiring proof imports)
+    await substitutePlaceholdersInFiles([`${apiPath}/package.json`, `${apiPath}/src/shared-wiring.ts`], { PROJECT_NAME: projectName })
+  }
+
+  // Update package.json
+  const packageJsonPath = `${apiPath}/package.json`
+  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
+  packageJson.name = `${projectName}-api`
+  packageJson.description = projectDescription
+  packageJson.repository.url = backendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
+  packageJson.keywords = [projectName, 'saasfoundry', 'backend', 'nest', 'prisma']
+  await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
+  // Update .env with core settings (JWT secrets, database credentials)
+  const envPath = `${apiPath}/.env`
+  let envContent = await readFile(envPath, 'utf8')
+
+  // Generate JWT secrets
+  const jwtSecrets = {
+    auth: generateJwtSecret(),
+    refresh: generateJwtSecret(),
+    invitation: generateJwtSecret(),
+    confirmAccount: generateJwtSecret(),
+    resetPassword: generateJwtSecret()
+  }
+
+  // The ports this project was given, not the template's constants.
+  envContent = envContent.replace(/^PORT=.*$/m, `PORT="${apiPort}"`).replace(/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`)
+
+  // Update JWT secrets in .env
+  envContent = envContent
+    .replace(/JWT_SECRET_AUTH=.*$/m, `JWT_SECRET_AUTH="${jwtSecrets.auth}"`)
+    .replace(/JWT_SECRET_REFRESH=.*$/m, `JWT_SECRET_REFRESH="${jwtSecrets.refresh}"`)
+    .replace(/JWT_SECRET_INVITATION=.*$/m, `JWT_SECRET_INVITATION="${jwtSecrets.invitation}"`)
+    .replace(/JWT_SECRET_CONFIRM_ACCOUNT=.*$/m, `JWT_SECRET_CONFIRM_ACCOUNT="${jwtSecrets.confirmAccount}"`)
+    .replace(/JWT_SECRET_RESET_PASSWORD=.*$/m, `JWT_SECRET_RESET_PASSWORD="${jwtSecrets.resetPassword}"`)
+
+  // Update email templates with project name
+  const enLocalePath = `${apiPath}/src/modules/email/locales/en.ts`
+  const frLocalePath = `${apiPath}/src/modules/email/locales/fr.ts`
+
+  if (await fileExists(enLocalePath)) {
+    let enLocaleContent = await readFile(enLocalePath, 'utf8')
+    enLocaleContent = enLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase())
+    await writeFile(enLocalePath, enLocaleContent)
+  }
+
+  if (await fileExists(frLocalePath)) {
+    let frLocaleContent = await readFile(frLocalePath, 'utf8')
+    frLocaleContent = frLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase())
+    await writeFile(frLocalePath, frLocaleContent)
+  }
+
+  // Update database credentials if provided
+  if (dbCredentials) {
+    const { host, port, user, password, database, dbType } = dbCredentials
+    envContent = envContent
+      .replace(/DATABASE_URL=.*$/m, `DATABASE_URL="${dbType}://${user}:${password}@${host}:${port}/${database}"`)
+      .replace(/DIRECT_URL=.*$/m, `DIRECT_URL="${dbType}://${user}:${password}@${host}:${port}/${database}"`)
+  }
+
+  // Write core .env changes before module installers run
+  await writeFile(envPath, envContent)
+  await chmod(envPath, 0o600)
+
+  // Install MailerSend email module (if selected)
+  if (emailService === 'mailersend') {
+    await installEmailModule({
+      apiPath,
+      isMonorepo,
+      projectName,
+      mailersendApiKey: mailersendApiKey || '',
+      mailersendSenderEmail: mailersendSenderEmail || '',
+      mailersendSenderName: mailersendSenderName || ''
+    })
+  }
+
+  // Install S3 storage module (if selected)
+  if (s3Setup !== 'manual') {
+    const webPath = join(targetDir, isMonorepo ? 'apps/web' : `apps/${projectName}-web`)
+    await installStorageModule({
+      apiPath,
+      webPath,
+      isMonorepo,
+      projectName,
+      s3Setup,
+      s3Credentials,
+      skipNpmInstall: true,
+      // The endpoint written into .env must name the port MinIO was actually published on,
+      // or the API dials a port nothing listens on — the #583 defect, on storage (#623).
+      s3Port: ports?.s3
+    })
+  }
+
+  // Install workflow artefacts (skill + tool skill) when a workflow is configured
+  await installWorkflowArtifacts({ targetPath: apiPath, workflow })
+
+  // Install optional skills (if selected)
+  // TODO: Add optional skills selection to CreateApiAppParams and call installOptionalSkills
+
+  // Update Docker network name in docker-compose.yml
+  const dockerComposePath = `${apiPath}/docker-compose.yml`
+  if (await fileExists(dockerComposePath)) {
+    let dockerComposeContent = await readFile(dockerComposePath, 'utf8')
+    dockerComposeContent = applyProjectIdentity(dockerComposeContent, projectName)
+      // `env_file: ./.env` puts PORT inside the container, so the published side and the
+      // container side have to move together — a mapping of `3501:3500` would publish a
+      // port nothing listens on, and the healthcheck would call a dead one.
+      .replace(/\$\{BACKEND_PORT:-3500\}:3500/, `\${BACKEND_PORT:-${apiPort}}:${apiPort}`)
+      .replace(/http:\/\/localhost:3500\/api\/health/, `http://localhost:${apiPort}/api/health`)
+    await writeFile(dockerComposePath, dockerComposeContent)
+  }
+
+  // Update Docker Compose project name and container names in docker-compose.db-test.yml
+  const dbTestComposePath = `${apiPath}/docker-compose.db-test.yml`
+  if (await fileExists(dbTestComposePath)) {
+    let dbTestContent = await readFile(dbTestComposePath, 'utf8')
+    dbTestContent = applyProjectIdentity(dbTestContent, projectName)
+    await writeFile(dbTestComposePath, dbTestContent)
+  }
+
+  // Update network name in GitHub Actions deployment.yml
+  const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
+  if (await fileExists(deploymentYmlPath)) {
+    let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
+    deploymentYmlContent = applyProjectIdentity(deploymentYmlContent, projectName)
+      // One port identity per project: the deploy writes the same PORT the project uses
+      // everywhere else, and the sed that strips the published port matches it.
+      .replace(/PORT=\\"3500\\"/, `PORT=\\"${apiPort}\\"`)
+      .replace(/'\/ports:\/,\/3500\/d'/, `'/ports:/,/${apiPort}/d'`)
+    await writeFile(deploymentYmlPath, deploymentYmlContent)
+  }
+
+  // Every other api-side file that names a port
+  await replaceInFile(`${apiPath}/.env.test`, [
+    [/^PORT=.*$/m, `PORT="${apiPort}"`],
+    [/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`]
+  ])
+  await chmod(`${apiPath}/.env.test`, 0o600)
+  await replaceInFile(`${apiPath}/Dockerfile`, [
+    [/^ENV PORT=.*$/m, `ENV PORT=${apiPort}`],
+    [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
+  ])
+  // Same as the web side: the lockfile named the scaffold, disagreeing with the
+  // package.json beside it until the first npm install rewrote it.
+  await replaceInFile(`${apiPath}/package-lock.json`, [[/"saasfoundry-api"/g, `"${projectName}-api"`]])
+  await replaceInFile(`${apiPath}/src/configs/env/services/env.service.ts`, [[/PORT: z\.string\(\)\.default\('3500'\)/, `PORT: z.string().default('${apiPort}')`]])
+  // The README hands the user commands to run — `docker network create …`, `docker build -t …`.
+  // Naming the scaffold's resources there is telling them to build somebody else's image.
+  await replaceInFile(`${apiPath}/README.md`, [
+    [/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`],
+    [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
+  ])
+
+  if (!isMonorepo) await installImpactValidation(apiPath, 'api')
+
+  // Branch placeholders in CI workflows: PRs target the working branch + main, deploys push from main
+  const ciPrBranchList = [...new Set([workflow?.workingBranch || mainBranch, mainBranch])]
+  const ciPrBranches = ciPrBranchList.join(', ')
+  await substitutePlaceholdersInFiles([`${apiPath}/.github/workflows/test.yml`, deploymentYmlPath], {
+    MAIN_BRANCH: mainBranch,
+    CI_PR_BRANCHES: ciPrBranches,
+    ...impactValidationPlaceholders(mainBranch, workflow?.workingBranch)
+  })
+
+  return true
+}
+
+/** Apply the external effects required to make a rendered multirepo API ready to use. */
+export async function provisionApiApp({ targetDir = '.', isMonorepo, projectName, backendRepoUrl, mainBranch, workflow }: CreateApiAppParams): Promise<void> {
+  if (isMonorepo) return
+  const apiPath = join(targetDir, `apps/${projectName}-api`)
+  const nvm = getNvmPrefix(apiPath)
+
+  runRequired('npm install (api)', `${nvm}npm install`, { cwd: apiPath })
+  runRequired('prisma generate (api)', `${nvm}npx prisma generate`, { cwd: apiPath })
+
+  // Best-effort: the folder may already be a repository, or git may be absent. None of
+  // that makes the scaffold unusable, so it reports and carries on.
+  const workingBranch = workflow?.workingBranch
+  assertGitBranchName(mainBranch)
+  if (workingBranch) assertGitBranchName(workingBranch)
+  runBestEffortArgv('git init (api)', 'git', ['init'], { cwd: apiPath, onSkipped: warn })
+  runBestEffortArgv('git checkout (api)', 'git', ['checkout', '-b', mainBranch], { cwd: apiPath, onSkipped: warn })
+  if (backendRepoUrl) runBestEffortArgv('git remote add (api)', 'git', ['remote', 'add', 'origin', backendRepoUrl], { cwd: apiPath, onSkipped: warn })
+  runBestEffortArgv('git add (api)', 'git', ['add', '.'], { cwd: apiPath, onSkipped: warn })
+  runBestEffortArgv('git commit (api)', 'git', ['commit', '-m', 'Initial commit'], { cwd: apiPath, onSkipped: warn })
+  if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch (api)', 'git', ['checkout', '-b', workingBranch], { cwd: apiPath, onSkipped: warn })
+}

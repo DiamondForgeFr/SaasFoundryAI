@@ -1,0 +1,107 @@
+{
+  "name": "{{PROJECT_NAME}}-web",
+  "version": "1.0.0",
+  "description": "{{PROJECT_NAME}} is just an amazing SaaSFoundryAI project",
+  "type": "module",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agachet/saasfoundry.git"
+  },
+  "homepage": "https://github.com/agachet/saasfoundry/#readme",
+  "bugs": {
+    "url": "https://github.com/agachet/saasfoundry/issues"
+  },
+  "engines": {
+    "node": ">=22.13.0",
+    "npm": ">=11.0.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=22.13.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.0.0",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "dev": "wait-on -t 60000 tcp:3500 && vite",
+    "build": "tsc -b && vite build",
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "type-check": "tsc -b",
+    "type-check:watch": "tsc -b --watch",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "E2E_DEBUG=true playwright test --ui",
+    "test:e2e:debug": "E2E_DEBUG=true playwright test --project=chromium --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report",
+    "test:full": "npm run format && npm run lint && npm run type-check && npm run test:e2e",
+    "postinstall": "if [ \"$SF_SKIP_PLAYWRIGHT_INSTALL\" != \"1\" ]; then if [ \"$CI\" = \"true\" ]; then npx playwright install --with-deps || echo '\u26a0 Playwright browsers not installed \u2014 run: npx playwright install'; else npx playwright install || echo '\u26a0 Playwright browsers not installed \u2014 run: npx playwright install'; fi; fi"
+  },
+  "keywords": [
+    "{{PROJECT_NAME}}",
+    "saasfoundry",
+    "frontend",
+    "react",
+    "vite"
+  ],
+  "author": "Your Name <anthony.gachet@diamondforge.fr> (https://agachet.diamondforge.fr)",
+  "dependencies": {
+    "@hookform/resolvers": "5.2.2",
+    "@{{PROJECT_NAME}}/api-client": "*",
+    "@{{PROJECT_NAME}}/shared-config": "*",
+    "@{{PROJECT_NAME}}/shared-types": "*",
+    "@{{PROJECT_NAME}}/shared-validation": "*",
+    "@{{PROJECT_NAME}}/ui-primitives": "*",
+    "@tanstack/react-query": "5.100.8",
+    "i18next": "26.0.8",
+    "i18next-browser-languagedetector": "8.2.1",
+    "i18next-resources-to-backend": "1.2.1",
+    "js-cookie": "3.0.7",
+    "js-yaml": "5.4.1",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "react-hook-form": "7.75.0",
+    "react-i18next": "17.0.6",
+    "react-router-dom": "7.18.2",
+    "tailwindcss": "4.2.4",
+    "yaml": "2.8.4",
+    "zod": "4.4.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.59.1",
+    "@tailwindcss/vite": "4.2.4",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.2",
+    "@types/js-cookie": "3.0.6",
+    "@types/js-yaml": "4.0.9",
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.1",
+    "eslint": "10.3.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-jsonc": "3.4.2",
+    "eslint-plugin-prettier": "5.5.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.2",
+    "globals": "17.6.0",
+    "jsdom": "29.1.1",
+    "prettier-plugin-tailwindcss": "0.8.0",
+    "terser": "5.46.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.59.1",
+    "vite": "8.2.2",
+    "vitest": "4.1.8",
+    "wait-on": "9.0.5"
+  }
+}

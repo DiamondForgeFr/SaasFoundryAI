@@ -1,0 +1,470 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/saasfoundry-manifest.schema.json",
+  "title": "SaaSFoundryAI project manifest",
+  "description": "Shape of .saasfoundry.json at the root of every SaaSFoundryAI-managed project. Mirrors the SaaSFoundryManifest TypeScript type in src/types.ts and the canonical example in .claude/docs/manifest-schema.md.",
+  "type": "object",
+  "required": ["version", "structure", "projectName"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional pointer to this schema for IDE live validation."
+    },
+    "manifestVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Schema-shape version, monotonic integer, bumped by registered manifest migrations. Treat absence as 0 (manifest predates the migration framework)."
+    },
+    "version": {
+      "type": "string",
+      "description": "CLI version that generated the manifest (semver, e.g. 1.0.0-beta)."
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of manifest generation."
+    },
+    "structure": {
+      "type": "string",
+      "enum": ["monorepo", "multirepo", "cli"],
+      "description": "Repo layout emitted by sf new."
+    },
+    "projectName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adoption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sourcePackage", "sourceVersion", "sourceIntegrity", "layout", "planFingerprint"],
+      "properties": {
+        "kind": { "type": "string", "const": "legacy" },
+        "sourcePackage": { "type": "string", "minLength": 1 },
+        "sourceVersion": { "type": "string", "minLength": 1 },
+        "sourceIntegrity": { "type": "string", "minLength": 1 },
+        "layout": { "type": "string", "enum": ["monorepo", "multirepo"] },
+        "planFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "refreshPending": { "type": "boolean", "description": "True until the first current-template comparison completes without unresolved conflicts." }
+      },
+      "description": "Release-specific evidence recorded when a project created before manifest support is adopted."
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rootProjectName", "app"],
+      "properties": {
+        "kind": { "type": "string", "const": "multirepo-child" },
+        "rootProjectName": { "type": "string", "minLength": 1 },
+        "app": { "type": "string", "enum": ["api", "web"] }
+      }
+    },
+    "mainBranch": {
+      "type": "string",
+      "description": "Git main branch chosen at sf new (main/master). Absent on manifests written before this field existed \u2014 readers must fall back."
+    },
+    "ports": {
+      "type": "object",
+      "description": "Host ports the project runs on, chosen at sf new. Absent on manifests written before this field existed \u2014 readers fall back to 5435/3500/5173, which is what those projects run.",
+      "additionalProperties": false,
+      "required": ["db", "api", "web"],
+      "properties": {
+        "db": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port the development database is published on."
+        },
+        "api": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port the API listens on."
+        },
+        "web": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port the Vite dev server listens on."
+        },
+        "s3": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port MinIO's S3 API is published on. Present only when the project hosts its own storage (--s3-setup docker); absent under `credentials`, where the bucket is on someone else's host, and on manifests written before this field existed, whose projects run on 9000."
+        },
+        "s3Console": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port MinIO's web console is published on. Same presence rule as `s3`; absent means 9001."
+        }
+      }
+    },
+    "modules": {
+      "type": "object",
+      "description": "Every key optional: scaffolded projects carry the five stack keys, harness-only projects carry just `harness`. Scaffold-only tooling must gate on the presence of `email`, not on the modules block itself.",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "object",
+          "required": ["provider", "version"],
+          "additionalProperties": false,
+          "description": "Email module \u2014 versioned shape introduced in manifestVersion 2 (Epic #310). `provider` replaces the legacy flat `emailService` string; `version` is the per-module installed version, used by module-level migrations.",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "enum": ["none", "mailersend"]
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "s3Setup": {
+          "type": "string",
+          "enum": ["docker", "credentials", "manual"]
+        },
+        "dbSetup": {
+          "type": "string",
+          "enum": ["docker", "credentials", "manual"]
+        },
+        "includeAnalytics": {
+          "type": "boolean"
+        },
+        "advancedSkills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "harness": {
+          "type": "object",
+          "required": ["version"],
+          "additionalProperties": false,
+          "description": "AI harness deposits (skills, docs, workflow artefacts) \u2014 versioned so sf update can refresh them and module migrations can target them.",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "managed": {
+              "type": "boolean",
+              "description": "Whether the complete collaboration harness is managed. False means common/core deposits only; omission is a legacy unknown state."
+            },
+            "agents": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["claude-code", "codex", "kimi", "gemini-cli", "qwen-code", "generic"]
+              },
+              "description": "Additive shared agent support. Omission preserves legacy harness behavior."
+            }
+          }
+        },
+        "pwa": {
+          "type": "object",
+          "required": ["version"],
+          "additionalProperties": false,
+          "description": "PWA module \u2014 makes the generated web app installable as a desktop application. Versioned so module migrations can target it.",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "language": {
+      "type": "object",
+      "description": "Language of AI-produced artefacts, per surface. Every key is optional and defaults to English, so a manifest without this block behaves exactly as one that pins \"en\" everywhere. The surfaces are separate because they do not always agree \u2014 a French SRS can coexist with English code comments.",
+      "additionalProperties": false,
+      "properties": {
+        "srs": {
+          "type": "string",
+          "description": "SRS pages \u2014 features, versions, FRs. Absent means English."
+        },
+        "tickets": {
+          "type": "string",
+          "description": "Ticket titles, bodies and comments on the board. Absent means English."
+        },
+        "codeComments": {
+          "type": "string",
+          "description": "Comments in source files, and commit messages. Absent means English."
+        }
+      }
+    },
+    "skillsAccounts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "fileHashes": {
+      "type": "object",
+      "description": "Map of relative path \u2192 SHA hash used by sf update to detect user edits.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "unmanagedPaths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Pre-existing files that matched a technical template during adoption and remain user-owned."
+    },
+    "workflow": {
+      "$ref": "#/definitions/workflowConfig"
+    },
+    "aiRules": {
+      "$ref": "#/definitions/aiRules"
+    },
+    "tools": {
+      "$ref": "#/definitions/toolsConfig"
+    }
+  },
+  "definitions": {
+    "workflowConfig": {
+      "type": "object",
+      "required": ["tool"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["github-projects", "jira", "notion", "linear", "none"]
+        },
+        "template": {
+          "type": "string"
+        },
+        "projectUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "workingBranch": {
+          "type": "string"
+        },
+        "prTargetBranch": {
+          "type": "string"
+        },
+        "releaseBranch": {
+          "type": "string"
+        },
+        "requireCodeReview": {
+          "type": "boolean"
+        },
+        "branchNaming": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "feature": {
+              "type": "string"
+            },
+            "fix": {
+              "type": "string"
+            },
+            "release": {
+              "type": "string"
+            }
+          }
+        },
+        "commitFormat": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pattern": {
+              "type": "string"
+            },
+            "requireTicket": {
+              "type": "boolean"
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          }
+        },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/workflowStatus"
+          }
+        },
+        "issueTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/workflowIssueType"
+          }
+        },
+        "validated": {
+          "type": "boolean"
+        },
+        "lastValidated": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "workflowStatus": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string",
+          "enum": ["GRAY", "YELLOW", "BLUE", "PURPLE", "ORANGE", "PINK", "GREEN", "RED"]
+        }
+      }
+    },
+    "workflowIssueType": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string",
+          "enum": ["GRAY", "YELLOW", "BLUE", "PURPLE", "ORANGE", "PINK", "GREEN", "RED"]
+        }
+      }
+    },
+    "aiRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "alwaysCreateBranchFromWorking": {
+          "type": "boolean"
+        },
+        "alwaysCreateTicketBeforeCode": {
+          "type": "boolean"
+        },
+        "autoUpdateTicketStatus": {
+          "type": "boolean"
+        },
+        "requireHumanCheckOnPushedBranch": {
+          "type": "boolean"
+        }
+      }
+    },
+    "toolsConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "srs": {
+          "$ref": "#/definitions/srsToolConfig"
+        },
+        "tracker": {
+          "$ref": "#/definitions/toolSelection"
+        },
+        "docs": {
+          "$ref": "#/definitions/toolSelection"
+        },
+        "design": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/toolSelection"
+          }
+        }
+      }
+    },
+    "toolSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "account": {
+          "type": "string"
+        }
+      }
+    },
+    "srsToolConfig": {
+      "type": "object",
+      "required": ["enabled", "backend"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend": {
+          "type": "string",
+          "const": "notion"
+        },
+        "rootPage": {
+          "$ref": "#/definitions/srsPageRef"
+        },
+        "pendingIngestion": {
+          "$ref": "#/definitions/pendingIngestion"
+        },
+        "scan": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "srsPageRef": {
+      "type": "object",
+      "required": ["id", "url", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "pendingIngestion": {
+      "type": "object",
+      "required": ["sourceBackend", "sourceParent", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceBackend": {
+          "type": "string",
+          "const": "notion"
+        },
+        "sourceParent": {
+          "$ref": "#/definitions/srsPageRef"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

@@ -41,6 +41,7 @@ actions:
   tk_activate_: Activate
   tk_deactivate_: Deactivate
   tk_cancel_: Cancel
+  tk_confirm_: Confirm
   tk_send_: Send
   tk_resend_: Resend
   tk_loading_: 'In progress...'
@@ -49,6 +50,7 @@ fields:
   errors:
     tk_locale_: Invalid locale
     tk_required_: This field is required
+    tk_invalid-url_: Invalid URL — must include http:// or https://
     tk_emailError_: This email is not valid
     tk_minLength_: This field does not meet the minimum length requirements
     tk_maxLength_: This field exceeds the maximum length requirements

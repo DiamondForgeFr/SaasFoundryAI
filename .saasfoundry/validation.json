@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "profile": "saasfoundry",
+  "commands": {
+    "guards": [["npm", "run", "test:impact:guards"]],
+    "docs": [["npm", "run", "test:impact:docs"]],
+    "frontend": [["npm", "run", "test:impact:frontend"]],
+    "backend": [["npm", "run", "test:impact:backend"]],
+    "shared": [["npm", "run", "test:impact:shared"]],
+    "harnessScaffold": [["npm", "run", "test:impact:harness"]],
+    "lifecycle": [["npm", "run", "test:docker:normal"]],
+    "full": [["npm", "run", "test:full"]]
+  }
+}

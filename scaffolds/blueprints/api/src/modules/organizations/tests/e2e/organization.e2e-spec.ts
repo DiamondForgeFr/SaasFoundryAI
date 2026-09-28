@@ -3,7 +3,7 @@
  */
 import { INestApplication } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
-import { OrganizationType } from '@prisma/client'
+import { OrganizationType } from '@/generated/prisma/client'
 import cookieParser from 'cookie-parser'
 import * as dotenv from 'dotenv'
 import request from 'supertest'
@@ -65,7 +65,7 @@ describe('Organizations Module (e2e)', () => {
       password: 'TestPassword123',
       firstname: 'Organization',
       lastname: 'Manager',
-      roles: ['user', 'admin'],
+      roles: ['account-user', 'account-admin'],
       permissions: ['ORGANIZATION_CREATION', 'ORGANIZATION_UPDATE']
     })
 

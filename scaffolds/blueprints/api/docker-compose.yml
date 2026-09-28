@@ -1,3 +1,4 @@
+name: saasfoundry-api
 services:
   ###############
   # Backend API #

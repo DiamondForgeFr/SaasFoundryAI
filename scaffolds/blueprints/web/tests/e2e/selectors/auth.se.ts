@@ -53,8 +53,36 @@ const testApi = {
           firstname: 'Bill',
           lastname: 'Mate'
         },
-        roles: ['admin'],
+        roleAssignments: [
+          {
+            id: 'ra-admin-account',
+            roleId: 3,
+            roleName: 'account-admin',
+            scope: 'ACCOUNT',
+            accountId: 'acc-123e4567-e89b-12d3-a456-426614174000',
+            entityId: null,
+            modules: ['ACCOUNT_ADMINISTRATION', 'ORGANIZATION_ADMINISTRATION', 'USER_ACCOUNT_PASSWORD_RECOVERY'],
+            subModules: ['OVERVIEW', 'USERS', 'ENTITIES', 'ROLES', 'SETTINGS'],
+            permissions: [
+              'PASSWORD_RECOVERY_LINK_REQUEST_OWN',
+              'PASSWORD_RECOVERY_RESET_OWN',
+              'ACCOUNT_UPDATE',
+              'ACCOUNT_USER_MANAGEMENT',
+              'ACCOUNT_ENTITY_MANAGEMENT',
+              'ENTITY_CREATION',
+              'USER_ACCOUNTS_INVITATION',
+              'USER_ENTITIES_INVITATION',
+              'USER_ROLE_ALLOCATION',
+              'ENTITY_USER_MANAGEMENT',
+              'ORGANIZATION_CREATION',
+              'ORGANIZATION_UPDATE'
+            ]
+          }
+        ],
+        currentScope: { kind: 'ACCOUNT', id: 'acc-123e4567-e89b-12d3-a456-426614174000' },
+        roles: ['account-admin'],
         modules: ['ACCOUNT_ADMINISTRATION', 'ORGANIZATION_ADMINISTRATION', 'USER_ACCOUNT_PASSWORD_RECOVERY'],
+        subModules: ['OVERVIEW', 'USERS', 'ENTITIES', 'ROLES', 'SETTINGS'],
         permissions: [
           'PASSWORD_RECOVERY_LINK_REQUEST_OWN',
           'PASSWORD_RECOVERY_RESET_OWN',
@@ -74,7 +102,8 @@ const testApi = {
             id: 'acc-123e4567-e89b-12d3-a456-426614174000',
             name: 'Main account',
             description: 'Default account for testing',
-            isActive: true
+            isActive: true,
+            deactivatedByScope: null
           }
         ],
         entities: [
@@ -89,6 +118,10 @@ const testApi = {
             }
           }
         ],
+        preferences: {
+          locale: 'EN',
+          avatarUrl: null
+        },
         createdAt: new Date().toISOString()
       }
     }
@@ -104,9 +137,39 @@ const testApi = {
           firstname: 'Bill',
           lastname: 'Mate'
         },
-        roles: ['user'],
+        roleAssignments: [
+          {
+            id: 'ra-user-account',
+            roleId: 2,
+            roleName: 'account-user',
+            scope: 'ACCOUNT',
+            accountId: 'acc-123e4567-e89b-12d3-a456-426614174000',
+            entityId: null,
+            modules: ['USER_ACCOUNT_PASSWORD_RECOVERY'],
+            subModules: [],
+            permissions: ['PASSWORD_RECOVERY_LINK_REQUEST_OWN', 'PASSWORD_RECOVERY_RESET_OWN']
+          }
+        ],
+        currentScope: { kind: 'ACCOUNT', id: 'acc-123e4567-e89b-12d3-a456-426614174000' },
+        roles: ['account-user'],
         modules: ['USER_ACCOUNT_PASSWORD_RECOVERY'],
-        permissions: ['PASSWORD_RECOVERY_LINK_REQUEST_OWN', 'PASSWORD_RECOVERY_RESET_OWN']
+        subModules: [],
+        permissions: ['PASSWORD_RECOVERY_LINK_REQUEST_OWN', 'PASSWORD_RECOVERY_RESET_OWN'],
+        accounts: [
+          {
+            id: 'acc-123e4567-e89b-12d3-a456-426614174000',
+            name: 'Main account',
+            description: 'Default account for testing',
+            isActive: true,
+            deactivatedByScope: null
+          }
+        ],
+        entities: [],
+        preferences: {
+          locale: 'EN',
+          avatarUrl: null
+        },
+        createdAt: new Date().toISOString()
       }
     }
   },
@@ -117,7 +180,8 @@ const testApi = {
       body: {
         roles: ['guest'],
         modules: ['USER_ACCOUNT_CREATION', 'USER_ACCOUNT_PASSWORD_RECOVERY'],
-        permissions: ['USER_ACCOUNT_CREATE_OWN']
+        permissions: ['USER_ACCOUNT_CREATE_OWN'],
+        awaitsPlatformAdmin: false
       }
     }
   },
@@ -229,7 +293,7 @@ const selectors = {
     requiredPassword: /Password is required/i,
     invalidEmail: /Email is invalid/i,
     incorrectCredentials: /The provided credentials do not match any account/i,
-    shortPassword: /Password must contain at least 6 characters/i,
+    shortPassword: /Password must contain at least 8 characters/i,
     passwordComplexity: /Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number/i,
     requiredFirstName: /First name is required/i,
     requiredLastName: /Last name is required/i,

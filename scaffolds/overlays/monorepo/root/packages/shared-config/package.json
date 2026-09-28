@@ -1,0 +1,19 @@
+{
+  "name": "@{{PROJECT_NAME}}/shared-config",
+  "version": "0.0.1",
+  "description": "Shared runtime constants and configuration consumed by both apps/api and apps/web",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

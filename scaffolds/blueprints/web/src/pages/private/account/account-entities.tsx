@@ -1,33 +1,33 @@
 /**
- * Ressources
+ * Resources
  */
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUpDown, Building2, Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Building2, ChevronLeft, ChevronRight, Globe, Plus, Search, Users } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 /**
  * Dependencies
  */
+import { useAccount } from '@/hooks/api/accounts'
 import { EntityOrderBy, useAccountEntities } from '@/hooks/api/accounts/queries/useAccountEntities'
+import { useEntityUpdate } from '@/hooks/api/entities/mutations/useEntityUpdate'
+import { useAdminScope } from '@/hooks/auth/useAdminScope'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
-import { formatDate } from '@/utils/format'
+import { useDebounce } from '@/hooks/ui/useDebounce'
 
 /**
  * Components
  */
 import { CreateEntityDialog } from '@/components/dialogs/create-entity-dialog'
-import { Filter, FilterGroup, FiltersContainer } from '@/components/ui/custom/filters-container'
-import { SearchFilter } from '@/components/ui/custom/search-filter'
-import { StatusFilter } from '@/components/ui/custom/status-filter'
-import { Avatar, AvatarFallback } from '@/components/ui/shadcn/avatar'
-import { Badge } from '@/components/ui/shadcn/badge'
-import { Button } from '@/components/ui/shadcn/button'
-import { Card, CardContent, CardFooter } from '@/components/ui/shadcn/card'
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/shadcn/pagination'
-import { ScrollArea } from '@/components/ui/shadcn/scroll-area'
+import { EditEntityDialog, type EditEntityTarget } from '@/components/dialogs/edit-entity-dialog'
+import { KpiCard } from '@/components/ui/custom/kpi-card'
+import { SegmentedFilter, type SegmentedOption } from '@/components/ui/custom/segmented-filter'
+import { WaveButton } from '@/components/ui/custom/wave-button'
+import { cn } from '@/utils/ui'
+import { Input } from '@/components/ui/shadcn/input'
 import { Skeleton } from '@/components/ui/shadcn/skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/shadcn/table'
+import { Switch } from '@/components/ui/shadcn/switch'
 
 /**
  * Types
@@ -35,310 +35,344 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { AccountEntitiesResponseDto } from '@/hooks/api/accounts/queries/useAccountEntities'
 import type { MeResponseDto } from '@/hooks/api/auth'
 
-/**
- * Constants
- */
-const ENTITIES_ICON_BG = 'bg-[#E5D8FF]'
-const ENTITIES_ICON_COLOR = 'text-[#A259FF]'
+type EntityRow = AccountEntitiesResponseDto['items'][number]
+type StatusFilter = 'all' | 'active' | 'disabled'
 
-/**
- * Search Filters Component
- */
-type SearchFiltersProps = {
-  searchTerm: string
-  setSearchTerm: (value: string) => void
-  activeFilter: boolean | undefined
-  setActiveFilter: (value: boolean | undefined) => void
-  tAccount: (key: string) => string
-  tCommon: (key: string) => string
+const ORG_TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  COMPANY: Building2,
+  ASSOCIATION: Users,
+  COMMUNITY: Globe
 }
 
-function SearchFilters({ searchTerm, setSearchTerm, activeFilter, setActiveFilter, tAccount, tCommon }: SearchFiltersProps) {
-  return (
-    <FiltersContainer>
-      <FilterGroup>
-        <Filter minWidth="400px">
-          <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder={tAccount('entities.tk_filters-search-placeholder_')} />
-        </Filter>
-        <Filter minWidth="200px">
-          <StatusFilter value={activeFilter} onChange={setActiveFilter} placeholder={tCommon('filters.tk_status_')} />
-        </Filter>
-      </FilterGroup>
-    </FiltersContainer>
-  )
-}
+/* ─────────────── KPI ROW ─────────────── */
 
-/**
- * Entities Table Component
- */
-type EntitiesTableProps = {
-  entities: AccountEntitiesResponseDto['items']
-  isLoading: boolean
-  tCommon: (key: string) => string
-  tAccount: (key: string) => string
-}
-
-function EntitiesTable({ entities, isLoading, tCommon, tAccount }: EntitiesTableProps) {
-  if (isLoading) {
-    return (
-      <TableBody className="opacity-25">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <TableRow key={index}>
-            <TableCell>
-              <div className="flex items-center gap-3">
-                <Skeleton className="skeleton-shimmer-orange h-10 w-10 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="skeleton-shimmer-orange h-4 w-[200px]" />
-                  <Skeleton className="skeleton-shimmer-orange h-3 w-[150px]" />
-                </div>
-              </div>
-            </TableCell>
-            <TableCell>
-              <Skeleton className="skeleton-shimmer-orange h-4 w-[100px]" />
-            </TableCell>
-            <TableCell>
-              <Skeleton className="skeleton-shimmer-orange h-4 w-[150px]" />
-            </TableCell>
-            <TableCell>
-              <Skeleton className="skeleton-shimmer-orange h-4 w-[100px]" />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    )
-  }
-
-  if (entities.length === 0) {
-    return (
-      <TableBody>
-        <TableRow>
-          <TableCell colSpan={4} className="h-[calc(60vh-48px)]">
-            <div className="flex h-full flex-1 items-center justify-center gap-2 rounded-md border border-dashed border-gray-300/50 p-6">
-              <Building2 className="text-muted-foreground opacity-40" size={18} />
-              <span className="text-sm text-muted-foreground opacity-50">{tAccount('overview.recentEntities.tk_no-entity_')}</span>
-            </div>
-          </TableCell>
-        </TableRow>
-      </TableBody>
-    )
-  }
-
-  return (
-    <TableBody>
-      {entities.map((entity) => (
-        <TableRow key={entity.id}>
-          {/* Entity Name & Description */}
-          <TableCell>
-            <div className="flex items-center gap-3">
-              <Avatar>
-                <AvatarFallback className={ENTITIES_ICON_BG}>
-                  <span className={ENTITIES_ICON_COLOR}>
-                    <Building2 className="h-5 w-5" />
-                  </span>
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="font-medium">{entity.name}</div>
-                <div className="text-sm text-muted-foreground">{entity.description || '-'}</div>
-              </div>
-            </div>
-          </TableCell>
-          {/* Entity Status */}
-          <TableCell>
-            <div className="flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-full ${entity.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-              <span>{entity.isActive ? tCommon('status.tk_active_') : tCommon('status.tk_inactive_')}</span>
-            </div>
-          </TableCell>
-          {/* Entity Organization */}
-          <TableCell>
-            <div className="flex flex-wrap gap-1">
-              {entity.organization ? (
-                <Badge variant="outline" className={`${ENTITIES_ICON_BG} border-none`}>
-                  <span className={ENTITIES_ICON_COLOR}>{entity.organization.name}</span>
-                </Badge>
-              ) : (
-                <span className="text-xs text-muted-foreground">-</span>
-              )}
-            </div>
-          </TableCell>
-          {/* Entity Created At */}
-          <TableCell>
-            <div className="text-sm text-muted-foreground">{formatDate(entity.createdAt)}</div>
-          </TableCell>
-        </TableRow>
-      ))}
-    </TableBody>
-  )
-}
-
-/**
- * Table Pagination Component
- */
-type TablePaginationProps = {
-  currentPage: number
-  setCurrentPage: (page: number) => void
-  totalItems: number
-  pageSize: number
-}
-
-function TablePagination({ currentPage, setCurrentPage, totalItems, pageSize }: TablePaginationProps) {
-  const totalPages = Math.ceil(totalItems / pageSize)
-
-  if (totalPages <= 1) return null
-
-  return (
-    <Pagination>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious
-            href="#"
-            onClick={(e) => {
-              e.preventDefault()
-              if (currentPage > 1) setCurrentPage(currentPage - 1)
-            }}
-            className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
-          />
-        </PaginationItem>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-          <PaginationItem key={page}>
-            <PaginationLink
-              href="#"
-              onClick={(e) => {
-                e.preventDefault()
-                setCurrentPage(page)
-              }}
-              isActive={currentPage === page}
-            >
-              {page}
-            </PaginationLink>
-          </PaginationItem>
-        ))}
-        <PaginationItem>
-          <PaginationNext
-            href="#"
-            onClick={(e) => {
-              e.preventDefault()
-              if (currentPage < totalPages) setCurrentPage(currentPage + 1)
-            }}
-            className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
-          />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  )
-}
-
-/**
- * Main Component
- */
-export function AccountEntities() {
+function KpiRow({ total, active, disabled }: { total: number; active: number; disabled: number }) {
   const { t: tAccount } = useTranslation('account')
-  const { t: tCommon } = useTranslation('common')
+  const activePct = total === 0 ? 0 : Math.round((active / total) * 100)
+  return (
+    <div className="mb-6 grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3">
+      <KpiCard icon={<Building2 className="text-primary h-3 w-3" />} label={tAccount('entities.kpi.tk_total_')} value={total} sub={tAccount('entities.kpi.tk_total-sub_', { active, disabled })} />
+      <KpiCard
+        icon={<Building2 className="text-primary h-3 w-3" />}
+        label={tAccount('entities.kpi.tk_active_')}
+        value={active}
+        sub={total === 0 ? tAccount('entities.kpi.tk_active-sub-empty_') : tAccount('entities.kpi.tk_active-sub_', { percent: activePct })}
+      />
+      <KpiCard
+        icon={<Building2 className="text-primary h-3 w-3" />}
+        label={tAccount('entities.kpi.tk_disabled_')}
+        value={disabled}
+        sub={disabled === 0 ? tAccount('entities.kpi.tk_disabled-sub-none_') : tAccount('entities.kpi.tk_disabled-sub-some_')}
+      />
+    </div>
+  )
+}
+
+/* ─────────────── FILTER BAR ─────────────── */
+
+function FilterBar({
+  search,
+  onSearch,
+  status,
+  onStatus,
+  onCreate,
+  canCreate
+}: {
+  search: string
+  onSearch: (v: string) => void
+  status: StatusFilter
+  onStatus: (v: StatusFilter) => void
+  onCreate: () => void
+  canCreate: boolean
+}) {
+  const { t: tAccount } = useTranslation('account')
+  const statusOptions: readonly SegmentedOption<StatusFilter>[] = [
+    { value: 'all', label: tAccount('entities.filters.tk_status-all_') },
+    { value: 'active', label: tAccount('entities.filters.tk_status-active_') },
+    { value: 'disabled', label: tAccount('entities.filters.tk_status-disabled_') }
+  ]
+  return (
+    <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="relative flex-1 min-w-[260px]">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input type="text" data-testid="search-filter" value={search} onChange={(e) => onSearch(e.target.value)} placeholder={tAccount('entities.filters.tk_search-placeholder_')} className="pl-9" />
+      </div>
+      <SegmentedFilter value={status} onChange={onStatus} options={statusOptions} />
+      {canCreate && (
+        <WaveButton type="button" onClick={onCreate} className="!h-9 !w-auto !text-[11px] px-3.5">
+          <Plus className="h-3.5 w-3.5" />
+          {tAccount('entities.tk_create-entity_')}
+        </WaveButton>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────── ENTITY CARD ─────────────── */
+
+function EntityCard({
+  entity,
+  onEdit,
+  canEdit,
+  canToggle,
+  isToggling,
+  onToggle
+}: {
+  entity: EntityRow
+  onEdit: (e: EntityRow) => void
+  canEdit: boolean
+  canToggle: boolean
+  isToggling: boolean
+  onToggle: (next: boolean) => void
+}) {
+  const { t: tAccount } = useTranslation('account')
+  const orgType = entity.organization?.type ?? null
+  const Icon = (orgType && ORG_TYPE_ICON[orgType]) || Building2
+  const logoUrl = entity.organization?.logoUrl ?? null
+  const showSubName = entity.organization && entity.name !== entity.organization.name
+  const handleClick = () => canEdit && onEdit(entity)
+  const dimmed = !entity.isActive
+
+  return (
+    <div
+      data-testid="entity-row"
+      role={canEdit ? 'button' : undefined}
+      onClick={handleClick}
+      className={cn(
+        'group rounded-sm border bg-card p-4 transition-all',
+        'hover:border-primary/40 hover:shadow-[0_0_0_1px_var(--primary)/15]',
+        dimmed ? 'border-border/60 bg-muted/30' : 'border-border',
+        canEdit && 'cursor-pointer'
+      )}
+      title={canEdit ? tAccount('entities.tk_edit-title_') : undefined}
+    >
+      {/* Top row: logo (or org-type icon) + name + type badge + status switch */}
+      <div className="flex items-start gap-3">
+        <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-muted text-muted-foreground', dimmed && 'opacity-60')}>
+          {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : <Icon className="h-4 w-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-1.5 flex-wrap">
+            <span className={cn('font-bold text-sm truncate flex-1 min-w-0', dimmed ? 'text-muted-foreground' : 'text-foreground')}>{entity.organization?.name || entity.name}</span>
+            {orgType && (
+              <span
+                className={cn(
+                  'flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border-border bg-muted text-muted-foreground',
+                  dimmed && 'opacity-70'
+                )}
+              >
+                {orgType.toLowerCase()}
+              </span>
+            )}
+            {/* Status switch — same affordance as role/account cards. Falls back to a display-only
+                pill when the actor cannot toggle this entity (no ACCOUNT_ENTITY_MANAGEMENT). */}
+            {canToggle ? (
+              <label
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  entity.isActive
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                    : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
+                  isToggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                )}
+              >
+                <Switch
+                  checked={entity.isActive}
+                  disabled={isToggling}
+                  onCheckedChange={onToggle}
+                  className={cn(
+                    '!h-3 !w-6 [&>span]:!h-2 [&>span]:!w-2 [&>span]:data-[state=checked]:!translate-x-3 [&>span]:data-[state=unchecked]:!translate-x-0',
+                    entity.isActive ? 'data-[state=checked]:!bg-emerald-500' : 'data-[state=unchecked]:!bg-muted-foreground/40'
+                  )}
+                />
+                <span>{tAccount(entity.isActive ? 'entities.table.tk_status-active_' : 'entities.table.tk_status-disabled_')}</span>
+              </label>
+            ) : (
+              <span
+                className={cn(
+                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  entity.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', entity.isActive ? 'bg-emerald-500 shadow-[0_0_6px] shadow-emerald-500' : 'bg-muted-foreground/60')} />
+                {tAccount(entity.isActive ? 'entities.table.tk_status-active_' : 'entities.table.tk_status-disabled_')}
+              </span>
+            )}
+          </div>
+          {showSubName && <div className={cn('text-[11px] leading-tight truncate mt-0.5', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')}>{entity.name}</div>}
+          {entity.description && <div className={cn('text-[12px] mt-1 line-clamp-2 leading-snug', dimmed ? 'text-muted-foreground/70' : 'text-foreground/80')}>{entity.description}</div>}
+        </div>
+      </div>
+
+      {/* Footer: user count (left) + EDIT cta (right) — same shape as role cards */}
+      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60 text-[11px]">
+        <span className="inline-flex items-center gap-1">
+          <Users className="h-3 w-3 text-muted-foreground" />
+          <span className="font-medium text-foreground tabular-nums">{entity.userCount}</span>
+          <span className="text-muted-foreground">{tAccount('entities.tk_users-short_')}</span>
+        </span>
+        {canEdit && <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors">{tAccount('entities.tk_edit-cta_')} →</span>}
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────── PAGINATION ─────────────── */
+
+function MiniPagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-end gap-1.5 px-4 py-2.5 border-t border-border">
+      <button
+        type="button"
+        disabled={page === 1}
+        onClick={() => onPage(page - 1)}
+        className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      <span className="text-[11px] text-muted-foreground tabular-nums px-2">
+        {page} / {totalPages}
+      </span>
+      <button
+        type="button"
+        disabled={page === totalPages}
+        onClick={() => onPage(page + 1)}
+        className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
+
+/* ─────────────── MAIN ─────────────── */
+
+export function AccountEntities() {
   const queryClient = useQueryClient()
-  const [searchInput, setSearchInput] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
-  const [orderBy, setOrderBy] = useState<EntityOrderBy>(EntityOrderBy.CREATED_AT)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(10)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const { hasPermission } = useModuleAccess()
+  const { currentScope } = useAdminScope()
+  const { t: tAccount } = useTranslation('account')
+  const [searchInput, setSearchInput] = useState('')
+  const debouncedSearch = useDebounce(searchInput)
+  const [status, setStatus] = useState<StatusFilter>('active')
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<EditEntityTarget | null>(null)
 
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchInput)
-    }, 500)
+  const authMe = queryClient.getQueryData<MeResponseDto>(['authMe'])
+  const accountIdFromScope = currentScope.kind === 'ACCOUNT' || (currentScope.kind === 'PLATFORM' && currentScope.id) ? currentScope.id : null
+  const activeAccount = authMe?.accounts.find((acc) => acc.isActive)
+  const accountId = accountIdFromScope ?? activeAccount?.id ?? authMe?.entities.find((e) => e.isActive)?.accountId
 
-    return () => clearTimeout(timer)
-  }, [searchInput])
+  const isActive = status === 'all' ? undefined : status === 'active'
 
-  // Get accountId from authMe
-  const authMe = queryClient.getQueryData<MeResponseDto>(['authMe'])!
-  const activeAccount = authMe.accounts.find((acc) => acc.isActive)
-  const accountId = activeAccount?.id
-
-  // Get entities with pagination and filters
+  const { data: account } = useAccount(accountId as string)
   const { data: entitiesData, isLoading } = useAccountEntities(accountId as string, {
     search: debouncedSearch,
-    isActive: activeFilter,
-    orderBy,
+    isActive,
+    orderBy: EntityOrderBy.CREATED_AT,
     page: currentPage,
     limit: pageSize
   })
 
-  // Handle filter changes
-  const handleSearchChange = (value: string) => {
-    setSearchInput(value)
-    setCurrentPage(1)
+  const items = entitiesData?.items ?? []
+  const totalItems = entitiesData?.meta.pagination.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+
+  const { totalAll, activeAll, disabledAll } = useMemo(() => {
+    const values = account?.entities.values ?? []
+    const activeCount = values.filter((e) => e.isActive).length
+    return {
+      totalAll: account?.entities.count ?? 0,
+      activeAll: activeCount,
+      disabledAll: (account?.entities.count ?? 0) - activeCount
+    }
+  }, [account])
+
+  const canCreate = hasPermission('ENTITY_CREATION')
+  const canEdit = hasPermission('ACCOUNT_ENTITY_MANAGEMENT')
+  const isFiltered = debouncedSearch.length > 0 || status !== 'all'
+
+  const entityUpdateMutation = useEntityUpdate()
+  // Track WHICH entity is being toggled so only that switch shows the wait state.
+  const [togglingEntityId, setTogglingEntityId] = useState<string | null>(null)
+  const handleToggleEntity = async (entity: EntityRow, next: boolean) => {
+    if (!accountId) return
+    setTogglingEntityId(entity.id)
+    try {
+      await entityUpdateMutation.mutateAsync({ entityId: entity.id, accountId, isActive: next })
+    } catch (e) {
+      console.error('Failed to toggle entity status', e)
+    } finally {
+      setTogglingEntityId(null)
+    }
   }
 
-  const handleActiveFilterChange = (value: boolean | undefined) => {
-    setActiveFilter(value)
-    setCurrentPage(1)
+  const handleEdit = (entity: EntityRow) => {
+    if (!accountId) return
+    setEditTarget({
+      id: entity.id,
+      accountId,
+      name: entity.name,
+      description: entity.description,
+      isActive: entity.isActive,
+      organization: entity.organization
+        ? {
+            id: entity.organization.id,
+            name: entity.organization.name,
+            type: entity.organization.type as 'COMPANY' | 'ASSOCIATION' | 'COMMUNITY',
+            description: entity.organization.description ?? null,
+            website: entity.organization.website ?? null,
+            logoUrl: entity.organization.logoUrl ?? null
+          }
+        : null
+    })
   }
 
-  const handleOrderByChange = (value: EntityOrderBy) => {
-    setOrderBy(value)
+  const handleSearch = (v: string) => {
+    setSearchInput(v)
+    setCurrentPage(1)
+  }
+  const handleStatus = (v: StatusFilter) => {
+    setStatus(v)
     setCurrentPage(1)
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filters & new entity */}
-      <Card className="overflow-hidden border-none bg-gradient-to-br from-muted to-white">
-        <CardContent className="flex justify-between gap-3 p-4">
-          <SearchFilters searchTerm={searchInput} setSearchTerm={handleSearchChange} activeFilter={activeFilter} setActiveFilter={handleActiveFilterChange} tAccount={tAccount} tCommon={tCommon} />
-          {hasPermission('ENTITY_CREATION') && (
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              <Plus />
-              {tAccount('entities.tk_create-entity_')}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+    <div>
+      <KpiRow total={totalAll} active={activeAll} disabled={disabledAll} />
 
-      {/* Entities Table */}
-      <Card className="overflow-hidden border-none bg-gradient-to-br from-background to-white shadow-sm">
-        <CardContent className="p-0">
-          <ScrollArea className="h-[60vh]">
-            <Table>
-              <TableHeader className="bg-muted/30 backdrop-blur-sm">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-[250px] cursor-pointer" onClick={() => handleOrderByChange(EntityOrderBy.NAME)}>
-                    <div className="ml-2 flex items-center gap-2">
-                      {tCommon('items.tk_entities_')}
-                      {orderBy === EntityOrderBy.NAME && <ArrowUpDown size={14} className="text-primary" />}
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="ml-2 flex items-center gap-2">
-                      {tCommon('status.tk_title_')}
-                      {activeFilter !== undefined && <div className={`h-2 w-2 rounded-full ${activeFilter ? 'bg-green-500' : 'bg-gray-400'}`}></div>}
-                    </div>
-                  </TableHead>
-                  <TableHead>{tCommon('items.tk_organization_')}</TableHead>
-                  <TableHead className="w-[150px] cursor-pointer" onClick={() => handleOrderByChange(EntityOrderBy.CREATED_AT)}>
-                    <div className="flex items-center gap-2">
-                      {tCommon('date.tk_created-at_')}
-                      {orderBy === EntityOrderBy.CREATED_AT && <ArrowUpDown size={14} className="text-primary" />}
-                    </div>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <EntitiesTable entities={entitiesData?.items || []} isLoading={isLoading} tCommon={tCommon} tAccount={tAccount} />
-            </Table>
-          </ScrollArea>
-        </CardContent>
-        {entitiesData?.items.length !== 0 && (
-          <CardFooter>
-            <TablePagination currentPage={currentPage} setCurrentPage={setCurrentPage} totalItems={entitiesData?.meta.pagination.total || 0} pageSize={pageSize} />
-          </CardFooter>
+      <FilterBar search={searchInput} onSearch={handleSearch} status={status} onStatus={handleStatus} onCreate={() => setIsCreateDialogOpen(true)} canCreate={canCreate} />
+
+      <div data-testid="entities-table">
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="skeleton-shimmer-orange h-32 w-full rounded-sm" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
+            <Building2 className="h-5 w-5 text-muted-foreground/60" />
+            <span className="text-sm text-muted-foreground">{isFiltered ? tAccount('entities.tk_no-results-filtered_') : tAccount('entities.tk_no-entities-yet_')}</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {items.map((e) => (
+              <EntityCard key={e.id} entity={e} onEdit={handleEdit} canEdit={canEdit} canToggle={canEdit} isToggling={togglingEntityId === e.id} onToggle={(next) => handleToggleEntity(e, next)} />
+            ))}
+          </div>
         )}
-      </Card>
+        <div className="mt-3">
+          <MiniPagination page={currentPage} totalPages={totalPages} onPage={setCurrentPage} />
+        </div>
+      </div>
 
-      {hasPermission('ENTITY_CREATION') && isCreateDialogOpen && <CreateEntityDialog isOpen={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />}
+      {canCreate && isCreateDialogOpen && <CreateEntityDialog isOpen={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />}
+      <EditEntityDialog isOpen={editTarget !== null} onOpenChange={(open) => !open && setEditTarget(null)} entity={editTarget} />
     </div>
   )
 }

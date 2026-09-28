@@ -1,8 +1,11 @@
 {
   "name": "saasfoundry-api",
-  "version": "0.0.0",
-  "description": "Backend API for SaaSFoundry",
+  "version": "1.0.0",
+  "description": "Backend API for SaaSFoundryAI",
   "private": true,
+  "prisma": {
+    "schema": "prisma/schema"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/agachet/saasfoundry/apps/api"
@@ -12,18 +15,18 @@
     "url": "https://github.com/agachet/saasfoundry/issues"
   },
   "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=10.0.0"
+    "node": ">=22.13.0",
+    "npm": ">=11.0.0"
   },
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=20.0.0",
+      "version": ">=22.13.0",
       "onFail": "error"
     },
     "packageManager": {
       "name": "npm",
-      "version": ">=10.0.0",
+      "version": ">=11.0.0",
       "onFail": "error"
     }
   },
@@ -33,10 +36,10 @@
     "format": "prettier --write .",
     "dev": "nest start --watch",
     "debug": "nest start --debug --watch",
-    "prod": "node dist/main",
+    "prod": "node dist/src/main",
     "lint": "eslint --config eslint.config.mjs .",
     "lint:fix": "eslint --config eslint.config.mjs . --fix",
-    "type-check": "tsc -b",
+    "type-check": "tsc --noEmit",
     "test:unit": "NODE_NO_WARNINGS=1 jest --config jest.config.js --silent",
     "test:unit:verbose": "NODE_NO_WARNINGS=1 jest --config jest.config.js --verbose --detectOpenHandles --forceExit --logHeapUsage",
     "test:unit:watch": "NODE_NO_WARNINGS=1 jest --config jest.config.js --watch",
@@ -47,9 +50,12 @@
     "test:e2e:coverage": "NODE_NO_WARNINGS=1 jest --config jest-e2e.config.js --runInBand --coverage --coverageDirectory=coverage-e2e",
     "test:full": "npm run format && npm run lint && npm run type-check && npm run test:unit && npm run test:e2e",
     "test:full:verbose": "npm run format && npm run lint && npm run type-check && npm run test:unit:verbose && npm run test:e2e:verbose",
+    "db:setup:dev": "./scripts/setup-db-dev.sh",
     "db:update:dev": "./scripts/update-db-dev.sh",
-    "db:update:prod": "./scripts/update-db-prod.sh",
     "db:init:test": "./scripts/init-test-db.sh",
+    "services:up": "docker compose -f docker-compose.dev-services.yml up -d",
+    "services:down": "docker compose -f docker-compose.dev-services.yml down",
+    "services:reset": "docker compose -f docker-compose.dev-services.yml down -v && docker compose -f docker-compose.dev-services.yml up -d",
     "version:manage": "./scripts/tag-manager.sh \"$(git symbolic-ref --short HEAD)\"",
     "prepare": "if [ \"$HUSKY\" != \"0\" ]; then husky; fi",
     "postinstall": "if [ \"$HUSKY\" != \"0\" ] && [ -d './scripts' ]; then find ./scripts -type f -name '*.sh' -exec chmod +x {} +; fi"
@@ -62,68 +68,81 @@
     "prisma"
   ],
   "dependencies": {
-    "@nestjs/common": "11.0.11",
-    "@nestjs/core": "11.0.11",
-    "@nestjs/jwt": "11.0.0",
+    "@nestjs/common": "11.2.1",
+    "@nestjs/core": "11.2.1",
+    "@nestjs/jwt": "11.0.2",
     "@nestjs/passport": "11.0.5",
-    "@nestjs/platform-express": "11.0.11",
-    "@nestjs/schedule": "6.0.0",
-    "@nestjs/serve-static": "5.0.3",
-    "@nestjs/swagger": "11.0.6",
-    "@nestjs/terminus": "11.0.0",
-    "@prisma/client": "6.4.1",
-    "@types/cookie-parser": "1.4.8",
-    "bcrypt": "5.1.1",
-    "chalk": "5.4.1",
+    "@nestjs/platform-express": "11.2.1",
+    "@nestjs/schedule": "6.1.3",
+    "@nestjs/serve-static": "5.0.5",
+    "@nestjs/swagger": "11.4.7",
+    "@nestjs/terminus": "11.1.1",
+    "@prisma/adapter-pg": "7.8.0",
+    "@prisma/client": "7.10.0",
+    "@types/cookie-parser": "1.4.10",
+    "bcrypt": "6.0.0",
+    "chalk": "5.6.2",
     "class-transformer": "0.5.1",
-    "class-validator": "0.14.1",
+    "class-validator": "0.15.1",
     "cookie-parser": "1.4.7",
-    "dotenv": "16.4.7",
-    "mailersend": "2.5.0",
+    "dotenv": "17.4.2",
+    "mailersend": "3.3.0",
     "ms": "2.1.3",
+    "nestjs-zod": "5.3.0",
     "passport": "0.7.0",
     "passport-jwt": "4.0.1",
     "punycode": "2.3.1",
     "reflect-metadata": "0.2.2",
-    "rxjs": "7.8.1",
-    "winston": "3.17.0",
+    "rxjs": "7.8.2",
+    "winston": "3.19.0",
     "winston-daily-rotate-file": "5.0.0",
-    "zod": "3.24.2"
+    "zod": "4.4.2"
   },
   "devDependencies": {
-    "@commitlint/cli": "19.6.1",
-    "@commitlint/config-conventional": "19.6.0",
-    "@eslint/eslintrc": "3.2.0",
-    "@eslint/js": "9.18.0",
-    "@nestjs/cli": "11.0.0",
-    "@nestjs/schematics": "11.0.0",
-    "@nestjs/testing": "11.0.11",
-    "@swc/cli": "0.6.0",
-    "@swc/core": "1.10.7",
-    "@types/bcrypt": "5.0.2",
-    "@types/chalk": "0.4.31",
-    "@types/express": "5.0.0",
-    "@types/jest": "29.5.14",
+    "@commitlint/cli": "21.2.2",
+    "@commitlint/config-conventional": "21.2.2",
+    "@eslint/eslintrc": "3.3.5",
+    "@eslint/js": "10.0.1",
+    "@nestjs/cli": "11.0.21",
+    "@nestjs/schematics": "11.1.0",
+    "@nestjs/testing": "11.2.1",
+    "@swc/cli": "0.8.1",
+    "@swc/core": "1.15.32",
+    "@types/bcrypt": "6.0.0",
+    "@types/chalk": "2.2.4",
+    "@types/express": "5.0.6",
+    "@types/jest": "30.0.0",
     "@types/ms": "2.1.0",
-    "@types/node": "22.10.7",
+    "@types/node": "26.4.1",
     "@types/passport-jwt": "4.0.1",
-    "@types/supertest": "6.0.2",
-    "eslint": "9.19.0",
-    "eslint-config-prettier": "10.0.1",
-    "eslint-plugin-jsonc": "2.19.1",
-    "eslint-plugin-prettier": "5.2.3",
-    "globals": "15.14.0",
-    "husky": "8.0.0",
-    "jest": "29.7.0",
-    "prettier": "3.4.2",
-    "prisma": "6.4.1",
+    "@types/supertest": "7.2.0",
+    "eslint": "10.3.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-jsonc": "3.4.2",
+    "eslint-plugin-prettier": "5.5.5",
+    "globals": "17.6.0",
+    "husky": "9.1.7",
+    "jest": "30.3.0",
+    "prettier": "3.8.3",
+    "prisma": "7.10.0",
     "source-map-support": "0.5.21",
-    "supertest": "7.0.0",
-    "ts-jest": "29.2.5",
-    "ts-loader": "9.5.2",
+    "supertest": "7.2.2",
+    "ts-jest": "29.4.9",
+    "ts-loader": "9.5.7",
     "ts-node": "10.9.2",
     "tsconfig-paths": "4.2.0",
-    "typescript": "5.7.3",
-    "typescript-eslint": "8.20.0"
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.59.1"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "2.4.0"
+    },
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    },
+    "prisma": {
+      "mysql2": "3.24.4"
+    }
   }
 }

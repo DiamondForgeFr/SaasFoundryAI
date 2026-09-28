@@ -3,14 +3,17 @@
  */
 import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
+// chalk is held at 5.x on purpose: 6.0.0 moved its type declarations behind an `exports`
+// map that this project's `moduleResolution: node` cannot read. See
+// .claude/docs/embedded-dependencies.md before bumping it.
 import chalk from 'chalk'
 import cookieParser from 'cookie-parser'
 import 'dotenv/config'
+import { ZodValidationPipe } from 'nestjs-zod'
 
 /**
  * Dependencies
  */
-import { GlobalExceptionFilter } from '@common/filters/global-exception.filter'
 import { Logger } from '@common/services/logger/logger.service'
 import { EnvConfig } from '@configs/env/services/env.service'
 import { ApiDocsService } from '@modules/api-docs/services/api-docs.service'
@@ -25,8 +28,7 @@ const bootstrap = async () => {
   const logger = app.get(Logger)
 
   app.setGlobalPrefix(env.get('API_PREFIX'))
-  app.useGlobalFilters(new GlobalExceptionFilter(logger))
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+  app.useGlobalPipes(new ZodValidationPipe(), new ValidationPipe({ transform: true }))
   app.use(cookieParser())
 
   // Generate OpenAPI documentation in development mode

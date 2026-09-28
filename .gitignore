@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /node_modules
+/tests/docker/runtime/node_modules
 /build
 
 # OS
@@ -41,4 +42,21 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Ignore migration files for open-source distribution
 # (In a team project, remove this line to track database migration
-prisma/migrations
+prisma/migrationsdocs/.vitepress/dist
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
+# Claude Code runtime
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# Local env (tokens, secrets — never committed)
+.env
+.env.local
+
+# Local audit workspace (lessons-learned capstone #203) — drafts, reports, scratch
+/.srs-audit/*
+# …except the persisted artefacts referenced by #203 exit conditions
+!/.srs-audit/follow-ups.md
+!/.srs-audit/baseline-report-fixed-root.json
+docs-dist/

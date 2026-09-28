@@ -21,10 +21,11 @@ export class ExpiredInvitationsSchedulerService {
   ) {}
 
   /**
-   * Run every week to check for expired invitations
-   * and mark them as expired in the database
+   * Run every day at midnight to check for expired invitations and mark them as expired in
+   * the database. Daily cadence keeps the UI status in sync within a 24h window of the
+   * actual token expiry — well below the default 7d invitation lifespan.
    */
-  @Cron(CronExpression.EVERY_WEEKEND)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleExpiredInvitations() {
     this.logger.debug('Checking for expired invitations...', 'ExpiredInvitationsSchedulerService')
 

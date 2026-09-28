@@ -76,7 +76,10 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
     prismaServiceAny.entity.findMany = jest.fn()
     prismaServiceAny.entity.count = jest.fn()
     prismaServiceAny.role.count = jest.fn()
+    prismaServiceAny.account.findUniqueOrThrow = jest.fn()
+    prismaServiceAny.userRoleAssignment.findFirst = jest.fn()
     prismaServiceAny.$transaction = jest.fn()
+    prismaServiceAny.subModule = { findUnique: jest.fn(), update: jest.fn() }
 
     // Get service references
     this.logger = this.getService(Logger)
@@ -103,7 +106,7 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
           const userWithCompleteStructure = {
             ...testUser,
             people: mockPeople,
-            rolesLinked: [{ role: mockRole }],
+            roleAssignments: [{ role: mockRole }],
             entitiesLinked: [{ entity: { ...mockEntity, organization: null } }],
             accountsLinked: [{ accountId: testAccount.id }],
             createdAt: new Date(),
@@ -125,14 +128,16 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
             indirectAccess: false
           })
 
-          // Mock the 6 queries that the transaction performs in the exact order
+          // Mock the 8 queries that the transaction performs in the exact order
           const mockTransactionResults = [
             [userWithCompleteStructure], // users query (findMany)
             1, // users count
             [{ ...mockEntity, organization: null }], // entities query (findMany)
             1, // entities count
             [mockRole], // roles query (findMany)
-            1 // roles count
+            1, // roles count
+            2, // pendingInvitations count
+            1 // pendingSignups count
           ]
 
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -146,7 +151,7 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
 
             // Assert
             expect(result).toBeDefined()
-            expect(this.accountAccessService.validateUserAccountAccess).toHaveBeenCalledWith(testUser.id, testAccount.id, 'getAccountDetails')
+            expect(this.accountAccessService.validateUserAccountAccess).toHaveBeenCalledWith(testUser.id, testAccount.id, 'getAccountDetails', { allowDisabled: true })
 
             const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
             expect(prismaServiceAny.$transaction).toHaveBeenCalled()
@@ -184,6 +189,8 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
             expect(result.users.count).toBe(1)
             expect(result.entities.count).toBe(1)
             expect(result.roles.count).toBe(1)
+            expect(result.pendingInvitations).toBe(2)
+            expect(result.pendingSignups).toBe(1)
             expect(result.users.values).toHaveLength(1)
             expect(result.entities.values).toHaveLength(1)
             expect(result.roles.values).toHaveLength(1)
@@ -266,6 +273,10 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
         })
 
         const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        // Account is currently active, so toggling to inactive is a real change (not a no-op)
+        prismaServiceAny.account.findUniqueOrThrow.mockResolvedValue({ ...testAccount, isActive: true })
+        // Acting user is not a platform admin -> deactivation provenance scope is ACCOUNT_OWNER
+        prismaServiceAny.userRoleAssignment.findFirst.mockResolvedValue(null)
         prismaServiceAny.account.update.mockResolvedValue({
           id: testAccount.id,
           name: testAccount.name,
@@ -283,7 +294,12 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
         expect(result).toEqual(expectedResponse)
         expect(prismaServiceAny.account.update).toHaveBeenCalledWith({
           where: { id: testAccount.id },
-          data: { isActive: false }
+          data: {
+            isActive: false,
+            deactivatedAt: expect.any(Date),
+            deactivatedByUserId: testUser.id,
+            deactivatedByScope: 'ACCOUNT_OWNER'
+          }
         })
       })
 
@@ -297,6 +313,8 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
         })
 
         const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        // Account already active -> requesting active is a no-op, update must not be called
+        prismaServiceAny.account.findUniqueOrThrow.mockResolvedValue({ ...testAccount, isActive: true })
 
         // Act
         const result = await this.service.updateAccountStatus(testUser.id, testAccount.id, true) // Same as default
@@ -334,6 +352,43 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
 
         // Act & Assert
         await TestAssertions.assertThrows(() => this.service.updateAccountStatus(testUser.id, testAccount.id, false), BadRequestException, 'Failed to deactivate account')
+      })
+    })
+  }
+
+  /**
+   * Test toggleSubModule functionality (per-sub-module activation + self-lockout guard)
+   */
+  testToggleSubModule(): void {
+    describe('toggleSubModule', () => {
+      it('toggles a sub-module activation successfully', async () => {
+        const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        prismaServiceAny.subModule.findUnique.mockResolvedValue({ id: 2, moduleId: 4, name: 'USERS', isActive: true, module: { name: 'ACCOUNT_ADMINISTRATION' } })
+        prismaServiceAny.subModule.update.mockResolvedValue({ id: 2, name: 'USERS', isActive: false })
+
+        const result = await this.service.toggleSubModule(4, 2, false)
+
+        expect(result).toEqual({ id: 2, name: 'USERS', isActive: false })
+        expect(prismaServiceAny.subModule.update).toHaveBeenCalledWith({ where: { id: 2 }, data: { isActive: false } })
+      })
+
+      it('throws NotFound when the sub-module does not belong to the given module', async () => {
+        const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        prismaServiceAny.subModule.findUnique.mockResolvedValue({ id: 2, moduleId: 99, name: 'USERS', isActive: true, module: { name: 'ACCOUNT_ADMINISTRATION' } })
+
+        await TestAssertions.assertThrows(() => this.service.toggleSubModule(4, 2, false), NotFoundException, 'Sub-module not found')
+      })
+
+      it('blocks deactivating a PLATFORM_ADMINISTRATION sub-module (self-lockout guard)', async () => {
+        const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        prismaServiceAny.subModule.findUnique.mockResolvedValue({ id: 8, moduleId: 7, name: 'PLATFORM_MODULES', isActive: true, module: { name: 'PLATFORM_ADMINISTRATION' } })
+
+        await TestAssertions.assertThrows(
+          () => this.service.toggleSubModule(7, 8, false),
+          BadRequestException,
+          'PLATFORM_ADMINISTRATION sub-modules cannot be deactivated — it would lock platform-admins out of the platform console.'
+        )
+        expect(prismaServiceAny.subModule.update).not.toHaveBeenCalled()
       })
     })
   }
@@ -581,9 +636,10 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
             firstname: 'Bruce',
             lastname: 'Wayne'
           },
-          rolesLinked: [{ role: TestDataFactory.role().build() }],
+          roleAssignments: [{ role: TestDataFactory.role().build() }],
           entitiesLinked: [{ entity: { ...TestDataFactory.entity().build(), accountId: testAccount.id } }],
-          accountsLinked: [{ accountId: testAccount.id }]
+          accountsLinked: [{ accountId: testAccount.id }],
+          receivedInvitations: []
         }
       ]
 
@@ -611,6 +667,24 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
         expect(result.items).toBeDefined()
         expect(result.meta).toBeDefined()
         expect(this.accountAccessService.validateUserAccountAccess).toHaveBeenCalledWith(testUser.id, testAccount.id, 'fetchAccountUsers')
+      })
+
+      it('should derive pendingKind from active flag + pending received invitations', async () => {
+        // Arrange — three users: active, inactive-invited (has pending invite), inactive-selfsignup (no invite)
+        const activeUser = { ...mockUsersList[0], id: 'u-active', isActive: true, receivedInvitations: [] }
+        const invitedUser = { ...mockUsersList[0], id: 'u-invited', isActive: false, receivedInvitations: [{ id: 'inv-1' }] }
+        const selfSignupUser = { ...mockUsersList[0], id: 'u-selfsignup', isActive: false, receivedInvitations: [] }
+        const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        prismaServiceAny.$transaction.mockResolvedValueOnce([[activeUser, invitedUser, selfSignupUser], 3])
+
+        // Act
+        const result = await this.service.fetchAccountUsers(testUser.id, testAccount.id, { page: 1, limit: 10 })
+
+        // Assert
+        const byId = Object.fromEntries(result.items.map((u) => [u.id, u.pendingKind]))
+        expect(byId['u-active']).toBeNull()
+        expect(byId['u-invited']).toBe('invited')
+        expect(byId['u-selfsignup']).toBe('awaiting-confirmation')
       })
 
       it('should apply search filter when provided', async () => {
@@ -708,6 +782,9 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
           organization: {
             id: '1',
             name: 'Wayne Enterprises'
+          },
+          _count: {
+            users: 1
           }
         }
       ]
@@ -719,6 +796,9 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
           account: testAccount,
           indirectAccess: false
         })
+        // B3b — default to "no restriction" (account-admin / platform reach) so the listing returns all
+        // account entities. The subtree-narrowing path is covered by the entity e2e adversarial tests.
+        this.accountAccessService.resolveVisibleEntityIdsForAccount.mockResolvedValue(null)
 
         const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
         prismaServiceAny.$transaction.mockResolvedValue([mockEntitiesList, 1])
@@ -922,6 +1002,7 @@ describe('AccountService (Refactored)', () => {
   // Run all test suites
   accountServiceTest.testFetchAccount()
   accountServiceTest.testUpdateAccountStatus()
+  accountServiceTest.testToggleSubModule()
   accountServiceTest.testUpdateAccountUsers()
   accountServiceTest.testFetchAccountUsers()
   accountServiceTest.testFetchAccountEntities()
