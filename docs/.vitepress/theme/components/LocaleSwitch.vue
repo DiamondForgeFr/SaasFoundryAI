@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, withBase } from 'vitepress'
+import { useData, withBase } from 'vitepress'
+import { languageSwitchRoute } from '../../config/locale-paths'
 
 const props = withDefaults(
   defineProps<{
@@ -11,25 +12,13 @@ const props = withDefaults(
   { screenMenu: false }
 )
 
-const route = useRoute()
+const { page } = useData()
 const menu = ref<HTMLDetailsElement | null>(null)
 const trigger = ref<HTMLElement | null>(null)
 
-const currentRoute = computed(() => {
-  const withoutLocale = route.path.replace(/^\/fr(?=\/|$)/, '') || '/'
-  const withoutHtml = withoutLocale.replace(/\.html$/, '')
-  return withoutHtml !== '/' ? withoutHtml.replace(/\/$/, '') : '/'
-})
-
-const pathForLocale = (locale: 'en' | 'fr'): string => {
-  if (locale === 'en') return currentRoute.value
-  if (!props.translatedRoutes.includes(currentRoute.value)) return '/fr/'
-  return currentRoute.value === '/' ? '/fr/' : `/fr${currentRoute.value}`
-}
-
 const languageOptions = computed(() => [
-  { code: 'en' as const, shortLabel: 'EN', label: 'English', path: pathForLocale('en') },
-  { code: 'fr' as const, shortLabel: 'FR', label: 'Français', path: pathForLocale('fr') }
+  { code: 'en' as const, shortLabel: 'EN', label: 'English', path: languageSwitchRoute(page.value.relativePath, 'en', props.translatedRoutes) },
+  { code: 'fr' as const, shortLabel: 'FR', label: 'Français', path: languageSwitchRoute(page.value.relativePath, 'fr', props.translatedRoutes) }
 ])
 
 const menuLabel = computed(() => (props.locale === 'fr' ? `Choisir la langue de la documentation. Langue actuelle : Français` : `Choose documentation language. Current language: English`))
