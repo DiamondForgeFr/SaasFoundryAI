@@ -14,6 +14,33 @@ const releaseMergeOid = 'c'.repeat(40)
 const releaseHeadOid = 'd'.repeat(40)
 const releaseTreeOid = 'e'.repeat(40)
 const syncMergeOid = 'f'.repeat(40)
+const releasePrTitle = 'chore(#42): release SaaSFoundryAI v1.0.0'
+
+function releasePrFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    number: 807,
+    title: releasePrTitle,
+    headRefName: 'rc-1.0.0',
+    headRefOid: releaseHeadOid,
+    headRepository: { name: 'FakeRepo' },
+    headRepositoryOwner: { login: 'FakeOrg' },
+    isCrossRepository: false,
+    baseRefName: 'master',
+    body: 'Release candidate\n\nCloses #42',
+    mergedAt: '2026-09-27T20:00:00Z',
+    mergeCommit: { oid: releaseMergeOid },
+    ...overrides
+  }
+}
+
+function releasePrList(...pullRequests: Array<Record<string, unknown>>): string {
+  return JSON.stringify(pullRequests)
+}
+
+function canonicalReleaseMergeMessage(overrides: { number?: number; owner?: string; headRefName?: string; title?: string } = {}): string {
+  const { number = 807, owner = 'FakeOrg', headRefName = 'rc-1.0.0', title = releasePrTitle } = overrides
+  return `Merge pull request #${number} from ${owner}/${headRefName}\n\n${title}`
+}
 
 // The PR-merged guard blocks `update-status N Done` while an open PR exists for
 // the ticket — the rule is "Done means merged to develop, not reviewer
@@ -104,7 +131,7 @@ esac
   const mergeCommitApiPayload = (
     options.mergeCommitApiPayload ??
     JSON.stringify({
-      message: options.mergeCommitMessage ?? '[#42] Release SaaSFoundryAI',
+      message: options.mergeCommitMessage ?? canonicalReleaseMergeMessage(),
       tree: { sha: releaseTreeOid },
       parents: [{ sha: 'a'.repeat(40) }, { sha: releaseHeadOid }]
     })
@@ -121,6 +148,7 @@ esac
         mergedAt: '2026-09-27T21:00:00Z',
         mergeCommit: { oid: syncMergeOid },
         body: 'Technical release synchronization',
+        closingIssuesReferences: [],
         isCrossRepository: false
       }
     ])
@@ -276,14 +304,15 @@ describe('sf-workflow CLI — PR-merged guard', () => {
         fix: 'repair/{description}-ticket-{number}',
         release: 'candidate/{version}'
       },
-      mergedPrListPayload: `[{"number":807,"headRefName":"candidate/1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`
+      mergedPrListPayload: releasePrList(releasePrFixture({ headRefName: 'candidate/1.0.0' })),
+      mergeCommitMessage: canonicalReleaseMergeMessage({ headRefName: 'candidate/1.0.0' })
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(0)
   })
 
   it('blocks "Done" while the configured release PR is still open', async () => {
-    sandbox = await buildSandbox('[{"number":807,"headRefName":"rc-1.0.0","baseRefName":"master","body":"Release candidate\\n\\nCloses #42","mergedAt":null}]')
+    sandbox = await buildSandbox(releasePrList(releasePrFixture({ mergedAt: null })))
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(2)
     expect(res.stderr).toContain('open PR (#807)')
@@ -291,36 +320,160 @@ describe('sf-workflow CLI — PR-merged guard', () => {
 
   it('allows "Done" for a verified RC merged into the configured release branch', async () => {
     sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Release candidate\\n\\nCloses #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`
+      mergedPrListPayload: releasePrList(releasePrFixture())
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(0)
     expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toHaveLength(1)
   })
 
-  it.each([{ baseRefName: 'develop' }, { body: '' }, { body: 'Closes #43' }, { body: 'Closes #42\nCloses #43' }, { body: 'Closes #42\nCloses #42' }, { body: 'Resolves #42' }, { mergedAt: null }])(
+  it.each(['[#42] Custom release title', 'chore(#42)!: custom release title'])('keeps accepting a legacy ticket-aware custom merge title: %s', async (mergeCommitMessage) => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture({ title: 'Release title intentionally differs from the commit title' })),
+      mergeCommitMessage
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(0)
+  })
+
+  it('compares canonical GitHub metadata literally even when the branch and title contain regex characters', async () => {
+    const title = 'chore(#42): release v1.0.0 [ready] $exact?'
+    const headRefName = 'rc-1.0.0+build.1'
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture({ title, headRefName })),
+      mergeCommitMessage: canonicalReleaseMergeMessage({ title, headRefName })
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(0)
+  })
+
+  it.each([{ baseRefName: 'develop' }, { body: '' }, { body: 'Closes #43' }, { body: 'Closes #42\nCloses #43' }, { body: 'Closes #42\nCloses #42' }, { body: 'Resolves #42' }])(
     'rejects an unverified merged release PR: %j',
     async (changes) => {
-      const releasePr = {
-        number: 807,
-        headRefName: 'rc-1.0.0',
-        baseRefName: 'master',
-        body: 'Release candidate\n\nCloses #42',
-        mergedAt: '2026-09-27T20:00:00Z',
-        headRefOid: releaseHeadOid,
-        mergeCommit: { oid: releaseMergeOid },
-        ...changes
-      }
-      sandbox = await buildSandbox('[]', { mergedPrListPayload: JSON.stringify([releasePr]) })
+      sandbox = await buildSandbox('[]', { mergedPrListPayload: releasePrList(releasePrFixture(changes)) })
       const res = await runCli(['update-status', '42', 'Done'], sandbox)
       expect(res.code).toBe(2)
       expect(res.stderr).toContain('no verified merged PR')
     }
   )
 
+  it.each([{ mergedAt: null }, { mergedAt: 'not-a-date' }])('fails closed when a matching merged release PR has an invalid merge date: %j', async (changes) => {
+    sandbox = await buildSandbox('[]', { mergedPrListPayload: releasePrList(releasePrFixture(changes)) })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('unable to verify merged PR state')
+    expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toEqual([])
+  })
+
+  it.each([
+    ['pull request number', canonicalReleaseMergeMessage({ number: 806 })],
+    ['repository owner', canonicalReleaseMergeMessage({ owner: 'OtherOrg' })],
+    ['release branch', canonicalReleaseMergeMessage({ headRefName: 'rc-2.0.0' })],
+    ['pull request title', canonicalReleaseMergeMessage({ title: 'chore(#42): different release title' })],
+    ['canonical blank line', `Merge pull request #807 from FakeOrg/rc-1.0.0\n${releasePrTitle}`],
+    ['ticket marker only on a later line', `Merge pull request #807 from FakeOrg/rc-1.0.0\n\nRelease\n\n${releasePrTitle}`]
+  ])('rejects a canonical-looking merge message with mismatched %s', async (_caseName, mergeCommitMessage) => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture()),
+      mergeCommitMessage
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('immutable merge title')
+  })
+
+  it.each(['[#43] Wrong ticket', '[#420] Prefix collision', 'chore(#43): wrong ticket', 'chore(#420): prefix collision'])(
+    'rejects a legacy custom merge title for a different ticket: %s',
+    async (mergeCommitMessage) => {
+      sandbox = await buildSandbox('[]', {
+        mergedPrListPayload: releasePrList(releasePrFixture()),
+        mergeCommitMessage
+      })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('immutable merge title')
+    }
+  )
+
+  it('rejects the exact canonical GitHub form when the verified PR title is not ticket-aware', async () => {
+    const title = 'Release SaaSFoundryAI v1.0.0'
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture({ title })),
+      mergeCommitMessage: canonicalReleaseMergeMessage({ title })
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('does not have a ticket-aware title')
+  })
+
+  it.each([{ isCrossRepository: true }, { headRepositoryOwner: { login: 'OtherOrg' } }, { headRepository: { name: 'OtherRepo' } }])(
+    'rejects release PR metadata that does not prove the same repository: %j',
+    async (changes) => {
+      sandbox = await buildSandbox('[]', { mergedPrListPayload: releasePrList(releasePrFixture(changes)) })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox)
+      expect(res.code).toBe(2)
+      expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toEqual([])
+    }
+  )
+
+  it('selects the newest matching release PR by mergedAt regardless of API order', async () => {
+    const older = releasePrFixture({
+      number: 806,
+      headRefName: 'rc-0.9.0',
+      mergedAt: '2026-09-26T20:00:00Z'
+    })
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(older, releasePrFixture())
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(0)
+  })
+
+  it('fails closed instead of falling back when the newest matching release PR is invalid', async () => {
+    const older = releasePrFixture({
+      number: 806,
+      headRefName: 'rc-0.9.0',
+      mergedAt: '2026-09-26T20:00:00Z'
+    })
+    const newestInvalid = releasePrFixture({ isCrossRepository: true })
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(older, newestInvalid)
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('unable to verify merged PR state')
+  })
+
+  it('uses the release verification path when both delivery and release PRs match the ticket', async () => {
+    const deliveryPr = {
+      number: 333,
+      headRefName: 'feature/42-legacy-delivery',
+      baseRefName: 'develop',
+      body: '',
+      mergedAt: '2026-09-25T20:00:00Z'
+    }
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(deliveryPr, releasePrFixture({ isCrossRepository: true }))
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('unable to verify merged PR state')
+    expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toEqual([])
+  })
+
+  it('fails closed when two matching release PRs share the latest mergedAt', async () => {
+    const sameTimestamp = '2026-09-27T20:00:00Z'
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture({ number: 806, headRefName: 'rc-0.9.0', mergedAt: sameTimestamp }), releasePrFixture({ mergedAt: sameTimestamp }))
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('Latest release PR is ambiguous')
+  })
+
   it('rejects a release body redirected to a ticket absent from the immutable merge title', async () => {
     sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergedPrListPayload: releasePrList(releasePrFixture()),
       mergeCommitMessage: '[#43] Different ticket'
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
@@ -329,20 +482,23 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     expect(readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))).toEqual([])
   })
 
-  it('rejects a release merge commit that copied the closing directive from the PR body', async () => {
-    sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
-      mergeCommitMessage: '[#42] Release\n\nCloses #42'
-    })
-    const res = await runCli(['update-status', '42', 'Done'], sandbox)
-    expect(res.code).toBe(2)
-    expect(res.stderr).toContain('embeds a closing directive')
-  })
+  it.each([`${releasePrTitle}\n\nCloses #42`, `${releasePrTitle}\n\nRelease notes fix: #42`, `${releasePrTitle}\n\nResolves #42, resolves #43`, `${releasePrTitle}\n\nFixes FakeOrg/FakeRepo#42`])(
+    'rejects every GitHub closing-directive form in the release merge commit',
+    async (mergeCommitMessage) => {
+      sandbox = await buildSandbox('[]', {
+        mergedPrListPayload: releasePrList(releasePrFixture()),
+        mergeCommitMessage
+      })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('embeds a closing directive')
+    }
+  )
 
   it('rejects squash/rebase release integration without the two-parent RC merge', async () => {
     sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
-      mergeCommitApiPayload: JSON.stringify({ message: '[#42] Release', tree: { sha: releaseTreeOid }, parents: [{ sha: 'a'.repeat(40) }] })
+      mergedPrListPayload: releasePrList(releasePrFixture()),
+      mergeCommitApiPayload: JSON.stringify({ message: canonicalReleaseMergeMessage(), tree: { sha: releaseTreeOid }, parents: [{ sha: 'a'.repeat(40) }] })
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(2)
@@ -351,7 +507,7 @@ describe('sf-workflow CLI — PR-merged guard', () => {
 
   it('keeps a merged release In review until its commit is merged back into the working branch', async () => {
     sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergedPrListPayload: releasePrList(releasePrFixture()),
       syncStatus: 'diverged'
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
@@ -362,7 +518,7 @@ describe('sf-workflow CLI — PR-merged guard', () => {
 
   it('rejects a fast-forward or direct-push release synchronization without a two-parent PR merge', async () => {
     sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergedPrListPayload: releasePrList(releasePrFixture()),
       syncCommitApiPayload: JSON.stringify({ message: 'Fast-forward sync', tree: { sha: releaseTreeOid }, parents: [{ sha: releaseMergeOid }] })
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
@@ -370,9 +526,34 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     expect(res.stderr).toContain('two-parent merge commit')
   })
 
-  it('rejects a release synchronization PR carrying a ticket-closing directive', async () => {
+  it.each(['Closes #42', 'Release sync fixes: #42', 'Resolves #42, resolves #43', 'Fixes FakeOrg/FakeRepo#42'])(
+    'rejects a release synchronization PR carrying a ticket-closing directive: %s',
+    async (body) => {
+      sandbox = await buildSandbox('[]', {
+        mergedPrListPayload: releasePrList(releasePrFixture()),
+        syncPrListPayload: JSON.stringify([
+          {
+            number: 808,
+            headRefName: 'master',
+            headRefOid: releaseMergeOid,
+            baseRefName: 'develop',
+            mergedAt: '2026-09-27T21:00:00Z',
+            mergeCommit: { oid: syncMergeOid },
+            body,
+            closingIssuesReferences: [],
+            isCrossRepository: false
+          }
+        ])
+      })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('No unique clean master')
+    }
+  )
+
+  it('rejects a synchronization PR whose native closing references are non-empty', async () => {
     sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergedPrListPayload: releasePrList(releasePrFixture()),
       syncPrListPayload: JSON.stringify([
         {
           number: 808,
@@ -381,7 +562,8 @@ describe('sf-workflow CLI — PR-merged guard', () => {
           baseRefName: 'develop',
           mergedAt: '2026-09-27T21:00:00Z',
           mergeCommit: { oid: syncMergeOid },
-          body: 'Closes #42',
+          body: 'Technical release synchronization',
+          closingIssuesReferences: [{ number: 42 }],
           isCrossRepository: false
         }
       ])
@@ -391,9 +573,23 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     expect(res.stderr).toContain('No unique clean master')
   })
 
+  it('rejects a closing directive embedded in the immutable synchronization merge commit', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: releasePrList(releasePrFixture()),
+      syncCommitApiPayload: JSON.stringify({
+        message: 'chore: synchronize release\n\nResolves: #42, resolves #43',
+        tree: { sha: releaseTreeOid },
+        parents: [{ sha: 'b'.repeat(40) }, { sha: releaseMergeOid }]
+      })
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('synchronization merge commit embeds a closing directive')
+  })
+
   it('rejects a release merge whose tree differs from the immutable RC head', async () => {
     sandbox = await buildSandbox('[]', {
-      mergedPrListPayload: `[{"number":807,"headRefName":"rc-1.0.0","headRefOid":"${releaseHeadOid}","baseRefName":"master","body":"Closes #42","mergedAt":"2026-09-27T20:00:00Z","mergeCommit":{"oid":"${releaseMergeOid}"}}]`,
+      mergedPrListPayload: releasePrList(releasePrFixture()),
       rcCommitApiPayload: JSON.stringify({ message: 'RC head', tree: { sha: 'f'.repeat(40) }, parents: [] })
     })
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
