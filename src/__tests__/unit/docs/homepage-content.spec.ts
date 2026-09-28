@@ -12,6 +12,7 @@ const frenchSetup = read('docs/fr/getting-started/setup-paths.md')
 const agentProfiles = JSON.parse(read('src/harness/agent-profiles.json')) as { profiles: Record<string, { displayName: string }> }
 const agentProfileNames = Object.values(agentProfiles.profiles).map(({ displayName }) => displayName)
 const systemMap = read('docs/.vitepress/theme/components/FoundrySystemMap.vue')
+const navigation = read('docs/.vitepress/config/navigation.ts')
 const theme = read('docs/.vitepress/theme/custom.css')
 const englishRoutes = discoverLocaleRoutes('en')
 const frenchRoutes = discoverLocaleRoutes('fr')
@@ -26,7 +27,8 @@ const contrast = (first: string, second: string): number => {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-const localLinks = (content: string): string[] => [...content.matchAll(/(?:href=["']|link:\s*)(\/(?!\/)[^"'\s<]+)/g)].map((match) => match[1]).filter(Boolean)
+const localLinks = (content: string): string[] => [...content.matchAll(/(?:href=["']|link:\s*)((?:\/(?!\/)|\.\/)[^"'\s<]+)/g)].map((match) => match[1]).filter(Boolean)
+const homeRoute = (locale: 'en' | 'fr', link: string): string => (link.startsWith('./') ? `${locale === 'fr' ? '/fr' : ''}/${link.slice(2).replace(/\.html(?=#|$)/, '')}` : link)
 const vitepressSlug = (heading: string): string =>
   heading
     .normalize('NFKD')
@@ -48,6 +50,7 @@ const missingLinkTargets = (locale: 'en' | 'fr', content: string): string[] => {
   const routes = locale === 'fr' ? frenchRoutes : englishRoutes
 
   return localLinks(content).filter((link) => {
+    link = homeRoute(locale, link)
     const [route, fragment] = link.split('#', 2)
     const localRoute = routeWithoutLocale(route)
     if (!routes.includes(localRoute)) return true
@@ -82,7 +85,7 @@ describe('the bilingual product landing (#395)', () => {
     ['English', 'en', english],
     ['French', 'fr', french]
   ] as const)('keeps every local link on the %s landing in-locale with a real page and anchor', (_label, locale, content) => {
-    const links = localLinks(content)
+    const links = localLinks(content).map((link) => homeRoute(locale, link))
     if (locale === 'fr') expect(links.every((link) => link.startsWith('/fr/'))).toBe(true)
     else expect(links.every((link) => !link.startsWith('/fr/'))).toBe(true)
 
@@ -113,14 +116,31 @@ describe('the bilingual product landing (#395)', () => {
   })
 
   it.each([
-    ['English', english, 'Robust engineering, from day one.', 'any SaaS codebase', 'independently', 'href="/features/built-in"'],
-    ['French', french, "L'ingénierie robuste, dès le premier jour.", 'tout projet SaaS', 'séparément', 'href="/fr/features/built-in"']
+    ['English', english, 'Robust engineering, from day one.', 'any SaaS codebase', 'independently', 'href="./features/built-in.html"'],
+    ['French', french, "L'ingénierie robuste, dès le premier jour.", 'tout projet SaaS', 'séparément', 'href="./features/built-in.html"']
   ])('positions the harness first and both products as independent in %s', (_locale, content, headline, anyProject, independence, foundationLink) => {
     expect(content).toContain(headline)
     expect(content.toLowerCase()).toContain(anyProject.toLowerCase())
     expect(content).toContain(independence)
     expect(content.indexOf('sf-pillar--harness')).toBeLessThan(content.indexOf(foundationLink))
     expect(content).not.toMatch(/Ship the product\. Not the boilerplate|Livrez le produit\. Pas le boilerplate|should never have been separated|n'auraient jamais dû être séparés/)
+  })
+
+  it.each([
+    ['English', english, '/getting-started/install-harness', './getting-started/install-harness.html', 'docs/getting-started/install-harness.md'],
+    ['French', french, '/fr/getting-started/install-harness', './getting-started/install-harness.html', 'docs/fr/getting-started/install-harness.md']
+  ])('offers a short harness installation route repeatedly in %s', (_locale, content, heroLink, inlineLink, source) => {
+    expect(content).toContain(`link: ${heroLink}`)
+    expect(content.split(inlineLink).length - 1).toBeGreaterThanOrEqual(3)
+    expect(existsSync(resolve(root, source))).toBe(true)
+  })
+
+  it('keeps the stable release and installation visible in the shared navigation', () => {
+    expect(navigation).toContain("text: 'v1.0.0'")
+    expect(navigation).not.toContain("text: 'v1.0.0-beta'")
+    expect(navigation).toContain("install: 'Install'")
+    expect(navigation).toContain("install: 'Installer'")
+    expect(navigation).toContain("'/getting-started/install-harness'")
   })
 
   it.each([
