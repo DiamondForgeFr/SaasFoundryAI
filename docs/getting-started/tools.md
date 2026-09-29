@@ -54,7 +54,8 @@ sf agents replace claude-code codex --scope shared
 sf agents doctor codex claude-code
 ```
 
-Claude Code currently has the native one-line assistant bootstrap. Other hosts begin with the CLI path and their declared profile, then follow the generated `AGENTS.md` or host-specific entrypoint.
+Claude Code currently has an optional one-line installer for its `tool-saasfoundry` skill. Other capable hosts can also guide the same CLI setup without that skill: select their declared profile, then
+follow the generated `AGENTS.md` or host-specific entrypoint.
 
 ## 3. Project instructions and skills
 

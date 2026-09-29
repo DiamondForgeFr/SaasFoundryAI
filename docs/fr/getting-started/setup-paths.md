@@ -62,22 +62,30 @@ Choisissez ce parcours pour comprendre chaque décision ou lorsqu'aucun assistan
 
 ## Parcours 2 — piloté par assistant
 
-Le bootstrap assistant en une phrase est aujourd'hui natif pour **Claude Code** :
+Ouvrez le dépôt dans un assistant de développement capable de lire les fichiers et d'exécuter des commandes, puis demandez-lui de guider l'installation :
+
+> Aide-moi à installer SaaSFoundryAI ici. Examine le projet existant, propose le profil d'installation, les profils d'agents et la commande CLI, puis demande mon accord avant de modifier les fichiers.
+
+L'assistant pilote le même CLI, avec une commande non interactive quand il le peut. Il ne doit ni répondre aux questions Inquirer interactives ni écrire les fichiers du scaffold à la main. Le profil
+d'agent désigne l'**outil hôte**, pas son modèle : GPT, DeepSeek, GLM et Kimi peuvent être utilisés à travers un hôte adapté.
+
+Claude Code propose aussi un bootstrap facultatif en une phrase pour son skill utilisateur `tool-saasfoundry` :
 
 > Installe le skill SaaSFoundryAI depuis https://github.com/DiamondForgeFr/SaasFoundryAI
 
-Il installe le skill utilisateur `tool-saasfoundry` avec :
+Cet installateur de skill lance :
 
 ```bash
 npx saasfoundryai-cli skill install --yes --force
 ```
 
-Le skill orchestre ensuite le même CLI. Il ne répond jamais aux questions Inquirer interactives et ne génère jamais les fichiers du scaffold à la main.
+Le skill orchestre ensuite le même CLI. C'est une facilité côté assistant, pas un prérequis du harness.
 
-::: info Bootstrap Claude-first, projet multi-agent
+::: info Projet multi-agent, installation du skill propre à l'hôte
 
-La phrase de bootstrap ci-dessus est propre à Claude ; le harness généré ne l'est pas. Un même projet peut déclarer Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code et un profil générique. Pour un
-autre hôte, lancez une première fois le CLI interactif, sélectionnez son profil, puis ouvrez le projet généré avec cet hôte. Consultez le registre courant avec `sf agents catalog --json`.
+La phrase facultative d'installation du skill ci-dessus cible actuellement Claude Code ; l'**installation guidée du CLI** ne dépend pas de lui. Un même projet peut déclarer Claude Code, Codex, Gemini
+CLI, Kimi Code, Qwen Code et un profil générique. Pour un hôte non répertorié, choisissez `generic` et vérifiez qu'il peut charger les instructions et exécuter les commandes gardées. Consultez le
+registre courant avec `sf agents catalog --json`.
 
 :::
 
