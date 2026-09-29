@@ -209,6 +209,8 @@ For local startup commands, follow the generated README because they depend on t
 Credential flags are available for the selected database, MailerSend, storage, and tool integrations. Use `sf new --help` for the current exhaustive surface; options are validated only when their
 module is relevant.
 
+For Notion SRS setup, provide `NOTION_API_TOKEN` through the environment. The older `--notion-api-token` flag remains available, but exposes the secret in process arguments.
+
 ## Continue the lifecycle
 
 - [Inspect the generated architecture](/guide/project-structure)

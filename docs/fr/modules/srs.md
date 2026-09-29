@@ -47,6 +47,9 @@ feuille de route SRS.
 
 ### À la création
 
+Définissez `NOTION_API_TOKEN` dans l'environnement du shell qui lance `sf new` (par exemple via votre gestionnaire de secrets). Ne passez pas le jeton en argument et ne le collez pas dans une
+conversation avec l'assistant.
+
 ```bash
 sf new --non-interactive \
   --project-name my-saas \
@@ -60,11 +63,12 @@ sf new --non-interactive \
 
 ### Dans un projet existant
 
+Définissez `SF_UPDATE_NOTION_API_TOKEN` dans l'environnement avant de lancer :
+
 ```bash
 sf update --add-modules srs \
   --srs-backend notion \
-  --srs-parent-page-input "https://www.notion.so/..." \
-  --notion-api-token "secret_..."
+  --srs-parent-page-input "https://www.notion.so/..."
 ```
 
 L'installateur dépose les compétences, initialise la racine via `adapter.init()`, écrit le manifeste et enregistre l'ingestion demandée. Le token Notion doit avoir accès aux pages source et cible.

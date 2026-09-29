@@ -96,10 +96,10 @@ export interface NewCommandOptions {
  * Convert Commander-parsed options into a `Partial<Answers>` prefill
  * consumable by the config-engine session (`runConfigSession`).
  *
- * Only fields that were explicitly passed end up in the prefill, so the
- * interactive prompt still asks for anything the user didn't specify.
+ * Only fields that were explicitly passed end up in the prefill, apart from
+ * safe non-interactive defaults and the opt-in SRS token environment fallback.
  */
-export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answers> {
+export function buildPrefillFromOptions(opts: NewCommandOptions, env: NodeJS.ProcessEnv = process.env): Partial<Answers> {
   const prefill: Partial<Answers> = {}
 
   // Intent profile is opt-in; in --non-interactive mode default to `full` so
@@ -171,7 +171,11 @@ export function buildPrefillFromOptions(opts: NewCommandOptions): Partial<Answer
   if (opts.atlassianApiToken !== undefined) prefill.atlassianApiToken = opts.atlassianApiToken
   if (opts.atlassianSite !== undefined) prefill.atlassianSite = opts.atlassianSite
   if (opts.atlassianCloudId !== undefined) prefill.atlassianCloudId = opts.atlassianCloudId
-  if (opts.notionApiToken !== undefined) prefill.notionApiToken = opts.notionApiToken
+  // An assistant-led SRS setup must not require a secret in argv, shell history,
+  // or the planner's intent JSON. Keep the flag for compatibility, but prefer
+  // NOTION_API_TOKEN when SRS bootstrap is explicitly requested without it.
+  const notionApiToken = opts.notionApiToken ?? (opts.srsEnable === true ? env.NOTION_API_TOKEN : undefined)
+  if (notionApiToken !== undefined) prefill.notionApiToken = notionApiToken
   if (opts.notionApiVersion !== undefined) prefill.notionApiVersion = opts.notionApiVersion
   if (opts.figmaApiToken !== undefined) prefill.figmaApiToken = opts.figmaApiToken
 

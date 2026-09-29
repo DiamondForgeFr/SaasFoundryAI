@@ -210,6 +210,8 @@ Pour le démarrage local, suivez le README généré : les commandes dépendent 
 Des options de secrets existent pour la base sélectionnée, MailerSend, le stockage et les intégrations d'outils. Utilisez `sf new --help` pour la liste exhaustive actuelle ; les options ne sont
 validées que lorsque leur module est concerné.
 
+Pour configurer le SRS Notion, fournissez `NOTION_API_TOKEN` via l'environnement. L'ancien flag `--notion-api-token` reste disponible, mais expose le jeton dans les arguments du processus.
+
 ## Poursuivre le cycle
 
 - [Comprendre l'architecture générée](/fr/guide/project-structure)
