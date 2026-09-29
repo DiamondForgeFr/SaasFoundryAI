@@ -29,6 +29,20 @@ async function runWithIntent(intent: unknown): Promise<ExecResult> {
 }
 
 describe('skill/plan-new', () => {
+  it('refuses a Notion token in intent instead of rendering it on the command line', async () => {
+    const { stdout, stderr, code } = await runWithIntent({
+      projectName: 'acme',
+      structure: 'monorepo',
+      srsEnable: true,
+      notionApiToken: 'secret_from_intent'
+    })
+
+    expect(code).toBe(2)
+    expect(stdout).not.toContain('secret_from_intent')
+    expect(stderr).not.toContain('secret_from_intent')
+    expect(stderr).toContain('NOTION_API_TOKEN')
+  })
+
   // `profile` decides whether a stack is scaffolded at all. It was absent from the flag manifest,
   // so plan-new dropped it in silence: an assistant that correctly concluded "this user has an
   // existing repo, use harness" produced a command that scaffolded a full stack over it.

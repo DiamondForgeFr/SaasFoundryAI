@@ -166,6 +166,24 @@ describe('buildPrefillFromOptions', () => {
   })
 
   describe('SRS + ingestion flags', () => {
+    it('uses NOTION_API_TOKEN for non-interactive SRS setup without putting the token in argv', () => {
+      const prefill = buildPrefillFromOptions({ nonInteractive: true, srsEnable: true, srsBackend: 'notion' }, { NOTION_API_TOKEN: 'secret_from_environment' })
+
+      expect(prefill.notionApiToken).toBe('secret_from_environment')
+    })
+
+    it('lets an explicit token flag take precedence over the environment for compatibility', () => {
+      const prefill = buildPrefillFromOptions({ nonInteractive: true, srsEnable: true, notionApiToken: 'explicit_token' }, { NOTION_API_TOKEN: 'environment_token' })
+
+      expect(prefill.notionApiToken).toBe('explicit_token')
+    })
+
+    it('does not consume the environment token when SRS setup was not requested', () => {
+      const prefill = buildPrefillFromOptions({ nonInteractive: true }, { NOTION_API_TOKEN: 'unrelated_token' })
+
+      expect(prefill.notionApiToken).toBeUndefined()
+    })
+
     it('maps --srs-enable / --srs-backend / --srs-parent-page-input to prefill', () => {
       const prefill = buildPrefillFromOptions({
         srsEnable: true,

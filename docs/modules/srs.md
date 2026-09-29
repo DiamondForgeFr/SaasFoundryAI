@@ -73,6 +73,8 @@ sf new
 
 Scripted equivalent:
 
+Set `NOTION_API_TOKEN` in the shell running `sf new` (for example, through your secret manager). Do not pass the token as a CLI argument or paste it into an assistant chat.
+
 ```bash
 sf new --non-interactive \
   --project-name my-saas \
@@ -84,15 +86,17 @@ sf new --non-interactive \
   --srs-ingest-parent-input "https://www.notion.so/legacy-notes-..."
 ```
 
-Prerequisite — a Notion integration token must be provided for `sf-tool-notion` (the same token powers the SRS adapter). See [`sf-tool-notion`](/skills/tool-skills#sf-tool-notion) for the setup steps.
+Prerequisite — the Notion integration token in `NOTION_API_TOKEN` must have access to the parent page. The same token powers `sf-tool-notion` and the SRS adapter. See
+[`sf-tool-notion`](/skills/tool-skills#sf-tool-notion) for the setup steps.
 
 ### Adding it to an existing project
+
+Set `SF_UPDATE_NOTION_API_TOKEN` in the environment before running:
 
 ```bash
 sf update --add-modules srs \
   --srs-backend notion \
-  --srs-parent-page-input "https://www.notion.so/..." \
-  --notion-api-token    "secret_..."
+  --srs-parent-page-input "https://www.notion.so/..."
 ```
 
 Or run `sf update` interactively and pick **SRS** from the module menu. See [Updating Projects → Enable SRS on an existing project](/guide/updating-projects#enable-srs-on-an-existing-project).

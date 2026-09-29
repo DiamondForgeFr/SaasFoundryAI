@@ -192,6 +192,9 @@ Chaque module possède ses options d’identifiants. Consultez la référence [`
 
 Le [module SRS](/fr/modules/srs) fournit un système de spécifications avec Notion comme backend v1 :
 
+Pour une installation automatisée, chargez `SF_UPDATE_NOTION_API_TOKEN` dans l'environnement du shell depuis votre gestionnaire de secrets. Ne placez pas le jeton dans la commande ni dans une
+conversation avec l'assistant.
+
 ```bash
 # Interactive
 sf update
@@ -200,8 +203,7 @@ sf update
 sf update --non-interactive \
   --add-modules srs \
   --srs-backend notion \
-  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123" \
-  --notion-api-token "secret_..."
+  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123"
 ```
 
 L’installateur :
@@ -219,8 +221,7 @@ sf update --non-interactive \
   --srs-backend notion \
   --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root" \
   --srs-ingest-enable \
-  --srs-ingest-parent-input "https://www.notion.so/your-workspace/Legacy-notes" \
-  --notion-api-token "secret_..."
+  --srs-ingest-parent-input "https://www.notion.so/your-workspace/Legacy-notes"
 ```
 
 Cette commande définit temporairement `tools.srs.pendingIngestion`. À la prochaine session d’un agent de développement configuré, le skill `sf-srs` guide le choix des pages historiques à transformer

@@ -65,6 +65,13 @@ if (unknown.length > 0) {
   process.exit(2)
 }
 
+// The Notion SRS bootstrap reads its token from the environment. Refuse it in
+// the intent instead of rendering a command that leaks the secret via argv.
+if (intent.notionApiToken !== undefined) {
+  process.stderr.write('plan-new: omit notionApiToken from intent; set NOTION_API_TOKEN in the environment before running sf new\n')
+  process.exit(2)
+}
+
 for (const [key, value] of Object.entries(intent)) {
   const spec = manifest.fields[key]
   if (spec.type === 'enum' && !spec.values.includes(value)) {

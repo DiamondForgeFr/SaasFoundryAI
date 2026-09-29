@@ -128,9 +128,9 @@ Assistant
     --workflow saasfoundry --language en \
     --no-analytics --no-start-services --start-apps none
 
-  I still need the Notion parent page, the sender identity, and both
-  provider credentials. I will not echo those values in the plan.
-  Shall I proceed after you provide them?
+  I still need the Notion parent page and the sender identity.
+  Before execution, set NOTION_API_TOKEN in your shell from your secret
+  manager; do not send the token to me. Shall I proceed?
 ```
 
 The assistant builds a structured intent and passes it through the skill's versioned flag map. It presents both a human summary and the generated command. If you change a decision, it rebuilds the

@@ -589,7 +589,7 @@ async function bootstrapSrsWorkspace(startProjectAnswers: Answers, onProgress: (
   const missing: string[] = []
   if (!startProjectAnswers.srsBackend) missing.push('srsBackend (--srs-backend)')
   if (!startProjectAnswers.srsParentPageInput) missing.push('srsParentPageInput (--srs-parent-page-input)')
-  if (!startProjectAnswers.notionApiToken) missing.push('notionApiToken (--notion-api-token)')
+  if (!startProjectAnswers.notionApiToken) missing.push('notionApiToken (NOTION_API_TOKEN or --notion-api-token)')
   if (startProjectAnswers.srsIngestEnable && !startProjectAnswers.srsIngestParentInput) {
     missing.push('srsIngestParentInput (--srs-ingest-parent-input)')
   }

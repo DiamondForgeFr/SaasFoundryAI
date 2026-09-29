@@ -23,6 +23,8 @@ exactly the area you want under version.
 
 If you're at `sf new` time, pass the flags :
 
+First make `NOTION_API_TOKEN` available in the shell running the command. Load it from your secret manager; do not include it in command arguments or an assistant transcript.
+
 ```bash
 sf new --non-interactive \
   --project-name tutorial-saas \
@@ -40,11 +42,12 @@ sf new --non-interactive \
 
 On an existing project :
 
+Set `SF_UPDATE_NOTION_API_TOKEN` in the environment before running:
+
 ```bash
 sf update --add-modules srs \
   --srs-backend notion \
-  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123" \
-  --notion-api-token "secret_..."
+  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123"
 ```
 
 Either path writes `tools.srs` into `.saasfoundry.json` and installs the `sf-srs` + `sf-tool-notion` skills under `.claude/skills/`.

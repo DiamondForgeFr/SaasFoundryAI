@@ -16,6 +16,9 @@ Une page racine SRS dédiée limite les droits de l'intégration au périmètre 
 
 À la création :
 
+Définissez d'abord `NOTION_API_TOKEN` dans l'environnement du shell qui lance la commande, via votre gestionnaire de secrets. Ne placez pas le jeton dans les arguments ni dans une conversation avec
+l'assistant.
+
 ```bash
 sf new --non-interactive \
   --project-name tutorial-saas \
@@ -33,11 +36,12 @@ sf new --non-interactive \
 
 Dans un projet existant :
 
+Définissez `SF_UPDATE_NOTION_API_TOKEN` dans l'environnement avant de lancer :
+
 ```bash
 sf update --add-modules srs \
   --srs-backend notion \
-  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123" \
-  --notion-api-token "secret_..."
+  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123"
 ```
 
 Les deux chemins installent `sf-srs` et `sf-tool-notion`, puis écrivent `tools.srs` dans le manifeste. Vérifiez :

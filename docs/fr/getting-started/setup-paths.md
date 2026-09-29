@@ -131,9 +131,9 @@ Assistant
     --workflow saasfoundry --language fr \
     --no-analytics --no-start-services --start-apps none
 
-  Il me manque la page parente Notion, l'identité d'expéditeur et les
-  credentials des deux fournisseurs. Ils ne seront pas affichés dans le plan.
-  Dois-je continuer une fois ces valeurs fournies ?
+  Il me manque la page parente Notion et l'identité d'expéditeur.
+  Avant l'exécution, définissez NOTION_API_TOKEN dans votre shell depuis
+  votre gestionnaire de secrets ; ne m'envoyez pas le jeton. Je continue ?
 ```
 
 L'assistant construit une intention structurée et la passe dans la table de flags versionnée du skill. Il présente un résumé humain et la commande générée. Si vous changez une décision, il reconstruit

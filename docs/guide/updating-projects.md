@@ -195,6 +195,8 @@ Each module has its own credential flags. See [`sf update`](/cli/sf-update) for 
 The [SRS module](/modules/srs) ships a pluggable specifications system with a Notion backend (V1). Enabling it on a project that was generated without SRS uses the same module-addition flow as any
 other optional feature :
 
+For scripted setup, load `SF_UPDATE_NOTION_API_TOKEN` into the shell environment from your secret manager. Do not put the token in the command or an assistant transcript.
+
 ```bash
 # Interactive (menu picks 'srs' from the module list)
 sf update
@@ -203,8 +205,7 @@ sf update
 sf update --non-interactive \
   --add-modules srs \
   --srs-backend notion \
-  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123" \
-  --notion-api-token "secret_..."
+  --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root-abc123"
 ```
 
 What the installer does :
@@ -224,8 +225,7 @@ sf update --non-interactive \
   --srs-backend notion \
   --srs-parent-page-input "https://www.notion.so/your-workspace/SRS-root" \
   --srs-ingest-enable \
-  --srs-ingest-parent-input "https://www.notion.so/your-workspace/Legacy-notes" \
-  --notion-api-token "secret_..."
+  --srs-ingest-parent-input "https://www.notion.so/your-workspace/Legacy-notes"
 ```
 
 This sets `tools.srs.pendingIngestion` in the manifest. The flag is ephemeral — on the next supported coding-agent session, `sf-srs` drives a conversational loop to pick which legacy pages to draft
