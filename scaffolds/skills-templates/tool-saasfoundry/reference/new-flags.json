@@ -238,6 +238,7 @@
     },
     "notionApiToken": {
       "flag": "--notion-api-token",
+      "env": "NOTION_API_TOKEN",
       "type": "string",
       "required": false,
       "secret": true

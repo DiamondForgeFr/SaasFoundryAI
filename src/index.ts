@@ -76,7 +76,7 @@ program
   .option('--atlassian-api-token <token>', 'Atlassian API token')
   .option('--atlassian-site <site>', 'Atlassian site name (e.g. "mycompany")')
   .option('--atlassian-cloud-id <id>', 'Atlassian Cloud ID')
-  .option('--notion-api-token <token>', 'Notion API token')
+  .option('--notion-api-token <token>', 'Notion API token (prefer NOTION_API_TOKEN for SRS setup)')
   .option('--notion-api-version <version>', 'Notion API version (default: 2022-06-28)')
   .option('--figma-api-token <token>', 'Figma API token')
   // SRS bootstrap (opt-in)

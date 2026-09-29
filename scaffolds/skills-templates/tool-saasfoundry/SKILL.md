@@ -334,7 +334,7 @@ Full specification: `reference/new-flags.json`. Essentials:
 - **Always required:** `projectName` (kebab-case), `structure` (`monorepo` | `multirepo`)
 - **Recommended to set explicitly:** `mainBranch`, `dbSetup`, `emailService`, `analytics`
 - **Only set when user opts in:** `advancedSkills` (CSV of `context7`, `atlassian`, `notion`, `figma`) and their credential fields; `agents` (CSV of registered coding-tool IDs) when the user wants an explicit multi-agent declaration
-- **Secrets** (marked `"secret": true` in the manifest): never echo them back, never log them
+- **Secrets** (marked `"secret": true` in the manifest): never echo them back, never log them. For Notion SRS bootstrap, keep `notionApiToken` out of the intent entirely and have the user provide `NOTION_API_TOKEN` in the CLI environment.
 
 ### Recommendation rules
 
@@ -358,7 +358,7 @@ The full rationale for each recommendation is in the `recommendations` block of 
 - **Don't fabricate flags.** Every flag you pass must exist in the manifest's `fields` section.
 - **Don't ask for every field in Guided mode.** Skip fields whose defaults are obvious for the user's context (e.g. don't ask about `mainBranch` for a hobby project).
 - **Don't re-serialize the plan by hand.** Always round-trip through `plan-new.sh` so the command stays consistent with the manifest.
-- **Don't stash secrets in the intent you echo back.** Collect them, pass them through to `plan-new.sh`, but redact in any user-facing summary.
+- **Don't put the Notion token in the intent or command.** `plan-new.sh` rejects `notionApiToken`; ask the user to provide `NOTION_API_TOKEN` in their shell or secret manager before running `sf new`. Never request that they paste it into the chat.
 
 ## Discovery: `sf update`
 
