@@ -11,8 +11,7 @@
 A deterministic development harness for human–AI teams, with an optional production-ready SaaS foundation. Use either layer independently, or combine them to ship without rebuilding the same
 engineering practices and product plumbing each time.
 
-[Documentation](https://diamondforgefr.github.io/SaasFoundryAI/) · [Documentation en français](https://diamondforgefr.github.io/SaasFoundryAI/fr/) ·
-[npm package](https://www.npmjs.com/package/saasfoundryai-cli)
+[Documentation](https://saasfoundryai.diamondforge.fr/) · [Documentation en français](https://saasfoundryai.diamondforge.fr/fr/) · [npm package](https://www.npmjs.com/package/saasfoundryai-cli)
 
 [![npm version](https://img.shields.io/npm/v/saasfoundryai-cli?label=CLI)](https://www.npmjs.com/package/saasfoundryai-cli) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -35,8 +34,8 @@ cd your-project
 npx saasfoundryai-cli new --profile harness
 ```
 
-Prefer a global command? Run `npm install -g saasfoundryai-cli`, then `sf new`. See the [short harness setup guide](https://diamondforgefr.github.io/SaasFoundryAI/getting-started/install-harness.html)
-and [full installation guide](https://diamondforgefr.github.io/SaasFoundryAI/getting-started/installation.html).
+Prefer a global command? Run `npm install -g saasfoundryai-cli`, then `sf new`. See the [short harness setup guide](https://saasfoundryai.diamondforge.fr/getting-started/install-harness.html) and
+[full installation guide](https://saasfoundryai.diamondforge.fr/getting-started/installation.html).
 
 ### With an AI assistant
 
@@ -48,7 +47,7 @@ The assistant is an interface to the CLI, not a separate generator. It can guide
 
 Claude Code also supports an optional one-line `tool-saasfoundry` skill bootstrap via `npx saasfoundryai-cli skill install --yes --force`; that installer currently targets Claude Code, but the harness
 does not. GPT, DeepSeek, GLM and Kimi can name models or providers rather than coding tools: select the profile of the tool hosting the model, not the model name.
-[Compare both paths](https://diamondforgefr.github.io/SaasFoundryAI/getting-started/setup-paths.html).
+[Compare both paths](https://saasfoundryai.diamondforge.fr/getting-started/setup-paths.html).
 
 ## Two layers, one standard of care
 
@@ -59,8 +58,7 @@ does not. GPT, DeepSeek, GLM and Kimi can name models or providers rather than c
 | **Both**                | A ready technical foundation developed through the same guarded process                                                  | You are starting a product and want the two layers together                                      |
 
 `sf new` lets you choose `harness`, `stack` or `full`. The harness does not require the SaaS stack; the stack can be used without the managed workflow.
-[Explore the architecture](https://diamondforgefr.github.io/SaasFoundryAI/features/built-in.html) and
-[installation profiles](https://diamondforgefr.github.io/SaasFoundryAI/getting-started/installation.html).
+[Explore the architecture](https://saasfoundryai.diamondforge.fr/features/built-in.html) and [installation profiles](https://saasfoundryai.diamondforge.fr/getting-started/installation.html).
 
 ## What makes the harness different
 
@@ -70,7 +68,7 @@ so a typo and an authorization change do not incur the same ceremony.
 
 Supported coding-agent profiles share one project contract across Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and a generic agent. The harness records the tool profiles; it does **not**
 automatically select or dispatch a model for each subtask. Provider-neutral planning contracts are available to host integrations that explicitly supply candidates, budgets and dispatch.
-[See the workflow](https://diamondforgefr.github.io/SaasFoundryAI/guide/workflow-system.html) and [agent coexistence](https://diamondforgefr.github.io/SaasFoundryAI/guide/agent-coexistence.html).
+[See the workflow](https://saasfoundryai.diamondforge.fr/guide/workflow-system.html) and [agent coexistence](https://saasfoundryai.diamondforge.fr/guide/agent-coexistence.html).
 
 ## After setup
 
@@ -80,12 +78,12 @@ npx saasfoundryai-cli docs                              # Open the bundled docum
 npx saasfoundryai-cli update                            # Update the project or add supported modules
 ```
 
-The documentation is available [online in English](https://diamondforgefr.github.io/SaasFoundryAI/) and [French](https://diamondforgefr.github.io/SaasFoundryAI/fr/), and also ships with the CLI for
-offline use. The [first-project guide](https://diamondforgefr.github.io/SaasFoundryAI/getting-started/first-project.html) walks through a complete run.
+The documentation is available [online in English](https://saasfoundryai.diamondforge.fr/) and [French](https://saasfoundryai.diamondforge.fr/fr/), and also ships with the CLI for offline use. The
+[first-project guide](https://saasfoundryai.diamondforge.fr/getting-started/first-project.html) walks through a complete run.
 
 ## Contributing
 
-See the [development guide](docs/contributing/development.md) before opening a pull request. Changes to generated manifests or module file sets must follow the
+See the [development guide](https://saasfoundryai.diamondforge.fr/contributing/development.html) before opening a pull request. Changes to generated manifests or module file sets must follow the
 [migration framework](.claude/docs/migration-framework.md). Commits use `<type>(#<ticket>): <description>`.
 
 SaaSFoundryAI is [MIT licensed](LICENSE).
