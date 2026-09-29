@@ -15,11 +15,16 @@ Les choix détaillés sont présentés ci-dessous. Commencez par choisir entre [
 
 ## Configuration pilotée par un agent
 
-Avec Claude Code, transmettez cette phrase à l'assistant depuis le dossier de travail :
+Ouvrez le dépôt dans un assistant de développement capable de lire les fichiers et d'exécuter des commandes, puis demandez-lui :
 
-> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
+> Aide-moi à installer SaaSFoundryAI dans ce dépôt. Examine d'abord ce qui existe, recommande le bon profil d'installation et les profils d'agents adaptés à mes outils, puis demande mon accord avant
+> de lancer le CLI.
 
-Le bootstrap actuel au niveau utilisateur installe `tool-saasfoundry` dans le dossier de skills de Claude Code :
+L'assistant doit utiliser le même CLI que le parcours terminal ci-dessous. S'il dispose des capacités nécessaires, il peut guider une installation non interactive ; le harness ne dépend pas de Claude
+Code. Sélectionnez les profils des **outils de développement**, pas ceux des modèles : GPT, DeepSeek, GLM et Kimi peuvent être utilisés via un hôte compatible sans être des identifiants de profil
+`sf agents`.
+
+Claude Code propose en plus un bootstrap utilisateur facultatif qui installe `tool-saasfoundry` dans son dossier de skills :
 
 ```bash
 npx saasfoundryai-cli skill install --yes --force
@@ -27,9 +32,8 @@ npx saasfoundryai-cli skill install --yes --force
 
 Utilisez `--project` pour placer cette méta-skill dans le dépôt afin de la relire et de la partager avec l'équipe.
 
-Ce bootstrap en une phrase est actuellement natif pour Claude Code. Avec Codex, Gemini CLI, Kimi Code, Qwen Code ou un autre hôte d'agent, suivez le chemin CLI ci-dessous, sélectionnez les profils
-appropriés, puis ouvrez le projet généré dans cet hôte. Le harness prend en charge plusieurs profils ; installer la méta-skill destinée à l'assistant et configurer le harness du projet sont deux
-opérations distinctes.
+Cet **installateur de méta-skill** cible actuellement Claude Code. Codex, Gemini CLI, Kimi Code, Qwen Code et d'autres assistants capables de piloter le CLI peuvent tout de même guider l'installation
+ci-dessus ; aucun skill propre à Claude n'est requis. Installer la méta-skill destinée à l'assistant et configurer le harness du projet restent deux opérations distinctes.
 
 ## Prérequis
 

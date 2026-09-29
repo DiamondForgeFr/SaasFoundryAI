@@ -40,15 +40,15 @@ and [full installation guide](https://diamondforgefr.github.io/SaasFoundryAI/get
 
 ### With an AI assistant
 
-In **Claude Code**, open the folder you want to work in and say:
+Open the folder in a coding assistant that can inspect the repository and run terminal commands, then say:
 
-> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI, then help me set up the development harness.
+> Help me set up the SaaSFoundryAI development harness here. Inspect the existing project, propose the installation profile and CLI steps, then ask before changing files.
 
-The skill bootstraps with `npx saasfoundryai-cli skill install --yes --force`, reads the current project, proposes the commands and asks for approval before generating files. The assistant is an
-interface to the CLI, not a separate generator.
+The assistant is an interface to the CLI, not a separate generator. It can guide the setup with Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code or another capable coding tool.
 
-The one-line skill bootstrap is currently Claude Code-specific. **Codex, Gemini CLI, Kimi Code, Qwen Code and generic coding agents** can use the terminal path above, select their profiles during
-setup, then work from the shared project instructions. [Compare both paths](https://diamondforgefr.github.io/SaasFoundryAI/getting-started/setup-paths.html).
+Claude Code also supports an optional one-line `tool-saasfoundry` skill bootstrap via `npx saasfoundryai-cli skill install --yes --force`; that installer currently targets Claude Code, but the harness
+does not. GPT, DeepSeek, GLM and Kimi can name models or providers rather than coding tools: select the profile of the tool hosting the model, not the model name.
+[Compare both paths](https://diamondforgefr.github.io/SaasFoundryAI/getting-started/setup-paths.html).
 
 ## Two layers, one standard of care
 

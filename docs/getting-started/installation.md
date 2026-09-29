@@ -15,11 +15,14 @@ the shortest runnable example.
 
 ## Assistant-first setup
 
-For Claude Code, give the assistant this line from the folder you want to work in:
+Open the repository in a coding assistant that can read files and run terminal commands, and ask:
 
-> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
+> Help me set up SaaSFoundryAI in this repository. Inspect what is already here, recommend the right installation profile and coding-agent profiles, then ask before running the CLI.
 
-The current user-scope bootstrap installs `tool-saasfoundry` into Claude Code's skill directory:
+The assistant should use the same CLI as the terminal path below. It can guide a non-interactive setup when it has the required capabilities; the harness is not tied to Claude Code. Select profiles
+for the **coding tools** you use, not their models: GPT, DeepSeek, GLM and Kimi models can be used through a capable host without being `sf agents` profile IDs.
+
+Claude Code additionally offers an optional user-scope bootstrap that installs `tool-saasfoundry` into its skill directory:
 
 ```bash
 npx saasfoundryai-cli skill install --yes --force
@@ -27,9 +30,8 @@ npx saasfoundryai-cli skill install --yes --force
 
 Use `--project` to place that meta-skill in the repository for review and team sharing.
 
-This bootstrap path is currently native to Claude Code. With Codex, Gemini CLI, Kimi Code, Qwen Code, or another coding-agent host, start with the CLI path below, select the appropriate profiles, then
-open the generated project in that host. The generated harness itself supports several coding-agent profiles; installing the assistant-facing meta-skill and configuring the project harness are
-separate operations.
+That **meta-skill installer** currently targets Claude Code. Codex, Gemini CLI, Kimi Code, Qwen Code and other capable assistants can still guide the CLI setup above; no Claude-specific skill is
+required. Installing the assistant-facing meta-skill and configuring the project harness are separate operations.
 
 ## Prerequisites
 
