@@ -33,12 +33,17 @@ La dernière commande ouvre la documentation embarquée dans le CLI, même sans 
 
 ## Vous préférez demander à un assistant ?
 
-Dans **Claude Code**, ouvrez le dépôt et dites :
+Ouvrez le dépôt dans un assistant de développement capable de lire ses fichiers et d'exécuter des commandes, puis dites :
 
-> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI, then help me set up the development harness in this repository.
+> Aide-moi à installer le harness de développement SaaSFoundryAI dans ce dépôt. Examine d'abord le projet existant, propose les commandes CLI et les profils d'agents adaptés à mes outils, puis demande
+> mon accord avant de modifier les fichiers.
 
-L'assistant propose l'installation et demande votre accord avant de lancer le même CLI. Cette phrase d'amorçage du skill ne fonctionne actuellement de façon native que dans Claude Code. Avec Codex,
-Gemini CLI, Kimi Code, Qwen Code ou un autre agent, suivez les étapes du terminal, sélectionnez son profil, puis ouvrez le dépôt configuré dans cet agent.
+L'assistant peut guider le même parcours `npx saasfoundryai-cli new --profile harness` que ci-dessus ; il ne doit pas recréer le scaffold à la main. Claude Code, Codex, Gemini CLI, Kimi Code et Qwen
+Code disposent de profils d'agents enregistrés. Pour un autre hôte, choisissez `generic` et vérifiez qu'il peut lire les instructions générées et exécuter les commandes requises. L'installation
+facultative du **skill** `tool-saasfoundry` en une phrase cible actuellement Claude Code ; elle n'est pas nécessaire pour installer ou utiliser le harness avec un autre assistant.
+
+GPT, DeepSeek, GLM et Kimi peuvent désigner des modèles ou des fournisseurs de modèles, pas nécessairement des hôtes d'agents. Utilisez-les dans un outil ayant accès au dépôt et au terminal ; pendant
+l'installation, sélectionnez le profil de cet outil, pas le nom du modèle.
 
 Pour les choix détaillés, les plateformes et la création d'un nouveau produit, consultez le [guide d'installation complet](/fr/getting-started/installation) ou les
 [parcours CLI et assistant](/fr/getting-started/setup-paths).

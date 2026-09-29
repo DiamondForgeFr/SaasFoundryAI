@@ -31,12 +31,17 @@ The last command opens the documentation bundled with the CLI, even without the 
 
 ## Prefer to ask an assistant?
 
-In **Claude Code**, open the repository and say:
+Open the repository in a coding assistant that can read its files and run terminal commands, then say:
 
-> Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI, then help me set up the development harness in this repository.
+> Help me set up the SaaSFoundryAI development harness in this repository. Inspect the existing project first, propose the CLI steps and coding-agent profiles for the tools I use, and ask before
+> changing files.
 
-The assistant proposes the setup and asks for approval before running the same CLI. This one-line skill bootstrap is currently Claude Code-specific. With Codex, Gemini CLI, Kimi Code, Qwen Code or
-another coding agent, run the terminal steps above, select that agent's profile, then open the configured repository in the agent.
+The assistant can guide the same `npx saasfoundryai-cli new --profile harness` flow shown above; it should not recreate the scaffold by hand. Claude Code, Codex, Gemini CLI, Kimi Code and Qwen Code
+have registered coding-agent profiles. For another host, choose `generic` and verify that it can read the generated instructions and run the required commands. The optional one-line `tool-saasfoundry`
+**skill installer** currently targets Claude Code; it is not required to set up or use the harness with another assistant.
+
+GPT, DeepSeek, GLM and Kimi can name models or model providers, not necessarily coding-agent hosts. Use them through a host that exposes the needed repository and terminal capabilities; select the
+host's profile, not a model name, during setup.
 
 Need the decision matrix, platform notes or a new-project walkthrough? Continue to the [full installation guide](/getting-started/installation) or
 [CLI versus assistant setup](/getting-started/setup-paths).

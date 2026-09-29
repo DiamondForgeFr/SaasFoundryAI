@@ -60,22 +60,30 @@ Use this path when you want to understand every decision or when no assistant ru
 
 ## Path 2 — assistant-driven
 
-The one-line assistant bootstrap is currently native to **Claude Code**:
+Open the repository in a coding assistant that can inspect files and run commands, then ask it to guide the setup:
+
+> Help me set up SaaSFoundryAI here. Inspect the existing project, propose the installation profile, coding-agent profiles and CLI command, then ask before changing files.
+
+The assistant drives the same CLI, using a non-interactive command when it can. It must not answer interactive Inquirer prompts or write scaffold files by hand. The coding-agent profile describes the
+**host tool**, not its model: GPT, DeepSeek, GLM and Kimi models can be used through a capable host.
+
+Claude Code also has an optional one-line bootstrap for its user-scoped `tool-saasfoundry` skill:
 
 > Install the SaaSFoundryAI skill from https://github.com/DiamondForgeFr/SaasFoundryAI
 
-It installs the user-scoped `tool-saasfoundry` skill with:
+That skill installer runs:
 
 ```bash
 npx saasfoundryai-cli skill install --yes --force
 ```
 
-The skill then orchestrates the same CLI. It never answers interactive Inquirer prompts and never writes scaffold files by hand.
+The skill then orchestrates the same CLI. It is an assistant-side convenience, not a prerequisite for the project harness.
 
-::: info Claude-first bootstrap, multi-agent project
+::: info Multi-agent project, host-specific skill installation
 
-The bootstrap sentence above is Claude-specific; the generated harness is not. It can declare Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and the Generic coding agent profile in the same
-project. For another host, run the interactive CLI once, select its profile, then open the generated project in that host. Inspect the current registry with `sf agents catalog --json`.
+The optional skill-install sentence above currently targets Claude Code; assistant-guided **CLI setup** does not. A project can declare Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and the
+Generic coding-agent profile together. For an unlisted host, select `generic` and verify it can load project instructions and run the guarded commands. Inspect the current registry with
+`sf agents catalog --json`.
 
 :::
 

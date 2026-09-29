@@ -55,8 +55,8 @@ sf agents replace claude-code codex --scope shared
 sf agents doctor codex claude-code
 ```
 
-Claude Code dispose actuellement du bootstrap natif en une phrase. Les autres hôtes commencent par le CLI et le profil déclaré, puis suivent le fichier `AGENTS.md` généré ou leur point d'entrée
-propre.
+Claude Code dispose actuellement d'un installateur facultatif en une phrase pour son skill `tool-saasfoundry`. Les autres hôtes capables de piloter le CLI peuvent aussi guider la même installation
+sans ce skill : sélectionnez leur profil déclaré, puis suivez le fichier `AGENTS.md` généré ou leur point d'entrée propre.
 
 ## 3. Instructions du projet et skills
 
