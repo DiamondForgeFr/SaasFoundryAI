@@ -172,3 +172,33 @@ describe('committed multirepo lockfiles', () => {
     expect(minimumResolutionDrift(staleLock, { 'fast-uri': '3.1.8' })).toEqual(['fast-uri: expected every resolution to be at least 3.1.8, received 2.99.0'])
   })
 })
+
+/**
+ * The CLI, the client and the driver adapter are one Prisma release: #586 bumped
+ * two of them and left the adapter behind (#862), which no build or test noticed.
+ */
+describe('Prisma release line in the API templates', () => {
+  const PRISMA_RUNTIME = ['prisma', '@prisma/client', '@prisma/adapter-pg'] as const
+  const templates = ['monorepo', 'multirepo'].map((topology) => ({
+    topology,
+    manifest: readJson<PackageManifest>(join(ROOT, 'scaffolds', 'overlays', topology, 'api', 'package.json'))
+  }))
+
+  const declaredVersions = (manifest: PackageManifest): Record<string, string | undefined> =>
+    Object.fromEntries(PRISMA_RUNTIME.map((name) => [name, manifest.dependencies?.[name] ?? manifest.devDependencies?.[name]]))
+
+  it.each(templates)('$topology declares prisma, @prisma/client and @prisma/adapter-pg at one version', ({ manifest }) => {
+    const versions = declaredVersions(manifest)
+    expect(new Set(Object.values(versions)).size).toBe(1)
+    expect(versions.prisma).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+
+  it('resolves the adapter and its driver utilities from the same release in the multirepo lock', () => {
+    const directory = join(MULTIREPO, 'api')
+    const manifest = readJson<PackageManifest>(join(directory, 'package.json'))
+    const lock = readJson<PackageLock>(join(directory, 'package-lock.json'))
+    const release = declaredVersions(manifest).prisma!
+
+    expect(resolutionDrift(lock, { prisma: release, '@prisma/client': release, '@prisma/adapter-pg': release, '@prisma/driver-adapter-utils': release })).toEqual([])
+  })
+})
