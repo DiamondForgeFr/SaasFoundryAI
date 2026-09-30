@@ -230,9 +230,14 @@ export class OrganizationService {
   // TODO storage-service-active:     // Update organization with new logo URL
   // TODO storage-service-active:     const updated = await this.prisma.organization.update({ where: { id }, data: { logoUrl } })
   // TODO storage-service-active:     return {
-  // TODO storage-service-active:       id: updated.id, name: updated.name, type: updated.type,
-  // TODO storage-service-active:       description: updated.description, website: updated.website,
-  // TODO storage-service-active:       logoUrl: updated.logoUrl, createdAt: updated.createdAt, updatedAt: updated.updatedAt
+  // TODO storage-service-active:       id: updated.id,
+  // TODO storage-service-active:       name: updated.name,
+  // TODO storage-service-active:       type: updated.type,
+  // TODO storage-service-active:       description: updated.description,
+  // TODO storage-service-active:       website: updated.website,
+  // TODO storage-service-active:       logoUrl: updated.logoUrl,
+  // TODO storage-service-active:       createdAt: updated.createdAt,
+  // TODO storage-service-active:       updatedAt: updated.updatedAt
   // TODO storage-service-active:     }
   // TODO storage-service-active:   } catch (error) {
   // TODO storage-service-active:     if (error instanceof NotFoundException || error instanceof UnauthorizedException) throw error

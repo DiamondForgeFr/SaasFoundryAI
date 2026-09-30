@@ -1,3 +1,4 @@
+import { spawnSync } from 'child_process'
 import { copy } from 'fs-extra'
 import { rm } from 'fs/promises'
 import { join, resolve } from 'path'
@@ -118,6 +119,34 @@ describe('installStorageModule (integration)', () => {
       join(apiPath, 'src/modules/organizations/services/organization.service.ts'),
       'private readonly accountAccessService: AccountAccessService,\n    private readonly storageService: StorageService'
     )
+  })
+
+  // #863 — the markers were stripped correctly, but the spec's provider list came out as
+  // `}\n      ,{`, which the generated eslint config rejects through prettier/prettier.
+  it('leaves every activated file formatted as the generated prettier config requires', async () => {
+    await installStorageModule({
+      apiPath,
+      webPath,
+      isMonorepo: false,
+      projectName: 'test-project',
+      s3Setup: 'docker',
+      skipNpmInstall: true
+    })
+
+    const gated = [
+      'src/configs/env/services/env.service.ts',
+      'src/app.module.ts',
+      'src/modules/organizations/organizations.module.ts',
+      'src/modules/organizations/controllers/organization.controller.ts',
+      'src/modules/organizations/services/organization.service.ts',
+      'src/modules/organizations/tests/unit/organization.service.spec.ts'
+    ]
+    // The CLI, not the API: prettier 3 loads its plugins through dynamic imports Jest cannot run.
+    // From apiPath it resolves the `.prettierrc` the generated API ships with.
+    const check = spawnSync(process.execPath, [require.resolve('prettier/bin/prettier.cjs'), '--list-different', ...gated], { cwd: apiPath, encoding: 'utf8' })
+    const unformatted = check.stdout.split('\n').filter(Boolean)
+
+    expect(unformatted).toEqual([])
   })
 
   it('should set docker S3 credentials in .env when s3Setup is docker', async () => {
