@@ -66,7 +66,7 @@
     "prepare": "husky",
     "test:impact": "node scaffolds/shared/validation/run-impact-validation.mjs --config .saasfoundry/validation.json",
     "test:staged": "npm run test:impact -- --staged --config .saasfoundry/validation.commit.json",
-    "test:impact-contract": "jest --selectProjects unit --runInBand src/__tests__/unit/ci/impact-classifier.spec.ts src/__tests__/unit/ci/impact-workflow.spec.ts src/__tests__/unit/ci/commit-validation.spec.ts",
+    "test:impact-contract": "jest --selectProjects unit --runInBand src/__tests__/unit/ci/impact-classifier.spec.ts src/__tests__/unit/ci/impact-workflow.spec.ts src/__tests__/unit/ci/commit-validation.spec.ts src/__tests__/unit/ci/required-gate.spec.ts",
     "test:docs-integrity": "jest --selectProjects unit --runInBand src/__tests__/unit/docs",
     "test:release-contract": "jest --selectProjects unit --runInBand src/__tests__/unit/release/release-contract.spec.ts",
     "test:impact:guards": "npm run format:check && npm run test:impact-contract",

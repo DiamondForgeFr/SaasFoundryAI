@@ -107,6 +107,11 @@ propre dépôt, mais les paramètres GitHub restent la frontière d'application.
 La protection de branche vise un contrôle stable : **`CI / Required gate`**. Il vérifie la version du contrat, les sorties booléennes et la concordance entre le plan demandé et le résultat du job. Un
 job sélectionné absent ou en échec fait échouer ce contrôle.
 
+Le contrôle obligatoire démarre sans dépendances et reste en attente pendant que `CI / Validation result` vérifie le plan du run courant. Il lit uniquement les jobs de la tentative courante : le
+succès d'un ancien run draft ne peut pas autoriser une PR nouvellement promue. Un verdict annulé, ignoré, ambigu, indisponible ou expiré ne devient jamais un succès. Si seul le job de suivi est
+relancé sans son verdict, relancez le workflow complet. L'attente est bornée à 80 minutes (budget du job : 90 minutes) ; les pipelines personnalisés plus longs doivent adapter cette borne. Le contrôle
+n'a besoin que de `actions: read` et ne récupère aucun code du dépôt.
+
 ## Comment les économies sont prouvées
 
 Les tests du dépôt vérifient la sélection elle-même, pas un pourcentage marketing :

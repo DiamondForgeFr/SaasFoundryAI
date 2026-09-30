@@ -31,13 +31,15 @@ describe.each(FILES)('%s draft validation policy', (file) => {
     expect(workflow.jobs.classify.if).toBeUndefined()
     expect(workflow.jobs.required_gate.if).toBe('always()')
     for (const [name, job] of Object.entries(workflow.jobs)) {
-      if (name === 'classify' || name === 'required_gate') continue
+      if (name === 'classify' || name === 'required_gate' || name === 'validation_result') continue
       expect(job.if).toContain('needs.classify.outputs.')
     }
   })
   it('runs validation for ready PRs while preserving Docker target branch selection', () => {
     expect(workflow.jobs.classify).toBeDefined()
-    expect(workflow.jobs.required_gate.needs).toEqual(expect.arrayContaining(['classify']))
+    expect(workflow.jobs.required_gate.needs).toBeUndefined()
+    expect(workflow.jobs.validation_result.if).toBe('always()')
+    expect(workflow.jobs.validation_result.needs).toEqual(expect.arrayContaining(['classify']))
   })
   it('keeps ordinary pushes selective and routes release, schedule and manual surfaces through classification', () => {
     expect(workflow.on.push?.branches).toEqual(expect.arrayContaining(['master', 'develop', 'rc-*']))

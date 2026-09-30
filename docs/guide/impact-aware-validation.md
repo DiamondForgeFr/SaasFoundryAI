@@ -106,6 +106,10 @@ enforcement boundary. Do not replace this with `pull_request_target` while execu
 Branch protection targets one stable check: **`CI / Required gate`**. That gate verifies the contract version, validates boolean outputs and compares the job result with the requested plan. A selected
 job that fails or disappears fails the gate; an unexpected job result also fails it.
 
+The required gate starts without job dependencies and stays pending while `CI / Validation result` verifies the current run's plan. It reads only the current run attempt's jobs, so an earlier draft
+success cannot authorize a newly promoted PR. Cancelled, skipped, ambiguous, unavailable or timed-out verdicts never become success. If the polling job alone is retried without its verdict, rerun the
+full workflow. The polling deadline is 80 minutes (90-minute job budget); unusually long custom pipelines must adjust this bound. The gate needs only `actions: read` and checks out no repository code.
+
 ## How the savings are proved
 
 The repository tests assert the selection itself, not a marketing percentage:
