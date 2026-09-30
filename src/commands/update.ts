@@ -55,6 +55,7 @@ import { handleProfileTransition } from './update.profile-transition'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../harness/agent-instructions'
+import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
@@ -1385,6 +1386,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     // Existing projects may still carry the legacy unconditional SRS hook.
     // Reconcile it even when no modules are selected below.
     if (!dryRun) await reconcileSrsIntentHook('.', Boolean(manifest.tools?.srs?.enabled))
+    if (!dryRun && manifest.modules?.harness?.agents?.length) {
+      await installSelectedAgentInstructions(manifest, manifest.projectName, manifest.modules.harness.agents, persistManifest)
+    }
 
     // ─── FLOW 2: Module addition ───
     const availableModules = getAvailableModules(manifest)
@@ -1812,6 +1816,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         }
       }
       await persistManifest()
+
+      // Module additions (notably SRS) happen after the first bridge refresh.
+      if (manifest.modules?.harness?.agents?.length) {
+        await installSelectedAgentInstructions(manifest, manifest.projectName, manifest.modules.harness.agents, persistManifest)
+      }
 
       moduleSpinner.succeed(chalk.green('Modules installed successfully'))
     } catch (error) {

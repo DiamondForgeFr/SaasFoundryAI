@@ -354,6 +354,13 @@ async function bundledFiles(name: string): Promise<Set<string>> {
     }
   }
   for (const candidate of candidates) await visit(candidate)
+  // The Solo installer moves this bundled directory to `statuses`. Keep the
+  // installed names inside the trusted inventory as well as the source names.
+  if (name === 'sf-workflow') {
+    for (const file of [...files]) {
+      if (file.startsWith('statuses-solo/')) files.add(`statuses/${file.slice('statuses-solo/'.length)}`)
+    }
+  }
   return files
 }
 

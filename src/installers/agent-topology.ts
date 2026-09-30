@@ -1,8 +1,9 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { mkdir, writeFile } from 'fs/promises'
 
 import { installAgentInstructions } from '../harness/agent-instructions'
 import { resolveHarnessAgents, type HarnessAgent } from '../harness/agent-registry'
 import type { SaaSFoundryManifest } from '../types'
+import { readManifestFileSafe, replaceManifestFileSafe } from '../manifest-file'
 
 export function projectMultirepoChildManifest(manifest: SaaSFoundryManifest, app: 'api' | 'web'): SaaSFoundryManifest {
   const harness = manifest.modules?.harness
@@ -43,18 +44,29 @@ export async function writeMultirepoAgentManifests(manifest: SaaSFoundryManifest
   }
 }
 
-export async function installSelectedAgentInstructions(manifest: SaaSFoundryManifest, projectName: string, agents: HarnessAgent[] | undefined): Promise<void> {
+export async function installSelectedAgentInstructions(
+  manifest: SaaSFoundryManifest,
+  projectName: string,
+  agents: HarnessAgent[] | undefined,
+  persistRootManifest?: () => Promise<void>
+): Promise<void> {
   const declaredAgents = resolveHarnessAgents(agents)
 
-  const targets = manifest.structure === 'monorepo' ? ['.'] : [`apps/${projectName}-api`, `apps/${projectName}-web`]
+  const targets = manifest.structure === 'multirepo' ? [`apps/${projectName}-api`, `apps/${projectName}-web`] : ['.']
   for (const targetPath of targets) {
     const targetManifestPath = targetPath === '.' ? '.saasfoundry.json' : `${targetPath}/.saasfoundry.json`
-    const targetManifest = targetPath === '.' ? manifest : (JSON.parse(await readFile(targetManifestPath, 'utf8')) as SaaSFoundryManifest)
-    const report = await installAgentInstructions({ targetPath, agents: declaredAgents, manifest: targetManifest })
-    if (Object.keys(report.fileHashes).length > 0) {
+    const childSnapshot = targetPath === '.' ? undefined : await readManifestFileSafe(targetManifestPath)
+    const targetManifest = childSnapshot ? (JSON.parse(childSnapshot.bytes.toString('utf8')) as SaaSFoundryManifest) : manifest
+    const targetAgents = childSnapshot ? resolveHarnessAgents(targetManifest.modules?.harness?.agents ?? agents) : declaredAgents
+    const report = await installAgentInstructions({ targetPath, agents: targetAgents, manifest: targetManifest })
+    for (const warning of report.warnings) console.warn(warning)
+    for (const conflict of report.conflicts) console.warn(`Agent instructions need reconciliation: ${conflict}`)
+    if (Object.entries(report.fileHashes).some(([path, hash]) => targetManifest.fileHashes?.[path] !== hash)) {
       targetManifest.fileHashes = { ...targetManifest.fileHashes, ...report.fileHashes }
-      await writeFile(targetManifestPath, JSON.stringify(targetManifest, null, 2))
       if (targetPath === '.') Object.assign(manifest, targetManifest)
+      if (targetPath === '.' && persistRootManifest) await persistRootManifest()
+      else if (childSnapshot) await replaceManifestFileSafe(childSnapshot, Buffer.from(JSON.stringify(targetManifest, null, 2)))
+      else await writeFile(targetManifestPath, JSON.stringify(targetManifest, null, 2))
     }
   }
 }
