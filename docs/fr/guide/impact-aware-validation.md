@@ -49,6 +49,21 @@ Le hook de pre-commit valide l'instantané préparé dans l'index Git, pas les m
 npm run test:staged
 ```
 
+Pour les **contributeurs au dépôt SaaSFoundryAI lui-même**, cette commande utilise `.saasfoundry/validation.commit.json` : même classifieur, même isolation de l'index, mais aucune commande Docker au
+commit. Les changements de documentation, frontend, backend et harness conservent leurs contrôles ciblés. Un changement limité au cycle de vie lance les gardes et tests de contrat ; ses vrais
+scénarios Docker restent obligatoires avant livraison. Un changement du cœur, de la racine ou d'un fichier inconnu conserve le fallback complet, mais vers `test:commit:full` (formatage, lint, build,
+intégrité du package et toutes les suites Jest), pas vers la suite Docker de release.
+
+Après le commit et le push, le workflow contributeur exige une validation lourde explicite pendant AI testing :
+
+```bash
+npm run test:pre-push
+```
+
+Consignez le commit testé et l'environnement dans le rapport du ticket. Il ne s'agit pas d'un cache automatique de résultats : toute modification pertinente du code ou de l'environnement exige une
+nouvelle validation, et la CI valide la PR indépendamment. La revue humaine et les éventuelles étapes Human testing restent inchangées. Les projets générés conservent leur propre table
+`.saasfoundry/validation.json` ; cette optimisation réservée aux contributeurs ne modifie ni leurs hooks ni leur politique de release.
+
 Inspectez une plage sans exécuter les commandes :
 
 ```bash

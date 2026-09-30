@@ -5,3 +5,5 @@
 /.github/workflows/ @AGachet
 /scaffolds/shared/validation/ @AGachet
 /.saasfoundry/validation.json @AGachet
+/.saasfoundry/validation.commit.json @AGachet
+/package.json @AGachet

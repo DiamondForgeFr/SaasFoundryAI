@@ -49,6 +49,20 @@ The pre-commit hook validates the staged snapshot, not every unstaged edit in th
 npm run test:staged
 ```
 
+For **contributors to SaaSFoundryAI itself**, this command uses `.saasfoundry/validation.commit.json`: the same classifier and staged isolation, with no Docker commands at commit time. Docs, frontend,
+backend and harness changes keep their targeted checks. Lifecycle-only changes run guard/contract checks; their real Docker scenarios remain mandatory before delivery. Core, root or unknown changes
+still fail wide, but to `test:commit:full` (format, lint, build, package integrity and all Jest suites), not the release-grade Docker suite.
+
+After committing and pushing, the contributor workflow requires explicit heavy validation during AI testing:
+
+```bash
+npm run test:pre-push
+```
+
+Record the tested commit and environment in the ticket's test report. This is not an automatic result cache: relevant code or environment changes require revalidation, and CI independently validates
+the PR. Human review and any required Human testing remain unchanged. Generated projects retain their own `.saasfoundry/validation.json` mapping; this contributor-only optimization does not alter
+their hooks or release policy.
+
 Inspect an explicit range without executing its commands:
 
 ```bash
