@@ -94,10 +94,26 @@ export class OrganizationController {
   // TODO storage-service-active: @Post(':id/logo')
   // TODO storage-service-active: @RequirePermissions(['ORGANIZATION_UPDATE'], 'ORGANIZATION_ADMINISTRATION')
   // TODO storage-service-active: @UseGuards(PermissionsGuard)
-  // TODO storage-service-active: @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => { const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']; if (allowedMimes.includes(file.mimetype)) { cb(null, true) } else { cb(new BadRequestException('Only image files are allowed (jpeg, png, webp, svg)'), false) } } }))
+  // TODO storage-service-active: @UseInterceptors(
+  // TODO storage-service-active:   FileInterceptor('file', {
+  // TODO storage-service-active:     limits: { fileSize: 5 * 1024 * 1024 },
+  // TODO storage-service-active:     fileFilter: (_req, file, cb) => {
+  // TODO storage-service-active:       const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
+  // TODO storage-service-active:       if (allowedMimes.includes(file.mimetype)) {
+  // TODO storage-service-active:         cb(null, true)
+  // TODO storage-service-active:       } else {
+  // TODO storage-service-active:         cb(new BadRequestException('Only image files are allowed (jpeg, png, webp, svg)'), false)
+  // TODO storage-service-active:       }
+  // TODO storage-service-active:     }
+  // TODO storage-service-active:   })
+  // TODO storage-service-active: )
   // TODO storage-service-active: @ApiOperation({ summary: 'Upload organization logo', description: 'Upload a logo image for the organization.' })
   // TODO storage-service-active: @ApiConsumes('multipart/form-data')
-  // TODO storage-service-active: @ApiBody({ description: 'Logo file (jpeg, png, webp, svg — max 5MB)', required: true, schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: 'Logo image file' } } } })
+  // TODO storage-service-active: @ApiBody({
+  // TODO storage-service-active:   description: 'Logo file (jpeg, png, webp, svg — max 5MB)',
+  // TODO storage-service-active:   required: true,
+  // TODO storage-service-active:   schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: 'Logo image file' } } }
+  // TODO storage-service-active: })
   // TODO storage-service-active: @ApiParam({ name: 'id', description: 'Organization ID' })
   // TODO storage-service-active: @ApiResponse({ status: 200, description: 'Logo uploaded successfully', type: FetchOrganizationResponseDto })
   // TODO storage-service-active: @ApiResponse({ status: 400, description: 'Invalid file type or size' })

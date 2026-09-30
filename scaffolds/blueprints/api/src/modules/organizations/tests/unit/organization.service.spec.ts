@@ -39,7 +39,7 @@ class OrganizationServiceTest extends ServiceTestBase<OrganizationService> {
       { provide: PrismaService, useValue: mockPrismaService },
       { provide: Logger, useValue: mockLogger },
       { provide: AccountAccessService, useValue: mockAccountAccessService }
-      // TODO storage-service-active: ,{
+      // TODO storage-service-active-parameter: {
       // TODO storage-service-active:   provide: StorageService,
       // TODO storage-service-active:   useValue: {
       // TODO storage-service-active:     uploadFile: jest.fn(),
