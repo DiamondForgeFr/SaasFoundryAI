@@ -32,6 +32,7 @@ jest.mock('ora', () => () => {
 
 import { updateCommand } from '../../../commands/update'
 import { installHarness } from '../../../installers/harness.installer'
+import { installSrsSkill } from '../../../installers/srs-skill.installer'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
 
@@ -198,6 +199,32 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
 
     const manifest = await readManifest()
     expect(manifest.version).toBe(cliVersion)
+  })
+
+  it.each([false, true])('repairs missing shared SRS skills without changing custom shared files (dryRun=%s)', async (dryRun) => {
+    const agents = ['claude-code', 'codex'] as const
+    const report = await installHarness({ targetPath: projectDir, projectName: 'acme', version: cliVersion, agents: [...agents] })
+    await installSrsSkill({ targetPath: projectDir })
+    const customizedPath = '.agents/skills/sf-git-commit/SKILL.md'
+    await writeFile(join(projectDir, customizedPath), '# Custom shared commit instructions\n')
+    await writeManifest({
+      version: cliVersion,
+      modules: { harness: { version: 1, agents: [...agents] } },
+      tools: { srs: { enabled: true, backend: 'notion', rootPage: { id: 'srs-root', url: 'https://example.test/srs', name: 'acme-srs' } } },
+      fileHashes: report?.fileHashes
+    })
+    const before = await readFile(manifestPath(), 'utf8')
+
+    await updateCommand({ nonInteractive: true, dryRun })
+
+    expect(await readFile(join(projectDir, customizedPath), 'utf8')).toBe('# Custom shared commit instructions\n')
+    if (dryRun) {
+      await expect(readFile('.agents/skills/sf-srs/SKILL.md', 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(await readFile(manifestPath(), 'utf8')).toBe(before)
+    } else {
+      expect(await readFile('.agents/skills/sf-srs/SKILL.md', 'utf8')).toContain('name: sf-srs')
+      expect((await readManifest()).fileHashes['.agents/skills/sf-srs/SKILL.md']).toBeDefined()
+    }
   })
 
   it('removes an obsolete SRS hook when a harness-only project has no SRS module', async () => {

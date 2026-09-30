@@ -17,6 +17,9 @@ jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual
 
 jest.mock('../../../runners/database.runner', () => ({ initAndStartDb: jest.fn() }))
 jest.mock('../../../runners/s3.runner', () => ({ initAndStartS3: jest.fn() }))
+jest.mock('../../../runners/srs.runner', () => ({
+  bootstrapSrs: jest.fn().mockResolvedValue({ rootPage: { id: 'srs-root', url: 'https://example.test/srs', name: 'acme-srs' } })
+}))
 jest.mock('../../../runners/server.runner', () => ({
   startBackend: jest.fn(),
   startFrontend: jest.fn(),
@@ -169,7 +172,8 @@ describe('newCommand (--profile integration)', () => {
       projectName: 'acme',
       mainBranch: 'main',
       workflow: 'solo',
-      tracker: 'github-projects'
+      tracker: 'github-projects',
+      agents: 'claude-code,codex'
     })
 
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
@@ -186,6 +190,31 @@ describe('newCommand (--profile integration)', () => {
     expect(statusDocs.filter((file) => /^\d+-/.test(file)).sort()).toEqual(['1-backlog.md', '2-in-progress.md', '3-ai-testing.md', '4-in-review.md', '5-done.md'])
     expect(await readFile(join(tempDir, '.claude', 'skills', 'sf-workflow', 'workflow-cli.sh'), 'utf8')).toContain('manifest_statuses()')
     expect(await readdir(join(tempDir, '.claude', 'skills'))).toContain('sf-tool-github-projects')
+    expect(await readdir(join(tempDir, '.agents', 'skills', 'sf-workflow', 'statuses'))).toEqual(statusDocs)
+    for (const file of statusDocs) {
+      expect(manifest.fileHashes[`.agents/skills/sf-workflow/statuses/${file}`]).toBeDefined()
+    }
+  })
+
+  it('publishes the SRS skill to declared shared agents after SRS bootstrap', async () => {
+    await newCommand({
+      nonInteractive: true,
+      profile: 'harness',
+      projectName: 'acme',
+      mainBranch: 'main',
+      agents: 'claude-code,codex',
+      srsEnable: true,
+      srsBackend: 'notion',
+      srsParentPageInput: '00000000-0000-0000-0000-000000000001',
+      notionApiToken: 'fixture-token'
+    })
+
+    const sharedSkill = await readFile('.agents/skills/sf-srs/SKILL.md', 'utf8')
+    expect(sharedSkill).toContain('name: sf-srs')
+    expect(await readFile('.agents/skills/sf-srs/scripts/srs-cli.sh', 'utf8')).toContain('#!/usr/bin/env bash')
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest.fileHashes['.agents/skills/sf-srs/SKILL.md']).toBeDefined()
+    expect(manifest.tools.srs.enabled).toBe(true)
   })
 
   // Covers the S4 scenarios of #514, which were only validated by hand: a fresh
