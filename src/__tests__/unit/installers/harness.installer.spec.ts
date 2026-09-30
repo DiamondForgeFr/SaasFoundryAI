@@ -66,6 +66,7 @@ describe('harness installer', () => {
       // Claude Code hooks
       const settings = JSON.parse(await readFile(join(dir, '.claude', 'settings.json'), 'utf8'))
       expect(JSON.stringify(settings.hooks.SessionStart)).toContain('sf status --claude-friendly --no-network')
+      expect(settings.hooks.UserPromptSubmit).toBeUndefined()
     })
 
     it('never overwrites an existing CLAUDE.md — only appends the workflow section', async () => {

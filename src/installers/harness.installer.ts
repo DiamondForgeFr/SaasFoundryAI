@@ -155,8 +155,7 @@ export interface InstallHarnessParams {
 }
 
 const HARNESS_HOOKS: ClaudeHooksConfig = {
-  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }],
-  UserPromptSubmit: [{ hooks: [{ type: 'command', command: '.claude/skills/sf-srs/scripts/srs-intent-hook.sh' }] }]
+  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }]
 }
 
 export interface MergeHarnessUserFilesParams {

@@ -522,8 +522,9 @@ The classifier above is also wired into Claude Code's `UserPromptSubmit` event s
 [`scripts/srs-intent-hook.sh`](scripts/srs-intent-hook.sh) runs on every prompt the user sends, pipes it through `detect-eval-signals.sh --classify`, and emits a `<system-reminder>` only when the
 classifier returns `signal ∈ {ur, fr, ds, tc, revision}` AND `confidence != "low"`. The reminder points the agent at this skill — it does not act on its own.
 
-The hook is registered under the `UserPromptSubmit` block of `.claude/settings.json` in every scaffold (root, api blueprint, web blueprint, monorepo overlay). It always exits 0 (`UserPromptSubmit`
-hooks are non-blocking by contract) and degrades silently when prerequisites are missing (no `jq`, classifier removed, garbage stdin).
+`sf new` registers the hook in the project-root `.claude/settings.json` only after installing `sf-srs`; projects without SRS do not receive it. `sf update` removes the managed hook when SRS is no
+longer enabled or its script is absent, while preserving unrelated hooks. The script always exits 0 (`UserPromptSubmit` hooks are non-blocking by contract) and degrades silently when prerequisites are
+missing (no `jq`, classifier removed, garbage stdin).
 
 **Three opt-out paths**, in priority order:
 

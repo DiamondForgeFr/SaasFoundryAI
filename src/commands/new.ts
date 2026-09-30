@@ -26,6 +26,7 @@ import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { Answers, manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '../types'
 import type { HarnessAgent } from '../harness/agent-registry'
 import { upsertEnvKey } from '../utils/env-file'
+import { reconcileSrsIntentHook } from '../utils/claude-settings'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
@@ -167,6 +168,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     const srsTools = await bootstrapSrsWorkspace(startProjectAnswers, (text) => {
       spinner.text = text
     })
+    await reconcileSrsIntentHook('.', Boolean(srsTools?.enabled))
 
     // Generate .saasfoundry.json manifest with file hashes
     spinner.text = 'Computing file hashes for update tracking...'
@@ -665,6 +667,7 @@ async function runHarnessInstall(config: Answers): Promise<void> {
     const srsTools = await bootstrapSrsWorkspace(config, (text) => {
       spinner.text = text
     })
+    await reconcileSrsIntentHook('.', Boolean(srsTools?.enabled))
 
     spinner.text = 'Writing .saasfoundry.json...'
     const manifest: SaaSFoundryManifest = {
