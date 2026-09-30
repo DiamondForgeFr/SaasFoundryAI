@@ -12,10 +12,9 @@ import { StepDefinition } from '../types'
  * say so now: they used to promise "no AI workflow configuration", which a user reasonably
  * read as "no `.claude/` directory at all", and then found seven skills in their repo (#628).
  *
- * Removing the deposit is a different decision, and a larger one: the deposited
- * `.claude/settings.json` registers a `UserPromptSubmit` hook pointing at
- * `.claude/skills/sf-srs/scripts/srs-intent-hook.sh`, so dropping the skills while keeping
- * the settings would ship a configuration referencing a script that is not there.
+ * The SRS prompt hook is installed separately, only after the optional SRS
+ * skill is present. Core skills can therefore remain on the stack profile
+ * without leaving a hook pointing at a missing script.
  */
 export const profileStep: StepDefinition = {
   id: 'profile',

@@ -16,6 +16,8 @@ export interface ClaudeHookGroup {
 /** Hooks keyed by Claude Code event name (SessionStart, UserPromptSubmit, …). */
 export type ClaudeHooksConfig = Record<string, ClaudeHookGroup[]>
 
+export const SRS_INTENT_HOOK_COMMAND = '.claude/skills/sf-srs/scripts/srs-intent-hook.sh'
+
 /**
  * Merge hook groups into `<targetPath>/.claude/settings.json` without
  * clobbering anything the user already configured. Idempotent: a hook command
@@ -48,6 +50,27 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
 
   settings.hooks = existingHooks
 
+  await mkdir(dirname(settingsPath), { recursive: true })
+  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+}
+
+/** Keep only the SaaSFoundry SRS hook in sync with the installed SRS skill. */
+export async function reconcileSrsIntentHook(targetPath: string, srsEnabled: boolean): Promise<void> {
+  const settingsPath = join(targetPath, '.claude', 'settings.json')
+  if (!(await fileExists(settingsPath)) && !srsEnabled) return
+
+  const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? JSON.parse(await readFile(settingsPath, 'utf8')) : {}
+  const hooks = (settings.hooks ?? {}) as ClaudeHooksConfig
+  const groups = hooks.UserPromptSubmit ?? []
+  const withoutManagedHook = groups.map((group) => ({ ...group, hooks: group.hooks.filter((hook) => hook.command !== SRS_INTENT_HOOK_COMMAND) })).filter((group) => group.hooks.length > 0)
+  const hadManagedHook = groups.some((group) => group.hooks.some((hook) => hook.command === SRS_INTENT_HOOK_COMMAND))
+  const hasScript = srsEnabled && (await fileExists(join(targetPath, SRS_INTENT_HOOK_COMMAND)))
+
+  if (hasScript === hadManagedHook) return
+  if (hasScript) withoutManagedHook.push({ hooks: [{ type: 'command', command: SRS_INTENT_HOOK_COMMAND }] })
+  if (withoutManagedHook.length > 0) hooks.UserPromptSubmit = withoutManagedHook
+  else delete hooks.UserPromptSubmit
+  settings.hooks = hooks
   await mkdir(dirname(settingsPath), { recursive: true })
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
 }

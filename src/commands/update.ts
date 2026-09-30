@@ -36,6 +36,7 @@ import { createManifestFileSafe, readManifestFileSafe, replaceManifestFileSafe }
 import { detectLegacyAdoption, type LegacyAdoptionReport } from '../legacy-adoption/legacy-adoption'
 import { Answers, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
+import { reconcileSrsIntentHook } from '../utils/claude-settings'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent, validateProjectName } from '../utils'
 import { version as cliVersion } from '../../package.json'
@@ -1381,6 +1382,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       return
     }
 
+    // Existing projects may still carry the legacy unconditional SRS hook.
+    // Reconcile it even when no modules are selected below.
+    if (!dryRun) await reconcileSrsIntentHook('.', Boolean(manifest.tools?.srs?.enabled))
+
     // ─── FLOW 2: Module addition ───
     const availableModules = getAvailableModules(manifest)
     if (dryRunReport) dryRunReport.moduleAddition.available = availableModules.map((m) => m.value)
@@ -1741,6 +1746,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           rootPage: result.rootPage
         }
         manifest.tools = { ...(manifest.tools ?? {}), srs: srsTools }
+        await reconcileSrsIntentHook('.', true)
 
         const envPath = join('.', '.env')
         upsertEnvKey(envPath, 'NOTION_API_TOKEN', srsBootstrap.notionApiToken)

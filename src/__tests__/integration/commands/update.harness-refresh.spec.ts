@@ -6,6 +6,7 @@ import inquirer from 'inquirer'
 
 import { SaaSFoundryManifest, manifestSchemaUrl } from '../../../types'
 import { hashFileContent } from '../../../utils'
+import { SRS_INTENT_HOOK_COMMAND } from '../../../utils/claude-settings'
 import { version as cliVersion } from '../../../../package.json'
 
 jest.mock('inquirer')
@@ -197,6 +198,42 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
 
     const manifest = await readManifest()
     expect(manifest.version).toBe(cliVersion)
+  })
+
+  it('removes an obsolete SRS hook when a harness-only project has no SRS module', async () => {
+    const hashes = await installTrackedHarness()
+    const settingsPath = join(projectDir, '.claude', 'settings.json')
+    const settings = JSON.parse(await readFile(settingsPath, 'utf8'))
+    settings.hooks.UserPromptSubmit = [
+      {
+        hooks: [
+          { type: 'command', command: SRS_INTENT_HOOK_COMMAND },
+          { type: 'command', command: 'echo user-hook' }
+        ]
+      }
+    ]
+    await writeFile(settingsPath, JSON.stringify(settings))
+    await writeManifest({ version: cliVersion, modules: { harness: { version: 1 } }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+
+    const updated = JSON.parse(await readFile(settingsPath, 'utf8'))
+    expect(updated.hooks.UserPromptSubmit).toEqual([{ hooks: [{ type: 'command', command: 'echo user-hook' }] }])
+    expect(updated.hooks.SessionStart).toEqual(settings.hooks.SessionStart)
+  })
+
+  it('does not change an obsolete SRS hook in dry-run mode', async () => {
+    const hashes = await installTrackedHarness()
+    const settingsPath = join(projectDir, '.claude', 'settings.json')
+    const settings = JSON.parse(await readFile(settingsPath, 'utf8'))
+    settings.hooks.UserPromptSubmit = [{ hooks: [{ type: 'command', command: SRS_INTENT_HOOK_COMMAND }] }]
+    const original = JSON.stringify(settings)
+    await writeFile(settingsPath, original)
+    await writeManifest({ version: cliVersion, modules: { harness: { version: 1 } }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true, dryRun: true })
+
+    expect(await readFile(settingsPath, 'utf8')).toBe(original)
   })
 
   // Regression: the backfill first sat inside the refresh branch, so a project
