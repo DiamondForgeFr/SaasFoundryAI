@@ -696,6 +696,10 @@ async function runHarnessInstall(config: Answers): Promise<void> {
     }
     await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
 
+    // SRS is deposited after the initial harness bridge. Publish the complete
+    // installed skill set and persist its shared-agent baselines now.
+    if (srsTools?.enabled) await installSelectedAgentInstructions(manifest, config.projectName, config.agents)
+
     // Provision the workflow's prerequisites on the existing repo so it's
     // immediately runnable: the declared working branch and the guard labels
     // (#474). Both are best-effort — a git/gh hiccup must not fail the install.
