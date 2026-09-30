@@ -68,7 +68,8 @@ describe('impact-aware SaaSFoundry CI contract', () => {
   it('publishes one stable required gate that rejects missing, extra, failed or malformed execution', () => {
     const gate = workflow.jobs.required_gate
     expect(gate.if).toBe('always()')
-    expect(gate.needs).toEqual(['classify', 'guards', 'docs', 'unit', 'integration', 'e2e', 'lint_build', 'coverage', 'lifecycle_prepare', 'lifecycle'])
+    expect(gate.needs).toBeUndefined()
+    expect(workflow.jobs.validation_result.needs).toEqual(['classify', 'guards', 'docs', 'unit', 'integration', 'e2e', 'lint_build', 'coverage', 'lifecycle_prepare', 'lifecycle'])
     expect(source).toContain('if [[ "$actual" != "$wanted" ]]; then failed=1; fi')
     expect(source).toContain('if [[ "$CONTRACT_VERSION" != "1" ]]')
     expect(source).toContain('Malformed boolean output')
