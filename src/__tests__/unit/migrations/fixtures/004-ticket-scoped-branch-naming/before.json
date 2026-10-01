@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/saasfoundry-manifest.schema.json",
+  "manifestVersion": 3,
+  "version": "1.0.0-beta",
+  "generatedAt": "2026-06-22T21:07:04.662Z",
+  "structure": "monorepo",
+  "projectName": "sst-pilot",
+  "mainBranch": "master",
+  "modules": {
+    "email": { "provider": "mailersend", "version": 1 },
+    "s3Setup": "docker",
+    "dbSetup": "docker",
+    "includeAnalytics": true,
+    "advancedSkills": ["context7"],
+    "harness": { "version": 1, "managed": true }
+  },
+  "workflow": {
+    "tool": "github-projects",
+    "projectUrl": "https://github.com/orgs/DiamondForgeFr/projects/3",
+    "workingBranch": "develop",
+    "prTargetBranch": "develop",
+    "template": "SaaSFoundry Solo",
+    "branchNaming": {
+      "feature": "feature/{name}",
+      "fix": "fix/{name}",
+      "release": "rc-{version}"
+    },
+    "commitFormat": { "pattern": "type(#N): description", "requireTicket": true }
+  }
+}

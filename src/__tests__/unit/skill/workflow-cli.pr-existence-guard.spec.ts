@@ -20,6 +20,7 @@ const BASH = '/bin/bash'
 // sans PR associé".
 
 interface SandboxOptions {
+  branchNaming?: Record<string, string>
   ghExitCode?: number
   natureLabel?: 'internal' | 'user-facing' | 'bundled-pr' | null
   currentStatus?: string
@@ -54,7 +55,7 @@ async function buildSandbox(
         workingBranch: 'develop',
         prTargetBranch: options.prTargetBranch ?? 'develop',
         releaseBranch: 'master',
-        branchNaming: {
+        branchNaming: options.branchNaming ?? {
           feature: 'feature/{N}-{description}',
           fix: 'fix/{N}-{description}',
           release: 'rc-{version}'
@@ -167,6 +168,25 @@ describe('sf-workflow CLI — PR-existence guard (→ In Review)', () => {
     expect(res.stderr).toContain('SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1')
     const toolCalls = readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))
     expect(toolCalls).toEqual([])
+  })
+
+  // #864 — manifests from before #480 kept feature/{name}: the guard must name the cause.
+  it('names the branch patterns when none of them can identify the ticket', async () => {
+    sandbox = await buildSandbox('[{"number":555,"isDraft":false,"headRefName":"feature/42-add-stuff","baseRefName":"develop"}]', {
+      natureLabel: 'internal',
+      branchNaming: { feature: 'feature/{name}', fix: 'fix/{name}', release: 'rc-{version}' }
+    })
+    const res = await runCli(['update-status', '42', 'In review'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('has no open PR')
+    expect(res.stderr).toContain('workflow.branchNaming.feature and .fix in .saasfoundry.json carry no ticket placeholder')
+    expect(res.stderr).toContain('manifest migration 004')
+  })
+
+  it('does not blame the branch patterns when they can identify the ticket', async () => {
+    sandbox = await buildSandbox('[]', { natureLabel: 'internal' })
+    const res = await runCli(['update-status', '42', 'In review'], sandbox)
+    expect(res.stderr).not.toContain('workflow.branchNaming')
   })
 
   it('blocks "In review" when the open-PR list is empty', async () => {

@@ -1,6 +1,7 @@
 import { migration001 } from './001-add-schema-url'
 import { migration002 } from './002-restructure-email'
 import { migration003 } from './003-classify-harness-capability'
+import { migration004 } from './004-ticket-scoped-branch-naming'
 import type { ManifestMigration } from './types'
 
 /**
@@ -12,4 +13,4 @@ import type { ManifestMigration } from './types'
  * 2. Append it here in order. The dispatcher validates contiguity at runtime —
  *    a gap or duplicate `to` value throws before any user manifest is touched.
  */
-export const manifestMigrations: ManifestMigration[] = [migration001, migration002, migration003]
+export const manifestMigrations: ManifestMigration[] = [migration001, migration002, migration003, migration004]
