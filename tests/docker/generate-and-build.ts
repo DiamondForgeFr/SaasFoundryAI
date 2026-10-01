@@ -1002,6 +1002,9 @@ function assertOwnFormatCheck(roots: string[]): AssertionResult[] {
   return roots.map((root) => {
     const check = spawnSync('npm', ['run', 'format:check'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
     const failing = `${check.stdout}${check.stderr}`
+      // The container forces colours: `[\x1b[33mwarn\x1b[39m] file`
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\[[0-9;]*m/g, '')
       .split('\n')
       .filter((line) => line.startsWith('[warn] ') && !line.includes('Code style issues'))
       .map((line) => line.slice('[warn] '.length))
