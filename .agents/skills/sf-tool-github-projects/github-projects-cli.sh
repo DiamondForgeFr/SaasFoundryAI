@@ -8,6 +8,20 @@
 
 set -e
 
+# Every gh call targets the repository the project lives in: its `origin`
+# remote. gh otherwise follows its own default repository, which a conventional
+# `upstream` remote silently retargets — "Could not find issue #3", or a pull
+# request opened against the upstream project (#840). An explicit GH_REPO wins.
+if [[ -z "${GH_REPO:-}" ]]; then
+  _sf_origin=$(git remote get-url origin 2>/dev/null || true)
+  if [[ "$_sf_origin" =~ ^(git@|ssh://([^@/]+@)?)([^:/]+)[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$ ]] \
+    || [[ "$_sf_origin" =~ ^https?://([^@/]+@)?()([^/]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$ ]]; then
+    _sf_host=${BASH_REMATCH[3]} _sf_owner=${BASH_REMATCH[4]} _sf_name=${BASH_REMATCH[5]%.git}
+    if [[ "$_sf_host" == github.com ]]; then export GH_REPO="$_sf_owner/$_sf_name"; else export GH_REPO="$_sf_host/$_sf_owner/$_sf_name"; fi
+  fi
+  unset _sf_origin _sf_host _sf_owner _sf_name
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -144,6 +158,9 @@ find_status_option_id() {
 # `gh repo view` calls within a single script invocation.
 _GH_REPO_CACHE=""
 get_repo_owner_name() {
+  if [ -z "$_GH_REPO_CACHE" ] && [[ "${GH_REPO:-}" =~ ([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$ ]]; then
+    _GH_REPO_CACHE=${BASH_REMATCH[1]}
+  fi
   if [ -z "$_GH_REPO_CACHE" ]; then
     _GH_REPO_CACHE=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
   fi

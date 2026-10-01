@@ -289,4 +289,34 @@ describe('runtime preconditions (#587)', () => {
       expect(runtime.map((p) => `${p.status} ${p.name}`)).toEqual(['fail dependencies', 'fail database', 'fail ormClient'])
     })
   })
+
+  // #840 — gh prefers an `upstream` remote over `origin` unless a default is recorded.
+  describe('GitHub CLI repository', () => {
+    const git = (remotes: Record<string, string>, ghDefaultRemote?: string) => ({ available: true, branch: 'develop', remotes, ghDefaultRemote })
+    const ghRepository = (report: StatusReport) => evaluatePreconditions(report).find((p) => p.name === 'ghRepository')
+
+    it('warns when an upstream remote would take gh away from origin', () => {
+      const check = ghRepository(makeReport({ git: git({ origin: 'me/fork', upstream: 'them/original' }) }))
+      expect(check?.status).toBe('warn')
+      expect(check?.details).toContain('upstream remote (them/original), not origin (me/fork)')
+      expect(check?.remediation).toBe('gh repo set-default me/fork')
+    })
+
+    it('is satisfied by a recorded default pointing at origin', () => {
+      expect(ghRepository(makeReport({ git: git({ origin: 'me/fork', upstream: 'them/original' }, 'origin') }))?.status).toBe('ok')
+    })
+
+    it('warns about a recorded default pointing elsewhere', () => {
+      expect(ghRepository(makeReport({ git: git({ origin: 'me/fork', upstream: 'them/original' }, 'upstream') }))?.status).toBe('warn')
+    })
+
+    it('is satisfied when origin is the only GitHub remote', () => {
+      expect(ghRepository(makeReport({ git: git({ origin: 'me/app' }) }))?.status).toBe('ok')
+    })
+
+    it('is not reported without an origin on GitHub', () => {
+      expect(ghRepository(makeReport({ git: git({}) }))).toBeUndefined()
+      expect(ghRepository(makeReport())).toBeUndefined()
+    })
+  })
 })
