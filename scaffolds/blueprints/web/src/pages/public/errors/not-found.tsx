@@ -30,9 +30,9 @@ export const NotFound = () => {
       <div className="container mx-auto max-w-5xl px-4">
         <div className="flex flex-col items-center justify-center gap-8 md:flex-row">
           <div className="flex-1 text-center md:text-left">
-            <h1 className="mb-4 text-8xl font-bold text-foreground">404</h1>
-            <h2 className="mb-6 text-3xl font-semibold text-foreground/80">{tPageErrors('404-not-found.title')}</h2>
-            <p className="mb-8 text-lg text-muted-foreground">{tPageErrors('404-not-found.description')}</p>
+            <h1 className="text-foreground mb-4 text-8xl font-bold">404</h1>
+            <h2 className="text-foreground/80 mb-6 text-3xl font-semibold">{tPageErrors('404-not-found.title')}</h2>
+            <p className="text-muted-foreground mb-8 text-lg">{tPageErrors('404-not-found.description')}</p>
             <Button asChild>
               <Link to={isSessionActive ? '/dashboard' : '/signin'}>
                 <DoorOpen className="mr-2 h-4 w-4" />

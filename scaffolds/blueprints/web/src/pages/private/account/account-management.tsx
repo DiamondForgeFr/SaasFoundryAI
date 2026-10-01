@@ -77,7 +77,7 @@ export function AccountManagement() {
     <div className="container mx-auto">
       <AccountScopeHeader />
       <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-5">
-        <TabsList className="flex w-full justify-start gap-0 rounded-none bg-transparent border-b border-border p-0 h-auto">
+        <TabsList className="border-border flex h-auto w-full justify-start gap-0 rounded-none border-b bg-transparent p-0">
           <TabsTrigger value="overview" className={tabTriggerClass}>
             {tAccount(`tabs.tk_overview_`)}
           </TabsTrigger>

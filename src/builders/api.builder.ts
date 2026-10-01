@@ -10,6 +10,7 @@ import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, monorepoBuildContext, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
+import { layoutStringProperties } from '../utils/source-layout'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
@@ -71,7 +72,7 @@ export async function renderApiApp({
     keywords: [projectName, 'saasfoundry', 'backend', 'nest', 'prisma'],
     repositoryUrl: backendRepoUrl
   })
-  await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
+  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
   // Update .env with core settings (JWT secrets, database credentials)
   const envPath = `${apiPath}/.env`
   let envContent = await readFile(envPath, 'utf8')
@@ -102,13 +103,15 @@ export async function renderApiApp({
 
   if (await fileExists(enLocalePath)) {
     let enLocaleContent = await readFile(enLocalePath, 'utf8')
-    enLocaleContent = enLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase())
+    // The name's length moves these sentences across the print width: lay them out as prettier would (#867)
+    enLocaleContent = layoutStringProperties(enLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase()))
     await writeFile(enLocalePath, enLocaleContent)
   }
 
   if (await fileExists(frLocalePath)) {
     let frLocaleContent = await readFile(frLocalePath, 'utf8')
-    frLocaleContent = frLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase())
+    // The name's length moves these sentences across the print width: lay them out as prettier would (#867)
+    frLocaleContent = layoutStringProperties(frLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase()))
     await writeFile(frLocalePath, frLocaleContent)
   }
 

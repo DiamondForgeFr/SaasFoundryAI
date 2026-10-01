@@ -15,7 +15,6 @@ Le système de gestion des versions est automatiquement activé lorsque vous tra
 1. Créez une branche avec le préfixe `rc-` (ex: `rc-feature/new-ui`)
 2. Lorsque vous poussez votre branche (`git push`), le système vous demandera si vous souhaitez mettre à jour la version
 3. Choisissez le type de mise à jour :
-
    - `patch` : Corrections de bugs (1.0.0 → 1.0.1)
    - `minor` : Nouvelles fonctionnalités rétrocompatibles (1.0.0 → 1.1.0)
    - `major` : Changements incompatibles (1.0.0 → 2.0.0)

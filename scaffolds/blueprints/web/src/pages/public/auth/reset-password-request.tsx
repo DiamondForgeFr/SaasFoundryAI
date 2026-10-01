@@ -63,7 +63,7 @@ export function ResetPasswordRequest() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col items-center bg-muted">
+    <div className="bg-muted relative flex h-screen flex-col items-center">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
@@ -72,9 +72,9 @@ export function ResetPasswordRequest() {
         <div className="igw-glow" aria-hidden="true" />
         <div className="igw-border" aria-hidden="true" />
         <div className="relative z-10">
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{tAuth('resetPasswordRequest.tk_title_')}</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">{tAuth('resetPasswordRequest.tk_description_')}</p>
+          <div className="mb-6 text-center">
+            <h2 className="text-foreground text-3xl font-bold tracking-tight">{tAuth('resetPasswordRequest.tk_title_')}</h2>
+            <p className="text-muted-foreground mt-1.5 text-sm">{tAuth('resetPasswordRequest.tk_description_')}</p>
           </div>
 
           <Form {...form}>
@@ -102,14 +102,14 @@ export function ResetPasswordRequest() {
                 {resetPasswordMutation.isLoading ? tCommon('loading.tk_loadingSend_') : tAuth('callToAction.tk_sendResetPasswordLink_')}
               </WaveButton>
 
-              <div className="flex items-center gap-3 my-4">
+              <div className="my-4 flex items-center gap-3">
                 <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">or</span>
+                <span className="text-muted-foreground text-xs">or</span>
                 <Separator className="flex-1" />
               </div>
 
-              <p className="text-center text-sm text-muted-foreground">
-                <button type="button" onClick={() => navigate('/signin', { state: { flip: 'left' } })} className="cursor-pointer font-semibold text-primary hover:text-primary/80 transition-colors">
+              <p className="text-muted-foreground text-center text-sm">
+                <button type="button" onClick={() => navigate('/signin', { state: { flip: 'left' } })} className="text-primary hover:text-primary/80 cursor-pointer font-semibold transition-colors">
                   {tAuth('callToAction.tk_backToSignin_')}
                 </button>
               </p>

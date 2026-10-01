@@ -13,9 +13,11 @@ npm run db:setup:dev     # schema, SQL functions, triggers, seed data
 npm run dev              # API and web, together, via Turborepo
 ```
 
-The ports this project runs on are recorded in `.saasfoundry.json` under `ports` — they are chosen at generation time and are not always the defaults, because a machine already running another project takes the obvious ones.
+The ports this project runs on are recorded in `.saasfoundry.json` under `ports` — they are chosen at generation time and are not always the defaults, because a machine already running another project
+takes the obvious ones.
 
-If any of the steps above was left unfinished when the project was created, **`sf resume`** completes it. It is safe to run on a healthy project, and it will never reset a database that already holds data.
+If any of the steps above was left unfinished when the project was created, **`sf resume`** completes it. It is safe to run on a healthy project, and it will never reset a database that already holds
+data.
 
 ## Where things are
 
@@ -38,15 +40,15 @@ Each app carries its own `README.md` with the detail that belongs to it, and its
 
 ## Everyday commands
 
-| | |
-|---|---|
-| `npm run dev` | API and web together |
-| `npm run dev:api` · `npm run dev:web` | one at a time |
-| `npm run build` | build everything through Turborepo |
-| `npm run test:unit` · `npm run test:e2e` | the test suites |
-| `npm run lint` · `npm run format` · `npm run type-check` | quality gates |
-| `npm run services:up` · `services:down` · `services:reset` | Docker dev services |
-| `npm run db:setup:dev` | **destructive** — rebuilds the dev schema from scratch |
+|                                                            |                                                        |
+| ---------------------------------------------------------- | ------------------------------------------------------ |
+| `npm run dev`                                              | API and web together                                   |
+| `npm run dev:api` · `npm run dev:web`                      | one at a time                                          |
+| `npm run build`                                            | build everything through Turborepo                     |
+| `npm run test:unit` · `npm run test:e2e`                   | the test suites                                        |
+| `npm run lint` · `npm run format` · `npm run type-check`   | quality gates                                          |
+| `npm run services:up` · `services:down` · `services:reset` | Docker dev services                                    |
+| `npm run db:setup:dev`                                     | **destructive** — rebuilds the dev schema from scratch |
 
 ## Reading further
 
@@ -57,4 +59,5 @@ Each app carries its own `README.md` with the detail that belongs to it, and its
 
 ## Conventions
 
-Commits follow `<type>(#<ticket>): <description>` and are checked by commitlint; Husky runs the quality gates before each commit and push. The branch names, statuses and target branches this project uses all live in `.saasfoundry.json` — read them there rather than assuming.
+Commits follow `<type>(#<ticket>): <description>` and are checked by commitlint; Husky runs the quality gates before each commit and push. The branch names, statuses and target branches this project
+uses all live in `.saasfoundry.json` — read them there rather than assuming.

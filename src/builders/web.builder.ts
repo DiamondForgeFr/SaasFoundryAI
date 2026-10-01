@@ -11,6 +11,7 @@ import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, monorepoBuildContext, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
+import { layoutNamedImports } from '../utils/source-layout'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
@@ -80,6 +81,8 @@ export async function renderWebApp({
     // Rewire all primitive imports across apps/web to the workspace package.
     // Covers `@/components/ui/shadcn/<name>` → `@<projectName>/ui-primitives/<name>`,
     // and `@/utils/ui` (cn) → `@<projectName>/ui-primitives` (barrel).
+    // The rewritten imports change length with the project name: lay them out as the
+    // project's prettier would, or `npm run format:check` fails for some names (#867).
     const monorepoSrcFiles = globSync(`${webPath}/src/**/*.{ts,tsx}`, { exclude: [`${webPath}/node_modules/**`] })
     for (const filePath of monorepoSrcFiles) {
       let body = await readFile(filePath, 'utf8')
@@ -88,6 +91,7 @@ export async function renderWebApp({
         .replace(/from '@\/components\/ui\/shadcn\/([a-z-]+)'/g, `from '@${projectName}/ui-primitives/$1'`)
         .replace(/from '@\/utils\/ui'/g, `from '@${projectName}/ui-primitives'`)
         .replace(/from '@\/hooks\/ui\/useIsMobile'/g, `from '@${projectName}/ui-primitives'`)
+      body = layoutNamedImports(body, (module) => module.startsWith(`@${projectName}/`))
       if (body !== before) await writeFile(filePath, body)
     }
   }
@@ -101,7 +105,7 @@ export async function renderWebApp({
     keywords: [projectName, 'saasfoundry', 'frontend', 'react', 'vite'],
     repositoryUrl: frontendRepoUrl
   })
-  await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
+  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
 
   // Every web-side file that names a port. `.env` carries both: the API the app calls,
   // and the port Vite serves on — which the config now actually reads (FRONTEND_PORT was

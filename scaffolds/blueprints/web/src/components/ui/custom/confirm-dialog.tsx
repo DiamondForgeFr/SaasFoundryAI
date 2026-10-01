@@ -69,7 +69,7 @@ export function ConfirmDialog({ isOpen, onOpenChange, title, description, tone =
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-sm">{title}</DialogTitle>
-              {description && <DialogDescription className="text-xs text-foreground/80 mt-1 leading-snug">{description}</DialogDescription>}
+              {description && <DialogDescription className="text-foreground/80 mt-1 text-xs leading-snug">{description}</DialogDescription>}
             </div>
           </div>
         </DialogHeader>
@@ -80,7 +80,7 @@ export function ConfirmDialog({ isOpen, onOpenChange, title, description, tone =
             type="button"
             disabled={isLoading}
             onClick={() => onOpenChange(false)}
-            className="cursor-pointer rounded-[2px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            className="border-border bg-card text-muted-foreground hover:text-foreground cursor-pointer rounded-[2px] border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
           >
             {cancelLabel ?? tCommon('actions.tk_cancel_')}
           </button>

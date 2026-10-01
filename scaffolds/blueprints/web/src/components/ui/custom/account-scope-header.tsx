@@ -158,27 +158,27 @@ export function AccountScopeHeader() {
     <>
       <div
         className={cn(
-          'mb-5 flex justify-between gap-4 rounded-sm border border-border bg-card px-4 py-3 transition-colors',
+          'border-border bg-card mb-5 flex justify-between gap-4 rounded-sm border px-4 py-3 transition-colors',
           showAccountMeta ? 'items-start' : 'items-center',
-          showSwitcher && 'cursor-pointer hover:border-primary/40'
+          showSwitcher && 'hover:border-primary/40 cursor-pointer'
         )}
         onClick={showEntitySwitcher ? () => setEntitySwitcherOpen((v) => !v) : showAccountSwitcher ? () => setSwitcherOpen((v) => !v) : undefined}
         role={showSwitcher ? 'button' : undefined}
         title={showSwitcher ? tAccount(showEntitySwitcher ? 'scopeHeader.tk_switch-entity_' : 'scopeHeader.tk_switch-account_') : undefined}
       >
         {/* Left — scope identity + meta row */}
-        <div className={cn('flex gap-3 min-w-0', showAccountMeta ? 'items-start' : 'items-center')}>
+        <div className={cn('flex min-w-0 gap-3', showAccountMeta ? 'items-start' : 'items-center')}>
           <div className={cn('flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full', isPlatformAll || isAccountAdmin || isPlatformAdmin ? 'bg-primary/15' : 'bg-muted')}>
             <Icon className={cn('h-4 w-4', isPlatformAll || isAccountAdmin || isPlatformAdmin ? 'text-primary' : 'text-muted-foreground')} />
           </div>
 
-          <div className="min-w-0 flex flex-col gap-1.5">
+          <div className="flex min-w-0 flex-col gap-1.5">
             {/* Title row */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-display font-bold text-foreground truncate text-sm">{title}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-foreground truncate text-sm font-bold">{title}</span>
               <span
                 className={cn(
-                  'flex-shrink-0 rounded-[2px] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border',
+                  'flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase',
                   isPlatformAll || isAccountAdmin || isPlatformAdmin ? 'bg-primary/15 text-primary border-primary/25' : 'bg-muted text-muted-foreground border-border'
                 )}
               >
@@ -195,11 +195,11 @@ export function AccountScopeHeader() {
                     <label
                       onClick={(e) => e.stopPropagation()}
                       className={cn(
-                        'inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                        'inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase transition-colors select-none',
                         target.isActive
                           ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                           : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
-                        updateStatus.isLoading ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                        updateStatus.isLoading ? 'cursor-wait opacity-50' : 'cursor-pointer'
                       )}
                       title={tAccount(target.isActive ? 'scopeHeader.tk_status-deactivate_' : 'scopeHeader.tk_status-reactivate_')}
                     >
@@ -218,7 +218,7 @@ export function AccountScopeHeader() {
                   ) : (
                     <span
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                        'inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                         target.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                       )}
                     >
@@ -227,7 +227,7 @@ export function AccountScopeHeader() {
                     </span>
                   )
                 })()}
-              {isPlatformAll && <span className="text-[11px] text-muted-foreground">{tAccount('scopeHeader.tk_platform-overview-hint_')}</span>}
+              {isPlatformAll && <span className="text-muted-foreground text-[11px]">{tAccount('scopeHeader.tk_platform-overview-hint_')}</span>}
             </div>
 
             {/* Meta row — ID, Created, Updated (hidden in PLATFORM_ALL view).
@@ -240,10 +240,10 @@ export function AccountScopeHeader() {
                 const createdAt = isEntityScope ? entity!.createdAt : account?.createdAt
                 const updatedAt = isEntityScope ? entity!.updatedAt : account?.updatedAt
                 return (
-                  <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
+                  <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-[11px]">
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider">{tAccount('scopeHeader.tk_id_')}</span>
-                      <span className="inline-flex items-center gap-1.5 rounded-[2px] border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+                      <span className="text-[10px] font-bold tracking-wider uppercase">{tAccount('scopeHeader.tk_id_')}</span>
+                      <span className="border-border bg-muted text-foreground inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 font-mono text-[11px]">
                         {shortenId(idValue)}
                         <button
                           type="button"
@@ -251,7 +251,7 @@ export function AccountScopeHeader() {
                             e.stopPropagation()
                             handleCopy()
                           }}
-                          className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+                          className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                           title={tAccount('scopeHeader.tk_copy-id_')}
                         >
                           {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
@@ -262,7 +262,7 @@ export function AccountScopeHeader() {
                       <>
                         <span className="text-border">·</span>
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider">{tAccount('scopeHeader.tk_created_')}</span>
+                          <span className="text-[10px] font-bold tracking-wider uppercase">{tAccount('scopeHeader.tk_created_')}</span>
                           <span className="text-foreground font-medium">{formatDate(createdAt)}</span>
                         </span>
                       </>
@@ -271,7 +271,7 @@ export function AccountScopeHeader() {
                       <>
                         <span className="text-border">·</span>
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider">{tAccount('scopeHeader.tk_updated_')}</span>
+                          <span className="text-[10px] font-bold tracking-wider uppercase">{tAccount('scopeHeader.tk_updated_')}</span>
                           <span className="text-foreground font-medium">{formatDate(updatedAt)}</span>
                         </span>
                       </>
@@ -294,7 +294,7 @@ export function AccountScopeHeader() {
                 e.stopPropagation()
                 setCreateOwnAccountOpen(true)
               }}
-              className="cursor-pointer inline-flex items-center gap-1.5 rounded-sm border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
+              className="border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 inline-flex cursor-pointer items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
               {tAccount('scopeHeader.tk_create-own-account_')}
@@ -307,7 +307,7 @@ export function AccountScopeHeader() {
                 e.stopPropagation()
                 setCreateOwnEntityOpen(true)
               }}
-              className="cursor-pointer inline-flex items-center gap-1.5 rounded-sm border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
+              className="border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 inline-flex cursor-pointer items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
               {tAccount('scopeHeader.tk_create-own-entity_')}
@@ -336,21 +336,21 @@ export function AccountScopeHeader() {
                       setSwitcherSearch('')
                     }}
                   />
-                  <div className="absolute right-0 top-full z-20 mt-2 w-[480px] max-w-[90vw] rounded-sm border border-border bg-card shadow-lg p-2" onClick={(e) => e.stopPropagation()}>
-                    <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <div className="border-border bg-card absolute top-full right-0 z-20 mt-2 w-[480px] max-w-[90vw] rounded-sm border p-2 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-muted-foreground px-2 py-1.5 text-[10px] font-bold tracking-widest uppercase">
                       {tAccount(isPlatformAdmin ? 'scopeHeader.tk_pick-context_' : 'scopeHeader.tk_your-accounts_')}
                     </p>
 
                     {/* Search input — same affordance pattern as the multiselect-filter popover. */}
                     <div className="relative mb-2 px-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                      <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
                       <input
                         type="text"
                         autoFocus
                         value={switcherSearch}
                         onChange={(e) => setSwitcherSearch(e.target.value)}
                         placeholder={tAccount('scopeHeader.tk_search-placeholder_')}
-                        className="h-9 w-full rounded-sm border border-border bg-card pl-7 pr-7 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/60 focus:outline-none"
+                        className="border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary/60 h-9 w-full rounded-sm border pr-7 pl-7 text-sm transition-colors focus:outline-none"
                       />
                       {switcherSearch.length > 0 && (
                         <button
@@ -359,7 +359,7 @@ export function AccountScopeHeader() {
                             e.stopPropagation()
                             setSwitcherSearch('')
                           }}
-                          className="cursor-pointer absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -374,7 +374,7 @@ export function AccountScopeHeader() {
                       return (
                         <>
                           {hasAccountsToShow ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[280px] overflow-y-auto">
+                            <div className="grid max-h-[280px] grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2">
                               {showAllAccountsTile && (
                                 <button
                                   type="button"
@@ -385,18 +385,18 @@ export function AccountScopeHeader() {
                                     queryClient.invalidateQueries()
                                   }}
                                   className={cn(
-                                    'cursor-pointer flex items-start gap-2.5 rounded-sm border px-3 py-2.5 text-left transition-colors',
+                                    'flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2.5 text-left transition-colors',
                                     isPlatformAll ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                                   )}
                                 >
-                                  <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                                  <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                     <Globe className="h-3.5 w-3.5" />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <div className="text-[12px] font-bold text-foreground leading-tight">{tAccount('scopeHeader.tk_all-accounts_')}</div>
-                                    <div className="text-[11px] text-muted-foreground leading-tight mt-0.5">{tAccount('scopeHeader.tk_all-accounts-sub_')}</div>
+                                    <div className="text-foreground text-[12px] leading-tight font-bold">{tAccount('scopeHeader.tk_all-accounts_')}</div>
+                                    <div className="text-muted-foreground mt-0.5 text-[11px] leading-tight">{tAccount('scopeHeader.tk_all-accounts-sub_')}</div>
                                   </div>
-                                  {isPlatformAll && <Check className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />}
+                                  {isPlatformAll && <Check className="text-primary mt-0.5 h-3.5 w-3.5 flex-shrink-0" />}
                                 </button>
                               )}
                               {switchableAccounts.map((acc) => {
@@ -412,24 +412,24 @@ export function AccountScopeHeader() {
                                       queryClient.invalidateQueries()
                                     }}
                                     className={cn(
-                                      'cursor-pointer flex items-start gap-2.5 rounded-sm border px-3 py-2.5 text-left transition-colors',
+                                      'flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2.5 text-left transition-colors',
                                       isCurrent ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                                     )}
                                   >
-                                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                                    <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                       <Shield className="h-3.5 w-3.5" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                      <div className="text-[12px] font-bold text-foreground leading-tight truncate">{acc.name}</div>
-                                      <div className="text-[10px] font-mono text-muted-foreground leading-tight mt-0.5 truncate">{shortenId(acc.id)}</div>
+                                      <div className="text-foreground truncate text-[12px] leading-tight font-bold">{acc.name}</div>
+                                      <div className="text-muted-foreground mt-0.5 truncate font-mono text-[10px] leading-tight">{shortenId(acc.id)}</div>
                                     </div>
-                                    {isCurrent && <Check className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />}
+                                    {isCurrent && <Check className="text-primary mt-0.5 h-3.5 w-3.5 flex-shrink-0" />}
                                   </button>
                                 )
                               })}
                             </div>
                           ) : (
-                            <div className="px-3 py-6 text-center text-[11px] text-muted-foreground">{tAccount('scopeHeader.tk_no-match_')}</div>
+                            <div className="text-muted-foreground px-3 py-6 text-center text-[11px]">{tAccount('scopeHeader.tk_no-match_')}</div>
                           )}
                           {/* Create new account stays outside the filtered grid — the search input
                             is meant to find an existing account, not to gate the create affordance. */}
@@ -442,16 +442,16 @@ export function AccountScopeHeader() {
                                 setCreateOwnAccountOpen(true)
                               }}
                               className={cn(
-                                'cursor-pointer flex items-center gap-2.5 rounded-sm border border-dashed border-border bg-secondary px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 w-full',
+                                'border-border bg-secondary hover:border-primary/40 hover:bg-primary/5 flex w-full cursor-pointer items-center gap-2.5 rounded-sm border border-dashed px-3 py-2.5 text-left transition-colors',
                                 hasAccountsToShow && 'mt-2'
                               )}
                             >
-                              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                              <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                 <Plus className="h-3.5 w-3.5" />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="text-[12px] font-bold text-foreground leading-tight">{tAccount('scopeHeader.tk_create-own-account_')}</div>
-                                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">{tAccount('scopeHeader.tk_create-own-account-sub_')}</div>
+                                <div className="text-foreground text-[12px] leading-tight font-bold">{tAccount('scopeHeader.tk_create-own-account_')}</div>
+                                <div className="text-muted-foreground mt-0.5 text-[10px] leading-tight">{tAccount('scopeHeader.tk_create-own-account-sub_')}</div>
                               </div>
                             </button>
                           )}
@@ -487,18 +487,18 @@ export function AccountScopeHeader() {
                       setEntitySwitcherSearch('')
                     }}
                   />
-                  <div className="absolute right-0 top-full z-20 mt-2 w-[480px] max-w-[90vw] rounded-sm border border-border bg-card shadow-lg p-2" onClick={(e) => e.stopPropagation()}>
-                    <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('scopeHeader.tk_your-entities_')}</p>
+                  <div className="border-border bg-card absolute top-full right-0 z-20 mt-2 w-[480px] max-w-[90vw] rounded-sm border p-2 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-muted-foreground px-2 py-1.5 text-[10px] font-bold tracking-widest uppercase">{tAccount('scopeHeader.tk_your-entities_')}</p>
 
                     <div className="relative mb-2 px-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                      <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
                       <input
                         type="text"
                         autoFocus
                         value={entitySwitcherSearch}
                         onChange={(e) => setEntitySwitcherSearch(e.target.value)}
                         placeholder={tAccount('scopeHeader.tk_search-entity-placeholder_')}
-                        className="h-9 w-full rounded-sm border border-border bg-card pl-7 pr-7 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/60 focus:outline-none"
+                        className="border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary/60 h-9 w-full rounded-sm border pr-7 pl-7 text-sm transition-colors focus:outline-none"
                       />
                       {entitySwitcherSearch.length > 0 && (
                         <button
@@ -507,7 +507,7 @@ export function AccountScopeHeader() {
                             e.stopPropagation()
                             setEntitySwitcherSearch('')
                           }}
-                          className="cursor-pointer absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -515,7 +515,7 @@ export function AccountScopeHeader() {
                     </div>
 
                     {switchableEntities.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[280px] overflow-y-auto">
+                      <div className="grid max-h-[280px] grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2">
                         {switchableEntities.map((ent) => {
                           const isCurrent = currentScope.kind === 'ENTITY' && ent.id === currentScope.id
                           return (
@@ -530,24 +530,24 @@ export function AccountScopeHeader() {
                                 queryClient.invalidateQueries()
                               }}
                               className={cn(
-                                'cursor-pointer flex items-start gap-2.5 rounded-sm border px-3 py-2.5 text-left transition-colors',
+                                'flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2.5 text-left transition-colors',
                                 isCurrent ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                               )}
                             >
-                              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                              <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                 <ShieldCheck className="h-3.5 w-3.5" />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="text-[12px] font-bold text-foreground leading-tight truncate">{ent.name}</div>
-                                <div className="text-[10px] font-mono text-muted-foreground leading-tight mt-0.5 truncate">{shortenId(ent.id)}</div>
+                                <div className="text-foreground truncate text-[12px] leading-tight font-bold">{ent.name}</div>
+                                <div className="text-muted-foreground mt-0.5 truncate font-mono text-[10px] leading-tight">{shortenId(ent.id)}</div>
                               </div>
-                              {isCurrent && <Check className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />}
+                              {isCurrent && <Check className="text-primary mt-0.5 h-3.5 w-3.5 flex-shrink-0" />}
                             </button>
                           )
                         })}
                       </div>
                     ) : (
-                      <div className="px-3 py-6 text-center text-[11px] text-muted-foreground">{tAccount('scopeHeader.tk_no-match_')}</div>
+                      <div className="text-muted-foreground px-3 py-6 text-center text-[11px]">{tAccount('scopeHeader.tk_no-match_')}</div>
                     )}
 
                     {canCreateOwnEntity && (
@@ -559,16 +559,16 @@ export function AccountScopeHeader() {
                           setCreateOwnEntityOpen(true)
                         }}
                         className={cn(
-                          'cursor-pointer flex items-center gap-2.5 rounded-sm border border-dashed border-border bg-secondary px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 w-full',
+                          'border-border bg-secondary hover:border-primary/40 hover:bg-primary/5 flex w-full cursor-pointer items-center gap-2.5 rounded-sm border border-dashed px-3 py-2.5 text-left transition-colors',
                           switchableEntities.length > 0 && 'mt-2'
                         )}
                       >
-                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                        <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                           <Plus className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-[12px] font-bold text-foreground leading-tight">{tAccount('scopeHeader.tk_create-own-entity_')}</div>
-                          <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">{tAccount('scopeHeader.tk_create-own-entity-sub_')}</div>
+                          <div className="text-foreground text-[12px] leading-tight font-bold">{tAccount('scopeHeader.tk_create-own-entity_')}</div>
+                          <div className="text-muted-foreground mt-0.5 text-[10px] leading-tight">{tAccount('scopeHeader.tk_create-own-entity-sub_')}</div>
                         </div>
                       </button>
                     )}

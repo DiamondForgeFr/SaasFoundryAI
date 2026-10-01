@@ -152,15 +152,15 @@ function FilterBar({
   const roleItems: MultiSelectFilterItem[] = rolesData?.items.filter((r) => r.name?.toLowerCase() !== 'guest').map((r) => ({ id: r.id, label: r.name })) ?? []
 
   return (
-    <div className="flex flex-col gap-3 mb-4">
+    <div className="mb-4 flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[260px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative min-w-[260px] flex-1">
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
           <Input type="text" data-testid="search-filter" value={search} onChange={(e) => onSearch(e.target.value)} placeholder={tAccount('users.filters.tk_search-placeholder_')} className="pl-9" />
         </div>
         <SegmentedFilter value={status} onChange={onStatus} options={statusOptions} />
         {canInvite && (
-          <WaveButton data-testid="invite-user-button" type="button" onClick={onInvite} className="!h-9 !w-auto !text-[11px] px-3.5">
+          <WaveButton data-testid="invite-user-button" type="button" onClick={onInvite} className="!h-9 !w-auto px-3.5 !text-[11px]">
             <UserPlus className="h-3.5 w-3.5" />
             {tAccount('users.tk_invite-user-cta_')}
           </WaveButton>
@@ -224,7 +224,7 @@ function PendingInvitations({ forceOpen = false }: { forceOpen?: boolean }) {
     if (!forceOpen) return null
     // Pending-as-main-view but no items: show an empty-state instead of nothing.
     return (
-      <div className="rounded-sm border border-border bg-card flex items-center justify-center gap-2 px-4 py-12 text-xs text-muted-foreground">
+      <div className="border-border bg-card text-muted-foreground flex items-center justify-center gap-2 rounded-sm border px-4 py-12 text-xs">
         <Mail className="h-4 w-4 opacity-40" />
         {tAccount('users.pending.tk_no-invitations_')}
       </div>
@@ -255,46 +255,46 @@ function PendingInvitations({ forceOpen = false }: { forceOpen?: boolean }) {
   }
 
   return (
-    <div className="rounded-sm border border-border bg-card overflow-hidden mb-4">
+    <div className="border-border bg-card mb-4 overflow-hidden rounded-sm border">
       <button
         type="button"
         onClick={() => !forceOpen && setCollapsed((v) => !v)}
         disabled={forceOpen}
-        className={cn('w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border transition-colors', forceOpen ? 'cursor-default' : 'cursor-pointer hover:bg-muted/40')}
+        className={cn('border-border flex w-full items-center justify-between gap-3 border-b px-4 py-2.5 transition-colors', forceOpen ? 'cursor-default' : 'hover:bg-muted/40 cursor-pointer')}
       >
         <div className="flex items-center gap-2">
-          <Mail className="h-3.5 w-3.5 text-primary" />
-          <span className="font-display text-[13px] font-bold text-foreground">{tAccount('users.pending.tk_title_')}</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <Mail className="text-primary h-3.5 w-3.5" />
+          <span className="font-display text-foreground text-[13px] font-bold">{tAccount('users.pending.tk_title_')}</span>
+          <span className="inline-flex items-center rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-amber-600 uppercase dark:text-amber-400">
             {pending.length}
           </span>
         </div>
-        {!forceOpen && <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />}
+        {!forceOpen && <ChevronRight className={`text-muted-foreground h-3.5 w-3.5 transition-transform ${open ? 'rotate-90' : ''}`} />}
       </button>
       {open && (
         <div className="flex flex-col">
           {pending.map((inv) => {
             const isExpired = inv.status === 'EXPIRED'
             return (
-              <div key={inv.id} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3.5 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted transition-colors">
+              <div key={inv.id} className="border-border hover:bg-muted grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3.5 border-b px-4 py-3 transition-colors last:border-b-0">
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-foreground leading-tight truncate">{inv.inviteeUserEmail}</div>
-                  <div className="text-[11px] text-muted-foreground leading-tight">
+                  <div className="text-foreground truncate text-[13px] leading-tight font-semibold">{inv.inviteeUserEmail}</div>
+                  <div className="text-muted-foreground text-[11px] leading-tight">
                     {tAccount('users.pending.tk_sent-prefix_')} {formatDateShort(inv.invitedAt)}
                   </div>
                 </div>
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border ${
+                  className={`inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase ${
                     isExpired ? 'border-red-500/40 bg-red-500/10 text-red-500 dark:text-red-400' : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                   }`}
                 >
                   {isExpired ? tAccount('users.pending.tk_status-expired_') : tAccount('users.pending.tk_status-pending_')}
                 </span>
-                <span className="text-[11px] text-muted-foreground whitespace-nowrap">{inv.roles[0]?.name ?? '—'}</span>
+                <span className="text-muted-foreground text-[11px] whitespace-nowrap">{inv.roles[0]?.name ?? '—'}</span>
                 <button
                   type="button"
                   onClick={() => handleResend(inv)}
-                  className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+                  className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
                 >
                   {tAccount('users.pending.tk_resend_')} <ChevronRight className="h-3 w-3" />
                 </button>
@@ -302,7 +302,7 @@ function PendingInvitations({ forceOpen = false }: { forceOpen?: boolean }) {
                   type="button"
                   onClick={() => handleCancel(inv)}
                   disabled={cancelInvitation.isLoading}
-                  className="cursor-pointer inline-flex items-center justify-center rounded-[2px] border border-border bg-card p-1 text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors disabled:opacity-50"
+                  className="border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 inline-flex cursor-pointer items-center justify-center rounded-[2px] border p-1 transition-colors disabled:opacity-50"
                   title={tAccount('users.pending.tk_cancel_')}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -366,26 +366,26 @@ function UserCard({
       data-testid="user-row"
       role={canEdit ? 'button' : undefined}
       onClick={handleClick}
-      className={cn('group rounded-sm border bg-card p-4 transition-all border-border', canEdit && 'cursor-pointer hover:border-primary/40')}
+      className={cn('group bg-card border-border rounded-sm border p-4 transition-all', canEdit && 'hover:border-primary/40 cursor-pointer')}
       title={canEdit ? tAccount('users.edit.tk_action_') : undefined}
     >
       {/* Header — avatar + name (+email below) | role chips → status switch on the right. */}
       <div className="flex items-start gap-3">
         <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-[12px] font-bold', accessClass)}>{initials}</div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-1.5 flex-wrap">
-            <span className="font-bold text-sm text-foreground truncate flex-1 min-w-0">{fullName}</span>
+          <div className="flex flex-wrap items-start gap-1.5">
+            <span className="text-foreground min-w-0 flex-1 truncate text-sm font-bold">{fullName}</span>
             {roleLabels.map((r) => (
               <span
                 key={r.id}
-                className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80 whitespace-nowrap max-w-[120px] truncate"
+                className="border-border bg-secondary text-foreground/80 inline-flex max-w-[120px] flex-shrink-0 items-center truncate rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase"
                 title={r.label}
               >
                 {r.label}
               </span>
             ))}
             {extraRoles > 0 && (
-              <span className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80">
+              <span className="border-border bg-secondary text-foreground/80 inline-flex flex-shrink-0 items-center rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase">
                 +{extraRoles}
               </span>
             )}
@@ -393,11 +393,11 @@ function UserCard({
               <label
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  'inline-flex flex-shrink-0 items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase transition-colors select-none',
                   user.isActive
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                     : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
-                  isToggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                  isToggling ? 'cursor-wait opacity-50' : 'cursor-pointer'
                 )}
               >
                 <Switch
@@ -414,7 +414,7 @@ function UserCard({
             ) : (
               <span
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  'inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                   user.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                 )}
               >
@@ -423,7 +423,7 @@ function UserCard({
               </span>
             )}
           </div>
-          <div className="text-[11px] text-muted-foreground leading-tight truncate mt-0.5">{user.email}</div>
+          <div className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">{user.email}</div>
         </div>
       </div>
 
@@ -433,7 +433,7 @@ function UserCard({
       <div className="mt-3 flex flex-wrap items-center gap-1">
         {user.pendingKind && (
           <span
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-amber-500/40 bg-amber-500/10 text-amber-500 whitespace-nowrap"
+            className="inline-flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap text-amber-500 uppercase"
             title={tAccount(user.pendingKind === 'invited' ? 'users.table.tk_awaiting-signup-tooltip_' : 'users.table.tk_awaiting-confirmation-tooltip_')}
           >
             <Mail className="h-2.5 w-2.5" />
@@ -442,7 +442,7 @@ function UserCard({
         )}
         <span
           className={cn(
-            'inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap',
+            'inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
             scopeKind === 'ACCOUNT' ? 'border-primary/22 bg-primary/12 text-primary' : 'border-amber-500/40 bg-amber-500/10 text-amber-500'
           )}
         >
@@ -451,22 +451,22 @@ function UserCard({
         {entityNames.map((e) => (
           <span
             key={e.id}
-            className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80 whitespace-nowrap max-w-[160px] truncate"
+            className="border-border bg-secondary text-foreground/80 inline-flex max-w-[160px] items-center truncate rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase"
             title={e.name}
           >
             {e.name}
           </span>
         ))}
         {extraEntities > 0 && (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80">
+          <span className="border-border bg-secondary text-foreground/80 inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase">
             +{extraEntities}
           </span>
         )}
       </div>
 
       {/* Footer — created date + last login on the left, EDIT cta on the right. */}
-      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60 text-[11px] text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+      <div className="border-border/60 text-muted-foreground mt-3 flex items-center justify-between gap-2 border-t pt-3 text-[11px]">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <span className="inline-flex items-center gap-1 whitespace-nowrap">
             <UserPlus className="h-3 w-3" />
             <span className="tabular-nums">{formatDateShort(user.createdAt, { withYear: false })}</span>
@@ -476,7 +476,7 @@ function UserCard({
             <span className="tabular-nums">{user.lastLoginAt ? formatDateShort(user.lastLoginAt, { withYear: false }) : tAccount('users.table.tk_never-logged-in_')}</span>
           </span>
         </div>
-        {canEdit && <span className="flex-shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors">{tAccount('users.tk_edit-cta_')} →</span>}
+        {canEdit && <span className="text-muted-foreground/70 group-hover:text-primary flex-shrink-0 text-[10px] tracking-wider uppercase transition-colors">{tAccount('users.tk_edit-cta_')} →</span>}
       </div>
     </div>
   )
@@ -487,23 +487,23 @@ function UserCard({
 function MiniPagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
   if (totalPages <= 1) return null
   return (
-    <div className="flex items-center justify-end gap-1.5 px-4 py-2.5 border-t border-border">
+    <div className="border-border flex items-center justify-end gap-1.5 border-t px-4 py-2.5">
       <button
         type="button"
         disabled={page === 1}
         onClick={() => onPage(page - 1)}
-        className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
-      <span className="text-[11px] text-muted-foreground tabular-nums px-2">
+      <span className="text-muted-foreground px-2 text-[11px] tabular-nums">
         {page} / {totalPages}
       </span>
       <button
         type="button"
         disabled={page === totalPages}
         onClick={() => onPage(page + 1)}
-        className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
@@ -688,18 +688,18 @@ export function AccountUsers() {
 
           <div data-testid="users-table">
             {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="skeleton-shimmer-orange h-36 w-full rounded-sm" />
                 ))}
               </div>
             ) : items.length === 0 ? (
-              <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
-                <UsersIcon className="h-5 w-5 text-muted-foreground/60" />
-                <span className="text-sm text-muted-foreground">{isFiltered ? tAccount('users.tk_no-results-filtered_') : tAccount('users.tk_no-users-yet_')}</span>
+              <div className="border-border bg-card flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed p-10 text-center">
+                <UsersIcon className="text-muted-foreground/60 h-5 w-5" />
+                <span className="text-muted-foreground text-sm">{isFiltered ? tAccount('users.tk_no-results-filtered_') : tAccount('users.tk_no-users-yet_')}</span>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {items.map((u) => (
                   <UserCard
                     key={u.id}

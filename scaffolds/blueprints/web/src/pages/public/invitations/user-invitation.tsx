@@ -87,7 +87,7 @@ export function UserInvitation() {
   /* ── No token — countdown card ── */
   if (!invitationToken) {
     return (
-      <div className="relative flex h-screen flex-col items-center bg-muted">
+      <div className="bg-muted relative flex h-screen flex-col items-center">
         <div className="absolute top-4 right-4">
           <ThemeToggleButton />
         </div>
@@ -95,9 +95,9 @@ export function UserInvitation() {
         <Card className="glow-card auth-flip-right w-full max-w-md px-8 py-8">
           <div className="igw-glow" aria-hidden="true" />
           <div className="igw-border" aria-hidden="true" />
-          <div className="relative z-10 text-center space-y-3">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">{tAuth('userInvitation.tk_acceptInvitationError_')}</h2>
-            <p className="text-sm text-muted-foreground">{tAuth('userInvitation.tk_redirecting_', { countdown })}</p>
+          <div className="relative z-10 space-y-3 text-center">
+            <h2 className="text-foreground text-2xl font-bold tracking-tight">{tAuth('userInvitation.tk_acceptInvitationError_')}</h2>
+            <p className="text-muted-foreground text-sm">{tAuth('userInvitation.tk_redirecting_', { countdown })}</p>
           </div>
         </Card>
       </div>
@@ -106,7 +106,7 @@ export function UserInvitation() {
 
   /* ── Invitation form ── */
   return (
-    <div className="relative flex h-screen flex-col items-center bg-muted">
+    <div className="bg-muted relative flex h-screen flex-col items-center">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
@@ -115,9 +115,9 @@ export function UserInvitation() {
         <div className="igw-glow" aria-hidden="true" />
         <div className="igw-border" aria-hidden="true" />
         <div className="relative z-10">
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{tAuth('userInvitation.tk_title_')}</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">{tAuth('userInvitation.tk_descriptionInvitation_')}</p>
+          <div className="mb-6 text-center">
+            <h2 className="text-foreground text-3xl font-bold tracking-tight">{tAuth('userInvitation.tk_title_')}</h2>
+            <p className="text-muted-foreground mt-1.5 text-sm">{tAuth('userInvitation.tk_descriptionInvitation_')}</p>
           </div>
 
           <Form {...form}>

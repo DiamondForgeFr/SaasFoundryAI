@@ -104,9 +104,8 @@ docker compose up -d --build
 docker compose run --rm backend npm run db:update
 ```
 
-The image runs `node dist/src/main.js` as an unprivileged user, writes its logs to the `api-logs`
-volume, and answers its health check on `127.0.0.1`. It ships `prisma/` and `scripts/update-db.sh`,
-so the schema can be brought up to date from the image itself.
+The image runs `node dist/src/main.js` as an unprivileged user, writes its logs to the `api-logs` volume, and answers its health check on `127.0.0.1`. It ships `prisma/` and `scripts/update-db.sh`, so
+the schema can be brought up to date from the image itself.
 
 ## 📁 Folder Structure
 
@@ -214,18 +213,17 @@ The project includes a comprehensive GitHub Actions workflow for automated deplo
 
 #### Deployment Configuration
 
-| Name                 | Kind     | Value                                                                                         |
-| -------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `DEPLOY_HOST`        | variable | Host name or address of the Docker host                                                       |
-| `DEPLOY_USER`        | variable | SSH user, allowed to run `docker`                                                             |
-| `DEPLOY_PORT`        | variable | SSH port (default `22`)                                                                       |
-| `DEPLOY_API_PATH`    | variable | Directory on the host that holds `docker-compose.yml` and `.env`                              |
-| `DEPLOY_KNOWN_HOSTS` | variable | Output of `ssh-keyscan -p <port> <host>`: the host key is checked, an unknown key aborts      |
-| `DEPLOY_SSH_KEY`     | secret   | Private key of `DEPLOY_USER`                                                                  |
-| application secrets  | secret   | `FRONTEND_URL`, `DATABASE_URL`, `DIRECT_URL` and the five `JWT_SECRET_*` values               |
+| Name                 | Kind     | Value                                                                                    |
+| -------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `DEPLOY_HOST`        | variable | Host name or address of the Docker host                                                  |
+| `DEPLOY_USER`        | variable | SSH user, allowed to run `docker`                                                        |
+| `DEPLOY_PORT`        | variable | SSH port (default `22`)                                                                  |
+| `DEPLOY_API_PATH`    | variable | Directory on the host that holds `docker-compose.yml` and `.env`                         |
+| `DEPLOY_KNOWN_HOSTS` | variable | Output of `ssh-keyscan -p <port> <host>`: the host key is checked, an unknown key aborts |
+| `DEPLOY_SSH_KEY`     | secret   | Private key of `DEPLOY_USER`                                                             |
+| application secrets  | secret   | `FRONTEND_URL`, `DATABASE_URL`, `DIRECT_URL` and the five `JWT_SECRET_*` values          |
 
-The host needs Docker with the Compose plugin. It logs in to the GitHub Container Registry with the
-job's token for the pull, and out again when the job ends.
+The host needs Docker with the Compose plugin. It logs in to the GitHub Container Registry with the job's token for the pull, and out again when the job ends.
 
 ### Best Practices
 

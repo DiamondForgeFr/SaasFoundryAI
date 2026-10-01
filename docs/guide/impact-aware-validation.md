@@ -63,8 +63,13 @@ npm run test:pre-push
 ```
 
 Record the tested commit and environment in the ticket's test report. This is not an automatic result cache: relevant code or environment changes require revalidation, and CI independently validates
-the PR. Human review and any required Human testing remain unchanged. Generated projects retain their own `.saasfoundry/validation.json` mapping; this contributor-only optimization does not alter
-their hooks or release policy.
+the PR. Human review and any required Human testing remain unchanged. These scoped commit checks are contributor-only and do not alter generated projects' release policy.
+
+**In generated projects**, `npm run test:staged` reads `.saasfoundry/validation.commit.json` as well. It holds the same lanes as `.saasfoundry/validation.json` except two: the lifecycle lane runs the
+guards instead of `test:e2e`, and full validation runs the guards and the shared-contract checks. Every API or web change selects the lifecycle lane, so a hook that ran the E2E suite ran it on almost
+every commit. CI keeps `.saasfoundry/validation.json`, where the lifecycle lane still runs `test:e2e`. The generated `.prettierignore` keeps the files SaaSFoundryAI writes and refreshes on `sf update`
+(`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, agent instructions, the validation workflow) and generated artefacts out of `npm run format:check`; formatting them would turn the next update
+into conflicts.
 
 Inspect an explicit range without executing its commands:
 

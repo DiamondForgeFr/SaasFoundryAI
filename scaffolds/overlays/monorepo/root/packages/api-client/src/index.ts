@@ -9,11 +9,4 @@
  * The mutator + auth hooks are stable and can be edited.
  */
 
-export {
-  apiClientMutator,
-  setApiBaseUrl,
-  setUnauthorizedHandler,
-  type ApiClientRequestConfig,
-  type BodyType,
-  type ErrorType
-} from './http-client'
+export { apiClientMutator, setApiBaseUrl, setUnauthorizedHandler, type ApiClientRequestConfig, type BodyType, type ErrorType } from './http-client'

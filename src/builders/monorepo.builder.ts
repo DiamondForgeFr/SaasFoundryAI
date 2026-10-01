@@ -81,7 +81,7 @@ export async function renderMonorepoRoot({
   // baked a broken npm into every generated monorepo — the whole npm 10 line crashes on this
   // workspace peer graph with "Cannot read properties of null (reading 'edgesOut')" (arborist
   // #loadPeerSet). npm 11+ resolves it. Keep the pin in the template, not the host's version.
-  await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
+  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`)
 
   // Update deployment workflow references with project-specific names
   const deployApiPath = at('.github/workflows/deployment-api.yml')

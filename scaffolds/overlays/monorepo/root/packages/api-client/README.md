@@ -42,7 +42,9 @@ To regenerate after a controller / DTO change:
 
 ### HMR integration
 
-`apps/api`'s `ApiDocsService` rewrites `apps/api/docs/openapi.json` on every Nest boot — so a `npm run dev:api` restart **after** a controller change refreshes the snapshot in place. From there, `npm run codegen` (or `npm run codegen:api-client`) emits the new client. Wire a watcher into your editor's "on save → restart Nest" flow to keep the loop tight; the codegen step is sub-second on a warm npm cache.
+`apps/api`'s `ApiDocsService` rewrites `apps/api/docs/openapi.json` on every Nest boot — so a `npm run dev:api` restart **after** a controller change refreshes the snapshot in place. From there,
+`npm run codegen` (or `npm run codegen:api-client`) emits the new client. Wire a watcher into your editor's "on save → restart Nest" flow to keep the loop tight; the codegen step is sub-second on a
+warm npm cache.
 
 ### Drift detection (pre-commit)
 
@@ -61,7 +63,11 @@ import { useSignIn } from '@{{PROJECT_NAME}}/api-client/generated/api/auth/auth'
 
 function SignInButton() {
   const { mutate, isPending } = useSignIn()
-  return <button disabled={isPending} onClick={() => mutate({ data: { email, password, locale: 'EN' } })}>Sign in</button>
+  return (
+    <button disabled={isPending} onClick={() => mutate({ data: { email, password, locale: 'EN' } })}>
+      Sign in
+    </button>
+  )
 }
 ```
 

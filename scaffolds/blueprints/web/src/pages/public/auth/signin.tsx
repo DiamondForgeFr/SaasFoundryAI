@@ -171,7 +171,7 @@ export function SignIn() {
                 <button
                   type="button"
                   onClick={() => navigate('/reset-password-request', { state: { flip: 'up' } })}
-                  className="cursor-pointer text-xs text-muted-foreground hover:text-primary transition-colors"
+                  className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
                 >
                   {tAuth('callToAction.tk_forgotPassword_')}
                 </button>
@@ -185,7 +185,7 @@ export function SignIn() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col items-center bg-muted">
+    <div className="bg-muted relative flex h-screen flex-col items-center">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
@@ -194,11 +194,11 @@ export function SignIn() {
         <div className="igw-glow" aria-hidden="true" />
         <div className="igw-border" aria-hidden="true" />
         <div className="relative z-10">
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">
+          <div className="mb-6 text-center">
+            <h2 className="text-foreground text-3xl font-bold tracking-tight">
               {tAuth(isFirstLogin ? (awaitsPlatformAdmin ? 'signin.tk_bootstrapTitle_' : 'signin.tk_activateTitle_') : 'signin.tk_title_')}
             </h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
+            <p className="text-muted-foreground mt-1.5 text-sm">
               {tAuth(isFirstLogin ? (awaitsPlatformAdmin ? 'signin.tk_bootstrapDescription_' : 'signin.tk_activateDescription_') : 'signin.tk_description_')}
             </p>
           </div>
@@ -246,7 +246,7 @@ export function SignIn() {
                               }}
                             />
                           </FormControl>
-                          <p className="text-[11px] text-muted-foreground">{tAuth('signin.tk_account-name-hint_')}</p>
+                          <p className="text-muted-foreground text-[11px]">{tAuth('signin.tk_account-name-hint_')}</p>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -276,18 +276,18 @@ export function SignIn() {
 
               {hasModuleAccess('USER_ACCOUNT_CREATION') && (
                 <>
-                  <div className="flex items-center gap-3 my-4">
+                  <div className="my-4 flex items-center gap-3">
                     <Separator className="flex-1" />
-                    <span className="text-xs text-muted-foreground">{tCommon('other.tk_or_')}</span>
+                    <span className="text-muted-foreground text-xs">{tCommon('other.tk_or_')}</span>
                     <Separator className="flex-1" />
                   </div>
 
-                  <p className="text-center text-sm text-muted-foreground">
+                  <p className="text-muted-foreground text-center text-sm">
                     New here?{' '}
                     <button
                       type="button"
                       onClick={() => navigate('/signup', { state: { flip: 'right' } })}
-                      className="cursor-pointer font-semibold text-primary hover:text-primary/80 transition-colors"
+                      className="text-primary hover:text-primary/80 cursor-pointer font-semibold transition-colors"
                     >
                       {tAuth('callToAction.tk_signup_')}
                     </button>

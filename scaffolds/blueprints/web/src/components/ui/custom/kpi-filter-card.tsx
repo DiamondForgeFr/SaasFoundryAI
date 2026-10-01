@@ -45,16 +45,16 @@ export function KpiFilterCard({ active, onClick, icon: Icon, label, value, sub, 
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'cursor-pointer text-left rounded-sm border p-4 flex flex-col gap-1.5 transition-colors',
+        'flex cursor-pointer flex-col gap-1.5 rounded-sm border p-4 text-left transition-colors',
         active ? 'border-accent bg-accent text-accent-foreground' : 'bg-card border-border hover:border-foreground/20'
       )}
     >
-      <div className={cn('flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest', active ? 'text-accent-foreground/90' : 'text-muted-foreground')}>
+      <div className={cn('flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase', active ? 'text-accent-foreground/90' : 'text-muted-foreground')}>
         <Icon className={cn('h-3 w-3', active ? 'text-accent-foreground' : idleIcon)} />
         <span>{label}</span>
         {alert && !active && <span className="ml-auto h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500 shadow-[0_0_6px] shadow-amber-500" />}
       </div>
-      <div className={cn('text-[26px] font-bold leading-none tabular-nums', active ? 'text-accent-foreground' : 'text-foreground')}>{value}</div>
+      <div className={cn('text-[26px] leading-none font-bold tabular-nums', active ? 'text-accent-foreground' : 'text-foreground')}>{value}</div>
       <div className={cn('text-[11px] leading-tight', active ? 'text-accent-foreground/80' : 'text-muted-foreground')}>{sub}</div>
     </button>
   )
