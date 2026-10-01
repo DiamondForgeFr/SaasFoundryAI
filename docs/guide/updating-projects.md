@@ -266,7 +266,9 @@ npm test
 git add -A && git commit -m "chore: sf update $(sf --version)"
 ```
 
-The `.saasfoundry.json` manifest is rewritten at the end of a successful `sf update`, so the next run starts from a fresh `base`.
+The `.saasfoundry.json` manifest is rewritten at the end of every applied `sf update`, conflicts included, so the next run starts from a fresh `base`. A conflicted file takes the template version it
+was offered as its new `base`: merging (or discarding) the `.saasfoundry.new` sidecar is the whole resolution, the next run on the same templates reports nothing, and only a later template change to
+that file raises a new conflict.
 
 ## What `sf update` does NOT do
 
