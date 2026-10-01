@@ -97,12 +97,16 @@ npm run test:full
 # Create network (if needed)
 docker network create saasfoundry-network
 
-# Build image
-docker build -t saasfoundry-api .
+# Build and start with Docker Compose (in a monorepo, the build runs from the repository root)
+docker compose up -d --build
 
-# Start with Docker Compose
-docker-compose up --build
+# Bring the database schema and its SQL up to date (forward-only, never resets)
+docker compose run --rm backend npm run db:update
 ```
+
+The image runs `node dist/src/main.js` as an unprivileged user, writes its logs to the `api-logs`
+volume, and answers its health check on `127.0.0.1`. It ships `prisma/` and `scripts/update-db.sh`,
+so the schema can be brought up to date from the image itself.
 
 ## 📁 Folder Structure
 
@@ -203,20 +207,25 @@ The project includes a comprehensive GitHub Actions workflow for automated deplo
      - Latest tag
      - Git SHA
 
-4. **NAS/VPS Deployment (to adapt depending on your setup)**
-   - Deploys to NAS/VPS with proper environment setup
-   - Handles container lifecycle management
-   - Manages log rotation and retention
-   - Performs cleanup of old images and containers
+4. **Deployment to a Docker host over SSH**
+   - Skipped until the `DEPLOY_HOST` repository variable is set
+   - Uploads `docker-compose.yml` and writes the server's `.env` (mode 0600) from the repository secrets
+   - Pulls the new image, runs `npm run db:update`, starts the container and waits for its health check
 
-#### Environment Configuration
+#### Deployment Configuration
 
-The deployment process automatically sets up:
+| Name                 | Kind     | Value                                                                                         |
+| -------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `DEPLOY_HOST`        | variable | Host name or address of the Docker host                                                       |
+| `DEPLOY_USER`        | variable | SSH user, allowed to run `docker`                                                             |
+| `DEPLOY_PORT`        | variable | SSH port (default `22`)                                                                       |
+| `DEPLOY_API_PATH`    | variable | Directory on the host that holds `docker-compose.yml` and `.env`                              |
+| `DEPLOY_KNOWN_HOSTS` | variable | Output of `ssh-keyscan -p <port> <host>`: the host key is checked, an unknown key aborts      |
+| `DEPLOY_SSH_KEY`     | secret   | Private key of `DEPLOY_USER`                                                                  |
+| application secrets  | secret   | `FRONTEND_URL`, `DATABASE_URL`, `DIRECT_URL` and the five `JWT_SECRET_*` values               |
 
-- Server configuration
-- Database connections
-- JWT settings
-- Logging configuration
+The host needs Docker with the Compose plugin. It logs in to the GitHub Container Registry with the
+job's token for the pull, and out again when the job ends.
 
 ### Best Practices
 

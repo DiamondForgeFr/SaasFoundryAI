@@ -89,7 +89,7 @@ export async function renderMonorepoRoot({
     let content = await readFile(deployApiPath, 'utf8')
     content = applyProjectIdentity(content, projectName)
     // Same port identity as the multirepo deployment workflow.
-    content = content.replace(/PORT=\\"3500\\"/, `PORT=\\"${apiPort}\\"`).replace(/'\/ports:\/,\/3500\/d'/, `'/ports:/,/${apiPort}/d'`)
+    content = content.replace(/env_line PORT "3500"/, `env_line PORT "${apiPort}"`)
     await writeFile(deployApiPath, content)
   }
 

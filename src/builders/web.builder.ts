@@ -8,7 +8,7 @@ import { installPwaModule } from '../installers/pwa.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
-import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyProjectIdentity, fileExists, getNvmPrefix, monorepoBuildContext, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
@@ -135,6 +135,8 @@ export async function renderWebApp({
   if (await fileExists(dockerComposePath)) {
     let dockerComposeContent = await readFile(dockerComposePath, 'utf8')
     dockerComposeContent = applyProjectIdentity(dockerComposeContent, projectName)
+    // The monorepo Dockerfile copies the root manifests and packages/: it builds from the root.
+    if (isMonorepo) dockerComposeContent = monorepoBuildContext(dockerComposeContent, 'web')
     await writeFile(dockerComposePath, dockerComposeContent)
   }
 

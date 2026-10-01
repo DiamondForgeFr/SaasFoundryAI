@@ -4,27 +4,32 @@ services:
   # Backend API #
   ###############
   backend:
-    image: saasfoundry-api
+    # The deployment workflow sets API_IMAGE to the published image; locally, `docker compose build` tags this name
+    image: ${API_IMAGE:-saasfoundry-api}
     build:
       context: ./
       dockerfile: Dockerfile
     container_name: saasfoundry-api
     env_file:
       - ./.env
+    # Loopback only: the web container reaches the API over the network, not through this port
     ports:
-      - '${BACKEND_PORT:-3500}:3500'
+      - '127.0.0.1:${BACKEND_PORT:-3500}:3500'
+    # A named volume takes the ownership of the image's /app/logs; a host directory would be root-owned
     volumes:
-      - ./logs:/app/logs
-      - ./scripts:/app/scripts
+      - api-logs:/app/logs
     restart: unless-stopped
     networks:
       - saasfoundry-network
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:3500/api/health']
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:3500/api/health']
       interval: 30s
       timeout: 3s
       retries: 1
       start_period: 30s
+
+volumes:
+  api-logs:
 
 networks:
   saasfoundry-network:

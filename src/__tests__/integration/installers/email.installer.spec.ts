@@ -155,26 +155,26 @@ describe('installEmailModule (integration)', () => {
     expect(envTestContent).toContain('MAILERSEND_SENDER_EMAIL="hello@myapp.com"')
   })
 
-  it('should update deployment.yml with MailerSend env vars when file exists', async () => {
+  it('writes the MailerSend values into the .env the deployment workflow uploads (#861)', async () => {
     const deploymentPath = join(apiPath, '.github/workflows/deployment.yml')
 
-    // Check if deployment.yml exists in the blueprint
-    try {
-      await readFile(deploymentPath, 'utf8')
-      // Only test if it exists
-      await installEmailModule({
-        apiPath,
-        isMonorepo: false,
-        projectName: 'test-project',
-        mailersendApiKey: 'test-key',
-        mailersendSenderEmail: 'noreply@test.com',
-        mailersendSenderName: 'Test'
-      })
+    await installEmailModule({
+      apiPath,
+      isMonorepo: false,
+      projectName: 'test-project',
+      mailersendApiKey: 'test-key',
+      mailersendSenderEmail: 'noreply@test.com',
+      mailersendSenderName: "O'Neil $HOME"
+    })
 
-      const updatedContent = await readFile(deploymentPath, 'utf8')
-      expect(updatedContent).toContain('MAILERSEND_API_KEY')
-    } catch {
-      // deployment.yml might not exist in blueprint, which is fine
-    }
+    const deployment = await readFile(deploymentPath, 'utf8')
+    // The key stays a secret: the workflow reads it from the repository secrets
+    expect(deployment).toMatch(/^ {10}MAILERSEND_API_KEY: \$\{\{ secrets\.MAILERSEND_API_KEY \}\}$/m)
+    expect(deployment).toMatch(/^ {12}env_line MAILERSEND_API_KEY "\$MAILERSEND_API_KEY"$/m)
+    expect(deployment).toMatch(/^ {12}env_line MAILERSEND_SENDER_EMAIL 'noreply@test\.com'$/m)
+    // Single-quoted for the shell: neither the quote nor `$HOME` is interpreted
+    expect(deployment).toContain(`env_line MAILERSEND_SENDER_NAME 'O'\\''Neil $HOME'`)
+    expect(deployment).not.toContain('# env_line MAILERSEND')
+    expect(deployment).not.toContain('test-key')
   })
 })
