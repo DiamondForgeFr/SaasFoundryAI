@@ -34,8 +34,7 @@ RUN npm run build
 FROM nginx:alpine AS runner
 WORKDIR /usr/share/nginx/html
 
-# Add labels only in the final image
-LABEL org.opencontainers.image.source="https://github.com/agachet/saasfoundry"
+# Add labels only in the final image (CI adds org.opencontainers.image.source from the repository)
 LABEL org.opencontainers.image.description="saasfoundry-web app"
 LABEL org.opencontainers.image.licenses="MIT"
 

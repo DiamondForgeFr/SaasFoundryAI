@@ -8,6 +8,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, monorepoBuildContext, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { apiDocsIdentity, applyApiDocsIdentity } from '../utils/api-docs-identity'
 import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
 import { layoutStringProperties } from '../utils/source-layout'
@@ -96,6 +97,9 @@ export async function renderApiApp({
     .replace(/JWT_SECRET_INVITATION=.*$/m, `JWT_SECRET_INVITATION="${jwtSecrets.invitation}"`)
     .replace(/JWT_SECRET_CONFIRM_ACCOUNT=.*$/m, `JWT_SECRET_CONFIRM_ACCOUNT="${jwtSecrets.confirmAccount}"`)
     .replace(/JWT_SECRET_RESET_PASSWORD=.*$/m, `JWT_SECRET_RESET_PASSWORD="${jwtSecrets.resetPassword}"`)
+
+  // The API documents itself as the project, not as SaaSFoundryAI and its author (#884)
+  await applyApiDocsIdentity(apiPath, apiDocsIdentity(projectName, projectDescription))
 
   // Update email templates with project name
   const enLocalePath = `${apiPath}/src/modules/email/locales/en.ts`
