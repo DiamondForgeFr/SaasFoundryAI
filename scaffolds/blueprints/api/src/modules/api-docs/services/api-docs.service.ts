@@ -29,7 +29,6 @@ export class ApiDocsService {
         .setTitle(openApiConfig.title)
         .setDescription(openApiConfig.description)
         .setVersion(openApiConfig.version)
-        .setContact(openApiConfig.contact.name, openApiConfig.contact.url, openApiConfig.contact.email)
         .setLicense(openApiConfig.license.name, openApiConfig.license.url)
         .addBearerAuth()
         .build()
@@ -78,7 +77,7 @@ export class ApiDocsService {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>SaaSFoundryAI API Documentation</title>
+        <title>${openApiConfig.title} documentation</title>
 
         <!-- Stoplight Elements styles -->
         <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">

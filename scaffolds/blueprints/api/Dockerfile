@@ -31,8 +31,7 @@ RUN npm run build
 FROM node:24.19.0-alpine AS runner
 WORKDIR /app
 
-# Add labels only in the final image
-LABEL org.opencontainers.image.source="https://github.com/agachet/saasfoundry"
+# Add labels only in the final image (CI adds org.opencontainers.image.source from the repository)
 LABEL org.opencontainers.image.description="saasfoundry-api app"
 LABEL org.opencontainers.image.licenses="MIT"
 

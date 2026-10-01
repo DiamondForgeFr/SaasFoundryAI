@@ -26,6 +26,12 @@ describe.each(DOCKERFILES)('$dockerfile', ({ dockerfile, nvmrc }) => {
     expect(nodeImages.length).toBeGreaterThan(0)
     for (const tag of nodeImages) expect(tag).toBe(`${read(nvmrc).trim()}-alpine`)
   })
+
+  // The source label pointed every image at the template's placeholder repository (#884);
+  // docker/metadata-action sets the project's own in CI.
+  it('does not label the image as the template repository', () => {
+    expect(source).not.toMatch(/agachet|LABEL org\.opencontainers\.image\.source/)
+  })
 })
 
 /** The instructions of each stage, continuation lines joined, comments dropped. */
