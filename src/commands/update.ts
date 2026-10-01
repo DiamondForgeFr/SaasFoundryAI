@@ -1274,6 +1274,13 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         // Template files the new CLI no longer generates. Flagged, kept, and untracked — never
         // deleted: a regeneration defect would otherwise turn into lost files (#857, #874, #865).
         let obsolete: FileUpdate[] = []
+        // Conflicted files left as the user wrote them (sidecar or kept). Their new baseline is
+        // the template version this run offered: merging the sidecar resolves the conflict, the
+        // next run on the same templates reports nothing, and a later template change conflicts
+        // again. Waiting for zero conflicts instead kept a customized project on its old version
+        // forever, re-conflicting on every deliberately kept edit (#856).
+        let conflictBaselines: string[] = []
+        let unresolvedConflicts = false
 
         try {
           // Regenerate project in temp dir with current CLI
@@ -1347,7 +1354,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
                 conflictStrategy,
                 assertStackModuleWritePathSafe
               )
-              templateRefreshComplete = conflicts.length === 0 || conflictStrategy === 'replace'
+              templateRefreshComplete = true
+              unresolvedConflicts = conflictStrategy !== 'replace' && conflicts.length > 0
+              conflictBaselines = unresolvedConflicts ? conflicts.map((conflict) => conflict.path) : []
 
               spinner.succeed(chalk.green('Template update complete.'))
 
@@ -1388,8 +1397,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           if (!dryRun && templateRefreshComplete) {
             // Update manifest version and recompute hashes
             manifest.version = cliVersion
-            if (manifest.adoption?.refreshPending) manifest.adoption.refreshPending = false
+            // The legacy adoption marker clears on the first refresh that leaves nothing to merge.
+            if (manifest.adoption?.refreshPending && !unresolvedConflicts) manifest.adoption.refreshPending = false
             manifest.fileHashes = await refreshProjectHashes(manifest)
+            for (const path of conflictBaselines) if (targetHashes[path]) manifest.fileHashes[path] = targetHashes[path]
             for (const { path } of obsolete) delete manifest.fileHashes[path]
             await persistManifest()
           }
