@@ -299,10 +299,16 @@ check_complexity_guard() {
   [[ "${SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD:-}" == "1" ]] && return 0
   is_backlog_target "$target" && return 0   # moving back to Backlog is always allowed
 
-  local level
-  level=$(get_ticket_complexity_label "$ticket") || return 0   # fail-open on fetch error
+  local raw level
+  raw=$(route_to_tool "$WORKFLOW_TOOL" get-labels "$ticket" 2>/dev/null) || return 0   # fail-open on fetch error
+  level=$(echo "$raw" | grep -E '^complexity: ' | head -n1 | sed 's/^complexity: //')
 
   if [[ -z "$level" ]]; then
+    # An Epic is an aggregate with a derived status: the workflow never asks for
+    # its complexity, so the guard does not either (#839).
+    local issue_type
+    if issue_type=$(get_ticket_issue_type "$ticket" 2>/dev/null) && [[ "$issue_type" == "sf-epic" ]]; then return 0; fi
+
     echo -e "${RED}✗ Ticket #${ticket} has no complexity label — cannot transition to '${target}'.${NC}" >&2
     echo "" >&2
     echo "  Every ticket must be tagged with one of: bug | low | medium | complex" >&2
