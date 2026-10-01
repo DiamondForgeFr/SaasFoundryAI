@@ -1072,6 +1072,51 @@ explain_pr_event_rejection() {
   ' "$event_path" 2>/dev/null || echo "the event payload could not be read"
 }
 
+# Publish an AI Testing step where the developer already looks: the ticket's
+# pull request. A commit status on the PR head ("AI testing / <step>") links to
+# one progress comment that keeps a row per step. Hours of AI Testing used to
+# show nothing outside the chat, and a status without a link led nowhere (#883).
+AI_STATUS_MARKER='<!-- sf-ai-testing-progress -->'
+ai_status() {
+  if [[ "$#" -ne 4 || ! "$1" =~ ^[1-9][0-9]*$ || ! "$3" =~ ^(pending|success|failure)$ || -z "$2" ]]; then
+    echo "Usage: workflow-cli.sh ai-status <ticket> <step> <pending|success|failure> \"<description>\"" >&2
+    return 2
+  fi
+  local ticket=$1 step=${2//|//} state=$3 description=${4//|//} repo pr head icon row comment comment_id comment_url body_file
+  step=${step//$'\n'/ } description=${description//$'\n'/ }
+  load_config
+  [[ "$WORKFLOW_TOOL" == github-projects ]] || { echo "Error: ai-status requires github-projects." >&2; return 2; }
+  if [[ "${GH_REPO:-}" =~ ([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$ ]]; then repo=${BASH_REMATCH[1]}; else repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || repo=""; fi
+  [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Error: unable to resolve the repository." >&2; return 2; }
+  pr=$(get_open_pr_for_ticket "$ticket") || { echo "Error: unable to look up the pull request of ticket #${ticket}." >&2; return 2; }
+  [[ -n "$pr" ]] || { echo "Error: ticket #${ticket} has no open pull request — open one first: workflow-cli.sh create-pr ${ticket} --draft" >&2; return 2; }
+  head=$(gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null) || head=""
+  [[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "Error: unable to read the head commit of pull request #${pr}." >&2; return 2; }
+  case "$state" in pending) icon='⏳' ;; success) icon='✅' ;; failure) icon='❌' ;; esac
+  row="| ${step} | ${icon} ${description} |"
+  comment=$(gh api "repos/${repo}/issues/${pr}/comments" --paginate --jq "[.[] | select(.body | contains(\"${AI_STATUS_MARKER}\"))] | last // empty | {id, html_url, body}" 2>/dev/null) || comment=""
+  body_file=$(mktemp)
+  if [[ -z "$comment" ]]; then
+    printf '%s\n## AI Testing — live progress\n\n| Step | State |\n| --- | --- |\n%s\n' "$AI_STATUS_MARKER" "$row" > "$body_file"
+    comment=$(gh api -X POST "repos/${repo}/issues/${pr}/comments" -F "body=@${body_file}" --jq '{id, html_url}' 2>/dev/null) || comment=""
+  else
+    printf '%s' "$comment" | jq -r .body | awk -v step="| ${step} |" -v row="$row" '
+      index($0, step) == 1 { print row; done = 1; next }
+      { print }
+      END { if (!done) print row }
+    ' > "$body_file"
+    comment_id=$(printf '%s' "$comment" | jq -r .id)
+    comment=$(gh api -X PATCH "repos/${repo}/issues/comments/${comment_id}" -F "body=@${body_file}" --jq '{id, html_url}' 2>/dev/null) || comment=""
+  fi
+  rm -f "$body_file"
+  comment_url=$(printf '%s' "$comment" | jq -r '.html_url // empty' 2>/dev/null)
+  [[ -n "$comment_url" ]] || { echo "Error: unable to write the progress comment on pull request #${pr}." >&2; return 2; }
+  gh api -X POST "repos/${repo}/statuses/${head}" -f state="$state" -f context="AI testing / ${step}" -f description="${description:0:140}" -f target_url="$comment_url" >/dev/null 2>&1 || {
+    echo "Error: unable to publish the commit status on pull request #${pr}." >&2; return 2;
+  }
+  echo "AI testing / ${step}: ${state} — ${description} (PR #${pr})"
+}
+
 # A pull request merged into the configured PR target moves its delivery ticket
 # to Done through the same guarded update-status — which also closes the issue
 # and rolls an Epic up. The Solo In Review banner promised "your merge triggers
@@ -1358,6 +1403,10 @@ shift || true
 case "$COMMAND" in
   sync-pr-review)
     sync_pr_review "$@"
+    exit $?
+    ;;
+  ai-status)
+    ai_status "$@"
     exit $?
     ;;
   # Workflow status commands
@@ -1816,6 +1865,8 @@ case "$COMMAND" in
     echo "  create-pr <ticket> [--draft]  Create pull request"
     echo "  ready-pr <ticket>            Mark pull request ready for review"
     echo "  sync-pr-review <pr>          Sync a verified GitHub ready event to In review"
+    echo "  ai-status <ticket> <step> <pending|success|failure> \"<description>\""
+    echo "                               Publish an AI Testing step on the ticket's pull request"
     echo "  draft-pr <ticket>            Return pull request to draft"
     echo "  list ...                     List tickets"
     echo "  get-labels <ticket>          List every label on a ticket"
@@ -1825,7 +1876,7 @@ case "$COMMAND" in
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
     echo ""
-    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, list, get-labels, inspect-srs-tickets, link-subtask, transition-drafting"
+    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, ai-status, list, get-labels, inspect-srs-tickets, link-subtask, transition-drafting"
     echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;

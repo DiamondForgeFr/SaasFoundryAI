@@ -135,10 +135,10 @@
     ".agents/skills/sf-workflow/statuses/3a-ai-drafting.md": "ab6bc2e19150fd4280910a1ba8660dd5de16f719b4fb92426019a93039463ac7",
     ".agents/skills/sf-workflow/statuses/3b-human-review.md": "54616cd2dc8e4d728e5e37a7c5d21f80c07ab01426ab5acd29137d94da86b07a",
     ".agents/skills/sf-workflow/statuses/3c-spawning.md": "81d7a64b7d8c566531f0ae97e432b1f9219d18a79c927770409ce2e4480552e1",
-    ".agents/skills/sf-workflow/statuses/4-ai-testing.md": "50ea0f3893b03606f21d1b17f4985a55e07f243b24fdd582c740596e08426757",
+    ".agents/skills/sf-workflow/statuses/4-ai-testing.md": "f87415aa0288ce050474c3f07c7bccc12c92fbabeecfc3de745144628015fd03",
     ".agents/skills/sf-workflow/statuses/5-human-testing.md": "3b99530974d8fa72f4578c31f037565e4e9be882f0471cc14854e67162c5e42a",
     ".agents/skills/sf-workflow/statuses/6-in-review.md": "45ef602930b687818f4b32f1ed1544bf152a7115ad0d87c8ee7a27c5c83a1ec5",
     ".agents/skills/sf-workflow/statuses/7-done.md": "998216a270f6c80bb530c5c3d58e41bad05680b174c2477da36afdb11ce5e3fc",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "b88ee373282cb65b9e360b6d39995f97fb644d8e1219732cdf4a4408944b9dad"
+    ".agents/skills/sf-workflow/workflow-cli.sh": "b4c6dca4fa869f379684c7346b17c91c91fedc70bb85f5b1aa4bb03dbb950ab6"
   }
 }
