@@ -1,4 +1,3 @@
-import { copy } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
 import { join, resolve } from 'path'
 
@@ -8,6 +7,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
@@ -37,7 +37,7 @@ export async function renderMonorepoRoot({
   const { api: apiPort } = ports ?? DEFAULT_PORTS
 
   // Copy monorepo root overlay to project root (current directory)
-  await copy(resolve(overlaysPath, 'monorepo/root'), targetDir, { overwrite: true })
+  await copyOverlay(resolve(overlaysPath, 'monorepo/root'), targetDir)
 
   // Substitute {{PROJECT_NAME}} in shared-* + api-client + ui-primitives package files (scoped package names + docs)
   await substitutePlaceholdersInFiles(

@@ -60,6 +60,34 @@ describe('regenerateInTempDir', () => {
     expect(cliVersion).toMatch(/^\d+\.\d+\.\d+/)
   })
 
+  describe('.gitignore templates (#875)', () => {
+    const exists = (path: string) =>
+      readFile(path).then(
+        () => true,
+        () => false
+      )
+
+    it.each([
+      ['monorepo', ['.']],
+      ['multirepo', ['apps/acme-pilot-api', 'apps/acme-pilot-web']]
+    ] as const)(
+      'deposits a real .gitignore in every %s package root, and no stray packaged copy',
+      async (structure, roots) => {
+        const { projectDir } = await regenerate(monorepoManifest({ structure }))
+
+        for (const root of roots) {
+          expect({ root, gitignore: await exists(join(projectDir, root, '.gitignore')), packaged: await exists(join(projectDir, root, 'gitignore')) }).toEqual({
+            root,
+            gitignore: true,
+            packaged: false
+          })
+          expect(await readFile(join(projectDir, root, '.gitignore'), 'utf8')).toMatch(/^\.env$/m)
+        }
+      },
+      120_000
+    )
+  })
+
   describe('package identity (#858)', () => {
     it("keeps the project's description and repository in every regenerated package", async () => {
       const identity = { description: 'Workplace health and safety compliance for construction SMEs.', repository: { type: 'git', url: 'git@github.com:acme/acme-pilot.git' } }

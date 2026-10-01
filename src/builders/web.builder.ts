@@ -9,6 +9,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
@@ -44,9 +45,9 @@ export async function renderWebApp({
   const webPath = join(targetDir, isMonorepo ? 'apps/web' : `apps/${projectName}-web`)
 
   await copy(resolve(blueprintsPath, 'web'), webPath)
-  if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/web'), webPath, { overwrite: true })
+  if (!isMonorepo) await copyOverlay(resolve(overlaysPath, 'multirepo/web'), webPath)
   else {
-    await copy(resolve(overlaysPath, 'monorepo/web'), webPath, { overwrite: true })
+    await copyOverlay(resolve(overlaysPath, 'monorepo/web'), webPath)
     // Remove per-app CI workflows (monorepo uses root-level workflows)
     await rm(`${webPath}/.github`, { recursive: true, force: true })
     // Point ESLint custom rule to monorepo root shared file
