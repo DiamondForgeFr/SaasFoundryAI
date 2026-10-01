@@ -1,7 +1,7 @@
 #########################
 # Stage 1: Dependencies #
 #########################
-FROM node:22-alpine AS deps
+FROM node:24.19.0-alpine AS deps
 WORKDIR /app
 
 # Copy root package files for workspace resolution
@@ -19,7 +19,7 @@ RUN npm ci
 ####################
 # Stage 2: Builder #
 ####################
-FROM node:22-alpine AS builder
+FROM node:24.19.0-alpine AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
