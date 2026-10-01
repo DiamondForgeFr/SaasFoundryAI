@@ -244,6 +244,52 @@ esac
     expect((await run({ LIVE: JSON.stringify(integrationLive) })).code).toBe(0)
     expect(calls()).toContain('tool update-status 42 In review')
   })
+  // #846 — a refused event names the condition it failed.
+  describe('rejection reasons', () => {
+    const integrationManifest = JSON.stringify({
+      workflow: {
+        tool: 'github-projects',
+        workingBranch: 'develop',
+        prTargetBranch: 'integration',
+        releaseBranch: 'master',
+        branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' }
+      }
+    })
+    const integrationEvent = (body: string) => ({
+      ...event,
+      repository: { ...event.repository, default_branch: 'main' },
+      pull_request: { ...event.pull_request, body, base: { ...event.pull_request.base, ref: 'integration' } }
+    })
+
+    it('explains that the Resolves line must read exactly `Resolves #N`', async () => {
+      await writeFile(path.join(dir, '.saasfoundry.json'), integrationManifest)
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify(integrationEvent('Resolves #42 — FR-FORK-005: continuous integration')))
+      const result = await run()
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('must contain exactly one line that reads `Resolves #<ticket>` and nothing else (found 0)')
+      expect(result.stderr).toContain('no ticket changed')
+      expect(changedTicket()).toBe(false)
+    })
+
+    it('counts two Resolves lines as ambiguous', async () => {
+      await writeFile(path.join(dir, '.saasfoundry.json'), integrationManifest)
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify(integrationEvent('Resolves #42\nResolves #43')))
+      expect((await run()).stderr).toContain('(found 2)')
+    })
+
+    it.each([
+      [{ action: 'edited' }, 'event action "edited" is not opened, reopened or ready_for_review'],
+      [{ pull_request: { ...event.pull_request, draft: true } }, 'pull request #100 is a draft'],
+      [{ pull_request: { ...event.pull_request, state: 'closed' } }, 'pull request #100 is not open'],
+      [{ pull_request: { ...event.pull_request, base: { ...event.pull_request.base, ref: 'experiments' } } }, 'targets "experiments", which is neither the PR target "develop" nor the release branch']
+    ])('names the failed condition for %j', async (change, reason) => {
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, ...change }))
+      const result = await run()
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain(reason)
+    })
+  })
+
   it('does not misclassify a feature PR when delivery and release targets are the same branch', async () => {
     await writeFile(
       path.join(dir, '.saasfoundry.json'),

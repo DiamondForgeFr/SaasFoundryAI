@@ -1029,6 +1029,35 @@ show_next_status() {
 # GitHub's live native issue references confirm ordinary delivery branches. Release
 # PRs target a non-default branch, so GitHub does not populate that field for them;
 # an exact `Closes #N` directive in the live PR body is their guarded association.
+# The first condition a pull request event failed, in words a developer can act
+# on. The validation below answers only yes or no; a body line such as
+# `Resolves #7 — summary` was refused with no hint that it must read exactly
+# `Resolves #7` (#846).
+explain_pr_event_rejection() {
+  local repo=$1 number=$2 event_path=$3
+  jq -r --arg repo "$repo" --argjson n "$number" --slurpfile manifest .saasfoundry.json '
+    ($manifest[0].workflow.workingBranch // "develop") as $working
+    | ($manifest[0].workflow.prTargetBranch // $working) as $target
+    | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release
+    | .pull_request as $pr
+    | ([$pr.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$")] | length) as $resolves
+    | ([$pr.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$")] | length) as $closes
+    | if ((.action // "") | IN("ready_for_review", "opened", "reopened") | not) then
+        "event action \"\(.action)\" is not opened, reopened or ready_for_review"
+      elif .number != $n or .repository.full_name != $repo then "the event belongs to another pull request or repository"
+      elif ($pr.state // "") != "open" then "pull request #\($n) is not open"
+      elif $pr.draft != false then "pull request #\($n) is a draft"
+      elif $pr.head.repo.full_name != $repo or $pr.base.repo.full_name != $repo then "pull request #\($n) comes from another repository"
+      elif ($pr.base.ref | IN($target, $release, $working) | not) then
+        "pull request #\($n) targets \"\($pr.base.ref)\", which is neither the PR target \"\($target)\" nor the release branch \"\($release)\""
+      elif $pr.base.ref == $release and $closes != 1 then
+        "a release pull request body must contain exactly one line that reads `Closes #<ticket>` (found \($closes))"
+      elif $pr.base.ref != .repository.default_branch and $pr.base.ref == $target and $resolves != 1 then
+        "pull request #\($n) targets \"\($pr.base.ref)\", not the default branch, so GitHub links no ticket: its body must contain exactly one line that reads `Resolves #<ticket>` and nothing else (found \($resolves)); a line such as `Resolves #7 — summary` does not count"
+      else "the event could not be validated (malformed or stale payload)" end
+  ' "$event_path" 2>/dev/null || echo "the event payload could not be read"
+}
+
 sync_pr_review() {
   if [[ "$#" -ne 1 || ! "$1" =~ ^[1-9][0-9]*$ ]]; then
     echo "Usage: workflow-cli.sh sync-pr-review <pr-number>" >&2
@@ -1087,7 +1116,7 @@ sync_pr_review() {
           | if length == 1 then .[0] else error("Invalid non-default delivery ticket association") end)
        else null end)}
   ' "$event_path" 2>/dev/null) || {
-    echo "Error: event is malformed, stale, cross-repository or not a ready pull request; no ticket changed." >&2
+    echo "Error: $(explain_pr_event_rejection "$repo" "$pr_number" "$event_path"); no ticket changed." >&2
     return 2
   }
   live=$(gh pr view "$pr_number" --repo "$repo" --json number,url,title,state,isDraft,headRefName,headRefOid,baseRefName,baseRefOid,headRepository,headRepositoryOwner,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
