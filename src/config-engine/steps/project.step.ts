@@ -85,8 +85,7 @@ export const projectStep: StepDefinition = {
       validate: (input: string) => {
         if (!input) return 'Backend Git URL is required'
         return true
-      },
-      default: 'https://github.com/agachet/saasfoundry'
+      }
     },
     {
       type: 'input',
@@ -96,8 +95,7 @@ export const projectStep: StepDefinition = {
       validate: (input: string) => {
         if (!input) return 'Frontend Git URL is required'
         return true
-      },
-      default: 'https://github.com/agachet/saasfoundry'
+      }
     },
     {
       type: 'list',

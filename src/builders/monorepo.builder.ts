@@ -8,6 +8,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
@@ -68,10 +69,12 @@ export async function renderMonorepoRoot({
   // Update root package.json
   const packageJsonPath = at('package.json')
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
-  packageJson.name = projectName
-  packageJson.description = projectDescription
-  packageJson.repository.url = monorepoUrl || 'https://github.com/agachet/saasfoundry.git'
-  packageJson.keywords = [projectName, 'saasfoundry', 'monorepo', 'turborepo']
+  applyPackageIdentity(packageJson, {
+    name: projectName,
+    description: projectDescription,
+    keywords: [projectName, 'saasfoundry', 'monorepo', 'turborepo'],
+    repositoryUrl: monorepoUrl
+  })
   // `packageManager` deliberately keeps the value pinned in the template. It used to be stamped
   // with the *generating machine's* npm version, which made generation non-deterministic: the
   // scaffold's package manager depended on whoever ran `sf new`. Docker (npm 10.9.x) therefore

@@ -57,6 +57,7 @@ import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
+import { readLivePackageIdentity } from '../utils/package-identity'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
 // scaffold refreshes must neither delete them nor adopt user edits/private skills.
@@ -419,7 +420,7 @@ export function enforceAtomicImpactValidationBundles(updates: FileUpdate[], hash
  *
  * Returns the temp dir path and the file hashes of the regenerated project.
  */
-async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tempDir: string; hashes: Record<string, string> }> {
+export async function regenerateInTempDir(manifest: SaaSFoundryManifest, liveRoot = '.'): Promise<{ tempDir: string; hashes: Record<string, string> }> {
   // Template regeneration only applies to projects scaffolded by `sf new`.
   // Harness-only manifests carry a `modules` block too, but have no stack to regenerate.
   if (!isScaffoldManifest(manifest)) {
@@ -442,14 +443,27 @@ async function regenerateInTempDir(manifest: SaaSFoundryManifest): Promise<{ tem
     const ports = manifest.ports ?? DEFAULT_PORTS
     const mainBranch = (manifest.mainBranch ?? 'main') as Answers['mainBranch']
 
+    /**
+     * The manifest records neither the description nor the repository URLs, so they are
+     * read back from the project's own package files. Passing empty values made the
+     * target erase the description and point every package at the template's placeholder
+     * repository — a conflict at best, a silent overwrite of an untouched file at worst (#858).
+     */
+    const isMonorepo = manifest.structure === 'monorepo'
+    const [rootIdentity, apiIdentity, webIdentity] = await Promise.all(
+      (isMonorepo ? ['.', 'apps/api', 'apps/web'] : ['.', `apps/${manifest.projectName}-api`, `apps/${manifest.projectName}-web`]).map((dir) => readLivePackageIdentity(join(liveRoot, dir)))
+    )
+    const ownIdentity = isMonorepo ? rootIdentity : apiIdentity
+
     const config: Answers = {
       profile: manifest.modules.harness?.managed === false ? 'stack' : 'full',
       setupRepo: 'local',
-      isMonorepo: manifest.structure === 'monorepo',
+      isMonorepo,
       projectName: manifest.projectName,
-      projectDescription: '',
-      backendRepoUrl: '',
-      frontendRepoUrl: '',
+      projectDescription: ownIdentity.description ?? '',
+      monorepoUrl: isMonorepo ? rootIdentity.repositoryUrl : undefined,
+      backendRepoUrl: isMonorepo ? '' : (apiIdentity.repositoryUrl ?? ''),
+      frontendRepoUrl: isMonorepo ? '' : (webIdentity.repositoryUrl ?? ''),
       dbCredentials: {
         host: 'localhost',
         port: String(ports.db),

@@ -53,7 +53,6 @@
     "react",
     "vite"
   ],
-  "author": "Your Name <anthony.gachet@diamondforge.fr> (https://agachet.diamondforge.fr)",
   "dependencies": {
     "@hookform/resolvers": "5.2.2",
     "@{{PROJECT_NAME}}/api-client": "*",

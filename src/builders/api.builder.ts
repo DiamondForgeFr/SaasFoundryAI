@@ -8,6 +8,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
@@ -63,10 +64,12 @@ export async function renderApiApp({
   // Update package.json
   const packageJsonPath = `${apiPath}/package.json`
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
-  packageJson.name = `${projectName}-api`
-  packageJson.description = projectDescription
-  packageJson.repository.url = backendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
-  packageJson.keywords = [projectName, 'saasfoundry', 'backend', 'nest', 'prisma']
+  applyPackageIdentity(packageJson, {
+    name: `${projectName}-api`,
+    description: projectDescription,
+    keywords: [projectName, 'saasfoundry', 'backend', 'nest', 'prisma'],
+    repositoryUrl: backendRepoUrl
+  })
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
   // Update .env with core settings (JWT secrets, database credentials)
   const envPath = `${apiPath}/.env`
