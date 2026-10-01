@@ -530,6 +530,16 @@ check_bundled_pr_parent_guard() {
   return 0
 }
 
+# Whether .saasfoundry.json declares a board status, case-insensitively. A manifest
+# that lists no statuses uses the default Team set, which has every status.
+manifest_declares_status() {
+  local name=$1 count
+  [[ -f .saasfoundry.json ]] || return 0
+  count=$(jq -r '(.workflow.statuses // []) | length' .saasfoundry.json 2>/dev/null) || return 0
+  [[ "$count" == "0" ]] && return 0
+  jq -e --arg s "$name" '[.workflow.statuses[].name | ascii_downcase] | index($s | ascii_downcase) != null' .saasfoundry.json >/dev/null 2>&1
+}
+
 rollup_parent_status() {
   # The child transition already succeeded. A rollup failure is reported, never
   # undone locally; GitHub remains the authoritative source and a later child
@@ -552,10 +562,13 @@ rollup_parent_status() {
     }
     case "$(echo "$parent_status" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')" in
       backlog)
-        route_to_tool "$WORKFLOW_TOOL" update-status "$parent" "Ready" || {
-          echo "Warning: could not roll parent Epic #${parent} from Backlog to Ready." >&2; return 0;
-        }
-        echo "Derived rollup: Epic #${parent} → Ready (child #${child} entered In progress)."
+        # Walk the statuses this board declares: the Solo preset has no Ready (#838).
+        if manifest_declares_status "Ready"; then
+          route_to_tool "$WORKFLOW_TOOL" update-status "$parent" "Ready" || {
+            echo "Warning: could not roll parent Epic #${parent} from Backlog to Ready." >&2; return 0;
+          }
+          echo "Derived rollup: Epic #${parent} → Ready (child #${child} entered In progress)."
+        fi
         route_to_tool "$WORKFLOW_TOOL" update-status "$parent" "In progress" || {
           echo "Warning: could not roll parent Epic #${parent} to In progress." >&2; return 0;
         }
