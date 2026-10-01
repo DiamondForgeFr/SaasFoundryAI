@@ -35,6 +35,8 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 - [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`
 - [ ] **Heavy local validation** — run the project's configured build/integration suite before Human Testing (for example `npm run test:pre-push` when declared in `package.json`). Record command,
       commit and results. Repeat after relevant fixes; ordinary pushes do not rerun this suite.
+- [ ] **Show progress on the PR** — around every heavy run, `workflow-cli.sh ai-status <ticket> "<step>" pending "<what runs>"`, then `success` or `failure` with a one-line result. The developer
+      follows it from the PR's checks, which link to one progress comment; open the draft PR first (`create-pr <ticket> --draft`).
 - [ ] **Execute test plan** step by step — verify each scenario, document any failure
 - [ ] **On failure** — document, fix, commit, push, restart from automated tests
 - [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel review agents (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
