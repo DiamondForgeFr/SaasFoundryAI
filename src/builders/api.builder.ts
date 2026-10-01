@@ -8,6 +8,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
@@ -47,9 +48,9 @@ export async function renderApiApp({
   const apiPath = join(targetDir, isMonorepo ? 'apps/api' : `apps/${projectName}-api`)
 
   await copy(resolve(blueprintsPath, 'api'), apiPath)
-  if (!isMonorepo) await copy(resolve(overlaysPath, 'multirepo/api'), apiPath, { overwrite: true })
+  if (!isMonorepo) await copyOverlay(resolve(overlaysPath, 'multirepo/api'), apiPath)
   else {
-    await copy(resolve(overlaysPath, 'monorepo/api'), apiPath, { overwrite: true })
+    await copyOverlay(resolve(overlaysPath, 'monorepo/api'), apiPath)
     // Remove per-app CI workflows (monorepo uses root-level workflows)
     await rm(`${apiPath}/.github`, { recursive: true, force: true })
     // Point ESLint custom rule to monorepo root shared file
