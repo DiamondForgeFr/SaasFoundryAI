@@ -304,6 +304,9 @@ check_complexity_guard() {
   level=$(echo "$raw" | grep -E '^complexity: ' | head -n1 | sed 's/^complexity: //')
 
   if [[ -z "$level" ]]; then
+    # An SRS drafting ticket follows its own lifecycle, and its srs:* label is
+    # the profile that lifecycle declares; a code-path level would be arbitrary (#851).
+    if echo "$raw" | grep -qE '^srs:(drafting|update|new)$'; then return 0; fi
     # An Epic is an aggregate with a derived status: the workflow never asks for
     # its complexity, so the guard does not either (#839).
     local issue_type
