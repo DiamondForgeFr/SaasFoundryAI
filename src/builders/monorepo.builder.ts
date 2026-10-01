@@ -7,6 +7,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { CreateMonorepoRootParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { apiDocsIdentity, applyApiClientIdentity } from '../utils/api-docs-identity'
 import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
@@ -65,6 +66,9 @@ export async function renderMonorepoRoot({
   // handled: a README addresses a human and belongs to the project whatever profile was
   // chosen, while the AI harness may not be installed at all (#627).
   await substitutePlaceholdersInFiles([at('package.json'), at('README.md')], { PROJECT_NAME: projectName })
+
+  // The api-client headers name the API as its OpenAPI document does (#884)
+  await applyApiClientIdentity(at('packages/api-client'), apiDocsIdentity(projectName, projectDescription))
 
   // Update root package.json
   const packageJsonPath = at('package.json')
