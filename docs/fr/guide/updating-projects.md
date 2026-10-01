@@ -105,7 +105,7 @@ Cette fusion est volontairement prudente :
 
 - les modifications utilisateur ne sont jamais écrasées silencieusement ;
 - un nouveau fichier ne remplace jamais un fichier utilisateur de même nom ;
-- un fichier retiré du modèle est signalé, jamais supprimé automatiquement ; il cesse ensuite d'être suivi et les mises à jour suivantes n'y touchent plus.
+- un fichier retiré du modèle est signalé, jamais supprimé automatiquement ; il garde sa base, de sorte qu'un module ou un modèle qui le génère de nouveau le met à jour sur place.
 
 ## Stratégies de conflit
 
@@ -284,7 +284,7 @@ ou régénérez les hashes depuis un `sf new` temporaire avec les mêmes options
 
 ### Le nouveau CLI a retiré un fichier intact
 
-`sf update` le signale comme n'étant plus généré, le conserve et cesse de le suivre. Supprimez-le manuellement si vous ne l'utilisez pas :
+`sf update` le signale comme n'étant plus généré et le conserve, à chaque mise à jour tant qu'il existe. Supprimez-le manuellement si vous ne l'utilisez pas :
 
 ```bash
 git rm path/to/removed-file.ts

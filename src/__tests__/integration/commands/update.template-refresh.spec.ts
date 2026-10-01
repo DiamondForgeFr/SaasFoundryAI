@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import shelljs from 'shelljs'
 
-import { regenerateInTempDir, updateCommand } from '../../../commands/update'
+import { computeFileUpdates, regenerateInTempDir, updateCommand } from '../../../commands/update'
 import { targetManifestVersion } from '../../../migrations/manifest/registry'
 import { manifestSchemaUrl, type SaaSFoundryManifest } from '../../../types'
 import { hashFileContent } from '../../../utils'
@@ -169,7 +169,7 @@ describe('sf update template refresh', () => {
   })
 
   describe('obsolete template files (#865)', () => {
-    it('keeps an unmodified file the new CLI no longer generates, and stops tracking it', async () => {
+    it('keeps an unmodified file the new CLI no longer generates, with its baseline', async () => {
       const manifest = manifestFor()
       const recorded = await generateProject(manifest)
       // A template an older CLI shipped and this one no longer generates, untouched since.
@@ -184,8 +184,14 @@ describe('sf update template refresh', () => {
 
       expect(await exists(obsolete)).toBe(true)
       const saved = await readManifest()
-      expect(saved.fileHashes).not.toHaveProperty([obsolete])
+      expect(saved.fileHashes?.[obsolete]).toBe(hashFileContent(content))
       expect(saved.version).toBe(cliVersion)
+
+      // #882 — when a module or template generates the path again, the kept file is an
+      // untouched template file: it is updated in place, not mistaken for a user file.
+      const current = { ...(saved.fileHashes ?? {}) }
+      const regenerated = { ...(saved.fileHashes ?? {}), [obsolete]: hashFileContent('export const legacy = false\n') }
+      expect(computeFileUpdates(saved.fileHashes ?? {}, current, regenerated)).toEqual([{ path: obsolete, action: 'update' }])
     }, 180_000)
 
     it('reports the obsolete file in the dry-run plan without touching it', async () => {
