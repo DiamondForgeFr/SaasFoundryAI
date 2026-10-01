@@ -215,7 +215,7 @@ Les projets API et web incluent des Dockerfiles multi-stage. Nginx sert la SPA c
 rotation rendent les échecs observables.
 
 ```dockerfile
-FROM node:22-alpine AS builder
+FROM node:24.19.0-alpine AS builder
 RUN npm run build
 
 FROM nginx:alpine AS runner
