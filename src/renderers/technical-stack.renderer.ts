@@ -52,7 +52,8 @@ export async function renderTechnicalStack({ targetDir, config, ports, externalE
     isMonorepo: config.isMonorepo,
     projectName: config.projectName,
     projectDescription: config.projectDescription,
-    backendRepoUrl: config.backendRepoUrl,
+    // A monorepo's apps live in the monorepo's repository; only a multirepo asks per app.
+    backendRepoUrl: (config.isMonorepo ? config.monorepoUrl : config.backendRepoUrl) || '',
     dbCredentials: config.dbCredentials,
     mainBranch: config.mainBranch,
     emailService: config.emailService,
@@ -82,7 +83,7 @@ export async function renderTechnicalStack({ targetDir, config, ports, externalE
     isMonorepo: config.isMonorepo,
     projectName: config.projectName,
     projectDescription: config.projectDescription,
-    frontendRepoUrl: config.frontendRepoUrl || '',
+    frontendRepoUrl: (config.isMonorepo ? config.monorepoUrl : config.frontendRepoUrl) || '',
     mainBranch: config.mainBranch,
     s3Setup: config.s3Setup,
     includeAnalytics: config.includeAnalytics,
