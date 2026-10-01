@@ -141,7 +141,7 @@ export function AccountPlatformUsers() {
   return (
     <div>
       {/* KPI cards = filters */}
-      <div className="mb-6 grid grid-cols-1 sm:grid-cols-4 items-stretch gap-3">
+      <div className="mb-6 grid grid-cols-1 items-stretch gap-3 sm:grid-cols-4">
         <KpiFilterCard
           active={accountScope === 'all'}
           onClick={() => setScope('all')}
@@ -183,8 +183,8 @@ export function AccountPlatformUsers() {
           Same shape as the per-account Users tab so the filter affordance stays consistent. */}
       <div className="mb-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[260px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
             <Input
               type="text"
               value={searchInput}
@@ -205,7 +205,7 @@ export function AccountPlatformUsers() {
             options={statusOptions}
           />
           {canInvite && (
-            <WaveButton type="button" onClick={() => setIsInviteDialogOpen(true)} className="!h-9 !w-auto !text-[11px] px-3.5">
+            <WaveButton type="button" onClick={() => setIsInviteDialogOpen(true)} className="!h-9 !w-auto px-3.5 !text-[11px]">
               <UserPlus className="h-3.5 w-3.5" />
               {tAccount('users.tk_invite-user-cta_')}
             </WaveButton>
@@ -250,18 +250,18 @@ export function AccountPlatformUsers() {
 
       {/* Tile grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-36 w-full rounded-sm" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
-          <UsersIcon className="h-5 w-5 text-muted-foreground/60" />
-          <span className="text-sm text-muted-foreground">{isFiltered ? tAccount('platformUsers.tk_no-results-filtered_') : tAccount('platformUsers.tk_no-users_')}</span>
+        <div className="border-border bg-card flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed p-10 text-center">
+          <UsersIcon className="text-muted-foreground/60 h-5 w-5" />
+          <span className="text-muted-foreground text-sm">{isFiltered ? tAccount('platformUsers.tk_no-results-filtered_') : tAccount('platformUsers.tk_no-users_')}</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((u) => (
             <PlatformUserCard
               key={u.id}
@@ -281,18 +281,18 @@ export function AccountPlatformUsers() {
             type="button"
             disabled={currentPage === 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span className="text-[11px] text-muted-foreground tabular-nums px-2">
+          <span className="text-muted-foreground px-2 text-[11px] tabular-nums">
             {currentPage} / {totalPages}
           </span>
           <button
             type="button"
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -356,15 +356,15 @@ function PlatformUserCard({
   const extraRoles = seenRoleNames.size > roleLabels.length ? seenRoleNames.size - roleLabels.length : 0
 
   return (
-    <div role="button" onClick={onOpen} className="group cursor-pointer rounded-sm border border-border bg-card p-4 transition-colors hover:border-primary/40">
+    <div role="button" onClick={onOpen} className="group border-border bg-card hover:border-primary/40 cursor-pointer rounded-sm border p-4 transition-colors">
       {/* Header — avatar + name (+email below) | platform badge + role chips + status switch */}
       <div className="flex items-start gap-3">
         <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-[12px] font-bold', avatarClass)}>{initials}</div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-1.5 flex-wrap">
-            <span className="font-bold text-sm text-foreground truncate flex-1 min-w-0">{fullName}</span>
+          <div className="flex flex-wrap items-start gap-1.5">
+            <span className="text-foreground min-w-0 flex-1 truncate text-sm font-bold">{fullName}</span>
             {isPlatformUser && (
-              <span className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary whitespace-nowrap">
+              <span className="border-primary/40 bg-primary/10 text-primary inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase">
                 <Globe className="h-2.5 w-2.5" />
                 {tAccount('platformUsers.row.tk_platform-badge_')}
               </span>
@@ -372,14 +372,14 @@ function PlatformUserCard({
             {roleLabels.map((r) => (
               <span
                 key={r.id}
-                className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80 whitespace-nowrap max-w-[120px] truncate"
+                className="border-border bg-secondary text-foreground/80 inline-flex max-w-[120px] flex-shrink-0 items-center truncate rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase"
                 title={r.label}
               >
                 {r.label}
               </span>
             ))}
             {extraRoles > 0 && (
-              <span className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80">
+              <span className="border-border bg-secondary text-foreground/80 inline-flex flex-shrink-0 items-center rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase">
                 +{extraRoles}
               </span>
             )}
@@ -387,11 +387,11 @@ function PlatformUserCard({
               <label
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  'inline-flex flex-shrink-0 items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase transition-colors select-none',
                   user.isActive
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                     : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
-                  isToggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                  isToggling ? 'cursor-wait opacity-50' : 'cursor-pointer'
                 )}
               >
                 <Switch
@@ -408,7 +408,7 @@ function PlatformUserCard({
             ) : (
               <span
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  'inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                   user.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                 )}
               >
@@ -417,7 +417,7 @@ function PlatformUserCard({
               </span>
             )}
           </div>
-          <div className="text-[11px] text-muted-foreground leading-tight truncate mt-0.5">{user.email}</div>
+          <div className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">{user.email}</div>
         </div>
       </div>
 
@@ -429,7 +429,7 @@ function PlatformUserCard({
       {user.pendingKind ? (
         <div className="mt-3 flex flex-wrap items-center gap-1">
           <span
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-amber-500/40 bg-amber-500/10 text-amber-500 whitespace-nowrap"
+            className="inline-flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap text-amber-500 uppercase"
             title={tAccount(user.pendingKind === 'invited' ? 'platformUsers.row.tk_awaiting-signup-tooltip_' : 'platformUsers.row.tk_awaiting-confirmation-tooltip_')}
           >
             <Mail className="h-2.5 w-2.5" />
@@ -440,7 +440,7 @@ function PlatformUserCard({
         <div className="mt-3 flex flex-wrap items-center gap-1">
           <span
             className={cn(
-              'inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap',
+              'inline-flex min-w-[1.5rem] items-center justify-center rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
               isMulti ? 'border-amber-500/40 bg-amber-500/10 text-amber-500' : 'border-border bg-muted text-muted-foreground'
             )}
             title={isMulti ? tAccount('platformUsers.row.tk_multi-account-tooltip_', { count: user.accountCount }) : undefined}
@@ -448,12 +448,12 @@ function PlatformUserCard({
             {user.accountCount}
           </span>
           {user.accounts.slice(0, 3).map((a) => (
-            <span key={a.id} className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-primary/22 bg-primary/12 text-primary">
+            <span key={a.id} className="border-primary/22 bg-primary/12 text-primary inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase">
               {a.name}
             </span>
           ))}
           {user.accounts.length > 3 && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-primary/22 bg-primary/12 text-primary">
+            <span className="border-primary/22 bg-primary/12 text-primary inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase">
               +{user.accounts.length - 3}
             </span>
           )}
@@ -461,8 +461,8 @@ function PlatformUserCard({
       ) : null}
 
       {/* Footer — created + last login (left), VIEW → CTA hint on the right. */}
-      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60 text-[11px] text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+      <div className="border-border/60 text-muted-foreground mt-3 flex items-center justify-between gap-2 border-t pt-3 text-[11px]">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <span className="inline-flex items-center gap-1 whitespace-nowrap">
             <UserPlus className="h-3 w-3" />
             <span className="tabular-nums">{formatDateShort(user.createdAt, { withYear: false })}</span>
@@ -472,7 +472,7 @@ function PlatformUserCard({
             <span className="tabular-nums">{user.lastLoginAt ? formatDateShort(user.lastLoginAt, { withYear: false }) : tAccount('users.table.tk_never-logged-in_')}</span>
           </span>
         </div>
-        <span className="flex-shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors">{tAccount('platformUsers.row.tk_view_')} →</span>
+        <span className="text-muted-foreground/70 group-hover:text-primary flex-shrink-0 text-[10px] tracking-wider uppercase transition-colors">{tAccount('platformUsers.row.tk_view_')} →</span>
       </div>
     </div>
   )
@@ -499,23 +499,23 @@ function PlatformUserDetailSheet({ user, onOpenChange }: { user: PlatformUserIte
 
   return (
     <Sheet open={user !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-[480px] flex flex-col p-0 overflow-hidden">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+      <SheetContent side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-[480px]">
+        <SheetHeader className="border-border border-b px-6 pt-6 pb-4">
           <div className="flex items-start gap-3">
             <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-[12px] font-bold', avatarClass)}>{initials}</div>
             <div className="min-w-0">
               <SheetTitle className="text-sm">{fullName}</SheetTitle>
-              <SheetDescription className="text-xs text-foreground/80 mt-0.5 leading-snug">{user.email}</SheetDescription>
-              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              <SheetDescription className="text-foreground/80 mt-0.5 text-xs leading-snug">{user.email}</SheetDescription>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {user.isPlatformUser && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary">
+                  <span className="border-primary/40 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase">
                     <Globe className="h-2.5 w-2.5" />
                     {tAccount('platformUsers.row.tk_platform-badge_')}
                   </span>
                 )}
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                    'inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase',
                     user.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                   )}
                 >
@@ -523,7 +523,7 @@ function PlatformUserDetailSheet({ user, onOpenChange }: { user: PlatformUserIte
                   {tAccount(user.isActive ? 'users.table.tk_status-active_' : 'users.table.tk_status-inactive_')}
                 </span>
                 {isMulti && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider border border-amber-500/40 bg-amber-500/10 text-amber-500">
+                  <span className="inline-flex items-center gap-1 rounded-[2px] border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-amber-500 uppercase">
                     <Layers className="h-2.5 w-2.5" />
                     {tAccount('platformUsers.row.tk_multi-account-tooltip_', { count: user.accountCount })}
                   </span>
@@ -533,26 +533,26 @@ function PlatformUserDetailSheet({ user, onOpenChange }: { user: PlatformUserIte
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
           {/* Accounts */}
           <section>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('platformUsers.sheet.tk_accounts_')}</span>
-              <span className="text-[10px] text-muted-foreground">{user.accounts.length}</span>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-muted-foreground text-[10px] font-bold tracking-widest uppercase">{tAccount('platformUsers.sheet.tk_accounts_')}</span>
+              <span className="text-muted-foreground text-[10px]">{user.accounts.length}</span>
             </div>
             {user.accounts.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground italic">{tAccount('platformUsers.sheet.tk_no-accounts_')}</p>
+              <p className="text-muted-foreground text-[11px] italic">{tAccount('platformUsers.sheet.tk_no-accounts_')}</p>
             ) : (
               <div className="space-y-1.5">
                 {user.accounts.map((a) => {
                   const accountEntities = entitiesByAccount.get(a.id) ?? []
                   return (
-                    <div key={a.id} className="rounded-sm border border-border bg-card p-2.5">
+                    <div key={a.id} className="border-border bg-card rounded-sm border p-2.5">
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                        <span className="text-[12px] font-semibold text-foreground break-words">{a.name}</span>
+                        <Building2 className="text-primary h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="text-foreground text-[12px] font-semibold break-words">{a.name}</span>
                         {a.isDirect && (
-                          <span className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-primary/22 bg-primary/12 text-primary whitespace-nowrap">
+                          <span className="border-primary/22 bg-primary/12 text-primary ml-auto inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase">
                             {tAccount('users.table.tk_access-account_')}
                           </span>
                         )}
@@ -562,7 +562,7 @@ function PlatformUserDetailSheet({ user, onOpenChange }: { user: PlatformUserIte
                           {accountEntities.map((e) => (
                             <span
                               key={e.id}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-muted text-muted-foreground"
+                              className="border-border bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase"
                             >
                               <ShieldCheck className="h-2.5 w-2.5" />
                               {e.name}
@@ -579,12 +579,12 @@ function PlatformUserDetailSheet({ user, onOpenChange }: { user: PlatformUserIte
 
           {/* Roles */}
           <section>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('platformUsers.sheet.tk_roles_')}</span>
-              <span className="text-[10px] text-muted-foreground">{user.roles.length}</span>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-muted-foreground text-[10px] font-bold tracking-widest uppercase">{tAccount('platformUsers.sheet.tk_roles_')}</span>
+              <span className="text-muted-foreground text-[10px]">{user.roles.length}</span>
             </div>
             {user.roles.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground italic">{tAccount('platformUsers.sheet.tk_no-roles_')}</p>
+              <p className="text-muted-foreground text-[11px] italic">{tAccount('platformUsers.sheet.tk_no-roles_')}</p>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {user.roles.map((r) => {
@@ -594,10 +594,10 @@ function PlatformUserDetailSheet({ user, onOpenChange }: { user: PlatformUserIte
                   const Icon = r.scope === 'PLATFORM' ? Globe : r.scope === 'ENTITY' ? ShieldCheck : Shield
                   const tone = r.scope === 'ENTITY' ? 'border-amber-500/40 bg-amber-500/10 text-amber-500' : 'border-primary/22 bg-primary/12 text-primary'
                   return (
-                    <span key={r.id} className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap', tone)}>
+                    <span key={r.id} className={cn('inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase', tone)}>
                       <Icon className="h-2.5 w-2.5" />
                       {label}
-                      <span className="opacity-60 text-[9px] ml-0.5">{r.scope}</span>
+                      <span className="ml-0.5 text-[9px] opacity-60">{r.scope}</span>
                     </span>
                   )
                 })}
@@ -606,14 +606,14 @@ function PlatformUserDetailSheet({ user, onOpenChange }: { user: PlatformUserIte
           </section>
 
           {/* Meta */}
-          <section className="pt-3 border-t border-border/60 text-[11px] text-muted-foreground space-y-1">
+          <section className="border-border/60 text-muted-foreground space-y-1 border-t pt-3 text-[11px]">
             <div className="flex items-center justify-between">
               <span>{tAccount('platformUsers.sheet.tk_created_')}</span>
-              <span className="tabular-nums text-foreground">{formatDateLong(user.createdAt)}</span>
+              <span className="text-foreground tabular-nums">{formatDateLong(user.createdAt)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>{tAccount('platformUsers.sheet.tk_updated_')}</span>
-              <span className="tabular-nums text-foreground">{formatDateLong(user.updatedAt)}</span>
+              <span className="text-foreground tabular-nums">{formatDateLong(user.updatedAt)}</span>
             </div>
           </section>
         </div>

@@ -192,12 +192,12 @@ export function AccountAccounts() {
 
         {/* Filters bar — search + invite. The status filter moved to the KPI cards. */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[260px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
             <Input type="text" value={searchInput} onChange={(e) => handleSearch(e.target.value)} placeholder={tAccount('accounts.filters.tk_search-placeholder_')} className="pl-9" />
           </div>
           {canInviteOwner && (
-            <WaveButton type="button" onClick={() => setIsInviteOwnerOpen(true)} className="!h-9 !w-auto !text-[11px] px-3.5">
+            <WaveButton type="button" onClick={() => setIsInviteOwnerOpen(true)} className="!h-9 !w-auto px-3.5 !text-[11px]">
               <Mail className="h-3.5 w-3.5" />
               {tAccount('overview.recentAccounts.tk_invite-owner_')}
             </WaveButton>
@@ -206,18 +206,18 @@ export function AccountAccounts() {
 
         {/* Tile grid — same affordance as the Roles tab. Each tile = one account. */}
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-32 w-full rounded-sm" />
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
-            <Building2 className="h-5 w-5 text-muted-foreground/60" />
-            <span className="text-sm text-muted-foreground">{isFiltered ? tAccount('accounts.tk_no-results-filtered_') : tAccount('accounts.tk_no-accounts_')}</span>
+          <div className="border-border bg-card flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed p-10 text-center">
+            <Building2 className="text-muted-foreground/60 h-5 w-5" />
+            <span className="text-muted-foreground text-sm">{isFiltered ? tAccount('accounts.tk_no-results-filtered_') : tAccount('accounts.tk_no-accounts_')}</span>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {items.map((acc) => (
               <AccountCard
                 key={acc.id}
@@ -238,18 +238,18 @@ export function AccountAccounts() {
               type="button"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
-            <span className="text-[11px] text-muted-foreground tabular-nums px-2">
+            <span className="text-muted-foreground px-2 text-[11px] tabular-nums">
               {currentPage} / {totalPages}
             </span>
             <button
               type="button"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -335,36 +335,36 @@ function PlatformAccountOwnerInvitations() {
   }
 
   return (
-    <div className="rounded-sm border border-border bg-card overflow-hidden mb-4">
+    <div className="border-border bg-card mb-4 overflow-hidden rounded-sm border">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="cursor-pointer w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border hover:bg-muted/40 transition-colors"
+        className="border-border hover:bg-muted/40 flex w-full cursor-pointer items-center justify-between gap-3 border-b px-4 py-2.5 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Mail className="h-3.5 w-3.5 text-primary" />
-          <span className="font-display text-[13px] font-bold text-foreground">{tAccount('platformInvitations.tk_title_')}</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <Mail className="text-primary h-3.5 w-3.5" />
+          <span className="font-display text-foreground text-[13px] font-bold">{tAccount('platformInvitations.tk_title_')}</span>
+          <span className="inline-flex items-center rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-amber-600 uppercase dark:text-amber-400">
             {pending.length}
           </span>
         </div>
-        <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', open && 'rotate-90')} />
+        <ChevronRight className={cn('text-muted-foreground h-3.5 w-3.5 transition-transform', open && 'rotate-90')} />
       </button>
       {open && (
         <div className="flex flex-col">
           {pending.map((inv) => {
             const isExpired = inv.status === 'EXPIRED'
             return (
-              <div key={inv.id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3.5 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted transition-colors">
+              <div key={inv.id} className="border-border hover:bg-muted grid grid-cols-[1fr_auto_auto_auto] items-center gap-3.5 border-b px-4 py-3 transition-colors last:border-b-0">
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-foreground leading-tight truncate">{inv.inviteeUserEmail}</div>
-                  <div className="text-[11px] text-muted-foreground leading-tight">
+                  <div className="text-foreground truncate text-[13px] leading-tight font-semibold">{inv.inviteeUserEmail}</div>
+                  <div className="text-muted-foreground text-[11px] leading-tight">
                     {tAccount('platformInvitations.tk_sent-prefix_')} {formatDateShort(inv.invitedAt)}
                   </div>
                 </div>
                 <span
                   className={cn(
-                    'inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap',
+                    'inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                     isExpired ? 'border-red-500/40 bg-red-500/10 text-red-500 dark:text-red-400' : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                   )}
                 >
@@ -373,7 +373,7 @@ function PlatformAccountOwnerInvitations() {
                 <button
                   type="button"
                   onClick={() => handleResend(inv)}
-                  className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+                  className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
                 >
                   {tAccount('platformInvitations.tk_resend_')} <ChevronRight className="h-3 w-3" />
                 </button>
@@ -381,7 +381,7 @@ function PlatformAccountOwnerInvitations() {
                   type="button"
                   onClick={() => handleCancel(inv)}
                   disabled={cancelInvitation.isLoading}
-                  className="cursor-pointer inline-flex items-center justify-center rounded-[2px] border border-border bg-card p-1 text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors disabled:opacity-50"
+                  className="border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 inline-flex cursor-pointer items-center justify-center rounded-[2px] border p-1 transition-colors disabled:opacity-50"
                   title={tAccount('platformInvitations.tk_cancel_')}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -448,7 +448,7 @@ function AccountCard({
       role="button"
       onClick={handleCardClick}
       className={cn(
-        'group cursor-pointer rounded-sm border bg-card p-4 transition-all',
+        'group bg-card cursor-pointer rounded-sm border p-4 transition-all',
         hasPending ? 'border-amber-500/40 bg-amber-500/5 hover:border-amber-500/60 hover:bg-amber-500/10' : 'border-border hover:border-primary/40'
       )}
       title={hasPending ? tAccount('accounts.row.tk_pending-tooltip_') : tAccount('accounts.row.tk_open-context-tooltip_')}
@@ -456,11 +456,11 @@ function AccountCard({
       {/* Header — icon + name + status badge/toggle on the right */}
       <div className="flex items-start gap-3">
         <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm border', hasPending ? 'border-amber-500/30 bg-amber-500/10' : 'border-primary/25 bg-primary/10')}>
-          {hasPending ? <MessageSquareWarning className={cn('h-4 w-4 text-amber-500')} /> : <Shield className="h-4 w-4 text-primary" />}
+          {hasPending ? <MessageSquareWarning className={cn('h-4 w-4 text-amber-500')} /> : <Shield className="text-primary h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2 flex-wrap">
-            <span className="font-bold text-sm text-foreground truncate flex-1 min-w-0">{account.name}</span>
+          <div className="flex flex-wrap items-start gap-2">
+            <span className="text-foreground min-w-0 flex-1 truncate text-sm font-bold">{account.name}</span>
             {/* Status pill: keeps the framed badge UI (consistent with the rest of the app's
                 bordered status chips), but the dot icon is replaced by a real Switch — so the
                 affordance reads as "interactive on/off" without giving up the visual coherence.
@@ -470,11 +470,11 @@ function AccountCard({
               <label
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  'inline-flex flex-shrink-0 items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase transition-colors select-none',
                   account.isActive
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                     : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
-                  isToggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                  isToggling ? 'cursor-wait opacity-50' : 'cursor-pointer'
                 )}
                 title={tAccount(account.isActive ? 'scopeHeader.tk_status-deactivate_' : 'scopeHeader.tk_status-reactivate_')}
               >
@@ -492,7 +492,7 @@ function AccountCard({
             ) : (
               <span
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  'inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                   account.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                 )}
               >
@@ -501,34 +501,34 @@ function AccountCard({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground leading-tight mt-1">
+          <div className="text-muted-foreground mt-1 flex items-center gap-1.5 text-[11px] leading-tight">
             <span className="font-mono">{shortenId(account.id)}</span>
-            <button type="button" onClick={handleCopy} className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors" title={tAccount('scopeHeader.tk_copy-id_')}>
+            <button type="button" onClick={handleCopy} className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors" title={tAccount('scopeHeader.tk_copy-id_')}>
               {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
             </button>
           </div>
-          {hasPending && account.pendingReactivation && <div className="mt-1.5 text-[11px] text-amber-500/90 line-clamp-2 leading-snug">{account.pendingReactivation.message}</div>}
+          {hasPending && account.pendingReactivation && <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-amber-500/90">{account.pendingReactivation.message}</div>}
         </div>
       </div>
 
       {/* Footer — counts + CTA hint matching the Roles "VIEW →" affordance */}
-      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60">
+      <div className="border-border/60 mt-3 flex items-center justify-between gap-2 border-t pt-3">
         <div className="inline-flex items-center gap-3 text-[11px]">
           <span className="inline-flex items-center gap-1">
-            <UsersIcon className="h-3 w-3 text-muted-foreground" />
-            <span className="font-medium text-foreground tabular-nums">{account.usersCount}</span>
+            <UsersIcon className="text-muted-foreground h-3 w-3" />
+            <span className="text-foreground font-medium tabular-nums">{account.usersCount}</span>
             <span className="text-muted-foreground">{tAccount('accounts.table.tk_users_').toLowerCase()}</span>
           </span>
           <span className="inline-flex items-center gap-1">
-            <Building2 className="h-3 w-3 text-muted-foreground" />
-            <span className="font-medium text-foreground tabular-nums">{account.entitiesCount}</span>
+            <Building2 className="text-muted-foreground h-3 w-3" />
+            <span className="text-foreground font-medium tabular-nums">{account.entitiesCount}</span>
             <span className="text-muted-foreground">{tAccount('accounts.table.tk_entities_').toLowerCase()}</span>
           </span>
         </div>
         {/* CTA hint — matches the Roles "VIEW →" affordance exactly: same font size, no bold,
             same muted→primary hover transition, literal "→" character (no icon). */}
         <span
-          className={cn('text-[10px] uppercase tracking-wider transition-colors', hasPending ? 'text-amber-500/70 group-hover:text-amber-500' : 'text-muted-foreground/70 group-hover:text-primary')}
+          className={cn('text-[10px] tracking-wider uppercase transition-colors', hasPending ? 'text-amber-500/70 group-hover:text-amber-500' : 'text-muted-foreground/70 group-hover:text-primary')}
         >
           {hasPending ? tAccount('accounts.row.tk_review-request_') : tAccount('overview.recentAccounts.tk_open-context_')} →
         </span>
@@ -560,45 +560,45 @@ function PendingReactivationSheet({
 
   return (
     <Sheet open={account !== null && request !== null} onOpenChange={onOpenChange}>
-      <SheetContent data-testid="reactivation-review-sheet" side="right" className="sm:max-w-[500px] flex flex-col p-0 overflow-hidden">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+      <SheetContent data-testid="reactivation-review-sheet" side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-[500px]">
+        <SheetHeader className="border-border border-b px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/15 text-amber-500">
               <MessageSquareWarning className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <SheetTitle className="text-base font-bold tracking-tight truncate">{account?.name}</SheetTitle>
-              <SheetDescription className="text-[11px] mt-0.5">{tAccount('platformReactivation.sheet.tk_subtitle_')}</SheetDescription>
+              <SheetTitle className="truncate text-base font-bold tracking-tight">{account?.name}</SheetTitle>
+              <SheetDescription className="mt-0.5 text-[11px]">{tAccount('platformReactivation.sheet.tk_subtitle_')}</SheetDescription>
             </div>
           </div>
         </SheetHeader>
 
         {request && (
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
             <section>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{tAccount('platformReactivation.sheet.tk_requested-by_')}</div>
-              <div className="rounded-sm border border-border bg-muted/30 px-3 py-2.5">
-                <div className="text-[13px] font-semibold text-foreground">{requesterName}</div>
-                <div className="text-[11px] text-muted-foreground">{request.requestedBy.email}</div>
-                <div className="text-[11px] text-muted-foreground mt-1">{tAccount('platformReactivation.sheet.tk_submitted-at_', { date: formatDateLong(request.createdAt) })}</div>
+              <div className="text-muted-foreground mb-2 text-[10px] font-bold tracking-widest uppercase">{tAccount('platformReactivation.sheet.tk_requested-by_')}</div>
+              <div className="border-border bg-muted/30 rounded-sm border px-3 py-2.5">
+                <div className="text-foreground text-[13px] font-semibold">{requesterName}</div>
+                <div className="text-muted-foreground text-[11px]">{request.requestedBy.email}</div>
+                <div className="text-muted-foreground mt-1 text-[11px]">{tAccount('platformReactivation.sheet.tk_submitted-at_', { date: formatDateLong(request.createdAt) })}</div>
               </div>
             </section>
 
             <section>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{tAccount('platformReactivation.sheet.tk_message_')}</div>
-              <div className="rounded-sm border border-border bg-card p-3 text-[13px] text-foreground whitespace-pre-wrap break-words leading-relaxed">{request.message}</div>
+              <div className="text-muted-foreground mb-2 text-[10px] font-bold tracking-widest uppercase">{tAccount('platformReactivation.sheet.tk_message_')}</div>
+              <div className="border-border bg-card text-foreground rounded-sm border p-3 text-[13px] leading-relaxed break-words whitespace-pre-wrap">{request.message}</div>
             </section>
           </div>
         )}
 
         {request && (
-          <div className="flex flex-col gap-2 px-6 py-4 border-t border-border bg-muted/20">
+          <div className="border-border bg-muted/20 flex flex-col gap-2 border-t px-6 py-4">
             <button
               data-testid="reactivation-approve"
               type="button"
               onClick={onApprove}
               disabled={isApproving || isRejecting}
-              className="cursor-pointer w-full inline-flex items-center justify-center gap-2 h-10 rounded-sm border border-emerald-500/40 bg-emerald-500/10 text-[12px] font-semibold text-emerald-500 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
+              className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-sm border border-emerald-500/40 bg-emerald-500/10 text-[12px] font-semibold text-emerald-500 transition-colors hover:bg-emerald-500/20 disabled:cursor-wait disabled:opacity-50"
             >
               <CheckCircle2 className="h-4 w-4" />
               {tAccount('platformReactivation.tk_approve_')}
@@ -608,7 +608,7 @@ function PendingReactivationSheet({
               type="button"
               onClick={onReject}
               disabled={isApproving || isRejecting}
-              className="cursor-pointer w-full inline-flex items-center justify-center gap-2 h-10 rounded-sm border border-destructive/40 bg-destructive/5 text-[12px] font-semibold text-destructive hover:bg-destructive/15 transition-colors disabled:opacity-50 disabled:cursor-wait"
+              className="border-destructive/40 bg-destructive/5 text-destructive hover:bg-destructive/15 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-sm border text-[12px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50"
             >
               <X className="h-4 w-4" />
               {tAccount('platformReactivation.tk_reject_')}

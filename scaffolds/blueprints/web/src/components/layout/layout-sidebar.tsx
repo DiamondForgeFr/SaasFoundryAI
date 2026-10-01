@@ -157,12 +157,12 @@ export const LayoutSidebar = ({ ...props }: ComponentProps<typeof Sidebar>) => {
           <>
             <SidebarMenu className="mt-6 px-1">
               <SidebarMenuItem className="relative">
-                {isDashboardActive && <span aria-hidden className="pointer-events-none absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-r bg-primary" />}
+                {isDashboardActive && <span aria-hidden className="bg-primary pointer-events-none absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-r" />}
                 <SidebarMenuButton
                   isActive={isDashboardActive}
                   tooltip={tNav('main-navigation.tk_dashboard_')}
                   onClick={() => navigate('/dashboard')}
-                  className="data-[active=true]:bg-sidebar-accent/70 data-[active=true]:font-semibold data-[active=true]:[&>svg]:text-primary"
+                  className="data-[active=true]:bg-sidebar-accent/70 data-[active=true]:[&>svg]:text-primary data-[active=true]:font-semibold"
                 >
                   <ChartNoAxesCombined />
                   <span>{tNav('main-navigation.tk_dashboard_')}</span>

@@ -164,24 +164,24 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
           <DialogDescription>{tAccount('entities.tk_edit-description_')}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 mt-4">
+        <div className="mt-4 space-y-5">
           {entity?.organization ? (
             <div data-testid="organization-details" className="space-y-4">
               {/* 1 — Status pill — placed at the very top so the most consequential action
                   (de/activating the entity) is always within thumb reach and can't be missed. */}
               <label
                 className={cn(
-                  'flex items-center justify-between gap-3 rounded-sm border bg-card px-3 py-2.5 cursor-pointer select-none transition-colors',
+                  'bg-card flex cursor-pointer items-center justify-between gap-3 rounded-sm border px-3 py-2.5 transition-colors select-none',
                   isActive ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border'
                 )}
               >
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[12px] font-bold text-foreground uppercase tracking-wider">{tAccount('entities.edit.tk_active_')}</span>
-                  <span className="text-[11px] text-muted-foreground">{tAccount(isActive ? 'entities.edit.tk_active-on_' : 'entities.edit.tk_active-off_')}</span>
+                  <span className="text-foreground text-[12px] font-bold tracking-wider uppercase">{tAccount('entities.edit.tk_active_')}</span>
+                  <span className="text-muted-foreground text-[11px]">{tAccount(isActive ? 'entities.edit.tk_active-on_' : 'entities.edit.tk_active-off_')}</span>
                 </div>
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                    'inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                     isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                   )}
                 >
@@ -199,15 +199,15 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
 
               {/* 2 — Type — visual cards (same layout as create) */}
               <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tCommon('other.tk_type_')}</span>
-                <div className="grid grid-cols-3 gap-2 mt-2">
+                <span className="text-muted-foreground text-xs font-bold tracking-wider uppercase">{tCommon('other.tk_type_')}</span>
+                <div className="mt-2 grid grid-cols-3 gap-2">
                   {ORG_TYPES.map(({ value, tk, subTk, icon: Icon }) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setOrgType(value)}
                       className={cn(
-                        'cursor-pointer flex flex-col items-center gap-1.5 rounded-sm border p-3 text-center transition-all',
+                        'flex cursor-pointer flex-col items-center gap-1.5 rounded-sm border p-3 text-center transition-all',
                         orgType === value ? 'border-primary bg-primary/8 text-primary' : 'border-border bg-secondary text-muted-foreground hover:border-primary/40 hover:text-foreground'
                       )}
                     >
@@ -226,15 +226,15 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
               <div className="grid grid-cols-2 gap-3">
                 {/* Logo column — shows existing logo unless user picked a new file */}
                 <div className="flex flex-col gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tAccount('organizations.tk_logo_')}</span>
+                  <span className="text-muted-foreground text-xs font-bold tracking-wider uppercase">{tAccount('organizations.tk_logo_')}</span>
                   {previewUrl ? (
-                    <div className="flex h-24 items-center gap-3 rounded-sm border border-border bg-secondary px-3">
-                      <img src={previewUrl} alt="Logo preview" className="h-16 w-16 rounded-sm border border-border object-cover" />
+                    <div className="border-border bg-secondary flex h-24 items-center gap-3 rounded-sm border px-3">
+                      <img src={previewUrl} alt="Logo preview" className="border-border h-16 w-16 rounded-sm border object-cover" />
                       {localLogoPreview ? (
                         <button
                           type="button"
                           onClick={handleRemoveStagedLogo}
-                          className="cursor-pointer flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                          className="text-muted-foreground hover:text-destructive flex cursor-pointer items-center gap-1 text-xs transition-colors"
                         >
                           <X className="h-3.5 w-3.5" />
                           {tAccount('organizations.tk_logo-remove_')}
@@ -243,7 +243,7 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="cursor-pointer flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                          className="text-muted-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-xs transition-colors"
                         >
                           <ImagePlus className="h-3.5 w-3.5" />
                           {tAccount('organizations.tk_logo-replace_')}
@@ -254,11 +254,11 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="cursor-pointer flex h-24 w-full flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed border-border/60 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                      className="border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed transition-colors"
                     >
                       <ImagePlus className="h-5 w-5" />
                       <span className="text-[11px] font-medium">{tAccount('organizations.tk_logo-dropzone_')}</span>
-                      <span className="text-[10px] text-muted-foreground/60">{tAccount('organizations.tk_logo-formats_')}</span>
+                      <span className="text-muted-foreground/60 text-[10px]">{tAccount('organizations.tk_logo-formats_')}</span>
                     </button>
                   )}
                   <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={handleLogoChange} className="hidden" />
@@ -266,8 +266,8 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
 
                 {/* Description column — same vertical structure */}
                 <div className="flex flex-col gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tCommon('other.tk_description_')}</span>
-                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="resize-none h-24" maxLength={255} />
+                  <span className="text-muted-foreground text-xs font-bold tracking-wider uppercase">{tCommon('other.tk_description_')}</span>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="h-24 resize-none" maxLength={255} />
                 </div>
               </div>
 
@@ -287,17 +287,17 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
             <div className="space-y-3">
               <label
                 className={cn(
-                  'flex items-center justify-between gap-3 rounded-sm border bg-card px-3 py-2.5 cursor-pointer select-none transition-colors',
+                  'bg-card flex cursor-pointer items-center justify-between gap-3 rounded-sm border px-3 py-2.5 transition-colors select-none',
                   isActive ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border'
                 )}
               >
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[12px] font-bold text-foreground uppercase tracking-wider">{tAccount('entities.edit.tk_active_')}</span>
-                  <span className="text-[11px] text-muted-foreground">{tAccount(isActive ? 'entities.edit.tk_active-on_' : 'entities.edit.tk_active-off_')}</span>
+                  <span className="text-foreground text-[12px] font-bold tracking-wider uppercase">{tAccount('entities.edit.tk_active_')}</span>
+                  <span className="text-muted-foreground text-[11px]">{tAccount(isActive ? 'entities.edit.tk_active-on_' : 'entities.edit.tk_active-off_')}</span>
                 </div>
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                    'inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                     isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                   )}
                 >
@@ -317,20 +317,20 @@ export function EditEntityDialog({ isOpen, onOpenChange, entity }: EditEntityDia
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={tAccount('entities.edit.tk_description-placeholder_')}
-                className="text-sm min-h-[60px]"
+                className="min-h-[60px] text-sm"
                 maxLength={255}
               />
             </div>
           )}
         </div>
 
-        {submitError && <p className="text-[12px] text-destructive mt-3">{submitError}</p>}
+        {submitError && <p className="text-destructive mt-3 text-[12px]">{submitError}</p>}
 
         <DialogFooter>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="cursor-pointer rounded-[2px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="border-border bg-card text-muted-foreground hover:text-foreground cursor-pointer rounded-[2px] border px-3 py-1.5 text-xs font-medium transition-colors"
           >
             {tCommon('actions.tk_cancel_')}
           </button>

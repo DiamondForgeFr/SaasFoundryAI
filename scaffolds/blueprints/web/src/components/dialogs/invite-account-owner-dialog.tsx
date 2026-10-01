@@ -130,7 +130,7 @@ export function InviteAccountOwnerDialog({ isOpen, onOpenChange }: InviteAccount
           <DialogDescription>{tAccount('dialogs.inviteOwner.tk_description_')}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 mt-3">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="mt-3 space-y-4">
             <FormField
               control={form.control}
               name="email"
@@ -185,19 +185,19 @@ export function InviteAccountOwnerDialog({ isOpen, onOpenChange }: InviteAccount
                       }}
                     />
                   </FormControl>
-                  <p className="text-[11px] text-muted-foreground mt-1">{tAccount('dialogs.inviteOwner.tk_account-name-hint_')}</p>
+                  <p className="text-muted-foreground mt-1 text-[11px]">{tAccount('dialogs.inviteOwner.tk_account-name-hint_')}</p>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <p className="text-[11px] text-muted-foreground">{tAccount('dialogs.inviteOwner.tk_hint_')}</p>
+            <p className="text-muted-foreground text-[11px]">{tAccount('dialogs.inviteOwner.tk_hint_')}</p>
 
             <DialogFooter>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="cursor-pointer rounded-[2px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="border-border bg-card text-muted-foreground hover:text-foreground cursor-pointer rounded-[2px] border px-3 py-1.5 text-xs font-medium transition-colors"
               >
                 {tCommon('actions.tk_cancel_')}
               </button>

@@ -24,11 +24,11 @@ export const Dashboard = () => {
   return (
     <div className="container mx-auto">
       <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
-        <h2 className="mb-4 text-3xl font-bold text-primary">{tDashboard('tk_title_')}</h2>
+        <h2 className="text-primary mb-4 text-3xl font-bold">{tDashboard('tk_title_')}</h2>
         <div className="max-w-2xl">
-          <p className="mb-6 text-lg text-muted-foreground">{tCommon('work-in-progress.tk_page-under-construction_')}</p>
-          <div className="rounded-lg bg-muted p-6">
-            <p className="text-sm text-muted-foreground">{tCommon('work-in-progress.tk_coming-soon_')}</p>
+          <p className="text-muted-foreground mb-6 text-lg">{tCommon('work-in-progress.tk_page-under-construction_')}</p>
+          <div className="bg-muted rounded-lg p-6">
+            <p className="text-muted-foreground text-sm">{tCommon('work-in-progress.tk_coming-soon_')}</p>
           </div>
         </div>
       </div>

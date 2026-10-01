@@ -104,7 +104,7 @@ function KpiFilterRow({ items, value, onChange }: { items: RoleListItem[]; value
   const customCount = total - systemCount
   const totalPermissions = items.reduce((acc, r) => acc + r.permissions.length, 0)
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <KpiFilterCard
         active={value === 'ALL'}
         onClick={() => onChange('ALL')}
@@ -150,7 +150,7 @@ function RoleCard({ role, onOpen, canToggle, isToggling, onToggle }: { role: Rol
       role="button"
       onClick={onOpen}
       className={cn(
-        'group cursor-pointer rounded-sm border bg-card p-4 transition-all',
+        'group bg-card cursor-pointer rounded-sm border p-4 transition-all',
         'hover:border-primary/40 hover:shadow-[0_0_0_1px_var(--primary)/15]',
         dimmed ? 'border-border/60 bg-muted/30' : 'border-border'
       )}
@@ -161,13 +161,13 @@ function RoleCard({ role, onOpen, canToggle, isToggling, onToggle }: { role: Rol
           {createElement(pickRoleVisualIcon(role), { className: cn('h-4 w-4', scopeIconColor[role.scope]) })}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-1.5 flex-wrap">
-            <span className={cn('font-bold text-sm capitalize truncate flex-1 min-w-0', dimmed ? 'text-muted-foreground' : 'text-foreground')}>{displayName}</span>
-            <span className={cn('flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider', scopeBadgeStyles[role.scope], dimmed && 'opacity-70')}>
+          <div className="flex flex-wrap items-start gap-1.5">
+            <span className={cn('min-w-0 flex-1 truncate text-sm font-bold capitalize', dimmed ? 'text-muted-foreground' : 'text-foreground')}>{displayName}</span>
+            <span className={cn('flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase', scopeBadgeStyles[role.scope], dimmed && 'opacity-70')}>
               {role.scope}
             </span>
             {role.isSystem && (
-              <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="border-border bg-muted text-muted-foreground inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-medium">
                 <Lock className="h-2.5 w-2.5" />
                 {tAccount('roles.tk_system_')}
               </span>
@@ -178,11 +178,11 @@ function RoleCard({ role, onOpen, canToggle, isToggling, onToggle }: { role: Rol
               <label
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  'inline-flex flex-shrink-0 items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase transition-colors select-none',
                   role.isActive
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                     : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
-                  isToggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                  isToggling ? 'cursor-wait opacity-50' : 'cursor-pointer'
                 )}
                 title={tAccount(role.isActive ? 'roles.tk_status-deactivate-tooltip_' : 'roles.tk_status-reactivate-tooltip_')}
               >
@@ -200,7 +200,7 @@ function RoleCard({ role, onOpen, canToggle, isToggling, onToggle }: { role: Rol
             ) : (
               <span
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  'inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                   role.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                 )}
               >
@@ -209,25 +209,25 @@ function RoleCard({ role, onOpen, canToggle, isToggling, onToggle }: { role: Rol
               </span>
             )}
           </div>
-          {displayDescription && <div className={cn('text-xs mt-1 line-clamp-2 leading-snug', dimmed ? 'text-muted-foreground/70' : 'text-foreground/80')}>{displayDescription}</div>}
+          {displayDescription && <div className={cn('mt-1 line-clamp-2 text-xs leading-snug', dimmed ? 'text-muted-foreground/70' : 'text-foreground/80')}>{displayDescription}</div>}
         </div>
       </div>
 
       {/* Footer: counts + view CTA */}
-      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60">
+      <div className="border-border/60 mt-3 flex items-center justify-between gap-2 border-t pt-3">
         <div className="inline-flex items-center gap-3 text-[11px]">
           <span className="inline-flex items-center gap-1">
-            <Settings2 className="h-3 w-3 text-muted-foreground" />
-            <span className="font-medium text-foreground">{role.modules.length}</span>
+            <Settings2 className="text-muted-foreground h-3 w-3" />
+            <span className="text-foreground font-medium">{role.modules.length}</span>
             <span className="text-muted-foreground">{tAccount('roles.tk_modules-short_')}</span>
           </span>
           <span className="inline-flex items-center gap-1">
-            <FileText className="h-3 w-3 text-muted-foreground" />
-            <span className="font-medium text-foreground">{role.permissions.length}</span>
+            <FileText className="text-muted-foreground h-3 w-3" />
+            <span className="text-foreground font-medium">{role.permissions.length}</span>
             <span className="text-muted-foreground">{tAccount('roles.tk_permissions-short_')}</span>
           </span>
         </div>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors">{tAccount('roles.tk_view_')} →</span>
+        <span className="text-muted-foreground/70 group-hover:text-primary text-[10px] tracking-wider uppercase transition-colors">{tAccount('roles.tk_view_')} →</span>
       </div>
     </div>
   )
@@ -256,19 +256,19 @@ function RoleDetailSheet({
 
   return (
     <Sheet open={role !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-[480px] flex flex-col p-0 overflow-hidden">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+      <SheetContent side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-[480px]">
+        <SheetHeader className="border-border border-b px-6 pt-6 pb-4">
           <div className="flex items-start gap-3">
             <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm border', scopeRingStyles[role.scope])}>
               {createElement(pickRoleVisualIcon(role), { className: cn('h-4 w-4', scopeIconColor[role.scope]) })}
             </div>
             <div className="min-w-0">
-              <SheetTitle className="capitalize text-sm">{displayName}</SheetTitle>
-              {displayDescription && <SheetDescription className="text-xs text-foreground/80 mt-1 leading-snug">{displayDescription}</SheetDescription>}
-              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                <span className={cn('rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider', scopeBadgeStyles[role.scope])}>{role.scope}</span>
+              <SheetTitle className="text-sm capitalize">{displayName}</SheetTitle>
+              {displayDescription && <SheetDescription className="text-foreground/80 mt-1 text-xs leading-snug">{displayDescription}</SheetDescription>}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className={cn('rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase', scopeBadgeStyles[role.scope])}>{role.scope}</span>
                 {role.isSystem ? (
-                  <span className="inline-flex items-center gap-1 rounded-[2px] border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="border-border bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-medium">
                     <Lock className="h-2.5 w-2.5" />
                     {tAccount('roles.tk_system_')}
                   </span>
@@ -282,19 +282,19 @@ function RoleDetailSheet({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
           {/* Modules */}
           <section>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('roles.tk_modules_')}</span>
-              <span className="text-[10px] text-muted-foreground">{role.modules.length}</span>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-muted-foreground text-[10px] font-bold tracking-widest uppercase">{tAccount('roles.tk_modules_')}</span>
+              <span className="text-muted-foreground text-[10px]">{role.modules.length}</span>
             </div>
             {role.modules.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground italic">{tAccount('roles.tk_modules-empty_')}</p>
+              <p className="text-muted-foreground text-[11px] italic">{tAccount('roles.tk_modules-empty_')}</p>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {role.modules.map((m) => (
-                  <span key={m} className="inline-flex items-center rounded-[2px] border border-border bg-card px-1.5 py-0.5 text-[10px] font-mono font-bold text-foreground break-all leading-snug">
+                  <span key={m} className="border-border bg-card text-foreground inline-flex items-center rounded-[2px] border px-1.5 py-0.5 font-mono text-[10px] leading-snug font-bold break-all">
                     {m}
                   </span>
                 ))}
@@ -304,16 +304,16 @@ function RoleDetailSheet({
 
           {/* Permissions */}
           <section>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('roles.tk_permissions_')}</span>
-              <span className="text-[10px] text-muted-foreground">{role.permissions.length}</span>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-muted-foreground text-[10px] font-bold tracking-widest uppercase">{tAccount('roles.tk_permissions_')}</span>
+              <span className="text-muted-foreground text-[10px]">{role.permissions.length}</span>
             </div>
             {role.permissions.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground italic">{tAccount('roles.tk_permissions-empty_')}</p>
+              <p className="text-muted-foreground text-[11px] italic">{tAccount('roles.tk_permissions-empty_')}</p>
             ) : (
               <div className="space-y-1.5">
                 {role.permissions.map((p) => (
-                  <div key={p} className="rounded-[2px] border border-primary/20 bg-primary/8 px-2 py-1 font-mono text-[10.5px] text-primary break-all leading-snug">
+                  <div key={p} className="border-primary/20 bg-primary/8 text-primary rounded-[2px] border px-2 py-1 font-mono text-[10.5px] leading-snug break-all">
                     {p}
                   </div>
                 ))}
@@ -324,12 +324,12 @@ function RoleDetailSheet({
 
         {/* Footer actions */}
         {canManage && (
-          <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3 bg-card/50">
+          <div className="border-border bg-card/50 flex items-center justify-end gap-2 border-t px-6 py-3">
             {!role.isSystem && (
               <button
                 type="button"
                 onClick={() => onDelete(role)}
-                className="cursor-pointer inline-flex items-center gap-1.5 rounded-[2px] border border-border bg-card px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
+                className="border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 inline-flex cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 {tCommon('actions.tk_delete_')}
@@ -338,7 +338,7 @@ function RoleDetailSheet({
             <button
               type="button"
               onClick={() => onEdit(role)}
-              className="cursor-pointer inline-flex items-center gap-1.5 rounded-[2px] border border-primary/40 bg-primary/15 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-primary hover:bg-primary/25 transition-colors"
+              className="border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 inline-flex cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors"
             >
               <Pencil className="h-3.5 w-3.5" />
               {tAccount(role.isSystem ? 'roles.edit.tk_action-system_' : 'roles.edit.tk_action-custom_')}
@@ -493,8 +493,8 @@ export function AccountRoles() {
           The PLATFORM_ALL view enables creating PLATFORM-scoped roles; per-account view creates
           ACCOUNT/ENTITY-scoped roles. Both gated by ROLE_CUSTOM_MANAGEMENT. */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[260px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative min-w-[260px] flex-1">
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tAccount('roles.tk_search-placeholder_')} className="pl-9" />
         </div>
         {scopeFilterOptions.length > 0 && <SegmentedFilter dataTestid="roles-scope-filter" value={scopeFilter} onChange={setScopeFilter} options={scopeFilterOptions} />}
@@ -503,7 +503,7 @@ export function AccountRoles() {
             data-testid="new-role-button"
             type="button"
             onClick={() => setEditorTarget({ mode: 'create', accountId: accountId ?? null, allowPlatformScope: isPlatformAll, lockToEntityScope: isEntityScopedView })}
-            className="!h-9 !w-auto !text-[11px] px-3.5"
+            className="!h-9 !w-auto px-3.5 !text-[11px]"
           >
             <Plus className="h-3.5 w-3.5" />
             {tAccount('roles.tk_create_')}
@@ -513,18 +513,18 @@ export function AccountRoles() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-32 w-full rounded-sm" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
-          <Settings2 className="h-5 w-5 text-muted-foreground/60" />
-          <span className="text-sm text-muted-foreground">{tAccount('roles.tk_empty_')}</span>
+        <div className="border-border bg-card flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed p-10 text-center">
+          <Settings2 className="text-muted-foreground/60 h-5 w-5" />
+          <span className="text-muted-foreground text-sm">{tAccount('roles.tk_empty_')}</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((role) => (
             <RoleCard
               key={role.id}

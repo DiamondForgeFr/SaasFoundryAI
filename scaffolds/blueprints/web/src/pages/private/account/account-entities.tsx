@@ -92,14 +92,14 @@ function FilterBar({
     { value: 'disabled', label: tAccount('entities.filters.tk_status-disabled_') }
   ]
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-4">
-      <div className="relative flex-1 min-w-[260px]">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+    <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="relative min-w-[260px] flex-1">
+        <Search className="text-muted-foreground absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
         <Input type="text" data-testid="search-filter" value={search} onChange={(e) => onSearch(e.target.value)} placeholder={tAccount('entities.filters.tk_search-placeholder_')} className="pl-9" />
       </div>
       <SegmentedFilter value={status} onChange={onStatus} options={statusOptions} />
       {canCreate && (
-        <WaveButton type="button" onClick={onCreate} className="!h-9 !w-auto !text-[11px] px-3.5">
+        <WaveButton type="button" onClick={onCreate} className="!h-9 !w-auto px-3.5 !text-[11px]">
           <Plus className="h-3.5 w-3.5" />
           {tAccount('entities.tk_create-entity_')}
         </WaveButton>
@@ -139,7 +139,7 @@ function EntityCard({
       role={canEdit ? 'button' : undefined}
       onClick={handleClick}
       className={cn(
-        'group rounded-sm border bg-card p-4 transition-all',
+        'group bg-card rounded-sm border p-4 transition-all',
         'hover:border-primary/40 hover:shadow-[0_0_0_1px_var(--primary)/15]',
         dimmed ? 'border-border/60 bg-muted/30' : 'border-border',
         canEdit && 'cursor-pointer'
@@ -148,16 +148,16 @@ function EntityCard({
     >
       {/* Top row: logo (or org-type icon) + name + type badge + status switch */}
       <div className="flex items-start gap-3">
-        <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-muted text-muted-foreground', dimmed && 'opacity-60')}>
+        <div className={cn('border-border bg-muted text-muted-foreground flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-sm border', dimmed && 'opacity-60')}>
           {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : <Icon className="h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-1.5 flex-wrap">
-            <span className={cn('font-bold text-sm truncate flex-1 min-w-0', dimmed ? 'text-muted-foreground' : 'text-foreground')}>{entity.organization?.name || entity.name}</span>
+          <div className="flex flex-wrap items-start gap-1.5">
+            <span className={cn('min-w-0 flex-1 truncate text-sm font-bold', dimmed ? 'text-muted-foreground' : 'text-foreground')}>{entity.organization?.name || entity.name}</span>
             {orgType && (
               <span
                 className={cn(
-                  'flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border-border bg-muted text-muted-foreground',
+                  'border-border bg-muted text-muted-foreground flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                   dimmed && 'opacity-70'
                 )}
               >
@@ -170,11 +170,11 @@ function EntityCard({
               <label
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  'inline-flex flex-shrink-0 items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase transition-colors select-none',
                   entity.isActive
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                     : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
-                  isToggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                  isToggling ? 'cursor-wait opacity-50' : 'cursor-pointer'
                 )}
               >
                 <Switch
@@ -191,7 +191,7 @@ function EntityCard({
             ) : (
               <span
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  'inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                   entity.isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                 )}
               >
@@ -200,19 +200,19 @@ function EntityCard({
               </span>
             )}
           </div>
-          {showSubName && <div className={cn('text-[11px] leading-tight truncate mt-0.5', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')}>{entity.name}</div>}
-          {entity.description && <div className={cn('text-[12px] mt-1 line-clamp-2 leading-snug', dimmed ? 'text-muted-foreground/70' : 'text-foreground/80')}>{entity.description}</div>}
+          {showSubName && <div className={cn('mt-0.5 truncate text-[11px] leading-tight', dimmed ? 'text-muted-foreground/70' : 'text-muted-foreground')}>{entity.name}</div>}
+          {entity.description && <div className={cn('mt-1 line-clamp-2 text-[12px] leading-snug', dimmed ? 'text-muted-foreground/70' : 'text-foreground/80')}>{entity.description}</div>}
         </div>
       </div>
 
       {/* Footer: user count (left) + EDIT cta (right) — same shape as role cards */}
-      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60 text-[11px]">
+      <div className="border-border/60 mt-3 flex items-center justify-between gap-2 border-t pt-3 text-[11px]">
         <span className="inline-flex items-center gap-1">
-          <Users className="h-3 w-3 text-muted-foreground" />
-          <span className="font-medium text-foreground tabular-nums">{entity.userCount}</span>
+          <Users className="text-muted-foreground h-3 w-3" />
+          <span className="text-foreground font-medium tabular-nums">{entity.userCount}</span>
           <span className="text-muted-foreground">{tAccount('entities.tk_users-short_')}</span>
         </span>
-        {canEdit && <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors">{tAccount('entities.tk_edit-cta_')} →</span>}
+        {canEdit && <span className="text-muted-foreground/70 group-hover:text-primary text-[10px] tracking-wider uppercase transition-colors">{tAccount('entities.tk_edit-cta_')} →</span>}
       </div>
     </div>
   )
@@ -223,23 +223,23 @@ function EntityCard({
 function MiniPagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
   if (totalPages <= 1) return null
   return (
-    <div className="flex items-center justify-end gap-1.5 px-4 py-2.5 border-t border-border">
+    <div className="border-border flex items-center justify-end gap-1.5 border-t px-4 py-2.5">
       <button
         type="button"
         disabled={page === 1}
         onClick={() => onPage(page - 1)}
-        className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
-      <span className="text-[11px] text-muted-foreground tabular-nums px-2">
+      <span className="text-muted-foreground px-2 text-[11px] tabular-nums">
         {page} / {totalPages}
       </span>
       <button
         type="button"
         disabled={page === totalPages}
         onClick={() => onPage(page + 1)}
-        className="cursor-pointer inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
@@ -349,18 +349,18 @@ export function AccountEntities() {
 
       <div data-testid="entities-table">
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="skeleton-shimmer-orange h-32 w-full rounded-sm" />
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
-            <Building2 className="h-5 w-5 text-muted-foreground/60" />
-            <span className="text-sm text-muted-foreground">{isFiltered ? tAccount('entities.tk_no-results-filtered_') : tAccount('entities.tk_no-entities-yet_')}</span>
+          <div className="border-border bg-card flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed p-10 text-center">
+            <Building2 className="text-muted-foreground/60 h-5 w-5" />
+            <span className="text-muted-foreground text-sm">{isFiltered ? tAccount('entities.tk_no-results-filtered_') : tAccount('entities.tk_no-entities-yet_')}</span>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {items.map((e) => (
               <EntityCard key={e.id} entity={e} onEdit={handleEdit} canEdit={canEdit} canToggle={canEdit} isToggling={togglingEntityId === e.id} onToggle={(next) => handleToggleEntity(e, next)} />
             ))}

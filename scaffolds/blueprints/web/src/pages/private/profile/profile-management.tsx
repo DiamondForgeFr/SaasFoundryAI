@@ -25,14 +25,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 function ProfileHeader({ fullName, email, initials, roleLabel }: { fullName: string; email: string; initials: string; roleLabel: string }) {
   return (
-    <div data-testid="profile-header" className="flex items-center gap-4 rounded-sm border border-border bg-card px-4 py-3.5 mb-6">
-      <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-primary/22 text-primary text-base font-bold">{initials}</div>
-      <div className="flex-1 min-w-0">
-        <div className="font-display text-lg font-bold text-foreground leading-tight truncate">{fullName}</div>
-        <div className="text-[12px] text-muted-foreground leading-tight truncate">{email}</div>
+    <div data-testid="profile-header" className="border-border bg-card mb-6 flex items-center gap-4 rounded-sm border px-4 py-3.5">
+      <div className="bg-primary/22 text-primary flex h-12 w-12 items-center justify-center rounded-sm text-base font-bold">{initials}</div>
+      <div className="min-w-0 flex-1">
+        <div className="font-display text-foreground truncate text-lg leading-tight font-bold">{fullName}</div>
+        <div className="text-muted-foreground truncate text-[12px] leading-tight">{email}</div>
       </div>
       {roleLabel && (
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-widest border border-primary/22 bg-primary/12 text-primary whitespace-nowrap">
+        <span className="border-primary/22 bg-primary/12 text-primary inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-bold tracking-widest whitespace-nowrap uppercase">
           <Shield className="h-3 w-3" />
           {roleLabel}
         </span>
@@ -45,12 +45,12 @@ function ProfileHeader({ fullName, email, initials, roleLabel }: { fullName: str
 
 function Section({ icon, title, meta, children, dataTestid }: { icon: React.ReactNode; title: string; meta?: string; children: React.ReactNode; dataTestid?: string }) {
   return (
-    <div data-testid={dataTestid} className="rounded-sm border border-border bg-card overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+    <div data-testid={dataTestid} className="border-border bg-card overflow-hidden rounded-sm border">
+      <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="text-primary">{icon}</span>
-          <span className="font-display text-[13px] font-bold text-foreground">{title}</span>
-          {meta && <span className="text-[11px] text-muted-foreground font-medium">{meta}</span>}
+          <span className="font-display text-foreground text-[13px] font-bold">{title}</span>
+          {meta && <span className="text-muted-foreground text-[11px] font-medium">{meta}</span>}
         </div>
       </div>
       {children}
@@ -95,16 +95,16 @@ function AccountChip({
         <button
           type="button"
           onClick={handleCopy}
-          className={`group inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[11px] border bg-muted text-foreground/80 transition-colors hover:border-primary/60 hover:bg-primary/8 ${indirect ? 'border-dashed border-border/70' : 'border-border'}`}
+          className={`group bg-muted text-foreground/80 hover:border-primary/60 hover:bg-primary/8 inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[11px] transition-colors ${indirect ? 'border-border/70 border-dashed' : 'border-border'}`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
           <span>{name}</span>
           {indirect && (
-            <span className="ml-0.5 inline-flex items-center px-1 py-px rounded-[3px] text-[9px] font-bold uppercase tracking-wider border border-border/70 text-muted-foreground">
+            <span className="border-border/70 text-muted-foreground ml-0.5 inline-flex items-center rounded-[3px] border px-1 py-px text-[9px] font-bold tracking-wider uppercase">
               {indirectLabel}
             </span>
           )}
-          {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100" />}
+          {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="text-muted-foreground/60 h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />}
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" className="font-mono text-[10px]">
@@ -118,12 +118,12 @@ function AccountChip({
 
 function InfoRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[180px_1fr] items-center gap-4 px-4 py-3 border-b border-border last:border-b-0">
-      <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+    <div className="border-border grid grid-cols-[180px_1fr] items-center gap-4 border-b px-4 py-3 last:border-b-0">
+      <span className="text-muted-foreground inline-flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase">
         {icon}
         {label}
       </span>
-      <span className="text-[13px] text-foreground">{value}</span>
+      <span className="text-foreground text-[13px]">{value}</span>
     </div>
   )
 }
@@ -202,18 +202,18 @@ export function ProfileManagement() {
           meta={tProfile('sections.profileInfo.tk_meta-readonly_')}
         >
           <InfoRow
-            icon={<UserIcon className="h-3 w-3 text-primary" />}
+            icon={<UserIcon className="text-primary h-3 w-3" />}
             label={tProfile('sections.profileInfo.tk_first-name_')}
             value={user.people?.firstname || <span className="text-muted-foreground">—</span>}
           />
           <InfoRow
-            icon={<UserIcon className="h-3 w-3 text-primary" />}
+            icon={<UserIcon className="text-primary h-3 w-3" />}
             label={tProfile('sections.profileInfo.tk_last-name_')}
             value={user.people?.lastname || <span className="text-muted-foreground">—</span>}
           />
-          <InfoRow icon={<Mail className="h-3 w-3 text-primary" />} label={tProfile('sections.profileInfo.tk_email_')} value={user.email} />
+          <InfoRow icon={<Mail className="text-primary h-3 w-3" />} label={tProfile('sections.profileInfo.tk_email_')} value={user.email} />
           <InfoRow
-            icon={<Shield className="h-3 w-3 text-primary" />}
+            icon={<Shield className="text-primary h-3 w-3" />}
             label={tProfile('sections.profileInfo.tk_roles_')}
             value={
               user.roles.length === 0 ? (
@@ -223,7 +223,7 @@ export function ProfileManagement() {
                   {user.roles.map((r) => (
                     <span
                       key={r}
-                      className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80 whitespace-nowrap"
+                      className="border-border bg-secondary text-foreground/80 inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase"
                     >
                       {roleDisplay(r)}
                     </span>
@@ -232,7 +232,7 @@ export function ProfileManagement() {
               )
             }
           />
-          <InfoRow icon={<Calendar className="h-3 w-3 text-primary" />} label={tProfile('sections.profileInfo.tk_member-since_')} value={formatDateLong(user.createdAt)} />
+          <InfoRow icon={<Calendar className="text-primary h-3 w-3" />} label={tProfile('sections.profileInfo.tk_member-since_')} value={formatDateLong(user.createdAt)} />
         </Section>
 
         {!isPlatformOnly && (
@@ -244,7 +244,7 @@ export function ProfileManagement() {
               meta={tProfile(accountsCount > 1 || entitiesCount > 1 ? 'sections.memberships.tk_meta-many_' : 'sections.memberships.tk_meta-one_', { accounts: accountsCount, entities: entitiesCount })}
             >
               <InfoRow
-                icon={<Users className="h-3 w-3 text-primary" />}
+                icon={<Users className="text-primary h-3 w-3" />}
                 label={tProfile('sections.memberships.tk_accounts_')}
                 value={
                   displayedAccounts.length === 0 ? (
@@ -268,7 +268,7 @@ export function ProfileManagement() {
                 }
               />
               <InfoRow
-                icon={<Building2 className="h-3 w-3 text-primary" />}
+                icon={<Building2 className="text-primary h-3 w-3" />}
                 label={tProfile('sections.memberships.tk_entities_')}
                 value={
                   user.entities.length === 0 ? (
@@ -276,7 +276,7 @@ export function ProfileManagement() {
                   ) : (
                     <span className="flex flex-wrap gap-1.5">
                       {user.entities.map((e) => (
-                        <span key={e.id} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[11px] border border-border bg-muted text-foreground/80">
+                        <span key={e.id} className="border-border bg-muted text-foreground/80 inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[11px]">
                           <span className={`h-1.5 w-1.5 rounded-full ${e.isActive ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
                           {e.organization?.name ? `${e.organization.name} · ${e.name}` : e.name}
                         </span>
@@ -291,7 +291,7 @@ export function ProfileManagement() {
 
         <Section dataTestid="preferences-section" icon={<Sun className="h-3.5 w-3.5" />} title={tProfile('sections.preferences.tk_title_')} meta={tProfile('sections.preferences.tk_meta_')}>
           <InfoRow
-            icon={<Moon className="h-3 w-3 text-primary" />}
+            icon={<Moon className="text-primary h-3 w-3" />}
             label={tProfile('sections.preferences.tk_theme_')}
             value={
               <SegmentedFilter
@@ -307,7 +307,7 @@ export function ProfileManagement() {
             }
           />
           <InfoRow
-            icon={<Globe className="h-3 w-3 text-primary" />}
+            icon={<Globe className="text-primary h-3 w-3" />}
             label={tProfile('sections.preferences.tk_language_')}
             value={
               <div className="inline-flex items-center gap-2">
@@ -320,7 +320,7 @@ export function ProfileManagement() {
                     { value: 'fr', label: tProfile('sections.preferences.tk_language-fr_') }
                   ]}
                 />
-                {isUpdatingPrefs && <span className="text-[10px] text-muted-foreground uppercase tracking-widest">{tProfile('sections.preferences.tk_saving_')}</span>}
+                {isUpdatingPrefs && <span className="text-muted-foreground text-[10px] tracking-widest uppercase">{tProfile('sections.preferences.tk_saving_')}</span>}
               </div>
             }
           />

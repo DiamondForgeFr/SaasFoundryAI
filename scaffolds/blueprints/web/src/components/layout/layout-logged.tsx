@@ -78,7 +78,7 @@ const LayoutLoggedContent = () => {
         <Breadcrumb>{renderBreadcrumbItems()}</Breadcrumb>
       </div>
       {items.length > 0 && items[items.length - 1].description && (
-        <div data-testid="page-description" className="ml-4 text-sm text-muted-foreground">
+        <div data-testid="page-description" className="text-muted-foreground ml-4 text-sm">
           {items[items.length - 1].description}
         </div>
       )}

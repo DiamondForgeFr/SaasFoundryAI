@@ -77,10 +77,10 @@ export function CreateOwnAccountDialog({ isOpen, onOpenChange, onCreated, defaul
           <DialogTitle>{tAccount('dialogs.createOwnAccount.tk_title_')}</DialogTitle>
           <DialogDescription>{tAccount('dialogs.createOwnAccount.tk_description_')}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <FloatingLabelInput label={tAccount('dialogs.createOwnAccount.tk_name-label_')} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           <FloatingLabelInput label={tAccount('dialogs.createOwnAccount.tk_description-label_')} value={description} onChange={(e) => setDescription(e.target.value)} />
-          {error && <p className="text-[11px] text-destructive">{error}</p>}
+          {error && <p className="text-destructive text-[11px]">{error}</p>}
           <DialogFooter>
             <WaveButton type="submit" disabled={createMutation.isLoading} className="w-full">
               <Plus className="h-3.5 w-3.5" />

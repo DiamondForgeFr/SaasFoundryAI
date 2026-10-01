@@ -48,7 +48,7 @@ export function NavUser() {
       <Avatar initials={initials} bgColor="bg-primary/15" textColor="text-primary" size="sm" />
       <div className="grid flex-1 text-left text-sm leading-tight">
         <span className="truncate font-semibold">{userName}</span>
-        <span className="truncate text-xs capitalize text-muted-foreground">{roleLabel || user.email}</span>
+        <span className="text-muted-foreground truncate text-xs capitalize">{roleLabel || user.email}</span>
       </div>
     </div>
   )
@@ -62,7 +62,7 @@ export function NavUser() {
               <Avatar initials={initials} bgColor="bg-primary/15" textColor="text-primary" size="sm" />
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{userName}</span>
-                <span className="truncate text-xs capitalize text-muted-foreground">{roleLabel || user.email}</span>
+                <span className="text-muted-foreground truncate text-xs capitalize">{roleLabel || user.email}</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>

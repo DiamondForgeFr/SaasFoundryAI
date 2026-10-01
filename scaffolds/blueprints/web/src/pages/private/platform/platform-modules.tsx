@@ -77,7 +77,7 @@ function KpiFilterRow({
   const { t: tPlatform } = useTranslation('platform')
   const inactive = total - active
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+    <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <KpiFilterCard
         active={value === 'ALL'}
         onClick={() => onChange('ALL')}
@@ -143,9 +143,9 @@ function ModuleCard({ mod, onOpen, onToggle, busy, canToggle }: { mod: PlatformM
       role="button"
       onClick={onOpen}
       className={cn(
-        'group cursor-pointer rounded-sm border bg-card p-4 transition-all',
+        'group bg-card cursor-pointer rounded-sm border p-4 transition-all',
         'hover:border-primary/40 hover:shadow-[0_0_0_1px_var(--primary)/15]',
-        isActive ? 'border-border' : 'border-dashed border-border/60 opacity-90'
+        isActive ? 'border-border' : 'border-border/60 border-dashed opacity-90'
       )}
     >
       {/* Top row: icon + name + version + status-switch pill (same affordance as role/account cards) */}
@@ -154,14 +154,14 @@ function ModuleCard({ mod, onOpen, onToggle, busy, canToggle }: { mod: PlatformM
           <Icon className={cn('h-4 w-4', visual.tone)} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-1.5 flex-wrap">
-            <span className="font-mono text-[12.5px] font-bold text-foreground truncate flex-1 min-w-0">{mod.name}</span>
-            <span className="flex-shrink-0 rounded-[2px] border border-border bg-muted px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground">v{mod.version}</span>
+          <div className="flex flex-wrap items-start gap-1.5">
+            <span className="text-foreground min-w-0 flex-1 truncate font-mono text-[12.5px] font-bold">{mod.name}</span>
+            <span className="border-border bg-muted text-muted-foreground flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 font-mono text-[9px]">v{mod.version}</span>
             {/* Status switch — locked modules degrade to a display-only pill (disabling them would
                 self-lockout the platform admin from this very page). */}
             {isLocked ? (
               <span
-                className="flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border border-border bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap text-muted-foreground"
+                className="border-border bg-muted text-muted-foreground inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase"
                 title={tPlatform('modules.tk_locked-tooltip_')}
               >
                 <Lock className="h-2.5 w-2.5" />
@@ -171,7 +171,7 @@ function ModuleCard({ mod, onOpen, onToggle, busy, canToggle }: { mod: PlatformM
               // Read-only actor (no MODULE_MANAGEMENT): browse the catalog but no toggle affordance.
               <span
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap',
+                  'inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase',
                   isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
                 )}
               >
@@ -182,11 +182,11 @@ function ModuleCard({ mod, onOpen, onToggle, busy, canToggle }: { mod: PlatformM
               <label
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap select-none transition-colors',
+                  'inline-flex flex-shrink-0 items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase transition-colors select-none',
                   isActive
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
                     : 'border-border bg-muted text-muted-foreground hover:text-foreground hover:border-foreground/40',
-                  busy ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                  busy ? 'cursor-wait opacity-50' : 'cursor-pointer'
                 )}
               >
                 <Switch
@@ -203,28 +203,28 @@ function ModuleCard({ mod, onOpen, onToggle, busy, canToggle }: { mod: PlatformM
               </label>
             )}
           </div>
-          <div className="text-xs text-foreground/80 mt-1 line-clamp-2 leading-snug">{mod.description}</div>
+          <div className="text-foreground/80 mt-1 line-clamp-2 text-xs leading-snug">{mod.description}</div>
         </div>
       </div>
 
       {/* Footer: permissions count + updatedAt on the left, VIEW → on the right (same shape as role/account cards) */}
-      <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-border/60 text-[11px]">
+      <div className="border-border/60 mt-3 flex items-center justify-between gap-2 border-t pt-3 text-[11px]">
         <div className="inline-flex items-center gap-3">
           <span className="inline-flex items-center gap-1">
-            <FileText className="h-3 w-3 text-muted-foreground" />
-            <span className="font-medium text-foreground">{modulePermCount(mod)}</span>
+            <FileText className="text-muted-foreground h-3 w-3" />
+            <span className="text-foreground font-medium">{modulePermCount(mod)}</span>
             <span className="text-muted-foreground">{tPlatform('modules.tk_permissions_')}</span>
           </span>
           {mod.subModules.length > 0 && (
             <span className="inline-flex items-center gap-1">
-              <Boxes className="h-3 w-3 text-muted-foreground" />
-              <span className="font-medium text-foreground">{mod.subModules.length}</span>
+              <Boxes className="text-muted-foreground h-3 w-3" />
+              <span className="text-foreground font-medium">{mod.subModules.length}</span>
               <span className="text-muted-foreground">{tPlatform('modules.tk_sub-modules_')}</span>
             </span>
           )}
-          <span className="text-muted-foreground tabular-nums whitespace-nowrap">{formatDateShort(mod.updatedAt, { withYear: false })}</span>
+          <span className="text-muted-foreground whitespace-nowrap tabular-nums">{formatDateShort(mod.updatedAt, { withYear: false })}</span>
         </div>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors">{tPlatform('modules.tk_view_')} →</span>
+        <span className="text-muted-foreground/70 group-hover:text-primary text-[10px] tracking-wider uppercase transition-colors">{tPlatform('modules.tk_view_')} →</span>
       </div>
     </div>
   )
@@ -248,19 +248,19 @@ function StateDot({ active }: { active: boolean }) {
 function PermissionCard({ p, muted }: { p: PlatformModulePermission; muted?: boolean }) {
   const { t: tPlatform } = useTranslation('platform')
   return (
-    <div className={cn('rounded-sm border border-border bg-card px-3 py-2.5 transition-opacity', muted && 'opacity-55')}>
+    <div className={cn('border-border bg-card rounded-sm border px-3 py-2.5 transition-opacity', muted && 'opacity-55')}>
       <div className="flex items-start justify-between gap-2">
-        <div className="font-mono text-[11px] font-bold text-foreground break-all leading-snug">{p.name}</div>
+        <div className="text-foreground font-mono text-[11px] leading-snug font-bold break-all">{p.name}</div>
         {muted && (
-          <span className="flex-shrink-0 rounded-[2px] border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+          <span className="border-border bg-muted text-muted-foreground flex-shrink-0 rounded-[2px] border px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase">
             {tPlatform('modules.detail.tk_hidden_')}
           </span>
         )}
       </div>
-      <div className="text-xs text-foreground/80 mt-1 leading-snug">{p.description}</div>
+      <div className="text-foreground/80 mt-1 text-xs leading-snug">{p.description}</div>
       <div className="mt-2 flex flex-wrap gap-1">
         {p.applicableScopes.map((s) => (
-          <span key={s} className={cn('inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', scopeBadgeStyles[s as RoleScope])}>
+          <span key={s} className={cn('inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase', scopeBadgeStyles[s as RoleScope])}>
             {s === 'PLATFORM' && <Globe className="h-2.5 w-2.5" />}
             {s === 'ACCOUNT' && <Shield className="h-2.5 w-2.5" />}
             {s === 'ENTITY' && <ShieldCheck className="h-2.5 w-2.5" />}
@@ -293,7 +293,7 @@ function StatusControl({
   if (locked) {
     return (
       <span
-        className="flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border border-border bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+        className="border-border bg-muted text-muted-foreground inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase"
         title={lockedTooltip}
       >
         <Lock className="h-2.5 w-2.5" /> {tPlatform('modules.tk_locked_')}
@@ -304,7 +304,7 @@ function StatusControl({
     return (
       <span
         className={cn(
-          'flex-shrink-0 inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+          'inline-flex flex-shrink-0 items-center gap-1 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase',
           isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground'
         )}
       >
@@ -316,9 +316,9 @@ function StatusControl({
     <label
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        'flex-shrink-0 inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider select-none',
+        'inline-flex flex-shrink-0 items-center gap-1.5 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase select-none',
         isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-muted text-muted-foreground',
-        busy ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+        busy ? 'cursor-wait opacity-50' : 'cursor-pointer'
       )}
     >
       <Switch
@@ -411,16 +411,16 @@ function ModuleDetailBody({
   return (
     <>
       {/* Header — module identity + activation */}
-      <SheetHeader className="border-b border-border px-5 pb-4 pt-6">
+      <SheetHeader className="border-border border-b px-5 pt-6 pb-4">
         <div className="flex items-start gap-3">
           <div className={cn('flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm border', visual.ring)}>
             <Icon className={cn('h-4 w-4', visual.tone)} />
           </div>
           <div className="min-w-0 flex-1">
-            <SheetTitle className="break-all font-mono text-sm leading-snug">{mod.name}</SheetTitle>
-            <SheetDescription className="mt-1 text-xs leading-snug text-foreground/80">{mod.description}</SheetDescription>
+            <SheetTitle className="font-mono text-sm leading-snug break-all">{mod.name}</SheetTitle>
+            <SheetDescription className="text-foreground/80 mt-1 text-xs leading-snug">{mod.description}</SheetDescription>
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
-              <span className="rounded-[2px] border border-border bg-muted px-1.5 py-0.5 font-mono text-muted-foreground">v{mod.version}</span>
+              <span className="border-border bg-muted text-muted-foreground rounded-[2px] border px-1.5 py-0.5 font-mono">v{mod.version}</span>
               <span className="text-muted-foreground">· {prettifyTypeName(mod.typeName)}</span>
               <StatusControl isActive={mod.isActive} locked={isModuleLocked} canToggle={canToggle} busy={busy} onToggle={onToggleModule} lockedTooltip={tPlatform('modules.tk_locked-tooltip_')} />
             </div>
@@ -429,9 +429,9 @@ function ModuleDetailBody({
       </SheetHeader>
 
       {/* Search */}
-      <div className="border-b border-border px-4 py-3">
+      <div className="border-border border-b px-4 py-3">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tPlatform('modules.detail.tk_search-placeholder_')} className="h-9 pl-8 text-xs" />
         </div>
       </div>
@@ -439,15 +439,15 @@ function ModuleDetailBody({
       {/* Accordion tree: module-level permissions, then one collapsible per sub-module */}
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-4">
         {showModuleSection && (
-          <div className="overflow-hidden rounded-sm border border-border">
-            <button type="button" onClick={() => toggleExpand('module')} className="flex w-full items-center gap-2 bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/50">
-              <ChevronDown className={cn('h-3.5 w-3.5 flex-shrink-0 text-muted-foreground transition-transform', !sectionOpen('module') && '-rotate-90')} />
-              <Layers className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
-              <span className="flex-1 text-[12px] font-semibold text-foreground">{tPlatform('modules.detail.tk_module-permissions_')}</span>
-              <span className="text-[10px] tabular-nums text-muted-foreground">{(q ? moduleLevelMatches : mod.permissions).length}</span>
+          <div className="border-border overflow-hidden rounded-sm border">
+            <button type="button" onClick={() => toggleExpand('module')} className="bg-card hover:bg-muted/50 flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors">
+              <ChevronDown className={cn('text-muted-foreground h-3.5 w-3.5 flex-shrink-0 transition-transform', !sectionOpen('module') && '-rotate-90')} />
+              <Layers className="text-primary h-3.5 w-3.5 flex-shrink-0" />
+              <span className="text-foreground flex-1 text-[12px] font-semibold">{tPlatform('modules.detail.tk_module-permissions_')}</span>
+              <span className="text-muted-foreground text-[10px] tabular-nums">{(q ? moduleLevelMatches : mod.permissions).length}</span>
             </button>
             {sectionOpen('module') && (
-              <div className="space-y-2 border-t border-border bg-background/40 p-2.5">
+              <div className="border-border bg-background/40 space-y-2 border-t p-2.5">
                 {(q ? moduleLevelMatches : mod.permissions).map((p) => (
                   <PermissionCard key={p.id} p={p} />
                 ))}
@@ -456,19 +456,19 @@ function ModuleDetailBody({
           </div>
         )}
 
-        {visibleSubs.length > 0 && <div className="px-1 pt-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/70">{tPlatform('modules.detail.tk_sub-modules_')}</div>}
+        {visibleSubs.length > 0 && <div className="text-muted-foreground/70 px-1 pt-1 text-[9px] font-bold tracking-widest uppercase">{tPlatform('modules.detail.tk_sub-modules_')}</div>}
         {visibleSubs.map(({ sm, perms }) => {
           const key = `sub-${sm.id}`
           const open = sectionOpen(key)
           return (
-            <div key={sm.id} className={cn('overflow-hidden rounded-sm border border-border', !sm.isActive && 'opacity-70')}>
-              <div className="flex items-center gap-2 bg-card px-3 py-2.5">
+            <div key={sm.id} className={cn('border-border overflow-hidden rounded-sm border', !sm.isActive && 'opacity-70')}>
+              <div className="bg-card flex items-center gap-2 px-3 py-2.5">
                 <button type="button" onClick={() => toggleExpand(key)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                  <ChevronDown className={cn('h-3.5 w-3.5 flex-shrink-0 text-muted-foreground transition-transform', !open && '-rotate-90')} />
-                  <Boxes className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                  <span className="truncate text-[12px] font-medium text-foreground">{sm.name}</span>
+                  <ChevronDown className={cn('text-muted-foreground h-3.5 w-3.5 flex-shrink-0 transition-transform', !open && '-rotate-90')} />
+                  <Boxes className="text-muted-foreground h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="text-foreground truncate text-[12px] font-medium">{sm.name}</span>
                   <StateDot active={sm.isActive} />
-                  <span className="text-[10px] tabular-nums text-muted-foreground">{perms.length}</span>
+                  <span className="text-muted-foreground text-[10px] tabular-nums">{perms.length}</span>
                 </button>
                 <StatusControl
                   isActive={sm.isActive}
@@ -480,15 +480,15 @@ function ModuleDetailBody({
                 />
               </div>
               {open && (
-                <div className="space-y-2 border-t border-border bg-background/40 p-2.5">
-                  <p className="text-[11px] leading-snug text-muted-foreground">{sm.description}</p>
+                <div className="border-border bg-background/40 space-y-2 border-t p-2.5">
+                  <p className="text-muted-foreground text-[11px] leading-snug">{sm.description}</p>
                   {!sm.isActive && (
                     <div className="rounded-sm border border-amber-500/25 bg-amber-500/8 px-2.5 py-1.5 text-[11px] text-amber-600 dark:text-amber-500">
                       {tPlatform('modules.detail.tk_inactive-hint_')}
                     </div>
                   )}
                   {perms.length === 0 ? (
-                    <p className="text-[11px] italic text-muted-foreground">{tPlatform('modules.tk_no-permissions_')}</p>
+                    <p className="text-muted-foreground text-[11px] italic">{tPlatform('modules.tk_no-permissions_')}</p>
                   ) : (
                     perms.map((p) => <PermissionCard key={p.id} p={p} muted={!sm.isActive} />)
                   )}
@@ -498,7 +498,7 @@ function ModuleDetailBody({
           )
         })}
 
-        {nothingMatches && <p className="px-1 py-6 text-center text-[12px] italic text-muted-foreground">{tPlatform('modules.detail.tk_no-results_')}</p>}
+        {nothingMatches && <p className="text-muted-foreground px-1 py-6 text-center text-[12px] italic">{tPlatform('modules.detail.tk_no-results_')}</p>}
       </div>
     </>
   )
@@ -578,19 +578,19 @@ export function PlatformModules() {
   return (
     <div className="container mx-auto">
       {/* Header — no search here anymore; it moved next to the type filter below. */}
-      <div className="mb-5 flex items-center justify-between gap-4 rounded-sm border border-border bg-card px-4 py-3">
+      <div className="border-border bg-card mb-5 flex items-center justify-between gap-4 rounded-sm border px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-sm border border-primary/30 bg-primary/12">
-            <Layers className="h-4 w-4 text-primary" />
+          <div className="border-primary/30 bg-primary/12 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-sm border">
+            <Layers className="text-primary h-4 w-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-display font-bold text-foreground text-sm">{tPlatform('modules.tk_title_')}</span>
-              <span className="rounded-[2px] bg-primary/15 text-primary border border-primary/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+              <span className="font-display text-foreground text-sm font-bold">{tPlatform('modules.tk_title_')}</span>
+              <span className="bg-primary/15 text-primary border-primary/25 rounded-[2px] border px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase">
                 {tPlatform('modules.tk_platform-only_')}
               </span>
             </div>
-            <p className="text-[11px] text-muted-foreground">{tPlatform('modules.tk_subtitle_', { active: totalActive, total: allModules.length })}</p>
+            <p className="text-muted-foreground text-[11px]">{tPlatform('modules.tk_subtitle_', { active: totalActive, total: allModules.length })}</p>
           </div>
         </div>
       </div>
@@ -600,8 +600,8 @@ export function PlatformModules() {
 
       {/* Filter bar — search on the left, type multi-select on the right (mirrors the users page layout). */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[260px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative min-w-[260px] flex-1">
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tPlatform('modules.tk_search-placeholder_')} className="pl-9" />
         </div>
         <MultiSelectFilter
@@ -622,18 +622,18 @@ export function PlatformModules() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-32 w-full rounded-sm" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-sm border border-dashed border-border bg-card p-10 flex flex-col items-center justify-center gap-2 text-center">
-          <Users className="h-5 w-5 text-muted-foreground/60" />
-          <span className="text-sm text-muted-foreground">{tPlatform('modules.tk_empty_')}</span>
+        <div className="border-border bg-card flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed p-10 text-center">
+          <Users className="text-muted-foreground/60 h-5 w-5" />
+          <span className="text-muted-foreground text-sm">{tPlatform('modules.tk_empty_')}</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((mod) => (
             <ModuleCard
               key={mod.id}

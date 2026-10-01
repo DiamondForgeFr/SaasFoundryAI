@@ -64,8 +64,14 @@ npm run test:pre-push
 ```
 
 Consignez le commit testé et l'environnement dans le rapport du ticket. Il ne s'agit pas d'un cache automatique de résultats : toute modification pertinente du code ou de l'environnement exige une
-nouvelle validation, et la CI valide la PR indépendamment. La revue humaine et les éventuelles étapes Human testing restent inchangées. Les projets générés conservent leur propre table
-`.saasfoundry/validation.json` ; cette optimisation réservée aux contributeurs ne modifie ni leurs hooks ni leur politique de release.
+nouvelle validation, et la CI valide la PR indépendamment. La revue humaine et les éventuelles étapes Human testing restent inchangées. Ces contrôles de commit ciblés sont réservés aux contributeurs
+et ne modifient pas la politique de release des projets générés.
+
+**Dans les projets générés**, `npm run test:staged` lit lui aussi `.saasfoundry/validation.commit.json`. Il reprend les voies de `.saasfoundry/validation.json` à deux exceptions près : la voie de
+cycle de vie lance les gardes au lieu de `test:e2e`, et la validation complète lance les gardes et les contrôles du contrat partagé. Tout changement de l'API ou du web sélectionne la voie de cycle de
+vie : un hook qui lançait la suite E2E la lançait donc à presque chaque commit. La CI garde `.saasfoundry/validation.json`, où la voie de cycle de vie lance toujours `test:e2e`. Le `.prettierignore`
+généré exclut de `npm run format:check` les fichiers que SaaSFoundryAI écrit et rafraîchit à chaque `sf update` (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, instructions des agents, workflow
+de validation) ainsi que les artefacts générés : les formater transformerait la mise à jour suivante en conflits.
 
 Inspectez une plage sans exécuter les commandes :
 
