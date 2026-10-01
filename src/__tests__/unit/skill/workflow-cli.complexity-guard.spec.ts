@@ -45,6 +45,13 @@ case "$1" in
       printf '%s\\n' "\${FAKE_LABELS}"
     fi
     ;;
+  get-issue-type)
+    if [ -n "\${FAKE_ISSUE_TYPE:-}" ]; then
+      printf '{"name":"%s"}\\n' "\${FAKE_ISSUE_TYPE}"
+    else
+      exit 1
+    fi
+    ;;
   update-status)
     echo "✓ Ticket #$2 → $3"
     ;;
@@ -143,6 +150,24 @@ describe('sf-workflow CLI — complexity guard', () => {
     expect(res.code).toBe(0)
     const toolCalls = readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))
     expect(toolCalls).toHaveLength(1)
+  })
+
+  // #839 — an Epic is an aggregate with a derived status.
+  it('lets an Epic move without a complexity label', async () => {
+    const res = await runCli(['update-status', '2', 'In progress'], sandbox, { FAKE_LABELS: '', FAKE_ISSUE_TYPE: 'sf-epic' })
+    expect(res.code).toBe(0)
+    expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))).toEqual(['update-status 2 In progress'])
+  })
+
+  it.each(['sf-story', 'sf-task', 'sf-issue'])('still blocks an %s without a complexity label', async (issueType) => {
+    const res = await runCli(['update-status', '42', 'In progress'], sandbox, { FAKE_LABELS: '', FAKE_ISSUE_TYPE: issueType })
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('no complexity label')
+  })
+
+  it('still blocks when the issue type cannot be read', async () => {
+    const res = await runCli(['update-status', '42', 'In progress'], sandbox, { FAKE_LABELS: '' })
+    expect(res.code).toBe(2)
   })
 
   it('coexists with the SRS guard — SRS-labelled ticket with complexity still blocked on code-path targets', async () => {
