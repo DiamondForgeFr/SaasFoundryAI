@@ -9,6 +9,7 @@ import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateWebAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
@@ -93,10 +94,12 @@ export async function renderWebApp({
   // Update package.json
   const packageJsonPath = `${webPath}/package.json`
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
-  packageJson.name = `${projectName}-web`
-  packageJson.description = projectDescription
-  packageJson.repository.url = frontendRepoUrl || 'https://github.com/agachet/saasfoundry.git'
-  packageJson.keywords = [projectName, 'saasfoundry', 'frontend', 'react', 'vite']
+  applyPackageIdentity(packageJson, {
+    name: `${projectName}-web`,
+    description: projectDescription,
+    keywords: [projectName, 'saasfoundry', 'frontend', 'react', 'vite'],
+    repositoryUrl: frontendRepoUrl
+  })
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2))
 
   // Every web-side file that names a port. `.env` carries both: the API the app calls,
