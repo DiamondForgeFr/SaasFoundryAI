@@ -2,8 +2,9 @@ name: Sync PR review status
 
 on:
   pull_request_target:
-    # A pull request opened ready for review never emits ready_for_review (#876).
-    types: [opened, reopened, ready_for_review]
+    # A pull request opened ready for review never emits ready_for_review (#876);
+    # a merge into the PR target moves the ticket to Done (#845).
+    types: [opened, reopened, ready_for_review, closed]
 
 permissions:
   contents: read
@@ -14,7 +15,7 @@ concurrency:
 
 jobs:
   sync-review:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false
+    if: github.event.pull_request.head.repo.full_name == github.repository && (github.event.action == 'closed' && github.event.pull_request.merged == true || github.event.action != 'closed' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

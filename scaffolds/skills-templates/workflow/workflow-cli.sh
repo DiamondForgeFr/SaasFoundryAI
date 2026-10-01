@@ -1058,6 +1058,94 @@ explain_pr_event_rejection() {
   ' "$event_path" 2>/dev/null || echo "the event payload could not be read"
 }
 
+# A pull request merged into the configured PR target moves its delivery ticket
+# to Done through the same guarded update-status — which also closes the issue
+# and rolls an Epic up. The Solo In Review banner promised "your merge triggers
+# Done" and nothing listened: a PR to the working branch rather than the default
+# one does not even close its issue on GitHub's side (#845).
+sync_pr_merge() {
+  local pr_number=$1 repo=$2 event_path=$3 event live ticket status labels
+  event=$(jq -ce --arg repo "$repo" --argjson n "$pr_number" --slurpfile manifest .saasfoundry.json '
+    ($manifest[0].workflow.workingBranch // "develop") as $working
+    | ($manifest[0].workflow.prTargetBranch // $working) as $target
+    | select(.action == "closed" and .number == $n and .repository.full_name == $repo)
+    | .pull_request
+    | select(.number == $n and .merged == true
+      and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .base.ref == $target
+      and (.head.ref | type) == "string" and ((.merge_commit_sha // "") | test("^[0-9a-f]{40}$")))
+    | {number, head: .head.ref, base: .base.ref, mergeSha: .merge_commit_sha}
+  ' "$event_path" 2>/dev/null) || {
+    echo "Pull request #${pr_number} was not merged into the configured PR target; nothing to synchronize."
+    return 0
+  }
+  live=$(gh pr view "$pr_number" --repo "$repo" --json number,state,headRefName,baseRefName,isCrossRepository,mergeCommit,body,closingIssuesReferences 2>/dev/null) || {
+    echo "Error: unable to fetch live PR metadata; no ticket changed." >&2; return 2;
+  }
+  if ! echo "$live" | jq -e --argjson e "$event" '
+    .number == $e.number and .state == "MERGED" and .isCrossRepository == false
+    and .headRefName == $e.head and .baseRefName == $e.base and .mergeCommit.oid == $e.mergeSha
+    and (.body | type) == "string" and (.closingIssuesReferences | type) == "array"
+  ' >/dev/null 2>&1; then
+    echo "Error: the live pull request does not confirm this merge; no ticket changed." >&2
+    return 2
+  fi
+  ticket=$(echo "$live" | jq -er --slurpfile manifest .saasfoundry.json '
+    def literal:
+      explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
+        then [92,$c] else [$c] end) | flatten | implode;
+    def pattern_piece: split("\u0000") | map(literal) | join(".+");
+    def ticket_pattern:
+      select(type == "string")
+      | select(([scan("\\{(?:N|ticket|number|issue-number)\\}")] | length) == 1)
+      | select(([scan("\\{(?:description|name)\\}")] | length) <= 1)
+      | gsub("\\{(?:N|ticket|number|issue-number)\\}"; "\u0001")
+      | gsub("\\{(?:description|name)\\}"; "\u0000")
+      | split("\u0001")
+      | "^" + (.[0] | pattern_piece) + "(?<ticket>[1-9][0-9]*)" + (.[1] | pattern_piece) + "$";
+    . as $live
+    | [$manifest[0].workflow.branchNaming.feature // "feature/{N}-{description}",
+       $manifest[0].workflow.branchNaming.fix // "fix/{N}-{description}"]
+    | map(ticket_pattern)
+    | [.[] as $pattern | $live.headRefName | try capture($pattern).ticket catch empty]
+    | unique
+    | if length == 1 then .[0] else error("No single delivery ticket") end
+  ' 2>/dev/null) || {
+    echo "Error: the merged branch does not identify exactly one ticket under the configured branch naming; no ticket changed." >&2
+    report_unusable_delivery_patterns
+    return 2
+  }
+  if ! echo "$live" | jq -e --arg t "$ticket" '
+    [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t]
+    or any(.closingIssuesReferences[]; (.number | tostring) == $t)
+  ' >/dev/null 2>&1; then
+    echo "Error: the merged pull request has no verified closing association to ticket #${ticket}; no ticket changed." >&2
+    return 2
+  fi
+  local GH_REPO="$repo"
+  export GH_REPO
+  labels=$(route_to_tool "$WORKFLOW_TOOL" get-labels "$ticket") || {
+    echo "Error: unable to verify ticket labels; no ticket changed." >&2; return 2;
+  }
+  if echo "$labels" | grep -Eq '^srs:|^nature:bundled-pr$'; then
+    echo "Ticket #${ticket} does not follow the code delivery lifecycle; nothing to synchronize."
+    return 0
+  fi
+  status=$(get_current_status "$ticket") || return 2
+  case "$(status_slug "$status")" in
+    done) echo "Ticket #${ticket} is already Done; nothing to synchronize."; return 0 ;;
+    in-review) ;;
+    *)
+      echo "Ticket #${ticket} is ${status:-without a status}, not In Review: a merge does not skip review. Take it through the workflow, then to Done."
+      return 0
+      ;;
+  esac
+  (
+    unset SF_WORKFLOW_BYPASS_NATURE_GUARD SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD SF_WORKFLOW_BYPASS_PR_MERGED_GUARD SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD SF_WORKFLOW_BYPASS_SRS_GUARD
+    export GH_REPO="$repo"
+    bash "$SKILL_DIR/workflow-cli.sh" update-status "$ticket" "Done"
+  )
+}
+
 sync_pr_review() {
   if [[ "$#" -ne 1 || ! "$1" =~ ^[1-9][0-9]*$ ]]; then
     echo "Usage: workflow-cli.sh sync-pr-review <pr-number>" >&2
@@ -1070,6 +1158,10 @@ sync_pr_review() {
   fi
   load_config
   [[ "$WORKFLOW_TOOL" == github-projects ]] || { echo "Error: review synchronization requires github-projects." >&2; return 2; }
+  if [[ "$(jq -r '.action // empty' "$event_path" 2>/dev/null)" == closed ]]; then
+    sync_pr_merge "$pr_number" "$repo" "$event_path"
+    return $?
+  fi
   local event live
   event=$(jq -ce --arg repo "$repo" --argjson n "$pr_number" --slurpfile manifest .saasfoundry.json '
     def literal:
