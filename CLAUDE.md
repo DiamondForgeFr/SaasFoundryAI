@@ -44,7 +44,8 @@ all three surfaces (`srs`, `tickets`, `codeComments`).
 - **Nature axis (Human Testing optionality)** — `nature:internal` tickets (refactor / scaffolding / non-terminal stories of an Epic) may transition AI Testing → In Review directly. Default (no label
   or `nature:user-facing`) requires Human Testing. The `update-status` guard enforces this — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
 - **Never bypass the CLI**: use `.claude/skills/sf-workflow/workflow-cli.sh` and `.claude/skills/sf-tool-github-projects/github-projects-cli.sh` — not raw `gh api graphql` mutations
-- **Heavy validation before Human Testing:** run `npm run test:pre-push` explicitly during AI Testing and record the result. Iterative pushes do not run Docker.
+- **Heavy validation before Human Testing:** run `npm test` and `npm run test:pre-push` explicitly during AI Testing and record the results. Commits only check what they touch, and iterative pushes do
+  not run Docker.
 - **Commit + push BEFORE moving to AI Testing.** Code must be on remote before any testing phase.
 - **Subtasks must be real GitHub issues** (not checkboxes), created via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`
 
@@ -117,9 +118,10 @@ scripts/              # Version management (tag-manager.sh)
 - `npm run dev` — Watch mode for CLI development
 - `npm run format` — Prettier
 - `npm run lint` — ESLint
-- `npm run test:pre-commit` — Format + Lint + Type-check + Jest tests (runs on pre-commit, ~15s)
+- `npm run test:pre-commit` — The commit gate (alias of `test:staged`): format, lint and type-check the staged files and run their related Jest tests; dependency or configuration changes escalate to
+  the full Jest run (see `docs/guide/impact-aware-validation.md`, #878)
 - `npm run test:pre-push` — the exact three-check normal lifecycle lane (run explicitly during AI Testing before Human Testing)
-- `npm run test:full` — Alias: `test:pre-commit` + `test:pre-push` (full local validation)
+- `npm run test:full` — Full local validation: format, lint, build, package check, every Jest suite and the exhaustive Docker lane
 - `npm run test:docker` / `npm run test:docker:full` — the four-check exhaustive lifecycle lane
 - `npm run test:docker:normal` — the three checks used by ordinary non-draft pull requests
 - `npm run test:docker:scenario -- <name> --depth <smoke|full>` — one lifecycle scenario

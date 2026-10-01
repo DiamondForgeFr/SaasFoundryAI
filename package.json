@@ -77,6 +77,7 @@
     "test:impact:harness": "jest --runInBand src/__tests__/unit/scaffold src/__tests__/integration/scaffold src/__tests__/smoke/generated-project.spec.ts",
     "test:pre-commit": "npm run test:staged",
     "test:commit:full": "npm run format:check && npm run lint && npm run build && npm run package:check && npm test",
+    "test:commit:scoped": "node scripts/commit-scoped-validation.mjs",
     "test:pre-push": "npm run test:docker:normal",
     "test:full": "npm run format:check && npm run lint && npm run build && npm run package:check && npm test && npm run test:docker:full",
     "test:docker": "bash tests/docker/run-docker-tests.sh --lane full",

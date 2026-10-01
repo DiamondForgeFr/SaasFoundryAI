@@ -50,12 +50,15 @@ npm run test:staged
 ```
 
 For **contributors to SaaSFoundryAI itself**, this command uses `.saasfoundry/validation.commit.json`: the same classifier and staged isolation, with no Docker commands at commit time. Docs, frontend,
-backend and harness changes keep their targeted checks. Lifecycle-only changes run guard/contract checks; their real Docker scenarios remain mandatory before delivery. Core, root or unknown changes
-still fail wide, but to `test:commit:full` (format, lint, build, package integrity and all Jest suites), not the release-grade Docker suite.
+backend and harness changes keep their targeted checks. Lifecycle-only changes run guard/contract checks; their real Docker scenarios remain mandatory before delivery. Core, shared, root or unknown
+changes go to `test:commit:scoped`, which checks what the commit touches: prettier and ESLint on the staged files, `tsc --noEmit`, and the Jest tests whose imports reach them
+(`jest --findRelatedTests`). A change Jest cannot follow through imports — dependencies, compiler, test, lint or format configuration, hooks, workflows, the validation contract itself — escalates to
+`test:commit:full` (format, lint, build, package integrity and all Jest suites). Neither runs Docker.
 
-After committing and pushing, the contributor workflow requires explicit heavy validation during AI testing:
+After committing and pushing, the contributor workflow requires explicit heavy validation during AI testing — the whole Jest suite, which commits no longer run, then the lifecycle lane:
 
 ```bash
+npm test
 npm run test:pre-push
 ```
 
