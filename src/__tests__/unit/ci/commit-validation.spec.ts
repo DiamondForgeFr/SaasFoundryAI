@@ -74,6 +74,7 @@ describe('contributor commit validation', () => {
       }
     }
     expect(scripts['test:commit:full']).toBe('npm run format:check && npm run lint && npm run build && npm run package:check && npm test')
+    expect(scripts['test:commit:scoped']).toBe('node scripts/commit-scoped-validation.mjs')
     expect(readFileSync(path.join(ROOT, '.github/CODEOWNERS'), 'utf8')).toContain('/.saasfoundry/validation.commit.json @AGachet')
   })
 
@@ -81,18 +82,19 @@ describe('contributor commit validation', () => {
     const output = plan('README.md')
     expect(output).toContain('> npm run test:impact:guards')
     expect(output).toContain('> npm run test:impact:docs')
-    expect(output).not.toContain('> npm run test:commit:full')
+    expect(output).not.toContain('> npm run test:commit:scoped')
   })
 
-  it.each(['src/commands/fixture.ts', 'package.json', 'unknown.contract'])('retains a non-Docker full fallback for %s', (file) => {
+  // #878 — the scoped check decides between the touched files and the full commit check.
+  it.each(['src/commands/fixture.ts', 'package.json', 'unknown.contract'])('routes %s to the scoped commit check, never Docker', (file) => {
     const output = plan(file)
-    expect(output).toContain('> npm run test:commit:full')
+    expect(output).toContain('> npm run test:commit:scoped')
     expect(output).not.toContain('> npm run test:full\n')
     expect(output).not.toContain('test:docker')
   })
 
-  it('fails wide to non-Docker checks when the Git range is unavailable', () => {
-    expect(plan('README.md', COMMIT_CONFIG, 'missing-base')).toContain('> npm run test:commit:full')
+  it('fails wide to the scoped check when the Git range is unavailable', () => {
+    expect(plan('README.md', COMMIT_CONFIG, 'missing-base')).toContain('> npm run test:commit:scoped')
   })
 
   it('deduplicates guard checks for lifecycle-only changes instead of launching Docker', () => {
@@ -111,7 +113,7 @@ describe('contributor commit validation', () => {
       path.join(fixture, 'package.json'),
       JSON.stringify({
         scripts: {
-          'test:commit:full': `node -e "if(require('fs').readFileSync('README.md','utf8')!=='fixed\\n')process.exit(42)"`
+          'test:commit:scoped': `node -e "if(require('fs').readFileSync('README.md','utf8')!=='fixed\\n')process.exit(42)"`
         }
       })
     )
