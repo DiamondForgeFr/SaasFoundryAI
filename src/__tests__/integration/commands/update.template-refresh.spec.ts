@@ -84,6 +84,34 @@ describe('sf update template refresh', () => {
     await rm(root, { recursive: true, force: true })
   })
 
+  describe('baselines after a refresh (#879)', () => {
+    it('leaves a customized file and a file the project wrote alone across two updates', async () => {
+      const manifest = manifestFor()
+      const recorded = await generateProject(manifest)
+      // The project rewires a template file whose template does not change, and adds its own module.
+      const wiring = 'apps/api/src/app.module.ts'
+      const customized = `${await readFile(join(project, wiring), 'utf8')}\n// AcmeModule wired here\n`
+      await writeFile(join(project, wiring), customized)
+      const own = 'apps/api/src/modules/acme/acme.service.ts'
+      await mkdir(join(project, 'apps/api/src/modules/acme'), { recursive: true })
+      await writeFile(join(project, own), 'export class AcmeService {}\n')
+      await writeFile(join(project, '.saasfoundry.json'), JSON.stringify({ ...manifest, fileHashes: recorded }, null, 2))
+      process.chdir(project)
+
+      await updateCommand({ nonInteractive: true })
+      const afterFirst = await readManifest()
+      expect(afterFirst.fileHashes).not.toHaveProperty([own])
+      expect(afterFirst.fileHashes?.[wiring]).toBe(recorded[wiring])
+
+      // The next release, same templates.
+      await writeFile(join(project, '.saasfoundry.json'), JSON.stringify({ ...afterFirst, version: '0.9.1' }, null, 2))
+      await updateCommand({ nonInteractive: true })
+
+      expect(await readFile(join(project, wiring), 'utf8')).toBe(customized)
+      expect(await readFile(join(project, own), 'utf8')).toBe('export class AcmeService {}\n')
+    }, 240_000)
+  })
+
   describe('conflicts (#856)', () => {
     const template = 'apps/api/src/main.ts'
 

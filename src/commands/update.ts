@@ -339,11 +339,22 @@ export async function refreshDependencyLockAndInstall(label: string, packageRoot
   await finalizeDependencyRefresh(projectRoot, backupRoot)
 }
 
-export async function refreshProjectHashes(manifest: SaaSFoundryManifest): Promise<Record<string, string>> {
+/**
+ * The baselines a FLOW 1 refresh records: what this CLI generates, never a sweep of the disk.
+ *
+ * A disk sweep recorded every user edit as the template version and tracked the project's own
+ * sources as templates. The next update then auto-updated each customized file whose template
+ * had not changed — replacing the project's code with the template — and listed the project's
+ * own files as removed templates (#879). The harness refresh already follows this rule: the
+ * baseline is the deposit target. A conflicted file therefore keeps the offered template as its
+ * baseline, so merging its sidecar resolves it (#856), and a file the CLI no longer generates
+ * stops being tracked (#865).
+ */
+export function templateBaselines(manifest: SaaSFoundryManifest, targetHashes: Record<string, string>): Record<string, string> {
   const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
   const sharedBaselines = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([path]) => isSharedAgentPath(path, protectClaude)))
   const unmanaged = new Set(manifest.unmanagedPaths ?? [])
-  return { ...Object.fromEntries(Object.entries(withoutSharedAgentHashes(await computeFileHashes('.'), protectClaude)).filter(([path]) => !unmanaged.has(path))), ...sharedBaselines }
+  return { ...Object.fromEntries(Object.entries(withoutSharedAgentHashes(targetHashes, protectClaude)).filter(([path]) => !unmanaged.has(path))), ...sharedBaselines }
 }
 
 export interface FileUpdate {
@@ -1274,12 +1285,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         // Template files the new CLI no longer generates. Flagged, kept, and untracked — never
         // deleted: a regeneration defect would otherwise turn into lost files (#857, #874, #865).
         let obsolete: FileUpdate[] = []
-        // Conflicted files left as the user wrote them (sidecar or kept). Their new baseline is
-        // the template version this run offered: merging the sidecar resolves the conflict, the
-        // next run on the same templates reports nothing, and a later template change conflicts
-        // again. Waiting for zero conflicts instead kept a customized project on its old version
-        // forever, re-conflicting on every deliberately kept edit (#856).
-        let conflictBaselines: string[] = []
+        // Conflicts left for the user to merge (sidecar or kept edit). They no longer hold the
+        // project on its old version: their baseline becomes the offered template (#856).
         let unresolvedConflicts = false
 
         try {
@@ -1356,7 +1363,6 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               )
               templateRefreshComplete = true
               unresolvedConflicts = conflictStrategy !== 'replace' && conflicts.length > 0
-              conflictBaselines = unresolvedConflicts ? conflicts.map((conflict) => conflict.path) : []
 
               spinner.succeed(chalk.green('Template update complete.'))
 
@@ -1399,9 +1405,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             manifest.version = cliVersion
             // The legacy adoption marker clears on the first refresh that leaves nothing to merge.
             if (manifest.adoption?.refreshPending && !unresolvedConflicts) manifest.adoption.refreshPending = false
-            manifest.fileHashes = await refreshProjectHashes(manifest)
-            for (const path of conflictBaselines) if (targetHashes[path]) manifest.fileHashes[path] = targetHashes[path]
-            for (const { path } of obsolete) delete manifest.fileHashes[path]
+            manifest.fileHashes = templateBaselines(manifest, targetHashes)
             await persistManifest()
           }
         } catch (error) {

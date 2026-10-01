@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { applyFileUpdates, computeFileUpdates, enforceAtomicImpactValidationBundles, FileUpdate, moduleSelectionPrefill, refreshProjectHashes } from '../../../commands/update'
+import { applyFileUpdates, computeFileUpdates, enforceAtomicImpactValidationBundles, FileUpdate, moduleSelectionPrefill, templateBaselines } from '../../../commands/update'
 import { hashFileContent } from '../../../utils'
 
 describe('moduleSelectionPrefill', () => {
@@ -341,11 +341,30 @@ describe('applyFileUpdates (conflict strategies)', () => {
     expect(await readFile('obsolete.config.js', 'utf8')).toBe('user edit after planning\n')
   })
 
-  it('never absorbs adoption-compatible user paths into refreshed ownership', async () => {
-    await writeFile('user-owned.ts', 'same as template')
-    await writeFile('generated.ts', 'generated')
-    const hashes = await refreshProjectHashes({ unmanagedPaths: ['user-owned.ts'], fileHashes: {} } as never)
+  it('never absorbs adoption-compatible user paths into refreshed ownership', () => {
+    const target = { 'user-owned.ts': hashFileContent('same as template'), 'generated.ts': hashFileContent('generated') }
+    const hashes = templateBaselines({ unmanagedPaths: ['user-owned.ts'], fileHashes: {} } as never, target)
     expect(hashes['user-owned.ts']).toBeUndefined()
-    expect(hashes['generated.ts']).toBeDefined()
+    expect(hashes['generated.ts']).toBe(target['generated.ts'])
+  })
+})
+
+// #879 — the refreshed baselines used to be a sweep of the disk.
+describe('templateBaselines', () => {
+  it("records the template version, not the project's edit, and tracks nothing the CLI does not generate", () => {
+    const target = { 'src/app.module.ts': hashFileContent('template wiring\n') }
+    // On disk: the project's own wiring, and a module the project wrote.
+    const manifest = { fileHashes: { 'src/app.module.ts': hashFileContent('older template\n') } } as never
+
+    expect(templateBaselines(manifest, target)).toEqual(target)
+  })
+
+  it('keeps the shared agent adapter baselines the previous manifest recorded', () => {
+    const manifest = { fileHashes: { 'AGENTS.md': hashFileContent('adopted adapter\n') } } as never
+
+    expect(templateBaselines(manifest, { 'AGENTS.md': hashFileContent('fresh adapter\n'), 'README.md': hashFileContent('readme\n') })).toEqual({
+      'AGENTS.md': hashFileContent('adopted adapter\n'),
+      'README.md': hashFileContent('readme\n')
+    })
   })
 })
