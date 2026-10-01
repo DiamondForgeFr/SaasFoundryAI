@@ -258,7 +258,9 @@ npm test
 git add -A && git commit -m "chore: sf update $(sf --version)"
 ```
 
-`.saasfoundry.json` est réécrit à la fin d’une mise à jour réussie ; la prochaine exécution part donc d’une nouvelle `base`.
+`.saasfoundry.json` est réécrit à la fin de chaque mise à jour appliquée, conflits compris ; la prochaine exécution part donc d’une nouvelle `base`. Un fichier en conflit prend pour nouvelle `base` la
+version du modèle qui lui a été proposée : fusionner (ou écarter) le sidecar `.saasfoundry.new` suffit à le résoudre, la prochaine exécution sur les mêmes modèles ne signale rien, et seule une
+évolution ultérieure du modèle de ce fichier provoque un nouveau conflit.
 
 ## Ce que `sf update` ne fait pas
 

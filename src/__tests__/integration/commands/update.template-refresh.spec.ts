@@ -84,6 +84,62 @@ describe('sf update template refresh', () => {
     await rm(root, { recursive: true, force: true })
   })
 
+  describe('conflicts (#856)', () => {
+    const template = 'apps/api/src/main.ts'
+
+    /** A project whose `main.ts` the user edited, recorded by an older CLI that shipped a different `main.ts`. */
+    const conflictedProject = async () => {
+      const manifest = manifestFor()
+      const recorded = await generateProject(manifest)
+      const offered = await readFile(join(project, template), 'utf8')
+      const userEdit = `${offered}\n// the team's own bootstrap tweak\n`
+      await writeFile(join(project, template), userEdit)
+      await writeFile(join(project, '.saasfoundry.json'), JSON.stringify({ ...manifest, fileHashes: { ...recorded, [template]: hashFileContent('// older template\n') } }, null, 2))
+      process.chdir(project)
+      return { offered, userEdit }
+    }
+
+    it('reaches the new version with a sidecar, and records the offered template as the baseline', async () => {
+      const { offered, userEdit } = await conflictedProject()
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(await readFile(join(project, template), 'utf8')).toBe(userEdit)
+      expect(await readFile(join(project, `${template}.saasfoundry.new`), 'utf8')).toBe(offered)
+      const saved = await readManifest()
+      expect(saved.version).toBe(cliVersion)
+      expect(saved.fileHashes?.[template]).toBe(hashFileContent(offered))
+    }, 180_000)
+
+    it('does not raise the same conflict again once the sidecar is merged', async () => {
+      const { userEdit } = await conflictedProject()
+      await updateCommand({ nonInteractive: true })
+      // The developer merges by keeping their edit and deleting the sidecar.
+      await rm(join(project, `${template}.saasfoundry.new`))
+      // Next CLI release, same templates.
+      const saved = await readManifest()
+      await writeFile(join(project, '.saasfoundry.json'), JSON.stringify({ ...saved, version: '0.9.1' }, null, 2))
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(await exists(`${template}.saasfoundry.new`)).toBe(false)
+      expect(await readFile(join(project, template), 'utf8')).toBe(userEdit)
+      expect((await readManifest()).version).toBe(cliVersion)
+    }, 240_000)
+
+    it('keeps the edit without a sidecar under --conflict-strategy keep, and still moves on', async () => {
+      const { offered, userEdit } = await conflictedProject()
+
+      await updateCommand({ nonInteractive: true, conflictStrategy: 'keep' })
+
+      expect(await readFile(join(project, template), 'utf8')).toBe(userEdit)
+      expect(await exists(`${template}.saasfoundry.new`)).toBe(false)
+      const saved = await readManifest()
+      expect(saved.version).toBe(cliVersion)
+      expect(saved.fileHashes?.[template]).toBe(hashFileContent(offered))
+    }, 180_000)
+  })
+
   describe('obsolete template files (#865)', () => {
     it('keeps an unmodified file the new CLI no longer generates, and stops tracking it', async () => {
       const manifest = manifestFor()
