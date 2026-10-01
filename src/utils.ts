@@ -12,13 +12,29 @@ import { DbCredentials, SaaSFoundryManifest } from './types'
 const HASH_IGNORE_PATTERNS = ['node_modules', '.git', 'dist', 'build', '.next', '.turbo', 'coverage', '.env', '.env.test', 'package-lock.json', '.saasfoundry.json', '.DS_Store', '.saasfoundry.new']
 
 /**
+ * Outputs of the generated project's own code generators. The templates ship a first
+ * snapshot, then the project regenerates them from its schema and its API: the Prisma
+ * client (`src/generated/prisma`), the orval API client (`packages/api-client/src/generated`)
+ * and the OpenAPI document the API writes at every start. Tracked as templates, they
+ * conflicted on every update and were deleted when a regeneration did not run the
+ * generator — 105 of 164 conflicts and 22 of 35 removals on a real project (#874).
+ */
+const DERIVED_ARTEFACTS = [/(^|\/)src\/generated(\/|$)/, /^apps\/[^/]+\/docs\/openapi\.json$/]
+
+/** Whether `relativePath` is codegen output the project owns, never a template. */
+export function isDerivedArtefact(relativePath: string): boolean {
+  const normalized = relativePath.split(path.sep).join('/')
+  return DERIVED_ARTEFACTS.some((pattern) => pattern.test(normalized))
+}
+
+/**
  * Check if a file path should be ignored for hash computation.
  */
 function shouldIgnore(filePath: string): boolean {
   const parts = filePath.split(path.sep)
   // `.saasfoundry.new` sidecars are conflict artifacts, never templates —
   // hashing them would pollute the baseline after a conflicted update.
-  return parts.some((part) => HASH_IGNORE_PATTERNS.includes(part) || part.endsWith('.saasfoundry.new'))
+  return parts.some((part) => HASH_IGNORE_PATTERNS.includes(part) || part.endsWith('.saasfoundry.new')) || isDerivedArtefact(filePath)
 }
 
 /**
