@@ -364,7 +364,18 @@ esac
     expect((await run(change)).code).toBe(2)
     expect(changedTicket()).toBe(false)
   })
-  it.each([{ action: 'opened' }, { number: 101 }, { repository: { full_name: 'Other/Repo' } }])('rejects wrong event envelope %j', async (change) => {
+  // #876 — opened and reopened PRs that are ready count like ready_for_review.
+  it.each(['opened', 'reopened'])('moves the branch ticket for a PR %s ready for review', async (action) => {
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, action }))
+    expect((await run()).code).toBe(0)
+    expect(changedTicket()).toBe(true)
+  })
+  it('ignores a PR opened as a draft', async () => {
+    await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, action: 'opened', pull_request: { ...event.pull_request, draft: true } }))
+    expect((await run()).code).toBe(2)
+    expect(changedTicket()).toBe(false)
+  })
+  it.each([{ action: 'edited' }, { action: 'closed' }, { number: 101 }, { repository: { full_name: 'Other/Repo' } }])('rejects wrong event envelope %j', async (change) => {
     await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, ...change }))
     expect((await run()).code).toBe(2)
     expect(changedTicket()).toBe(false)

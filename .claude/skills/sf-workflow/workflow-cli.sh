@@ -1036,7 +1036,7 @@ sync_pr_review() {
   fi
   local pr_number=$1 repo=${GITHUB_REPOSITORY:-} event_path=${GITHUB_EVENT_PATH:-}
   if [[ ! "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ || ! -f "$event_path" ]]; then
-    echo "Error: sync-pr-review requires GITHUB_REPOSITORY and a ready_for_review GITHUB_EVENT_PATH." >&2
+    echo "Error: sync-pr-review requires GITHUB_REPOSITORY and a pull request GITHUB_EVENT_PATH." >&2
     return 2
   fi
   load_config
@@ -1055,7 +1055,8 @@ sync_pr_review() {
     | ($manifest[0].workflow.prTargetBranch // $working_branch) as $target_branch
     | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
     | ($manifest[0].workflow.branchNaming.release // "rc-{version}" | release_pattern) as $release_pattern
-    | select(.action == "ready_for_review" and .number == $n and .repository.full_name == $repo
+    # A PR opened (or reopened) ready for review never emits ready_for_review (#876).
+    | select((.action == "ready_for_review" or .action == "opened" or .action == "reopened") and .number == $n and .repository.full_name == $repo
       and (.repository.default_branch | type) == "string" and (.repository.default_branch | length) > 0)
     | .repository.default_branch as $default_branch
     | .pull_request
@@ -1086,7 +1087,7 @@ sync_pr_review() {
           | if length == 1 then .[0] else error("Invalid non-default delivery ticket association") end)
        else null end)}
   ' "$event_path" 2>/dev/null) || {
-    echo "Error: event is malformed, stale, cross-repository or not ready_for_review; no ticket changed." >&2
+    echo "Error: event is malformed, stale, cross-repository or not a ready pull request; no ticket changed." >&2
     return 2
   }
   live=$(gh pr view "$pr_number" --repo "$repo" --json number,url,title,state,isDraft,headRefName,headRefOid,baseRefName,baseRefOid,headRepository,headRepositoryOwner,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {

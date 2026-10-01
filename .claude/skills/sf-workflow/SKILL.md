@@ -263,9 +263,9 @@ validation belongs to AI Testing instead of every push.
 
 ### GitHub Ready for review button
 
-For GitHub Projects, `.github/workflows/pr-review-sync.yml` listens to `ready_for_review` and calls `workflow-cli.sh sync-pr-review <PR>`. The button is the developer's approval to enter review; the
-job still enforces the workflow guards. The PR must close the ticket named by its configured feature/fix branch convention. Same-repository PRs are supported; fork PRs require the normal manual CLI
-transition.
+For GitHub Projects, `.github/workflows/pr-review-sync.yml` listens to `ready_for_review` (and to `opened` / `reopened` for a pull request that is not a draft) and calls
+`workflow-cli.sh sync-pr-review <PR>`. The button is the developer's approval to enter review; the job still enforces the workflow guards. The PR must close the ticket named by its configured
+feature/fix branch convention. Same-repository PRs are supported; fork PRs require the normal manual CLI transition.
 
 Configure the Actions secret `SF_PROJECTS_TOKEN` with access to the repository and write access to the configured organization Project (a dedicated token with `repo` and `project` scopes, or an
 equivalent appropriately scoped credential). The default `GITHUB_TOKEN` cannot access Projects. Never put credentials in the manifest or PR.
