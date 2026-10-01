@@ -229,8 +229,8 @@ describe('compiled multi-agent coexistence in generated-layout fixtures (#651)',
     })
     expect(JSON.parse(migrated)).toMatchObject({
       from: 0,
-      to: 3,
-      names: ['add-schema-url', 'restructure-email', 'classify-harness-capability']
+      to: 4,
+      names: ['add-schema-url', 'restructure-email', 'classify-harness-capability', 'ticket-scoped-branch-naming']
     })
 
     const preview = runAgents('adopt', 'claude-code', 'codex', '--scope', 'shared', '--json')
@@ -242,7 +242,7 @@ describe('compiled multi-agent coexistence in generated-layout fixtures (#651)',
     expect(await readFile(join(project, 'CLAUDE.md'), 'utf8')).toBe(originalInstructions)
     expect(await readFile(join(project, '.claude/skills/private/SKILL.md'), 'utf8')).toBe('# Private team procedure\n')
     const manifest = JSON.parse(await readFile(join(project, '.saasfoundry.json'), 'utf8'))
-    expect(manifest.manifestVersion).toBe(3)
+    expect(manifest.manifestVersion).toBe(4)
     expect(manifest.modules.email).toEqual({ provider: 'none', version: 1 })
     expect(manifest.modules.emailService).toBeUndefined()
 

@@ -743,6 +743,7 @@ check_pr_merged_guard() {
     echo -e "${RED}✗ Ticket #${ticket} has no verified merged PR into its configured working or release branch — cannot transition to 'Done'.${NC}" >&2
     echo "  Open and merge the ticket PR before marking the ticket Done." >&2
     echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1" >&2
+    report_unusable_delivery_patterns
     return 1
   fi
   if [[ "$merged_pr" == *$'\t'* ]]; then
@@ -850,6 +851,19 @@ check_pr_merged_guard() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# A delivery branch is matched through workflow.branchNaming, and a pattern without
+# exactly one ticket placeholder is discarded. Manifests from before #480 said
+# feature/{name}: every guard then failed with no hint at the cause (#864).
+report_unusable_delivery_patterns() {
+  [[ -f .saasfoundry.json ]] || return 0
+  local usable
+  usable=$(jq -r '[(.workflow.branchNaming.feature // "feature/{N}-{description}"), (.workflow.branchNaming.fix // "fix/{N}-{description}")]
+    | map(select(type == "string" and ([scan("\\{(?:N|ticket|number|issue-number)\\}")] | length) == 1)) | length' .saasfoundry.json 2>/dev/null) || return 0
+  [[ "$usable" == "0" ]] || return 0
+  echo "  No branch can match: workflow.branchNaming.feature and .fix in .saasfoundry.json carry no ticket placeholder ({N})." >&2
+  echo "  Run sf update to apply manifest migration 004, or set them to feature/{N}-{description} and fix/{N}-{description}." >&2
+}
+
 # PR-state guard — Human Testing requires draft; In Review requires ready.
 # Unknown, malformed or ambiguous remote state fails closed. Aggregate Epics
 # are rejected earlier by check_epic_derived_status_guard and never reach this
@@ -913,6 +927,7 @@ check_pr_existence_guard() {
     echo "  Open a draft with workflow-cli.sh create-pr ${ticket} --draft for Human Testing." >&2
     echo "  After approval, use workflow-cli.sh ready-pr ${ticket} before In Review." >&2
     echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1" >&2
+    report_unusable_delivery_patterns
     return 1
   fi
   if [[ "$count" -ne 1 ]] || ! echo "$matches" | jq -e '.[0].isDraft | type == "boolean"' >/dev/null; then

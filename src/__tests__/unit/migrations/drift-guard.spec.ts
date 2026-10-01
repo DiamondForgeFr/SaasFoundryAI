@@ -43,7 +43,8 @@ describe('SaaSFoundryManifest drift-guard', () => {
       keys: extractTopLevelKeys()
     }
     expect(snapshot).toEqual({
-      targetVersion: 3,
+      // 4: branch patterns name the ticket so the workflow guards can match pull requests (#864).
+      targetVersion: 4,
       // mainBranch and language added without a version bump: new OPTIONAL fields with
       // read-site fallbacks — the "no migration needed" case of migration-framework.md.
       // For `language`, an absent block resolves exactly like one pinning "en"
