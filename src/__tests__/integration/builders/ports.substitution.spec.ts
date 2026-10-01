@@ -75,8 +75,8 @@ describe('the generated project carries the ports it was given (#584)', () => {
       const compose = await read(`${apiDir}/docker-compose.yml`)
 
       // env_file puts PORT inside the container: a 3501:3500 mapping would publish a dead port.
-      expect(compose).toContain("'${BACKEND_PORT:-3501}:3501'")
-      expect(compose).toContain('http://localhost:3501/api/health')
+      expect(compose).toContain("'127.0.0.1:${BACKEND_PORT:-3501}:3501'")
+      expect(compose).toContain('http://127.0.0.1:3501/api/health')
       expect(compose).not.toContain('3500')
     })
 
@@ -97,8 +97,8 @@ describe('the generated project carries the ports it was given (#584)', () => {
     it('deploys with it', async () => {
       const deployment = await read(`${apiDir}/.github/workflows/deployment.yml`)
 
-      expect(deployment).toContain('PORT=\\"3501\\"')
-      expect(deployment).toContain("'/ports:/,/3501/d'")
+      expect(deployment).toContain('env_line PORT "3501"')
+      expect(deployment).not.toContain('3500')
     })
   })
 
@@ -180,8 +180,8 @@ describe('the generated project carries the ports it was given (#584)', () => {
       await createMonorepoRoot(monorepoRootParams({ ports: PORTS }))
 
       const deployment = await read('.github/workflows/deployment-api.yml')
-      expect(deployment).toContain('PORT=\\"3501\\"')
-      expect(deployment).toContain("'/ports:/,/3501/d'")
+      expect(deployment).toContain('env_line PORT "3501"')
+      expect(deployment).not.toContain('3500')
     })
   })
 

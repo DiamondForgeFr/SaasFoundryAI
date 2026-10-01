@@ -1,0 +1,36 @@
+# Dependencies: the image installs its own for linux (native rollup/esbuild binaries)
+node_modules
+npm-debug.log
+
+# Build outputs
+dist
+dev-dist
+
+# Version control
+.git
+.gitignore
+
+# Environment: build-time values must not leak from a developer's .env
+.env
+.env.*
+
+# IDE
+.idea
+.vscode
+
+# Logs
+logs
+nginx/logs
+*.log
+
+# Tests
+coverage
+playwright-report
+test-results
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Misc
+.DS_Store

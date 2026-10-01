@@ -7,7 +7,7 @@ import { installStorageModule } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
-import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
+import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, monorepoBuildContext, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
@@ -168,7 +168,9 @@ export async function renderApiApp({
       // container side have to move together — a mapping of `3501:3500` would publish a
       // port nothing listens on, and the healthcheck would call a dead one.
       .replace(/\$\{BACKEND_PORT:-3500\}:3500/, `\${BACKEND_PORT:-${apiPort}}:${apiPort}`)
-      .replace(/http:\/\/localhost:3500\/api\/health/, `http://localhost:${apiPort}/api/health`)
+      .replace(/http:\/\/127\.0\.0\.1:3500\/api\/health/, `http://127.0.0.1:${apiPort}/api/health`)
+    // The monorepo Dockerfile copies the root manifests and packages/: it builds from the root.
+    if (isMonorepo) dockerComposeContent = monorepoBuildContext(dockerComposeContent, 'api')
     await writeFile(dockerComposePath, dockerComposeContent)
   }
 
@@ -185,10 +187,8 @@ export async function renderApiApp({
   if (await fileExists(deploymentYmlPath)) {
     let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
     deploymentYmlContent = applyProjectIdentity(deploymentYmlContent, projectName)
-      // One port identity per project: the deploy writes the same PORT the project uses
-      // everywhere else, and the sed that strips the published port matches it.
-      .replace(/PORT=\\"3500\\"/, `PORT=\\"${apiPort}\\"`)
-      .replace(/'\/ports:\/,\/3500\/d'/, `'/ports:/,/${apiPort}/d'`)
+      // One port identity per project: the deploy writes the same PORT the project uses everywhere else.
+      .replace(/env_line PORT "3500"/, `env_line PORT "${apiPort}"`)
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
 

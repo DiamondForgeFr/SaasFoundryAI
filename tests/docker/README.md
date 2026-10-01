@@ -29,6 +29,14 @@ npm run test:docker:scenario -- update-previous-release --depth smoke
 
 The local runner builds the image once, uses `--init --ipc=host`, mounts diagnostics only, and executes lane entries sequentially.
 
+## Production images
+
+The lifecycle lanes run the generated API and web through `npm run`, never through their Dockerfiles. `npm run test:docker:images` (after `npm run build`) covers the production images instead: it
+generates a monorepo and a multirepo with this checkout's CLI, builds both images of each, runs `npm run db:update` from the API image against PostgreSQL, starts the containers on the project network,
+and checks each image's own `HEALTHCHECK`, the SPA routes, the `/api` proxy, and that the proxy survives an API redeploy on a new address. Pass `monorepo` or `multirepo` to check one topology;
+`SF_KEEP_IMAGES_WORKDIR=1` keeps the generated projects for inspection. The `Production images` workflow runs it on ready pull requests that change a Dockerfile, a compose file, `nginx.conf`, a
+builder or the script itself.
+
 ## Evidence
 
 Every lifecycle writes a versioned timing document under `timings/` with its declared budget, teardown reserve, total duration, status, and named phase durations. Runtime failures may also retain

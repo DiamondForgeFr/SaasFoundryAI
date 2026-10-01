@@ -22,6 +22,11 @@ interface InstallEmailModuleParams {
   mailersendSenderName: string
 }
 
+/** A single-quoted shell word: the deploy script must not expand `$` in a sender name. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
 /**
  * Install the MailerSend email module on an API app.
  *
@@ -110,14 +115,15 @@ export async function installEmailModule({ apiPath, isMonorepo, projectName, mai
     await writeFile(envTestPath, envTestContent)
   }
 
-  // Update deployment.yml with MailerSend env vars (if file exists)
+  // The API's deployment workflow writes the server's .env: give it the MailerSend values.
   const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
   if (await fileExists(deploymentYmlPath)) {
     let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
     deploymentYmlContent = deploymentYmlContent
-      .replace(/# MAILERSEND_API_KEY=.*$/m, `MAILERSEND_API_KEY=\\"\${{ secrets.MAILERSEND_API_KEY }}\\"`)
-      .replace(/# MAILERSEND_SENDER_EMAIL=.*$/m, `MAILERSEND_SENDER_EMAIL=\\"${mailersendSenderEmail}\\"`)
-      .replace(/# MAILERSEND_SENDER_NAME=.*$/m, `MAILERSEND_SENDER_NAME=\\"${mailersendSenderName}\\"`)
+      .replace(/# (MAILERSEND_API_KEY: .*)$/m, '$1')
+      .replace(/# (env_line MAILERSEND_API_KEY .*)$/m, '$1')
+      .replace(/# env_line MAILERSEND_SENDER_EMAIL .*$/m, `env_line MAILERSEND_SENDER_EMAIL ${shellQuote(mailersendSenderEmail)}`)
+      .replace(/# env_line MAILERSEND_SENDER_NAME .*$/m, `env_line MAILERSEND_SENDER_NAME ${shellQuote(mailersendSenderName)}`)
     await writeFile(deploymentYmlPath, deploymentYmlContent)
   }
 

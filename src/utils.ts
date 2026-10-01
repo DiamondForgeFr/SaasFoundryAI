@@ -205,6 +205,17 @@ export function applyProjectIdentity(content: string, projectName: string): stri
 }
 
 /**
+ * Point an app's `docker-compose.yml` build at the monorepo root.
+ *
+ * The blueprint builds from the app's own directory, which is right for a multirepo app.
+ * A monorepo Dockerfile copies the root manifests and `packages/`, so building it from
+ * `apps/<app>` failed on the first `COPY` (#861).
+ */
+export function monorepoBuildContext(content: string, app: 'api' | 'web'): string {
+  return content.replace(/^(\s+)context: \.\/\n(\s+)dockerfile: Dockerfile$/m, `$1context: ../..\n$2dockerfile: apps/${app}/Dockerfile`)
+}
+
+/**
  * Apply regex replacements to a file, skipping it when it does not exist.
  *
  * Overlay-driven scaffolds do not materialise every file on every topology, and a

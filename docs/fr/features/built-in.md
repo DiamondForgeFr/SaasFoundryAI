@@ -220,8 +220,12 @@ RUN npm run build
 
 FROM nginx:alpine AS runner
 COPY --from=builder /app/dist /usr/share/nginx/html
-HEALTHCHECK CMD wget --quiet --tries=1 --spider http://localhost:80/ || exit 1
+EXPOSE 8080
+HEALTHCHECK CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/ || exit 1
 ```
+
+L'image API embarque aussi son schéma Prisma, le SQL de `prisma/sql` et `npm run db:update`, qui met une base à jour sans jamais la réinitialiser. Les workflows de déploiement générés publient les
+deux images sur le GitHub Container Registry puis, une fois les variables de dépôt `DEPLOY_*` renseignées, les déploient par SSH sur n'importe quel hôte équipé de Docker Compose.
 
 Le CLI valide le manifeste généré avant les opérations de cycle de vie. Des migrations numérotées du manifeste et des migrations de modules ordonnées mettent à jour la configuration possédée sans
 écraser silencieusement le code de l'utilisateur.

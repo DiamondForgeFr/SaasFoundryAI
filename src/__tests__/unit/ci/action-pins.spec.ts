@@ -4,7 +4,14 @@ import { resolve } from 'path'
 const ROOT = resolve(__dirname, '../../../..')
 
 /** Workflow templates the CLI deposits into generated projects. */
-const GENERATED_WORKFLOWS = ['scaffolds/skills-templates/workflow/github/pr-review-sync.yml', 'scaffolds/shared/validation/test.workflow.yml']
+const GENERATED_WORKFLOWS = [
+  'scaffolds/skills-templates/workflow/github/pr-review-sync.yml',
+  'scaffolds/shared/validation/test.workflow.yml',
+  'scaffolds/blueprints/api/.github/workflows/deployment.yml',
+  'scaffolds/blueprints/web/.github/workflows/deployment.yml',
+  'scaffolds/overlays/monorepo/root/.github/workflows/deployment-api.yml',
+  'scaffolds/overlays/monorepo/root/.github/workflows/deployment-web.yml'
+]
 
 /**
  * First major of each action that runs on Node.js 24, read from its `action.yml`
