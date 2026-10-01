@@ -117,7 +117,7 @@
     ".agents/skills/sf-srs/templates/tickets/examples/story.md": "b061472b1540b1342f3424b777a0ddb5849ce1e62d2544627645a07e2f7a301f",
     ".agents/skills/sf-srs/templates/tickets/examples/task.md": "d3e00d8872d580137055917cce2729d1100a36e5cc9e655b0612333ea84c6364",
     ".agents/skills/sf-srs/templates/tickets/README.md": "86a02da6116ff743c16415bfe0288abf46cd67a7b3424571a245a693768f873f",
-    ".agents/skills/sf-tool-github-projects/github-projects-cli.sh": "ce08038e47301a3a32b7cecddc5d6ca1eec32d81b013bb1896f93fa69ba22eaa",
+    ".agents/skills/sf-tool-github-projects/github-projects-cli.sh": "ae9694d01b3a5ed180d31761a965cec8279b2ca1ca89afc13c001d4d243b78be",
     ".agents/skills/sf-tool-github-projects/SKILL.md": "6c2b0cf04f83ae93b73137df14ae95a64b2f0a3824665f999d7e50d0c2a86835",
     ".agents/skills/sf-workflow/complexity/bug.yml": "9a45279f1c34c556f57a771fa7f954ad85299e1779aa6babcd7a35e060e4cb0a",
     ".agents/skills/sf-workflow/complexity/complex.yml": "3490204c27f807cf289b63b275544d4b7fa53b493e93f14e5fd7c941445159e4",
@@ -139,6 +139,6 @@
     ".agents/skills/sf-workflow/statuses/5-human-testing.md": "3b99530974d8fa72f4578c31f037565e4e9be882f0471cc14854e67162c5e42a",
     ".agents/skills/sf-workflow/statuses/6-in-review.md": "45ef602930b687818f4b32f1ed1544bf152a7115ad0d87c8ee7a27c5c83a1ec5",
     ".agents/skills/sf-workflow/statuses/7-done.md": "998216a270f6c80bb530c5c3d58e41bad05680b174c2477da36afdb11ce5e3fc",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "84f128f4befee7a93a8839b9a249451804b68660de8949b914712bcf6fd80e07"
+    ".agents/skills/sf-workflow/workflow-cli.sh": "b88ee373282cb65b9e360b6d39995f97fb644d8e1219732cdf4a4408944b9dad"
   }
 }

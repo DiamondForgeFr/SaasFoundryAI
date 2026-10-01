@@ -203,6 +203,40 @@ function checkOrmClient(report: StatusReport): Precondition {
   }
 }
 
+/**
+ * Which repository a bare `gh` call targets. Without a recorded default, gh prefers a
+ * remote named `upstream`, then `github`, then `origin` — so adding the conventional
+ * `upstream` of a fork silently retargets every ticket and PR command (#840). The
+ * workflow scripts pass GH_REPO from `origin`; this tells the developer about the rest.
+ */
+function checkGhRepository(report: StatusReport): Precondition | undefined {
+  const remotes = report.git.remotes ?? {}
+  const origin = remotes.origin
+  if (!report.git.available || !origin) return undefined
+  const ghRemote = report.git.ghDefaultRemote ?? ['upstream', 'github', 'origin'].find((name) => remotes[name])
+  const ghRepo = ghRemote ? remotes[ghRemote] : undefined
+  const description = 'GitHub CLI targets origin'
+  if (!ghRepo || ghRepo === origin) return { name: 'ghRepository', description, status: 'ok', details: origin }
+  return {
+    name: 'ghRepository',
+    description,
+    status: 'warn',
+    details: `gh resolves the ${ghRemote} remote (${ghRepo}), not origin (${origin}). The workflow scripts target origin; a bare gh call does not.`,
+    remediation: `gh repo set-default ${origin}`
+  }
+}
+
 export function evaluatePreconditions(report: StatusReport): Precondition[] {
-  return [checkManifest(report), checkWorkflow(report), checkSrs(report), checkGit(report), checkGh(report), checkDependencies(report), checkDatabase(report), checkOrmClient(report)]
+  const ghRepository = checkGhRepository(report)
+  return [
+    checkManifest(report),
+    checkWorkflow(report),
+    checkSrs(report),
+    checkGit(report),
+    ...(ghRepository ? [ghRepository] : []),
+    checkGh(report),
+    checkDependencies(report),
+    checkDatabase(report),
+    checkOrmClient(report)
+  ]
 }
