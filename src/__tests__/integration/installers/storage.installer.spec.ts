@@ -139,7 +139,10 @@ describe('installStorageModule (integration)', () => {
       'src/modules/organizations/organizations.module.ts',
       'src/modules/organizations/controllers/organization.controller.ts',
       'src/modules/organizations/services/organization.service.ts',
-      'src/modules/organizations/tests/unit/organization.service.spec.ts'
+      'src/modules/organizations/tests/unit/organization.service.spec.ts',
+      // Re-serialized, the tsconfig spread `types` over several lines (#867)
+      'tsconfig.json',
+      'package.json'
     ]
     // The CLI, not the API: prettier 3 loads its plugins through dynamic imports Jest cannot run.
     // From apiPath it resolves the `.prettierrc` the generated API ships with.

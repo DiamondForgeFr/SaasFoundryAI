@@ -91,12 +91,23 @@ export async function installStorageModule({ apiPath, webPath, isMonorepo, proje
   // Register multer in tsconfig types so @types/multer is picked up under explicit types[]
   // Defensive: create compilerOptions/types if absent so manual edits to tsconfig don't silently skip the registration.
   const tsconfigPath = `${apiPath}/tsconfig.json`
-  const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf8'))
+  const tsconfigSource = await readFile(tsconfigPath, 'utf8')
+  const tsconfig = JSON.parse(tsconfigSource)
   tsconfig.compilerOptions ??= {}
   tsconfig.compilerOptions.types ??= ['node', 'jest']
   if (!tsconfig.compilerOptions.types.includes('multer')) {
-    tsconfig.compilerOptions.types.push('multer')
-    await writeFile(tsconfigPath, JSON.stringify(tsconfig, null, 2) + '\n')
+    // Edited in place: re-serializing spread every array over several lines, which the
+    // project's prettier collapses back, so `npm run format:check` failed (#867).
+    const inline = /("types":\s*\[)([^\]\n]*)(\])/
+    if (inline.test(tsconfigSource)) {
+      await writeFile(
+        tsconfigPath,
+        tsconfigSource.replace(inline, (_match, open: string, items: string, close: string) => `${open}${items.trim() ? `${items.trim()}, ` : ''}"multer"${close}`)
+      )
+    } else {
+      tsconfig.compilerOptions.types.push('multer')
+      await writeFile(tsconfigPath, JSON.stringify(tsconfig, null, 2) + '\n')
+    }
   }
 
   // Run npm install (unless monorepo handles it or explicitly skipped)
