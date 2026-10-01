@@ -14,6 +14,10 @@ export interface GitInfo {
   ahead?: number
   behind?: number
   upstream?: string
+  /** `owner/repo` of each GitHub-hosted remote, by remote name. */
+  remotes?: Record<string, string>
+  /** The remote `gh repo set-default` recorded, when one was. */
+  ghDefaultRemote?: string
 }
 
 export interface ToolAvailability {
@@ -151,7 +155,28 @@ function collectGit(projectRoot: string): GitInfo {
     }
   }
 
-  return { available: true, branch, isClean, ahead, behind, upstream }
+  const { remotes, ghDefaultRemote } = collectRemotes(projectRoot)
+  return { available: true, branch, isClean, ahead, behind, upstream, remotes, ghDefaultRemote }
+}
+
+/** `owner/repo` of a GitHub remote URL (https, scp-style or ssh), or undefined. */
+export function githubRepoOf(url: string): string | undefined {
+  const match = /^(?:git@|ssh:\/\/(?:[^@/]+@)?|https?:\/\/(?:[^@/]+@)?)[^:/]+[:/]([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(url.trim())
+  return match ? `${match[1]}/${match[2]}` : undefined
+}
+
+function collectRemotes(projectRoot: string): { remotes?: Record<string, string>; ghDefaultRemote?: string } {
+  const urls = runSafe("git config --get-regexp '^remote\\..*\\.url$'", projectRoot)
+  if (!urls) return {}
+  const remotes: Record<string, string> = {}
+  for (const line of urls.split('\n')) {
+    const match = /^remote\.(.+)\.url\s+(.+)$/.exec(line.trim())
+    const repo = match ? githubRepoOf(match[2]) : undefined
+    if (match && repo) remotes[match[1]] = repo
+  }
+  const resolved = runSafe("git config --get-regexp '^remote\\..*\\.gh-resolved$'", projectRoot)
+  const ghDefaultRemote = resolved ? /^remote\.(.+)\.gh-resolved\s/.exec(resolved.split('\n')[0].trim())?.[1] : undefined
+  return { remotes, ghDefaultRemote }
 }
 
 function listSkillsIn(skillsDir: string): string[] {
