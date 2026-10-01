@@ -85,6 +85,7 @@
     "test:docker:full": "bash tests/docker/run-docker-tests.sh --lane full",
     "test:docker:scenario": "bash tests/docker/run-docker-tests.sh --scenario",
     "test:docker:list": "bash tests/docker/run-docker-tests.sh --list",
+    "test:docker:images": "bash tests/docker/production-images.sh",
     "publish:check": "npm dist-tag ls saasfoundryai-cli",
     "package:check": "node scripts/check-package-contents.js",
     "docs:dev": "vitepress dev docs",

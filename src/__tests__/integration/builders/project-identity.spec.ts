@@ -68,7 +68,7 @@ describe('no scaffold-owned name survives generation (#606)', () => {
     const nginx = await readFile(join(tempDir, 'apps/test-project-web/nginx.conf'), 'utf8')
     const apiCompose = await readFile(join(tempDir, 'apps/test-project-api/docker-compose.yml'), 'utf8')
 
-    expect(nginx).toContain('proxy_pass http://test-project-api:')
+    expect(nginx).toContain('set $api_upstream http://test-project-api:')
     expect(apiCompose).toContain('container_name: test-project-api')
     expect(nginx).not.toContain('saasfoundry')
   })

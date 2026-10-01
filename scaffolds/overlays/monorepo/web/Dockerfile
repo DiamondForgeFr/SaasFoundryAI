@@ -1,44 +1,35 @@
-#########################
-# Stage 1: Dependencies #
-#########################
-FROM node:24.19.0-alpine AS deps
-WORKDIR /app
-
-# Copy root package files for workspace resolution
-COPY package.json ./
-COPY package-lock.json ./
-
-# Copy workspace package.json files
-COPY apps/api/package.json ./apps/api/
-COPY apps/web/package.json ./apps/web/
-
-# Install all dependencies (workspaces)
-RUN npm ci
-
-
 ####################
-# Stage 2: Builder #
+# Stage 1: Builder #
 ####################
 FROM node:24.19.0-alpine AS builder
 WORKDIR /app
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+# No git repository in the build context: skip the husky hooks and turbo telemetry
+ENV HUSKY=0
+ENV TURBO_TELEMETRY_DISABLED=1
 
-# Copy root package files
+# Copy root package files for workspace resolution, and the turbo pipeline
 COPY package.json ./
 COPY package-lock.json ./
+COPY turbo.json ./
+
+# Copy workspace package.json files, and the shared packages the web app is built from
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages ./packages
+
+# Install all dependencies (workspaces)
+RUN npm ci
 
 # Copy web source
 COPY apps/web/ ./apps/web/
 
-# Build web application
-RUN npm run build -w apps/web
+# Build the web application and the shared packages it imports
+RUN npx turbo run build --filter=./apps/web...
 
 
 ###################
-# Stage 3: Runner #
+# Stage 2: Runner #
 ###################
 FROM nginx:alpine AS runner
 WORKDIR /usr/share/nginx/html
@@ -65,12 +56,12 @@ RUN chown -R ci-deploy:nginx /usr/share/nginx/html && \
     touch /var/run/nginx.pid && \
     chown ci-deploy:nginx /var/run/nginx.pid
 
-# Expose port
-EXPOSE 80
+# Expose port (nginx listens on 8080: the server runs unprivileged)
+EXPOSE 8080
 
-# Health check
+# Health check (127.0.0.1: alpine resolves localhost to ::1 first)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
-  CMD wget --quiet --tries=1 --spider http://localhost:80/ || exit 1
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/ || exit 1
 
 # Use non-root user for better security
 USER ci-deploy

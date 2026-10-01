@@ -207,17 +207,23 @@ Production Docker images use multi-stage builds:
 # Stage 1: Build
 FROM node:24.19.0-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN npx prisma generate && npm run build
 
 # Stage 2: Production
-FROM node:24.19.0-alpine
+FROM node:24.19.0-alpine AS runner
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
+COPY prisma.config.ts ./
+COPY prisma ./prisma
+COPY scripts ./scripts
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-CMD ["node", "dist/main.js"]
+USER ci-deploy
+HEALTHCHECK CMD wget --quiet --tries=1 --spider http://127.0.0.1:$PORT/api/health || exit 1
+CMD ["node", "dist/src/main.js"]
 ```
 
 ## Configuration

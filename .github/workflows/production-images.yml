@@ -1,0 +1,51 @@
+name: Production images
+
+# Builds and runs the production images of freshly generated projects (#861). Nothing else
+# executes the generated Dockerfiles, compose files and nginx configuration, so this runs
+# whenever a pull request changes one of them.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'scaffolds/**/Dockerfile'
+      - 'scaffolds/**/.dockerignore'
+      - 'scaffolds/**/docker-compose*.yml'
+      - 'scaffolds/**/nginx.conf'
+      - 'scaffolds/blueprints/api/scripts/update-db*.sh'
+      - 'scaffolds/blueprints/api/prisma.config.ts'
+      - 'scaffolds/overlays/*/api/package.json'
+      - 'scaffolds/overlays/*/web/package.json'
+      - 'scaffolds/overlays/monorepo/root/package.json'
+      - 'scaffolds/overlays/monorepo/root/turbo.json'
+      - 'src/builders/**'
+      - 'tests/docker/production-images.sh'
+      - '.github/workflows/production-images.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  images:
+    name: Generated production images
+    # Draft pull requests defer heavy validation, like the Tests workflow
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # The Node the generated projects declare: their npm >= 11 requirement refuses Node 22
+          node-version-file: scaffolds/overlays/monorepo/root/.nvmrc
+          cache: npm
+      - run: npm ci --no-warnings
+      - run: npm run build
+      - name: Build and run the generated images
+        run: npm run test:docker:images

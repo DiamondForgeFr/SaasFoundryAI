@@ -19,7 +19,7 @@ jobs:
     name: Check if tests passed
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.ref }}
@@ -63,7 +63,7 @@ jobs:
     outputs:
       version: ${{ steps.package-version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -141,7 +141,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Always get package version directly from package.json to ensure consistency
       - name: Get package version directly
@@ -152,10 +152,10 @@ jobs:
           echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -163,7 +163,7 @@ jobs:
 
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -179,7 +179,7 @@ jobs:
           docker images ghcr.io/${{ github.repository }} --format "{{.ID}} {{.Repository}}:{{.Tag}}"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true
@@ -193,183 +193,103 @@ jobs:
           echo "Images and their tags after push:"
           docker images ghcr.io/${{ github.repository }} --format "{{.ID}} {{.Tag}}"
 
-  deploy-to-nas:
-    name: Deploy to NAS
+  deploy:
+    name: Deploy to the Docker host
     needs: [docker-push]
+    # Skipped until the DEPLOY_HOST repository variable is set. Repository variables:
+    # DEPLOY_HOST, DEPLOY_USER, DEPLOY_PORT (default 22), DEPLOY_WEB_PATH, DEPLOY_KNOWN_HOSTS
+    # (`ssh-keyscan -p <port> <host>`), DEPLOY_WEB_PORT (default 3000). Secret: DEPLOY_SSH_KEY.
+    if: vars.DEPLOY_HOST != ''
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_WEB_PATH }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      # Always get package version directly from package.json to ensure consistency
-      - name: Get package version directly
+      - name: Get package version
         id: package-version
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          echo "Version from package.json: $PKG_VERSION"
-          echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Setup SSH key
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.CI_DEPLOY_NAS_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          echo -e "Host cinas-ext\n  HostName ${{ secrets.NAS_HOST }}\n  Port ${{ secrets.NAS_PORT }}\n  User ${{ secrets.NAS_USER }}\n  IdentityFile ~/.ssh/id_rsa\n  StrictHostKeyChecking no" >> ~/.ssh/config
-
-      - name: Setup NAS directories
-        run: |
-          # Create base directory with proper permissions
-          ssh cinas-ext "mkdir -p ${{ secrets.NAS_FRONTEND_PATH }} && chmod 755 ${{ secrets.NAS_FRONTEND_PATH }}"
-
-          # Create subdirectories with proper permissions
-          ssh cinas-ext "mkdir -p ${{ secrets.NAS_FRONTEND_PATH }}/{logs,nginx} && chmod 755 ${{ secrets.NAS_FRONTEND_PATH }}/{logs,nginx}"
-
-      - name: Check Docker version on NAS
-        run: |
-          DOCKER_VERSION=$(ssh cinas-ext '/usr/local/bin/docker --version')
-          echo "Docker version on NAS: $DOCKER_VERSION"
-          if ! ssh cinas-ext '/usr/local/bin/docker info >/dev/null 2>&1'; then
-            echo "Docker daemon is not running on NAS"
-            exit 1
-          fi
-
-      - name: Deploy frontend container
-        run: |
-          # Function to check SSH command status
-          check_ssh_status() {
-            if [ $? -ne 0 ]; then
-              echo "Error executing SSH command: $1"
-              echo "Last command failed: $2"
+          set -euo pipefail
+          for name in DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not configured: see the deploy job's header in this workflow"
               exit 1
             fi
-          }
-
-          # Set version variables once at the beginning
-          REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          # Always use package.json version directly to ensure consistency
-          VERSION="${{ steps.package-version.outputs.version }}"
-          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "Using repository: ${REPO}, version: ${VERSION}, SHA: ${SHA_SHORT}"
-
-          # Fail if version is empty (critical error)
-          if [ -z "$VERSION" ]; then
-            echo "ERROR: Version is empty! This is a critical error."
-            echo "Package.json might be invalid or not accessible."
-            exit 1
-          fi
-
-          # Debug package.json content
-          echo "Package.json content:"
-          cat package.json | grep version
-
-          # Update local docker-compose.yml to use version tag
-          echo "Updating local docker-compose.yml..."
-          sed -i.bak "s|image:.*|image: ghcr.io/${REPO}:${VERSION}|" docker-compose.yml
-          echo "Updated docker-compose.yml content:"
-          cat docker-compose.yml
-
-          # Create network if it doesn't exist
-          echo "Creating network if it doesn't exist..."
-          ssh cinas-ext "/usr/local/bin/docker network inspect saasfoundry-network >/dev/null 2>&1 || /usr/local/bin/docker network create saasfoundry-network"
-          check_ssh_status "Network creation" "docker network inspect/create"
-
-          # Backup current docker-compose.yml if it exists
-          echo "Backing up docker-compose.yml..."
-          ssh cinas-ext "if [ -f ${{ secrets.NAS_FRONTEND_PATH }}/docker-compose.yml ]; then cp ${{ secrets.NAS_FRONTEND_PATH }}/docker-compose.yml ${{ secrets.NAS_FRONTEND_PATH }}/docker-compose.yml.backup; fi"
-          check_ssh_status "Backup creation" "cp docker-compose.yml"
-
-          # Copy docker-compose.yml
-          echo "Copying docker-compose.yml to NAS..."
-          cat docker-compose.yml | ssh cinas-ext "cat > ${{ secrets.NAS_FRONTEND_PATH }}/docker-compose.yml"
-          check_ssh_status "File copy" "cat docker-compose.yml"
-
-          # Verify docker-compose.yml content on NAS
-          echo "Verifying docker-compose.yml content on NAS..."
-          ssh cinas-ext "cat ${{ secrets.NAS_FRONTEND_PATH }}/docker-compose.yml"
-          check_ssh_status "File verification" "cat docker-compose.yml"
-
-          # Copy nginx configuration
-          echo "Copying nginx configuration..."
-          cat nginx.conf | ssh cinas-ext "cat > ${{ secrets.NAS_FRONTEND_PATH }}/nginx/default.conf"
-          check_ssh_status "Nginx config copy" "cat nginx.conf"
-
-          # Verify nginx configuration exists on NAS
-          echo "Verifying nginx configuration..."
-          ssh cinas-ext "test -f ${{ secrets.NAS_FRONTEND_PATH }}/nginx/default.conf"
-          check_ssh_status "Nginx config verification" "test -f nginx/default.conf"
-
-          # Create .env file from secrets
-          echo "Creating .env file..."
-          ssh cinas-ext "echo 'VITE_BASE_API_URL=${{ secrets.FRONTEND_API_URL }}' > ${{ secrets.NAS_FRONTEND_PATH }}/.env && \
-          echo 'FRONTEND_PORT=3000' >> ${{ secrets.NAS_FRONTEND_PATH }}/.env"
-          check_ssh_status "Env file creation" "echo > .env"
-
-          # Check if deployment is possible
-          echo "Checking if deployment is possible..."
-          if ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && /usr/local/bin/docker-compose ps | grep -q 'saasfoundry-web'"; then
-            echo "Frontend is already running. Proceeding with deployment..."
-          else
-            echo "No frontend is currently running. Proceeding with fresh deployment..."
-          fi
-
-          # Set up environment variables
-          echo "Setting up environment variables on NAS..."
-          ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && export REPO=\"${REPO}\" && export VERSION=\"${VERSION}\""
-          check_ssh_status "Environment setup" "Setting environment variables"
-
-          # Stop the current container
-          echo "Stopping current container..."
-          ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && /usr/local/bin/docker-compose down"
-          check_ssh_status "Container shutdown" "docker-compose down"
-
-          # Check docker-compose.yml for validity
-          echo "Checking docker-compose.yml for validity..."
-          ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && cat docker-compose.yml && /usr/local/bin/docker-compose config"
-          check_ssh_status "Docker compose validation" "docker-compose config"
-
-          # Before starting container, ensure we have the latest image version
-          echo "Ensuring we have the latest image version..."
-          ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && /usr/local/bin/docker pull ghcr.io/${REPO}:${VERSION}"
-          check_ssh_status "Image pull" "docker pull"
-
-          # Start the new container
-          echo "Starting new container..."
-          ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && /usr/local/bin/docker-compose up -d"
-          check_ssh_status "Container startup" "docker-compose up -d"
-
-          # Clean up containers and unused images
-          echo "Cleaning up unused containers and images..."
-          ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && \
-            echo 'Pruning unused containers...' && \
-            /usr/local/bin/docker container prune -f && \
-            echo 'Cleaning up images from repository ${REPO} except the current version ${VERSION}...' && \
-            CURRENT_IMAGE_ID=\$(/usr/local/bin/docker images ghcr.io/${REPO}:${VERSION} -q) && \
-            if [ ! -z \"\$CURRENT_IMAGE_ID\" ]; then \
-              echo \"Keeping current image ID: \$CURRENT_IMAGE_ID\" && \
-              ALL_REPO_IMAGES=\$(/usr/local/bin/docker images ghcr.io/${REPO} -q) && \
-              for IMG_ID in \$ALL_REPO_IMAGES; do \
-                if [ \"\$IMG_ID\" != \"\$CURRENT_IMAGE_ID\" ]; then \
-                  echo \"Removing old image: \$IMG_ID\" && \
-                  /usr/local/bin/docker rmi -f \$IMG_ID || true; \
-                fi; \
-              done && \
-              echo 'Pruning any remaining dangling images...' && \
-              /usr/local/bin/docker image prune -f; \
-            else \
-              echo \"Warning: Current image ID not found. Skipping cleanup.\"; \
-            fi"
-          check_ssh_status "Image cleanup" "docker image cleanup"
-
-          # Wait for container to be healthy
-          echo "Waiting for container to be healthy..."
-          for i in {1..30}; do
-            if ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && /usr/local/bin/docker-compose ps | grep -q 'frontend.*Up'"; then
-              echo "Container is healthy!"
-              break
-            fi
-            if [ $i -eq 30 ]; then
-              echo "Container failed to become healthy within 30 seconds"
-              ssh cinas-ext "cd ${{ secrets.NAS_FRONTEND_PATH }} && /usr/local/bin/docker-compose logs frontend"
-              exit 1
-            fi
-            sleep 1
           done
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # The host key is pinned: an unknown or changed key aborts the deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host deploy-target
+            HostName $DEPLOY_HOST
+            Port $DEPLOY_PORT
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Upload the compose file and the nginx configuration
+        run: |
+          set -euo pipefail
+          ssh deploy-target "mkdir -p '$DEPLOY_PATH'"
+          scp -q docker-compose.yml "deploy-target:$DEPLOY_PATH/docker-compose.yml"
+          scp -q nginx.conf "deploy-target:$DEPLOY_PATH/nginx.conf"
+
+      - name: Deploy the new image
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository }}
+          VERSION: ${{ steps.package-version.outputs.version }}
+          WEB_PORT: ${{ vars.DEPLOY_WEB_PORT || '3000' }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          IMAGE="$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]'):$VERSION"
+          echo "Deploying $IMAGE to $DEPLOY_HOST:$DEPLOY_PATH"
+          # The job token is only valid while this job runs; the host logs out right after
+          printf '%s' "$GHCR_TOKEN" | ssh deploy-target "docker login ghcr.io -u '$GHCR_USER' --password-stdin" >/dev/null
+          ssh deploy-target sh -s -- "$DEPLOY_PATH" "$IMAGE" "$WEB_PORT" <<'REMOTE'
+          set -eu
+          cd "$1"
+          export WEB_IMAGE="$2" FRONTEND_PORT="$3"
+          docker network inspect saasfoundry-network >/dev/null 2>&1 || docker network create saasfoundry-network >/dev/null
+          docker compose pull frontend
+          docker compose up -d --no-build frontend
+          for attempt in $(seq 1 24); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' saasfoundry-web)
+            if [ "$status" = healthy ]; then
+              echo "saasfoundry-web is healthy"
+              docker image prune -f >/dev/null
+              exit 0
+            fi
+            [ "$status" = unhealthy ] && break
+            sleep 5
+          done
+          docker compose logs --tail 100 frontend
+          echo "saasfoundry-web did not become healthy" >&2
+          exit 1
+          REMOTE
+
+      - name: Log the host out of the registry
+        if: always()
+        run: ssh deploy-target "docker logout ghcr.io" >/dev/null 2>&1 || true
