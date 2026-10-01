@@ -104,7 +104,8 @@ The merge is conservative by design:
 - **Your edits are never overwritten silently.** If the hash of a file no longer matches `base`, it is treated as "user-modified" and will never be auto-updated.
 - **New files never clobber your files.** An `add` action only fires when the file is absent in your project. A same-name user file is reported as a conflict and follows the selected conflict
   strategy.
-- **Removed files are flagged, never deleted.** Even if the new CLI no longer generates a file you also didn't touch, `sf update` will only warn you; removal is your call.
+- **Removed files are flagged, never deleted.** Even if the new CLI no longer generates a file you also didn't touch, `sf update` will only warn you; removal is your call. The file then stops being
+  tracked: it is yours, and later updates leave it alone.
 
 ## Conflict strategies
 
@@ -296,7 +297,7 @@ Workarounds:
 
 ### The new CLI removed a file I didn't touch
 
-`sf update` flags it but never deletes. Delete it manually:
+`sf update` lists it as no longer generated, keeps it, and stops tracking it. Delete it manually if you do not use it:
 
 ```bash
 git rm path/to/removed-file.ts

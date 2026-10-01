@@ -1271,6 +1271,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         const spinner = ora('Regenerating project templates...').start()
         let tempDir: string | undefined
         let templateRefreshComplete = false
+        // Template files the new CLI no longer generates. Flagged, kept, and untracked — never
+        // deleted: a regeneration defect would otherwise turn into lost files (#857, #874, #865).
+        let obsolete: FileUpdate[] = []
 
         try {
           // Regenerate project in temp dir with current CLI
@@ -1302,14 +1305,14 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             const updateCount = updates.filter((u) => u.action === 'update').length
             const addCount = updates.filter((u) => u.action === 'add').length
             const conflictCount = updates.filter((u) => u.action === 'conflict').length
-            const removeCount = updates.filter((u) => u.action === 'remove').length
+            obsolete = updates.filter((u) => u.action === 'remove')
 
             spinner.stop()
             console.log(chalk.blue(`  ${updates.length} template change(s) detected:`))
             if (updateCount) console.log(chalk.green(`    ${updateCount} file(s) to auto-update`))
             if (addCount) console.log(chalk.green(`    ${addCount} new file(s) to add`))
             if (conflictCount) console.log(chalk.yellow(`    ${conflictCount} conflict(s) — strategy: ${conflictStrategy}`))
-            if (removeCount) console.log(chalk.yellow(`    ${removeCount} file(s) removed in new CLI`))
+            if (obsolete.length) console.log(chalk.yellow(`    ${obsolete.length} obsolete template file(s) — kept, no longer managed`))
             console.log()
 
             if (dryRunReport) {
@@ -1318,7 +1321,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
                 update: updates.filter((u) => u.action === 'update').map((u) => u.path),
                 add: updates.filter((u) => u.action === 'add').map((u) => u.path),
                 conflict: updates.filter((u) => u.action === 'conflict').map((u) => u.path),
-                remove: updates.filter((u) => u.action === 'remove').map((u) => u.path)
+                // Flagged only: obsolete files are kept and untracked, never deleted.
+                remove: obsolete.map((u) => u.path)
               }
             }
 
@@ -1336,7 +1340,13 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               // In dry-run we report but never mutate.
             } else {
               spinner.start('Applying updates...')
-              const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy, assertStackModuleWritePathSafe)
+              const { applied, conflicts, added } = await applyFileUpdates(
+                updates.filter((u) => u.action !== 'remove'),
+                tempProjectDir,
+                spinner,
+                conflictStrategy,
+                assertStackModuleWritePathSafe
+              )
               templateRefreshComplete = conflicts.length === 0 || conflictStrategy === 'replace'
 
               spinner.succeed(chalk.green('Template update complete.'))
@@ -1352,9 +1362,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
                 for (const f of added) console.log(chalk.green(`    + ${f.path}`))
               }
 
-              if (removed.length > 0) {
-                console.log(chalk.green(`\n  ${removed.length} unchanged obsolete template file(s) removed:`))
-                for (const f of removed) console.log(chalk.green(`    - ${f.path}`))
+              if (obsolete.length > 0) {
+                console.log(chalk.yellow(`\n  ${obsolete.length} template file(s) SaaSFoundryAI no longer generates — kept, and now yours:`))
+                for (const f of obsolete) console.log(chalk.yellow(`    ~ ${f.path}`))
+                console.log(chalk.gray('    Delete the ones you do not use (git rm <path>); sf update will not track them again.'))
               }
 
               if (conflicts.length > 0) {
@@ -1379,6 +1390,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             manifest.version = cliVersion
             if (manifest.adoption?.refreshPending) manifest.adoption.refreshPending = false
             manifest.fileHashes = await refreshProjectHashes(manifest)
+            for (const { path } of obsolete) delete manifest.fileHashes[path]
             await persistManifest()
           }
         } catch (error) {
