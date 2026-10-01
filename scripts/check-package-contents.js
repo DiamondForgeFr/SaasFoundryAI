@@ -32,6 +32,16 @@ const required = ['bin/sf.js', 'dist/index.js', 'docs-dist/index.html']
 const missing = required.filter((file) => !files.has(file))
 const compiledTests = [...files].filter((file) => file.startsWith('dist/__tests__/'))
 const scaffoldCount = [...files].filter((file) => file.startsWith('scaffolds/')).length
+// npm silently drops some names when it packs (every `.gitignore`, among others), and the
+// 1.0.0 package shipped without its three `.gitignore` templates (#875). Every tracked
+// scaffold file must reach the package, whatever rule dropped it.
+const tracked = spawnSync('git', ['ls-files', '-z', 'scaffolds'], { encoding: 'utf8' })
+if (tracked.status !== 0) {
+  process.stderr.write(tracked.stderr)
+  console.error('Could not list the tracked scaffold files.')
+  process.exit(1)
+}
+const unpublishedScaffolds = tracked.stdout.split('\0').filter((file) => file && !files.has(file))
 const forbiddenFixtureArtifacts = [...files].filter(
   (file) =>
     file.startsWith('tests/') ||
@@ -51,8 +61,9 @@ const packageBudgets = {
 const invalidReportFields = Object.keys(packageBudgets).filter((field) => !Number.isSafeInteger(packageReport?.[field]) || packageReport[field] < 0)
 const exceededBudgets = Object.entries(packageBudgets).filter(([field, maximum]) => Number.isSafeInteger(packageReport?.[field]) && packageReport[field] > maximum)
 
-if (missing.length || compiledTests.length || forbiddenFixtureArtifacts.length || scaffoldCount === 0 || invalidReportFields.length || exceededBudgets.length) {
+if (missing.length || unpublishedScaffolds.length || compiledTests.length || forbiddenFixtureArtifacts.length || scaffoldCount === 0 || invalidReportFields.length || exceededBudgets.length) {
   if (missing.length) console.error(`Missing required package files: ${missing.join(', ')}`)
+  if (unpublishedScaffolds.length) console.error(`Tracked scaffold files npm would not publish: ${unpublishedScaffolds.join(', ')}`)
   if (compiledTests.length) console.error(`Compiled tests leaked into the package: ${compiledTests.length}`)
   if (forbiddenFixtureArtifacts.length) console.error(`Test fixture or archive files leaked into the package: ${forbiddenFixtureArtifacts.join(', ')}`)
   if (scaffoldCount === 0) console.error('No scaffold files were included in the package.')
