@@ -152,6 +152,14 @@ describe('sf-workflow CLI — complexity guard', () => {
     expect(toolCalls).toHaveLength(1)
   })
 
+  // #851 — the drafting lifecycle declares srs:* as its complexity profiles.
+  it.each(['srs:drafting', 'srs:update', 'srs:new'])('lets a %s drafting ticket into In progress without a code-path level', async (label) => {
+    const res = await runCli(['update-status', '16', 'In progress'], sandbox, { FAKE_LABELS: label })
+    expect(res.code).toBe(0)
+    expect(res.stderr).not.toContain('no complexity label')
+    expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))).toEqual(['update-status 16 In progress'])
+  })
+
   // #839 — an Epic is an aggregate with a derived status.
   it('lets an Epic move without a complexity label', async () => {
     const res = await runCli(['update-status', '2', 'In progress'], sandbox, { FAKE_LABELS: '', FAKE_ISSUE_TYPE: 'sf-epic' })
