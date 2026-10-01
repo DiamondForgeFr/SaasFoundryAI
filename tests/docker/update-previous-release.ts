@@ -295,7 +295,14 @@ async function assertDeposits(projectRoot: string): Promise<void> {
       throw new Error(`The updated ${profile} workflow is incomplete or still contains project placeholders.`)
     }
     const packageJson = JSON.parse(await readFile(join(path, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
-    if (packageJson.scripts?.['test:staged'] !== 'npm run test:impact -- --staged') throw new Error(`The updated ${profile} package is missing staged impact validation.`)
+    if (packageJson.scripts?.['test:staged'] !== 'npm run test:impact -- --staged --config .saasfoundry/validation.commit.json') {
+      throw new Error(`The updated ${profile} package is missing staged impact validation.`)
+    }
+    // #867 — the update brings the commit-time lanes: no E2E suite on every commit
+    const commitValidation = JSON.parse(await readFile(join(path, '.saasfoundry', 'validation.commit.json'), 'utf8')) as { profile?: string; commands?: Record<string, string[][]> }
+    if (commitValidation.profile !== profile || JSON.stringify(commitValidation.commands?.lifecycle) !== JSON.stringify([['npm', 'run', 'test:impact:guards']])) {
+      throw new Error(`The updated ${profile} package does not keep the E2E suite out of its commit hook.`)
+    }
   }
 }
 
