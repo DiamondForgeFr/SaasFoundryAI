@@ -11,6 +11,7 @@ const CLI = path.resolve(REPO_ROOT, '.claude/skills/sf-workflow/workflow-cli.sh'
 const BASH = '/bin/bash'
 
 interface Options {
+  statuses?: string[]
   childStatuses?: string | null
   childQueryFails?: boolean
   currentStatus?: string
@@ -29,7 +30,17 @@ async function sandbox(options: Options = {}) {
   const log = path.join(dir, 'tool.log')
   await mkdir(toolDir, { recursive: true })
   await mkdir(binDir, { recursive: true })
-  await writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { tool: 'github-projects', projectUrl: 'https://github.com/orgs/Fake/projects/42', workingBranch: 'develop' } }))
+  await writeFile(
+    path.join(dir, '.saasfoundry.json'),
+    JSON.stringify({
+      workflow: {
+        tool: 'github-projects',
+        projectUrl: 'https://github.com/orgs/Fake/projects/42',
+        workingBranch: 'develop',
+        ...(options.statuses ? { statuses: options.statuses.map((name) => ({ name, color: 'GRAY' })) } : {})
+      }
+    })
+  )
 
   const labels = ['complexity: low', ...(options.nature ? [`nature:${options.nature}`] : [])]
   const listResponse = options.childStatuses ?? '[]'
@@ -168,6 +179,18 @@ describe('sf-workflow CLI — native parent/child guards and rollup', () => {
     expect(calls).toContain('update-status 7 Ready')
     expect(calls).toContain('update-status 7 In progress')
     expect(result.stdout).toContain('Derived rollup: Epic #7 → Ready')
+  })
+
+  // #838 — the Solo preset declares no Ready status.
+  it('rolls an Epic straight from Backlog to In Progress on a board without Ready', async () => {
+    s = await sandbox({ currentStatus: 'Backlog', parent: 7, parentType: 'sf-epic', parentStatus: 'Backlog', statuses: ['Backlog', 'In Progress', 'AI Testing', 'In Review', 'Done'] })
+    const result = await run(s, ['update-status', '42', 'In progress'])
+    expect(result.code).toBe(0)
+    const calls = readFileSync(s.log, 'utf8')
+    expect(calls).not.toContain('update-status 7 Ready')
+    expect(calls).toContain('update-status 7 In progress')
+    expect(result.stdout).toContain('Derived rollup: Epic #7 → In progress')
+    expect(result.stderr).not.toContain('could not roll')
   })
 
   it('rolls a verified Epic parent to Done after the last child reaches Done', async () => {
