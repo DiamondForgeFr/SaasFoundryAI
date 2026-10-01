@@ -58,6 +58,7 @@ import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 import { readLivePackageIdentity } from '../utils/package-identity'
+import { describeCliVersion, resolveCliChannel } from '../cli-channel'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
 // scaffold refreshes must neither delete them nor adopt user edits/private skills.
@@ -1223,11 +1224,13 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
     // Initialise the dry-run report. We populate it as we walk the two flows and
     // emit it on stdout at the end of the command when `--dry-run` is set.
+    const cliChannel = resolveCliChannel()
     const dryRunReport: UpdateDryRunReport | null = dryRun
       ? {
           version: 1,
           mutated: false,
           cliVersion,
+          cliChannel,
           projectVersion: manifest.version,
           conflictStrategy,
           profileTransition: requestedProfileTransition,
@@ -1242,7 +1245,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     console.log(chalk.white(`  Project:         ${manifest.projectName}`))
     console.log(chalk.white(`  Structure:       ${manifest.structure}`))
     console.log(chalk.white(`  Project version: ${manifest.version}`))
-    console.log(chalk.white(`  CLI version:     ${cliVersion}`))
+    console.log(chalk.white(`  CLI version:     ${describeCliVersion(cliVersion, cliChannel)}`))
+    if (cliChannel.channel === 'checkout') {
+      // A linked checkout carries the last release's number: say whose templates this plan uses (#859).
+      console.log(chalk.yellow(`  ⚠ This sf runs from a development checkout, not the published ${cliVersion} package: the plan reflects its unreleased templates.`))
+    }
     if (dryRun) console.log(chalk.gray('  (dry-run — no files will be written)'))
     console.log()
 

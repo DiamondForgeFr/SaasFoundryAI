@@ -106,6 +106,18 @@ silently overwritten.
 
 The next `sf update` will not re-create the sidecar unless the template changes again.
 
+## Two `sf update` previews of the same version disagree
+
+**Symptom** — `npx saasfoundryai-cli@<version> update --dry-run` plans different files for the same commit of your project on two machines, or under two Node versions.
+
+**Cause** — npm 10's `npx` runs a globally installed package that satisfies the requested version instead of the published one. A development checkout linked with `npm link` carries the number of the
+last release, so it satisfies `@<version>`, and its unreleased templates are used. npm 11 runs the downloaded package.
+
+**Fix**
+
+1. Run `sf --version`. A checkout names itself — `1.0.0 (development checkout: <path> @ <commit>)` — and so do the `sf update` header and the `cliChannel` field of the `--dry-run --json` report.
+2. To use the published package, find the link with `npm ls -g --depth=0`, remove it with `npm rm -g <name>`, and run the command again.
+
 ## Port already in use (3000 / 5173 / 5435)
 
 **Symptom**

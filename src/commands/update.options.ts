@@ -1,3 +1,4 @@
+import type { CliChannel } from '../cli-channel'
 import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import type { ProjectCapabilities } from '../project-capabilities'
 import type { TechnicalStackDryRunReport } from '../scaffold/technical-stack.planner'
@@ -88,6 +89,8 @@ export interface UpdateDryRunReport {
   version: 1
   mutated: false
   cliVersion: string
+  /** Where the running CLI comes from: a published package or a development checkout (#859). */
+  cliChannel?: CliChannel
   projectVersion: string
   conflictStrategy: ConflictStrategy
   profileTransition?: {
