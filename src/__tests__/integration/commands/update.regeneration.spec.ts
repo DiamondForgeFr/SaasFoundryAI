@@ -3,9 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import shelljs from 'shelljs'
 
-import { regenerateInTempDir } from '../../../commands/update'
+import { computeFileUpdates, regenerateInTempDir } from '../../../commands/update'
 import { targetManifestVersion } from '../../../migrations/manifest/registry'
+import { installSrsSkill } from '../../../installers/srs-skill.installer'
 import { manifestSchemaUrl, type SaaSFoundryManifest } from '../../../types'
+import { computeFileHashes } from '../../../utils'
 import { version as cliVersion } from '../../../../package.json'
 
 /**
@@ -86,6 +88,39 @@ describe('regenerateInTempDir', () => {
       },
       120_000
     )
+  })
+
+  describe('SRS deposit (#857)', () => {
+    const srsTools = { srs: { enabled: true, backend: 'notion' as const, rootPage: { id: 'root', url: 'https://www.notion.so/root', name: 'acme-pilot-srs' } } }
+    const settingsHooks = async (projectDir: string) => JSON.stringify((await readJson(join(projectDir, '.claude/settings.json'))).hooks ?? {})
+
+    it('regenerates the sf-srs skill and its prompt hook when the project has SRS', async () => {
+      const { projectDir, hashes } = await regenerate(monorepoManifest({ tools: srsTools }))
+
+      for (const script of ['srs-cli.sh', 'srs-intent-hook.sh', 'detect-eval-signals.sh']) expect(hashes).toHaveProperty([`.claude/skills/sf-srs/scripts/${script}`])
+      expect(await settingsHooks(projectDir)).toContain('.claude/skills/sf-srs/scripts/srs-intent-hook.sh')
+    }, 120_000)
+
+    it('plans no removal of the sf-srs deposit `sf new` laid down', async () => {
+      // Base and current: what `sf new` recorded — the stack plus the SRS bootstrap's skill.
+      const srsDir = await mkdtemp(join(tmpdir(), 'sf-regeneration-srs-'))
+      tempDirs.push(srsDir)
+      await installSrsSkill({ targetPath: srsDir, onExisting: () => {} })
+      const deposited = { ...(await regenerate(monorepoManifest())).hashes, ...(await computeFileHashes(srsDir)) }
+      expect(Object.keys(deposited).filter((path) => path.startsWith('.claude/skills/sf-srs/scripts/')).length).toBeGreaterThan(0)
+
+      const target = (await regenerate(monorepoManifest({ tools: srsTools }))).hashes
+      const removals = computeFileUpdates(deposited, deposited, target).filter((update) => update.action === 'remove' && update.path.startsWith('.claude/skills/sf-srs/'))
+
+      expect(removals).toEqual([])
+    }, 120_000)
+
+    it('regenerates neither the skill nor the hook without SRS', async () => {
+      const { projectDir, hashes } = await regenerate(monorepoManifest())
+
+      expect(Object.keys(hashes).filter((path) => path.includes('sf-srs'))).toEqual([])
+      expect(await settingsHooks(projectDir)).not.toContain('srs-intent-hook')
+    }, 120_000)
   })
 
   describe('package identity (#858)', () => {
