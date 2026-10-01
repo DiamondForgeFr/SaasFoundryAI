@@ -2,7 +2,8 @@ name: Sync PR review status
 
 on:
   pull_request_target:
-    types: [ready_for_review]
+    # A pull request opened ready for review never emits ready_for_review (#876).
+    types: [opened, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -13,7 +14,7 @@ concurrency:
 
 jobs:
   sync-review:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
