@@ -27,6 +27,7 @@ import { Answers, manifestSchemaUrl, SaaSFoundryManifest, SrsToolConfig } from '
 import type { HarnessAgent } from '../harness/agent-registry'
 import { upsertEnvKey } from '../utils/env-file'
 import { reconcileSrsIntentHook } from '../utils/claude-settings'
+import { describeCliVersion, resolveCliChannel } from '../cli-channel'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, setDefaultDbCredentials } from '../utils'
 import { version as cliVersion } from '../../package.json'
@@ -40,6 +41,12 @@ import { NewCommandOptions, buildPrefillFromOptions } from './new.options'
 export async function newCommand(opts: NewCommandOptions = {}) {
   // Verify Node.js version before proceeding
   checkNodeVersion()
+
+  const cliChannel = resolveCliChannel()
+  if (cliChannel.channel === 'checkout') {
+    // The manifest will record the last release's number for unreleased templates (#859).
+    console.log(chalk.yellow(`  ⚠ This sf runs from a development checkout (${describeCliVersion(cliVersion, cliChannel)}): the project will be generated from its unreleased templates.\n`))
+  }
 
   const prefill = buildPrefillFromOptions(opts)
   const nonInteractive = opts.nonInteractive === true
