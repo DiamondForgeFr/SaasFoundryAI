@@ -261,10 +261,12 @@
           "additionalProperties": false,
           "properties": {
             "feature": {
-              "type": "string"
+              "type": "string",
+              "description": "Feature branch pattern. Must contain exactly one ticket placeholder ({N}, {ticket}, {number} or {issue-number}) for the workflow guards to match pull requests, e.g. feature/{N}-{description}. Manifest migration 004 adds it to older patterns."
             },
             "fix": {
-              "type": "string"
+              "type": "string",
+              "description": "Fix branch pattern. Must contain exactly one ticket placeholder ({N}, {ticket}, {number} or {issue-number}), e.g. fix/{N}-{description}."
             },
             "release": {
               "type": "string"
