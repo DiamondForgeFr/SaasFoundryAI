@@ -1,7 +1,7 @@
 ####################
 # Stage 1: Builder #
 ####################
-FROM node:22-alpine AS builder
+FROM node:24.19.0-alpine AS builder
 WORKDIR /app
 
 # Copy root package files for workspace resolution
@@ -32,7 +32,7 @@ RUN rm -rf apps/api/prisma
 ###################
 # Stage 2: Runner #
 ###################
-FROM node:22-alpine AS runner
+FROM node:24.19.0-alpine AS runner
 WORKDIR /app
 
 # Add labels only in the final image

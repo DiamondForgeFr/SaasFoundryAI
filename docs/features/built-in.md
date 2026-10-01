@@ -211,7 +211,7 @@ The API and web projects include multi-stage Dockerfiles. Nginx serves the compi
 observable.
 
 ```dockerfile
-FROM node:22-alpine AS builder
+FROM node:24.19.0-alpine AS builder
 RUN npm run build
 
 FROM nginx:alpine AS runner
