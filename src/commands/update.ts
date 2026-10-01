@@ -504,6 +504,13 @@ export async function regenerateInTempDir(manifest: SaaSFoundryManifest, liveRoo
       advancedSkills: manifest.modules.advancedSkills || []
     })
 
+    // The SRS deposit and its prompt hook, in the order `sf new` lays them down before it
+    // hashes. Without them every unmodified sf-srs file read as removed from the templates
+    // and was deleted, while `transition-drafting` still requires `srs-cli.sh` (#857).
+    const srsEnabled = Boolean(manifest.tools?.srs?.enabled)
+    if (srsEnabled) await installSrsSkill({ targetPath: projectDir, onExisting: () => {} })
+    await reconcileSrsIntentHook(projectDir, srsEnabled)
+
     // Compute hashes of the regenerated project
     const hashes = await computeFileHashes(projectDir)
 
