@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { updateCommand } from '../../../commands/update'
+import { resolveCliChannel } from '../../../cli-channel'
 import { classifyProjectCapabilities } from '../../../project-capabilities'
 import { targetManifestVersion } from '../../../migrations/manifest/registry'
 import { sha256 } from '../../../scaffold/technical-stack.planner'
@@ -322,6 +323,24 @@ describe('updateCommand profile transition', () => {
     expect(JSON.parse(chunks.join(''))).toMatchObject({ version: 1, mutated: false, templateUpdate: { status: 'up-to-date' } })
     expect(chunks.join('').trimStart().startsWith('{')).toBe(true)
     expect(chunks.join('')).not.toContain('<sf-update-dry-run-report>')
+  })
+
+  // #859 — two runs of the same version planned different templates; the report now says which CLI ran.
+  it('names the channel of the CLI that produced the preview', async () => {
+    await writeFile('.saasfoundry.json', JSON.stringify(stackManifest(), null, 2))
+    const chunks: string[] = []
+    jest.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      chunks.push(String(chunk))
+      return true
+    }) as typeof process.stdout.write)
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    await updateCommand({ dryRun: true, json: true, nonInteractive: true })
+
+    const report = JSON.parse(chunks.join(''))
+    // The suite runs from this repository, which is a development checkout.
+    expect(report.cliChannel).toEqual(resolveCliChannel())
+    expect(report.cliChannel.channel).toBe('checkout')
   })
 
   it('previews credentialed modules as JSON without prompting for secrets', async () => {

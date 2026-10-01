@@ -101,6 +101,19 @@ rm <file>.saasfoundry.new
 
 Le sidecar ne réapparaîtra que si une nouvelle évolution du template rencontre encore un fichier localement modifié.
 
+## Deux aperçus `sf update` de la même version ne concordent pas
+
+**Symptôme** — `npx saasfoundryai-cli@<version> update --dry-run` prévoit des fichiers différents pour le même commit de votre projet sur deux machines, ou sous deux versions de Node.
+
+**Cause** — Le `npx` de npm 10 exécute un paquet installé globalement qui satisfait la version demandée au lieu du paquet publié. Un checkout de développement lié par `npm link` porte le numéro de la
+dernière release : il satisfait `@<version>`, et ce sont ses templates non publiés qui servent. npm 11 exécute le paquet téléchargé.
+
+**Correction**
+
+1. Lancez `sf --version`. Un checkout se nomme lui-même — `1.0.0 (development checkout: <chemin> @ <commit>)` — tout comme l'en-tête de `sf update` et le champ `cliChannel` du rapport
+   `--dry-run --json`.
+2. Pour utiliser le paquet publié, repérez le lien avec `npm ls -g --depth=0`, retirez-le avec `npm rm -g <nom>`, puis relancez la commande.
+
 ## Port déjà utilisé — 3000, 5173 ou 5435
 
 **Symptôme**

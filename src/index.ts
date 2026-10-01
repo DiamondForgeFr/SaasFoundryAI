@@ -2,6 +2,7 @@ import chalk from 'chalk'
 import { Command } from 'commander'
 import 'module-alias/register'
 import { version } from '../package.json'
+import { describeCliVersion } from './cli-channel'
 import { feedbackCommand } from './commands/feedback'
 import { modulesCommand } from './commands/modules'
 import { newCommand } from './commands/new'
@@ -20,7 +21,7 @@ void maybeEmitStaleSkillWarning(process.argv, version)
 
 const program = new Command()
 
-program.name('sf').description('SaaSFoundryAI CLI - Create and manage your SaaS projects').version(version)
+program.name('sf').description('SaaSFoundryAI CLI - Create and manage your SaaS projects').version(describeCliVersion(version))
 program
   .command('new')
   .description('Create a new SaaSFoundryAI project')
