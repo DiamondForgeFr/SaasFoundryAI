@@ -88,14 +88,14 @@ The template update is the non-trivial part. SaaSFoundryAI treats your project a
 
 For each file, the comparison produces one of four actions:
 
-| Condition                                      | Action       | What happens                                                    |
-| ---------------------------------------------- | ------------ | --------------------------------------------------------------- |
-| `base == target`                               | **noop**     | Template hasn't changed. Nothing to do.                         |
-| `base != target` AND `current == base`         | **update**   | Template evolved, you never touched the file → auto-apply.      |
-| `base != target` AND `current != base, target` | **conflict** | Template evolved AND you modified the file → conflict strategy. |
-| `!base` AND `target` AND `!current`            | **add**      | New file in the template, you don't have it → copy in.          |
-| `!base` AND `target` AND `current != target`   | **conflict** | A user-owned file already occupies the new template path.       |
-| `base` AND `!target` AND `current == base`     | **remove**   | Template removed the file, you didn't touch it → flag only.     |
+| Condition                                      | Action       | What happens                                                         |
+| ---------------------------------------------- | ------------ | -------------------------------------------------------------------- |
+| `base == target`                               | **noop**     | Template hasn't changed. Nothing to do.                              |
+| `base != target` AND `current == base`         | **update**   | Template evolved, you never touched the file → auto-apply.           |
+| `base != target` AND `current != base, target` | **conflict** | Template evolved AND you modified the file → conflict strategy.      |
+| `!base` AND `target` AND `!current`            | **add**      | New file in the template, you don't have it → copy in.               |
+| `!base` AND `target` AND `current != target`   | **conflict** | A user-owned file already occupies the new template path.            |
+| `base` AND `!target` AND `current == base`     | **remove**   | Template removed the file, you didn't touch it → removed and listed. |
 
 ### Why this matters
 
@@ -104,8 +104,9 @@ The merge is conservative by design:
 - **Your edits are never overwritten silently.** If the hash of a file no longer matches `base`, it is treated as "user-modified" and will never be auto-updated.
 - **New files never clobber your files.** An `add` action only fires when the file is absent in your project. A same-name user file is reported as a conflict and follows the selected conflict
   strategy.
-- **Removed files are flagged, never deleted.** Even if the new CLI no longer generates a file you also didn't touch, `sf update` will only warn you; removal is your call. The file keeps its baseline,
-  so a module or template that generates it again updates it in place.
+- **Only untouched obsolete files are removed.** A file the new CLI no longer generates is removed when its content still matches what SaaSFoundryAI generated, and the plan, the dry-run report and the
+  summary list it. A file you modified is never removed: it becomes yours. An obsolete configuration file is not inert — a kept Tailwind 3 `postcss.config.js` breaks the build once `autoprefixer`
+  leaves the dependencies — which is why it is not kept.
 
 ## Conflict strategies
 
@@ -299,10 +300,11 @@ Workarounds:
 
 ### The new CLI removed a file I didn't touch
 
-`sf update` lists it as no longer generated and keeps it, at every update while it exists. Delete it manually if you do not use it:
+`sf update` removes an obsolete template file only when its content still matches what SaaSFoundryAI generated, and lists it in the summary. If you still need it, restore it from git and commit it as
+your own:
 
 ```bash
-git rm path/to/removed-file.ts
+git checkout HEAD -- path/to/removed-file.ts
 ```
 
 ### Where are the tests for this merge?

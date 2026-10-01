@@ -347,8 +347,8 @@ export async function refreshDependencyLockAndInstall(label: string, packageRoot
  * had not changed — replacing the project's code with the template — and listed the project's
  * own files as removed templates (#879). The harness refresh already follows this rule: the
  * baseline is the deposit target. A conflicted file therefore keeps the offered template as its
- * baseline, so merging its sidecar resolves it (#856). Kept obsolete files are added by the
- * caller with their previous baseline (#882).
+ * baseline, so merging its sidecar resolves it (#856), and a removed obsolete file leaves the
+ * tracking with it.
  */
 export function templateBaselines(manifest: SaaSFoundryManifest, targetHashes: Record<string, string>): Record<string, string> {
   const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
@@ -1282,10 +1282,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         const spinner = ora('Regenerating project templates...').start()
         let tempDir: string | undefined
         let templateRefreshComplete = false
-        // Template files the new CLI no longer generates. Flagged and kept — never deleted: a
-        // regeneration defect would otherwise turn into lost files (#857, #874, #865). They keep
-        // their baseline, so a module or template that generates the path again updates the
-        // untouched file in place instead of colliding with it as a user file (#882).
+        // Template files the new CLI no longer generates and the project never modified. They are
+        // removed, and listed in the plan and the summary. Keeping them was tried (#865): an obsolete
+        // configuration file is not inert — a kept Tailwind 3 `postcss.config.js` made Vite load an
+        // `autoprefixer` the updated `package.json` no longer installs, and the web build failed.
+        // A modified file is never planned for removal, so nothing the project wrote is lost.
         let obsolete: FileUpdate[] = []
         // Conflicts left for the user to merge (sidecar or kept edit). They no longer hold the
         // project on its old version: their baseline becomes the offered template (#856).
@@ -1328,7 +1329,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             if (updateCount) console.log(chalk.green(`    ${updateCount} file(s) to auto-update`))
             if (addCount) console.log(chalk.green(`    ${addCount} new file(s) to add`))
             if (conflictCount) console.log(chalk.yellow(`    ${conflictCount} conflict(s) — strategy: ${conflictStrategy}`))
-            if (obsolete.length) console.log(chalk.yellow(`    ${obsolete.length} obsolete template file(s) — kept`))
+            if (obsolete.length) console.log(chalk.yellow(`    ${obsolete.length} obsolete template file(s) to remove — unchanged since they were generated`))
             console.log()
 
             if (dryRunReport) {
@@ -1337,7 +1338,6 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
                 update: updates.filter((u) => u.action === 'update').map((u) => u.path),
                 add: updates.filter((u) => u.action === 'add').map((u) => u.path),
                 conflict: updates.filter((u) => u.action === 'conflict').map((u) => u.path),
-                // Flagged only: obsolete files are kept, never deleted.
                 remove: obsolete.map((u) => u.path)
               }
             }
@@ -1356,13 +1356,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               // In dry-run we report but never mutate.
             } else {
               spinner.start('Applying updates...')
-              const { applied, conflicts, added } = await applyFileUpdates(
-                updates.filter((u) => u.action !== 'remove'),
-                tempProjectDir,
-                spinner,
-                conflictStrategy,
-                assertStackModuleWritePathSafe
-              )
+              const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy, assertStackModuleWritePathSafe)
               templateRefreshComplete = true
               unresolvedConflicts = conflictStrategy !== 'replace' && conflicts.length > 0
 
@@ -1379,10 +1373,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
                 for (const f of added) console.log(chalk.green(`    + ${f.path}`))
               }
 
-              if (obsolete.length > 0) {
-                console.log(chalk.yellow(`\n  ${obsolete.length} template file(s) SaaSFoundryAI no longer generates — kept:`))
-                for (const f of obsolete) console.log(chalk.yellow(`    ~ ${f.path}`))
-                console.log(chalk.gray('    Delete the ones you do not use (git rm <path>). A module or template that generates one again updates it in place.'))
+              if (removed.length > 0) {
+                console.log(chalk.green(`\n  ${removed.length} obsolete template file(s) removed — unchanged since they were generated:`))
+                for (const f of removed) console.log(chalk.green(`    - ${f.path}`))
+                console.log(chalk.gray('    Restore one with git if you still need it: git checkout HEAD -- <path>'))
               }
 
               if (conflicts.length > 0) {
@@ -1407,7 +1401,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             manifest.version = cliVersion
             // The legacy adoption marker clears on the first refresh that leaves nothing to merge.
             if (manifest.adoption?.refreshPending && !unresolvedConflicts) manifest.adoption.refreshPending = false
-            manifest.fileHashes = { ...templateBaselines(manifest, targetHashes), ...Object.fromEntries(obsolete.map((u) => [u.path, u.expectedCurrentHash!])) }
+            manifest.fileHashes = templateBaselines(manifest, targetHashes)
             await persistManifest()
           }
         } catch (error) {

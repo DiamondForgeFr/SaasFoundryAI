@@ -99,13 +99,15 @@ Pour chaque fichier :
 | `base != target` et `current != base, target` | **conflict** | Le modèle et l’utilisateur ont modifié le fichier.                     |
 | `!base` et `target` et `!current`             | **add**      | Nouveau fichier du modèle absent du projet : copie.                    |
 | `!base` et `target` et `current != target`    | **conflict** | Un fichier utilisateur occupe déjà le chemin.                          |
-| `base` et `!target` et `current == base`      | **remove**   | Le modèle a retiré un fichier intact : signalement uniquement.         |
+| `base` et `!target` et `current == base`      | **remove**   | Le modèle a retiré un fichier intact : suppression, listée.            |
 
 Cette fusion est volontairement prudente :
 
 - les modifications utilisateur ne sont jamais écrasées silencieusement ;
 - un nouveau fichier ne remplace jamais un fichier utilisateur de même nom ;
-- un fichier retiré du modèle est signalé, jamais supprimé automatiquement ; il garde sa base, de sorte qu'un module ou un modèle qui le génère de nouveau le met à jour sur place.
+- seul un fichier obsolète intact est supprimé : un fichier que le nouveau CLI ne génère plus est supprimé quand son contenu correspond encore à ce que SaaSFoundryAI a généré, et le plan, le rapport
+  du dry-run et le résumé le listent ; un fichier que vous avez modifié n'est jamais supprimé et vous appartient. Un fichier de configuration obsolète n'est pas inerte — un `postcss.config.js`
+  Tailwind 3 conservé casse le build dès qu'`autoprefixer` quitte les dépendances — c'est pourquoi il n'est pas conservé.
 
 ## Stratégies de conflit
 
@@ -284,10 +286,11 @@ ou régénérez les hashes depuis un `sf new` temporaire avec les mêmes options
 
 ### Le nouveau CLI a retiré un fichier intact
 
-`sf update` le signale comme n'étant plus généré et le conserve, à chaque mise à jour tant qu'il existe. Supprimez-le manuellement si vous ne l'utilisez pas :
+`sf update` ne supprime un fichier de modèle obsolète que si son contenu correspond encore à ce que SaaSFoundryAI a généré, et le liste dans le résumé. Si vous en avez encore besoin, restaurez-le
+depuis git et committez-le comme le vôtre :
 
 ```bash
-git rm path/to/removed-file.ts
+git checkout HEAD -- path/to/removed-file.ts
 ```
 
 ### Où sont les tests de fusion ?
