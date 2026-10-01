@@ -51,12 +51,15 @@ npm run test:staged
 
 Pour les **contributeurs au dépôt SaaSFoundryAI lui-même**, cette commande utilise `.saasfoundry/validation.commit.json` : même classifieur, même isolation de l'index, mais aucune commande Docker au
 commit. Les changements de documentation, frontend, backend et harness conservent leurs contrôles ciblés. Un changement limité au cycle de vie lance les gardes et tests de contrat ; ses vrais
-scénarios Docker restent obligatoires avant livraison. Un changement du cœur, de la racine ou d'un fichier inconnu conserve le fallback complet, mais vers `test:commit:full` (formatage, lint, build,
-intégrité du package et toutes les suites Jest), pas vers la suite Docker de release.
+scénarios Docker restent obligatoires avant livraison. Un changement du cœur, partagé, de la racine ou d'un fichier inconnu passe par `test:commit:scoped`, qui vérifie ce que le commit touche :
+prettier et ESLint sur les fichiers indexés, `tsc --noEmit`, et les tests Jest que leurs imports atteignent (`jest --findRelatedTests`). Un changement que Jest ne peut pas suivre par les imports —
+dépendances, configuration du compilateur, des tests, du lint ou du formatage, hooks, workflows, contrat de validation lui-même — remonte à `test:commit:full` (formatage, lint, build, intégrité du
+package et toutes les suites Jest). Aucun des deux ne lance Docker.
 
-Après le commit et le push, le workflow contributeur exige une validation lourde explicite pendant AI testing :
+Après le commit et le push, le workflow contributeur exige une validation lourde explicite pendant AI testing — toute la suite Jest, que les commits ne lancent plus, puis la voie de cycle de vie :
 
 ```bash
+npm test
 npm run test:pre-push
 ```
 
