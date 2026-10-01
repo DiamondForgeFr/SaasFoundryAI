@@ -14,12 +14,15 @@ describe('PR review board synchronization workflow', () => {
   it('ships the same listener in dogfood and generated projects', () => {
     expect(readFileSync(resolve(ROOT, '.github/workflows/pr-review-sync.yml'), 'utf8')).toBe(source)
     // #876 — a PR opened ready for review never emits ready_for_review.
-    expect(workflow.on).toEqual({ pull_request_target: { types: ['opened', 'reopened', 'ready_for_review'] } })
+    // #845 — and a merge into the PR target moves the ticket to Done.
+    expect(workflow.on).toEqual({ pull_request_target: { types: ['opened', 'reopened', 'ready_for_review', 'closed'] } })
   })
   it('only checks out trusted default-branch code and never persists an elevated credential', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' })
     const job = workflow.jobs['sync-review']
-    expect(job.if).toBe('github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false')
+    expect(job.if).toBe(
+      "github.event.pull_request.head.repo.full_name == github.repository && (github.event.action == 'closed' && github.event.pull_request.merged == true || github.event.action != 'closed' && github.event.pull_request.draft == false)"
+    )
     const checkout = job.steps.filter((step) => step.uses?.startsWith('actions/checkout@'))
     expect(checkout).toHaveLength(1)
     expect(checkout[0].with).toEqual({ ref: '${{ github.workflow_sha }}', 'persist-credentials': false })

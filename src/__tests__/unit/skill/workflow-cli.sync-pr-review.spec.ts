@@ -66,7 +66,11 @@ describe('workflow sync-pr-review (#658)', () => {
 printf 'gh %s\\n' "$*" >> "$CALLS"
 case "$1 $2" in
   'pr view') [ "$FETCH_FAIL" = 1 ] && exit 1; printf '%s' "$LIVE";;
-  'pr list') printf '%s' "$LIVE" | jq '[{number,headRefName,baseRefName,isDraft,body,closingIssuesReferences}]';;
+  'pr list')
+    case "$*" in
+      *'--state merged'*) printf '%s' "\${MERGED_LIST:-[]}";;
+      *) if [ -n "$OPEN_LIST" ]; then printf '%s' "$OPEN_LIST"; else printf '%s' "$LIVE" | jq '[{number,headRefName,baseRefName,isDraft,body,closingIssuesReferences}]'; fi;;
+    esac;;
   *) echo 'unexpected gh request' >&2; exit 1;;
 esac
 `
@@ -76,6 +80,8 @@ case "$1" in
   status) jq -n --arg status "$STATUS" '{status: $status}';;
   get-labels) [ "$LABEL_FAIL" = 1 ] && exit 1; printf '%s\\n' "$LABELS";;
   update-status) echo "Ticket #$2 → $3";;
+  get-issue-type) printf '{"name":"sf-issue"}';;
+  list-incomplete-children) printf '[]';;
   *) exit 1;;
 esac
 `
@@ -244,6 +250,74 @@ esac
     expect((await run({ LIVE: JSON.stringify(integrationLive) })).code).toBe(0)
     expect(calls()).toContain('tool update-status 42 In review')
   })
+  // #845 — a merge into the PR target moves the ticket to Done through the guards.
+  describe('merged pull requests', () => {
+    const mergeSha = 'c'.repeat(40)
+    const mergedEvent = { ...event, action: 'closed', pull_request: { ...event.pull_request, state: 'closed', merged: true, merge_commit_sha: mergeSha } }
+    const mergedLive = { ...live, state: 'MERGED', mergeCommit: { oid: mergeSha }, body: 'Resolves #42', closingIssuesReferences: [] }
+    const mergedList = JSON.stringify([
+      {
+        number: 100,
+        title: '[#42] Delivery',
+        headRefName: 'feature/42-work',
+        headRefOid: head,
+        headRepository: { name: 'FakeRepo' },
+        headRepositoryOwner: { login: 'FakeOrg' },
+        isCrossRepository: false,
+        baseRefName: 'develop',
+        body: 'Resolves #42',
+        mergedAt: '2026-10-01T12:00:00Z',
+        mergeCommit: { oid: mergeSha }
+      }
+    ])
+    const merge = (changes: NodeJS.ProcessEnv = {}) => run({ LIVE: JSON.stringify(mergedLive), MERGED_LIST: mergedList, OPEN_LIST: '[]', STATUS: 'In review', ...changes })
+
+    beforeEach(async () => writeFile(path.join(dir, 'event.json'), JSON.stringify(mergedEvent)))
+
+    it('moves an In Review ticket to Done through the guarded update-status', async () => {
+      const result = await merge()
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 Done')
+    })
+
+    it('does not let a merge skip review', async () => {
+      const result = await merge({ STATUS: 'AI testing' })
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('a merge does not skip review')
+      expect(changedTicket()).toBe(false)
+    })
+
+    it.each([
+      ['closed without merging', { pull_request: { ...mergedEvent.pull_request, merged: false } }],
+      ['merged into another branch', { pull_request: { ...mergedEvent.pull_request, base: { ...mergedEvent.pull_request.base, ref: 'master' } } }]
+    ])('does nothing for a pull request %s', async (_label, change) => {
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...mergedEvent, ...change }))
+      const result = await merge()
+      expect(result.code).toBe(0)
+      expect(changedTicket()).toBe(false)
+      expect(calls()).not.toContain('gh pr view')
+    })
+
+    it('refuses when the live pull request does not confirm the merge', async () => {
+      const result = await merge({ LIVE: JSON.stringify({ ...mergedLive, state: 'OPEN' }) })
+      expect(result.code).toBe(2)
+      expect(changedTicket()).toBe(false)
+    })
+
+    it('refuses a merged branch that names no ticket', async () => {
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...mergedEvent, pull_request: { ...mergedEvent.pull_request, head: { ...mergedEvent.pull_request.head, ref: 'chore/cleanup' } } }))
+      const result = await merge({ LIVE: JSON.stringify({ ...mergedLive, headRefName: 'chore/cleanup' }) })
+      expect(result.code).toBe(2)
+      expect(changedTicket()).toBe(false)
+    })
+
+    it.each(['complexity: low\nnature:bundled-pr', 'srs:new'])('leaves a ticket labelled %j alone', async (labels) => {
+      const result = await merge({ LABELS: labels })
+      expect(result.code).toBe(0)
+      expect(changedTicket()).toBe(false)
+    })
+  })
+
   // #846 — a refused event names the condition it failed.
   describe('rejection reasons', () => {
     const integrationManifest = JSON.stringify({
@@ -421,7 +495,7 @@ esac
     expect((await run()).code).toBe(2)
     expect(changedTicket()).toBe(false)
   })
-  it.each([{ action: 'edited' }, { action: 'closed' }, { number: 101 }, { repository: { full_name: 'Other/Repo' } }])('rejects wrong event envelope %j', async (change) => {
+  it.each([{ action: 'edited' }, { action: 'labeled' }, { number: 101 }, { repository: { full_name: 'Other/Repo' } }])('rejects wrong event envelope %j', async (change) => {
     await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, ...change }))
     expect((await run()).code).toBe(2)
     expect(changedTicket()).toBe(false)
