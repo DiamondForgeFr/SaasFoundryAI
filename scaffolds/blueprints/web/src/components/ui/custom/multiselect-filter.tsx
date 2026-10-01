@@ -128,7 +128,7 @@ export function MultiSelectFilter({
       >
         <div className="p-2">
           <div className="relative mb-2">
-            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <span className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 -translate-y-1/2">
               <SearchIcon className="h-4 w-4" />
             </span>
             <input
@@ -137,14 +137,14 @@ export function MultiSelectFilter({
               placeholder={placeholder}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="h-9 w-full rounded-sm border border-border bg-card pl-7 pr-7 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/60 focus:outline-none"
+              className="border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary/60 h-9 w-full rounded-sm border pr-7 pl-7 text-sm transition-colors focus:outline-none"
             />
             {search.length > 0 && (
               <button
                 type="button"
                 aria-label="Clear search"
                 onClick={() => onSearchChange('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground transition-colors hover:text-foreground focus:outline-hidden"
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer transition-colors focus:outline-hidden"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -159,17 +159,17 @@ export function MultiSelectFilter({
               <Skeleton className="skeleton-shimmer-orange h-6 w-2/3 rounded" />
             </div>
           ) : displayItems.length === 0 ? (
-            <div className="flex h-[70px] items-center justify-center text-sm text-muted-foreground">{emptyText}</div>
+            <div className="text-muted-foreground flex h-[70px] items-center justify-center text-sm">{emptyText}</div>
           ) : (
-            <div className="max-h-[200px] overflow-y-auto rounded-sm bg-card ring-1 ring-border/50">
+            <div className="bg-card ring-border/50 max-h-[200px] overflow-y-auto rounded-sm ring-1">
               {displayItems.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => handleSelect(item.id)}
-                  className={`flex cursor-pointer items-center justify-between px-4 py-2 text-sm capitalize transition-colors ${selected.includes(item.id) ? 'bg-primary/10 font-semibold text-primary' : 'hover:bg-muted'} last:mb-0`}
+                  className={`flex cursor-pointer items-center justify-between px-4 py-2 text-sm capitalize transition-colors ${selected.includes(item.id) ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted'} last:mb-0`}
                 >
                   <span>{item.label}</span>
-                  {selected.includes(item.id) && <span className="ml-2 text-primary">✓</span>}
+                  {selected.includes(item.id) && <span className="text-primary ml-2">✓</span>}
                 </div>
               ))}
             </div>

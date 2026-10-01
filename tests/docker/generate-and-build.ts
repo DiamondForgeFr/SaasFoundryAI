@@ -994,6 +994,23 @@ function formatErrorDetails(error: unknown): string {
  * that already has its database. Prisma generate, `prisma db push` and the SQL under
  * `prisma/sql/` all run for real.
  */
+/**
+ * A freshly generated project passes its own `npm run format:check` (#867). It failed on
+ * every file the CLI itself writes, and on the web templates' unsorted Tailwind classes.
+ */
+function assertOwnFormatCheck(roots: string[]): AssertionResult[] {
+  return roots.map((root) => {
+    const check = spawnSync('npm', ['run', 'format:check'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+    const failing = `${check.stdout}${check.stderr}`
+      .split('\n')
+      .filter((line) => line.startsWith('[warn] ') && !line.includes('Code style issues'))
+      .map((line) => line.slice('[warn] '.length))
+    return check.status === 0
+      ? { passed: true, message: `OK: ${root} passes its own npm run format:check` }
+      : { passed: false, message: `FAIL: npm run format:check in ${root} (${failing.length} files): ${failing.slice(0, 10).join(', ') || check.stderr.trim()}` }
+  })
+}
+
 async function runBootScenario(scenario: BootScenario): Promise<boolean> {
   const workspace = join(WORKSPACE, `boot-${scenario.name}`)
   mkdirSync(join(workspace, 'existing-src'), { recursive: true })
@@ -1088,6 +1105,8 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
         signal: LIFECYCLE_ABORT.signal
       })
     })
+
+    results.push(...assertOwnFormatCheck(structure === 'monorepo' ? [projectDir] : [join(projectDir, 'apps', `${scenario.projectName}-api`), join(projectDir, 'apps', `${scenario.projectName}-web`)]))
 
     // The ports the project chose. Anything else would be assuming what #584 made variable.
     const manifest = JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8')) as Record<string, unknown> & { ports?: { api?: number; web?: number } }

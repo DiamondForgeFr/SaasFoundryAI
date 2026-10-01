@@ -95,7 +95,7 @@ export function SignUp() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col items-center bg-muted">
+    <div className="bg-muted relative flex h-screen flex-col items-center">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
@@ -104,9 +104,9 @@ export function SignUp() {
         <div className="igw-glow" aria-hidden="true" />
         <div className="igw-border" aria-hidden="true" />
         <div className="relative z-10">
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{tAuth('signup.tk_title_')}</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">{tAuth('signup.tk_description_')}</p>
+          <div className="mb-6 text-center">
+            <h2 className="text-foreground text-3xl font-bold tracking-tight">{tAuth('signup.tk_title_')}</h2>
+            <p className="text-muted-foreground mt-1.5 text-sm">{tAuth('signup.tk_description_')}</p>
           </div>
 
           <Form {...form}>
@@ -137,15 +137,15 @@ export function SignUp() {
                 {signUpMutation.isLoading ? tCommon('loading.tk_loadingCreate_') : tAuth('callToAction.tk_signup_')}
               </WaveButton>
 
-              <div className="flex items-center gap-3 my-4">
+              <div className="my-4 flex items-center gap-3">
                 <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">{tCommon('other.tk_or_')}</span>
+                <span className="text-muted-foreground text-xs">{tCommon('other.tk_or_')}</span>
                 <Separator className="flex-1" />
               </div>
 
-              <p className="text-center text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-center text-sm">
                 Already here?{' '}
-                <button type="button" onClick={() => navigate('/signin', { state: { flip: 'left' } })} className="cursor-pointer font-semibold text-primary hover:text-primary/80 transition-colors">
+                <button type="button" onClick={() => navigate('/signin', { state: { flip: 'left' } })} className="text-primary hover:text-primary/80 cursor-pointer font-semibold transition-colors">
                   {tAuth('callToAction.tk_signin_')}
                 </button>
               </p>

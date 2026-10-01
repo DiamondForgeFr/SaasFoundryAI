@@ -135,26 +135,26 @@ export function EditUserDialog({ isOpen, onOpenChange, target }: EditUserDialogP
           <DialogDescription>{tAccount('users.edit.tk_description_')}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 mt-2">
+        <div className="mt-2 space-y-5">
           {/* Identity (read-only summary) */}
-          <div className="rounded-sm border border-border bg-secondary px-3 py-2">
-            <div className="text-[12px] font-bold text-foreground">{target.fullName || target.email}</div>
-            <div className="text-[11px] text-muted-foreground font-mono">{target.email}</div>
+          <div className="border-border bg-secondary rounded-sm border px-3 py-2">
+            <div className="text-foreground text-[12px] font-bold">{target.fullName || target.email}</div>
+            <div className="text-muted-foreground font-mono text-[11px]">{target.email}</div>
           </div>
 
           {/* Status */}
           <div className="space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('users.edit.tk_section-status_')}</p>
-            <div className="flex items-center justify-between rounded-sm border border-border bg-secondary px-3 py-2">
+            <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">{tAccount('users.edit.tk_section-status_')}</p>
+            <div className="border-border bg-secondary flex items-center justify-between rounded-sm border px-3 py-2">
               <div className="flex items-center gap-2">
-                {isActive ? <Power className="h-3.5 w-3.5 text-emerald-500" /> : <PowerOff className="h-3.5 w-3.5 text-muted-foreground" />}
-                <span className="text-[12px] font-bold text-foreground">{tAccount(isActive ? 'users.edit.tk_active-on_' : 'users.edit.tk_active-off_')}</span>
+                {isActive ? <Power className="h-3.5 w-3.5 text-emerald-500" /> : <PowerOff className="text-muted-foreground h-3.5 w-3.5" />}
+                <span className="text-foreground text-[12px] font-bold">{tAccount(isActive ? 'users.edit.tk_active-on_' : 'users.edit.tk_active-off_')}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setIsActive((v) => !v)}
                 className={cn(
-                  'cursor-pointer rounded-[2px] border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors',
+                  'cursor-pointer rounded-[2px] border px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase transition-colors',
                   isActive ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-border bg-card text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -166,15 +166,15 @@ export function EditUserDialog({ isOpen, onOpenChange, target }: EditUserDialogP
           {/* Account-scoped roles — only when the user is directly linked to the account */}
           {target.isDirectlyLinked && (
             <div className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+              <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">
                 {tAccount('users.edit.tk_section-account-roles_')}
-                <span className="ml-1 text-muted-foreground/70 normal-case font-normal">
+                <span className="text-muted-foreground/70 ml-1 font-normal normal-case">
                   · {accountRoleIds.size} {tAccount('users.edit.tk_selected_')}
                 </span>
               </p>
               <div className="space-y-1">
                 {accountScopeRoles.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground italic">{tAccount('users.edit.tk_no-roles-available_')}</p>
+                  <p className="text-muted-foreground text-[11px] italic">{tAccount('users.edit.tk_no-roles-available_')}</p>
                 ) : (
                   accountScopeRoles.map((role) => {
                     const checked = accountRoleIds.has(role.id)
@@ -187,16 +187,16 @@ export function EditUserDialog({ isOpen, onOpenChange, target }: EditUserDialogP
                         type="button"
                         onClick={() => toggleAccountRole(role.id)}
                         className={cn(
-                          'cursor-pointer w-full flex items-center justify-between rounded-[2px] border px-2.5 py-2 text-left transition-colors',
+                          'flex w-full cursor-pointer items-center justify-between rounded-[2px] border px-2.5 py-2 text-left transition-colors',
                           checked ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                         )}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Shield className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                          <span className="text-[12px] font-bold text-foreground capitalize truncate">{displayName}</span>
-                          {role.isSystem && <span className="text-[9px] uppercase tracking-wider text-muted-foreground">system</span>}
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Shield className="text-primary h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="text-foreground truncate text-[12px] font-bold capitalize">{displayName}</span>
+                          {role.isSystem && <span className="text-muted-foreground text-[9px] tracking-wider uppercase">system</span>}
                         </div>
-                        <span className={cn('text-[10px] font-bold uppercase tracking-wider', checked ? 'text-primary' : 'text-muted-foreground')}>
+                        <span className={cn('text-[10px] font-bold tracking-wider uppercase', checked ? 'text-primary' : 'text-muted-foreground')}>
                           {tAccount(checked ? 'users.edit.tk_assigned_' : 'users.edit.tk_assign_')}
                         </span>
                       </button>
@@ -210,14 +210,14 @@ export function EditUserDialog({ isOpen, onOpenChange, target }: EditUserDialogP
           {/* Entity-scoped roles, grouped per linked entity */}
           {target.linkedEntities.length > 0 && (
             <div className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('users.edit.tk_section-entity-roles_')}</p>
+              <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">{tAccount('users.edit.tk_section-entity-roles_')}</p>
               {target.linkedEntities.map((entity) => {
                 const selected = entityRoleIdsByEntityId[entity.id] ?? new Set<number>()
                 return (
-                  <div key={entity.id} className="rounded-sm border border-border bg-secondary px-3 py-2.5">
-                    <div className="text-[12px] font-bold text-foreground mb-2">{entity.name}</div>
+                  <div key={entity.id} className="border-border bg-secondary rounded-sm border px-3 py-2.5">
+                    <div className="text-foreground mb-2 text-[12px] font-bold">{entity.name}</div>
                     {entityScopeRoles.length === 0 ? (
-                      <p className="text-[11px] text-muted-foreground italic">{tAccount('users.edit.tk_no-roles-available_')}</p>
+                      <p className="text-muted-foreground text-[11px] italic">{tAccount('users.edit.tk_no-roles-available_')}</p>
                     ) : (
                       <div className="space-y-1">
                         {entityScopeRoles.map((role) => {
@@ -231,15 +231,15 @@ export function EditUserDialog({ isOpen, onOpenChange, target }: EditUserDialogP
                               type="button"
                               onClick={() => toggleEntityRole(entity.id, role.id)}
                               className={cn(
-                                'cursor-pointer w-full flex items-center justify-between rounded-[2px] border px-2.5 py-2 text-left transition-colors',
+                                'flex w-full cursor-pointer items-center justify-between rounded-[2px] border px-2.5 py-2 text-left transition-colors',
                                 checked ? 'border-amber-500 bg-amber-500/10' : 'border-border bg-card hover:border-amber-500/40'
                               )}
                             >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <ShieldCheck className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
-                                <span className="text-[12px] font-bold text-foreground capitalize truncate">{displayName}</span>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" />
+                                <span className="text-foreground truncate text-[12px] font-bold capitalize">{displayName}</span>
                               </div>
-                              <span className={cn('text-[10px] font-bold uppercase tracking-wider', checked ? 'text-amber-500' : 'text-muted-foreground')}>
+                              <span className={cn('text-[10px] font-bold tracking-wider uppercase', checked ? 'text-amber-500' : 'text-muted-foreground')}>
                                 {tAccount(checked ? 'users.edit.tk_assigned_' : 'users.edit.tk_assign_')}
                               </span>
                             </button>
@@ -258,7 +258,7 @@ export function EditUserDialog({ isOpen, onOpenChange, target }: EditUserDialogP
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="cursor-pointer rounded-[2px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="border-border bg-card text-muted-foreground hover:text-foreground cursor-pointer rounded-[2px] border px-3 py-1.5 text-xs font-medium transition-colors"
           >
             {tCommon('actions.tk_cancel_')}
           </button>

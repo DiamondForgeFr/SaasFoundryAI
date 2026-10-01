@@ -68,7 +68,7 @@ export function ResetPassword() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col items-center bg-muted">
+    <div className="bg-muted relative flex h-screen flex-col items-center">
       <div className="absolute top-4 right-4">
         <ThemeToggleButton />
       </div>
@@ -77,9 +77,9 @@ export function ResetPassword() {
         <div className="igw-glow" aria-hidden="true" />
         <div className="igw-border" aria-hidden="true" />
         <div className="relative z-10">
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{tAuth('resetPassword.tk_title_')}</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">{tAuth('resetPassword.tk_description_')}</p>
+          <div className="mb-6 text-center">
+            <h2 className="text-foreground text-3xl font-bold tracking-tight">{tAuth('resetPassword.tk_title_')}</h2>
+            <p className="text-muted-foreground mt-1.5 text-sm">{tAuth('resetPassword.tk_description_')}</p>
           </div>
 
           {tokenError ? (
@@ -90,11 +90,11 @@ export function ResetPassword() {
                   <AlertDescription>{tokenError}</AlertDescription>
                 </div>
               </Alert>
-              <p className="text-center text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-center text-sm">
                 <button
                   type="button"
                   onClick={() => navigate('/reset-password-request', { state: { flip: 'up' } })}
-                  className="cursor-pointer font-semibold text-primary hover:text-primary/80 transition-colors"
+                  className="text-primary hover:text-primary/80 cursor-pointer font-semibold transition-colors"
                 >
                   {tAuth('callToAction.tk_askForNewLink_')}
                 </button>
@@ -142,14 +142,14 @@ export function ResetPassword() {
                   {resetPasswordMutation.isLoading ? tCommon('loading.tk_loadingUpdate_') : tAuth('callToAction.tk_updatePassword_')}
                 </WaveButton>
 
-                <div className="flex items-center gap-3 my-4">
+                <div className="my-4 flex items-center gap-3">
                   <Separator className="flex-1" />
-                  <span className="text-xs text-muted-foreground">or</span>
+                  <span className="text-muted-foreground text-xs">or</span>
                   <Separator className="flex-1" />
                 </div>
 
-                <p className="text-center text-sm text-muted-foreground">
-                  <button type="button" onClick={() => navigate('/signin', { state: { flip: 'left' } })} className="cursor-pointer font-semibold text-primary hover:text-primary/80 transition-colors">
+                <p className="text-muted-foreground text-center text-sm">
+                  <button type="button" onClick={() => navigate('/signin', { state: { flip: 'left' } })} className="text-primary hover:text-primary/80 cursor-pointer font-semibold transition-colors">
                     {tAuth('callToAction.tk_backToSignin_')}
                   </button>
                 </p>

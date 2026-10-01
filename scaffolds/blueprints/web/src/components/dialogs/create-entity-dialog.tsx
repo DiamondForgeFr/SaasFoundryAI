@@ -196,7 +196,7 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
           <DialogDescription>{tAccount('entities.tk_create-entity-description_')}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={(e) => form.handleSubmit(handleSubmit)(e)} className="space-y-5 mt-4">
+          <form onSubmit={(e) => form.handleSubmit(handleSubmit)(e)} className="mt-4 space-y-5">
             {canRenderForm && (
               <div data-testid="organization-details" className="space-y-4">
                 {/* 1 — Type — visual cards */}
@@ -205,8 +205,8 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
                   name="organization.type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tCommon('other.tk_type_')}</FormLabel>
-                      <div className="grid grid-cols-3 gap-2 mt-2">
+                      <FormLabel className="text-muted-foreground text-xs font-bold tracking-wider uppercase">{tCommon('other.tk_type_')}</FormLabel>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
                         {(
                           [
                             { value: 'COMPANY', label: tAccount('organizations.tk_type-company_'), sub: tAccount('organizations.tk_type-company-sub_'), icon: <Building2 className="h-5 w-5" /> },
@@ -224,7 +224,7 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
                             type="button"
                             onClick={() => field.onChange(value)}
                             className={cn(
-                              'cursor-pointer flex flex-col items-center gap-1.5 rounded-sm border p-3 text-center transition-all',
+                              'flex cursor-pointer flex-col items-center gap-1.5 rounded-sm border p-3 text-center transition-all',
                               field.value === value ? 'border-primary bg-primary/8 text-primary' : 'border-border bg-secondary text-muted-foreground hover:border-primary/40 hover:text-foreground'
                             )}
                           >
@@ -257,11 +257,11 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
                 <div className="grid grid-cols-2 gap-3">
                   {/* Logo column */}
                   <div className="flex flex-col gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tAccount('organizations.tk_logo_')}</span>
+                    <span className="text-muted-foreground text-xs font-bold tracking-wider uppercase">{tAccount('organizations.tk_logo_')}</span>
                     {logoPreview ? (
-                      <div className="flex h-24 items-center gap-3 rounded-sm border border-border bg-secondary px-3">
-                        <img src={logoPreview} alt="Logo preview" className="h-16 w-16 rounded-sm border border-border object-cover" />
-                        <button type="button" onClick={handleRemoveLogo} className="cursor-pointer flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors">
+                      <div className="border-border bg-secondary flex h-24 items-center gap-3 rounded-sm border px-3">
+                        <img src={logoPreview} alt="Logo preview" className="border-border h-16 w-16 rounded-sm border object-cover" />
+                        <button type="button" onClick={handleRemoveLogo} className="text-muted-foreground hover:text-destructive flex cursor-pointer items-center gap-1 text-xs transition-colors">
                           <X className="h-3.5 w-3.5" />
                           Remove
                         </button>
@@ -270,11 +270,11 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="cursor-pointer flex h-24 w-full flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed border-border/60 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                        className="border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-sm border-2 border-dashed transition-colors"
                       >
                         <ImagePlus className="h-5 w-5" />
                         <span className="text-[11px] font-medium">{tAccount('organizations.tk_logo-dropzone_')}</span>
-                        <span className="text-[10px] text-muted-foreground/60">{tAccount('organizations.tk_logo-formats_')}</span>
+                        <span className="text-muted-foreground/60 text-[10px]">{tAccount('organizations.tk_logo-formats_')}</span>
                       </button>
                     )}
                     <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={handleLogoChange} className="hidden" />
@@ -286,9 +286,9 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
                     name="organization.description"
                     render={({ field }) => (
                       <FormItem className="flex flex-col gap-2 space-y-0">
-                        <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{tCommon('other.tk_description_')}</FormLabel>
+                        <FormLabel className="text-muted-foreground text-xs font-bold tracking-wider uppercase">{tCommon('other.tk_description_')}</FormLabel>
                         <FormControl>
-                          <Textarea {...field} className="resize-none h-24" />
+                          <Textarea {...field} className="h-24 resize-none" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -312,7 +312,7 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
               </div>
             )}
 
-            {submitError && <p className="text-[12px] text-destructive">{submitError}</p>}
+            {submitError && <p className="text-destructive text-[12px]">{submitError}</p>}
 
             <DialogFooter>
               <WaveButton type="submit" disabled={isLoading}>

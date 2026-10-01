@@ -55,11 +55,11 @@ export function RejectReactivationDialog({ isOpen, onOpenChange, accountName, is
           maxLength={2000}
           placeholder={tAccount('platformReactivation.reject.tk_placeholder_')}
           className={cn(
-            'w-full rounded-sm border border-border bg-background p-3 text-[13px] text-foreground',
-            'placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-destructive/30 focus:border-destructive/40 transition-colors resize-y'
+            'border-border bg-background text-foreground w-full rounded-sm border p-3 text-[13px]',
+            'placeholder:text-muted-foreground/60 focus:ring-destructive/30 focus:border-destructive/40 resize-y transition-colors focus:ring-2 focus:outline-none'
           )}
         />
-        <div className="text-[11px] text-muted-foreground flex justify-between">
+        <div className="text-muted-foreground flex justify-between text-[11px]">
           <span className={isValid ? 'text-muted-foreground' : 'text-destructive'}>{tAccount('platformReactivation.reject.tk_min-hint_')}</span>
           <span>{note.length} / 2000</span>
         </div>
@@ -68,11 +68,11 @@ export function RejectReactivationDialog({ isOpen, onOpenChange, accountName, is
             type="button"
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
-            className="cursor-pointer text-[12px] text-muted-foreground hover:text-foreground transition-colors px-3 py-2 disabled:opacity-50"
+            className="text-muted-foreground hover:text-foreground cursor-pointer px-3 py-2 text-[12px] transition-colors disabled:opacity-50"
           >
             {tCommon('tk_cancel_')}
           </button>
-          <WaveButton data-testid="reactivation-reject-submit" type="button" onClick={submit} disabled={isLoading || !isValid} className="!h-9 !w-auto !text-[12px] px-4">
+          <WaveButton data-testid="reactivation-reject-submit" type="button" onClick={submit} disabled={isLoading || !isValid} className="!h-9 !w-auto px-4 !text-[12px]">
             {isLoading ? tCommon('tk_loading_') : tAccount('platformReactivation.reject.tk_submit_')}
           </WaveButton>
         </DialogFooter>

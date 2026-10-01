@@ -65,46 +65,46 @@ function KpiRow({
   const entitiesTotal = isEntityScoped ? scopedEntitiesCount : account.entities.count
 
   return (
-    <div data-testid="overview-kpis" className="grid gap-3 mb-6 grid-cols-1 sm:grid-cols-3 items-stretch">
+    <div data-testid="overview-kpis" className="mb-6 grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3">
       {/* Users KPI */}
-      <div data-testid="kpi-users" className="flex flex-col gap-1.5 justify-between rounded-sm border border-border border-l-2 border-l-primary bg-card px-4 py-2.5">
+      <div data-testid="kpi-users" className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
         <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            <Users className="h-3 w-3 text-primary" />
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
+            <Users className="text-primary h-3 w-3" />
             {tAccount('overview.kpi.tk_users_')}
           </span>
         </div>
-        <div className="font-display text-3xl font-bold leading-none">{usersTotal}</div>
-        <div className="text-[11px] text-muted-foreground">{tAccount('overview.kpi.tk_users-sub_', { accountLinked: accountLinkedCount, entityLinked: entityOnlyCount })}</div>
+        <div className="font-display text-3xl leading-none font-bold">{usersTotal}</div>
+        <div className="text-muted-foreground text-[11px]">{tAccount('overview.kpi.tk_users-sub_', { accountLinked: accountLinkedCount, entityLinked: entityOnlyCount })}</div>
       </div>
 
       {/* Entities KPI */}
-      <div data-testid="kpi-entities" className="flex flex-col gap-1.5 justify-between rounded-sm border border-border border-l-2 border-l-primary bg-card px-4 py-2.5">
+      <div data-testid="kpi-entities" className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
         <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            <Building2 className="h-3 w-3 text-primary" />
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
+            <Building2 className="text-primary h-3 w-3" />
             {tAccount('overview.kpi.tk_entities_')}
           </span>
         </div>
-        <div className="font-display text-3xl font-bold leading-none">{entitiesTotal}</div>
-        <div className="text-[11px] text-muted-foreground">{tAccount('overview.kpi.tk_entities-sub_', { active: entitiesTotal, disabled: 0 })}</div>
+        <div className="font-display text-3xl leading-none font-bold">{entitiesTotal}</div>
+        <div className="text-muted-foreground text-[11px]">{tAccount('overview.kpi.tk_entities-sub_', { active: entitiesTotal, disabled: 0 })}</div>
       </div>
 
       {/* Pending invitations / sign-ups KPI — two numbers (invitations · sign-ups) with an adaptive sub-line. */}
-      <div data-testid="kpi-pending" className="flex flex-col gap-1.5 justify-between rounded-sm border border-border border-l-2 border-l-primary bg-card px-4 py-2.5">
+      <div data-testid="kpi-pending" className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
         <div className="flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            <Clock className="h-3 w-3 text-primary" />
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
+            <Clock className="text-primary h-3 w-3" />
             {tAccount('overview.kpi.tk_pending_')}
           </span>
-          {pendingTotal > 0 && <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_6px] shadow-amber-500 animate-pulse" />}
+          {pendingTotal > 0 && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500 shadow-[0_0_6px] shadow-amber-500" />}
         </div>
-        <div className="flex items-baseline gap-2 font-display text-3xl font-bold leading-none">
+        <div className="font-display flex items-baseline gap-2 text-3xl leading-none font-bold">
           <span>{pendingInvitations}</span>
           <span className="text-muted-foreground/50 text-xl">·</span>
           <span>{pendingSignups}</span>
         </div>
-        <div className="text-[11px] text-muted-foreground">{pendingSub}</div>
+        <div className="text-muted-foreground text-[11px]">{pendingSub}</div>
       </div>
     </div>
   )
@@ -114,7 +114,7 @@ function KpiRow({
 
 function Card({ children, dataTestid }: { children: React.ReactNode; dataTestid?: string }) {
   return (
-    <div data-testid={dataTestid} className="rounded-sm border border-border bg-card overflow-hidden">
+    <div data-testid={dataTestid} className="border-border bg-card overflow-hidden rounded-sm border">
       {children}
     </div>
   )
@@ -122,11 +122,11 @@ function Card({ children, dataTestid }: { children: React.ReactNode; dataTestid?
 
 function CardHeader({ icon, title, meta, action, onAction, rightSlot }: { icon: React.ReactNode; title: string; meta?: string; action?: string; onAction?: () => void; rightSlot?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+    <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-2.5">
       <div className="flex items-center gap-2">
         <span className="text-primary">{icon}</span>
-        <span className="font-display text-[13px] font-bold text-foreground">{title}</span>
-        {meta && <span className="text-[11px] text-muted-foreground font-medium">{meta}</span>}
+        <span className="font-display text-foreground text-[13px] font-bold">{title}</span>
+        {meta && <span className="text-muted-foreground text-[11px] font-medium">{meta}</span>}
       </div>
       <div className="flex items-center gap-3">
         {rightSlot}
@@ -134,7 +134,7 @@ function CardHeader({ icon, title, meta, action, onAction, rightSlot }: { icon: 
           <button
             type="button"
             onClick={onAction}
-            className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+            className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
           >
             {action} <ChevronRight className="h-3 w-3" />
           </button>
@@ -157,7 +157,7 @@ function RecentUsers({ users, onInvite, canInvite }: { users: UserDto[]; onInvit
         meta={tAccount('overview.recentUsers.tk_meta-most-recent_', { count: users.length })}
         rightSlot={
           canInvite ? (
-            <WaveButton type="button" onClick={onInvite} className="!h-8 !w-auto !text-[11px] px-3.5">
+            <WaveButton type="button" onClick={onInvite} className="!h-8 !w-auto px-3.5 !text-[11px]">
               <Mail className="h-3.5 w-3.5" />
               {tAccount('overview.recentUsers.tk_invite-cta_')}
             </WaveButton>
@@ -166,7 +166,7 @@ function RecentUsers({ users, onInvite, canInvite }: { users: UserDto[]; onInvit
       />
       <div className="flex flex-col">
         {users.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-muted-foreground">{tAccount('overview.recentUsers.tk_no-users_')}</div>
+          <div className="text-muted-foreground px-4 py-8 text-center text-xs">{tAccount('overview.recentUsers.tk_no-users_')}</div>
         ) : (
           users.slice(0, 5).map((u) => {
             const fullName = `${u.people?.firstname ?? ''} ${u.people?.lastname ?? ''}`.trim() || u.email
@@ -176,34 +176,34 @@ function RecentUsers({ users, onInvite, canInvite }: { users: UserDto[]; onInvit
               <div
                 data-testid="recent-user-row"
                 key={u.id}
-                className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3.5 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted transition-colors"
+                className="border-border hover:bg-muted grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3.5 border-b px-4 py-3 transition-colors last:border-b-0"
               >
                 <div className={`flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold ${accessClass}`}>{initials}</div>
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-foreground leading-tight truncate">{fullName}</div>
-                  <div className="text-[11px] text-muted-foreground leading-tight truncate">{u.email}</div>
+                  <div className="text-foreground truncate text-[13px] leading-tight font-semibold">{fullName}</div>
+                  <div className="text-muted-foreground truncate text-[11px] leading-tight">{u.email}</div>
                 </div>
                 {u.isDirectlyLinked ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-primary/22 bg-primary/12 text-primary whitespace-nowrap">
+                  <span className="border-primary/22 bg-primary/12 text-primary inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase">
                     {tAccount('users.table.tk_access-account_')}
                   </span>
                 ) : u.entities && u.entities.length > 0 ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-muted text-muted-foreground whitespace-nowrap">
+                  <span className="border-border bg-muted text-muted-foreground inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase">
                     {u.entities[0].name}
                   </span>
                 ) : (
-                  <span className="text-[11px] text-muted-foreground">—</span>
+                  <span className="text-muted-foreground text-[11px]">—</span>
                 )}
                 {/* Role chip — same affordance as the other role tags so it reads as "this is a role". */}
                 {(() => {
                   const r = u.roles?.[0]?.name
-                  if (!r) return <span className="text-[11px] text-muted-foreground">—</span>
+                  if (!r) return <span className="text-muted-foreground text-[11px]">—</span>
                   const k = r.toLowerCase()
                   const knownRoles = ['guest', 'account-user', 'account-admin', 'entity-admin', 'entity-user', 'platform-admin', 'platform-user']
                   const label = knownRoles.includes(k) ? tAccount(`roles.builtin.tk_${k.replace('-', '_')}_`) : r
                   return (
                     <span
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80 whitespace-nowrap"
+                      className="border-border bg-secondary text-foreground/80 inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase"
                       title={tAccount('overview.recentUsers.tk_role-tooltip_', { role: label })}
                     >
                       <Shield className="h-2.5 w-2.5" />
@@ -211,19 +211,19 @@ function RecentUsers({ users, onInvite, canInvite }: { users: UserDto[]; onInvit
                     </span>
                   )
                 })()}
-                <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{formatDateShort(u.createdAt, { withYear: false })}</span>
+                <span className="text-muted-foreground text-[11px] whitespace-nowrap tabular-nums">{formatDateShort(u.createdAt, { withYear: false })}</span>
               </div>
             )
           })
         )}
       </div>
       {users.length > 0 && (
-        <div className="flex justify-end border-t border-border px-4 py-2.5">
+        <div className="border-border flex justify-end border-t px-4 py-2.5">
           <button
             type="button"
             data-testid="recent-users-view-all"
             onClick={() => navigate('/account?tab=users')}
-            className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+            className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
           >
             {tAccount('overview.recentUsers.tk_view-all-users_')} <ChevronRight className="h-3 w-3" />
           </button>
@@ -246,7 +246,7 @@ function RecentEntities({ entities, onCreate, canCreate }: { entities: EntityDto
         meta={tAccount('overview.recentEntities.tk_meta-total_', { count: entities.length })}
         rightSlot={
           canCreate ? (
-            <WaveButton type="button" onClick={onCreate} className="!h-8 !w-auto !text-[11px] px-3.5">
+            <WaveButton type="button" onClick={onCreate} className="!h-8 !w-auto px-3.5 !text-[11px]">
               <Plus className="h-3.5 w-3.5" />
               {tAccount('overview.recentEntities.tk_create-cta_')}
             </WaveButton>
@@ -255,18 +255,18 @@ function RecentEntities({ entities, onCreate, canCreate }: { entities: EntityDto
       />
       <div className="flex flex-col">
         {entities.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-muted-foreground">{tAccount('overview.recentEntities.tk_no-entities-yet_')}</div>
+          <div className="text-muted-foreground px-4 py-8 text-center text-xs">{tAccount('overview.recentEntities.tk_no-entities-yet_')}</div>
         ) : (
           entities.slice(0, 5).map((e) => (
-            <div data-testid="recent-entity-row" key={e.id} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted transition-colors">
-              <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-muted border border-border text-muted-foreground">
+            <div data-testid="recent-entity-row" key={e.id} className="border-border hover:bg-muted flex items-center gap-3 border-b px-4 py-3 transition-colors last:border-b-0">
+              <div className="bg-muted border-border text-muted-foreground flex h-7 w-7 items-center justify-center rounded-sm border">
                 <Building2 className="h-3.5 w-3.5" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-foreground leading-tight truncate">{e.name}</div>
-                {e.organization?.name && <div className="text-[11px] text-muted-foreground leading-tight truncate">{e.organization.name}</div>}
+              <div className="min-w-0 flex-1">
+                <div className="text-foreground truncate text-[13px] leading-tight font-semibold">{e.name}</div>
+                {e.organization?.name && <div className="text-muted-foreground truncate text-[11px] leading-tight">{e.organization.name}</div>}
               </div>
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-muted text-muted-foreground whitespace-nowrap">
+              <span className="border-border bg-muted text-muted-foreground inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase">
                 {(e.organization as { type?: string } | null)?.type ?? '—'}
               </span>
             </div>
@@ -274,12 +274,12 @@ function RecentEntities({ entities, onCreate, canCreate }: { entities: EntityDto
         )}
       </div>
       {entities.length > 0 && (
-        <div className="flex justify-end border-t border-border px-4 py-2.5">
+        <div className="border-border flex justify-end border-t px-4 py-2.5">
           <button
             type="button"
             data-testid="recent-entities-view-all"
             onClick={() => navigate('/account?tab=entities')}
-            className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+            className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
           >
             {tAccount('overview.recentEntities.tk_view-all-entities_')} <ChevronRight className="h-3 w-3" />
           </button>
@@ -303,9 +303,9 @@ function RolesCard({ roles, allowPlatform }: { roles: RoleDto[]; allowPlatform: 
       <CardHeader icon={<Shield className="h-3.5 w-3.5" />} title={tAccount('overview.rolesCard.tk_title_')} meta={tAccount('overview.rolesCard.tk_meta-defined_', { count: visibleRoles.length })} />
       <div className="p-4">
         {visible.length === 0 ? (
-          <div className="py-6 text-center text-xs text-muted-foreground">{tAccount('overview.rolesCard.tk_no-roles_')}</div>
+          <div className="text-muted-foreground py-6 text-center text-xs">{tAccount('overview.rolesCard.tk_no-roles_')}</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((r) => {
               const key = r.name?.toLowerCase()
               const isGuest = key === 'guest'
@@ -314,13 +314,13 @@ function RolesCard({ roles, allowPlatform }: { roles: RoleDto[]; allowPlatform: 
               const displayName = isBuiltIn ? tAccount(`roles.builtin.tk_${key.replace('-', '_')}_`) : r.name
               const displayDescription = isBuiltIn ? tAccount(`roles.builtin.tk_${key.replace('-', '_')}-description_`) : r.description
               return (
-                <div data-testid="role-card" key={r.id} className="flex items-start gap-2.5 rounded-sm border border-border bg-secondary px-3 py-2.5 hover:border-primary/40 transition-colors">
+                <div data-testid="role-card" key={r.id} className="border-border bg-secondary hover:border-primary/40 flex items-start gap-2.5 rounded-sm border px-3 py-2.5 transition-colors">
                   <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm ${isGuest ? 'bg-muted text-muted-foreground' : 'bg-primary/12 text-primary'}`}>
                     {key?.includes('admin') ? <ShieldCheck className="h-3.5 w-3.5" /> : <UserIcon className="h-3.5 w-3.5" />}
                   </div>
                   <div className="min-w-0">
                     <div className={`text-[12px] font-bold capitalize ${isGuest ? 'text-muted-foreground' : 'text-foreground'}`}>{displayName}</div>
-                    {displayDescription && <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{displayDescription}</div>}
+                    {displayDescription && <div className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px]">{displayDescription}</div>}
                   </div>
                 </div>
               )
@@ -329,12 +329,12 @@ function RolesCard({ roles, allowPlatform }: { roles: RoleDto[]; allowPlatform: 
         )}
       </div>
       {visibleRoles.length > 0 && (
-        <div className="flex justify-end border-t border-border px-4 py-2.5">
+        <div className="border-border flex justify-end border-t px-4 py-2.5">
           <button
             type="button"
             data-testid="roles-view-all"
             onClick={() => navigate('/account?tab=roles')}
-            className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+            className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
           >
             {tAccount('overview.rolesCard.tk_view-all-roles_')} <ChevronRight className="h-3 w-3" />
           </button>
@@ -369,7 +369,7 @@ function PlatformOverview() {
   if (overviewLoading || !overview) {
     return (
       <div className="space-y-4 opacity-25">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-24 w-full rounded-sm" />
           ))}
@@ -399,39 +399,39 @@ function PlatformOverview() {
             meta={tAccount('overview.recentAccounts.tk_meta-total_', { count: kpis.accountsCount })}
             rightSlot={
               canInviteOwner ? (
-                <WaveButton type="button" onClick={() => setIsInviteOwnerOpen(true)} className="!h-8 !w-auto !text-[11px] px-3.5">
+                <WaveButton type="button" onClick={() => setIsInviteOwnerOpen(true)} className="!h-8 !w-auto px-3.5 !text-[11px]">
                   <Mail className="h-3.5 w-3.5" />
                   {tAccount('overview.recentAccounts.tk_invite-owner_')}
                 </WaveButton>
               ) : undefined
             }
           />
-          <div className="divide-y divide-border">
+          <div className="divide-border divide-y">
             {accountsLoading ? (
-              <div className="p-4 space-y-2">
+              <div className="space-y-2 p-4">
                 {[0, 1, 2].map((i) => (
                   <Skeleton key={i} className="h-12 w-full rounded-sm" />
                 ))}
               </div>
             ) : accounts.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-muted-foreground">{tAccount('overview.recentAccounts.tk_no-accounts_')}</div>
+              <div className="text-muted-foreground px-4 py-8 text-center text-xs">{tAccount('overview.recentAccounts.tk_no-accounts_')}</div>
             ) : (
               accounts.map((acc) => (
                 <button
                   key={acc.id}
                   type="button"
                   onClick={() => setCurrentScope({ kind: 'PLATFORM', id: acc.id })}
-                  className="group cursor-pointer w-full px-4 py-3 text-left hover:bg-secondary transition-colors"
+                  className="group hover:bg-secondary w-full cursor-pointer px-4 py-3 text-left transition-colors"
                   title={tAccount('overview.recentAccounts.tk_select-account_')}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/15">
-                        <Shield className="h-3.5 w-3.5 text-primary" />
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="bg-primary/15 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg">
+                        <Shield className="text-primary h-3.5 w-3.5" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-foreground truncate">{acc.name}</div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-foreground truncate text-sm font-semibold">{acc.name}</div>
+                        <div className="text-muted-foreground text-[11px]">
                           {acc.usersCount} users · {acc.entitiesCount} entities
                         </div>
                       </div>
@@ -439,7 +439,7 @@ function PlatformOverview() {
                     {/* CTA hint — same affordance as the Roles "VIEW →" footer: muted text that
                         turns primary on hover, literal arrow character. Conveys "click to open this
                         account context" without competing with the row's other content. */}
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 group-hover:text-primary transition-colors whitespace-nowrap">
+                    <span className="text-muted-foreground/70 group-hover:text-primary text-[10px] tracking-wider whitespace-nowrap uppercase transition-colors">
                       {tAccount('overview.recentAccounts.tk_open-context_')} →
                     </span>
                   </div>
@@ -448,12 +448,12 @@ function PlatformOverview() {
             )}
           </div>
           {accounts.length > 0 && (
-            <div className="flex justify-end border-t border-border px-4 py-2.5">
+            <div className="border-border flex justify-end border-t px-4 py-2.5">
               <button
                 type="button"
                 data-testid="recent-accounts-view-all"
                 onClick={() => navigate('/account?tab=accounts')}
-                className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+                className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
               >
                 {tAccount('overview.recentAccounts.tk_view-all-accounts_')} <ChevronRight className="h-3 w-3" />
               </button>
@@ -496,42 +496,42 @@ function PlatformKpiRow({
   return (
     // Order: Accounts → Pending invitations → Reactivation requests → Total users
     // Two attention-worthy actionable cards bracketed between the two stable-state cards.
-    <div className="grid gap-3 mb-6 grid-cols-1 sm:grid-cols-4 items-stretch">
-      <div className="flex flex-col gap-1.5 justify-between rounded-sm border border-border border-l-2 border-l-primary bg-card px-4 py-2.5">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          <Building2 className="h-3 w-3 text-primary" />
+    <div className="mb-6 grid grid-cols-1 items-stretch gap-3 sm:grid-cols-4">
+      <div className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
+        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
+          <Building2 className="text-primary h-3 w-3" />
           {tAccount('overview.kpi.tk_accounts_')}
         </span>
-        <div className="font-display text-3xl font-bold leading-none">{kpis.accountsCount}</div>
-        <div className="text-[11px] text-muted-foreground">{tAccount('overview.kpi.tk_accounts-sub_')}</div>
+        <div className="font-display text-3xl leading-none font-bold">{kpis.accountsCount}</div>
+        <div className="text-muted-foreground text-[11px]">{tAccount('overview.kpi.tk_accounts-sub_')}</div>
       </div>
-      <div className="flex flex-col gap-1.5 justify-between rounded-sm border border-border border-l-2 border-l-primary bg-card px-4 py-2.5">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          <Mail className="h-3 w-3 text-primary" />
+      <div className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
+        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
+          <Mail className="text-primary h-3 w-3" />
           {tAccount('overview.kpi.tk_pending-invitation_')}
         </span>
-        <div className={cn('flex items-baseline gap-2 font-display text-3xl font-bold leading-none', pendingTotal > 0 && 'text-amber-500')}>
+        <div className={cn('font-display flex items-baseline gap-2 text-3xl leading-none font-bold', pendingTotal > 0 && 'text-amber-500')}>
           <span>{kpis.pendingInvitations}</span>
           <span className="text-muted-foreground/50 text-xl">·</span>
           <span>{kpis.pendingSignups}</span>
         </div>
-        <div className="text-[11px] text-muted-foreground">{pendingInvSub}</div>
+        <div className="text-muted-foreground text-[11px]">{pendingInvSub}</div>
       </div>
-      <div className="flex flex-col gap-1.5 justify-between rounded-sm border border-border border-l-2 border-l-primary bg-card px-4 py-2.5">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          <Clock className="h-3 w-3 text-primary" />
+      <div className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
+        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
+          <Clock className="text-primary h-3 w-3" />
           {tAccount('overview.kpi.tk_pending-reactivation_')}
         </span>
-        <div className={cn('font-display text-3xl font-bold leading-none', kpis.pendingReactivationCount > 0 && 'text-amber-500')}>{kpis.pendingReactivationCount}</div>
-        <div className="text-[11px] text-muted-foreground">{tAccount(pendingReacSubKey)}</div>
+        <div className={cn('font-display text-3xl leading-none font-bold', kpis.pendingReactivationCount > 0 && 'text-amber-500')}>{kpis.pendingReactivationCount}</div>
+        <div className="text-muted-foreground text-[11px]">{tAccount(pendingReacSubKey)}</div>
       </div>
-      <div className="flex flex-col gap-1.5 justify-between rounded-sm border border-border border-l-2 border-l-primary bg-card px-4 py-2.5">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          <Users className="h-3 w-3 text-primary" />
+      <div className="border-border border-l-primary bg-card flex flex-col justify-between gap-1.5 rounded-sm border border-l-2 px-4 py-2.5">
+        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase">
+          <Users className="text-primary h-3 w-3" />
           {tAccount('overview.kpi.tk_users_')}
         </span>
-        <div className="font-display text-3xl font-bold leading-none">{kpis.usersCount}</div>
-        <div className="text-[11px] text-muted-foreground">{tAccount('overview.kpi.tk_users-platform-sub_')}</div>
+        <div className="font-display text-3xl leading-none font-bold">{kpis.usersCount}</div>
+        <div className="text-muted-foreground text-[11px]">{tAccount('overview.kpi.tk_users-platform-sub_')}</div>
       </div>
     </div>
   )
@@ -550,7 +550,7 @@ function PlatformRecentUsers({ users }: { users: PlatformUser[] }) {
       <CardHeader icon={<Users className="h-3.5 w-3.5" />} title={tAccount('overview.recentUsers.tk_title_')} meta={tAccount('overview.recentUsers.tk_meta-most-recent_', { count: users.length })} />
       <div className="flex flex-col">
         {users.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-muted-foreground">{tAccount('overview.recentUsers.tk_no-users_')}</div>
+          <div className="text-muted-foreground px-4 py-8 text-center text-xs">{tAccount('overview.recentUsers.tk_no-users_')}</div>
         ) : (
           users.map((u) => {
             const fullName = `${u.people?.firstname ?? ''} ${u.people?.lastname ?? ''}`.trim() || u.email
@@ -566,15 +566,15 @@ function PlatformRecentUsers({ users }: { users: PlatformUser[] }) {
                 : primaryRoleName
               : null
             return (
-              <div key={u.id} className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3.5 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted transition-colors">
+              <div key={u.id} className="border-border hover:bg-muted grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3.5 border-b px-4 py-3 transition-colors last:border-b-0">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold ${accessClass}`}>{initials}</div>
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-foreground leading-tight truncate">{fullName}</div>
-                  <div className="text-[11px] text-muted-foreground leading-tight truncate">{u.email}</div>
+                  <div className="text-foreground truncate text-[13px] leading-tight font-semibold">{fullName}</div>
+                  <div className="text-muted-foreground truncate text-[11px] leading-tight">{u.email}</div>
                 </div>
                 {accountLabel ? (
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider whitespace-nowrap border ${
+                    className={`inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase ${
                       isDirect ? 'border-primary/22 bg-primary/12 text-primary' : 'border-border bg-muted text-muted-foreground'
                     }`}
                     title={accountLabel}
@@ -588,7 +588,7 @@ function PlatformRecentUsers({ users }: { users: PlatformUser[] }) {
                     + scope icon) so the user immediately reads "this is a role" rather than free text. */}
                 {roleLabel ? (
                   <span
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border border-border bg-secondary text-foreground/80 whitespace-nowrap"
+                    className="border-border bg-secondary text-foreground/80 inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase"
                     title={tAccount('overview.recentUsers.tk_role-tooltip_', { role: roleLabel })}
                   >
                     <Shield className="h-2.5 w-2.5" />
@@ -597,19 +597,19 @@ function PlatformRecentUsers({ users }: { users: PlatformUser[] }) {
                 ) : (
                   <span />
                 )}
-                <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{formatDateShort(u.createdAt, { withYear: false })}</span>
+                <span className="text-muted-foreground text-[11px] whitespace-nowrap tabular-nums">{formatDateShort(u.createdAt, { withYear: false })}</span>
               </div>
             )
           })
         )}
       </div>
       {users.length > 0 && (
-        <div className="flex justify-end border-t border-border px-4 py-2.5">
+        <div className="border-border flex justify-end border-t px-4 py-2.5">
           <button
             type="button"
             data-testid="platform-recent-users-view-all"
             onClick={() => navigate('/account?tab=users')}
-            className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+            className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
           >
             {tAccount('overview.recentUsers.tk_view-all-users_')} <ChevronRight className="h-3 w-3" />
           </button>
@@ -630,9 +630,9 @@ function PlatformRolesCard({ roles }: { roles: PlatformSystemRole[] }) {
       <CardHeader icon={<Shield className="h-3.5 w-3.5" />} title={tAccount('overview.rolesCard.tk_title_')} meta={tAccount('overview.rolesCard.tk_meta-defined_', { count: roles.length })} />
       <div className="p-4">
         {visible.length === 0 ? (
-          <div className="py-6 text-center text-xs text-muted-foreground">{tAccount('overview.rolesCard.tk_no-roles_')}</div>
+          <div className="text-muted-foreground py-6 text-center text-xs">{tAccount('overview.rolesCard.tk_no-roles_')}</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((r) => {
               const key = r.name.toLowerCase()
               const isGuest = key === 'guest'
@@ -640,16 +640,16 @@ function PlatformRolesCard({ roles }: { roles: PlatformSystemRole[] }) {
               const displayName = known.includes(key) ? tAccount(`roles.builtin.tk_${key.replace('-', '_')}_`) : r.name
               const displayDescription = known.includes(key) ? tAccount(`roles.builtin.tk_${key.replace('-', '_')}-description_`) : r.description
               return (
-                <div key={r.id} className="flex items-start gap-2.5 rounded-sm border border-border bg-secondary px-3 py-2.5 hover:border-primary/40 transition-colors">
+                <div key={r.id} className="border-border bg-secondary hover:border-primary/40 flex items-start gap-2.5 rounded-sm border px-3 py-2.5 transition-colors">
                   <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm ${isGuest ? 'bg-muted text-muted-foreground' : 'bg-primary/12 text-primary'}`}>
                     {key.includes('admin') ? <ShieldCheck className="h-3.5 w-3.5" /> : <UserIcon className="h-3.5 w-3.5" />}
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <div className={`text-[12px] font-bold capitalize ${isGuest ? 'text-muted-foreground' : 'text-foreground'}`}>{displayName}</div>
-                      <span className="rounded-[2px] border border-primary/25 bg-primary/10 px-1 py-0 text-[9px] font-bold uppercase tracking-wider text-primary">{r.scope}</span>
+                      <span className="border-primary/25 bg-primary/10 text-primary rounded-[2px] border px-1 py-0 text-[9px] font-bold tracking-wider uppercase">{r.scope}</span>
                     </div>
-                    {displayDescription && <div className="text-xs text-foreground/80 mt-0.5 line-clamp-2 leading-snug">{displayDescription}</div>}
+                    {displayDescription && <div className="text-foreground/80 mt-0.5 line-clamp-2 text-xs leading-snug">{displayDescription}</div>}
                   </div>
                 </div>
               )
@@ -658,12 +658,12 @@ function PlatformRolesCard({ roles }: { roles: PlatformSystemRole[] }) {
         )}
       </div>
       {roles.length > 0 && (
-        <div className="flex justify-end border-t border-border px-4 py-2.5">
+        <div className="border-border flex justify-end border-t px-4 py-2.5">
           <button
             type="button"
             data-testid="platform-roles-view-all"
             onClick={() => navigate('/account?tab=roles')}
-            className="cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-primary hover:text-foreground transition-colors"
+            className="text-primary hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold tracking-wider uppercase transition-colors"
           >
             {tAccount('overview.rolesCard.tk_view-all-roles_')} <ChevronRight className="h-3 w-3" />
           </button>

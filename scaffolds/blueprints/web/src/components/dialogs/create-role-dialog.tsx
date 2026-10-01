@@ -270,10 +270,10 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 mt-2">
+        <div className="mt-2 space-y-5">
           {/* A — Identity */}
           <div className="space-y-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('roles.create.tk_section-identity_')}</p>
+            <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">{tAccount('roles.create.tk_section-identity_')}</p>
             <div>
               <Input
                 data-testid="role-name"
@@ -283,23 +283,23 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                   if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }))
                 }}
                 placeholder={tAccount('roles.create.tk_name-placeholder_')}
-                className={cn('h-9 text-sm disabled:opacity-60 disabled:cursor-not-allowed', errors.name && 'border-destructive focus:border-destructive')}
+                className={cn('h-9 text-sm disabled:cursor-not-allowed disabled:opacity-60', errors.name && 'border-destructive focus:border-destructive')}
                 maxLength={30}
                 disabled={isSystemEdit}
               />
-              {errors.name && <p className="mt-1 text-[11px] text-destructive">{errors.name}</p>}
+              {errors.name && <p className="text-destructive mt-1 text-[11px]">{errors.name}</p>}
             </div>
             <Input
               data-testid="role-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={tAccount('roles.create.tk_description-placeholder_')}
-              className="h-9 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              className="h-9 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               maxLength={255}
               disabled={isSystemEdit}
             />
             {isSystemEdit && (
-              <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+              <p className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px]">
                 <Lock className="h-3 w-3" />
                 {tAccount('roles.edit.tk_system-locked-hint_')}
               </p>
@@ -316,14 +316,14 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
               account. The role's `scope` axis (PLATFORM / ACCOUNT / ENTITY) tells the runtime
               at which layer the assignment will materialise when it's later attached to a user. */}
           <div className="space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('roles.create.tk_section-scope_')}</p>
+            <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">{tAccount('roles.create.tk_section-scope_')}</p>
             <div className={cn('grid gap-2', allowPlatformScope ? 'grid-cols-3' : 'grid-cols-2')}>
               {allowPlatformScope && (
                 <ScopeTile
                   selected={effectiveScope === 'PLATFORM'}
                   disabled={isEdit && editing?.scope !== 'PLATFORM'}
                   onClick={() => !isEdit && setScope('PLATFORM')}
-                  icon={<Globe className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />}
+                  icon={<Globe className="text-primary mt-0.5 h-4 w-4 flex-shrink-0" />}
                   label={tAccount('roles.create.tk_scope-platform_')}
                   sub={tAccount('roles.create.tk_scope-platform-sub_')}
                 />
@@ -332,7 +332,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                 selected={effectiveScope === 'ACCOUNT'}
                 disabled={(isEdit && editing?.scope !== 'ACCOUNT') || lockToEntityScope}
                 onClick={() => !isEdit && !lockToEntityScope && setScope('ACCOUNT')}
-                icon={<Shield className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />}
+                icon={<Shield className="text-primary mt-0.5 h-4 w-4 flex-shrink-0" />}
                 label={tAccount('roles.create.tk_scope-account_')}
                 sub={tAccount('roles.create.tk_scope-account-sub_')}
               />
@@ -340,13 +340,13 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                 selected={effectiveScope === 'ENTITY'}
                 disabled={isEdit && editing?.scope !== 'ENTITY'}
                 onClick={() => !isEdit && setScope('ENTITY')}
-                icon={<ShieldCheck className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />}
+                icon={<ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />}
                 label={tAccount('roles.create.tk_scope-entity_')}
                 sub={tAccount('roles.create.tk_scope-entity-sub_')}
               />
             </div>
             {/* Heads-up note in edit mode (scope is locked once a role exists). */}
-            {isEdit && <p className="text-[11px] text-muted-foreground">{tAccount('roles.edit.tk_scope-locked-note_')}</p>}
+            {isEdit && <p className="text-muted-foreground text-[11px]">{tAccount('roles.edit.tk_scope-locked-note_')}</p>}
           </div>
 
           {/* C — Access (sections + actions).
@@ -354,17 +354,17 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
               is a read-only section. Granting an action auto-selects (and locks on) its section. Simple
               modules expose their permissions directly. */}
           <div className="space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+            <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">
               {tAccount('roles.create.tk_section-permissions_')}{' '}
-              <span className="text-muted-foreground/70 normal-case font-normal">
+              <span className="text-muted-foreground/70 font-normal normal-case">
                 · {selectedSubModuleNames.size + selectedPermissionNames.size} {tAccount('roles.create.tk_selected_')}
               </span>
             </p>
-            <div className={cn('max-h-[260px] overflow-y-auto rounded-sm border p-1.5 space-y-1', errors.permissions ? 'border-destructive' : 'border-border')}>
+            <div className={cn('max-h-[260px] space-y-1 overflow-y-auto rounded-sm border p-1.5', errors.permissions ? 'border-destructive' : 'border-border')}>
               {isLoadingCatalog ? (
                 Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-sm" />)
               ) : filteredCatalog.length === 0 ? (
-                <div className="px-3 py-6 text-center text-[11px] text-muted-foreground">{tAccount('roles.create.tk_no-permissions-for-scope_')}</div>
+                <div className="text-muted-foreground px-3 py-6 text-center text-[11px]">{tAccount('roles.create.tk_no-permissions-for-scope_')}</div>
               ) : (
                 filteredCatalog.map((mod) => {
                   const isExpanded = expandedModules.has(mod.moduleId)
@@ -373,30 +373,30 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                     mod.subModules.reduce((acc, sm) => acc + (selectedSubModuleNames.has(sm.name) ? 1 : 0) + sm.permissions.filter((p) => selectedPermissionNames.has(p.name)).length, 0)
                   const totalInModule = mod.standalonePermissions.length + mod.subModules.reduce((acc, sm) => acc + 1 + sm.permissions.length, 0)
                   return (
-                    <div key={mod.moduleId} data-testid={`role-module-${mod.moduleName}`} className="rounded-sm border border-border bg-secondary">
-                      <button type="button" onClick={() => toggleModule(mod.moduleId)} className="cursor-pointer w-full flex items-center justify-between px-2.5 py-2">
+                    <div key={mod.moduleId} data-testid={`role-module-${mod.moduleName}`} className="border-border bg-secondary rounded-sm border">
+                      <button type="button" onClick={() => toggleModule(mod.moduleId)} className="flex w-full cursor-pointer items-center justify-between px-2.5 py-2">
                         <div className="flex items-center gap-2">
-                          {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                          <span className="text-[12px] font-bold text-foreground">{mod.moduleName}</span>
+                          {isExpanded ? <ChevronDown className="text-muted-foreground h-3.5 w-3.5" /> : <ChevronRight className="text-muted-foreground h-3.5 w-3.5" />}
+                          <span className="text-foreground text-[12px] font-bold">{mod.moduleName}</span>
                         </div>
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-muted-foreground text-[10px]">
                           {selectedInModule}/{totalInModule}
                         </span>
                       </button>
                       {isExpanded && (
-                        <div className="border-t border-border px-2.5 py-2 space-y-2">
+                        <div className="border-border space-y-2 border-t px-2.5 py-2">
                           {/* Sections (sub-modules) */}
                           {mod.subModules.map((sm) => {
                             const sectionChecked = selectedSubModuleNames.has(sm.name)
                             const sectionPermNames = sm.permissions.map((p) => p.name)
                             return (
-                              <div key={sm.id} className="rounded-[2px] border border-border/60 bg-background/30">
+                              <div key={sm.id} className="border-border/60 bg-background/30 rounded-[2px] border">
                                 <button
                                   data-testid={`role-section-${sm.name}`}
                                   type="button"
                                   onClick={() => toggleSubModule(sm.name, sectionPermNames)}
                                   className={cn(
-                                    'cursor-pointer w-full flex items-start gap-2 rounded-[2px] px-2 py-1.5 text-left transition-colors',
+                                    'flex w-full cursor-pointer items-start gap-2 rounded-[2px] px-2 py-1.5 text-left transition-colors',
                                     sectionChecked ? 'bg-primary/10' : 'hover:bg-background/50'
                                   )}
                                 >
@@ -406,18 +406,18 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                                       sectionChecked ? 'border-primary bg-primary' : 'border-border'
                                     )}
                                   >
-                                    {sectionChecked && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                                    {sectionChecked && <Check className="text-primary-foreground h-2.5 w-2.5" />}
                                   </span>
                                   <div className="min-w-0">
-                                    <div className="text-[11px] font-bold text-foreground inline-flex items-center gap-1.5">
-                                      <Eye className="h-3 w-3 text-muted-foreground" />
+                                    <div className="text-foreground inline-flex items-center gap-1.5 text-[11px] font-bold">
+                                      <Eye className="text-muted-foreground h-3 w-3" />
                                       {sm.name}
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground line-clamp-2">{sm.description}</div>
+                                    <div className="text-muted-foreground line-clamp-2 text-[10px]">{sm.description}</div>
                                   </div>
                                 </button>
                                 {sm.permissions.length > 0 && (
-                                  <div className="border-t border-border/60 pl-5 pr-2 py-1.5 space-y-1">
+                                  <div className="border-border/60 space-y-1 border-t py-1.5 pr-2 pl-5">
                                     {sm.permissions.map((p) => (
                                       <PermissionRow
                                         key={p.id}
@@ -443,7 +443,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
                 })
               )}
             </div>
-            {errors.permissions && <p className="text-[11px] text-destructive">{errors.permissions}</p>}
+            {errors.permissions && <p className="text-destructive text-[11px]">{errors.permissions}</p>}
           </div>
         </div>
 
@@ -451,7 +451,7 @@ export function CreateRoleDialog({ isOpen, onOpenChange, accountId, target }: Cr
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="cursor-pointer rounded-[2px] border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="border-border bg-card text-muted-foreground hover:text-foreground cursor-pointer rounded-[2px] border px-3 py-1.5 text-xs font-medium transition-colors"
           >
             {tCommon('actions.tk_cancel_')}
           </button>
@@ -480,13 +480,13 @@ function ScopeTile({ selected, disabled, onClick, icon, label, sub }: { selected
       className={cn(
         'flex items-start gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
         selected ? 'border-primary bg-primary/8' : 'border-border bg-secondary',
-        disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:border-primary/40'
+        disabled ? 'cursor-not-allowed opacity-40' : 'hover:border-primary/40 cursor-pointer'
       )}
     >
       {icon}
       <div className="min-w-0">
-        <div className="text-[12px] font-bold text-foreground">{label}</div>
-        <div className="text-[11px] text-muted-foreground">{sub}</div>
+        <div className="text-foreground text-[12px] font-bold">{label}</div>
+        <div className="text-muted-foreground text-[11px]">{sub}</div>
       </div>
     </button>
   )
@@ -500,14 +500,14 @@ function PermissionRow({ name, description, checked, onClick }: { name: string; 
     <button
       type="button"
       onClick={onClick}
-      className={cn('cursor-pointer w-full flex items-start gap-2 rounded-[2px] px-2 py-1.5 text-left transition-colors', checked ? 'bg-primary/10' : 'hover:bg-background/50')}
+      className={cn('flex w-full cursor-pointer items-start gap-2 rounded-[2px] px-2 py-1.5 text-left transition-colors', checked ? 'bg-primary/10' : 'hover:bg-background/50')}
     >
       <span className={cn('mt-0.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-[2px] border', checked ? 'border-primary bg-primary' : 'border-border')}>
-        {checked && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+        {checked && <Check className="text-primary-foreground h-2.5 w-2.5" />}
       </span>
       <div className="min-w-0">
-        <div className="text-[11px] font-mono font-bold text-foreground">{name}</div>
-        <div className="text-[10px] text-muted-foreground line-clamp-2">{description}</div>
+        <div className="text-foreground font-mono text-[11px] font-bold">{name}</div>
+        <div className="text-muted-foreground line-clamp-2 text-[10px]">{description}</div>
       </div>
     </button>
   )

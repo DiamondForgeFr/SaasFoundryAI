@@ -46,10 +46,10 @@ type InviteUserDialogProps = {
 function CompactSearch({ placeholder, value, onChange }: { placeholder: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="relative">
-      <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-      <Input placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} className="pl-8 pr-8 h-9 text-xs" />
+      <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+      <Input placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} className="h-9 pr-8 pl-8 text-xs" />
       {value && (
-        <button type="button" aria-label="Clear search" onClick={() => onChange('')} className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+        <button type="button" aria-label="Clear search" onClick={() => onChange('')} className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer">
           <X className="h-3.5 w-3.5" />
         </button>
       )}
@@ -252,10 +252,10 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5 mt-4">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="mt-4 space-y-5">
             {/* A — Who? */}
             <div className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('dialogs.inviteUser.tk_section-who_')}</p>
+              <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">{tAccount('dialogs.inviteUser.tk_section-who_')}</p>
               <FormField
                 control={form.control}
                 name="email"
@@ -304,13 +304,13 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                   Mutual exclusion in PLATFORM mode: selecting any account auto-deselects Platform
                   access; selecting Platform access auto-clears the accounts list. */}
             <div className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('dialogs.inviteUser.tk_section-access-scope_')}</p>
+              <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">{tAccount('dialogs.inviteUser.tk_section-access-scope_')}</p>
 
               {isPlatformAllMode ? (
                 <>
                   <CompactSearch placeholder={tAccount('dialogs.inviteUser.tk_search-accounts_')} value={searchAccounts} onChange={setSearchAccounts} />
 
-                  <div className="max-h-[212px] overflow-y-auto rounded-sm border border-border p-1.5">
+                  <div className="border-border max-h-[212px] overflow-y-auto rounded-sm border p-1.5">
                     {isLoadingAccounts ? (
                       <div className="grid grid-cols-2 gap-1.5 opacity-25">
                         {Array.from({ length: 4 }).map((_, i) => (
@@ -346,20 +346,20 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                                       }
                                     }}
                                     className={cn(
-                                      'cursor-pointer flex items-center gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors w-full',
+                                      'flex w-full cursor-pointer items-center gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
                                       platField.value ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                                     )}
                                   >
-                                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                                    <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                       <Globe className="h-3.5 w-3.5" />
                                     </div>
                                     <div className="min-w-0">
-                                      <div className="text-[12px] font-bold text-foreground leading-tight">{tAccount('dialogs.inviteUser.tk_platform-access_')}</div>
-                                      <div className="text-[11px] text-muted-foreground mt-0.5">{tAccount('dialogs.inviteUser.tk_platform-access-sub_')}</div>
+                                      <div className="text-foreground text-[12px] leading-tight font-bold">{tAccount('dialogs.inviteUser.tk_platform-access_')}</div>
+                                      <div className="text-muted-foreground mt-0.5 text-[11px]">{tAccount('dialogs.inviteUser.tk_platform-access-sub_')}</div>
                                     </div>
                                   </button>
                                   {accounts.length === 0 && searchAccounts ? (
-                                    <div className="flex h-[46px] items-center justify-center rounded-sm border border-dashed border-border bg-muted/40 px-3 text-center text-[11px] text-muted-foreground">
+                                    <div className="border-border bg-muted/40 text-muted-foreground flex h-[46px] items-center justify-center rounded-sm border border-dashed px-3 text-center text-[11px]">
                                       {tAccount('dialogs.inviteUser.tk_no-accounts-match_', { search: searchAccounts })}
                                     </div>
                                   ) : accounts.length > 0 ? (
@@ -378,16 +378,16 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                                               if (next.length > 0 && platField.value) platField.onChange(false)
                                             }}
                                             className={cn(
-                                              'cursor-pointer flex items-start gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
+                                              'flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
                                               selected ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                                             )}
                                           >
-                                            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-muted text-muted-foreground">
+                                            <div className="bg-muted text-muted-foreground flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                               <Building2 className="h-3.5 w-3.5" />
                                             </div>
                                             <div className="min-w-0">
-                                              <div className="text-[12px] font-bold text-foreground leading-tight truncate">{a.name}</div>
-                                              <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{tAccount('dialogs.inviteUser.tk_account-target-sub_')}</div>
+                                              <div className="text-foreground truncate text-[12px] leading-tight font-bold">{a.name}</div>
+                                              <div className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px]">{tAccount('dialogs.inviteUser.tk_account-target-sub_')}</div>
                                             </div>
                                           </button>
                                         )
@@ -408,7 +408,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                   <CompactSearch placeholder={tAccount('dialogs.inviteUser.tk_search-entities_')} value={searchEntities} onChange={setSearchEntities} />
 
                   {/* Account access full-row, entities 2 cols, fits content up to max 3 tile rows */}
-                  <div className="max-h-[212px] overflow-y-auto rounded-sm border border-border p-1.5">
+                  <div className="border-border max-h-[212px] overflow-y-auto rounded-sm border p-1.5">
                     {isLoadingEntities ? (
                       <div className="grid grid-cols-2 gap-1.5 opacity-25">
                         {Array.from({ length: 4 }).map((_, i) => (
@@ -439,21 +439,21 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                                       data-testid="invite-account-access"
                                       onClick={() => accField.onChange(!accField.value)}
                                       className={cn(
-                                        'cursor-pointer flex items-center gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors w-full',
+                                        'flex w-full cursor-pointer items-center gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
                                         accField.value ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                                       )}
                                     >
-                                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                                      <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                         <Shield className="h-3.5 w-3.5" />
                                       </div>
                                       <div className="min-w-0">
-                                        <div className="text-[12px] font-bold text-foreground leading-tight">{tAccount('dialogs.inviteUser.tk_account-access_')}</div>
-                                        <div className="text-[11px] text-muted-foreground mt-0.5">{tAccount('dialogs.inviteUser.tk_account-access-sub_')}</div>
+                                        <div className="text-foreground text-[12px] leading-tight font-bold">{tAccount('dialogs.inviteUser.tk_account-access_')}</div>
+                                        <div className="text-muted-foreground mt-0.5 text-[11px]">{tAccount('dialogs.inviteUser.tk_account-access-sub_')}</div>
                                       </div>
                                     </button>
                                   )}
                                   {entities.length === 0 && searchEntities ? (
-                                    <div className="flex h-[46px] items-center justify-center rounded-sm border border-dashed border-border bg-muted/40 px-3 text-center text-[11px] text-muted-foreground">
+                                    <div className="border-border bg-muted/40 text-muted-foreground flex h-[46px] items-center justify-center rounded-sm border border-dashed px-3 text-center text-[11px]">
                                       No entity matches “{searchEntities}”. Try another keyword.
                                     </div>
                                   ) : entities.length > 0 ? (
@@ -468,16 +468,16 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                                             data-testid="invite-entity-tile"
                                             onClick={() => entField.onChange(selected ? entIds.filter((id) => id !== entity.id) : [...entIds, entity.id])}
                                             className={cn(
-                                              'cursor-pointer flex items-start gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
+                                              'flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
                                               selected ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                                             )}
                                           >
-                                            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-muted text-muted-foreground">
+                                            <div className="bg-muted text-muted-foreground flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                               {getEntityIcon((entity.organization as { type?: string } | null)?.type)}
                                             </div>
                                             <div className="min-w-0">
-                                              <div className="text-[12px] font-bold text-foreground leading-tight truncate">{orgName || entity.name}</div>
-                                              <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{tAccount('dialogs.inviteUser.tk_entity-access-sub_')}</div>
+                                              <div className="text-foreground truncate text-[12px] leading-tight font-bold">{orgName || entity.name}</div>
+                                              <div className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px]">{tAccount('dialogs.inviteUser.tk_entity-access-sub_')}</div>
                                             </div>
                                           </button>
                                         )
@@ -495,28 +495,28 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                 </>
               ) : (
                 /* Entity-admin: locked, just show their entities as pills */
-                <div className="rounded-sm border border-primary/25 bg-primary/8 p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-xs font-semibold text-foreground">{tAccount('dialogs.inviteUser.tk_will-be-linked-to_')}</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground">pre-selected</span>
+                <div className="border-primary/25 bg-primary/8 rounded-sm border p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Users className="text-primary h-3.5 w-3.5" />
+                    <span className="text-foreground text-xs font-semibold">{tAccount('dialogs.inviteUser.tk_will-be-linked-to_')}</span>
+                    <span className="text-muted-foreground ml-auto text-[10px]">pre-selected</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {targetEntities.map((e) => (
-                      <span key={e.id} className="rounded-[2px] bg-primary/20 border border-primary/30 px-2 py-0.5 text-[11px] font-medium text-primary">
+                      <span key={e.id} className="bg-primary/20 border-primary/30 text-primary rounded-[2px] border px-2 py-0.5 text-[11px] font-medium">
                         {e.name}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
-              <p className="text-[11px] text-muted-foreground">{tAccount('dialogs.inviteUser.tk_at-least-one-access_')}</p>
+              <p className="text-muted-foreground text-[11px]">{tAccount('dialogs.inviteUser.tk_at-least-one-access_')}</p>
             </div>
 
             {/* C — Roles */}
             {hasPermission('USER_ROLE_ALLOCATION') && (
               <div className="space-y-2">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{tAccount('dialogs.inviteUser.tk_section-roles_')}</p>
+                <p className="text-muted-foreground text-[11px] font-bold tracking-widest uppercase">{tAccount('dialogs.inviteUser.tk_section-roles_')}</p>
                 <FormField
                   control={form.control}
                   name="roleIds"
@@ -525,7 +525,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                       <div className="mb-2">
                         <CompactSearch placeholder={tAccount('dialogs.inviteUser.tk_search-roles_')} value={searchRoles} onChange={setSearchRoles} />
                       </div>
-                      <div className="max-h-[140px] overflow-y-auto rounded-sm border border-border p-1.5" data-testid="roles-filter">
+                      <div className="border-border max-h-[140px] overflow-y-auto rounded-sm border p-1.5" data-testid="roles-filter">
                         {(() => {
                           // Filter roles by the scopes available to the current selection.
                           // PLATFORM_ALL mode:
@@ -557,7 +557,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
 
                           if (visibleRoles.length === 0) {
                             return (
-                              <div className="flex h-[46px] items-center justify-center rounded-sm border border-dashed border-border bg-muted/40 px-3 text-center text-[11px] text-muted-foreground">
+                              <div className="border-border bg-muted/40 text-muted-foreground flex h-[46px] items-center justify-center rounded-sm border border-dashed px-3 text-center text-[11px]">
                                 {!allowAccountScoped && !allowEntityScoped
                                   ? tAccount('dialogs.inviteUser.tk_pick-scope-first_')
                                   : searchRoles
@@ -588,27 +588,27 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                                       field.onChange(selected ? current.filter((id: number) => id !== role.id) : [...current, role.id])
                                     }}
                                     className={cn(
-                                      'cursor-pointer flex gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
+                                      'flex cursor-pointer gap-2.5 rounded-sm border px-3 py-2 text-left transition-colors',
                                       hasDesc ? 'items-start' : 'items-center',
                                       selected ? 'border-primary bg-primary/8' : 'border-border bg-secondary hover:border-primary/40'
                                     )}
                                   >
-                                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-primary/12 text-primary">
+                                    <div className="bg-primary/12 text-primary flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm">
                                       {role.name?.toLowerCase().includes('admin') ? <ShieldCheck className="h-3.5 w-3.5" /> : <UserIcon className="h-3.5 w-3.5" />}
                                     </div>
                                     <div className="min-w-0">
                                       <div className="flex items-center gap-1.5">
-                                        <div className="text-[12px] font-bold text-foreground capitalize leading-tight truncate">{displayName}</div>
+                                        <div className="text-foreground truncate text-[12px] leading-tight font-bold capitalize">{displayName}</div>
                                         <span
                                           className={cn(
-                                            'flex-shrink-0 rounded-[2px] border px-1 py-0 text-[9px] font-bold uppercase tracking-wider',
-                                            role.scope === 'ACCOUNT' ? 'bg-primary/10 text-primary border-primary/20' : 'bg-amber-500/15 text-amber-500 border-amber-500/25'
+                                            'flex-shrink-0 rounded-[2px] border px-1 py-0 text-[9px] font-bold tracking-wider uppercase',
+                                            role.scope === 'ACCOUNT' ? 'bg-primary/10 text-primary border-primary/20' : 'border-amber-500/25 bg-amber-500/15 text-amber-500'
                                           )}
                                         >
                                           {role.scope}
                                         </span>
                                       </div>
-                                      {hasDesc && <div className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{displayDescription}</div>}
+                                      {hasDesc && <div className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px]">{displayDescription}</div>}
                                     </div>
                                   </button>
                                 )
@@ -617,7 +617,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                           )
                         })()}
                       </div>
-                      <p className="text-[11px] text-muted-foreground">{tAccount('dialogs.inviteUser.tk_roles-scope-hint_')}</p>
+                      <p className="text-muted-foreground text-[11px]">{tAccount('dialogs.inviteUser.tk_roles-scope-hint_')}</p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -627,18 +627,18 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
 
             {/* D — Summary */}
             {showSummary && (
-              <div className="rounded-sm border border-primary/20 bg-primary/6 p-3 space-y-1">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-primary">D — Summary</p>
-                <p className="text-xs text-foreground">
+              <div className="border-primary/20 bg-primary/6 space-y-1 rounded-sm border p-3">
+                <p className="text-primary text-[11px] font-bold tracking-widest uppercase">D — Summary</p>
+                <p className="text-foreground text-xs">
                   Inviting: <span className="font-semibold">{emailValue}</span>
                 </p>
                 {isDirectlyLinkedValue && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     Access: <span className="text-foreground">Account + {entityIdsValue.length > 0 ? `${entityIdsValue.length} entities` : 'all entities'}</span>
                   </p>
                 )}
                 {!isDirectlyLinkedValue && entityIdsValue.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     Access:{' '}
                     <span className="text-foreground">
                       {entityIdsValue.length} {entityIdsValue.length === 1 ? 'entity' : 'entities'}
@@ -646,7 +646,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
                   </p>
                 )}
                 {roleIdsValue.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     Roles: <span className="text-foreground">{roleIdsValue.length} selected</span>
                   </p>
                 )}

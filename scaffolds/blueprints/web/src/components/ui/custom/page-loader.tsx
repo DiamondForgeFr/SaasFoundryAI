@@ -315,7 +315,7 @@ export const PageLoader = ({ className = 'scatterboxloader', background = '#FFFF
   ]
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background">
+    <div className="bg-background flex h-screen w-full items-center justify-center">
       <div className={`scatter-box-container ${className}`}>
         {/* All boxes */}
         {boxesConfig.map((config, index) => {
@@ -334,7 +334,7 @@ export const PageLoader = ({ className = 'scatterboxloader', background = '#FFFF
       </div>
 
       {/* Loading text */}
-      <div className="absolute mt-[340px] animate-pulse text-center font-medium text-muted-foreground">Loading...</div>
+      <div className="text-muted-foreground absolute mt-[340px] animate-pulse text-center font-medium">Loading...</div>
     </div>
   )
 }

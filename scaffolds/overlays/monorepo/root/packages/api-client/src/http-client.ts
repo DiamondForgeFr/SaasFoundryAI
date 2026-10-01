@@ -102,9 +102,7 @@ export const apiClientMutator = async <T>(config: ApiClientRequestConfig): Promi
     // the cached session through the registered handler.
     if (isSessionInvalidatingUnauthorized(response.status, errorBody) && onUnauthorized) onUnauthorized()
     const error = new Error(
-      typeof errorBody === 'object' && errorBody !== null && 'message' in errorBody
-        ? String((errorBody as { message: unknown }).message)
-        : `HTTP ${response.status}`
+      typeof errorBody === 'object' && errorBody !== null && 'message' in errorBody ? String((errorBody as { message: unknown }).message) : `HTTP ${response.status}`
     ) as Error & { status: number; body: unknown }
     error.status = response.status
     error.body = errorBody

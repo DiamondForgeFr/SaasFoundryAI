@@ -44,8 +44,9 @@ const PROFILE_SCRIPTS: Record<ImpactValidationProfile, Record<string, string>> =
   }
 }
 
+const command = (script: string) => [['npm', 'run', script]]
+
 function validationConfiguration(profile: ImpactValidationProfile) {
-  const command = (script: string) => [['npm', 'run', script]]
   return {
     version: 1,
     profile,
@@ -62,6 +63,52 @@ function validationConfiguration(profile: ImpactValidationProfile) {
   }
 }
 
+/**
+ * The same lanes, as the pre-commit hook runs them: without the E2E suite. Every change
+ * under the API or the web app selects the lifecycle lane, so a hook reading
+ * validation.json ran `test:e2e` on almost every commit (#867). CI keeps validation.json,
+ * where the lifecycle lane still runs it; a commit's full validation is everything else.
+ */
+function commitConfiguration(profile: ImpactValidationProfile) {
+  const config = validationConfiguration(profile)
+  return {
+    ...config,
+    commands: {
+      ...config.commands,
+      lifecycle: command('test:impact:guards'),
+      full: [...command('test:impact:guards'), ...command('test:impact:shared')]
+    }
+  }
+}
+
+/**
+ * Paths `prettier --check .` leaves alone: what SaaSFoundryAI writes and refreshes on
+ * `sf update`, and what is generated. Checking them failed the format check of every
+ * freshly generated project, and formatting them would turn the next update into
+ * conflicts (#867). The project's own files stay checked.
+ */
+function prettierIgnore(profile: ImpactValidationProfile): string {
+  const apiDocs = profile === 'monorepo' ? 'apps/api/docs/' : profile === 'api' ? 'docs/' : null
+  return [
+    '# Written and refreshed by SaaSFoundryAI (`sf update`)',
+    '.saasfoundry.json',
+    '.saasfoundry/',
+    'scripts/saasfoundry/',
+    '.github/workflows/test.yml',
+    '**/.github/workflows/pr-review-sync.yml',
+    '.claude/',
+    '.agents/',
+    'CLAUDE.md',
+    'AGENTS.md',
+    'GEMINI.md',
+    '',
+    '# Generated',
+    '**/src/generated/',
+    ...(apiDocs ? [`${apiDocs}openapi.json`, `${apiDocs}index.html`] : []),
+    ''
+  ].join('\n')
+}
+
 export async function installImpactValidation(targetPath: string, profile: ImpactValidationProfile): Promise<void> {
   const scriptsPath = join(targetPath, 'scripts/saasfoundry')
   const metadataPath = join(targetPath, '.saasfoundry')
@@ -70,6 +117,8 @@ export async function installImpactValidation(targetPath: string, profile: Impac
   await copy(join(VALIDATION_SOURCE, 'impact-classifier.mjs'), join(scriptsPath, 'impact-classifier.mjs'), { overwrite: true })
   await copy(join(VALIDATION_SOURCE, 'run-impact-validation.mjs'), join(scriptsPath, 'run-impact-validation.mjs'), { overwrite: true })
   await writeFile(join(metadataPath, 'validation.json'), `${JSON.stringify(validationConfiguration(profile), null, 2)}\n`)
+  await writeFile(join(metadataPath, 'validation.commit.json'), `${JSON.stringify(commitConfiguration(profile), null, 2)}\n`)
+  await writeFile(join(targetPath, '.prettierignore'), prettierIgnore(profile))
 
   const packagePath = join(targetPath, 'package.json')
   const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as { scripts?: Record<string, string> }
@@ -77,7 +126,7 @@ export async function installImpactValidation(targetPath: string, profile: Impac
     ...packageJson.scripts,
     'format:check': 'prettier --check .',
     'test:impact': 'node scripts/saasfoundry/run-impact-validation.mjs --config .saasfoundry/validation.json',
-    'test:staged': 'npm run test:impact -- --staged',
+    'test:staged': 'npm run test:impact -- --staged --config .saasfoundry/validation.commit.json',
     'test:impact:docs': 'npx prettier --check README.md',
     'test:impact:harness': 'npm run format:check',
     ...PROFILE_SCRIPTS[profile]

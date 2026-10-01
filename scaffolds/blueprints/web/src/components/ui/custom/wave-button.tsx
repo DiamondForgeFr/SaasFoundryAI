@@ -10,7 +10,7 @@ export function WaveButton({ children, className, tone = 'default', ...props }: 
   return (
     <button
       className={cn(
-        'wave-btn cursor-pointer flex h-11 w-full items-center justify-center rounded-sm text-sm font-semibold tracking-wide uppercase transition-shadow duration-300 disabled:opacity-50 disabled:cursor-not-allowed',
+        'wave-btn flex h-11 w-full cursor-pointer items-center justify-center rounded-sm text-sm font-semibold tracking-wide uppercase transition-shadow duration-300 disabled:cursor-not-allowed disabled:opacity-50',
         tone === 'destructive' && 'wave-btn--destructive',
         className
       )}

@@ -52,10 +52,44 @@ describe.each<ImpactValidationProfile>(['monorepo', 'api', 'web'])('%s generated
       existing: 'true',
       'format:check': 'prettier --check .',
       'test:impact': 'node scripts/saasfoundry/run-impact-validation.mjs --config .saasfoundry/validation.json',
-      'test:staged': 'npm run test:impact -- --staged'
+      'test:staged': 'npm run test:impact -- --staged --config .saasfoundry/validation.commit.json'
     })
     expect(packageJson.scripts['test:full']).toContain('format:check')
     expect(packageJson.scripts['test:full']).not.toMatch(/npm run format(?:\s|$)/)
+  })
+
+  // Every API or web change selects the lifecycle lane: a hook that maps it to test:e2e
+  // runs the whole E2E suite on almost every commit (#867).
+  it('keeps the E2E suite out of the commit hook, and in CI', async () => {
+    await installImpactValidation(target, profile)
+
+    const read = async (file: string) => JSON.parse(await readFile(path.join(target, file), 'utf8'))
+    const ci = await read('.saasfoundry/validation.json')
+    const commit = await read('.saasfoundry/validation.commit.json')
+    const { scripts } = (await read('package.json')) as { scripts: Record<string, string> }
+
+    expect(ci.commands.lifecycle).toEqual([['npm', 'run', 'test:impact:lifecycle']])
+    expect(scripts['test:impact:lifecycle']).toContain('test:e2e')
+    expect(Object.keys(commit.commands)).toEqual(Object.keys(ci.commands))
+    expect(commit.commands.lifecycle).toEqual([['npm', 'run', 'test:impact:guards']])
+    expect(commit.commands.full).toEqual([
+      ['npm', 'run', 'test:impact:guards'],
+      ['npm', 'run', 'test:impact:shared']
+    ])
+    for (const commands of Object.values(commit.commands) as string[][][]) {
+      for (const [, , script] of commands) expect(scripts[script]).not.toMatch(/test:e2e|test:full|test:impact:lifecycle/)
+    }
+  })
+
+  // `prettier --check .` failed on the files the CLI itself writes (#867).
+  it('keeps the files SaaSFoundryAI writes out of the format check', async () => {
+    await installImpactValidation(target, profile)
+
+    const ignored = (await readFile(path.join(target, '.prettierignore'), 'utf8')).split('\n')
+    expect(ignored).toEqual(
+      expect.arrayContaining(['.saasfoundry.json', '.saasfoundry/', 'scripts/saasfoundry/', '.github/workflows/test.yml', '.claude/', 'CLAUDE.md', 'AGENTS.md', '**/src/generated/'])
+    )
+    if (profile !== 'web') expect(ignored).toContain(profile === 'monorepo' ? 'apps/api/docs/openapi.json' : 'docs/openapi.json')
   })
 
   it('renders the shared trusted-base workflow with only project placeholders left', async () => {
