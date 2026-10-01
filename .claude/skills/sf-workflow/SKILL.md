@@ -77,10 +77,10 @@ Issue with its own branch and PR; the Epic only groups that delivery parent.
 
 An Epic is an aggregate with two derived transitions:
 
-| Child event                                    | Epic transition                                           |
-| ---------------------------------------------- | --------------------------------------------------------- |
-| The first native child enters `In progress`    | `Backlog → Ready → In progress`, or `Ready → In progress` |
-| The last incomplete native child enters `Done` | `In progress → Done`                                      |
+| Child event                                    | Epic transition                                                                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| The first native child enters `In progress`    | `Backlog → Ready → In progress`, or `Ready → In progress` (`Backlog → In progress` on a board that declares no Ready, such as Solo) |
+| The last incomplete native child enters `Done` | `In progress → Done`                                                                                                                |
 
 The Epic stays `In progress` while its children pass through testing and review. It never owns a branch or PR and may span multiple milestones; its delivery children carry their own milestone
 assignments. The parent Done guard checks every native child's project-board Status. Backlog, Ready, In progress, AI Testing, Human Testing, In Review, or an unknown status blocks Done. Incomplete

@@ -78,7 +78,7 @@ An Epic is an aggregate with two derived transitions:
 
 | Child event | Epic transition |
 | --- | --- |
-| The first native child enters `In progress` | `Backlog → Ready → In progress`, or `Ready → In progress` |
+| The first native child enters `In progress` | `Backlog → Ready → In progress`, or `Ready → In progress` (`Backlog → In progress` on a board that declares no Ready, such as Solo) |
 | The last incomplete native child enters `Done` | `In progress → Done` |
 
 The Epic stays `In progress` while its children pass through testing and review. It never owns a branch or PR and may
