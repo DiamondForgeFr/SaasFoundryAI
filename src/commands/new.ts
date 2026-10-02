@@ -8,7 +8,8 @@ import terminalLink from 'terminal-link'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
-import { ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug } from '../installers/harness-provisioning'
+import { describeBranchProvision, ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug } from '../installers/harness-provisioning'
+import { missingBoardWarning } from '../utils/workflow-board'
 import { pwaInstallerMeta } from '../installers/pwa.installer'
 import { installSkills } from '../installers/skills.installer'
 import { installSelectedAgentInstructions, writeMultirepoAgentManifests } from '../installers/agent-topology'
@@ -581,6 +582,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     const suffix = line.unreachable ? chalk.red(`   ✗ ${line.unreachable}`) : line.note ? chalk.yellow(`   ← ${line.note}`) : ''
     console.log(chalk.gray(column(line)) + address + suffix)
   }
+  const board = missingBoardWarning(startProjectAnswers.workflow)
+  if (board) console.log(chalk.yellow(`\n⚠️  ${board}`))
 
   console.log('\n')
   console.log(chalk.green('='.repeat(80)))
@@ -713,16 +716,11 @@ async function runHarnessInstall(config: Answers): Promise<void> {
     if (manifest.workflow && manifest.workflow.tool !== 'none') {
       spinner.text = 'Provisioning workflow branch + labels...'
 
-      const branch = ensureWorkingBranch({ workingBranch: manifest.workflow.workingBranch, mainBranch: manifest.mainBranch })
-      if (branch.action === 'created') {
-        provisioning.push(
-          branch.pushed
-            ? chalk.green(`✓ Created and pushed working branch "${branch.branch}"`)
-            : chalk.yellow(`⚠️  Created working branch "${branch.branch}" locally — push it manually (${branch.reason === 'no-remote' ? 'no remote configured' : 'push failed'})`)
-        )
-      } else if (branch.action === 'skipped' && branch.reason === 'not-a-git-repo') {
-        provisioning.push(chalk.yellow('⚠️  Not a git repository — skipped working-branch creation'))
-      }
+      const branch = describeBranchProvision(ensureWorkingBranch({ workingBranch: manifest.workflow.workingBranch, mainBranch: manifest.mainBranch }))
+      if (branch) provisioning.push(branch.ok ? chalk.green(`✓ ${branch.message}`) : chalk.yellow(`⚠️  ${branch.message}`))
+
+      const board = missingBoardWarning(manifest.workflow)
+      if (board) provisioning.push(chalk.yellow(`⚠️  ${board}`))
 
       if (manifest.workflow.tool === 'github-projects') {
         const slug = resolveRepoSlug()

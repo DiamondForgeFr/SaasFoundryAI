@@ -5,7 +5,8 @@ manifest, not a replacement API or frontend.
 
 ## 1. Prepare your machine
 
-Install Git, Node.js 24.19.0 and npm 11. You do not need Docker just to install the harness. A coding-agent runtime is optional if you will use the CLI yourself.
+Install Git, Node.js 22 or newer and npm 10 or newer: that is what the CLI and the harness need. Node.js 24.19.0 and npm 11 are required only by the generated SaaS stack (`stack` and `full` profiles),
+which pins them in its `.nvmrc`. You do not need Docker just to install the harness. A coding-agent runtime is optional if you will use the CLI yourself.
 
 ## 2. Install in your repository
 
@@ -39,6 +40,15 @@ Open the repository in a coding assistant that can read its files and run termin
 The assistant can guide the same `npx saasfoundryai-cli new --profile harness` flow shown above; it should not recreate the scaffold by hand. Claude Code, Codex, Gemini CLI, Kimi Code and Qwen Code
 have registered coding-agent profiles. For another host, choose `generic` and verify that it can read the generated instructions and run the required commands. The optional one-line `tool-saasfoundry`
 **skill installer** currently targets Claude Code; it is not required to set up or use the harness with another assistant.
+
+An assistant usually runs the CLI non-interactively. Every choice is then a flag, the board included; without one the workflow is left without a board and the setup says so:
+
+```bash
+npx saasfoundryai-cli new --profile harness --non-interactive --workflow solo --tracker github-projects --create-board --working-branch main
+```
+
+`--create-board` creates the GitHub Projects board under the account that owns the repository's `origin` remote, without prompting. `--project-url <url>` attaches an existing board instead. Both also
+work later with `sf workflow use <template>`.
 
 GPT, DeepSeek, GLM and Kimi can name models or model providers, not necessarily coding-agent hosts. Use them through a host that exposes the needed repository and terminal capabilities; select the
 host's profile, not a model name, during setup.

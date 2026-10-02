@@ -66,6 +66,10 @@ export interface Answers {
   workflow?: WorkflowConfig
   /** Collection-only preset preselection from `--workflow <preset>`; never persisted. */
   workflowPreset?: 'saasfoundry' | 'solo'
+  /** Collection-only branch choices from `--working-branch` / `--pr-target-branch`; persisted through `workflow`. */
+  workflowBranches?: { workingBranch?: string; prTargetBranch?: string }
+  /** Collection-only board choice from `--project-url` / `--create-board`; persisted as `workflow.projectUrl`. */
+  workflowBoard?: { projectUrl?: string; create?: boolean }
   /** Collection-only flag from `--no-network`: tools-first checks degrade to presence only; never persisted. */
   toolsNoNetwork?: boolean
   aiRules?: AIRules

@@ -166,6 +166,18 @@ describe('skill/read-project', () => {
     })
   })
 
+  describe('Catalogue shape', () => {
+    // #866: `sf modules list --json` prints `{ cliVersion, modules }`, not a bare array
+    it('reads the modules of the `sf modules list --json` object', async () => {
+      const report = await runAndParse({
+        manifest: { projectName: 'demo-app', version: '1.0.0', modules: { email: { provider: 'mailersend' } } },
+        catalogue: { cliVersion: '1.0.0', modules: fullCatalogue }
+      })
+      expect(report.modules.available).toEqual(fullCatalogue.map((entry) => entry.name))
+      expect(report.modules.installed).toEqual(['email'])
+    })
+  })
+
   describe('Empty catalogue', () => {
     it('emits a report with available=[] and upToDate=true', async () => {
       const report = await runAndParse({
@@ -300,10 +312,12 @@ exit 2
       expect(stderr).toMatch(/input.manifest must be the .saasfoundry.json object/)
     })
 
-    it('exits 2 when catalogue is not an array', async () => {
-      const { code, stderr } = await runWithInput({ manifest: { modules: {} }, catalogue: 'oops' })
-      expect(code).toBe(2)
-      expect(stderr).toMatch(/input.catalogue must be an array/)
+    it('exits 2 when catalogue is neither the modules list output nor an array', async () => {
+      for (const catalogue of ['oops', { cliVersion: '1.0.0' }]) {
+        const { code, stderr } = await runWithInput({ manifest: { modules: {} }, catalogue })
+        expect(code).toBe(2)
+        expect(stderr).toMatch(/input.catalogue must be the `sf modules list --json` output/)
+      }
     })
   })
 })

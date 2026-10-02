@@ -41,6 +41,7 @@ jest.mock('terminal-link', () => ({
 }))
 
 import { newCommand } from '../../../commands/new'
+import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import { renderTechnicalStack } from '../../../renderers/technical-stack.renderer'
 import { collectStatus } from '../../../status/collect'
 import { evaluatePreconditions } from '../../../status/preconditions'
@@ -98,7 +99,7 @@ describe('newCommand (--profile integration)', () => {
     expect(manifest.workflow).toBeUndefined()
     expect(manifest.tools).toBeUndefined()
     expect(manifest.modules.advancedSkills).toEqual([])
-    expect(manifest.modules.harness).toEqual({ version: 1, managed: false })
+    expect(manifest.modules.harness).toEqual({ version: harnessInstallerMeta.currentVersion, managed: false })
   })
 
   it('stack profile never asks workflow/skills/SRS questions', async () => {
@@ -123,7 +124,7 @@ describe('newCommand (--profile integration)', () => {
     // (scoped to the deposit dirs only — never the user's own code)
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
     expect(manifest).toMatchObject({ structure: 'cli', projectName: 'acme', mainBranch: 'main' })
-    expect(manifest.modules).toEqual({ harness: { version: 1, managed: true }, advancedSkills: [] })
+    expect(manifest.modules).toEqual({ harness: { version: harnessInstallerMeta.currentVersion, managed: true }, advancedSkills: [] })
     // computeFileHashes is mocked to {} in this spec — the field wiring is
     // asserted here, real hash content is covered by the installer unit spec.
     expect(manifest.fileHashes).toBeDefined()
@@ -194,6 +195,36 @@ describe('newCommand (--profile integration)', () => {
     for (const file of statusDocs) {
       expect(manifest.fileHashes[`.agents/skills/sf-workflow/statuses/${file}`]).toBeDefined()
     }
+  })
+
+  // #822 — a solo project working on main no longer has to edit the manifest after setup
+  it('harness profile writes the branches passed as flags', async () => {
+    await newCommand({ nonInteractive: true, profile: 'harness', projectName: 'acme', mainBranch: 'main', workflow: 'solo', tracker: 'github-projects', workingBranch: 'main' })
+
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest.workflow).toMatchObject({ workingBranch: 'main', prTargetBranch: 'main' })
+  })
+
+  // #821 — the non-interactive harness setup left the workflow without a board, and said nothing
+  it('harness profile warns when the GitHub Projects workflow has no board, and attaches --project-url', async () => {
+    await newCommand({ nonInteractive: true, profile: 'harness', projectName: 'acme', mainBranch: 'main', workflow: 'solo', tracker: 'github-projects' })
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('No github-projects board attached')
+    expect(output).toContain('sf workflow use solo --project-url <url>')
+
+    await rm('.saasfoundry.json')
+    logSpy.mockClear()
+    await newCommand({
+      nonInteractive: true,
+      profile: 'harness',
+      projectName: 'acme',
+      mainBranch: 'main',
+      workflow: 'solo',
+      tracker: 'github-projects',
+      projectUrl: 'https://github.com/users/acme/projects/7'
+    })
+    expect(JSON.parse(await readFile('.saasfoundry.json', 'utf8')).workflow.projectUrl).toBe('https://github.com/users/acme/projects/7')
+    expect(logSpy.mock.calls.flat().join('\n')).not.toContain('board attached')
   })
 
   it('publishes the SRS skill to declared shared agents after SRS bootstrap', async () => {

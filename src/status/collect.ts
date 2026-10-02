@@ -10,6 +10,8 @@ import { readManifest } from '../utils'
 export interface GitInfo {
   available: boolean
   branch?: string
+  /** The current branch has no commits yet (a fresh `git init`). */
+  unborn?: boolean
   isClean?: boolean
   ahead?: number
   behind?: number
@@ -139,7 +141,10 @@ function collectGit(projectRoot: string): GitInfo {
   // under parallel jest workers the subprocess probe flaked in ~25% of runs.
   if (findGitDir(projectRoot) === null) return { available: false }
 
-  const branch = runSafe('git rev-parse --abbrev-ref HEAD', projectRoot) ?? undefined
+  // `symbolic-ref` names an unborn branch, where `rev-parse --abbrev-ref HEAD` exits 128, and
+  // prints nothing on a detached HEAD, where rev-parse prints `HEAD` (#825)
+  const branch = runSafe('git symbolic-ref --short -q HEAD', projectRoot) || undefined
+  const unborn = branch !== undefined && runSafe('git rev-parse --verify -q HEAD', projectRoot) === null
   const statusShort = runSafe('git status --porcelain', projectRoot)
   const isClean = statusShort !== null ? statusShort.length === 0 : undefined
   const upstream = runSafe('git rev-parse --abbrev-ref --symbolic-full-name @{u}', projectRoot) ?? undefined
@@ -156,7 +161,7 @@ function collectGit(projectRoot: string): GitInfo {
   }
 
   const { remotes, ghDefaultRemote } = collectRemotes(projectRoot)
-  return { available: true, branch, isClean, ahead, behind, upstream, remotes, ghDefaultRemote }
+  return { available: true, branch, ...(unborn ? { unborn } : {}), isClean, ahead, behind, upstream, remotes, ghDefaultRemote }
 }
 
 /** `owner/repo` of a GitHub remote URL (https, scp-style or ssh), or undefined. */

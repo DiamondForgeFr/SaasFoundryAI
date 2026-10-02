@@ -37,8 +37,8 @@ ci-dessus ; aucun skill propre à Claude n'est requis. Installer la méta-skill 
 
 ## Prérequis
 
-- **Node.js 24.19.0**, version épinglée dans les `.nvmrc` générés
-- **npm 11 ou plus récent**
+- **Node.js 22 ou plus récent** et **npm 10 ou plus récent** pour exécuter le CLI et utiliser le harness
+- **Node.js 24.19.0** et **npm 11 ou plus récent** pour la stack SaaS générée (profils `stack` et `full`), versions épinglées dans ses `.nvmrc`
 - **Git**
 - **Docker** si vous choisissez des services de base ou de stockage gérés par Docker
 - au moins un runtime d'agent de code pour le développement assisté

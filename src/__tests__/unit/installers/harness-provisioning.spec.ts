@@ -3,7 +3,7 @@ import { mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { buildWorkflowLabels, ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug, type CommandRunner } from '../../../installers/harness-provisioning'
+import { buildWorkflowLabels, describeBranchProvision, ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug, type CommandRunner } from '../../../installers/harness-provisioning'
 
 const sh = (cmd: string, cwd: string) => execSync(cmd, { cwd, stdio: ['pipe', 'pipe', 'pipe'] })
 
@@ -75,6 +75,36 @@ describe('harness-provisioning', () => {
 
       expect(result.action).toBe('created')
       expect(branchExists('develop')).toBe(true)
+    })
+
+    // #822 — a fresh `git init` has nothing to branch from; the failure used to be silent
+    it('names the missing first commit on an unborn branch', () => {
+      sh('git init -b main', dir)
+
+      const result = ensureWorkingBranch({ cwd: dir, workingBranch: 'develop', mainBranch: 'main' })
+
+      expect(result).toEqual({ action: 'skipped', reason: 'no-commits', branch: 'develop', base: 'main' })
+      expect(describeBranchProvision(result)).toEqual({
+        ok: false,
+        message: 'Working branch "develop" not created: "main" has no commits yet. After the first commit, run `git branch develop && git push -u origin develop`'
+      })
+    })
+
+    it('describes every outcome, with the next step when one is left', () => {
+      initRepo('main')
+      sh('git checkout -b feature/wip', dir)
+      const created = ensureWorkingBranch({ cwd: dir, workingBranch: 'develop', mainBranch: 'main' })
+      expect(describeBranchProvision(created)).toEqual({
+        ok: false,
+        message: 'Created the working branch "develop" from main locally — no remote yet; push it with `git push -u origin develop` once one exists'
+      })
+      expect(describeBranchProvision(ensureWorkingBranch({ cwd: dir, workingBranch: 'develop', mainBranch: 'main' }))).toEqual({ ok: true, message: 'Working branch "develop" already exists' })
+      expect(describeBranchProvision(ensureWorkingBranch({ cwd: dir, workingBranch: 'feature/wip' }))).toEqual({ ok: true, message: 'Working branch "feature/wip" is the current branch' })
+      expect(describeBranchProvision({ action: 'created', branch: 'develop', base: 'main', pushed: true })).toEqual({ ok: true, message: 'Created and pushed the working branch "develop" from main' })
+      expect(describeBranchProvision({ action: 'created', branch: 'develop', base: 'main', pushed: false, reason: 'push-failed' })?.message).toContain(
+        'the push failed — run `git push -u origin develop`'
+      )
+      expect(describeBranchProvision({ action: 'skipped', reason: 'no-working-branch' })).toBeNull()
     })
 
     it('skips gracefully outside a git repository', () => {

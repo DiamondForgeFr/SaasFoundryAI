@@ -6,6 +6,7 @@ import os from 'os'
 import { execSync } from 'child_process'
 import type { WorkflowConfig, AIRules, WorkflowTemplate, WorkflowStatus, GitHubProjectColor } from '../types'
 import { fileExists } from '../utils'
+import { githubRepoOf } from '../status/collect'
 import { configureBoardView } from './workflow.board-view'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
@@ -232,7 +233,26 @@ async function promptOwnerSelection(): Promise<{ owner: string; isOrg: boolean }
   }
 }
 
-export async function setupGitHubProjectWithAutoCreation(projectName: string, statuses: WorkflowStatus[], repositoryUrl?: string): Promise<string | null> {
+/** `owner` / `repo` of a GitHub repository URL: https, scp-style (`git@github.com:o/r.git`) or `ssh://`; an org URL gives the owner only. */
+export function githubOwnerOf(url: string): { owner: string; repo?: string } | undefined {
+  if (!/github\.com[:/]/i.test(url)) return undefined
+  const slug = githubRepoOf(url)
+  if (slug) {
+    const [owner, repo] = slug.split('/')
+    return { owner, repo }
+  }
+  const org = /github\.com\/orgs\/([^/\s]+)/i.exec(url)?.[1]
+  return org ? { owner: org } : undefined
+}
+
+/**
+ * Create a GitHub Projects board and configure its Status field. Interactive
+ * (the default), it confirms the detected owner and offers a picker; with
+ * `interactive: false` (`--create-board`) the owner comes from the repository
+ * URL alone and nothing is asked — no owner, no board (#821).
+ */
+export async function setupGitHubProjectWithAutoCreation(projectName: string, statuses: WorkflowStatus[], repositoryUrl?: string, options: { interactive?: boolean } = {}): Promise<string | null> {
+  const interactive = options.interactive ?? true
   try {
     // Check gh auth
     if (!checkGhAuth()) {
@@ -247,11 +267,11 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
 
     // 1) From an explicit repository URL (sf new with a known remote)
     if (repositoryUrl) {
-      // https://github.com/owner/repo(.git) or https://github.com/orgs/owner/...
-      const urlMatch = repositoryUrl.match(/github\.com\/(orgs\/)?([^/]+)(?:\/([^/.]+))?/)
-      if (urlMatch) {
-        repoOwner = urlMatch[2]
-        repoName = urlMatch[3]
+      // The former regex missed scp-style remotes and cut `my.repo` to `my` (#821)
+      const parsed = githubOwnerOf(repositoryUrl)
+      if (parsed) {
+        repoOwner = parsed.owner
+        repoName = parsed.repo
         // Verify owner exists and get its type
         try {
           const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8' }).trim()
@@ -261,9 +281,12 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
           return null
         }
       } else {
-        console.log(chalk.yellow('\n⚠️  Invalid GitHub repository URL format\n'))
+        console.log(chalk.yellow(`\n⚠️  Not a GitHub repository URL: ${repositoryUrl}\n`))
         return null
       }
+    } else if (!interactive) {
+      console.log(chalk.yellow('\n⚠️  No GitHub remote to take the board owner from — add the remote, or create the board yourself and pass --project-url <url>.\n'))
+      return null
     } else {
       // 2) From the current git repository (existing repos)
       try {
@@ -280,7 +303,7 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
 
     // Confirm the auto-detected owner before creating — the board lands under
     // this account and picking the wrong one is painful to undo (#463 finding 1).
-    if (repoOwner) {
+    if (repoOwner && interactive) {
       const { confirmOwner } = await inquirer.prompt([
         {
           type: 'confirm',
@@ -561,19 +584,40 @@ export const DEFAULT_AI_RULES: AIRules = {
   requireHumanCheckOnPushedBranch: true
 }
 
+/** Branches chosen by `--working-branch` / `--pr-target-branch`, overriding the defaults and the prompts. */
+export interface WorkflowBranches {
+  workingBranch?: string
+  prTargetBranch?: string
+}
+
+export const DEFAULT_WORKING_BRANCH = 'develop'
+
+/** The working branch defaults to `develop`; the PR target defaults to the working branch. */
+export function resolveWorkflowBranches(branches: WorkflowBranches = {}, fallbackWorkingBranch = DEFAULT_WORKING_BRANCH): { workingBranch: string; prTargetBranch: string } {
+  const workingBranch = branches.workingBranch || fallbackWorkingBranch
+  return { workingBranch, prTargetBranch: branches.prTargetBranch || workingBranch }
+}
+
+/** Apply explicit branch choices to a workflow built from a saved template; unset choices keep the template's. */
+function withBranches<T extends Partial<WorkflowConfig>>(workflow: T, branches?: WorkflowBranches): T {
+  if (!branches?.workingBranch && !branches?.prTargetBranch) return workflow
+  const workingBranch = branches.workingBranch || workflow.workingBranch || DEFAULT_WORKING_BRANCH
+  const prTargetBranch = branches.prTargetBranch || (branches.workingBranch ? workingBranch : workflow.prTargetBranch) || workingBranch
+  return { ...workflow, workingBranch, prTargetBranch }
+}
+
 /**
  * Materialize a built-in workflow preset without prompting or provisioning a
  * remote board. Non-interactive `sf new` uses this path so an explicit
  * `--workflow` choice reaches the manifest and harness deposits instead of
  * being reduced to a collection-only preset hint.
  */
-export function workflowConfigFromPreset(presetKey: keyof typeof WORKFLOW_PRESETS, tool: WorkflowConfig['tool']): { workflow: WorkflowConfig; aiRules: AIRules } {
+export function workflowConfigFromPreset(presetKey: keyof typeof WORKFLOW_PRESETS, tool: WorkflowConfig['tool'], branches: WorkflowBranches = {}): { workflow: WorkflowConfig; aiRules: AIRules } {
   const preset = WORKFLOW_PRESETS[presetKey]
   return {
     workflow: {
       tool,
-      workingBranch: 'develop',
-      prTargetBranch: 'develop',
+      ...resolveWorkflowBranches(branches),
       requireCodeReview: true,
       template: preset.name,
       statuses: preset.statuses.map((status) => ({ ...status })),
@@ -753,7 +797,8 @@ export async function promptWorkflowConfiguration(
   repositoryUrl?: string,
   presetOverride?: keyof typeof WORKFLOW_PRESETS,
   preselectedTool?: WorkflowConfig['tool'],
-  existingProjectUrl?: string
+  existingProjectUrl?: string,
+  branches?: WorkflowBranches
 ): Promise<{
   workflow: WorkflowConfig
   aiRules: AIRules
@@ -908,7 +953,7 @@ export async function promptWorkflowConfiguration(
       workflowConfig.template = selectedWorkflow
 
       return {
-        workflow: workflowConfig as WorkflowConfig,
+        workflow: withBranches(workflowConfig, branches) as WorkflowConfig,
         aiRules: aiRulesConfig
       }
     }
@@ -973,8 +1018,7 @@ export async function promptWorkflowConfiguration(
     return {
       workflow: {
         tool: 'none',
-        workingBranch: 'develop',
-        prTargetBranch: 'develop',
+        ...resolveWorkflowBranches(branches),
         requireCodeReview: false,
         statuses: DEFAULT_STATUSES.none,
         branchNaming: DEFAULT_BRANCH_NAMING,
@@ -1155,24 +1199,28 @@ export async function promptWorkflowConfiguration(
     projectUrl = `linear://${teamKey}`
   }
 
-  // Step 4: Git workflow configuration
+  // Step 4: Git workflow configuration — a branch passed as a flag is not asked again
   const branchAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'workingBranch',
       message: 'Working branch (rebase from + PR target):',
-      default: 'develop'
+      default: DEFAULT_WORKING_BRANCH,
+      when: () => !branches?.workingBranch
     },
     {
       type: 'input',
       name: 'prTargetBranch',
       message: 'Override PR target? (leave empty to use working branch):',
-      default: ''
+      default: '',
+      when: () => !branches?.prTargetBranch
     }
   ])
 
-  const workingBranch = branchAnswers.workingBranch
-  const prTargetBranch = branchAnswers.prTargetBranch || branchAnswers.workingBranch
+  const { workingBranch, prTargetBranch } = resolveWorkflowBranches({
+    workingBranch: branches?.workingBranch || branchAnswers.workingBranch,
+    prTargetBranch: branches?.prTargetBranch || branchAnswers.prTargetBranch
+  })
 
   // For preconfigured workflows (SaaSFoundry AI), code review is implicit in the workflow (In Review status)
   // For custom workflows, ask explicitly

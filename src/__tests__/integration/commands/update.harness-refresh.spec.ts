@@ -1,3 +1,4 @@
+import { existsSync } from 'fs'
 import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -31,7 +32,7 @@ jest.mock('ora', () => () => {
 })
 
 import { updateCommand } from '../../../commands/update'
-import { installHarness } from '../../../installers/harness.installer'
+import { harnessInstallerMeta, installHarness } from '../../../installers/harness.installer'
 import { installSrsSkill } from '../../../installers/srs-skill.installer'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
@@ -94,7 +95,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
 
     // Simulate an outdated deposit: the file on disk AND the baseline carry
     // the old template content; the current CLI templates differ.
-    const stalePath = '.claude/skills/sf-integration-rules/SKILL.md'
+    const stalePath = '.claude/skills/sf-git-commit/SKILL.md'
     await writeFile(join(projectDir, stalePath), 'old template content\n')
     hashes[stalePath] = hashFileContent('old template content\n')
     await writeManifest({ modules: { harness: { version: 1 } }, fileHashes: hashes })
@@ -106,8 +107,25 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
 
     const manifest = await readManifest()
     expect(manifest.version).toBe(cliVersion)
-    expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(manifest.fileHashes[stalePath]).toBe(hashFileContent(refreshed))
+  })
+
+  // #831 — the v1 harness deposited the stack's integration rules on every project
+  it('migrates a v1 harness: removes the untouched integration rules, and the refresh does not bring them back', async () => {
+    await installHarness({ targetPath: projectDir, projectName: 'acme', version: FRESH_VERSION, stackPresent: true })
+    const { computeHarnessFileHashes } = jest.requireActual<typeof import('../../../installers/harness.installer')>('../../../installers/harness.installer')
+    const hashes = await computeHarnessFileHashes(projectDir)
+    expect(Object.keys(hashes).some((path) => path.startsWith('.claude/skills/sf-integration-rules/'))).toBe(true)
+    await writeManifest({ modules: { harness: { version: 1, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+
+    const manifest = await readManifest()
+    expect(manifest.modules.harness.version).toBe(2)
+    expect(existsSync(join(projectDir, '.claude/skills/sf-integration-rules'))).toBe(false)
+    expect(Object.keys(manifest.fileHashes).filter((path: string) => path.includes('sf-integration-rules'))).toEqual([])
+    expect(existsSync(join(projectDir, '.claude/skills/sf-git-commit/SKILL.md'))).toBe(true)
   })
 
   it('preserves enabled agents and shared baselines without adopting customized shared files', async () => {
@@ -124,7 +142,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     await updateCommand({ nonInteractive: true })
 
     const manifest = await readManifest()
-    expect(manifest.modules.harness).toEqual(harness)
+    expect(manifest.modules.harness).toEqual({ ...harness, version: harnessInstallerMeta.currentVersion })
     expect(manifest.modules.advancedSkills).toEqual(['context7'])
     expect(manifest.fileHashes[sharedPath]).toBe(baseline)
     expect(manifest.fileHashes['AGENTS.md']).toBe(entryBaseline)
@@ -137,7 +155,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
 
     // Baseline = an old template; disk = the user's own edit; target = current
     // template. All three differ → conflict → sidecar (save-new default).
-    const editedPath = '.claude/skills/sf-integration-rules/SKILL.md'
+    const editedPath = '.claude/skills/sf-git-commit/SKILL.md'
     hashes[editedPath] = hashFileContent('old template content\n')
     await writeFile(join(projectDir, editedPath), 'my precious user edit\n')
     await writeManifest({ modules: { harness: { version: 1 } }, fileHashes: hashes })
@@ -165,7 +183,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
 
   it('adopts pre-tracking deposits on confirmation — every change lands as a sidecar', async () => {
     await installTrackedHarness()
-    const stalePath = '.claude/skills/sf-integration-rules/SKILL.md'
+    const stalePath = '.claude/skills/sf-git-commit/SKILL.md'
     await writeFile(join(projectDir, stalePath), 'pre-451 deposit content\n')
     // Pre-#451 install: no modules.harness, no fileHashes
     await writeManifest({})
@@ -176,7 +194,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(await readFile(join(projectDir, stalePath), 'utf8')).toBe('pre-451 deposit content\n')
     expect(await readFile(join(projectDir, `${stalePath}.saasfoundry.new`), 'utf8')).toBeTruthy()
     const manifest = await readManifest()
-    expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(manifest.version).toBe(cliVersion)
   })
 
@@ -298,7 +316,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
 
   it('dry-run reports the refresh without mutating anything', async () => {
     const hashes = await installTrackedHarness()
-    const stalePath = '.claude/skills/sf-integration-rules/SKILL.md'
+    const stalePath = '.claude/skills/sf-git-commit/SKILL.md'
     await writeFile(join(projectDir, stalePath), 'old template content\n')
     hashes[stalePath] = hashFileContent('old template content\n')
     await writeManifest({ modules: { harness: { version: 1 } }, fileHashes: hashes })
@@ -343,7 +361,7 @@ describe('updateCommand — baseline integrity across refresh cycles', () => {
     const hashes = await computeHarnessFileHashes(projectDir)
 
     // Cycle N: baseline = old template, disk = user edit, target = current
-    const editedPath = '.claude/skills/sf-integration-rules/SKILL.md'
+    const editedPath = '.claude/skills/sf-git-commit/SKILL.md'
     hashes[editedPath] = hashFileContent('old template content\n')
     await writeFile(join(projectDir, editedPath), 'my precious user edit\n')
     await writeFile(

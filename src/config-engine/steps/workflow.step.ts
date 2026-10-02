@@ -1,10 +1,11 @@
 import chalk from 'chalk'
 
-import { promptWorkflowConfiguration, workflowConfigFromPreset } from '../../prompts/workflow.prompts'
-import { WorkflowConfig } from '../../types'
+import { promptWorkflowConfiguration, setupGitHubProjectWithAutoCreation, workflowConfigFromPreset } from '../../prompts/workflow.prompts'
+import { WorkflowConfig, WorkflowStatus } from '../../types'
+import { assertBoardUrl } from '../../utils/workflow-board'
 import { readManifest } from '../../utils'
 import { getRemoteUrl } from '../../utils/git-info'
-import { StepDefinition } from '../types'
+import { ConfigState, StepDefinition } from '../types'
 
 const WORKFLOW_TOOLS = new Set<WorkflowConfig['tool']>(['github-projects', 'jira', 'notion', 'linear', 'none'])
 
@@ -23,6 +24,23 @@ function asWorkflowTool(tracker?: string): WorkflowConfig['tool'] | undefined {
  * (FR-CONFIG-ENGINE-04) and threaded here as `preselectedTool`, so the
  * "which tool" question is no longer re-asked.
  */
+/**
+ * The board of a non-interactive setup (#821). An explicit `--create-board`
+ * that fails stops the setup before anything is written: the user asked for a
+ * board, and a workflow silently left without one is the defect being fixed.
+ */
+async function resolveBoard(tool: WorkflowConfig['tool'], board: ConfigState['workflowBoard'], state: ConfigState, statuses: WorkflowStatus[]): Promise<string | undefined> {
+  if (board?.projectUrl) return assertBoardUrl(tool, board.projectUrl)
+  if (!board?.create) return undefined
+  if (tool !== 'github-projects') throw new Error(`--create-board creates a GitHub Projects board, not a ${tool} one: pass --project-url <url>.`)
+  // The git remote of the cwd is the project's own only on the harness profile:
+  // a stack is generated in a new directory, so its owner comes from the repo URLs
+  const repositoryUrl = state.monorepoUrl || state.backendRepoUrl || state.frontendRepoUrl || (state.profile === 'harness' ? getRemoteUrl() : undefined)
+  const created = await setupGitHubProjectWithAutoCreation(state.projectName ?? '', statuses, repositoryUrl, { interactive: false })
+  if (!created) throw new Error('--create-board: the GitHub Projects board was not created (see the reason above). Fix it and re-run, or attach an existing board with --project-url <url>.')
+  return created
+}
+
 export const workflowStep: StepDefinition = {
   id: 'workflow',
   title: 'AI workflow',
@@ -32,14 +50,17 @@ export const workflowStep: StepDefinition = {
     // Non-interactive: use a complete prefilled workflow when supplied. An
     // explicit built-in preset is otherwise materialized here because
     // `buildPrefillFromOptions` intentionally stores only the preset key.
-    // No remote board is created on this path.
+    // A board is attached (`--project-url`) or created (`--create-board`) only
+    // when asked; a workflow left without one is reported in the summary.
     if (nonInteractive) {
       if (prefill.workflow) {
         return { workflow: prefill.workflow, aiRules: prefill.aiRules }
       }
       if (prefill.workflowPreset) {
         const tool = asWorkflowTool(derived.selectedTracker) ?? 'github-projects'
-        return workflowConfigFromPreset(prefill.workflowPreset, tool)
+        const config = workflowConfigFromPreset(prefill.workflowPreset, tool, prefill.workflowBranches)
+        const projectUrl = await resolveBoard(tool, prefill.workflowBoard, state, config.workflow.statuses ?? [])
+        return projectUrl ? { ...config, workflow: { ...config.workflow, projectUrl } } : config
       }
       return {}
     }
@@ -69,9 +90,17 @@ export const workflowStep: StepDefinition = {
       // creating a duplicate (#463 finding 5). Best-effort: a fresh project
       // has no manifest yet, so this is undefined and the flow is unchanged.
       const existingManifest = await readManifest(process.cwd())
-      const existingProjectUrl = existingManifest?.workflow?.projectUrl
+      // `--project-url` is offered as the board to reuse, so the prompt still confirms it
+      const existingProjectUrl = prefill.workflowBoard?.projectUrl ?? existingManifest?.workflow?.projectUrl
 
-      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset, asWorkflowTool(derived.selectedTracker), existingProjectUrl)
+      const { workflow, aiRules } = await promptWorkflowConfiguration(
+        state.projectName ?? '',
+        repositoryUrl,
+        prefill.workflowPreset,
+        asWorkflowTool(derived.selectedTracker),
+        existingProjectUrl,
+        prefill.workflowBranches
+      )
       return { workflow, aiRules }
     }
 

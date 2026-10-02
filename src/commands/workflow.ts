@@ -3,11 +3,23 @@ import chalk from 'chalk'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { execSync } from 'child_process'
-import { promptWorkflowConfiguration, listGlobalWorkflows, loadGlobalWorkflow, saveGlobalWorkflow, updateGitHubProjectStatuses, WORKFLOW_PRESETS } from '../prompts/workflow.prompts'
+import { spawnSync } from 'child_process'
+import {
+  DEFAULT_WORKING_BRANCH,
+  promptWorkflowConfiguration,
+  listGlobalWorkflows,
+  loadGlobalWorkflow,
+  saveGlobalWorkflow,
+  setupGitHubProjectWithAutoCreation,
+  updateGitHubProjectStatuses,
+  WORKFLOW_PRESETS
+} from '../prompts/workflow.prompts'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { readManifest } from '../utils'
 import { mutateProjectManifestSafe } from '../manifest-file'
+import { assertGitBranchName } from '../run'
+import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workflow-board'
+import { getRemoteUrl } from '../utils/git-info'
 import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
@@ -23,6 +35,14 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
   if (!subcommand || subcommand === 'help') {
     showUsage()
     return
+  }
+
+  // Options reach the subcommands as arguments; only `use` takes any (#821)
+  const stray = subcommand === 'use' ? undefined : args.find((arg) => arg.startsWith('-'))
+  if (stray) {
+    console.error(chalk.red(`\n❌ Unknown option for \`sf workflow ${subcommand}\`: ${stray}\n`))
+    showUsage()
+    process.exit(1)
   }
 
   // Check if we're in a project (unless it's a global command)
@@ -43,10 +63,13 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
       showWorkflowConfig(manifest!)
       break
     case 'use':
-      await useTemplate(manifest!, args[0])
+      await useTemplate(manifest!, args)
       break
     case 'set-working-branch':
-      await setWorkingBranch(manifest!, args[0])
+      await setWorkflowBranch(manifest!, 'workingBranch', args[0])
+      break
+    case 'set-pr-target-branch':
+      await setWorkflowBranch(manifest!, 'prTargetBranch', args[0])
       break
     case 'set-ai-rules':
       await setAIRules(manifest!)
@@ -84,7 +107,9 @@ function showUsage() {
   console.log(chalk.bold('Project-level commands:'))
   console.log('  show                        Display current workflow configuration')
   console.log('  use <template>              Apply a global template to current project')
-  console.log('  set-working-branch <branch> Change branch de travail')
+  console.log('      [--project-url <url> | --create-board]  Attach an existing board, or create a GitHub Projects one')
+  console.log('  set-working-branch <branch> Change the working branch')
+  console.log('  set-pr-target-branch <branch> Change the branch pull requests target')
   console.log('  set-ai-rules                Modify AI development rules')
   console.log('  validate                    Validate workflow configuration')
   console.log('  save <name>                 Save as global template')
@@ -150,10 +175,48 @@ function showWorkflowConfig(manifest: SaaSFoundryManifest) {
   console.log()
 }
 
-async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string) {
+interface UseOptions {
+  templateName?: string
+  projectUrl?: string
+  createBoard: boolean
+}
+
+/** `use <template> [--project-url <url> | --create-board]`; any other flag is refused rather than ignored. */
+export function parseUseArgs(args: string[]): UseOptions {
+  const options: UseOptions = { createBoard: false }
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--project-url' || arg.startsWith('--project-url=')) {
+      const value = arg === '--project-url' ? args[++i] : arg.slice('--project-url='.length)
+      if (!value || value.startsWith('-')) throw new Error('--project-url needs the board URL')
+      options.projectUrl = value
+    } else if (arg === '--create-board') {
+      options.createBoard = true
+    } else if (arg.startsWith('-')) {
+      throw new Error(`Unknown option for \`sf workflow use\`: ${arg}`)
+    } else if (options.templateName === undefined) {
+      options.templateName = arg
+    } else {
+      throw new Error(`Unexpected argument for \`sf workflow use\`: ${arg}`)
+    }
+  }
+  if (options.projectUrl && options.createBoard) throw new Error('--project-url and --create-board are exclusive: attach an existing board, or create one.')
+  return options
+}
+
+async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
+  let options: UseOptions
+  try {
+    options = parseUseArgs(args)
+  } catch (error) {
+    console.error(chalk.red(`\n❌ ${error instanceof Error ? error.message : String(error)}\n`))
+    console.log('Usage: sf workflow use <template-name> [--project-url <url> | --create-board]\n')
+    process.exit(1)
+  }
+  const templateName = options.templateName
   if (!templateName) {
     console.error(chalk.red('\n❌ Template name is required\n'))
-    console.log('Usage: sf workflow use <template-name>\n')
+    console.log('Usage: sf workflow use <template-name> [--project-url <url> | --create-board]\n')
     process.exit(1)
   }
 
@@ -188,23 +251,13 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
     process.exit(1)
   }
 
-  // Prompt for project-specific values
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'projectUrl',
-      message: `${template.tool} project URL:`,
-      default: manifest.workflow?.projectUrl,
-      validate: (input) => input.length > 0 || 'URL is required',
-      when: () => template.tool !== 'none'
-    }
-  ])
+  const projectUrl = await resolveUseBoard(manifest, template, options)
 
   // Apply template to project
   const workflow: NonNullable<SaaSFoundryManifest['workflow']> = {
     template: template.name ?? templateName,
     tool: template.tool,
-    projectUrl: answers.projectUrl,
+    projectUrl,
     workingBranch: template.workingBranch,
     prTargetBranch: template.prTargetBranch,
     requireCodeReview: template.requireCodeReview,
@@ -235,31 +288,95 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
   }
 
   console.log(chalk.green(`\n✅ Workflow template "${templateName}" applied\n`))
+  if (appliedManifest.workflow && isMissingBoard(appliedManifest.workflow)) {
+    console.log(chalk.yellow(`⚠️  No ${appliedManifest.workflow.tool} board attached: the workflow scripts refuse ticket commands until one is.`))
+    console.log(chalk.gray(`   ${boardRemediation(appliedManifest.workflow)}\n`))
+  }
 }
 
-async function setWorkingBranch(manifest: SaaSFoundryManifest, branch?: string) {
-  if (!branch) {
-    const { workingBranch } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'workingBranch',
-        message: 'Branch de travail (working branch):',
-        default: manifest.workflow?.workingBranch || 'develop'
-      }
-    ])
-    branch = workingBranch
+/**
+ * The board `use` applies: `--project-url`, a board created by `--create-board`,
+ * the project's current board when the tool is unchanged (never re-asked), or a
+ * prompt on a terminal. Without a terminal it stays empty and is reported (#821).
+ */
+async function resolveUseBoard(manifest: SaaSFoundryManifest, template: WorkflowTemplate, options: UseOptions): Promise<string | undefined> {
+  const fail = (message: string): never => {
+    console.error(chalk.red(`\n❌ ${message}\n`))
+    process.exit(1)
   }
+  if (template.tool === 'none') return undefined
+  if (options.projectUrl) {
+    try {
+      return assertBoardUrl(template.tool, options.projectUrl)
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : String(error))
+    }
+  }
+  if (options.createBoard) {
+    if (template.tool !== 'github-projects') return fail(`--create-board creates a GitHub Projects board, not a ${template.tool} one: pass --project-url <url>.`)
+    const created = await setupGitHubProjectWithAutoCreation(manifest.projectName, template.statuses ?? [], getRemoteUrl(), { interactive: false })
+    return created ?? fail('--create-board: the GitHub Projects board was not created (see the reason above). Fix it and re-run, or attach an existing board with --project-url <url>.')
+  }
+  if (manifest.workflow?.projectUrl && manifest.workflow.tool === template.tool) return manifest.workflow.projectUrl
+  if (!process.stdin.isTTY) return undefined
 
+  const { projectUrl } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'projectUrl',
+      message: `${template.tool} project URL (leave empty to attach it later):`
+    }
+  ])
+  return projectUrl?.trim() ? projectUrl.trim() : undefined
+}
+
+const BRANCH_FIELDS = {
+  workingBranch: { label: 'working branch', prompt: 'Working branch:' },
+  prTargetBranch: { label: 'PR target branch', prompt: 'Branch pull requests target:' }
+} as const
+
+/**
+ * `set-working-branch` / `set-pr-target-branch`. A PR target that followed the
+ * working branch keeps following it, as when both were chosen at setup.
+ */
+async function setWorkflowBranch(manifest: SaaSFoundryManifest, field: keyof typeof BRANCH_FIELDS, branch?: string) {
   if (!manifest.workflow) {
     console.error(chalk.red('\n❌ No workflow configured\n'))
     process.exit(1)
   }
 
+  if (!branch) {
+    const answer = await inquirer.prompt([{ type: 'input', name: 'branch', message: BRANCH_FIELDS[field].prompt, default: manifest.workflow[field] || DEFAULT_WORKING_BRANCH }])
+    branch = answer.branch as string
+  }
+  try {
+    assertGitBranchName(branch)
+  } catch (error) {
+    console.error(chalk.red(`\n❌ ${error instanceof Error ? error.message : String(error)}\n`))
+    process.exit(1)
+  }
+
+  const previous = manifest.workflow
+  const followsWorkingBranch = field === 'workingBranch' && (!previous.prTargetBranch || previous.prTargetBranch === previous.workingBranch)
   await mutateProjectManifestSafe(process.cwd(), (current) => {
     if (!current.workflow) throw new Error('No workflow configured in the current project manifest.')
-    current.workflow.workingBranch = branch!
+    current.workflow[field] = branch!
+    if (followsWorkingBranch) current.workflow.prTargetBranch = branch!
   })
-  console.log(chalk.green(`\n✅ Branch de travail set to: ${chalk.cyan(branch!)}\n`))
+
+  console.log(chalk.green(`\n✅ ${BRANCH_FIELDS[field].label[0].toUpperCase()}${BRANCH_FIELDS[field].label.slice(1)} set to: ${chalk.cyan(branch)}`))
+  if (followsWorkingBranch) console.log(chalk.gray(`   Pull requests target it too (PR target branch: ${branch}).`))
+  if (!branchExists(branch)) {
+    console.log(chalk.yellow(`⚠️  Branch "${branch}" does not exist yet — create it: git branch ${branch} && git push -u origin ${branch}`))
+  }
+  console.log()
+}
+
+/** Local or on origin. Outside a git repository nothing can be checked, so the branch is not reported missing. */
+function branchExists(branch: string): boolean {
+  const git = (...args: string[]) => spawnSync('git', args, { stdio: 'ignore' }).status === 0
+  if (!git('rev-parse', '--git-dir')) return true
+  return git('rev-parse', '--verify', '--quiet', `refs/heads/${branch}`) || git('rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`)
 }
 
 async function setAIRules(manifest: SaaSFoundryManifest) {
@@ -388,61 +505,48 @@ async function saveAsTemplate(manifest: SaaSFoundryManifest, templateName?: stri
   console.log(chalk.green(`\n✅ Workflow saved as template: ${chalk.cyan(templateName!)}\n`))
 }
 
+export interface WorkflowConfigIssue {
+  issue: string
+  remediation: string
+}
+
+/**
+ * The checks behind `sf workflow validate`: the workflow block of the local
+ * manifest only. The remote board is not queried — `github-projects-cli.sh`
+ * reports a board that no longer matches the manifest.
+ */
+export function workflowConfigIssues(manifest: SaaSFoundryManifest): WorkflowConfigIssue[] {
+  const workflow = manifest.workflow
+  if (!workflow)
+    return [{ issue: 'No workflow configuration found', remediation: 'Create a template with `sf workflow create <name>` (it asks for the tool), then apply it with `sf workflow use <name>`.' }]
+
+  const issues: WorkflowConfigIssue[] = []
+  if (!workflow.tool) issues.push({ issue: 'Tool not specified', remediation: 'Set `workflow.tool` with `sf workflow use <template>`.' })
+  if (workflow.tool && workflow.tool !== 'none' && !workflow.projectUrl) {
+    issues.push({ issue: `No ${workflow.tool} board attached (workflow.projectUrl is empty)`, remediation: boardRemediation(workflow) })
+  }
+  if (!workflow.workingBranch) issues.push({ issue: 'Working branch not specified', remediation: 'Run `sf workflow set-working-branch <branch>`.' })
+  if (!workflow.prTargetBranch) issues.push({ issue: 'PR target branch not specified', remediation: 'Run `sf workflow set-pr-target-branch <branch>`.' })
+  return issues
+}
+
 async function validateWorkflowConfig(manifest: SaaSFoundryManifest) {
-  // Check if workflow validator skill exists in generated project
-  const skillPath = path.join(process.cwd(), '.claude', 'skills-optional', 'sf-tool-workflow-validator', 'validate-workflow.sh')
+  console.log(chalk.blue('\n🔍 Validating the workflow configuration in .saasfoundry.json'))
+  console.log(chalk.gray('Checks the tool, board URL and branches recorded locally; the remote board is not queried.\n'))
 
-  try {
-    await fs.access(skillPath)
-  } catch {
-    console.log(chalk.yellow('\n⚠️  Workflow validator skill not found in project\n'))
-    console.log(chalk.gray('The validator skill may not have been generated with your project.'))
-    console.log(chalk.gray('It is available in newer versions of SaaSFoundryAI.\n'))
-
-    // Fallback to basic validation
-    console.log(chalk.blue('🔍 Running basic validation...\n'))
-
-    const issues: string[] = []
-
-    if (!manifest.workflow) {
-      issues.push('No workflow configuration found')
-    } else {
-      if (!manifest.workflow.tool) {
-        issues.push('Tool not specified')
-      }
-      if (manifest.workflow.tool !== 'none' && !manifest.workflow.projectUrl) {
-        issues.push('Project URL not specified')
-      }
-      if (!manifest.workflow.workingBranch) {
-        issues.push('Working branch not specified')
-      }
-      if (!manifest.workflow.prTargetBranch) {
-        issues.push('PR target branch not specified')
-      }
-    }
-
-    if (issues.length === 0) {
-      console.log(chalk.green('✅ Workflow configuration is valid\n'))
-    } else {
-      console.log(chalk.red('❌ Validation failed:\n'))
-      issues.forEach((issue) => console.log(`  - ${issue}`))
-      console.log()
-      process.exit(1)
-    }
-
+  const issues = workflowConfigIssues(manifest)
+  if (issues.length === 0) {
+    console.log(chalk.green('✅ Workflow configuration is valid\n'))
     return
   }
 
-  // Run the workflow validator script
-  try {
-    execSync(`bash "${skillPath}"`, {
-      stdio: 'inherit',
-      cwd: process.cwd()
-    })
-  } catch {
-    // Script already outputs errors, just exit with error code
-    process.exit(1)
+  console.log(chalk.red('❌ Validation failed:\n'))
+  for (const { issue, remediation } of issues) {
+    console.log(`  - ${issue}`)
+    console.log(chalk.gray(`    ${remediation}`))
   }
+  console.log()
+  process.exit(1)
 }
 
 // ============================================================================

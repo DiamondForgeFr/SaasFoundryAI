@@ -22,6 +22,7 @@ jest.mock('ora', () => () => {
 
 import { updateCommand } from '../../../commands/update'
 import { runConfigSession } from '../../../config-engine/session'
+import { harnessInstallerMeta } from '../../../installers/harness.installer'
 
 const mockedRunConfigSession = runConfigSession as jest.MockedFunction<typeof runConfigSession>
 
@@ -91,7 +92,7 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     // Manifest converges to the full-profile state: workflow + tracking
     const manifest = await readManifest()
     expect(manifest.workflow.tool).toBe('github-projects')
-    expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(manifest.modules.harness.managed).toBe(true)
     expect(manifest.modules.advancedSkills).toEqual(['context7'])
     expect(manifest.modules.email.provider).toBe('none')
@@ -119,7 +120,7 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(mockedRunConfigSession).toHaveBeenCalledTimes(1)
     const manifest = await readManifest()
     expect(manifest.workflow.tool).toBe('github-projects')
-    expect(manifest.modules.harness).toMatchObject({ version: 1, managed: true })
+    expect(manifest.modules.harness).toMatchObject({ version: harnessInstallerMeta.currentVersion, managed: true })
     expect(manifest.modules.email.provider).toBe('none')
   })
 
@@ -146,7 +147,7 @@ describe('updateCommand — late harness install (--add-modules harness)', () =>
     expect(await readFile(join(projectDir, editedPath), 'utf8')).toBe('my precious user edit\n')
     expect(await readFile(join(projectDir, `${editedPath}.saasfoundry.new`), 'utf8')).not.toBe('my precious user edit\n')
     const manifest = await readManifest()
-    expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(manifest.modules.harness.managed).toBe(true)
     // Baseline = deposit target, not the user's edit
     const { hashFileContent } = jest.requireActual<typeof import('../../../utils')>('../../../utils')
@@ -218,7 +219,7 @@ describe('updateCommand — skills add on a harness manifest', () => {
     expect(skillMd).toBeTruthy()
     const manifest = JSON.parse(await readFile(join(projectDir, '.saasfoundry.json'), 'utf8'))
     expect(manifest.modules.advancedSkills).toEqual(['context7'])
-    expect(manifest.modules.harness.version).toBe(1)
+    expect(manifest.modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(Object.keys(manifest.fileHashes ?? {}).some((p: string) => p.startsWith('.claude/skills/sf-tool-context7/'))).toBe(true)
   })
 

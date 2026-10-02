@@ -10,7 +10,8 @@ import { ConfigState, FieldDefinition, StepContext } from '../../../config-engin
 
 jest.mock('../../../prompts/workflow.prompts', () => ({
   ...jest.requireActual('../../../prompts/workflow.prompts'),
-  promptWorkflowConfiguration: jest.fn().mockResolvedValue({ workflow: { tool: 'github-projects' }, aiRules: {} })
+  promptWorkflowConfiguration: jest.fn().mockResolvedValue({ workflow: { tool: 'github-projects' }, aiRules: {} }),
+  setupGitHubProjectWithAutoCreation: jest.fn()
 }))
 jest.mock('../../../prompts/skills.prompts', () => ({
   promptAdvancedSkills: jest.fn().mockResolvedValue(['context7']),
@@ -23,7 +24,7 @@ jest.mock('../../../prompts/srs.prompts', () => ({
 jest.mock('../../../utils/git-info', () => ({ getRemoteUrl: jest.fn() }))
 jest.mock('../../../utils', () => ({ ...jest.requireActual('../../../utils'), readManifest: jest.fn() }))
 
-import { promptWorkflowConfiguration } from '../../../prompts/workflow.prompts'
+import { promptWorkflowConfiguration, setupGitHubProjectWithAutoCreation } from '../../../prompts/workflow.prompts'
 import { collectAdvancedSkillsCredentials, promptAdvancedSkills } from '../../../prompts/skills.prompts'
 import { promptSrsConfiguration, promptSrsIngestion } from '../../../prompts/srs.prompts'
 import { getRemoteUrl } from '../../../utils/git-info'
@@ -191,6 +192,47 @@ describe('workflowStep', () => {
     expect(promptWorkflowConfiguration).not.toHaveBeenCalled()
   })
 
+  it('non-interactive: writes the branches passed as flags, the PR target following the working branch', async () => {
+    const onMain = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'solo', workflowBranches: { workingBranch: 'main' } } }))
+    expect(onMain?.workflow).toMatchObject({ workingBranch: 'main', prTargetBranch: 'main' })
+
+    const split = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'solo', workflowBranches: { prTargetBranch: 'main' } } }))
+    expect(split?.workflow).toMatchObject({ workingBranch: 'develop', prTargetBranch: 'main' })
+  })
+
+  describe('non-interactive board (#821)', () => {
+    it('writes --project-url after checking it is a GitHub Projects URL', async () => {
+      const result = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'solo', workflowBoard: { projectUrl: 'https://github.com/orgs/acme/projects/3' } } }))
+      expect(result?.workflow?.projectUrl).toBe('https://github.com/orgs/acme/projects/3')
+
+      await expect(
+        workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'solo', workflowBoard: { projectUrl: 'https://github.com/acme/notulia' } } }))
+      ).rejects.toThrow('is not a GitHub Projects URL')
+    })
+
+    it('creates the board without prompts, owned by the harness repository remote', async () => {
+      ;(getRemoteUrl as jest.Mock).mockReturnValue('git@github.com:acme/notulia.git')
+      ;(setupGitHubProjectWithAutoCreation as jest.Mock).mockResolvedValue('https://github.com/users/acme/projects/7')
+
+      const result = await workflowStep.collect?.(
+        stepContext({ nonInteractive: true, state: { profile: 'harness', projectName: 'notulia' }, prefill: { workflowPreset: 'solo', workflowBoard: { create: true } } })
+      )
+
+      expect(setupGitHubProjectWithAutoCreation).toHaveBeenCalledWith('notulia', expect.any(Array), 'git@github.com:acme/notulia.git', { interactive: false })
+      expect(result?.workflow?.projectUrl).toBe('https://github.com/users/acme/projects/7')
+    })
+
+    it('does not take the owner from the cwd remote for a generated stack, and stops when creation fails', async () => {
+      ;(getRemoteUrl as jest.Mock).mockReturnValue('git@github.com:someone-else/parent.git')
+      ;(setupGitHubProjectWithAutoCreation as jest.Mock).mockResolvedValue(null)
+
+      await expect(
+        workflowStep.collect?.(stepContext({ nonInteractive: true, state: { profile: 'full', projectName: 'acme' }, prefill: { workflowPreset: 'solo', workflowBoard: { create: true } } }))
+      ).rejects.toThrow('--create-board: the GitHub Projects board was not created')
+      expect(setupGitHubProjectWithAutoCreation).toHaveBeenCalledWith('acme', expect.any(Array), undefined, { interactive: false })
+    })
+  })
+
   it('non-interactive: defaults an explicit preset to GitHub Projects', async () => {
     const result = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'saasfoundry' } }))
 
@@ -205,7 +247,7 @@ describe('workflowStep', () => {
 
     const result = await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://git/acme' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined, undefined, undefined)
     expect(result).toMatchObject({ workflow: { tool: 'github-projects' } })
     logSpy.mockRestore()
   })
@@ -217,7 +259,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'notulia' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('notulia', 'https://github.com/acme/notulia.git', undefined, undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('notulia', 'https://github.com/acme/notulia.git', undefined, undefined, undefined, undefined)
     logSpy.mockRestore()
   })
 
@@ -228,7 +270,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://github.com/acme/explicit.git' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://github.com/acme/explicit.git', undefined, undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://github.com/acme/explicit.git', undefined, undefined, undefined, undefined)
     logSpy.mockRestore()
   })
 
@@ -239,7 +281,17 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, derived, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, 'jira', undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, 'jira', undefined, undefined)
+    logSpy.mockRestore()
+  })
+
+  it('interactive: threads the branches passed as flags so they are not asked again (#822)', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    const render = jest.fn(async () => ({ configureWorkflow: true }) as unknown as ConfigState)
+
+    await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, prefill: { workflowBranches: { workingBranch: 'main' } }, render }))
+
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, undefined, undefined, { workingBranch: 'main' })
     logSpy.mockRestore()
   })
 
@@ -250,7 +302,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, undefined, 'https://github.com/orgs/acme/projects/7')
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, undefined, 'https://github.com/orgs/acme/projects/7', undefined)
     logSpy.mockRestore()
   })
 

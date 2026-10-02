@@ -23,7 +23,7 @@ SaaSFoundryAI has two first-class interfaces. Both use the same CLI, manifest, i
 
 ### From your terminal
 
-Use Node.js 24.19.0 and npm 11 for the generated project. Docker is needed only when you choose Docker-managed local services.
+The CLI and the harness run on Node.js 22 or newer with npm 10 or newer. The generated SaaS stack needs Node.js 24.19.0 and npm 11. Docker is needed only when you choose Docker-managed local services.
 
 ```bash
 # New project: choose the harness, SaaS stack, or both in the interactive setup

@@ -107,4 +107,35 @@ describe('status command (E2E)', () => {
     expect(JSON.parse(neutralJson.stdout)).toEqual(JSON.parse(json.stdout))
     expect(neutralJson.stdout).toBe(legacyJson.stdout)
   })
+
+  // #825 — `git rev-parse --abbrev-ref HEAD` exits 128 before the first commit, which read as
+  // "detached" and "Branch unknown"; on a real detached HEAD it printed the branch "HEAD"
+  describe('git branch state', () => {
+    const git = (...args: string[]) => spawnSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd: tempDir, encoding: 'utf8' })
+    const status = (...args: string[]) =>
+      spawnSync(process.execPath, [join(CLI_ROOT, 'bin/sf.js'), 'status', '--no-network', ...args], { cwd: tempDir, encoding: 'utf8', env: { ...process.env, SF_SKILL_NO_WARN: '1' } })
+
+    it('names the unborn branch of a repository without commits', () => {
+      git('init', '-q', '-b', 'main')
+
+      const agent = status('--agent-friendly')
+      expect(agent.stdout).toContain('- git: main (no commits yet, clean)')
+      expect(agent.stdout).toContain('Branch main has no commits yet')
+      expect(agent.stdout).not.toMatch(/detached|Branch unknown/)
+
+      const report = JSON.parse(status('--json').stdout)
+      expect(report.git).toMatchObject({ available: true, branch: 'main', unborn: true })
+    })
+
+    it('reports a detached HEAD as detached, and a committed branch without the unborn flag', () => {
+      git('init', '-q', '-b', 'main')
+      git('commit', '-q', '--allow-empty', '-m', 'first')
+      expect(JSON.parse(status('--json').stdout).git).not.toHaveProperty('unborn')
+
+      git('checkout', '-q', '--detach')
+      const agent = status('--agent-friendly')
+      expect(agent.stdout).toContain('- git: detached (clean)')
+      expect(JSON.parse(status('--json').stdout).git.branch).toBeUndefined()
+    })
+  })
 })

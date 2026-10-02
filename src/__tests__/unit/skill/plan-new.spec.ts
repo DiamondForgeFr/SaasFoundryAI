@@ -47,6 +47,25 @@ describe('skill/plan-new', () => {
   // so plan-new dropped it in silence: an assistant that correctly concluded "this user has an
   // existing repo, use harness" produced a command that scaffolded a full stack over it.
   describe('installation profile', () => {
+    // #821, #822 — the registry had no tracker, board or branch fields, so the skill could not
+    // plan a non-interactive harness setup that leaves a usable workflow
+    it('plans the assistant-led harness setup with its tracker, board and branches', async () => {
+      const { stdout, code } = await runWithIntent({
+        projectName: 'acme',
+        structure: 'monorepo',
+        profile: 'harness',
+        workflow: 'solo',
+        tracker: 'github-projects',
+        createBoard: true,
+        workingBranch: 'main'
+      })
+      expect(code).toBe(0)
+      expect(stdout).toContain('--workflow solo')
+      expect(stdout).toContain('--working-branch main')
+      expect(stdout).toContain('--tracker github-projects')
+      expect(stdout).toContain('--create-board')
+    })
+
     it('passes --profile harness through — the "I already have code" case', async () => {
       const { stdout, code } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', profile: 'harness' })
       expect(code).toBe(0)

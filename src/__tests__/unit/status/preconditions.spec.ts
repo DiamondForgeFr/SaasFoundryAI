@@ -107,7 +107,7 @@ describe('evaluatePreconditions', () => {
         structure: 'cli',
         projectName: 'notulia',
         modules: { harness: { version: 1 } },
-        workflow: { tool: 'github-projects' },
+        workflow: { tool: 'github-projects', projectUrl: 'https://github.com/users/octo/projects/1' },
         tools: { srs: { enabled: true, backend: 'notion', rootPage: { id: 'a', url: 'b', name: 'Root' } } }
       }
     })
@@ -118,6 +118,22 @@ describe('evaluatePreconditions', () => {
     expect(preconditions.find((p) => p.name === 'workflow')?.status).toBe('ok')
     expect(preconditions.find((p) => p.name === 'srs')?.status).toBe('ok')
     expect(preconditions.find((p) => p.name === 'git')?.status).toBe('ok')
+  })
+
+  // #821 — a non-interactive setup left `tool: github-projects` without a board and status said ok
+  it('warns when the workflow tool has no board attached, with the command that attaches one', () => {
+    const report = makeReport({
+      git: { available: true, branch: 'main', isClean: true },
+      manifest: { version: '1.0.0', generatedAt: '2026-10-02T00:00:00Z', structure: 'cli', projectName: 'acme', workflow: { tool: 'github-projects', template: 'SaaSFoundry Solo' } }
+    })
+
+    expect(evaluatePreconditions(report).find((p) => p.name === 'workflow')).toEqual({
+      name: 'workflow',
+      description: 'Workflow configured',
+      status: 'warn',
+      details: 'tool: github-projects, no board attached (workflow.projectUrl is empty)',
+      remediation: 'Attach a board with `sf workflow use solo --project-url <url>`, or create one with `sf workflow use solo --create-board`.'
+    })
   })
 })
 

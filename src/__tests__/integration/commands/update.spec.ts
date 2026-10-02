@@ -57,6 +57,7 @@ jest.mock('ora', () => () => ({
 }))
 
 import { DEPENDENCY_REFRESH_JOURNAL, DEPENDENCY_REFRESH_OUTCOME, updateCommand } from '../../../commands/update'
+import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import { getModuleSelections, getEmailModuleCredentials, getStorageModuleConfig, getSkillCredentials } from '../../../prompts/update.prompts'
 import { installEmailModule } from '../../../installers/email.installer'
 import { installStorageModule } from '../../../installers/storage.installer'
@@ -168,7 +169,7 @@ describe('updateCommand (integration)', () => {
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
       expect(saved.version).toBe(cliVersion)
-      expect(saved.modules.harness).toEqual(manifest.modules.harness)
+      expect(saved.modules.harness).toEqual({ ...manifest.modules.harness, version: harnessInstallerMeta.currentVersion })
       expect(saved.fileHashes).toEqual(expect.objectContaining(sharedHashes))
       expect(saved.fileHashes[hashKey(privateSkill)]).toBeUndefined()
       expect(await readFile(shared, 'utf8')).toBe('customized shared workflow\n')

@@ -5,7 +5,8 @@ manifeste de projet, sans remplacer votre API ni votre frontend.
 
 ## 1. Préparer la machine
 
-Installez Git, Node.js 24.19.0 et npm 11. Docker n'est pas nécessaire pour installer uniquement le harness. Un agent de développement est facultatif si vous utilisez directement le CLI.
+Installez Git, Node.js 22 ou plus récent et npm 10 ou plus récent : c'est ce dont le CLI et le harness ont besoin. Node.js 24.19.0 et npm 11 ne sont requis que par la stack SaaS générée (profils
+`stack` et `full`), qui les épingle dans son `.nvmrc`. Docker n'est pas nécessaire pour installer uniquement le harness. Un agent de développement est facultatif si vous utilisez directement le CLI.
 
 ## 2. Installer dans le dépôt
 
@@ -41,6 +42,15 @@ Ouvrez le dépôt dans un assistant de développement capable de lire ses fichie
 L'assistant peut guider le même parcours `npx saasfoundryai-cli new --profile harness` que ci-dessus ; il ne doit pas recréer le scaffold à la main. Claude Code, Codex, Gemini CLI, Kimi Code et Qwen
 Code disposent de profils d'agents enregistrés. Pour un autre hôte, choisissez `generic` et vérifiez qu'il peut lire les instructions générées et exécuter les commandes requises. L'installation
 facultative du **skill** `tool-saasfoundry` en une phrase cible actuellement Claude Code ; elle n'est pas nécessaire pour installer ou utiliser le harness avec un autre assistant.
+
+Un assistant exécute généralement le CLI en mode non interactif. Chaque choix passe alors par un drapeau, board compris ; sans lui, le workflow reste sans board et l'installation le signale :
+
+```bash
+npx saasfoundryai-cli new --profile harness --non-interactive --workflow solo --tracker github-projects --create-board --working-branch main
+```
+
+`--create-board` crée le board GitHub Projects sous le compte propriétaire du remote `origin` du dépôt, sans poser de question. `--project-url <url>` rattache plutôt un board existant. Les deux
+fonctionnent aussi plus tard avec `sf workflow use <template>`.
 
 GPT, DeepSeek, GLM et Kimi peuvent désigner des modèles ou des fournisseurs de modèles, pas nécessairement des hôtes d'agents. Utilisez-les dans un outil ayant accès au dépôt et au terminal ; pendant
 l'installation, sélectionnez le profil de cet outil, pas le nom du modèle.

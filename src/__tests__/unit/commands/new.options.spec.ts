@@ -252,6 +252,43 @@ describe('buildPrefillFromOptions — output language', () => {
   it('leaves outputLanguage undefined interactively, so the step still asks', () => {
     expect(buildPrefillFromOptions({}).outputLanguage).toBeUndefined()
   })
+
+  // #822 — the non-interactive path had no branch flags and always wrote develop
+  describe('--working-branch / --pr-target-branch', () => {
+    it('maps the branch flags into workflowBranches', () => {
+      expect(buildPrefillFromOptions({ nonInteractive: true, workflow: 'solo', workingBranch: 'main' }).workflowBranches).toEqual({ workingBranch: 'main' })
+      expect(buildPrefillFromOptions({ workingBranch: 'trunk', prTargetBranch: 'release/next' }).workflowBranches).toEqual({ workingBranch: 'trunk', prTargetBranch: 'release/next' })
+    })
+
+    it('leaves workflowBranches unset without the flags', () => {
+      expect(buildPrefillFromOptions({ nonInteractive: true, workflow: 'solo' })).not.toHaveProperty('workflowBranches')
+    })
+
+    it('rejects a name Git refuses, before it reaches a git command', () => {
+      expect(() => buildPrefillFromOptions({ workingBranch: 'main;touch pwned' })).toThrow('--working-branch: invalid Git branch name')
+      expect(() => buildPrefillFromOptions({ prTargetBranch: 'bad..name' })).toThrow('--pr-target-branch: invalid Git branch name')
+    })
+
+    it('refuses the flags non-interactively without a workflow preset, which would drop them', () => {
+      expect(() => buildPrefillFromOptions({ nonInteractive: true, workingBranch: 'main' })).toThrow('pass --workflow solo or --workflow saasfoundry')
+    })
+  })
+
+  // #821 — a non-interactive setup had no way to attach or create its board
+  describe('--project-url / --create-board', () => {
+    it('maps either flag into workflowBoard', () => {
+      expect(buildPrefillFromOptions({ nonInteractive: true, workflow: 'solo', projectUrl: 'https://github.com/users/octo/projects/1' }).workflowBoard).toEqual({
+        projectUrl: 'https://github.com/users/octo/projects/1'
+      })
+      expect(buildPrefillFromOptions({ nonInteractive: true, workflow: 'solo', createBoard: true }).workflowBoard).toEqual({ create: true })
+    })
+
+    it('refuses both at once, either without a preset non-interactively, and --create-board for another tracker', () => {
+      expect(() => buildPrefillFromOptions({ workflow: 'solo', projectUrl: 'https://github.com/users/octo/projects/1', createBoard: true })).toThrow('are exclusive')
+      expect(() => buildPrefillFromOptions({ nonInteractive: true, createBoard: true })).toThrow('--create-board configures a workflow')
+      expect(() => buildPrefillFromOptions({ workflow: 'solo', tracker: 'jira', createBoard: true })).toThrow('creates a GitHub Projects board, not a jira one')
+    })
+  })
 })
 
 describe('shouldSkipWorkflow', () => {

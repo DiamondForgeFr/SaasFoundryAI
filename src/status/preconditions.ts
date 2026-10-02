@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
+import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
 
 export type PreconditionStatus = 'ok' | 'warn' | 'fail' | 'skip'
@@ -40,6 +41,15 @@ function checkWorkflow(report: StatusReport): Precondition {
       remediation: 'Run `sf workflow use <template>` to configure a workflow.'
     }
   }
+  if (isMissingBoard(workflow)) {
+    return {
+      name: 'workflow',
+      description: 'Workflow configured',
+      status: 'warn',
+      details: `tool: ${workflow.tool}, no board attached (workflow.projectUrl is empty)`,
+      remediation: boardRemediation(workflow)
+    }
+  }
   return { name: 'workflow', description: 'Workflow configured', status: 'ok', details: `tool: ${workflow.tool}` }
 }
 
@@ -77,6 +87,15 @@ function checkGit(report: StatusReport): Precondition {
       status: 'warn',
       details: 'Not a git repository',
       remediation: 'Run `git init` to initialize a repository.'
+    }
+  }
+  if (report.git.unborn) {
+    return {
+      name: 'git',
+      description: 'Git branch has a first commit',
+      status: 'warn',
+      details: `Branch ${report.git.branch} has no commits yet`,
+      remediation: 'Make the first commit before running workflow transitions: the working branch is created from it.'
     }
   }
   if (report.git.isClean === false) {

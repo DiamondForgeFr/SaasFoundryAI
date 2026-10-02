@@ -1,5 +1,6 @@
 import { DEFAULT_OUTPUT_LANGUAGE } from '../language'
 import { getAgentIds, isHarnessAgent } from '../harness/agent-registry'
+import { assertGitBranchName } from '../run'
 import { Answers, DbCredentials, HarnessAgent, S3Credentials } from '../types'
 
 export interface NewCommandOptions {
@@ -86,6 +87,10 @@ export interface NewCommandOptions {
 
   // Workflow (flag allows skipping; full config still goes through `sf workflow` or interactive)
   workflow?: string | boolean
+  workingBranch?: string
+  prTargetBranch?: string
+  projectUrl?: string
+  createBoard?: boolean
 
   // Post-setup behavior
   startServices?: boolean
@@ -216,7 +221,46 @@ export function buildPrefillFromOptions(opts: NewCommandOptions, env: NodeJS.Pro
     if (preset === 'solo' || preset === 'saasfoundry') prefill.workflowPreset = preset
   }
 
+  const workflowBranches = parseWorkflowBranches(opts)
+  if (workflowBranches) {
+    // Non-interactively, only a preset builds a workflow: without one the branches would be dropped
+    if (opts.nonInteractive === true && !prefill.workflowPreset) {
+      throw new Error('--working-branch and --pr-target-branch configure a workflow: pass --workflow solo or --workflow saasfoundry with them.')
+    }
+    prefill.workflowBranches = workflowBranches
+  }
+
+  if (opts.projectUrl !== undefined || opts.createBoard === true) {
+    if (opts.projectUrl !== undefined && opts.createBoard === true) throw new Error('--project-url and --create-board are exclusive: attach an existing board, or create one.')
+    if (opts.nonInteractive === true && !prefill.workflowPreset) {
+      throw new Error(`${opts.createBoard ? '--create-board' : '--project-url'} configures a workflow: pass --workflow solo or --workflow saasfoundry with it.`)
+    }
+    if (opts.createBoard === true && opts.tracker !== undefined && opts.tracker !== 'github-projects') {
+      throw new Error(`--create-board creates a GitHub Projects board, not a ${opts.tracker} one: pass --project-url <url> for an existing ${opts.tracker} board.`)
+    }
+    prefill.workflowBoard = opts.createBoard === true ? { create: true } : { projectUrl: opts.projectUrl }
+  }
+
   return prefill
+}
+
+/** `--working-branch` / `--pr-target-branch`, validated as Git does: `sf new` passes them to git. */
+function parseWorkflowBranches(opts: NewCommandOptions): Answers['workflowBranches'] {
+  const branches: NonNullable<Answers['workflowBranches']> = {}
+  for (const [key, flag] of [
+    ['workingBranch', '--working-branch'],
+    ['prTargetBranch', '--pr-target-branch']
+  ] as const) {
+    const value = opts[key]
+    if (value === undefined) continue
+    try {
+      assertGitBranchName(value)
+    } catch {
+      throw new Error(`${flag}: invalid Git branch name ${JSON.stringify(value)}`)
+    }
+    branches[key] = value
+  }
+  return Object.keys(branches).length > 0 ? branches : undefined
 }
 
 /** Parse the comma-separated --agents option against the versioned registry. */
