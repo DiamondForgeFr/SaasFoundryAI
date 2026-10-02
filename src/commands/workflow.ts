@@ -3,7 +3,6 @@ import chalk from 'chalk'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { execSync } from 'child_process'
 import { promptWorkflowConfiguration, listGlobalWorkflows, loadGlobalWorkflow, saveGlobalWorkflow, updateGitHubProjectStatuses, WORKFLOW_PRESETS } from '../prompts/workflow.prompts'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { readManifest } from '../utils'
@@ -388,61 +387,48 @@ async function saveAsTemplate(manifest: SaaSFoundryManifest, templateName?: stri
   console.log(chalk.green(`\n✅ Workflow saved as template: ${chalk.cyan(templateName!)}\n`))
 }
 
+export interface WorkflowConfigIssue {
+  issue: string
+  remediation: string
+}
+
+/**
+ * The checks behind `sf workflow validate`: the workflow block of the local
+ * manifest only. The remote board is not queried — `github-projects-cli.sh`
+ * reports a board that no longer matches the manifest.
+ */
+export function workflowConfigIssues(manifest: SaaSFoundryManifest): WorkflowConfigIssue[] {
+  const workflow = manifest.workflow
+  if (!workflow)
+    return [{ issue: 'No workflow configuration found', remediation: 'Create a template with `sf workflow create <name>` (it asks for the tool), then apply it with `sf workflow use <name>`.' }]
+
+  const issues: WorkflowConfigIssue[] = []
+  if (!workflow.tool) issues.push({ issue: 'Tool not specified', remediation: 'Set `workflow.tool` with `sf workflow use <template>`.' })
+  if (workflow.tool && workflow.tool !== 'none' && !workflow.projectUrl) {
+    issues.push({ issue: `No ${workflow.tool} board attached (workflow.projectUrl is empty)`, remediation: 'Attach the board: `sf workflow use <template>` asks for its URL.' })
+  }
+  if (!workflow.workingBranch) issues.push({ issue: 'Working branch not specified', remediation: 'Run `sf workflow set-working-branch <branch>`.' })
+  if (!workflow.prTargetBranch) issues.push({ issue: 'PR target branch not specified', remediation: 'Set `workflow.prTargetBranch` in .saasfoundry.json.' })
+  return issues
+}
+
 async function validateWorkflowConfig(manifest: SaaSFoundryManifest) {
-  // Check if workflow validator skill exists in generated project
-  const skillPath = path.join(process.cwd(), '.claude', 'skills-optional', 'sf-tool-workflow-validator', 'validate-workflow.sh')
+  console.log(chalk.blue('\n🔍 Validating the workflow configuration in .saasfoundry.json'))
+  console.log(chalk.gray('Checks the tool, board URL and branches recorded locally; the remote board is not queried.\n'))
 
-  try {
-    await fs.access(skillPath)
-  } catch {
-    console.log(chalk.yellow('\n⚠️  Workflow validator skill not found in project\n'))
-    console.log(chalk.gray('The validator skill may not have been generated with your project.'))
-    console.log(chalk.gray('It is available in newer versions of SaaSFoundryAI.\n'))
-
-    // Fallback to basic validation
-    console.log(chalk.blue('🔍 Running basic validation...\n'))
-
-    const issues: string[] = []
-
-    if (!manifest.workflow) {
-      issues.push('No workflow configuration found')
-    } else {
-      if (!manifest.workflow.tool) {
-        issues.push('Tool not specified')
-      }
-      if (manifest.workflow.tool !== 'none' && !manifest.workflow.projectUrl) {
-        issues.push('Project URL not specified')
-      }
-      if (!manifest.workflow.workingBranch) {
-        issues.push('Working branch not specified')
-      }
-      if (!manifest.workflow.prTargetBranch) {
-        issues.push('PR target branch not specified')
-      }
-    }
-
-    if (issues.length === 0) {
-      console.log(chalk.green('✅ Workflow configuration is valid\n'))
-    } else {
-      console.log(chalk.red('❌ Validation failed:\n'))
-      issues.forEach((issue) => console.log(`  - ${issue}`))
-      console.log()
-      process.exit(1)
-    }
-
+  const issues = workflowConfigIssues(manifest)
+  if (issues.length === 0) {
+    console.log(chalk.green('✅ Workflow configuration is valid\n'))
     return
   }
 
-  // Run the workflow validator script
-  try {
-    execSync(`bash "${skillPath}"`, {
-      stdio: 'inherit',
-      cwd: process.cwd()
-    })
-  } catch {
-    // Script already outputs errors, just exit with error code
-    process.exit(1)
+  console.log(chalk.red('❌ Validation failed:\n'))
+  for (const { issue, remediation } of issues) {
+    console.log(`  - ${issue}`)
+    console.log(chalk.gray(`    ${remediation}`))
   }
+  console.log()
+  process.exit(1)
 }
 
 // ============================================================================
