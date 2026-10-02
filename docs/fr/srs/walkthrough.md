@@ -83,8 +83,11 @@ L'agent propose un `DraftCandidate[]` comprenant un Epic et ses FR. Aucune page 
 
 ```bash
 .claude/skills/sf-workflow/workflow-cli.sh transition-drafting 42 ai-draft
-.claude/skills/sf-srs/scripts/srs-cli.sh write --spec /tmp/draft-42.json
+.claude/skills/sf-srs/scripts/srs-cli.sh validate --spec /tmp/draft-42.json
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting 42 ai-draft --spec /tmp/draft-42.json
 ```
+
+Sans option, la phase affiche la procédure de rédaction et ne modifie rien. `validate --spec` vérifie la spécification hors ligne ; `ai-draft --spec` l'écrit.
 
 Après succès, Notion contient l'Epic, les pages `FR-001`, `FR-002` et `FR-003`, leurs sections UR/FR/DS/TC et une table de traçabilité. La page est désormais la source canonique.
 

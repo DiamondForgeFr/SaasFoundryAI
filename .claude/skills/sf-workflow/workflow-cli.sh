@@ -1707,6 +1707,7 @@ case "$COMMAND" in
     if [[ -z "$TICKET" || -z "$PHASE" ]]; then
       echo "Usage: workflow-cli.sh transition-drafting <ticket> <phase> [phase options]" >&2
       echo "Phases: ai-draft | human-review | spawning | done" >&2
+      echo "AI draft: no option prints the procedure; --spec <file> writes it; --from notion-pages|codebase drafts from existing material" >&2
       echo "Spawning: --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]" >&2
       exit 1
     fi
@@ -1743,15 +1744,72 @@ case "$COMMAND" in
         ;;
     esac
 
-    SRS_CLI=".claude/skills/sf-srs/scripts/srs-cli.sh"
+    # The project's SRS wrapper, else the one installed next to this skill (a project that
+    # only carries .agents/). The wrapper resolves the CLI itself, a global install included.
+    SRS_CLI=""
+    for SRS_CANDIDATE in ".claude/skills/sf-srs/scripts/srs-cli.sh" "$SKILL_DIR/../sf-srs/scripts/srs-cli.sh"; do
+      if [[ -x "$SRS_CANDIDATE" ]]; then
+        SRS_CLI="$SRS_CANDIDATE"
+        break
+      fi
+    done
+    require_srs_cli() {
+      if [[ -z "$SRS_CLI" ]]; then
+        echo -e "${RED}✗ Expected an executable sf-srs wrapper (.claude/skills/sf-srs/scripts/srs-cli.sh, or next to this skill). Run the SRS skill install first.${NC}" >&2
+        exit 2
+      fi
+    }
     case "$PHASE" in
       ai-draft)
         echo -e "${BLUE}→ AI drafting phase for #${TICKET} (label: ${SRS_LABEL})${NC}"
-        if [[ ! -x "$SRS_CLI" ]]; then
-          echo -e "${RED}✗ Expected ${SRS_CLI} to be executable. Run the SRS skill install first.${NC}" >&2
+        # No drafter takes a ticket: the agent drafts the DraftCandidate[] from the ticket and
+        # the conversation, then this phase writes it (#849). `draft --ticket` failed everywhere.
+        if [[ "${#DRAFTING_ARGS[@]}" -eq 0 ]]; then
+          echo "  Draft the specification from ticket #${TICKET} and the conversation — no CLI drafts it for you:"
+          echo "    1. Write a DraftCandidate[] JSON file: one epic candidate for the feature (with its id), one per"
+          echo "       version (parentId = the feature id), and one fr candidate per FR (parentEpicId = its version id)."
+          echo "       Reference: .claude/skills/sf-srs/templates/examples/example-three-levels.spec.json"
+          echo "    2. Check it offline:  ${SRS_CLI:-srs-cli.sh} validate --spec <file>"
+          echo "    3. Write it:          workflow-cli.sh transition-drafting ${TICKET} ai-draft --spec <file>"
+          echo "  To start from existing material instead:"
+          echo "    workflow-cli.sh transition-drafting ${TICKET} ai-draft --from notion-pages --ids <id,...>"
+          echo "    workflow-cli.sh transition-drafting ${TICKET} ai-draft --from codebase [--path <dir>]"
+          print_status_banner "drafting:ai-draft"
+          exit 0
+        fi
+        DRAFT_ACTION=()
+        DRAFT_INDEX=0
+        while [[ "$DRAFT_INDEX" -lt "${#DRAFTING_ARGS[@]}" ]]; do
+          DRAFT_ARG="${DRAFTING_ARGS[$DRAFT_INDEX]}"
+          case "$DRAFT_ARG" in
+            --spec)
+              DRAFT_SPEC="${DRAFTING_ARGS[$((DRAFT_INDEX + 1))]:-}"
+              if [[ -z "$DRAFT_SPEC" || "$DRAFT_SPEC" == --* ]]; then
+                echo -e "${RED}✗ --spec requires a path.${NC}" >&2
+                exit 2
+              fi
+              if [[ ! -f "$DRAFT_SPEC" ]]; then
+                echo -e "${RED}✗ Spec file not found: ${DRAFT_SPEC}${NC}" >&2
+                exit 2
+              fi
+              DRAFT_ACTION=(write)
+              ;;
+            --from)
+              [[ "${#DRAFT_ACTION[@]}" -eq 0 ]] && DRAFT_ACTION=(draft)
+              ;;
+            --ticket)
+              echo -e "${RED}✗ No drafter takes a ticket: draft the spec from #${TICKET}, then pass --spec <file>.${NC}" >&2
+              exit 2
+              ;;
+          esac
+          DRAFT_INDEX=$((DRAFT_INDEX + 1))
+        done
+        if [[ "${#DRAFT_ACTION[@]}" -eq 0 ]]; then
+          echo -e "${RED}✗ ai-draft takes --spec <file> (write a drafted spec) or --from notion-pages|codebase (draft from existing material).${NC}" >&2
           exit 2
         fi
-        "$SRS_CLI" draft --ticket "$TICKET" || exit $?
+        require_srs_cli
+        "$SRS_CLI" "${DRAFT_ACTION[@]}" "${DRAFTING_ARGS[@]}" || exit $?
         print_status_banner "drafting:ai-draft"
         ;;
       human-review)
@@ -1763,10 +1821,7 @@ case "$COMMAND" in
         ;;
       spawning)
         echo -e "${BLUE}→ Spawning phase for #${TICKET}${NC}"
-        if [[ ! -x "$SRS_CLI" ]]; then
-          echo -e "${RED}✗ Expected ${SRS_CLI} to be executable. Run the SRS skill install first.${NC}" >&2
-          exit 2
-        fi
+        require_srs_cli
         SPAWN_ARGS=()
         SPAWN_EPIC_SEEN=0
         SPAWN_PLAN_SEEN=0
@@ -1855,8 +1910,10 @@ case "$COMMAND" in
     echo "SRS drafting lifecycle (for tickets tagged srs:drafting|srs:update|srs:new):"
     echo "  transition-drafting <ticket> <phase> [phase options]"
     echo "    phase: ai-draft | human-review | spawning | done"
+    echo "    ai-draft: [--spec <file> | --from notion-pages --ids <ids> | --from codebase [--path <dir>]]"
+    echo "      no option prints the drafting procedure; --spec writes a drafted DraftCandidate[] file"
     echo "    spawning: --epic <feature> [--version <version>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]"
-    echo "    Dispatches to .claude/skills/sf-srs/scripts/srs-cli.sh for draft/spawn."
+    echo "    Dispatches to the sf-srs wrapper (srs-cli.sh) for write/draft/spawn."
     echo ""
     echo "Tool commands (delegated to tool-specific CLI):"
     echo "  create-subtask ...           Create a sub-issue/task"
