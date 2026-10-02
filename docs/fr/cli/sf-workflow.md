@@ -11,18 +11,19 @@ sf workflow [subcommand] [args...]
 
 ## Options
 
-| Option                        | Description                                       | Valeur par défaut |
-| ----------------------------- | ------------------------------------------------- | ----------------- |
-| `show`                        | Afficher la configuration courante                | -                 |
-| `use <template>`              | Appliquer un modèle de workflow                   | -                 |
-| `set-working-branch <branch>` | Définir la branche de travail Git                 | -                 |
-| `set-ai-rules`                | Configurer les règles de développement des agents | -                 |
-| `validate`                    | Valider la configuration du workflow              | -                 |
-| `save <template>`             | Enregistrer la configuration comme modèle         | -                 |
-| `list`                        | Lister les modèles disponibles                    | -                 |
-| `create <template>`           | Créer un modèle de workflow                       | -                 |
-| `delete <template>`           | Supprimer un modèle                               | -                 |
-| `show-template <template>`    | Afficher un modèle précis                         | -                 |
+| Option                          | Description                                                                       | Valeur par défaut |
+| ------------------------------- | --------------------------------------------------------------------------------- | ----------------- |
+| `show`                          | Afficher la configuration courante                                                | -                 |
+| `use <template>`                | Appliquer un modèle de workflow                                                   | -                 |
+| `set-working-branch <branch>`   | Définir la branche de travail Git ; une cible de PR qui la suivait la suit encore | -                 |
+| `set-pr-target-branch <branch>` | Définir la branche visée par les pull requests                                    | -                 |
+| `set-ai-rules`                  | Configurer les règles de développement des agents                                 | -                 |
+| `validate`                      | Valider la configuration du workflow                                              | -                 |
+| `save <template>`               | Enregistrer la configuration comme modèle                                         | -                 |
+| `list`                          | Lister les modèles disponibles                                                    | -                 |
+| `create <template>`             | Créer un modèle de workflow                                                       | -                 |
+| `delete <template>`             | Supprimer un modèle                                                               | -                 |
+| `show-template <template>`      | Afficher un modèle précis                                                         | -                 |
 
 ## Exemples
 

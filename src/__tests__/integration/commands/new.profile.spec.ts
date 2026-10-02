@@ -196,6 +196,14 @@ describe('newCommand (--profile integration)', () => {
     }
   })
 
+  // #822 — a solo project working on main no longer has to edit the manifest after setup
+  it('harness profile writes the branches passed as flags', async () => {
+    await newCommand({ nonInteractive: true, profile: 'harness', projectName: 'acme', mainBranch: 'main', workflow: 'solo', tracker: 'github-projects', workingBranch: 'main' })
+
+    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+    expect(manifest.workflow).toMatchObject({ workingBranch: 'main', prTargetBranch: 'main' })
+  })
+
   it('publishes the SRS skill to declared shared agents after SRS bootstrap', async () => {
     await newCommand({
       nonInteractive: true,

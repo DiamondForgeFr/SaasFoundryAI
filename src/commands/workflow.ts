@@ -3,10 +3,20 @@ import chalk from 'chalk'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { promptWorkflowConfiguration, listGlobalWorkflows, loadGlobalWorkflow, saveGlobalWorkflow, updateGitHubProjectStatuses, WORKFLOW_PRESETS } from '../prompts/workflow.prompts'
+import { spawnSync } from 'child_process'
+import {
+  DEFAULT_WORKING_BRANCH,
+  promptWorkflowConfiguration,
+  listGlobalWorkflows,
+  loadGlobalWorkflow,
+  saveGlobalWorkflow,
+  updateGitHubProjectStatuses,
+  WORKFLOW_PRESETS
+} from '../prompts/workflow.prompts'
 import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { readManifest } from '../utils'
 import { mutateProjectManifestSafe } from '../manifest-file'
+import { assertGitBranchName } from '../run'
 import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
@@ -45,7 +55,10 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
       await useTemplate(manifest!, args[0])
       break
     case 'set-working-branch':
-      await setWorkingBranch(manifest!, args[0])
+      await setWorkflowBranch(manifest!, 'workingBranch', args[0])
+      break
+    case 'set-pr-target-branch':
+      await setWorkflowBranch(manifest!, 'prTargetBranch', args[0])
       break
     case 'set-ai-rules':
       await setAIRules(manifest!)
@@ -83,7 +96,8 @@ function showUsage() {
   console.log(chalk.bold('Project-level commands:'))
   console.log('  show                        Display current workflow configuration')
   console.log('  use <template>              Apply a global template to current project')
-  console.log('  set-working-branch <branch> Change branch de travail')
+  console.log('  set-working-branch <branch> Change the working branch')
+  console.log('  set-pr-target-branch <branch> Change the branch pull requests target')
   console.log('  set-ai-rules                Modify AI development rules')
   console.log('  validate                    Validate workflow configuration')
   console.log('  save <name>                 Save as global template')
@@ -236,29 +250,53 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
   console.log(chalk.green(`\n✅ Workflow template "${templateName}" applied\n`))
 }
 
-async function setWorkingBranch(manifest: SaaSFoundryManifest, branch?: string) {
-  if (!branch) {
-    const { workingBranch } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'workingBranch',
-        message: 'Branch de travail (working branch):',
-        default: manifest.workflow?.workingBranch || 'develop'
-      }
-    ])
-    branch = workingBranch
-  }
+const BRANCH_FIELDS = {
+  workingBranch: { label: 'working branch', prompt: 'Working branch:' },
+  prTargetBranch: { label: 'PR target branch', prompt: 'Branch pull requests target:' }
+} as const
 
+/**
+ * `set-working-branch` / `set-pr-target-branch`. A PR target that followed the
+ * working branch keeps following it, as when both were chosen at setup.
+ */
+async function setWorkflowBranch(manifest: SaaSFoundryManifest, field: keyof typeof BRANCH_FIELDS, branch?: string) {
   if (!manifest.workflow) {
     console.error(chalk.red('\n❌ No workflow configured\n'))
     process.exit(1)
   }
 
+  if (!branch) {
+    const answer = await inquirer.prompt([{ type: 'input', name: 'branch', message: BRANCH_FIELDS[field].prompt, default: manifest.workflow[field] || DEFAULT_WORKING_BRANCH }])
+    branch = answer.branch as string
+  }
+  try {
+    assertGitBranchName(branch)
+  } catch (error) {
+    console.error(chalk.red(`\n❌ ${error instanceof Error ? error.message : String(error)}\n`))
+    process.exit(1)
+  }
+
+  const previous = manifest.workflow
+  const followsWorkingBranch = field === 'workingBranch' && (!previous.prTargetBranch || previous.prTargetBranch === previous.workingBranch)
   await mutateProjectManifestSafe(process.cwd(), (current) => {
     if (!current.workflow) throw new Error('No workflow configured in the current project manifest.')
-    current.workflow.workingBranch = branch!
+    current.workflow[field] = branch!
+    if (followsWorkingBranch) current.workflow.prTargetBranch = branch!
   })
-  console.log(chalk.green(`\n✅ Branch de travail set to: ${chalk.cyan(branch!)}\n`))
+
+  console.log(chalk.green(`\n✅ ${BRANCH_FIELDS[field].label[0].toUpperCase()}${BRANCH_FIELDS[field].label.slice(1)} set to: ${chalk.cyan(branch)}`))
+  if (followsWorkingBranch) console.log(chalk.gray(`   Pull requests target it too (PR target branch: ${branch}).`))
+  if (!branchExists(branch)) {
+    console.log(chalk.yellow(`⚠️  Branch "${branch}" does not exist yet — create it: git branch ${branch} && git push -u origin ${branch}`))
+  }
+  console.log()
+}
+
+/** Local or on origin. Outside a git repository nothing can be checked, so the branch is not reported missing. */
+function branchExists(branch: string): boolean {
+  const git = (...args: string[]) => spawnSync('git', args, { stdio: 'ignore' }).status === 0
+  if (!git('rev-parse', '--git-dir')) return true
+  return git('rev-parse', '--verify', '--quiet', `refs/heads/${branch}`) || git('rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`)
 }
 
 async function setAIRules(manifest: SaaSFoundryManifest) {
@@ -408,7 +446,7 @@ export function workflowConfigIssues(manifest: SaaSFoundryManifest): WorkflowCon
     issues.push({ issue: `No ${workflow.tool} board attached (workflow.projectUrl is empty)`, remediation: 'Attach the board: `sf workflow use <template>` asks for its URL.' })
   }
   if (!workflow.workingBranch) issues.push({ issue: 'Working branch not specified', remediation: 'Run `sf workflow set-working-branch <branch>`.' })
-  if (!workflow.prTargetBranch) issues.push({ issue: 'PR target branch not specified', remediation: 'Set `workflow.prTargetBranch` in .saasfoundry.json.' })
+  if (!workflow.prTargetBranch) issues.push({ issue: 'PR target branch not specified', remediation: 'Run `sf workflow set-pr-target-branch <branch>`.' })
   return issues
 }
 
