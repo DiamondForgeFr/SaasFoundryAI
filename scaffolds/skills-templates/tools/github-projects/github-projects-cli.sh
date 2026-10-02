@@ -762,6 +762,67 @@ cmd_status() {
 # Command: update-status — write status on Projects V2 board
 # ───────────────────────────────────────────────────────────────────────────
 
+# Put an issue on the board in its starting status (Backlog unless --status says otherwise).
+# An issue already there keeps its status, so a reused Story is never sent back to Backlog.
+# Spawned tickets reached the milestone and their Epic but never the board, and every later
+# `update-status` on them failed (#836).
+cmd_add_to_project() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 add-to-project <ticket-number> [--status <status-name>]" >&2
+    exit 1
+  fi
+  local ticket=$1
+  shift
+  local status_name="Backlog"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --status)
+        status_name=${2:-}
+        if [ -z "$status_name" ]; then
+          echo "Error: --status requires a value" >&2
+          exit 1
+        fi
+        shift 2
+        ;;
+      *)
+        echo "Error: unknown add-to-project option '$1'" >&2
+        exit 1
+        ;;
+    esac
+  done
+  load_project_schema
+
+  if [ -n "$(get_project_item_id "$ticket")" ]; then
+    echo -e "${GREEN}✓ Ticket #${ticket} is already on project board ${PROJECT_NUMBER} (status kept)${NC}"
+    return 0
+  fi
+
+  # Checked before adding: an item added without its status would sit on the board unsorted
+  local option_id
+  option_id=$(find_status_option_id "$status_name")
+  if [ -z "$option_id" ]; then
+    echo -e "${RED}Error: Unknown status '${status_name}' on project board ${PROJECT_NUMBER}${NC}" >&2
+    echo "Available statuses:" >&2
+    echo "$STATUS_OPTIONS_JSON" | jq -r '.[].name' | sed 's/^/  - /' >&2
+    exit 1
+  fi
+
+  local url item_id
+  url=$(gh issue view "$ticket" --json url --jq .url) || exit 1
+  item_id=$(gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --url "$url" --format json --jq .id)
+  if [ -z "$item_id" ]; then
+    echo -e "${RED}Error: could not add #${ticket} to project board ${PROJECT_NUMBER}${NC}" >&2
+    exit 1
+  fi
+  gh project item-edit \
+    --id "$item_id" \
+    --project-id "$PROJECT_ID" \
+    --field-id "$STATUS_FIELD_ID" \
+    --single-select-option-id "$option_id" >/dev/null
+
+  echo -e "${GREEN}✓ Ticket #${ticket} added to project board ${PROJECT_NUMBER} → ${status_name}${NC}"
+}
+
 cmd_update_status() {
   if [ "$#" -lt 2 ]; then
     echo "Usage: $0 update-status <ticket-number> <status-name>" >&2
@@ -2074,6 +2135,7 @@ case "$COMMAND" in
   create-subtask)     cmd_create_subtask "$@" ;;
   create-epic)        cmd_create_epic "$@" ;;
   update-status)      cmd_update_status "$@" ;;
+  add-to-project)     cmd_add_to_project "$@" ;;
   status)             cmd_status "$@" ;;
   set-complexity)     cmd_set_complexity "$@" ;;
   get-complexity)     cmd_get_complexity "$@" ;;
@@ -2104,6 +2166,7 @@ case "$COMMAND" in
     echo "                                           Create a sub-issue linked to parent (default type: story)"
     echo "  status <ticket>                          Read status from the project board"
     echo "  update-status <ticket> <status-name>     Write status on the project board"
+    echo "  add-to-project <ticket> [--status <s>]   Put an issue on the board (default Backlog; one already there keeps its status)"
     echo "  set-complexity <ticket> <level>          bug | low | medium | complex"
     echo "  get-complexity <ticket>                  Read current complexity label"
     echo "  get-labels <ticket>                      Print every label name (one per line)"
@@ -2126,7 +2189,7 @@ case "$COMMAND" in
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-subtask, status, update-status, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type"
+    echo "Available: create-subtask, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type"
     exit 1
     ;;
 esac
