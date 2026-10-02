@@ -146,6 +146,9 @@ sf srs spawn --ticket 42 --epic <feature-url> --dry-run
 `--ticket` is optional. Omit it and spawn creates the Epic itself — named `<feature> - <version>` — then hangs the Stories under it, through `workflow-cli.sh create-epic`. Pass `--ticket` to attach to
 an Epic that already exists. The naming convention becomes something the tool guarantees rather than something the agent has to remember.
 
+The drafting ticket is never that parent: `transition-drafting <N> spawning` passes `--drafting-ticket <N>`, and the version Epic's body says `Drafted in #N`. Every ticket spawn creates or reuses
+joins the project board in Backlog — one already on the board keeps its status.
+
 ### `--milestone` — spawning is when the release scope gets declared
 
 ```bash
@@ -160,7 +163,7 @@ why the CLI will not derive the name from the page it was handed. Ask the user f
 Omit the flag and spawn behaves as before, but says so: `release: none — pass --milestone <name> to declare what these tickets ship in`. That line exists because a version spawned into no release is
 the exact state #542 was filed to prevent, and the moment to raise it is while the tickets are being created — not when somebody later asks what v1 contains.
 
-### Evidence-first reconciliation for an existing delivery parent
+### Evidence-first reconciliation
 
 When an approved SRS version may overlap existing work, `--reconciliation-plan` is required by the drafting transition. Build a versioned JSON plan that exactly covers every selected FR and records
 verified evidence from the board, SRS, and implementation (source, tests, or docs). Classify each FR as `delivered`, `partial`, `missing`, or `superseded`:
@@ -188,6 +191,9 @@ Preview and then apply the same command:
   --reconciliation-plan /tmp/reconcile.json --dry-run
 # remove only --dry-run after reviewing the plan
 ```
+
+Without `--ticket`, the preflight runs before the version Epic exists. The open `sf-epic` a previous run created under the same `<feature> - <version>` title is adopted rather than duplicated; a
+matching ticket with no parent is reused and linked under the Epic; one that already belongs to another parent blocks the run. When every FR is delivered or superseded, no Epic is created.
 
 The preflight fails before mutation if a source is unavailable, coverage is incomplete, an FR id conflicts with its canonical page, or multiple tickets match. Exact canonical tickets are reused;
 delivered and superseded FRs are skipped. If a create response is interrupted, retry the same command: the spawner inspects open and closed candidates, recovers the exact ticket, and links it only

@@ -1708,7 +1708,7 @@ case "$COMMAND" in
       echo "Usage: workflow-cli.sh transition-drafting <ticket> <phase> [phase options]" >&2
       echo "Phases: ai-draft | human-review | spawning | done" >&2
       echo "AI draft: no option prints the procedure; --spec <file> writes it; --from notion-pages|codebase drafts from existing material" >&2
-      echo "Spawning: --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]" >&2
+      echo "Spawning: --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <name>] --reconciliation-plan <path> [--ticket <existing-epic>] [--dry-run]" >&2
       exit 1
     fi
 
@@ -1829,11 +1829,15 @@ case "$COMMAND" in
         while [[ "$SPAWN_INDEX" -lt "${#DRAFTING_ARGS[@]}" ]]; do
           SPAWN_ARG="${DRAFTING_ARGS[$SPAWN_INDEX]}"
           case "$SPAWN_ARG" in
-            --epic|--version|--milestone|--reconciliation-plan|--manifest|--bypass-reason)
+            --epic|--version|--milestone|--reconciliation-plan|--manifest|--bypass-reason|--ticket)
               SPAWN_VALUE_INDEX=$((SPAWN_INDEX + 1))
               SPAWN_VALUE="${DRAFTING_ARGS[$SPAWN_VALUE_INDEX]:-}"
               if [[ -z "$SPAWN_VALUE" || "$SPAWN_VALUE" == --* ]]; then
                 echo -e "${RED}✗ ${SPAWN_ARG} requires a value.${NC}" >&2
+                exit 2
+              fi
+              if [[ "$SPAWN_ARG" == "--ticket" && "$SPAWN_VALUE" == "$TICKET" ]]; then
+                echo -e "${RED}✗ #${TICKET} is the drafting ticket, not a delivery parent: --ticket names an existing version Epic.${NC}" >&2
                 exit 2
               fi
               if [[ "$SPAWN_ARG" == "--epic" ]]; then
@@ -1857,10 +1861,6 @@ case "$COMMAND" in
               SPAWN_ARGS+=("$SPAWN_ARG")
               SPAWN_INDEX=$((SPAWN_INDEX + 1))
               ;;
-            --ticket)
-              echo -e "${RED}✗ transition-drafting owns --ticket; do not override #${TICKET}.${NC}" >&2
-              exit 2
-              ;;
             *)
               echo -e "${RED}✗ Unknown spawning option '${SPAWN_ARG}'.${NC}" >&2
               exit 2
@@ -1872,7 +1872,10 @@ case "$COMMAND" in
           echo "  Usage: workflow-cli.sh transition-drafting ${TICKET} spawning --epic <feature-url-or-id> [--version <title-url-or-id>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]" >&2
           exit 2
         fi
-        "$SRS_CLI" spawn --ticket "$TICKET" "${SPAWN_ARGS[@]}" || exit $?
+        # The version Epic owns the Stories — spawn creates it, or adopts the one a previous run
+        # created. The drafting ticket is only referenced: hanging the Stories under it put them
+        # under a Task that `done` closes right away (#855).
+        "$SRS_CLI" spawn --drafting-ticket "$TICKET" "${SPAWN_ARGS[@]}" || exit $?
         print_status_banner "drafting:spawning"
         ;;
       done)
@@ -1912,7 +1915,8 @@ case "$COMMAND" in
     echo "    phase: ai-draft | human-review | spawning | done"
     echo "    ai-draft: [--spec <file> | --from notion-pages --ids <ids> | --from codebase [--path <dir>]]"
     echo "      no option prints the drafting procedure; --spec writes a drafted DraftCandidate[] file"
-    echo "    spawning: --epic <feature> [--version <version>] [--milestone <name>] --reconciliation-plan <path> [--dry-run]"
+    echo "    spawning: --epic <feature> [--version <version>] [--milestone <name>] --reconciliation-plan <path> [--ticket <existing-epic>] [--dry-run]"
+    echo "      the version Epic owns the Stories (created, or adopted on a re-run); the drafting ticket is only referenced"
     echo "    Dispatches to the sf-srs wrapper (srs-cli.sh) for write/draft/spawn."
     echo ""
     echo "Tool commands (delegated to tool-specific CLI):"

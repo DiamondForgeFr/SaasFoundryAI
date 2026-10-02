@@ -1007,16 +1007,19 @@ cmd_list_incomplete_children() {
 # identity. The spawner performs the final exact match and ambiguity checks.
 cmd_inspect_srs_tickets() {
   if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 inspect-srs-tickets <parent-ticket-number> --fr <FR-ID>=<page-url> [--fr ...]" >&2
+    echo "Usage: $0 inspect-srs-tickets <parent-ticket-number|--no-parent> --fr <FR-ID>=<page-url> [--fr ...]" >&2
     return 1
   fi
 
+  # --no-parent: the delivery parent does not exist yet (spawn creates the version Epic
+  # after this preflight), so only the repository search is inspected (#855)
   local parent=$1
+  if [ "$parent" = "--no-parent" ]; then parent=""; fi
   shift
   local requests='[]' spec fr_id fr_url identity normalized_url host
   while [ "$#" -gt 0 ]; do
     if [ "$1" != "--fr" ] || [ -z "${2:-}" ] || [[ "$2" != *=* ]]; then
-      echo "Usage: $0 inspect-srs-tickets <parent-ticket-number> --fr <FR-ID>=<page-url> [--fr ...]" >&2
+      echo "Usage: $0 inspect-srs-tickets <parent-ticket-number|--no-parent> --fr <FR-ID>=<page-url> [--fr ...]" >&2
       return 1
     fi
     spec=$2
@@ -1048,11 +1051,15 @@ cmd_inspect_srs_tickets() {
     return 1
   fi
 
-  children_pages=$(gh api --paginate --slurp -H "Accept: application/vnd.github+json" \
-    "repos/${repo}/issues/${parent}/sub_issues?per_page=100" 2>/dev/null) || {
-      echo "Error: could not list child issues for #${parent}." >&2
-      return 1
-    }
+  if [ -z "$parent" ]; then
+    children_pages='[[]]'
+  else
+    children_pages=$(gh api --paginate --slurp -H "Accept: application/vnd.github+json" \
+      "repos/${repo}/issues/${parent}/sub_issues?per_page=100" 2>/dev/null) || {
+        echo "Error: could not list child issues for #${parent}." >&2
+        return 1
+      }
+  fi
   children=$(printf '%s' "$children_pages" | jq -ce '
     if type == "array" and all(.[]; type == "array") then [.[][] | .number]
     else error("Expected paginated sub-issue arrays") end
@@ -1089,7 +1096,7 @@ cmd_inspect_srs_tickets() {
   candidates=$(jq -cn --arg parent "$parent" --argjson native "$children" --argjson nativeIssues "$native_issues" --argjson searched "$searched" --argjson requested "$requests" '
     ($nativeIssues + $searched)
     | map(select(has("pull_request") | not))
-    | map(select(.number != ($parent | tonumber)))
+    | map(select($parent == "" or .number != ($parent | tonumber)))
     | map(. as $issue | select(($native | index($issue.number)) != null or (any($issue.labels[]?; (.name | startswith("srs:"))) | not)))
     | map(
         . as $issue
@@ -1123,7 +1130,7 @@ cmd_inspect_srs_tickets() {
     parent_url=$(printf '%s' "$issue" | jq -r '.parent_issue_url // ""')
     parent_number=""
     if [ -n "$parent_url" ]; then parent_number=${parent_url##*/}; fi
-    if [ -z "$parent_number" ] && printf '%s' "$children" | jq -e --argjson n "$number" 'index($n) != null' >/dev/null; then
+    if [ -z "$parent_number" ] && [ -n "$parent" ] && printf '%s' "$children" | jq -e --argjson n "$number" 'index($n) != null' >/dev/null; then
       parent_number=$parent
     fi
     srs_links=$(printf '%s' "$body" | jq -Rsc '[scan("https?://[^][()<>[:space:]]+") | sub("[.,;]+$"; "")] | unique') || return 1

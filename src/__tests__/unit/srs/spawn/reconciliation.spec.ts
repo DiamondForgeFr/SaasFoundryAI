@@ -88,6 +88,18 @@ describe('SRS spawn reconciliation', () => {
     ])
   })
 
+  // #855 — before spawn creates the version Epic there is no parent yet
+  describe('with no delivery parent yet', () => {
+    it('reuses a matching ticket that has no parent', () => {
+      const result = reconcileRequirements(requirements, plan(), [ticket({ parentNumber: null })], null)
+      expect(result.find((entry) => entry.requirement.frId === 'FR-MAH-009')).toMatchObject({ action: 'reuse', ticket: { number: '100' } })
+    })
+
+    it('blocks a match that already belongs to a parent', () => {
+      expect(() => reconcileRequirements(requirements, plan(), [ticket()], null)).toThrow(/already belongs to parent #645/)
+    })
+  })
+
   it('reuses closed tickets as canonical evidence', () => {
     const result = reconcileRequirements(requirements, plan(), [ticket({ state: 'CLOSED', boardStatus: 'Done' })], '645')
     expect(result[0]).toMatchObject({ action: 'reuse', ticket: { number: '100', state: 'CLOSED' } })

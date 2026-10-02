@@ -174,7 +174,12 @@ function isFrDeliveryTicket(ticket: ExistingSrsTicket): boolean {
   return ticket.issueType?.toLowerCase() !== 'sf-epic'
 }
 
-export function reconcileRequirements(requirements: ReconciliationRequirement[], plan: ReconciliationPlan, tickets: ExistingSrsTicket[], parentTicket: string): ReconciliationResult[] {
+/**
+ * `parentTicket` is the delivery parent the Stories will hang under, or null while spawn has
+ * yet to create the version Epic: then any ticket that already has a parent blocks, since
+ * nothing could legitimately own it.
+ */
+export function reconcileRequirements(requirements: ReconciliationRequirement[], plan: ReconciliationPlan, tickets: ExistingSrsTicket[], parentTicket: string | null): ReconciliationResult[] {
   const expectedIds = new Set(requirements.map((requirement) => requirement.frId.toUpperCase()))
   const decisionIds = new Set(plan.requirements.map((decision) => decision.frId))
   const missingDecisions = [...expectedIds].filter((frId) => !decisionIds.has(frId))

@@ -26,12 +26,12 @@ Turn the approved SRS page into the matching tickets that will drive implementat
 
 - [ ] **Record the preflight:** inspect the board, approved SRS version, and implementation; classify every selected FR as `delivered`, `partial`, `missing`, or `superseded` in a version-1 reconciliation JSON file
 - [ ] **Preview the spawner:** `.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> spawning --epic <feature> [--version <version>] [--milestone <release>] --reconciliation-plan <path> --dry-run`
-  - dispatches to the SRS CLI with the drafting ticket fixed as the delivery parent
+  - dispatches to the SRS CLI; the version Epic is the delivery parent — created, or adopted on a re-run (`--ticket <epic>` names an existing one) — and the drafting ticket is only referenced
   - blocks on unavailable evidence, incomplete coverage, conflicting FR identities, ambiguous matches, or implicit reparenting
 - [ ] **Apply the reviewed plan:** rerun the exact command without `--dry-run`
   - renders ticket templates from `sf-srs/templates/tickets/` (Epic or Story)
   - skips delivered/superseded FRs, reuses canonical tickets, and creates only remaining children in **Backlog**
-- [ ] **Verify the children:** `github-projects-cli.sh list-incomplete-children <ticket>` — every newly spawned child must appear with its title and Backlog status; then inspect its backend-page link
+- [ ] **Verify the children:** `github-projects-cli.sh list-incomplete-children <epic>` (the Epic spawn printed) — every newly spawned child must appear with its title and Backlog status; then inspect its backend-page link
 - [ ] **Complete the drafting lifecycle:** `.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> done` — internally calls `update-status <ticket> Done` with
       `SF_WORKFLOW_BYPASS_SRS_GUARD=1`
   - keeps the `srs:*` label as durable provenance; it does not use raw provider commands to rewrite labels
