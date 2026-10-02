@@ -106,7 +106,7 @@
     ".agents/skills/sf-integration-rules/topology.md": "fa43b6840bb8dd8822b27002c2320f0c3a9b5b2dca2ef37c2732e14502903b00",
     ".agents/skills/sf-srs/data/clustering-rules.json": "3110294b18bf3229a320ea70f5878d18c1e874b8bbc511e61ee0c948dcf0bfee",
     ".agents/skills/sf-srs/scripts/detect-eval-signals.sh": "66dff12ed1bb9ffb0e961df566170eabe82e624a306855687baa3568e2224f99",
-    ".agents/skills/sf-srs/scripts/srs-cli.sh": "5e711b63e0f318d986073d898d9550b2db47d22ec99a7a561cb544137ddcf2e8",
+    ".agents/skills/sf-srs/scripts/srs-cli.sh": "6beef7c860b237e94bc4f8dfef85e84f2129eb368c5fb4c79524a4f9742a680e",
     ".agents/skills/sf-srs/SKILL.md": "dc50813e6f505f8a85d3440c92541fbac7c826908495c5867b734f1ac868e02d",
     ".agents/skills/sf-srs/templates/examples/example-epic.md": "e15fb18ee92bd9515e9dc899ba6e0e59668ecbba796e7755f321e21061ff1f46",
     ".agents/skills/sf-srs/templates/examples/example-epic.spec.json": "028ec65c05b42717ad94ef207263754625431ad3ce2b482d0439dd994acbc52d",
