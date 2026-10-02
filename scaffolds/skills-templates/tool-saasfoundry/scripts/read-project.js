@@ -8,7 +8,7 @@
 // Input (stdin, JSON object):
 //   {
 //     "manifest": <contents of .saasfoundry.json>,
-//     "catalogue": [<sf modules list --json entries>],
+//     "catalogue": <sf modules list --json output: { cliVersion, modules: [...] }, or a bare array of entries>,
 //     "status": <sf status --json output, optional for legacy callers>
 //   }
 //
@@ -50,7 +50,9 @@ if (input === null || typeof input !== 'object' || Array.isArray(input)) {
 }
 
 const manifest = input.manifest
-const catalogue = input.catalogue
+// `sf modules list --json` has printed `{ cliVersion, modules }` since #60; a bare array is still accepted
+const rawCatalogue = input.catalogue
+const catalogue = rawCatalogue && !Array.isArray(rawCatalogue) && typeof rawCatalogue === 'object' ? rawCatalogue.modules : rawCatalogue
 const status = input.status
 
 if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
@@ -59,7 +61,7 @@ if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
 }
 
 if (!Array.isArray(catalogue)) {
-  process.stderr.write('read-project: input.catalogue must be an array (output of `sf modules list --json`)\n')
+  process.stderr.write('read-project: input.catalogue must be the `sf modules list --json` output ({ modules: [...] }) or an array of its entries\n')
   process.exit(2)
 }
 
