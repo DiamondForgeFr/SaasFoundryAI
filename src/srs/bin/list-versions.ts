@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { walkSrsTree } from '../tree/walk'
+import { rejectUnknownOption, SrsUsageError } from './args'
 
 /**
  * Enumerates the versions the SRS declares, in the shape `plan-milestone`
@@ -79,13 +80,15 @@ export function parseArgs(argv: string[]): ListVersionsOptions {
     const a = argv[i]
     const next = argv[i + 1]
     if (a === '--manifest') {
-      if (next === undefined || next.startsWith('--')) throw new Error('list-versions: --manifest requires a value')
+      if (next === undefined || next.startsWith('--')) throw new SrsUsageError('list-versions: --manifest requires a value')
       opts.manifestPath = next
       i++
     } else if (a === '--root-page') {
-      if (next === undefined || next.startsWith('--')) throw new Error('list-versions: --root-page requires a value')
+      if (next === undefined || next.startsWith('--')) throw new SrsUsageError('list-versions: --root-page requires a value')
       opts.rootPageId = next
       i++
+    } else {
+      rejectUnknownOption('list-versions', a)
     }
   }
   return opts

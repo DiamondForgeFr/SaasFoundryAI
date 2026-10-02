@@ -18,7 +18,7 @@ Le [module SRS](/fr/modules/srs) doit être installé et un backend doit être c
 | Action         | Fonction                                                                                   |
 | -------------- | ------------------------------------------------------------------------------------------ |
 | `help`         | Afficher l'aide                                                                            |
-| `validate`     | Tester rapidement le backend configuré au moyen de `adapter.init()`                        |
+| `validate`     | Tester le backend configuré, ou vérifier une spécification hors ligne avec `--spec`        |
 | `browse`       | Lister en JSON les enfants directs d'une page parente                                      |
 | `draft`        | Produire un brouillon depuis des pages du backend ou une analyse du code                   |
 | `write`        | Appliquer un fichier de spécification `DraftCandidate[]` via l'adaptateur                  |
@@ -32,6 +32,7 @@ Le [module SRS](/fr/modules/srs) doit être installé et un backend doit être c
 
 ```bash
 sf srs validate [manifest]
+sf srs validate --spec <path>
 sf srs browse --parent <id> [--manifest <path>]
 
 sf srs draft --from notion-pages --ids <id1,id2,...> [--manifest <path>]
@@ -72,6 +73,9 @@ Toutes les actions partagent le même contrat. Un script peut donc réagir à la
 | `5`  | erreur d'exécution                                                 |
 | `6`  | écriture partielle ; la sortie contient un `rollbackHint`          |
 | `7`  | écriture réussie, mais l'effacement de `pendingIngestion` a échoué |
+
+Une option inconnue d'une action est une entrée incorrecte : l'action sort en `2` avant toute lecture ou écriture. `write` n'a pas de mode simulation : `sf srs validate --spec <path>` exécute, sans
+backend, les contrôles que `write` fait avant de créer la moindre page.
 
 ## Exemples
 

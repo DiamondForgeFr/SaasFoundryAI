@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { getSrsBackend, listSrsBackends, SrsConfigError, SrsManifestSubset } from '../index'
 import { ScannerFinding } from '../scanners/types'
 import { collectFindings } from './codebase-scan'
+import { rejectUnknownOption, runFromCommandLine } from './args'
 
 interface CodebaseManifest extends SrsManifestSubset {
   structure?: 'monorepo' | 'multirepo'
@@ -101,15 +102,9 @@ export function parseArgs(argv: string[]): { scanPath: string; manifestPath: str
 }
 
 if (require.main === module) {
-  const { scanPath, manifestPath, unknown } = parseArgs(process.argv.slice(2))
-  if (unknown) {
-    process.stderr.write(`draft-from-codebase: unknown flag ${unknown}\n`)
-    process.exit(2)
-  }
-  runDraftFromCodebase({ scanPath, manifestPath })
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`draft-from-codebase: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine('draft-from-codebase', (argv) => {
+    const { scanPath, manifestPath, unknown } = parseArgs(argv)
+    if (unknown) rejectUnknownOption('draft-from-codebase', unknown)
+    return runDraftFromCodebase({ scanPath, manifestPath })
+  })
 }

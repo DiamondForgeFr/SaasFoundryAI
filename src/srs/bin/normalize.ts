@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { SrsAdapter } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { SrsTreeFeature, walkSrsTree } from '../tree/walk'
+import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
 
 // The shared subset does not carry rootPage; eval-srs widens it the same way.
 interface NormalizeManifest extends SrsManifestSubset {
@@ -47,7 +48,7 @@ const DEFAULT_VERSION_NAME = 'MVP'
 
 function takeValue(argv: string[], i: number, flag: string): string {
   const next = argv[i + 1]
-  if (next === undefined || next.startsWith('--')) throw new Error(`normalize: ${flag} requires a value`)
+  if (next === undefined || next.startsWith('--')) throw new SrsUsageError(`normalize: ${flag} requires a value`)
   return next
 }
 
@@ -73,6 +74,8 @@ export function parseArgs(argv: string[]): NormalizeOptions {
       // Accepted and ignored: a dry run is what happens without --apply. Taking
       // the flag means a script that spells out its intent still works.
       opts.apply = false
+    } else {
+      rejectUnknownOption('normalize', a)
     }
   }
   return opts
@@ -246,12 +249,6 @@ function reportProgress(io: NormalizeIO, movedPages: string[]): void {
 }
 
 if (require.main === module) {
-  const options = parseArgs(process.argv.slice(2))
   const io: NormalizeIO = { stdout: (c) => process.stdout.write(c), stderr: (c) => process.stderr.write(c) }
-  runNormalize(options, io)
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`normalize: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine('normalize', (argv) => runNormalize(parseArgs(argv), io))
 }
