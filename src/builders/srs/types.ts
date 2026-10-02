@@ -30,6 +30,11 @@ export interface FrItem {
   securityRationale?: string
 }
 
+/** An FR shown on its feature's page, with the version it belongs to. */
+export interface VersionFrItem extends FrItem {
+  version: string
+}
+
 export interface DsItem {
   id: string
   title: string
@@ -78,6 +83,13 @@ export interface EpicSpec {
    * replaces, so indexing afterwards would duplicate the list on every re-run.
    */
   versions?: string[]
+  /**
+   * The FRs of the versions declared under this feature in the same batch, each with the
+   * title of its version. Derived by `write-srs`, never authored, like `versions`: in the
+   * three-level model `frs` is empty on a feature, so its UR and DS tables could link no FR
+   * and its FR table stayed empty (#850).
+   */
+  versionFrs?: VersionFrItem[]
   businessValue?: string
   scope?: string
   urs: UrItem[]
