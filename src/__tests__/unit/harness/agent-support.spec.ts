@@ -4,6 +4,7 @@ import { dirname, join } from 'path'
 
 import * as adapter from '../../../harness/agent-instructions'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../../../harness/agent-support'
+import { harnessInstallerMeta } from '../../../installers/harness.installer'
 
 const SKILL = '---\nname: commit\ndescription: Commit changes\n---\n# Commit\nFollow the project workflow.\n'
 const MANIFEST = {
@@ -137,7 +138,7 @@ describe('additive managed agent support (#660)', () => {
   it('supports legacy managed manifests without a harness stamp', async () => {
     await put('.saasfoundry.json', JSON.stringify({ version: '1', projectName: 'legacy', structure: 'cli' }))
     expect((await enable(['codex'])).configuredAgents).toEqual(['claude-code', 'codex'])
-    expect((await manifest()).modules.harness.version).toBe(1)
+    expect((await manifest()).modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(Object.keys((await manifest()).fileHashes).every((key) => ['AGENTS.md', 'GEMINI.md'].includes(key) || key.startsWith('.agents/'))).toBe(true)
   })
   it.each(['project', 'SHARED'])('refuses unsupported scope %s before changing files', async (scope) => {

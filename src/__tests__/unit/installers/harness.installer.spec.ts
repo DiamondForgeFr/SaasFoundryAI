@@ -61,12 +61,20 @@ describe('harness installer', () => {
       expect(await fileExists(join(dir, '.claude', 'skills', 'sf-workflow', 'SKILL.md'))).toBe(true)
       expect(await fileExists(join(dir, '.claude', 'skills', 'sf-tool-github-projects'))).toBe(true)
       expect(await fileExists(join(dir, '.claude', 'docs'))).toBe(true)
-      expect(await fileExists(join(dir, '.claude', 'skills', 'sf-integration-rules'))).toBe(true)
+      // #831 — the stack's integration grammar has nothing to govern on a bare repository
+      expect(await fileExists(join(dir, '.claude', 'skills', 'sf-integration-rules'))).toBe(false)
+      expect(await fileExists(join(dir, '.claude', 'skills', 'sf-git-commit', 'SKILL.md'))).toBe(true)
 
       // Claude Code hooks
       const settings = JSON.parse(await readFile(join(dir, '.claude', 'settings.json'), 'utf8'))
       expect(JSON.stringify(settings.hooks.SessionStart)).toContain('sf status --claude-friendly --no-network')
       expect(settings.hooks.UserPromptSubmit).toBeUndefined()
+    })
+
+    it('deposits the stack skills when the manifest says a technical stack is present (#831)', async () => {
+      await installHarness({ targetPath: dir, projectName: 'notulias', version: '9.9.9', stackPresent: true })
+
+      expect(await fileExists(join(dir, '.claude', 'skills', 'sf-integration-rules', 'SKILL.md'))).toBe(true)
     })
 
     it('never overwrites an existing CLAUDE.md — only appends the workflow section', async () => {
