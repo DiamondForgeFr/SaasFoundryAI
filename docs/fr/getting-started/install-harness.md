@@ -5,7 +5,8 @@ manifeste de projet, sans remplacer votre API ni votre frontend.
 
 ## 1. Préparer la machine
 
-Installez Git, Node.js 24.19.0 et npm 11. Docker n'est pas nécessaire pour installer uniquement le harness. Un agent de développement est facultatif si vous utilisez directement le CLI.
+Installez Git, Node.js 22 ou plus récent et npm 10 ou plus récent : c'est ce dont le CLI et le harness ont besoin. Node.js 24.19.0 et npm 11 ne sont requis que par la stack SaaS générée (profils
+`stack` et `full`), qui les épingle dans son `.nvmrc`. Docker n'est pas nécessaire pour installer uniquement le harness. Un agent de développement est facultatif si vous utilisez directement le CLI.
 
 ## 2. Installer dans le dépôt
 
