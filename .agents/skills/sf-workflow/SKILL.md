@@ -1,3 +1,50 @@
+---
+name: sf-workflow
+description: "SaaSFoundry workflow procedures. Follow the project workflow and CLI guards."
+---
+
+## Execution capabilities
+
+Use the current agent's native tools for reading, editing, shell commands and delegation.
+When delegation is available and authorized, assign independent work to agents; otherwise
+execute the same steps sequentially. A sequential self-review is not an independent review:
+report that limitation and retain any required human review. Tool names in legacy examples
+describe capabilities, not required APIs. Use the user's current request as skill arguments.
+Do not assume Claude Code hooks, model selection, tool permissions or credentials transfer.
+Run preconditions explicitly, and stop to report a missing capability when no equivalent exists.
+Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
+The project manifest and workflow rules take precedence over generic skill examples,
+including branch names, commit formats, staging, pushing and approval requirements.
+Legacy /task examples name roles: use native delegation if available and authorized,
+or perform the role's work sequentially with the review limitation stated above.
+
+## Parallel implementation and Git worktrees
+
+Propose parallel worktrees only when the user's request contains independent writing streams
+that can be delivered concurrently. Read-only exploration and review may use parallel agents
+without separate worktrees. Work with sequential dependencies, overlapping file ownership or
+unclear boundaries must use one feature worktree and sequential execution.
+
+Before proposing parallel implementation, read `.saasfoundry.json` and use
+`workflow.workingBranch`; never hardcode a branch name. Keep the primary checkout on that
+configured working branch. Do not let feature workers write in the primary checkout while
+parallel worktrees are active.
+
+For each independent writing stream, define one ticket, branch and worktree path, plus its owned
+files and dependency boundary. Start from a synchronized configured working branch. Each worker
+must stay inside its assigned worktree and ownership boundary, preserve other agents' changes
+and never revert unrelated work. The agent proposes this execution shape; the user retains
+control when parallel implementation was not already authorized. If authorization, clean
+separation, Git support or a synchronized base is unavailable, explain the constraint and use
+one worktree or sequential execution.
+
+After each stream is complete, commit and push through the configured workflow. After its merge,
+return to the primary checkout, check out and synchronize the configured working branch, verify
+the merge, then remove the completed worktree and local branch only when they are merged and no
+longer in use. Never remove or overwrite user-owned worktrees, branches, uncommitted changes,
+stashes or credentials implicitly.
+
+
 # Workflow SaaSFoundry AI
 
 Complexity-adaptive development workflow with GitHub Projects (GitHub Projects, Jira, Notion, Linear, etc.)
@@ -10,11 +57,11 @@ workflow status, check workflow, what should i do, next step, workflow help, cur
 
 This workflow adapts its rigor based on ticket complexity:
 
-| Level       | Label      | Process                            | Use Case          |
-| ----------- | ---------- | ---------------------------------- | ----------------- |
-| **bug**     | 🐛 Bug Fix | Direct fix, regression test        | Quick bug fixes   |
-| **low**     | 🟢 Low     | Oneshot-style (minimal ceremony)   | Simple tasks      |
-| **medium**  | 🟡 Medium  | Structured analysis and planning   | Standard features |
+| Level       | Label      | Process                          | Use Case          |
+| ----------- | ---------- | -------------------------------- | ----------------- |
+| **bug**     | 🐛 Bug Fix | Direct fix, regression test      | Quick bug fixes   |
+| **low**     | 🟢 Low     | Oneshot-style (minimal ceremony) | Simple tasks      |
+| **medium**  | 🟡 Medium  | Structured analysis and planning | Standard features |
 | **complex** | 🔴 Complex | Deep analysis + adversarial review | Critical features |
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
@@ -77,10 +124,10 @@ Issue with its own branch and PR; the Epic only groups that delivery parent.
 
 An Epic is an aggregate with two derived transitions:
 
-| Child event                                    | Epic transition                                                                                                                     |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Child event                                    | Epic transition                                           |
+| ---------------------------------------------- | --------------------------------------------------------- |
 | The first native child enters `In progress`    | `Backlog → Ready → In progress`, or `Ready → In progress` (`Backlog → In progress` on a board that declares no Ready, such as Solo) |
-| The last incomplete native child enters `Done` | `In progress → Done`                                                                                                                |
+| The last incomplete native child enters `Done` | `In progress → Done`                                      |
 
 The Epic stays `In progress` while its children pass through testing and review. It never owns a branch or PR and may span multiple milestones; its delivery children carry their own milestone
 assignments. The parent Done guard checks every native child's project-board Status. Backlog, Ready, In progress, AI Testing, Human Testing, In Review, or an unknown status blocks Done. Incomplete
@@ -103,7 +150,7 @@ children do not block the parent's testing or review phases.
 
 ## Configuration (Source of Truth)
 
-All workflow configuration lives in **`.saasfoundry.json`** at the project root. See [manifest schema](../../docs/manifest-schema.md) for the full field list and read snippets. **Never hardcode branch
+All workflow configuration lives in **`.saasfoundry.json`** at the project root. See [manifest schema](../../../.claude/docs/manifest-schema.md) for the full field list and read snippets. **Never hardcode branch
 names** — always read from the manifest.
 
 ## Output language
@@ -143,9 +190,8 @@ Developer always has final say.
 
 **`/workflow retag <ticket> <new-complexity>`** Changes ticket complexity level (bug | low | medium | complex). Adjusts remaining workflow steps to match new complexity.
 
-**Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. Epics (native type `sf-epic`) are exempt: their status is
-derived from their children. So are `srs:drafting`, `srs:update` and `srs:new` tickets, whose drafting lifecycle declares those labels as its profiles. `detect-complexity` only suggests — you must
-call `retag` to persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare).
+**Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. Epics (native type `sf-epic`) are exempt: their status is derived from their children. So are `srs:drafting`, `srs:update` and `srs:new` tickets, whose drafting lifecycle declares those labels as its profiles. `detect-complexity` only suggests — you must call `retag` to
+persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare).
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 
@@ -255,9 +301,7 @@ see its `## Conversational eval hook (SUB-10)` section. This skill only referenc
 
 After AI validation (including the configured heavy local suite), use `workflow-cli.sh create-pr <ticket> --draft` before Human Testing. Keep the test plan and results on that PR. After developer
 approval and required non-regression tests, push then use `workflow-cli.sh ready-pr <ticket>` before In Review. Creation retries reuse the existing PR without changing its draft state. Use
-`draft-pr <ticket>` explicitly when returning a ready PR to human retesting. Internal/solo routes may create a ready PR directly. `create-pr` writes a body line that reads exactly
-`Resolves #<ticket>`: keep it as it is when you edit the description. A pull request to a branch other than the default one links its ticket only through that line, and `sync-pr-review` refuses the
-event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`).
+`draft-pr <ticket>` explicitly when returning a ready PR to human retesting. Internal/solo routes may create a ready PR directly. `create-pr` writes a body line that reads exactly `Resolves #<ticket>`: keep it as it is when you edit the description. A pull request to a branch other than the default one links its ticket only through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`).
 
 With the updated CI policy, draft PRs skip test/build CI. When adopting these skills in an existing project, inspect its checked-in workflows and hooks: refreshing instructions alone does not update
 external CI configuration or remove custom push hooks. Readiness and subsequent ready-PR pushes run full CI; returning to draft cancels obsolete runs. Quick commit checks remain enabled; heavy local
@@ -265,10 +309,9 @@ validation belongs to AI Testing instead of every push.
 
 ### GitHub Ready for review button
 
-For GitHub Projects, `.github/workflows/pr-review-sync.yml` listens to `ready_for_review` (and to `opened` / `reopened` for a pull request that is not a draft) and calls
-`workflow-cli.sh sync-pr-review <PR>`. The button is the developer's approval to enter review; the job still enforces the workflow guards. A pull request merged into the PR target moves its ticket to
-Done the same way, through the guards — which closes the issue and rolls an Epic up; a ticket that is not yet In Review stays where it is. The PR must close the ticket named by its configured
-feature/fix branch convention. Same-repository PRs are supported; fork PRs require the normal manual CLI transition.
+For GitHub Projects, `.github/workflows/pr-review-sync.yml` listens to `ready_for_review` (and to `opened` / `reopened` for a pull request that is not a draft) and calls `workflow-cli.sh sync-pr-review <PR>`. The button is the developer's approval to enter review; the
+job still enforces the workflow guards. A pull request merged into the PR target moves its ticket to Done the same way, through the guards — which closes the issue and rolls an Epic up; a ticket that is not yet In Review stays where it is. The PR must close the ticket named by its configured feature/fix branch convention. Same-repository PRs are supported; fork PRs require the normal manual CLI
+transition.
 
 Configure the Actions secret `SF_PROJECTS_TOKEN` with access to the repository and write access to the configured organization Project (a dedicated token with `repo` and `project` scopes, or an
 equivalent appropriately scoped credential). The default `GITHUB_TOKEN` cannot access Projects. Never put credentials in the manifest or PR.
