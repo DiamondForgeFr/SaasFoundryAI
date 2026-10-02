@@ -100,7 +100,16 @@ export class NotionSrsAdapter implements SrsAdapter {
     const [page, allBlocks] = await Promise.all([this.client.pages.retrieve({ page_id: pageId }), this.listAllChildren(pageId)])
     const url = isFullPage(page) ? page.url : ''
     const title = extractPageTitle(page)
-    return { pageId, title, url, blocks: allBlocks.map(mapBlockToRaw) }
+    const blocks: RawBlock[] = []
+    for (const block of allBlocks) {
+      const raw = mapBlockToRaw(block)
+      // A table's content lives in its row blocks: an FR page keeps its description,
+      // acceptance criteria and references there, and a table read as empty is how every
+      // spawned Story body said "No acceptance criteria yet." (#837). One call per table.
+      if (raw.kind === 'table' && 'id' in block) raw.rows = (await this.listAllChildren(block.id)).filter(isTableRowBlock).map((row) => row.table_row.cells.map(extractRichText))
+      blocks.push(raw)
+    }
+    return { pageId, title, url, blocks }
   }
 
   async listChildren(parentPageId: string): Promise<PageRef[]> {
@@ -229,6 +238,10 @@ function extractPageTitle(page: Awaited<ReturnType<Client['pages']['retrieve']>>
   const title = page.properties['title'] ?? page.properties['Name']
   if (!title || title.type !== 'title') return ''
   return title.title.map((t) => (t.type === 'text' ? t.text.content : t.plain_text)).join('')
+}
+
+function isTableRowBlock(block: BlockResult): block is BlockResult & { type: 'table_row'; table_row: { cells: RichTextResult[][] } } {
+  return 'type' in block && block.type === 'table_row'
 }
 
 function isChildPageBlock(block: BlockResult): block is BlockResult & { type: 'child_page'; child_page: { title: string } } {

@@ -244,6 +244,8 @@ export interface RawContent {
   blocks: Array<{
     kind: 'heading' | 'paragraph' | 'list' | 'table' | 'other'
     text: string
+    /** A table's cells, row by row, its header row first. Absent when the backend does not read them. */
+    rows?: string[][]
   }>
   children?: RawContent[]
 }
