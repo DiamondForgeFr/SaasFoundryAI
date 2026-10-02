@@ -99,6 +99,8 @@ program
   // Workflow
   .option('--workflow <config>', 'Workflow preset or "none" to skip')
   .option('--no-workflow', 'Skip workflow configuration entirely')
+  .option('--working-branch <branch>', 'Working branch: feature branches start from it and pull requests target it (default: develop)')
+  .option('--pr-target-branch <branch>', 'Branch pull requests target (default: the working branch)')
   // Post-setup behavior
   .option('--start-services', 'Start dev services automatically (DB + MinIO)')
   .option('--no-start-services', 'Do not start dev services after setup')

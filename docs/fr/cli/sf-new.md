@@ -173,37 +173,39 @@ Pour le démarrage local, suivez le README généré : les commandes dépendent 
 
 ## Options
 
-| Option                                           | Description                                                       | Défaut             |
-| ------------------------------------------------ | ----------------------------------------------------------------- | ------------------ |
-| `--profile <profile>`                            | Installer `full`, `harness` ou `stack`.                           | `full`             |
-| `--agents <agents>`                              | Identifiants d'hôtes d'agents séparés par des virgules.           | Claude historique¹ |
-| `--non-interactive`                              | Échouer si une valeur obligatoire manque, sans poser de question. | -                  |
-| `--project-name <name>`                          | Nom du projet en kebab-case.                                      | -                  |
-| `--project-description <description>`            | Description du produit.                                           | -                  |
-| `--structure <structure>`                        | `monorepo` ou `multirepo`.                                        | -                  |
-| `--main-branch <branch>`                         | `main` ou `master`.                                               | -                  |
-| `--setup-repo <setup>`                           | `local` ou `existing`.                                            | -                  |
-| `--monorepo-url <url>`                           | URL d'un monorepo existant.                                       | -                  |
-| `--backend-repo-url <url>`                       | URL du dépôt API en multirepo.                                    | -                  |
-| `--frontend-repo-url <url>`                      | URL du dépôt web en multirepo.                                    | -                  |
-| `--db-setup <setup>`                             | `docker`, `credentials` ou `manual`.                              | -                  |
-| `--db-type <type>`                               | `postgresql` ou `sql`.                                            | -                  |
-| `--db-port <port>`                               | Port hôte de la base.                                             | `5435`             |
-| `--api-port <port>`                              | Port hôte de l'API.                                               | `3500`             |
-| `--web-port <port>`                              | Port hôte du web.                                                 | `5173`             |
-| `--email-service <service>`                      | `none` ou `mailersend`.                                           | -                  |
-| `--s3-setup <setup>`                             | `docker`, `credentials` ou `manual`.                              | -                  |
-| `--analytics` / `--no-analytics`                 | Inclure ou ignorer Analytics.                                     | -                  |
-| `--pwa` / `--no-pwa`                             | Inclure ou ignorer le support installable.                        | actif              |
-| `--advanced-skills <skills>`                     | Liste parmi `context7,atlassian,notion,figma`.                    | -                  |
-| `--srs-enable` / `--no-srs-enable`               | Activer ou ignorer le [module SRS](/fr/modules/srs).              | -                  |
-| `--srs-backend <backend>`                        | Backend SRS ; la V1 supporte `notion`.                            | -                  |
-| `--srs-parent-page-input <url>`                  | URL ou ID de la page racine SRS.                                  | -                  |
-| `--srs-ingest-enable` / `--no-srs-ingest-enable` | Configurer l'ingestion ponctuelle de notes existantes.            | -                  |
-| `--srs-ingest-parent-input <url>`                | Page source à ingérer.                                            | -                  |
-| `--workflow <config>` / `--no-workflow`          | Choisir un preset, `none`, ou ne pas configurer de workflow.      | -                  |
-| `--start-services` / `--no-start-services`       | Lancer ou ignorer la base et le stockage locaux.                  | -                  |
-| `--start-apps <mode>`                            | Lancer `all`, `backend`, `frontend` ou `none`.                    | -                  |
+| Option                                           | Description                                                                                                                         | Défaut                |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `--profile <profile>`                            | Installer `full`, `harness` ou `stack`.                                                                                             | `full`                |
+| `--agents <agents>`                              | Identifiants d'hôtes d'agents séparés par des virgules.                                                                             | Claude historique¹    |
+| `--non-interactive`                              | Échouer si une valeur obligatoire manque, sans poser de question.                                                                   | -                     |
+| `--project-name <name>`                          | Nom du projet en kebab-case.                                                                                                        | -                     |
+| `--project-description <description>`            | Description du produit.                                                                                                             | -                     |
+| `--structure <structure>`                        | `monorepo` ou `multirepo`.                                                                                                          | -                     |
+| `--main-branch <branch>`                         | `main` ou `master`.                                                                                                                 | -                     |
+| `--setup-repo <setup>`                           | `local` ou `existing`.                                                                                                              | -                     |
+| `--monorepo-url <url>`                           | URL d'un monorepo existant.                                                                                                         | -                     |
+| `--backend-repo-url <url>`                       | URL du dépôt API en multirepo.                                                                                                      | -                     |
+| `--frontend-repo-url <url>`                      | URL du dépôt web en multirepo.                                                                                                      | -                     |
+| `--db-setup <setup>`                             | `docker`, `credentials` ou `manual`.                                                                                                | -                     |
+| `--db-type <type>`                               | `postgresql` ou `sql`.                                                                                                              | -                     |
+| `--db-port <port>`                               | Port hôte de la base.                                                                                                               | `5435`                |
+| `--api-port <port>`                              | Port hôte de l'API.                                                                                                                 | `3500`                |
+| `--web-port <port>`                              | Port hôte du web.                                                                                                                   | `5173`                |
+| `--email-service <service>`                      | `none` ou `mailersend`.                                                                                                             | -                     |
+| `--s3-setup <setup>`                             | `docker`, `credentials` ou `manual`.                                                                                                | -                     |
+| `--analytics` / `--no-analytics`                 | Inclure ou ignorer Analytics.                                                                                                       | -                     |
+| `--pwa` / `--no-pwa`                             | Inclure ou ignorer le support installable.                                                                                          | actif                 |
+| `--advanced-skills <skills>`                     | Liste parmi `context7,atlassian,notion,figma`.                                                                                      | -                     |
+| `--srs-enable` / `--no-srs-enable`               | Activer ou ignorer le [module SRS](/fr/modules/srs).                                                                                | -                     |
+| `--srs-backend <backend>`                        | Backend SRS ; la V1 supporte `notion`.                                                                                              | -                     |
+| `--srs-parent-page-input <url>`                  | URL ou ID de la page racine SRS.                                                                                                    | -                     |
+| `--srs-ingest-enable` / `--no-srs-ingest-enable` | Configurer l'ingestion ponctuelle de notes existantes.                                                                              | -                     |
+| `--srs-ingest-parent-input <url>`                | Page source à ingérer.                                                                                                              | -                     |
+| `--workflow <config>` / `--no-workflow`          | Choisir un preset, `none`, ou ne pas configurer de workflow.                                                                        | -                     |
+| `--working-branch <branch>`                      | Branche de travail : les branches de ticket en partent et les pull requests la visent. Exige `--workflow` avec `--non-interactive`. | `develop`             |
+| `--pr-target-branch <branch>`                    | Branche visée par les pull requests, si elle diffère de la branche de travail.                                                      | la branche de travail |
+| `--start-services` / `--no-start-services`       | Lancer ou ignorer la base et le stockage locaux.                                                                                    | -                     |
+| `--start-apps <mode>`                            | Lancer `all`, `backend`, `frontend` ou `none`.                                                                                      | -                     |
 
 ¹ Repli de compatibilité lorsque `--agents` est absent. Une sélection explicite est stockée dans `modules.harness.agents`.
 

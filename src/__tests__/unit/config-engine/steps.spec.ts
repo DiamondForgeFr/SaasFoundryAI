@@ -191,6 +191,14 @@ describe('workflowStep', () => {
     expect(promptWorkflowConfiguration).not.toHaveBeenCalled()
   })
 
+  it('non-interactive: writes the branches passed as flags, the PR target following the working branch', async () => {
+    const onMain = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'solo', workflowBranches: { workingBranch: 'main' } } }))
+    expect(onMain?.workflow).toMatchObject({ workingBranch: 'main', prTargetBranch: 'main' })
+
+    const split = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'solo', workflowBranches: { prTargetBranch: 'main' } } }))
+    expect(split?.workflow).toMatchObject({ workingBranch: 'develop', prTargetBranch: 'main' })
+  })
+
   it('non-interactive: defaults an explicit preset to GitHub Projects', async () => {
     const result = await workflowStep.collect?.(stepContext({ nonInteractive: true, prefill: { workflowPreset: 'saasfoundry' } }))
 
@@ -205,7 +213,7 @@ describe('workflowStep', () => {
 
     const result = await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://git/acme' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://git/acme', undefined, undefined, undefined, undefined)
     expect(result).toMatchObject({ workflow: { tool: 'github-projects' } })
     logSpy.mockRestore()
   })
@@ -217,7 +225,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'notulia' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('notulia', 'https://github.com/acme/notulia.git', undefined, undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('notulia', 'https://github.com/acme/notulia.git', undefined, undefined, undefined, undefined)
     logSpy.mockRestore()
   })
 
@@ -228,7 +236,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme', backendRepoUrl: 'https://github.com/acme/explicit.git' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://github.com/acme/explicit.git', undefined, undefined, undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', 'https://github.com/acme/explicit.git', undefined, undefined, undefined, undefined)
     logSpy.mockRestore()
   })
 
@@ -239,7 +247,17 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, derived, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, 'jira', undefined)
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, 'jira', undefined, undefined)
+    logSpy.mockRestore()
+  })
+
+  it('interactive: threads the branches passed as flags so they are not asked again (#822)', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    const render = jest.fn(async () => ({ configureWorkflow: true }) as unknown as ConfigState)
+
+    await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, prefill: { workflowBranches: { workingBranch: 'main' } }, render }))
+
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, undefined, undefined, { workingBranch: 'main' })
     logSpy.mockRestore()
   })
 
@@ -250,7 +268,7 @@ describe('workflowStep', () => {
 
     await workflowStep.collect?.(stepContext({ state: { projectName: 'acme' }, render }))
 
-    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, undefined, 'https://github.com/orgs/acme/projects/7')
+    expect(promptWorkflowConfiguration).toHaveBeenCalledWith('acme', undefined, undefined, undefined, 'https://github.com/orgs/acme/projects/7', undefined)
     logSpy.mockRestore()
   })
 

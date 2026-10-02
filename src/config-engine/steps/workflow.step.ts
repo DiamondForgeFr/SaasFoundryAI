@@ -39,7 +39,7 @@ export const workflowStep: StepDefinition = {
       }
       if (prefill.workflowPreset) {
         const tool = asWorkflowTool(derived.selectedTracker) ?? 'github-projects'
-        return workflowConfigFromPreset(prefill.workflowPreset, tool)
+        return workflowConfigFromPreset(prefill.workflowPreset, tool, prefill.workflowBranches)
       }
       return {}
     }
@@ -71,7 +71,14 @@ export const workflowStep: StepDefinition = {
       const existingManifest = await readManifest(process.cwd())
       const existingProjectUrl = existingManifest?.workflow?.projectUrl
 
-      const { workflow, aiRules } = await promptWorkflowConfiguration(state.projectName ?? '', repositoryUrl, prefill.workflowPreset, asWorkflowTool(derived.selectedTracker), existingProjectUrl)
+      const { workflow, aiRules } = await promptWorkflowConfiguration(
+        state.projectName ?? '',
+        repositoryUrl,
+        prefill.workflowPreset,
+        asWorkflowTool(derived.selectedTracker),
+        existingProjectUrl,
+        prefill.workflowBranches
+      )
       return { workflow, aiRules }
     }
 

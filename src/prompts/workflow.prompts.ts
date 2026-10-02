@@ -561,19 +561,40 @@ export const DEFAULT_AI_RULES: AIRules = {
   requireHumanCheckOnPushedBranch: true
 }
 
+/** Branches chosen by `--working-branch` / `--pr-target-branch`, overriding the defaults and the prompts. */
+export interface WorkflowBranches {
+  workingBranch?: string
+  prTargetBranch?: string
+}
+
+export const DEFAULT_WORKING_BRANCH = 'develop'
+
+/** The working branch defaults to `develop`; the PR target defaults to the working branch. */
+export function resolveWorkflowBranches(branches: WorkflowBranches = {}, fallbackWorkingBranch = DEFAULT_WORKING_BRANCH): { workingBranch: string; prTargetBranch: string } {
+  const workingBranch = branches.workingBranch || fallbackWorkingBranch
+  return { workingBranch, prTargetBranch: branches.prTargetBranch || workingBranch }
+}
+
+/** Apply explicit branch choices to a workflow built from a saved template; unset choices keep the template's. */
+function withBranches<T extends Partial<WorkflowConfig>>(workflow: T, branches?: WorkflowBranches): T {
+  if (!branches?.workingBranch && !branches?.prTargetBranch) return workflow
+  const workingBranch = branches.workingBranch || workflow.workingBranch || DEFAULT_WORKING_BRANCH
+  const prTargetBranch = branches.prTargetBranch || (branches.workingBranch ? workingBranch : workflow.prTargetBranch) || workingBranch
+  return { ...workflow, workingBranch, prTargetBranch }
+}
+
 /**
  * Materialize a built-in workflow preset without prompting or provisioning a
  * remote board. Non-interactive `sf new` uses this path so an explicit
  * `--workflow` choice reaches the manifest and harness deposits instead of
  * being reduced to a collection-only preset hint.
  */
-export function workflowConfigFromPreset(presetKey: keyof typeof WORKFLOW_PRESETS, tool: WorkflowConfig['tool']): { workflow: WorkflowConfig; aiRules: AIRules } {
+export function workflowConfigFromPreset(presetKey: keyof typeof WORKFLOW_PRESETS, tool: WorkflowConfig['tool'], branches: WorkflowBranches = {}): { workflow: WorkflowConfig; aiRules: AIRules } {
   const preset = WORKFLOW_PRESETS[presetKey]
   return {
     workflow: {
       tool,
-      workingBranch: 'develop',
-      prTargetBranch: 'develop',
+      ...resolveWorkflowBranches(branches),
       requireCodeReview: true,
       template: preset.name,
       statuses: preset.statuses.map((status) => ({ ...status })),
@@ -753,7 +774,8 @@ export async function promptWorkflowConfiguration(
   repositoryUrl?: string,
   presetOverride?: keyof typeof WORKFLOW_PRESETS,
   preselectedTool?: WorkflowConfig['tool'],
-  existingProjectUrl?: string
+  existingProjectUrl?: string,
+  branches?: WorkflowBranches
 ): Promise<{
   workflow: WorkflowConfig
   aiRules: AIRules
@@ -908,7 +930,7 @@ export async function promptWorkflowConfiguration(
       workflowConfig.template = selectedWorkflow
 
       return {
-        workflow: workflowConfig as WorkflowConfig,
+        workflow: withBranches(workflowConfig, branches) as WorkflowConfig,
         aiRules: aiRulesConfig
       }
     }
@@ -973,8 +995,7 @@ export async function promptWorkflowConfiguration(
     return {
       workflow: {
         tool: 'none',
-        workingBranch: 'develop',
-        prTargetBranch: 'develop',
+        ...resolveWorkflowBranches(branches),
         requireCodeReview: false,
         statuses: DEFAULT_STATUSES.none,
         branchNaming: DEFAULT_BRANCH_NAMING,
@@ -1155,24 +1176,28 @@ export async function promptWorkflowConfiguration(
     projectUrl = `linear://${teamKey}`
   }
 
-  // Step 4: Git workflow configuration
+  // Step 4: Git workflow configuration — a branch passed as a flag is not asked again
   const branchAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'workingBranch',
       message: 'Working branch (rebase from + PR target):',
-      default: 'develop'
+      default: DEFAULT_WORKING_BRANCH,
+      when: () => !branches?.workingBranch
     },
     {
       type: 'input',
       name: 'prTargetBranch',
       message: 'Override PR target? (leave empty to use working branch):',
-      default: ''
+      default: '',
+      when: () => !branches?.prTargetBranch
     }
   ])
 
-  const workingBranch = branchAnswers.workingBranch
-  const prTargetBranch = branchAnswers.prTargetBranch || branchAnswers.workingBranch
+  const { workingBranch, prTargetBranch } = resolveWorkflowBranches({
+    workingBranch: branches?.workingBranch || branchAnswers.workingBranch,
+    prTargetBranch: branches?.prTargetBranch || branchAnswers.prTargetBranch
+  })
 
   // For preconfigured workflows (SaaSFoundry AI), code review is implicit in the workflow (In Review status)
   // For custom workflows, ask explicitly
