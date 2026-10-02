@@ -317,6 +317,33 @@
       "requiresWhen": "workflow=solo|saasfoundry",
       "description": "Branch pull requests target, when it differs from the working branch (defaults to the working branch)."
     },
+    "tracker": {
+      "flag": "--tracker",
+      "type": "enum",
+      "values": [
+        "github-projects",
+        "jira",
+        "notion",
+        "linear"
+      ],
+      "required": false,
+      "description": "Ticket tracker the workflow drives. The workflow tool defaults to github-projects when omitted."
+    },
+    "projectUrl": {
+      "flag": "--project-url",
+      "type": "string",
+      "required": false,
+      "requiresWhen": "workflow=solo|saasfoundry",
+      "description": "URL of an existing board to attach (https://github.com/orgs/<owner>/projects/<n> for GitHub Projects). Exclusive with createBoard."
+    },
+    "createBoard": {
+      "flag": "--create-board",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "requiresWhen": "workflow=solo|saasfoundry",
+      "description": "Create the GitHub Projects board under the account that owns the origin remote, without prompting. Without it or projectUrl the workflow has no board and every ticket command is refused."
+    },
     "startServices": {
       "flag": "--start-services",
       "negationFlag": "--no-start-services",

@@ -106,4 +106,63 @@ describe('sf workflow use <built-in preset> (in-place upgrade)', () => {
     expect(statusFiles).not.toContain('5-human-testing.md')
     expect(statusFiles.filter((f) => /^\d-/.test(f))).toHaveLength(5)
   })
+
+  // #821 — `use` took the board URL from a prompt only, so a scripted setup could not attach one
+  describe('board', () => {
+    const writeWorkflow = async (workflow: Record<string, unknown>) =>
+      writeFile('.saasfoundry.json', JSON.stringify({ ...SOLO_MANIFEST, workflow: { ...SOLO_MANIFEST.workflow, ...workflow } }, null, 2))
+    const manifestWorkflow = async () => JSON.parse(await readFile('.saasfoundry.json', 'utf8')).workflow
+    const output = () => logSpy.mock.calls.flat().join('\n')
+
+    it('keeps the current board without asking for it again', async () => {
+      await workflowCommand('use', 'saasfoundry')
+
+      expect(mockedPrompt).not.toHaveBeenCalled()
+      expect((await manifestWorkflow()).projectUrl).toBe(SOLO_MANIFEST.workflow.projectUrl)
+    })
+
+    it('attaches the board passed with --project-url', async () => {
+      await writeWorkflow({ projectUrl: undefined })
+
+      await workflowCommand('use', 'solo', '--project-url', 'https://github.com/users/octo/projects/4')
+
+      expect(mockedPrompt).not.toHaveBeenCalled()
+      expect((await manifestWorkflow()).projectUrl).toBe('https://github.com/users/octo/projects/4')
+    })
+
+    it('leaves a workflow without a board, and says how to attach one, when nothing is known and no terminal can be asked', async () => {
+      await writeWorkflow({ projectUrl: undefined })
+      const isTTY = process.stdin.isTTY
+      Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true })
+      try {
+        await workflowCommand('use', 'solo')
+      } finally {
+        Object.defineProperty(process.stdin, 'isTTY', { value: isTTY, configurable: true })
+      }
+
+      expect(mockedPrompt).not.toHaveBeenCalled()
+      expect((await manifestWorkflow()).projectUrl).toBeUndefined()
+      expect(output()).toContain('No github-projects board attached')
+      expect(output()).toContain('sf workflow use solo --create-board')
+    })
+
+    it.each([
+      [['solo', '--frobnicate'], 'Unknown option for `sf workflow use`: --frobnicate'],
+      [['solo', '--project-url', 'https://github.com/acme/notulia'], 'is not a GitHub Projects URL'],
+      [['solo', '--project-url', 'https://github.com/users/octo/projects/4', '--create-board'], 'are exclusive']
+    ])('refuses %j and leaves the manifest unchanged', async (args, message) => {
+      const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`exit ${code}`)
+      }) as never)
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        await expect(workflowCommand('use', ...args)).rejects.toThrow('exit 1')
+        expect(errorSpy.mock.calls.flat().join('\n')).toContain(message)
+        expect(await manifestWorkflow()).toEqual(SOLO_MANIFEST.workflow)
+      } finally {
+        exitSpy.mockRestore()
+        errorSpy.mockRestore()
+      }
+    })
+  })
 })

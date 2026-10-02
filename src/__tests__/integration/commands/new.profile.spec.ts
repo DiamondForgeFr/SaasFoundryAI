@@ -204,6 +204,28 @@ describe('newCommand (--profile integration)', () => {
     expect(manifest.workflow).toMatchObject({ workingBranch: 'main', prTargetBranch: 'main' })
   })
 
+  // #821 — the non-interactive harness setup left the workflow without a board, and said nothing
+  it('harness profile warns when the GitHub Projects workflow has no board, and attaches --project-url', async () => {
+    await newCommand({ nonInteractive: true, profile: 'harness', projectName: 'acme', mainBranch: 'main', workflow: 'solo', tracker: 'github-projects' })
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('No github-projects board attached')
+    expect(output).toContain('sf workflow use solo --project-url <url>')
+
+    await rm('.saasfoundry.json')
+    logSpy.mockClear()
+    await newCommand({
+      nonInteractive: true,
+      profile: 'harness',
+      projectName: 'acme',
+      mainBranch: 'main',
+      workflow: 'solo',
+      tracker: 'github-projects',
+      projectUrl: 'https://github.com/users/acme/projects/7'
+    })
+    expect(JSON.parse(await readFile('.saasfoundry.json', 'utf8')).workflow.projectUrl).toBe('https://github.com/users/acme/projects/7')
+    expect(logSpy.mock.calls.flat().join('\n')).not.toContain('board attached')
+  })
+
   it('publishes the SRS skill to declared shared agents after SRS bootstrap', async () => {
     await newCommand({
       nonInteractive: true,

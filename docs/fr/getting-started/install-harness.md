@@ -43,6 +43,15 @@ L'assistant peut guider le même parcours `npx saasfoundryai-cli new --profile h
 Code disposent de profils d'agents enregistrés. Pour un autre hôte, choisissez `generic` et vérifiez qu'il peut lire les instructions générées et exécuter les commandes requises. L'installation
 facultative du **skill** `tool-saasfoundry` en une phrase cible actuellement Claude Code ; elle n'est pas nécessaire pour installer ou utiliser le harness avec un autre assistant.
 
+Un assistant exécute généralement le CLI en mode non interactif. Chaque choix passe alors par un drapeau, board compris ; sans lui, le workflow reste sans board et l'installation le signale :
+
+```bash
+npx saasfoundryai-cli new --profile harness --non-interactive --workflow solo --tracker github-projects --create-board --working-branch main
+```
+
+`--create-board` crée le board GitHub Projects sous le compte propriétaire du remote `origin` du dépôt, sans poser de question. `--project-url <url>` rattache plutôt un board existant. Les deux
+fonctionnent aussi plus tard avec `sf workflow use <template>`.
+
 GPT, DeepSeek, GLM et Kimi peuvent désigner des modèles ou des fournisseurs de modèles, pas nécessairement des hôtes d'agents. Utilisez-les dans un outil ayant accès au dépôt et au terminal ; pendant
 l'installation, sélectionnez le profil de cet outil, pas le nom du modèle.
 
