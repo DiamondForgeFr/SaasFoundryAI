@@ -55,6 +55,7 @@ interface TestIO extends SpawnIO {
   createEpic: jest.Mock
   inspectTickets: jest.Mock
   linkSubtask: jest.Mock
+  addToProject: jest.Mock
   stdoutBuffer: string[]
   stderrBuffer: string[]
 }
@@ -96,7 +97,11 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
   })
   const inspectTickets = jest.fn(() => [])
   const linkSubtask = jest.fn()
-  return Object.assign({ stdout, stderr, createSubtask, createEpic, inspectTickets, linkSubtask, ensureMilestone, assignMilestone, associateMilestone, stdoutBuffer, stderrBuffer }, overrides)
+  const addToProject = jest.fn()
+  return Object.assign(
+    { stdout, stderr, createSubtask, createEpic, inspectTickets, linkSubtask, addToProject, ensureMilestone, assignMilestone, associateMilestone, stdoutBuffer, stderrBuffer },
+    overrides
+  )
 }
 
 describe('parseArgs', () => {
@@ -354,6 +359,54 @@ describe('runSpawn', () => {
     expect(firstBody).toMatch(/https:\/\/example\.test\/fr1/)
   })
 
+  // #836 — spawned tickets reached the milestone and their Epic, never the board
+  describe('the project board', () => {
+    const children: PageRef[] = [
+      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Login flow' },
+      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-AUTH-002 — Password reset' }
+    ]
+
+    it('carries the parent and every created Story, before the release is assigned', async () => {
+      registerSrsBackend('stub', () => new StubAdapter(children))
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+      const io = makeIO()
+
+      const code = await runSpawn(baseOptions({ milestone: 'v0.1.0' }), io)
+
+      expect(code).toBe(0)
+      expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual(['42', '100', '101'])
+      expect(io.addToProject.mock.invocationCallOrder[2]).toBeLessThan((io.assignMilestone as jest.Mock).mock.invocationCallOrder[0])
+      expect(io.stdoutBuffer.join('')).toContain('3 ticket(s) on the project board')
+    })
+
+    it('reports which tickets joined when one cannot, and stops before the release', async () => {
+      registerSrsBackend('stub', () => new StubAdapter(children))
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+      const io = makeIO({
+        addToProject: jest.fn((ticket: string) => {
+          if (ticket === '101') throw new Error('project scope missing')
+        })
+      })
+
+      const code = await runSpawn(baseOptions({ milestone: 'v0.1.0' }), io)
+
+      expect(code).toBe(9)
+      expect(io.stderrBuffer.join('')).toContain('#101 could not join the project board — project scope missing')
+      expect(io.stderrBuffer.join('')).toContain('2 of 3 are on the board: #42, #100')
+      expect(io.stderrBuffer.join('')).toContain('workflow-cli.sh add-to-project <ticket> --status Backlog')
+      expect(io.assignMilestone).not.toHaveBeenCalled()
+    })
+
+    it('touches nothing on a dry run', async () => {
+      registerSrsBackend('stub', () => new StubAdapter(children))
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+      const io = makeIO()
+
+      await expect(runSpawn(baseOptions({ dryRun: true }), io)).resolves.toBe(0)
+      expect(io.addToProject).not.toHaveBeenCalled()
+    })
+  })
+
   it('reconciles delivered, existing and missing FRs before creating only missing work', async () => {
     const children: PageRef[] = [
       { id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Existing flow' },
@@ -388,6 +441,8 @@ describe('runSpawn', () => {
     expect(io.stdoutBuffer.join('')).toMatch(/FR-AUTH-001: partial → reuse #77/)
     expect(io.stdoutBuffer.join('')).toMatch(/FR-AUTH-003: delivered → skip/)
     expect(io.stdoutBuffer.join('')).toMatch(/created 1, reused 1, skipped 1/)
+    // #836 — the reused Story is on the board too; add-to-project keeps the status it has there
+    expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual(['42', '77', '100'])
   })
 
   it('is idempotent when every actionable FR already has one canonical ticket', async () => {
@@ -655,6 +710,8 @@ describe('runSpawn', () => {
       expect(io.createSubtask).toHaveBeenCalledTimes(1)
       expect(io.createSubtask.mock.calls[0][0]).toBe(epicNumber)
       expect(io.createSubtask.mock.calls[0][1]).toBe('FR-LIVE-007: Topic-aware AI note taking')
+      // The Epic it created goes on the board with its Story (#836)
+      expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual([epicNumber, io.createSubtask.mock.results[0].value.childNumber])
     })
 
     it('creates nothing at all on a dry run', async () => {
