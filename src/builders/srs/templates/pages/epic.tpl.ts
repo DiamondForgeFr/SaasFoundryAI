@@ -80,11 +80,25 @@ function tcRow(tc: TcItem): string[] {
 }
 
 /**
+ * Why the feature or version exists and what it covers, first on its page and only when
+ * the spec states them. Both fields were accepted and written nowhere, so the feature's
+ * intent was lost from the SRS (#843).
+ */
+function intentBlocks(spec: EpicSpec): PageBlock[] {
+  const blocks: PageBlock[] = []
+  const businessValue = spec.businessValue?.trim()
+  if (businessValue) blocks.push({ kind: 'heading', level: 2, text: 'Business Value' }, { kind: 'paragraph', text: businessValue })
+  const scope = spec.scope?.trim()
+  if (scope) blocks.push({ kind: 'heading', level: 2, text: 'Scope' }, { kind: 'paragraph', text: scope })
+  return blocks
+}
+
+/**
  * A version page carries what changed and the FRs that belong to it — not the
  * traceability primer, which belongs once per feature rather than once per version.
  */
 function renderVersionPage(spec: EpicSpec): PageContent {
-  const blocks: PageBlock[] = []
+  const blocks: PageBlock[] = intentBlocks(spec)
 
   blocks.push({ kind: 'heading', level: 2, text: 'What changed in this version' })
   const changes = spec.version?.changes ?? []
@@ -112,7 +126,7 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   // Position decides the shape, the same rule the traversal reads the tree by.
   if (spec.parentId !== undefined) return renderVersionPage(spec)
 
-  const blocks: PageBlock[] = []
+  const blocks: PageBlock[] = intentBlocks(spec)
 
   if (spec.versions && spec.versions.length > 0) {
     blocks.push({ kind: 'heading', level: 2, text: 'Versions' })

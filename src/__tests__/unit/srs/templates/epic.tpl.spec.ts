@@ -233,3 +233,47 @@ describe('renderEpicPage — five-category structure', () => {
     expect(frTable.rows[0][0]).toBe('FR-1')
   })
 })
+
+// #843 — `businessValue` and `scope` were accepted by the spec and written nowhere
+describe('renderEpicPage — business value and scope', () => {
+  const headings = (page: ReturnType<typeof renderEpicPage>) => page.blocks.filter((b) => b.kind === 'heading').map((b) => (b.kind === 'heading' ? b.text : ''))
+
+  it('opens a feature page with its business value and scope, before its versions', () => {
+    const page = renderEpicPage({
+      title: 'Automorph',
+      parentPageId: 'root',
+      versions: ['v0 — Walking skeleton'],
+      businessValue: 'Operators reshape a mission without a redeploy.',
+      scope: 'Mission editing in the console; the runtime stays out of scope.',
+      urs: [],
+      frs: []
+    })
+
+    expect(headings(page).slice(0, 3)).toEqual(['Business Value', 'Scope', 'Versions'])
+    expect(findParagraphAfterHeading(page.blocks, 'Business Value')).toBe('Operators reshape a mission without a redeploy.')
+    expect(findParagraphAfterHeading(page.blocks, 'Scope')).toBe('Mission editing in the console; the runtime stays out of scope.')
+  })
+
+  it('opens a version page with them too, before what changed', () => {
+    const page = renderEpicPage({
+      title: 'v0 — Walking skeleton',
+      parentPageId: 'feature-page',
+      parentId: 'automorph',
+      businessValue: 'A first mission edited end to end.',
+      scope: 'One mission type.',
+      version: { changes: ['Edit a mission'] },
+      urs: [],
+      frs: []
+    })
+
+    expect(headings(page)).toEqual(['Business Value', 'Scope', 'What changed in this version', 'Functional Requirements (FR)'])
+  })
+
+  it('leaves both out when the spec does not state them', () => {
+    const page = renderEpicPage({ title: 'Plain', parentPageId: 'root', businessValue: '  ', urs: [], frs: [] })
+
+    expect(headings(page)).not.toContain('Business Value')
+    expect(headings(page)).not.toContain('Scope')
+    expect(headings(page)[0]).toBe('Traceability')
+  })
+})

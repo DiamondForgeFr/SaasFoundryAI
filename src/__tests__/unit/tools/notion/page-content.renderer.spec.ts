@@ -27,6 +27,16 @@ describe('renderPageContentToNotionBlocks', () => {
     expect(renderPageContentToNotionBlocks(content).map((b) => ('type' in b ? b.type : ''))).toEqual(['paragraph', 'divider'])
   })
 
+  // Notion refuses a text object over 2000 characters, and with it the whole page (#843)
+  it('splits a long text into text objects of at most 2000 characters', () => {
+    const text = 'x'.repeat(4500)
+    const [block] = renderPageContentToNotionBlocks({ blocks: [{ kind: 'paragraph', text }] }) as unknown as [{ paragraph: { rich_text: { text: { content: string } }[] } }]
+
+    const parts = block.paragraph.rich_text.map((item) => item.text.content)
+    expect(parts.map((part) => part.length)).toEqual([2000, 2000, 500])
+    expect(parts.join('')).toBe(text)
+  })
+
   it('expands bulleted_list into one bulleted_list_item per entry', () => {
     const content: PageContent = { blocks: [{ kind: 'bulleted_list', items: ['a', 'b', 'c'] }] }
     const out = renderPageContentToNotionBlocks(content)

@@ -34,6 +34,7 @@ type PageBlock =
 
 Produced by `renderEpicPage(spec)` in this order (five-category shape):
 
+0. `Business Value` and `Scope` (H2 + paragraph each), only when the spec states them; then `Versions` (H2 + list), when the batch declares versions under the feature
 1. `Traceability` (H2) + plain-text code block (ASCII tree `UR → FR → { DS, TC, NFR }`) + explanatory paragraph
 2. `Requirement Types` (H2) + definitions table `Prefix | Type | Description | Example` with one row per UR/FR/DS/TC/NFR
 3. `User Requirements (UR)` (H2) + table `ID | Requirement | Priority | Related FR`, with group-header rows when items carry a `group`
@@ -41,6 +42,8 @@ Produced by `renderEpicPage(spec)` in this order (five-category shape):
 5. `Design Specifications (DS)` (H2) + table `ID | Specification | Related FR`, grouped
 6. `Test Cases (TC)` (H2) + table `ID | Title | Steps | Expected Result | Related FR`
 7. `Non-Functional Requirements (NFR)` (H2) + table `ID | Requirement | Target | Priority | Related FR`, grouped
+
+A version page (`parentId` set) opens with the same `Business Value` / `Scope` sections when stated, then `What changed in this version` and its FR table.
 
 Empty sections emit a placeholder paragraph (e.g. `No user requirements yet.`) instead of the table. Missing optional fields render as the em-dash cell `—`. Group headers appear as a single-cell row
 carrying the group id followed by empty cells matching the table arity.
