@@ -35,8 +35,8 @@ required. Installing the assistant-facing meta-skill and configuring the project
 
 ## Prerequisites
 
-- **Node.js 24.19.0**, as pinned by generated `.nvmrc` files
-- **npm 11 or newer**
+- **Node.js 22 or newer** and **npm 10 or newer** to run the CLI and use the harness
+- **Node.js 24.19.0** and **npm 11 or newer** for the generated SaaS stack (`stack` and `full` profiles), as pinned by its `.nvmrc` files
 - **Git**
 - **Docker**, when you choose Docker-managed database or storage services
 - At least one coding-agent runtime if you want AI-assisted development
