@@ -10,6 +10,7 @@
         "title": "Réunion live : transcript & notes",
         "parentPageId": "<srs-root-page-id>",
         "businessValue": "A participant follows a meeting without taking notes by hand, and leaves with a usable record of it.",
+        "scope": "Live transcript and AI notes during a meeting, and the record kept afterwards. Scheduling and recording consent stay out of scope.",
         "urs": [],
         "frs": []
       }
