@@ -79,6 +79,15 @@ function checkGit(report: StatusReport): Precondition {
       remediation: 'Run `git init` to initialize a repository.'
     }
   }
+  if (report.git.unborn) {
+    return {
+      name: 'git',
+      description: 'Git branch has a first commit',
+      status: 'warn',
+      details: `Branch ${report.git.branch} has no commits yet`,
+      remediation: 'Make the first commit before running workflow transitions: the working branch is created from it.'
+    }
+  }
   if (report.git.isClean === false) {
     return {
       name: 'git',
