@@ -37,10 +37,12 @@ Le propriétaire et l'agent choisissent les pages sources, le mode d'ingestion e
 ### 4. ai-draft
 
 ```bash
-.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> ai-draft
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> ai-draft                 # affiche la procédure, ne modifie rien
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> ai-draft --spec <file>   # écrit la spécification rédigée
 ```
 
-Le rédacteur utilise l'une des trois sources :
+Aucune commande ne rédige une nouvelle feature à partir d'un ticket : l'agent écrit le `DraftCandidate[]`, le vérifie avec `srs-cli.sh validate --spec <file>`, puis la phase l'écrit. Il s'appuie sur
+l'une des trois sources :
 
 - **notes existantes** : `srs-cli.sh browse`, puis `draft --from notion-pages --ids ...` produit du `RawContent` ; l'agent propose un `DraftCandidate[]` avant toute écriture ;
 - **code existant** : `draft --from codebase` lance cinq scanners et produit des `ScannerFinding[]` pour endpoints, écrans, modèles Prisma, tests et documentation ;

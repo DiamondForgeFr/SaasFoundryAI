@@ -51,10 +51,12 @@ Exit : both agree the inputs are sharp enough to run the drafter.
 The AI drafter runs against the configured backend.
 
 ```bash
-.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> ai-draft
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> ai-draft                 # prints the procedure, touches nothing
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> ai-draft --spec <file>   # writes the drafted spec
 ```
 
-What happens in this phase depends on the source :
+No CLI drafts a new feature from a ticket: the agent writes the `DraftCandidate[]`, checks it with `srs-cli.sh validate --spec <file>`, and the phase writes it. What the agent drafts from depends on
+the source :
 
 - **Ingestion path** (when `pendingIngestion` is set, or the owner pointed at existing notes) : Claude calls `srs-cli.sh browse` to pick pages worth ingesting, then
   `srs-cli.sh draft --from notion-pages --ids ...` to fetch them as `RawContent`. Claude reads the raw content and proposes a `DraftCandidate[]` list (one Epic + its FR children) in the conversation.
