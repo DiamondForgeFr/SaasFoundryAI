@@ -8,6 +8,7 @@ import { formatHumanReport, formatJsonReport } from '../eval/report'
 import { buildReviewPacket } from '../eval/review-packet'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { collectFindings } from './codebase-scan'
+import { rejectUnknownOption, runFromCommandLine } from './args'
 
 interface EvalManifest extends SrsManifestSubset {
   structure?: 'monorepo' | 'multirepo' | 'cli'
@@ -133,16 +134,11 @@ export function parseArgs(argv: string[]): EvalSrsOptions {
     else if (arg === '--fixture-findings') fixtureFindingsPath = argv[++i]
     else if (arg === '--review-packet') reviewPacketPath = argv[++i]
     else if (arg.startsWith('--review-packet=')) reviewPacketPath = arg.slice('--review-packet='.length)
+    else if (arg.startsWith('-')) rejectUnknownOption('eval', arg)
   }
   return { scanPath, manifestPath, rootPageId, thresholdPct, output, fixtureInventoryPath, fixtureFindingsPath, reviewPacketPath }
 }
 
 if (require.main === module) {
-  const options = parseArgs(process.argv.slice(2))
-  runEvalSrs(options)
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`eval: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine('eval', (argv) => runEvalSrs(parseArgs(argv)))
 }

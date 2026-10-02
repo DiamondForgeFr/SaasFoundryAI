@@ -1,4 +1,5 @@
 import { parseArgs as parseApplyArgs, runApplyUpdate } from '../srs/bin/apply-srs-update'
+import { SrsUsageError } from '../srs/bin/args'
 import { parseArgs as parseBrowseArgs, runBrowseTree } from '../srs/bin/browse-tree'
 import { parseArgs as parseDraftCodebaseArgs, runDraftFromCodebase } from '../srs/bin/draft-from-codebase'
 import { parseArgs as parseDraftNotionPagesArgs, runDraftFromNotionPages } from '../srs/bin/draft-from-notion-pages'
@@ -6,7 +7,7 @@ import { parseArgs as parseEvalArgs, runEvalSrs } from '../srs/bin/eval-srs'
 import { parseArgs as parseListVersionsArgs, runListVersions } from '../srs/bin/list-versions'
 import { parseArgs as parseNormalizeArgs, runNormalize } from '../srs/bin/normalize'
 import { parseArgs as parseSpawnArgs, runSpawn } from '../srs/bin/spawn'
-import { runValidate } from '../srs/bin/validate'
+import { parseArgs as parseValidateArgs, runValidate } from '../srs/bin/validate'
 import { parseArgs as parseWriteArgs, runWriteSrs } from '../srs/bin/write-srs'
 
 const USAGE = `Usage: sf srs <action> [args...]
@@ -14,6 +15,7 @@ const USAGE = `Usage: sf srs <action> [args...]
 Actions:
   help                                   Print this message
   validate [manifest]                    Smoke-test the configured backend via adapter.init()
+  validate --spec <path>                 Check a DraftCandidate spec offline, as write does before any page
   browse --parent <id> [--manifest]      List direct children of a parent page (JSON)
   draft --from notion-pages --ids <id1,id2,...> [--manifest]
                                          Fetch pages from the backend as RawContent (JSON)
@@ -95,11 +97,9 @@ export async function srsCommand(subcommand?: string, ...rest: string[]): Promis
         emitUsage()
         code = 0
         break
-      case 'validate': {
-        const manifestPath = argv[0] ?? '.saasfoundry.json'
-        code = await runValidate({ manifestPath })
+      case 'validate':
+        code = await runValidate(parseValidateArgs(argv))
         break
-      }
       case 'browse': {
         const { parentId, manifestPath } = parseBrowseArgs(argv)
         code = await runBrowseTree({ parentId, manifestPath })
@@ -146,8 +146,14 @@ export async function srsCommand(subcommand?: string, ...rest: string[]): Promis
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    process.stderr.write(`sf srs ${action}: unexpected error — ${message}\n`)
-    code = 1
+    if (error instanceof SrsUsageError) {
+      // Bad input, refused before anything is read or written (#877)
+      process.stderr.write(`sf srs ${action}: ${message}\n`)
+      code = 2
+    } else {
+      process.stderr.write(`sf srs ${action}: unexpected error — ${message}\n`)
+      code = 1
+    }
   }
 
   if (code !== 0) process.exitCode = code

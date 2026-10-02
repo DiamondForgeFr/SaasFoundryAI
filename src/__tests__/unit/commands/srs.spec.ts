@@ -1,4 +1,7 @@
-jest.mock('../../../srs/bin/validate', () => ({ runValidate: jest.fn().mockResolvedValue(0) }))
+jest.mock('../../../srs/bin/validate', () => ({
+  runValidate: jest.fn().mockResolvedValue(0),
+  parseArgs: jest.requireActual('../../../srs/bin/validate').parseArgs
+}))
 jest.mock('../../../srs/bin/browse-tree', () => ({
   runBrowseTree: jest.fn().mockResolvedValue(0),
   parseArgs: jest.fn((argv: string[]) => {

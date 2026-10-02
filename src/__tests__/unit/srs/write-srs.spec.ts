@@ -120,6 +120,23 @@ describe('runWriteSrs', () => {
     expect(updatedManifest.tools.srs.backend).toBe('write-stub')
   })
 
+  // #877 — an unresolved parent used to stop the batch halfway, the pages before it written
+  it('checks the whole batch before creating any page', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
+    const orphan: DraftCandidate = { kind: 'fr', confidence: 'medium', fr: { parentEpicId: 'nowhere', fr: { id: 'FR-9', title: 'Orphan' } }, source: { kind: 'notion-pages' } }
+    const specPath = writeSpec([makeEpic('Auth'), makeEpic('Billing'), orphan])
+
+    const code = await runWriteSrs({ specPath, manifestPath })
+
+    expect(code).toBe(2)
+    expect(adapter.createdEpics).toHaveLength(0)
+    expect(adapter.createdFrs).toHaveLength(0)
+  })
+
   it('surfaces a rollbackHint listing previously created pages on partial failure', async () => {
     const adapter = new StubAdapter(1)
     registerSrsBackend('write-stub', () => adapter)
@@ -277,10 +294,10 @@ describe('runWriteSrs', () => {
    * feature that already needs `sf srs normalize`. This is the one deliberate
    * breaking change in the chain.
    */
-  it('refuses an FR attached to a feature rather than a version', async () => {
+  it('refuses an FR attached to a feature rather than a version, before creating any page', async () => {
     const adapter = new StubAdapter()
     registerSrsBackend('write-stub', () => adapter)
-    const stdout = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
     const specPath = writeSpec([
@@ -290,21 +307,19 @@ describe('runWriteSrs', () => {
 
     const code = await runWriteSrs({ specPath, manifestPath })
 
-    expect(code).toBe(6)
+    // Checked with the whole batch (#877): the feature page is not written either
+    expect(code).toBe(2)
+    expect(adapter.createdEpics).toHaveLength(0)
     expect(adapter.createdFrs).toHaveLength(0)
-    const printed = stdout.mock.calls.map((c) => String(c[0])).join('')
+    const printed = stderr.mock.calls.map((c) => String(c[0])).join('')
     expect(printed).toMatch(/which is a feature, not a version/)
     expect(printed).toMatch(/Epic = feature \+ version/)
   })
 
-  it('fails with code 6 and a clear error when parentEpicId is unresolved', async () => {
+  it('fails with code 2 and a clear error when parentEpicId is unresolved, before creating any page', async () => {
     const adapter = new StubAdapter()
     registerSrsBackend('write-stub', () => adapter)
-    const stdout: string[] = []
-    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
-      stdout.push(String(chunk))
-      return true
-    })
+    const stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     const manifestPath = writeManifest({ tools: { srs: { backend: 'write-stub' } } })
     const frCandidate: DraftCandidate = {
@@ -317,9 +332,9 @@ describe('runWriteSrs', () => {
 
     const code = await runWriteSrs({ specPath, manifestPath })
 
-    expect(code).toBe(6)
-    const body = JSON.parse(stdout.join(''))
-    expect(body.failed[0].error).toMatch(/parentEpicId="EPIC-MISSING"/)
+    expect(code).toBe(2)
+    expect(adapter.createdFrs).toHaveLength(0)
+    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(/parentEpicId="EPIC-MISSING"/)
   })
 
   it('still accepts explicit parentEpicPageId as an escape hatch', async () => {

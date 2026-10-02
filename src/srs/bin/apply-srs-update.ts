@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { DsItem, FrSpec, PageBlock, PageContent, PageRef, SrsAdapter, TcItem, UrItem } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
 
 // The conversational eval hook (SUB-10 / #170) lives inside SKILL.md as
 // Claude-side heuristics — it has no message parser. When Claude decides an
@@ -53,22 +54,24 @@ export function parseArgs(argv: string[]): ApplyOptions {
     const arg = argv[i]
     if (arg === '--patch') {
       const next = argv[i + 1]
-      if (next === undefined || next.startsWith('--')) throw new Error('apply-srs-update: --patch requires a value')
+      if (next === undefined || next.startsWith('--')) throw new SrsUsageError('apply-srs-update: --patch requires a value')
       opts.patchPath = next
       i++
     } else if (arg.startsWith('--patch=')) {
       const value = arg.slice('--patch='.length)
-      if (!value) throw new Error('apply-srs-update: --patch= requires a value')
+      if (!value) throw new SrsUsageError('apply-srs-update: --patch= requires a value')
       opts.patchPath = value
     } else if (arg === '--manifest') {
       const next = argv[i + 1]
-      if (next === undefined || next.startsWith('--')) throw new Error('apply-srs-update: --manifest requires a value')
+      if (next === undefined || next.startsWith('--')) throw new SrsUsageError('apply-srs-update: --manifest requires a value')
       opts.manifestPath = next
       i++
     } else if (arg.startsWith('--manifest=')) {
       const value = arg.slice('--manifest='.length)
-      if (!value) throw new Error('apply-srs-update: --manifest= requires a value')
+      if (!value) throw new SrsUsageError('apply-srs-update: --manifest= requires a value')
       opts.manifestPath = value
+    } else {
+      rejectUnknownOption('apply-srs-update', arg)
     }
   }
   return opts
@@ -171,18 +174,9 @@ export async function runApplyUpdate(options: ApplyOptions, io: ApplyIO = defaul
 }
 
 if (require.main === module) {
-  let options: ApplyOptions
-  try {
-    options = parseArgs(process.argv.slice(2))
-  } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
-    process.stderr.write('\nUsage: apply-srs-update.ts [--patch <path>] [--manifest <path>]\n(Patch JSON is read from stdin when --patch is omitted.)\n')
-    process.exit(1)
-  }
-  runApplyUpdate(options)
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`apply-srs-update: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine(
+    'apply-srs-update',
+    (argv) => runApplyUpdate(parseArgs(argv)),
+    'Usage: apply-srs-update.ts [--patch <path>] [--manifest <path>]\n(Patch JSON is read from stdin when --patch is omitted.)'
+  )
 }

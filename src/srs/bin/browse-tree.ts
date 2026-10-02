@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { PageRef } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { rejectUnknownOption, runFromCommandLine } from './args'
 
 export interface BrowseTreeOptions {
   parentId: string
@@ -66,17 +67,12 @@ export function parseArgs(argv: string[]): { parentId: string; manifestPath: str
     else if (arg.startsWith('--parent=')) parentId = arg.slice('--parent='.length)
     else if (arg === '--manifest' || arg === '-m') manifestPath = argv[++i] ?? manifestPath
     else if (arg.startsWith('--manifest=')) manifestPath = arg.slice('--manifest='.length)
-    else if (!arg.startsWith('-') && !parentId) parentId = arg
+    else if (arg.startsWith('-')) rejectUnknownOption('browse-tree', arg)
+    else if (!parentId) parentId = arg
   }
   return { parentId, manifestPath }
 }
 
 if (require.main === module) {
-  const { parentId, manifestPath } = parseArgs(process.argv.slice(2))
-  runBrowseTree({ parentId, manifestPath })
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`browse-tree: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine('browse-tree', (argv) => runBrowseTree(parseArgs(argv)))
 }
