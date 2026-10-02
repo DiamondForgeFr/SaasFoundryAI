@@ -61,6 +61,8 @@ export interface SpawnIO {
   createEpic: (title: string, body: string, bypassReason: string) => { epicNumber: string }
   inspectTickets: (parent: string, requirements: ReconciliationRequirement[]) => ExistingSrsTicket[]
   linkSubtask: (parent: string, child: string) => void
+  /** Put a ticket on the project board in Backlog; one already there keeps its status. */
+  addToProject: (ticket: string) => void
   /**
    * Create the milestone, or report that it already existed. Reuse is the normal
    * case: re-spawning a version must not produce a second release.
@@ -161,6 +163,9 @@ function defaultIO(): SpawnIO {
     },
     linkSubtask: (parent, child) => {
       execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['link-subtask', parent, child], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
+    },
+    addToProject: (ticket) => {
+      execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['add-to-project', ticket, '--status', 'Backlog'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
     },
     // `milestone create` refuses a name that already exists on purpose — two
     // releases sharing one milestone is a scope error. So reuse is detected by
@@ -470,6 +475,24 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   } else {
     io.stdout(`\nspawn: created ${created.length} Story ticket(s) under #${parentTicket}.\n`)
   }
+
+  // The board is where the lifecycle reads a ticket's status: a ticket missing from it can
+  // never leave Backlog through `update-status` (#836). Reused Stories keep their status.
+  const toBoard = [...new Set([parentTicket, ...reused, ...created])]
+  const boarded: string[] = []
+  for (const ticket of toBoard) {
+    try {
+      io.addToProject(ticket)
+      boarded.push(ticket)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      io.stderr(`\n✗ spawn: #${ticket} could not join the project board — ${message}\n`)
+      io.stderr(`  The tickets exist. ${boarded.length} of ${toBoard.length} are on the board: ${boarded.map((t) => `#${t}`).join(', ') || 'none'}\n`)
+      io.stderr(`  Finish with: workflow-cli.sh add-to-project <ticket> --status Backlog${options.milestone ? `, then workflow-cli.sh milestone assign <ticket> "${options.milestone}"` : ''}\n`)
+      return 9
+    }
+  }
+  io.stdout(`spawn: ${boarded.length} ticket(s) on the project board.\n`)
 
   if (options.milestone) {
     // The Epic joins too: a milestone read after the release should show the

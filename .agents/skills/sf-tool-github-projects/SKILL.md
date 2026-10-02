@@ -85,6 +85,7 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 | `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue`                              |
 | `status <ticket>`                        | Read status from Projects V2 board                                                                |
 | `update-status <ticket> <status-name>`   | Write status on Projects V2 board (`gh project item-edit`)                                        |
+| `add-to-project <ticket> [--status <s>]` | Put an issue on the board (default Backlog; one already there keeps its status) |
 | `set-complexity <ticket> <level>`        | Set label `complexity: <bug\|low\|medium\|complex>` (removes any existing complexity label first) |
 | `get-complexity <ticket>`                | Read current complexity label                                                                     |
 | `get-labels <ticket>`                    | Print every label name, one per line (used by `sf-workflow` SRS guard)                            |
@@ -219,6 +220,6 @@ Without that scope the CLI still works for read paths and prints an actionable m
 
 **`Could not load project <N> for owner <X>`** Check `.saasfoundry.json` → `workflow.projectUrl` matches a real project. Run `gh project list --owner <owner>` to see what you have access to.
 
-**`Ticket #N is not on project board`** The issue exists but hasn't been added to the project. Add it via the board UI or `gh project item-add`.
+**`Ticket #N is not on project board`** The issue exists but hasn't been added to the project. Add it with `github-projects-cli.sh add-to-project <N>` (Backlog; an issue already on the board keeps its status) or via the board UI. `sf srs spawn` adds the tickets it creates.
 
 **`Unknown status '<name>'`** Status must exactly match an option on the board (case is ignored). The CLI prints the available options on error.
