@@ -18,7 +18,7 @@ Requires the [SRS module](/modules/srs) to be installed and a backend configured
 | Action         | What it does                                                               |
 | -------------- | -------------------------------------------------------------------------- |
 | `help`         | Print the usage message                                                    |
-| `validate`     | Smoke-test the configured backend through `adapter.init()`                 |
+| `validate`     | Smoke-test the configured backend, or check a spec offline with `--spec`   |
 | `browse`       | List the direct children of a parent page, as JSON                         |
 | `draft`        | Produce draft material — from backend pages, or by scanning the codebase   |
 | `write`        | Apply a `DraftCandidate[]` spec file through the adapter                   |
@@ -32,6 +32,7 @@ Requires the [SRS module](/modules/srs) to be installed and a backend configured
 
 ```bash
 sf srs validate [manifest]
+sf srs validate --spec <path>
 sf srs browse --parent <id> [--manifest <path>]
 
 sf srs draft --from notion-pages --ids <id1,id2,...> [--manifest <path>]
@@ -71,6 +72,9 @@ A shared contract across every action, so a script can branch on the reason rath
 | `5`  | runtime failure                                         |
 | `6`  | write partial — the output carries a `rollbackHint`     |
 | `7`  | write succeeded, but clearing `pendingIngestion` failed |
+
+An option an action does not know is bad input: the action exits `2` before reading or writing anything. `write` has no dry run — `sf srs validate --spec <path>` runs, without a backend, the checks
+`write` makes before creating any page.
 
 ## Examples
 

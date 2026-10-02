@@ -14,6 +14,7 @@ Usage: srs-cli.sh <action> [args...]
 Actions:
   help                              Print this message
   validate [manifest]               Smoke-test the configured backend via adapter.init()
+  validate --spec <path>            Check a DraftCandidate spec offline, as write does before any page
   browse --parent <id> [--manifest] List direct children of a parent page (JSON)
   draft --from notion-pages --ids <id1,id2,...> [--manifest]
                                     Fetch pages from the backend as RawContent (JSON).
@@ -156,7 +157,7 @@ run_bin() {
   (cd "$target" && npx --no-install tsx "src/srs/bin/$bin.ts" "$@")
 }
 
-run_validate() { run_bin validate "${1:-.saasfoundry.json}"; }
+run_validate() { run_bin validate ${1+"$@"}; }
 
 run_browse() { run_bin browse-tree "$@"; }
 

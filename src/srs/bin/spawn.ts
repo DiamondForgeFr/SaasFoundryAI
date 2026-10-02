@@ -8,6 +8,7 @@ import { FrItem, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { canonicalSrsIdentity, ExistingSrsTicket, loadReconciliationPlan, reconcileRequirements, ReconciliationError, ReconciliationRequirement, ReconciliationResult } from '../spawn/reconciliation'
 import { parseFrPageTitle } from '../tree/fr-title'
+import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
 
 export interface SpawnOptions {
   /**
@@ -73,7 +74,7 @@ export interface SpawnIO {
 function takeValue(argv: string[], i: number, flag: string): string {
   const next = argv[i + 1]
   if (next === undefined || next.startsWith('--')) {
-    throw new Error(`spawn: ${flag} requires a value`)
+    throw new SrsUsageError(`spawn: ${flag} requires a value`)
   }
   return next
 }
@@ -105,9 +106,11 @@ export function parseArgs(argv: string[]): SpawnOptions {
     } else if (a === '--reconciliation-plan') {
       opts.reconciliationPlanPath = takeValue(argv, i, '--reconciliation-plan')
       i++
+    } else {
+      rejectUnknownOption('spawn', a)
     }
   }
-  if (!opts.epic) throw new Error('spawn: missing --epic <page-url-or-id>')
+  if (!opts.epic) throw new SrsUsageError('spawn: missing --epic <page-url-or-id>')
   return opts
 }
 
@@ -508,20 +511,9 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
 }
 
 if (require.main === module) {
-  let options: SpawnOptions
-  try {
-    options = parseArgs(process.argv.slice(2))
-  } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
-    process.stderr.write(
-      `\nUsage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]\n`
-    )
-    process.exit(1)
-  }
-  runSpawn(options)
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`spawn: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine(
+    'spawn',
+    (argv) => runSpawn(parseArgs(argv)),
+    'Usage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]'
+  )
 }

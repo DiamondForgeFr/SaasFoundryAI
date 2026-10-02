@@ -116,3 +116,62 @@ describe('runValidate', () => {
     expect(code).toBe(2)
   })
 })
+
+// #877 — a spec passed where the manifest goes read as "tools.srs.backend is not set"
+describe('runValidate with a DraftCandidate spec', () => {
+  let tmp: string
+  const out: string[] = []
+  const err: string[] = []
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'sf-srs-validate-spec-'))
+    out.length = 0
+    err.length = 0
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      out.push(String(chunk))
+      return true
+    })
+    jest.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      err.push(String(chunk))
+      return true
+    })
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  const spec = (candidates: unknown): string => {
+    const path = join(tmp, 'spec.json')
+    writeFileSync(path, JSON.stringify(candidates))
+    return path
+  }
+  const feature = { kind: 'epic', confidence: 'high', epic: { id: 'auth', title: 'Auth', urs: [], frs: [] }, source: { kind: 'codebase' } }
+  const version = { kind: 'epic', confidence: 'high', epic: { id: 'auth-v1', parentId: 'auth', title: 'v1', urs: [], frs: [] }, source: { kind: 'codebase' } }
+  const fr = (parentEpicId: string) => ({ kind: 'fr', confidence: 'high', fr: { parentEpicId, fr: { id: 'FR-1', title: 'Sign in' } }, source: { kind: 'codebase' } })
+
+  it('names a spec passed as the manifest instead of reporting a missing backend', async () => {
+    const path = spec([feature])
+
+    await expect(runValidate({ manifestPath: path })).resolves.toBe(2)
+    expect(err.join('')).toContain('is a DraftCandidate spec, not a manifest')
+    expect(err.join('')).toContain(`sf srs validate --spec ${path}`)
+    expect(err.join('')).not.toContain('backend is not set')
+  })
+
+  it('accepts a spec write could apply, without a manifest or a backend', async () => {
+    await expect(runValidate({ manifestPath: join(tmp, 'absent.json'), specPath: spec([feature, version, fr('auth-v1')]) })).resolves.toBe(0)
+    expect(out.join('')).toContain('3 candidates (2 epic, 1 fr) can be written')
+  })
+
+  it.each([
+    ['an FR whose parent is declared nowhere', [feature, fr('missing')], 'parentEpicId="missing"'],
+    ['a version whose feature comes after it', [version, feature], 'parentId="auth"'],
+    ['an FR attached to a feature instead of a version', [feature, fr('auth')], 'which is a feature, not a version'],
+    ['a candidate missing its spec', [{ kind: 'fr', confidence: 'high', source: { kind: 'codebase' } }], 'the "fr" spec is missing']
+  ])('rejects %s', async (_case, candidates, message) => {
+    await expect(runValidate({ manifestPath: '.saasfoundry.json', specPath: spec(candidates) })).resolves.toBe(2)
+    expect(err.join('')).toContain(message)
+  })
+})

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { RawContent } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { rejectUnknownOption, runFromCommandLine } from './args'
 
 export interface DraftFromNotionPagesOptions {
   pageIds: string[]
@@ -81,16 +82,11 @@ export function parseArgs(argv: string[]): { pageIds: string[]; manifestPath: st
         .filter(Boolean)
     else if (arg === '--manifest' || arg === '-m') manifestPath = argv[++i] ?? manifestPath
     else if (arg.startsWith('--manifest=')) manifestPath = arg.slice('--manifest='.length)
+    else rejectUnknownOption('draft-from-notion-pages', arg)
   }
   return { pageIds, manifestPath }
 }
 
 if (require.main === module) {
-  const { pageIds, manifestPath } = parseArgs(process.argv.slice(2))
-  runDraftFromNotionPages({ pageIds, manifestPath })
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`draft-from-notion-pages: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine('draft-from-notion-pages', (argv) => runDraftFromNotionPages(parseArgs(argv)))
 }

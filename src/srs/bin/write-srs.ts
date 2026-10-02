@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { titleCarriesOwnId } from '../../builders/srs/fr-title-format'
 import { DraftCandidate, EpicSpec, FrSpec, PageRef, SrsAdapter } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { rejectUnknownOption, runFromCommandLine } from './args'
 
 export interface WriteSrsOptions {
   specPath: string
@@ -40,7 +41,7 @@ function readJson<T>(path: string, label: string): T {
   }
 }
 
-function normalizeCandidates(input: unknown): DraftCandidate[] {
+export function normalizeCandidates(input: unknown): DraftCandidate[] {
   if (Array.isArray(input)) return input as DraftCandidate[]
   if (input && typeof input === 'object' && Array.isArray((input as { candidates?: unknown }).candidates)) {
     return (input as { candidates: DraftCandidate[] }).candidates
@@ -73,6 +74,55 @@ function assertCandidateShape(candidate: DraftCandidate, index: number): void {
     return
   }
   throw new Error(`write-srs: candidate #${index} has an unknown kind="${String((candidate as { kind?: unknown }).kind)}" (expected "epic" or "fr").`)
+}
+
+export interface SpecCheck {
+  errors: string[]
+  warnings: string[]
+}
+
+/**
+ * Every check a spec can pass or fail without a backend: each candidate's shape, logical
+ * parents declared earlier in the batch, FRs attached to a version rather than a feature.
+ * `write` runs it before creating any page — a parent it could not resolve used to stop the
+ * batch halfway, pages already written — and `sf srs validate --spec` runs it alone (#877).
+ */
+export function checkSpec(candidates: DraftCandidate[]): SpecCheck {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const levels = new Map<string, PageLevel>()
+  candidates.forEach((candidate, index) => {
+    try {
+      assertCandidateShape(candidate, index)
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+      return
+    }
+    warnOnDuplicatedFrId(candidate, index, (message) => warnings.push(message.trimEnd()))
+    if (candidate.kind === 'epic') {
+      const epic = candidate.epic!
+      if (epic.parentId !== undefined && !levels.has(epic.parentId)) errors.push(unresolvedParent('epic', 'parentId', epic.parentId, levels, index))
+      if (epic.id) levels.set(epic.id, epic.parentId === undefined ? 'feature' : 'version')
+      return
+    }
+    const fr = candidate.fr!
+    if (fr.parentEpicPageId) return
+    if (!levels.has(fr.parentEpicId!)) errors.push(unresolvedParent('fr', 'parentEpicId', fr.parentEpicId!, levels, index))
+    else {
+      try {
+        assertFrParentIsVersion(fr, levels, index)
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error))
+      }
+    }
+  })
+  return { errors, warnings }
+}
+
+function unresolvedParent(kind: 'epic' | 'fr', field: string, logicalId: string, levels: Map<string, PageLevel>, index: number): string {
+  const known = Array.from(levels.keys())
+  const hint = known.length > 0 ? `Known logical IDs so far: ${known.join(', ')}.` : 'No page in this batch declared a logical "id" before this one.'
+  return `write-srs: candidate #${index} (${kind}) references ${field}="${logicalId}" but no page with that logical id is declared before it. ${hint}`
 }
 
 function resolveFrParent(fr: FrSpec, logicalIdMap: Map<string, string>, index: number): FrSpec {
@@ -195,14 +245,13 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
     return 2
   }
 
-  try {
-    candidates.forEach((candidate, index) => assertCandidateShape(candidate, index))
-  } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+  // Nothing is written unless the whole batch can be: an unresolved parent used to stop it halfway
+  const check = checkSpec(candidates)
+  for (const warning of check.warnings) process.stderr.write(`${warning}\n`)
+  if (check.errors.length > 0) {
+    for (const error of check.errors) process.stderr.write(`${error}\n`)
     return 2
   }
-
-  candidates.forEach((candidate, index) => warnOnDuplicatedFrId(candidate, index, (message) => process.stderr.write(message)))
 
   let adapter: SrsAdapter
   try {
@@ -270,16 +319,11 @@ export function parseArgs(argv: string[]): { specPath: string; manifestPath: str
     else if (arg === '--manifest' || arg === '-m') manifestPath = argv[++i] ?? manifestPath
     else if (arg.startsWith('--manifest=')) manifestPath = arg.slice('--manifest='.length)
     else if (arg === '--no-clear-pending') clearPendingIngestion = false
+    else if (arg.startsWith('-')) rejectUnknownOption('write-srs', arg, arg === '--dry-run' ? 'write has no dry run; check the spec offline with `sf srs validate --spec <path>`' : undefined)
   }
   return { specPath, manifestPath, clearPendingIngestion }
 }
 
 if (require.main === module) {
-  const parsed = parseArgs(process.argv.slice(2))
-  runWriteSrs(parsed)
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      process.stderr.write(`write-srs: unexpected error — ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    })
+  runFromCommandLine('write-srs', (argv) => runWriteSrs(parseArgs(argv)), 'Usage: write-srs.ts --spec <path> [--manifest <path>] [--no-clear-pending]')
 }
