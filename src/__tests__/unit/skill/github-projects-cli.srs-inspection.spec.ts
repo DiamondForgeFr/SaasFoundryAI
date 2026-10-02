@@ -44,6 +44,7 @@ if [ "$1" = issue ] && [ "$2" = view ]; then
   exit 0
 fi
 if [ "$1" = api ] && [ "$2" != graphql ] && [[ "$*" == *sub_issues* ]]; then
+  [ -n "$NO_SUB_ISSUES" ] && { echo "sub-issues listed without a parent" >&2; exit 1; }
   printf '%s' '[[${JSON.stringify(issues[0]).replace(/'/g, "'\\''")}]]'
   exit 0
 fi
@@ -97,6 +98,30 @@ describe('github-projects CLI — SRS ticket inspection and recovery', () => {
         expect.objectContaining({ number: '11', state: 'OPEN', boardStatus: 'Backlog', parentNumber: null, frIds: ['FR-MAH-002'] })
       ])
       expect(JSON.parse(stdout)[0]).not.toHaveProperty('body')
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  // #855 — spawn inspects before the version Epic exists: there is no parent to list
+  it('inspects the repository alone with --no-parent', async () => {
+    const s = await sandbox()
+    try {
+      const { stdout } = await execFileP(
+        '/bin/bash',
+        [
+          CLI,
+          'inspect-srs-tickets',
+          '--no-parent',
+          '--fr',
+          'FR-MAH-001=https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          '--fr',
+          'FR-MAH-002=https://www.notion.so/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+        ],
+        { cwd: s.dir, env: { ...s.env, NO_SUB_ISSUES: '1' } }
+      )
+      // #10 is an srs:* drafting ticket and, with no parent, nobody's native child: left out
+      expect(JSON.parse(stdout)).toEqual([expect.objectContaining({ number: '11', parentNumber: null, frIds: ['FR-MAH-002'] })])
     } finally {
       await s.cleanup()
     }

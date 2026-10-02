@@ -46,6 +46,11 @@ export interface SpawnOptions {
    * deciding that old code already delivers a newly-written FR is semantic.
    */
   reconciliationPlanPath?: string
+  /**
+   * The SRS drafting ticket this spawn closes the lifecycle of. The version Epic spawn
+   * creates names it, so GitHub links the two; it is never the Stories' parent (#855).
+   */
+  draftingTicket?: string
 }
 
 export interface PlannedCreation {
@@ -60,7 +65,8 @@ export interface SpawnIO {
   stderr: (chunk: string) => void
   createSubtask: (parent: string, title: string, body: string, bypassReason: string) => { childNumber: string }
   createEpic: (title: string, body: string, bypassReason: string) => { epicNumber: string }
-  inspectTickets: (parent: string, requirements: ReconciliationRequirement[]) => ExistingSrsTicket[]
+  /** Existing tickets for these FRs; `null` while the delivery parent does not exist yet. */
+  inspectTickets: (parent: string | null, requirements: ReconciliationRequirement[]) => ExistingSrsTicket[]
   linkSubtask: (parent: string, child: string) => void
   /** Put a ticket on the project board in Backlog; one already there keeps its status. */
   addToProject: (ticket: string) => void
@@ -109,6 +115,9 @@ export function parseArgs(argv: string[]): SpawnOptions {
     } else if (a === '--reconciliation-plan') {
       opts.reconciliationPlanPath = takeValue(argv, i, '--reconciliation-plan')
       i++
+    } else if (a === '--drafting-ticket') {
+      opts.draftingTicket = takeValue(argv, i, '--drafting-ticket')
+      i++
     } else {
       rejectUnknownOption('spawn', a)
     }
@@ -155,7 +164,7 @@ function defaultIO(): SpawnIO {
     inspectTickets: (parent, requirements) => {
       const output = execFileSync(
         '.claude/skills/sf-workflow/workflow-cli.sh',
-        ['inspect-srs-tickets', parent, ...requirements.flatMap((requirement) => ['--fr', `${requirement.frId}=${requirement.frPageUrl}`])],
+        ['inspect-srs-tickets', parent ?? '--no-parent', ...requirements.flatMap((requirement) => ['--fr', `${requirement.frId}=${requirement.frPageUrl}`])],
         { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }
       )
       const parsed = JSON.parse(output) as unknown
@@ -250,6 +259,16 @@ async function selectVersion(
   }
 
   return { version: match, frPages }
+}
+
+/**
+ * The open version Epic a previous spawn created for this holder: issue type sf-epic, the
+ * `<feature> - <version>` title. Two of them is an ambiguity spawn will not resolve.
+ */
+function findVersionEpic(tickets: ExistingSrsTicket[], holderTitle: string): string | undefined {
+  const epics = tickets.filter((ticket) => ticket.issueType?.toLowerCase() === 'sf-epic' && ticket.state === 'OPEN' && ticket.title.trim() === holderTitle.trim())
+  if (epics.length > 1) throw new ReconciliationError(`« ${holderTitle} » has several open Epics (${epics.map((epic) => `#${epic.number}`).join(', ')}); pass --ticket <n> to choose one`)
+  return epics[0]?.number
 }
 
 export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO()): Promise<number> {
@@ -379,16 +398,17 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   let reconciliation: ReconciliationResult[] | undefined
+  let adoptedEpic: string | undefined
   if (options.reconciliationPlanPath) {
-    if (!options.ticket) {
-      io.stderr(`✗ spawn: --reconciliation-plan currently requires --ticket so existing work has an explicit delivery parent.\n`)
-      return 2
-    }
     try {
       const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
       const plan = loadReconciliationPlan(resolve(options.reconciliationPlanPath))
-      const tickets = io.inspectTickets(options.ticket, requirements)
-      reconciliation = reconcileRequirements(requirements, plan, tickets, options.ticket)
+      // Without --ticket the version Epic is the delivery parent, and spawn creates it below.
+      // A re-run finds the one it created before — its body lists these FR pages — and adopts
+      // it instead of a second one. The plan used to require --ticket outright (#855).
+      const tickets = io.inspectTickets(options.ticket ?? null, requirements)
+      adoptedEpic = options.ticket ? undefined : findVersionEpic(tickets, holderTitle)
+      reconciliation = reconcileRequirements(requirements, plan, tickets, options.ticket ?? adoptedEpic ?? null)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const prefix = error instanceof ReconciliationError ? 'reconciliation blocked' : 'reconciliation preflight failed'
@@ -398,7 +418,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     }
   }
 
-  const parentLabel = options.ticket ? `#${options.ticket}` : `a new Epic « ${holderTitle} »`
+  const parentLabel = options.ticket ? `#${options.ticket}` : adoptedEpic ? `the existing Epic #${adoptedEpic} « ${holderTitle} »` : `a new Epic « ${holderTitle} »`
   io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s), planning Story tickets under ${parentLabel}\n`)
   for (const p of planned) {
     io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl})\n`)
@@ -419,6 +439,13 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     // into no release is the state #542 exists to prevent, and the moment to
     // raise it is now — not when somebody asks what v1 contains.
     io.stdout(`  release: none — pass --milestone <name> to declare what these tickets ship in\n`)
+  }
+
+  // Every FR already delivered or superseded, and no Epic yet: creating one would put a
+  // promise on the board that nothing is left to keep.
+  if (reconciliation && !options.ticket && !adoptedEpic && reconciliation.every((result) => result.action === 'skip')) {
+    io.stdout(`\nspawn: every FR of « ${holderTitle} » is delivered or superseded — no Epic and no Story to create.\n`)
+    return 0
   }
 
   if (options.dryRun) {
@@ -444,7 +471,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   // Without --ticket, spawn owns the Epic too. Creating it here is what turns the
   // `<feature> - <version>` convention from something the agent has to remember
   // into something the tool guarantees.
-  let parentTicket = options.ticket
+  let parentTicket = options.ticket ?? adoptedEpic
   if (!parentTicket) {
     // The version states what this Epic delivers; the feature, why, when the version does not
     const scope = holderContent.scope ?? featureContent.scope
@@ -462,8 +489,9 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       scopeIncluded: scopeIncluded.length > 0 ? scopeIncluded : undefined,
       definitionOfDone: ['Every Story below is Done, its acceptance criteria met.']
     })
+    const referenced = options.draftingTicket ? `${body}\n\n_Drafted in #${options.draftingTicket}._` : body
     try {
-      const { epicNumber } = io.createEpic(holderTitle, body, options.bypassReason)
+      const { epicNumber } = io.createEpic(holderTitle, referenced, options.bypassReason)
       if (!epicNumber) {
         io.stderr(`✗ spawn: could not determine the new Epic number from create-epic output\n`)
         return 8
@@ -479,6 +507,18 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
 
   const created: string[] = []
   const reused = reconciliation?.filter((result) => result.action === 'reuse' && result.ticket).map((result) => result.ticket!.number) ?? []
+  // A reused ticket with no parent joins the delivery parent: it was counted, never linked
+  for (const result of reconciliation ?? []) {
+    if (result.action !== 'reuse' || !result.ticket || result.ticket.parentNumber) continue
+    try {
+      io.linkSubtask(parentTicket, result.ticket.number)
+      io.stdout(`  ↳ #${result.ticket.number} linked under #${parentTicket}\n`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      io.stderr(`  ✗ could not link #${result.ticket.number} under #${parentTicket}: ${message}\n`)
+      return 8
+    }
+  }
   const actionable = reconciliation ? planned.filter((item) => reconciliation!.find((result) => result.requirement.frId === item.frId)?.action === 'create') : planned
   for (const p of actionable) {
     try {
@@ -580,6 +620,6 @@ if (require.main === module) {
   runFromCommandLine(
     'spawn',
     (argv) => runSpawn(parseArgs(argv)),
-    'Usage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]'
+    'Usage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--drafting-ticket <n>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]'
   )
 }

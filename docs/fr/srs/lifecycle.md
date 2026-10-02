@@ -75,8 +75,9 @@ d'une fonctionnalité implémentée**.
 
 ### 6. spawning — réconciliation et création des Stories
 
-Avant toute mutation, l'agent inspecte le parent, ses enfants, la version SRS approuvée, le code, les tests et la documentation. Un plan de réconciliation couvre chaque FR et la classe comme
-`delivered`, `partial`, `missing` ou `superseded`.
+Avant toute mutation, l'agent inspecte le tableau, la version SRS approuvée, le code, les tests et la documentation. L'Epic de version `<feature> - <version>` porte les Stories : spawn le crée, ou
+reprend celui qu'une exécution précédente a créé ; `--ticket <epic>` en désigne un existant. Le ticket de rédaction n'est jamais le parent : le corps de l'Epic indique `Drafted in #<ticket>`. Un plan
+de réconciliation couvre chaque FR et la classe comme `delivered`, `partial`, `missing` ou `superseded`.
 
 ```bash
 .claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> spawning \
@@ -92,9 +93,9 @@ Après vérification, la même commande sans `--dry-run` :
 - ignore les FR déjà livrées ou remplacées ;
 - réutilise un ticket canonique unique ;
 - crée uniquement le travail manquant ou partiel sans correspondance ;
-- relie chaque Story comme sous-issue native du parent ;
-- rend son corps depuis la page FR : résumé, critères issus des TC et chaîne UR → FR → DS → TC ;
-- place les nouvelles Stories en `Backlog` pour leur workflow de code normal.
+- relie chaque Story comme sous-issue native de l'Epic de version ;
+- rend son corps depuis la page FR : description, UR et leurs énoncés, critères d'acceptation, références DS et contraintes ;
+- place les tickets sur le tableau, en `Backlog`, pour leur workflow de code normal.
 
 La reprise est prudente : une réponse interrompue peut être rejouée avec le même plan. Les identifiants contradictoires, les correspondances multiples et le reparentage implicite sont refusés.
 

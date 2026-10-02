@@ -719,6 +719,117 @@ describe('runSpawn', () => {
       expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual([epicNumber, io.createSubtask.mock.results[0].value.childNumber])
     })
 
+    // #855 — the plan required --ticket, while without one spawn creates the version Epic,
+    // the layout the skill recommends: the evidence-first path and that layout never met
+    describe('with a reconciliation plan', () => {
+      const holder = 'Réunion live - v2 — Prise de notes vivante'
+      const options = (overrides: Partial<SpawnOptions> = {}): SpawnOptions => ({
+        ...baseOptions({ version: 'v2 — Prise de notes vivante' }),
+        reconciliationPlanPath: overrides.reconciliationPlanPath ?? writeReconciliationPlan([{ frId: 'FR-LIVE-007', classification: 'missing' }]),
+        ticket: undefined,
+        ...overrides
+      })
+      const story = (overrides: Partial<{ number: string; parentNumber: string | null }> = {}) => ({
+        number: '77',
+        title: 'FR-LIVE-007: Topic-aware AI note taking',
+        state: 'OPEN' as const,
+        boardStatus: 'Backlog',
+        parentNumber: null,
+        issueType: 'sf-story',
+        url: 'https://github.test/issues/77',
+        srsLinks: ['https://example.test/f2'],
+        frIds: ['FR-LIVE-007'],
+        ...overrides
+      })
+      const epic = {
+        number: '50',
+        title: holder,
+        state: 'OPEN' as const,
+        boardStatus: 'Backlog',
+        parentNumber: null,
+        issueType: 'sf-epic',
+        url: 'https://github.test/issues/50',
+        srsLinks: ['https://example.test/f2'],
+        frIds: ['FR-LIVE-007']
+      }
+
+      it('previews with no parent, creating nothing', async () => {
+        register()
+        const io = makeIO()
+
+        await expect(runSpawn(options({ dryRun: true }), io)).resolves.toBe(0)
+
+        expect(io.inspectTickets.mock.calls[0][0]).toBeNull()
+        expect(io.stdoutBuffer.join('')).toContain(`under a new Epic « ${holder} »`)
+        expect(io.createEpic).not.toHaveBeenCalled()
+      })
+
+      it('creates the version Epic as the delivery parent, referencing the drafting ticket', async () => {
+        register()
+        const io = makeIO()
+
+        await expect(runSpawn(options({ draftingTicket: '16' }), io)).resolves.toBe(0)
+
+        expect(io.createEpic).toHaveBeenCalledTimes(1)
+        expect(io.createEpic.mock.calls[0][1]).toContain('_Drafted in #16._')
+        expect(io.createSubtask.mock.calls[0][0]).toBe(io.createEpic.mock.results[0].value.epicNumber)
+      })
+
+      it('adopts the Epic a previous run created instead of a second one', async () => {
+        register()
+        const io = makeIO({ inspectTickets: jest.fn(() => [epic, story({ parentNumber: '50' })]) })
+
+        await expect(runSpawn(options(), io)).resolves.toBe(0)
+
+        expect(io.createEpic).not.toHaveBeenCalled()
+        expect(io.createSubtask).not.toHaveBeenCalled()
+        expect(io.stdoutBuffer.join('')).toContain(`the existing Epic #50 « ${holder} »`)
+        expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual(['50', '77'])
+      })
+
+      it('links a matching ticket that has no parent under the new Epic', async () => {
+        register()
+        const io = makeIO({ inspectTickets: jest.fn(() => [story()]) })
+
+        await expect(runSpawn(options(), io)).resolves.toBe(0)
+
+        const epicNumber = io.createEpic.mock.results[0].value.epicNumber
+        expect(io.linkSubtask).toHaveBeenCalledWith(epicNumber, '77')
+        expect(io.createSubtask).not.toHaveBeenCalled()
+      })
+
+      it('blocks before creating anything when a match belongs to another parent', async () => {
+        register()
+        const io = makeIO({ inspectTickets: jest.fn(() => [story({ parentNumber: '9' })]) })
+
+        await expect(runSpawn(options({ milestone: 'v0.2.0' }), io)).resolves.toBe(10)
+
+        expect(io.stderrBuffer.join('')).toContain('already belongs to parent #9')
+        expect(io.createEpic).not.toHaveBeenCalled()
+        expect(io.ensureMilestone).not.toHaveBeenCalled()
+      })
+
+      it('creates no Epic when every FR is already delivered', async () => {
+        register()
+        const io = makeIO()
+
+        const plan = writeReconciliationPlan([{ frId: 'FR-LIVE-007', classification: 'delivered' }])
+        await expect(runSpawn(options({ reconciliationPlanPath: plan, milestone: 'v0.2.0' }), io)).resolves.toBe(0)
+
+        expect(io.stdoutBuffer.join('')).toContain('no Epic and no Story to create')
+        expect(io.createEpic).not.toHaveBeenCalled()
+        expect(io.ensureMilestone).not.toHaveBeenCalled()
+      })
+
+      it('refuses to choose between two open version Epics', async () => {
+        register()
+        const io = makeIO({ inspectTickets: jest.fn(() => [epic, { ...epic, number: '51' }]) })
+
+        await expect(runSpawn(options(), io)).resolves.toBe(10)
+        expect(io.stderrBuffer.join('')).toContain('several open Epics (#50, #51)')
+      })
+    })
+
     // #837 — spawn read titles only: every Story said "No acceptance criteria yet." and the
     // Epic kept its placeholders, although the pages held all of it
     describe('ticket bodies', () => {
