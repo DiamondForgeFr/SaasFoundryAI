@@ -342,7 +342,9 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       )
       expect(res.code).toBe(0)
       const srsCalls = readLog(sandbox.srsLogPath)
-      expect(srsCalls).toEqual(['spawn --ticket 42 --epic https://example.test/feature --version v1 — MVP --milestone v1.0.0 --reconciliation-plan /tmp/reconcile.json --dry-run'])
+      // #855 — the drafting ticket is referenced, never the Stories' parent: they hung under
+      // a Task that `done` closes right away. Spawn creates or adopts the version Epic.
+      expect(srsCalls).toEqual(['spawn --drafting-ticket 42 --epic https://example.test/feature --version v1 — MVP --milestone v1.0.0 --reconciliation-plan /tmp/reconcile.json --dry-run'])
     })
 
     it('blocks spawning before dispatch when the target or evidence plan is missing', async () => {
@@ -355,13 +357,22 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       expect(readLog(sandbox.srsLogPath)).toEqual([])
     })
 
-    it('refuses a caller-supplied parent override', async () => {
+    it('forwards --ticket naming an existing version Epic', async () => {
       const res = await runCli(['transition-drafting', '42', 'spawning', '--epic', 'https://example.test/feature', '--reconciliation-plan', '/tmp/reconcile.json', '--ticket', '99'], sandbox, {
         FAKE_LABELS: 'srs:drafting',
         FAKE_BOARD_STATUS: 'In progress'
       })
+      expect(res.code).toBe(0)
+      expect(readLog(sandbox.srsLogPath)).toEqual(['spawn --drafting-ticket 42 --epic https://example.test/feature --reconciliation-plan /tmp/reconcile.json --ticket 99'])
+    })
+
+    it('refuses the drafting ticket itself as the delivery parent', async () => {
+      const res = await runCli(['transition-drafting', '42', 'spawning', '--epic', 'https://example.test/feature', '--reconciliation-plan', '/tmp/reconcile.json', '--ticket', '42'], sandbox, {
+        FAKE_LABELS: 'srs:drafting',
+        FAKE_BOARD_STATUS: 'In progress'
+      })
       expect(res.code).toBe(2)
-      expect(res.stderr).toContain('do not override #42')
+      expect(res.stderr).toContain('#42 is the drafting ticket, not a delivery parent')
       expect(readLog(sandbox.srsLogPath)).toEqual([])
     })
 

@@ -93,9 +93,10 @@ Exit : owner explicitly approves (comments "OK to spawn" or bumps the transition
   --reconciliation-plan <path> --dry-run
 ```
 
-Before this command, inspect the parent and its open/closed children, the approved SRS version, and the relevant source, tests, and documentation. The reconciliation JSON must exactly cover every FR,
-cite those three evidence sources, and classify each requirement as `delivered`, `partial`, `missing`, or `superseded`. If any source is unavailable, the coverage is incomplete, or a ticket match is
-ambiguous, the command stops before mutation.
+Before this command, inspect the board, the approved SRS version, and the relevant source, tests, and documentation. The version Epic `<feature> - <version>` owns the Stories: spawn creates it, or
+adopts the one a previous run created; `--ticket <epic>` names an existing one. The drafting ticket is never the parent — the Epic's body says `Drafted in #<ticket>`. The reconciliation JSON must
+exactly cover every FR, cite those three evidence sources, and classify each requirement as `delivered`, `partial`, `missing`, or `superseded`. If any source is unavailable, the coverage is
+incomplete, or a ticket match is ambiguous, the command stops before mutation.
 
 ```bash
 # after reviewing the dry-run, repeat the same command without --dry-run
@@ -109,10 +110,10 @@ Delivered and superseded FRs are skipped, an exact canonical FR ticket is reused
 
 Each spawned child :
 
-- Lands in the parent's sub-issues list
-- Tagged `srs:new` so anyone can trace it back to the SRS Epic
-- Has a body rendered from `renderStoryTicketBody` : a summary, the FR page link, acceptance criteria pulled from the TC blocks, and the traceability chain (UR → FR → DS → TC)
-- Sits in **Backlog** — ready to flow through the normal code-path workflow from there
+- Lands in the version Epic's sub-issues list
+- Has a body read from its FR page and rendered by `renderStoryTicketBody` : the description, the URs with their narratives, the acceptance criteria, the DS references and the constraints, with the FR
+  page link
+- Sits on the project board in **Backlog** — ready to flow through the normal code-path workflow from there
 
 If a create response is interrupted, rerun the same command and plan. The spawner inspects open and closed tickets, recovers a single exact canonical match, and attaches it only when it has no parent.
 It refuses contradictory FR ids, multiple canonical matches, and implicit reparenting rather than claiming unconditional idempotency.
