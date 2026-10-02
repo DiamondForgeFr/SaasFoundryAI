@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 
 import { getCurrentBranch, getDefaultBranch, isGitRepo } from '../utils/git-info'
 
@@ -20,19 +20,22 @@ import { getCurrentBranch, getDefaultBranch, isGitRepo } from '../utils/git-info
 export interface BranchProvisionResult {
   action: 'created' | 'exists' | 'skipped'
   branch?: string
+  /** The ref the branch was (or would have been) created from. */
+  base?: string
   /** True when the freshly created branch was pushed to origin. */
   pushed?: boolean
   /** Why the step was a no-op (skipped) or, on `created`, why push was skipped. */
-  reason?: string
+  reason?: 'no-working-branch' | 'not-a-git-repo' | 'already-current' | 'no-commits' | 'branch-create-failed' | 'no-remote' | 'push-failed'
 }
 
-function git(args: string, cwd: string): string {
-  return execSync(`git ${args}`, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+// argv, never shell text: the branch name comes from a flag or a prompt
+function git(args: string[], cwd: string): string {
+  return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 }
 
 function refExists(cwd: string, ref: string): boolean {
   try {
-    git(`rev-parse --verify --quiet ${ref}`, cwd)
+    git(['rev-parse', '--verify', '--quiet', ref], cwd)
     return true
   } catch {
     return false
@@ -41,7 +44,7 @@ function refExists(cwd: string, ref: string): boolean {
 
 function hasOrigin(cwd: string): boolean {
   try {
-    return git('remote', cwd)
+    return git(['remote'], cwd)
       .split('\n')
       .map((r) => r.trim())
       .includes('origin')
@@ -67,8 +70,8 @@ function pickBase(cwd: string, mainBranch?: string): string {
  * Ensure the declared working branch exists locally (and on origin when a
  * remote is configured). Creates it from `mainBranch` **without switching** the
  * user off their current branch. Idempotent: an existing or already-current
- * branch is a no-op. Never throws — degrades to a `skipped` result on any
- * non-git / missing-config edge case.
+ * branch is a no-op. Never throws — every edge case is a result that
+ * `describeBranchProvision` turns into a next step.
  */
 export function ensureWorkingBranch(opts: { cwd?: string; workingBranch?: string; mainBranch?: string }): BranchProvisionResult {
   const cwd = opts.cwd ?? process.cwd()
@@ -78,23 +81,52 @@ export function ensureWorkingBranch(opts: { cwd?: string; workingBranch?: string
   if (!isGitRepo(cwd)) return { action: 'skipped', reason: 'not-a-git-repo', branch: workingBranch }
   if (workingBranch === getCurrentBranch(cwd)) return { action: 'skipped', reason: 'already-current', branch: workingBranch }
   if (refExists(cwd, `refs/heads/${workingBranch}`)) return { action: 'exists', branch: workingBranch }
+  // A fresh `git init`: no commit to branch from yet (#822)
+  if (!refExists(cwd, 'HEAD')) return { action: 'skipped', reason: 'no-commits', branch: workingBranch, base: getCurrentBranch(cwd) || undefined }
 
+  const base = pickBase(cwd, opts.mainBranch)
   try {
-    git(`branch ${workingBranch} ${pickBase(cwd, opts.mainBranch)}`, cwd)
+    git(['branch', workingBranch, base], cwd)
   } catch {
-    return { action: 'skipped', reason: 'branch-create-failed', branch: workingBranch }
+    return { action: 'skipped', reason: 'branch-create-failed', branch: workingBranch, base }
   }
 
-  if (!hasOrigin(cwd)) return { action: 'created', branch: workingBranch, pushed: false, reason: 'no-remote' }
+  if (!hasOrigin(cwd)) return { action: 'created', branch: workingBranch, base, pushed: false, reason: 'no-remote' }
 
   try {
-    git(`push -u origin ${workingBranch}`, cwd)
-    return { action: 'created', branch: workingBranch, pushed: true }
+    git(['push', '-u', 'origin', workingBranch], cwd)
+    return { action: 'created', branch: workingBranch, base, pushed: true }
   } catch {
     // Offline / no auth / protected branch — the branch is created locally; the
     // caller surfaces an actionable message rather than failing the install.
-    return { action: 'created', branch: workingBranch, pushed: false, reason: 'push-failed' }
+    return { action: 'created', branch: workingBranch, base, pushed: false, reason: 'push-failed' }
   }
+}
+
+/** One line per outcome, naming the next step when the branch still needs one (#822). */
+export function describeBranchProvision(result: BranchProvisionResult): { ok: boolean; message: string } | null {
+  const branch = result.branch
+  switch (result.reason) {
+    case 'no-working-branch':
+      return null
+    case 'already-current':
+      return { ok: true, message: `Working branch "${branch}" is the current branch` }
+    case 'not-a-git-repo':
+      return { ok: false, message: `Not a git repository — create the working branch "${branch}" after \`git init\` and a first commit` }
+    case 'no-commits':
+      return {
+        ok: false,
+        message: `Working branch "${branch}" not created: ${result.base ? `"${result.base}"` : 'the repository'} has no commits yet. After the first commit, run \`git branch ${branch} && git push -u origin ${branch}\``
+      }
+    case 'branch-create-failed':
+      return { ok: false, message: `Could not create the working branch "${branch}" from ${result.base} — create it with \`git branch ${branch} ${result.base}\`` }
+    case 'no-remote':
+      return { ok: false, message: `Created the working branch "${branch}" from ${result.base} locally — no remote yet; push it with \`git push -u origin ${branch}\` once one exists` }
+    case 'push-failed':
+      return { ok: false, message: `Created the working branch "${branch}" from ${result.base} locally, but the push failed — run \`git push -u origin ${branch}\`` }
+  }
+  if (result.action === 'exists') return { ok: true, message: `Working branch "${branch}" already exists` }
+  return { ok: true, message: `Created and pushed the working branch "${branch}" from ${result.base}` }
 }
 
 // ───────────────────────────────────────────────────────────────────────────
