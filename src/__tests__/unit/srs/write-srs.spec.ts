@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { DraftCandidate, EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../builders/srs/types'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../srs'
-import { collectVersionsByFeature, runWriteSrs } from '../../../srs/bin/write-srs'
+import { collectFrsByFeature, collectVersionsByFeature, runWriteSrs } from '../../../srs/bin/write-srs'
 
 class StubAdapter implements SrsAdapter {
   createdEpics: EpicSpec[] = []
@@ -405,5 +405,47 @@ describe('write-srs — feature → version → FR in one spec', () => {
 
   it('gives a feature no version index when the batch declares none', () => {
     expect(collectVersionsByFeature([feature('feat', 'Réunion live')]).get('feat')).toBeUndefined()
+  })
+
+  // #850 — the feature page needs its versions' FRs to link URs and DSs to them
+  it("collects each feature's version FRs, the fr candidate's references winning", () => {
+    const listed = version('v2', 'feat', 'v2 — Notes vivantes')
+    listed.epic!.frs = [
+      { id: 'FR-LIVE-007', title: 'Listed only by the version' },
+      { id: 'FR-LIVE-008', title: 'Topic grouping', priority: 'P2' }
+    ]
+    const detailed: DraftCandidate = {
+      kind: 'fr',
+      confidence: 'high',
+      fr: { parentEpicId: 'v2', fr: { id: 'FR-LIVE-007', title: 'Topic-aware notes', urRefs: ['UR-1'], dsRefs: ['DS-1'] } },
+      source: { kind: 'notion-pages' }
+    }
+
+    const frs = collectFrsByFeature([feature('feat', 'Réunion live'), listed, detailed, fr('elsewhere', 'FR-X')])
+
+    expect(frs.get('feat')).toEqual([
+      { id: 'FR-LIVE-007', title: 'Topic-aware notes', urRefs: ['UR-1'], dsRefs: ['DS-1'], version: 'v2 — Notes vivantes' },
+      { id: 'FR-LIVE-008', title: 'Topic grouping', priority: 'P2', version: 'v2 — Notes vivantes' }
+    ])
+  })
+
+  it('hands the feature page its version FRs when it writes it', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const tmpDir = mkdtempSync(join(tmpdir(), 'sf-srs-write-frs-'))
+    try {
+      const manifestPath = join(tmpDir, '.saasfoundry.json')
+      writeFileSync(manifestPath, JSON.stringify({ tools: { srs: { backend: 'write-stub' } } }))
+      const specPath = join(tmpDir, 'spec.json')
+      writeFileSync(specPath, JSON.stringify([feature('feat', 'Réunion live'), version('v2', 'feat', 'v2 — Notes vivantes'), fr('v2', 'FR-LIVE-007')]))
+
+      await expect(runWriteSrs({ specPath, manifestPath })).resolves.toBe(0)
+
+      expect(adapter.createdEpics[0].versionFrs).toEqual([{ id: 'FR-LIVE-007', title: 'Something', version: 'v2 — Notes vivantes' }])
+    } finally {
+      unregisterSrsBackend('write-stub')
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 })
