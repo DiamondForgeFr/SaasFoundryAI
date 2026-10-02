@@ -140,12 +140,12 @@ describe('renderEpicPage — five-category structure', () => {
     }
     const page = renderEpicPage(spec)
     const dsTable = findTableAfterHeading(page.blocks, 'Design Specifications (DS)')
-    expect(dsTable.header).toEqual(['ID', 'Specification', 'Related FR'])
+    expect(dsTable.header).toEqual(['ID', 'Specification', 'Description', 'Related FR'])
     expect(dsTable.rows).toEqual([
-      ['DS-X-01', '', ''],
-      ['DS-X-01-01', 'a', 'FR-X-01-01'],
-      ['DS-X-02', '', ''],
-      ['DS-X-02-01', 'b', '—']
+      ['DS-X-01', '', '', ''],
+      ['DS-X-01-01', 'a', '—', 'FR-X-01-01'],
+      ['DS-X-02', '', '', ''],
+      ['DS-X-02-01', 'b', '—', '—']
     ])
   })
 
@@ -275,5 +275,40 @@ describe('renderEpicPage — business value and scope', () => {
     expect(headings(page)).not.toContain('Business Value')
     expect(headings(page)).not.toContain('Scope')
     expect(headings(page)[0]).toBe('Traceability')
+  })
+})
+
+// #850 — the DS description was written nowhere, and with FRs in versions the feature's UR
+// and DS tables could link no FR and its FR table stayed empty
+describe('renderEpicPage — a feature whose FRs live in its versions', () => {
+  const feature: EpicSpec = {
+    title: 'Automorph',
+    parentPageId: 'root',
+    urs: [{ id: 'UR-1', narrative: 'reshape a mission' }],
+    frs: [],
+    versionFrs: [
+      { id: 'FR-1', title: 'Edit a mission', version: 'v0 — Walking skeleton', priority: 'P1', urRefs: ['UR-1'], dsRefs: ['DS-1'] },
+      { id: 'FR-2', title: 'Undo an edit', version: 'v1 — Safety', urRefs: ['UR-1'] }
+    ],
+    dsItems: [{ id: 'DS-1', title: 'Mission diff', description: 'Edits are stored as a diff against the deployed mission.' }]
+  }
+
+  it('links each UR to the version FRs that reference it', () => {
+    const urTable = findTableAfterHeading(renderEpicPage(feature).blocks, 'User Requirements (UR)')
+    expect(urTable.rows).toEqual([['UR-1', 'reshape a mission', '—', 'FR-1, FR-2']])
+  })
+
+  it('lists the version FRs with their version', () => {
+    const frTable = findTableAfterHeading(renderEpicPage(feature).blocks, 'Functional Requirements (FR)')
+    expect(frTable.header).toEqual(['ID', 'Requirement', 'Version', 'Priority', 'Related UR', 'Related DS'])
+    expect(frTable.rows).toEqual([
+      ['FR-1', 'Edit a mission', 'v0 — Walking skeleton', 'P1', 'UR-1', 'DS-1'],
+      ['FR-2', 'Undo an edit', 'v1 — Safety', '—', 'UR-1', '—']
+    ])
+  })
+
+  it('writes each DS description and the FRs whose dsRefs point to it', () => {
+    const dsTable = findTableAfterHeading(renderEpicPage(feature).blocks, 'Design Specifications (DS)')
+    expect(dsTable.rows).toEqual([['DS-1', 'Mission diff', 'Edits are stored as a diff against the deployed mission.', 'FR-1']])
   })
 })

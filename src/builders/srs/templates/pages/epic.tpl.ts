@@ -1,4 +1,4 @@
-import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, TcItem, UrItem } from '../../types'
+import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, TcItem, UrItem, VersionFrItem } from '../../types'
 
 const EMPTY_CELL = '—'
 
@@ -62,8 +62,14 @@ function frRow(fr: FrItem): string[] {
   return [fr.id, fr.title, priorityCell(fr.priority), refsCell(fr.urRefs), refsCell(fr.dsRefs)]
 }
 
-function dsRow(ds: DsItem): string[] {
-  return [ds.id, ds.title, refsCell(ds.frRefs)]
+function versionFrRow(fr: FrItem | VersionFrItem): string[] {
+  return [fr.id, fr.title, 'version' in fr ? fr.version : EMPTY_CELL, priorityCell(fr.priority), refsCell(fr.urRefs), refsCell(fr.dsRefs)]
+}
+
+/** The FRs a DS lists itself, and the FRs whose `dsRefs` point to it. */
+function dsRow(ds: DsItem, allFrs: FrItem[]): string[] {
+  const related = [...new Set([...(ds.frRefs ?? []), ...allFrs.filter((fr) => fr.dsRefs?.includes(ds.id)).map((fr) => fr.id)])]
+  return [ds.id, ds.title, ds.description?.trim() || EMPTY_CELL, refsCell(related)]
 }
 
 function nfrRow(nfr: NfrItem): string[] {
@@ -127,6 +133,9 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   if (spec.parentId !== undefined) return renderVersionPage(spec)
 
   const blocks: PageBlock[] = intentBlocks(spec)
+  // A feature's FRs live in its versions: its own `frs` is empty in the three-level model (#850)
+  const versionFrs = spec.versionFrs ?? []
+  const allFrs: FrItem[] = [...spec.frs, ...versionFrs]
 
   if (spec.versions && spec.versions.length > 0) {
     blocks.push({ kind: 'heading', level: 2, text: 'Versions' })
@@ -151,14 +160,20 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
       rows: buildGroupedRows(
         spec.urs,
         (ur) => ur.group,
-        (ur) => urRow(ur, spec.frs)
+        (ur) => urRow(ur, allFrs)
       )
     })
   }
 
   blocks.push({ kind: 'heading', level: 2, text: 'Functional Requirements (FR)' })
-  if (spec.frs.length === 0) {
+  if (allFrs.length === 0) {
     blocks.push({ kind: 'paragraph', text: 'No functional requirements yet.' })
+  } else if (versionFrs.length > 0) {
+    blocks.push({
+      kind: 'table',
+      header: ['ID', 'Requirement', 'Version', 'Priority', 'Related UR', 'Related DS'],
+      rows: buildGroupedRows(allFrs, (fr) => fr.group, versionFrRow)
+    })
   } else {
     blocks.push({
       kind: 'table',
@@ -174,8 +189,12 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   } else {
     blocks.push({
       kind: 'table',
-      header: ['ID', 'Specification', 'Related FR'],
-      rows: buildGroupedRows(dsItems, (ds) => ds.group, dsRow)
+      header: ['ID', 'Specification', 'Description', 'Related FR'],
+      rows: buildGroupedRows(
+        dsItems,
+        (ds) => ds.group,
+        (ds) => dsRow(ds, allFrs)
+      )
     })
   }
 

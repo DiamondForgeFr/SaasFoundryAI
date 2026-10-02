@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { titleCarriesOwnId } from '../../builders/srs/fr-title-format'
-import { DraftCandidate, EpicSpec, FrSpec, PageRef, SrsAdapter } from '../../builders/srs/types'
+import { DraftCandidate, EpicSpec, FrItem, FrSpec, PageRef, SrsAdapter, VersionFrItem } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { rejectUnknownOption, runFromCommandLine } from './args'
 
@@ -153,12 +153,13 @@ async function applyCandidate(
   logicalIdMap: Map<string, string>,
   levels: Map<string, PageLevel>,
   versionsByFeature: Map<string, string[]>,
+  frsByFeature: Map<string, VersionFrItem[]>,
   index: number
 ): Promise<PageRef> {
   if (candidate.kind === 'epic') {
     const epic = resolveEpicParent(candidate.epic!, logicalIdMap, index)
     const level: PageLevel = epic.parentId === undefined ? 'feature' : 'version'
-    const withIndex = level === 'feature' && epic.id ? { ...epic, versions: versionsByFeature.get(epic.id) } : epic
+    const withIndex = level === 'feature' && epic.id ? { ...epic, versions: versionsByFeature.get(epic.id), versionFrs: frsByFeature.get(epic.id) } : epic
     const page = await adapter.createEpicPage(withIndex)
     if (epic.id) {
       logicalIdMap.set(epic.id, page.id)
@@ -223,6 +224,37 @@ export function collectVersionsByFeature(candidates: DraftCandidate[]): Map<stri
   return byFeature
 }
 
+/**
+ * The FRs of each feature's versions, from the batch: those a version lists in `frs`, and the
+ * `fr` candidates attached to it (which carry the UR/DS references). Merged by FR id, the
+ * candidate winning. An FR attached by page id rather than logical id cannot be traced to a
+ * feature and is left out.
+ */
+export function collectFrsByFeature(candidates: DraftCandidate[]): Map<string, VersionFrItem[]> {
+  const versionOf = new Map<string, { feature: string; title: string }>()
+  for (const candidate of candidates) {
+    const epic = candidate.kind === 'epic' ? candidate.epic : undefined
+    if (epic?.id && epic.parentId) versionOf.set(epic.id, { feature: epic.parentId, title: epic.title })
+  }
+  const byFeature = new Map<string, Map<string, VersionFrItem>>()
+  const add = (versionId: string, fr: FrItem, override: boolean): void => {
+    const version = versionOf.get(versionId)
+    if (!version || !fr.id) return
+    const bucket = byFeature.get(version.feature) ?? new Map<string, VersionFrItem>()
+    const known = bucket.get(fr.id)
+    if (!known || override) bucket.set(fr.id, { ...known, ...fr, version: version.title })
+    byFeature.set(version.feature, bucket)
+  }
+  for (const candidate of candidates) {
+    const epic = candidate.kind === 'epic' ? candidate.epic : undefined
+    if (epic?.id && epic.parentId) for (const fr of epic.frs ?? []) add(epic.id, fr, false)
+  }
+  for (const candidate of candidates) {
+    if (candidate.kind === 'fr' && candidate.fr?.parentEpicId) add(candidate.fr.parentEpicId, candidate.fr.fr, true)
+  }
+  return new Map([...byFeature].map(([feature, frs]) => [feature, [...frs.values()]]))
+}
+
 export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   if (!options.specPath) {
     process.stderr.write('write-srs: --spec <path> is required.\n')
@@ -275,11 +307,12 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   // rather than replaces — so indexing the versions afterwards would duplicate the
   // list on every re-run. The batch already declares them, so read it up front.
   const versionsByFeature = collectVersionsByFeature(candidates)
+  const frsByFeature = collectFrsByFeature(candidates)
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i]
     try {
-      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, i)
+      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, frsByFeature, i)
       report.created.push({ index: i, kind: candidate.kind, page })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
