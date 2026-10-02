@@ -434,6 +434,43 @@ describe('NotionSrsAdapter', () => {
       expect(raw.blocks[2]).toEqual({ kind: 'list', text: 'Item' })
       expect(raw.blocks[3]).toEqual({ kind: 'other', text: '' })
     })
+
+    // #837 — a table's cells live in its row blocks; read as empty, they cost every spawned
+    // Story its acceptance criteria and references
+    it("reads each table's rows, one call per table", async () => {
+      const cell = (content: string) => [{ type: 'text', text: { content }, plain_text: content }]
+      const { client, calls } = buildMockClient({
+        blocksListImpl: async (args) => {
+          const { block_id } = args as { block_id: string }
+          if (block_id === 'table_1') {
+            return {
+              next_cursor: null,
+              has_more: false,
+              results: [
+                { type: 'table_row', table_row: { cells: [cell('Field'), cell('Value')] } },
+                { type: 'table_row', table_row: { cells: [cell('Description'), cell('Grouped notes')] } }
+              ]
+            }
+          }
+          return { next_cursor: null, has_more: false, results: [{ id: 'table_1', type: 'table', table: { table_width: 2 } }] }
+        }
+      })
+      const adapter = new NotionSrsAdapter({ apiToken: 'tk', client })
+
+      const raw = await adapter.fetchPage('page_x')
+
+      expect(raw.blocks).toEqual([
+        {
+          kind: 'table',
+          text: '',
+          rows: [
+            ['Field', 'Value'],
+            ['Description', 'Grouped notes']
+          ]
+        }
+      ])
+      expect(calls.blocksListCalls.map((call) => (call as { block_id: string }).block_id)).toEqual(['page_x', 'table_1'])
+    })
   })
 
   describe('listChildren', () => {

@@ -6,6 +6,7 @@ import { renderEpicTicketBody } from '../../builders/srs/templates/tickets/epic.
 import { renderStoryTicketBody } from '../../builders/srs/templates/tickets/story.tpl'
 import { FrItem, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { EpicPageContent, FrPageContent, parseEpicPage, parseFrPage } from '../spawn/page-content'
 import { canonicalSrsIdentity, ExistingSrsTicket, loadReconciliationPlan, reconcileRequirements, ReconciliationError, ReconciliationRequirement, ReconciliationResult } from '../spawn/reconciliation'
 import { parseFrPageTitle } from '../tree/fr-title'
 import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
@@ -310,6 +311,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
 
   let holderTitle = epicTitle
   let holderPageUrl = mainSpecUrl
+  let holderPageId = epicPageId
 
   if (versionCandidates.length > 0) {
     // A feature carrying both loose FRs and version pages is ambiguous: spawning
@@ -325,10 +327,30 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
 
     holderTitle = `${epicTitle} - ${selected.version.title}`
     holderPageUrl = selected.version.url
+    holderPageId = selected.version.id
     children = selected.frPages
   } else if (options.version) {
     io.stderr(`✗ spawn: « ${epicTitle} » is not versioned — it holds its FR pages directly, so --version has nothing to select.\n`)
     return 2
+  }
+
+  // Read before anything is created: the ticket bodies come from these pages, a dry run
+  // shows them as they will be, and a page that cannot be read stops the run with nothing
+  // created. Spawn used to read titles only, so every body kept its placeholders (#837).
+  let featureContent: EpicPageContent
+  let holderContent: EpicPageContent
+  const frContents = new Map<string, FrPageContent>()
+  try {
+    featureContent = parseEpicPage(await adapter.fetchPage(epicPageId))
+    holderContent = holderPageId === epicPageId ? featureContent : parseEpicPage(await adapter.fetchPage(holderPageId))
+    for (const child of children) {
+      if (parseFrPageTitle(child.title)) frContents.set(child.id, parseFrPage(await adapter.fetchPage(child.id)))
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    io.stderr(`✗ spawn: could not read the SRS pages under « ${holderTitle} » — ${message}\n`)
+    io.stderr(`  Nothing was created.\n`)
+    return 7
   }
 
   // Never fabricate. At this point every child must be an FR: either the feature
@@ -341,8 +363,18 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       io.stderr(`  Nothing was created. Producing a ticket from a raw title is worse than failing: it looks planned and is empty.\n`)
       return 2
     }
-    const fr: FrItem = { id: parsed.id, title: parsed.title }
-    const spec: StoryTicketBodySpec = { fr, frPageUrl: child.url, mainSpecUrl: holderPageUrl }
+    const page = frContents.get(child.id)
+    const fr: FrItem = { id: parsed.id, title: parsed.title, description: page?.description, priority: page?.priority, urRefs: page?.urRefs, dsRefs: page?.dsRefs, tcRefs: page?.tcRefs }
+    const spec: StoryTicketBodySpec = {
+      fr,
+      frPageUrl: child.url,
+      mainSpecUrl: holderPageUrl,
+      // The feature page holds the UR narratives and DS titles the FR page only names
+      urRefs: page?.urRefs.map((id) => ({ id, narrative: featureContent.urs.get(id) ?? '' })),
+      acceptanceCriteria: page?.acceptanceCriteria.map((text, index) => ({ id: `AC-${index + 1}`, text, sourceFr: fr.id })),
+      dsRefs: page?.dsRefs.map((id) => ({ id, title: featureContent.ds.get(id) || undefined })),
+      constraints: page ? [...page.validationRules, ...(page.securityRationale ? [page.securityRationale] : [])] : undefined
+    }
     planned.push({ frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec) })
   }
 
@@ -414,10 +446,21 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   // into something the tool guarantees.
   let parentTicket = options.ticket
   if (!parentTicket) {
+    // The version states what this Epic delivers; the feature, why, when the version does not
+    const scope = holderContent.scope ?? featureContent.scope
+    const scopeIncluded = [...(scope ? [scope] : []), ...holderContent.changes]
     const body = renderEpicTicketBody({
-      epic: { title: holderTitle, parentPageId: epicPageId, urs: [], frs: planned.map((p) => ({ id: p.frId, title: p.title })) },
+      epic: {
+        title: holderTitle,
+        parentPageId: epicPageId,
+        urs: [],
+        frs: planned.map((p) => ({ id: p.frId, title: p.title })),
+        businessValue: holderContent.businessValue ?? featureContent.businessValue
+      },
       epicPageUrl: holderPageUrl,
-      frPages: planned.map((p) => ({ frId: p.frId, frTitle: p.title, pageUrl: p.frPageUrl }))
+      frPages: planned.map((p) => ({ frId: p.frId, frTitle: p.title, pageUrl: p.frPageUrl })),
+      scopeIncluded: scopeIncluded.length > 0 ? scopeIncluded : undefined,
+      definitionOfDone: ['Every Story below is Done, its acceptance criteria met.']
     })
     try {
       const { epicNumber } = io.createEpic(holderTitle, body, options.bypassReason)
