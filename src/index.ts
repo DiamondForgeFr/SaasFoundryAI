@@ -101,6 +101,8 @@ program
   .option('--no-workflow', 'Skip workflow configuration entirely')
   .option('--working-branch <branch>', 'Working branch: feature branches start from it and pull requests target it (default: develop)')
   .option('--pr-target-branch <branch>', 'Branch pull requests target (default: the working branch)')
+  .option('--project-url <url>', 'Attach an existing board to the workflow (GitHub Projects, Jira, Notion or Linear URL)')
+  .option('--create-board', 'Create the GitHub Projects board, owned by the account of the git remote, without prompting')
   // Post-setup behavior
   .option('--start-services', 'Start dev services automatically (DB + MinIO)')
   .option('--no-start-services', 'Do not start dev services after setup')
@@ -199,7 +201,8 @@ program
   .command('workflow')
   .description('Manage workflow configuration and AI rules')
   .argument('[subcommand]', 'Subcommand to execute (list, create, show, use, set-working-branch, set-ai-rules, etc.)')
-  .argument('[args...]', 'Additional arguments for the subcommand')
+  .argument('[args...]', 'Additional arguments for the subcommand (use: --project-url <url> | --create-board)')
+  .allowUnknownOption()
   .action((subcommand, args) => workflowCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
   .command('srs')

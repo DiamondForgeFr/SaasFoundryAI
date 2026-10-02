@@ -47,6 +47,6 @@ describe('sf workflow validate through the compiled CLI', () => {
 
     expect(run.status).toBe(1)
     expect(run.stdout).toContain('No github-projects board attached (workflow.projectUrl is empty)')
-    expect(run.stdout).toContain('Attach the board')
+    expect(run.stdout).toContain('Attach a board with `sf workflow use solo --project-url <url>`, or create one with `sf workflow use solo --create-board`.')
   })
 })

@@ -10,6 +10,7 @@ import {
   listGlobalWorkflows,
   loadGlobalWorkflow,
   saveGlobalWorkflow,
+  setupGitHubProjectWithAutoCreation,
   updateGitHubProjectStatuses,
   WORKFLOW_PRESETS
 } from '../prompts/workflow.prompts'
@@ -17,6 +18,8 @@ import { installWorkflowSkill } from '../installers/workflow-skill.installer'
 import { readManifest } from '../utils'
 import { mutateProjectManifestSafe } from '../manifest-file'
 import { assertGitBranchName } from '../run'
+import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workflow-board'
+import { getRemoteUrl } from '../utils/git-info'
 import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
@@ -32,6 +35,14 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
   if (!subcommand || subcommand === 'help') {
     showUsage()
     return
+  }
+
+  // Options reach the subcommands as arguments; only `use` takes any (#821)
+  const stray = subcommand === 'use' ? undefined : args.find((arg) => arg.startsWith('-'))
+  if (stray) {
+    console.error(chalk.red(`\n❌ Unknown option for \`sf workflow ${subcommand}\`: ${stray}\n`))
+    showUsage()
+    process.exit(1)
   }
 
   // Check if we're in a project (unless it's a global command)
@@ -52,7 +63,7 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
       showWorkflowConfig(manifest!)
       break
     case 'use':
-      await useTemplate(manifest!, args[0])
+      await useTemplate(manifest!, args)
       break
     case 'set-working-branch':
       await setWorkflowBranch(manifest!, 'workingBranch', args[0])
@@ -96,6 +107,7 @@ function showUsage() {
   console.log(chalk.bold('Project-level commands:'))
   console.log('  show                        Display current workflow configuration')
   console.log('  use <template>              Apply a global template to current project')
+  console.log('      [--project-url <url> | --create-board]  Attach an existing board, or create a GitHub Projects one')
   console.log('  set-working-branch <branch> Change the working branch')
   console.log('  set-pr-target-branch <branch> Change the branch pull requests target')
   console.log('  set-ai-rules                Modify AI development rules')
@@ -163,10 +175,48 @@ function showWorkflowConfig(manifest: SaaSFoundryManifest) {
   console.log()
 }
 
-async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string) {
+interface UseOptions {
+  templateName?: string
+  projectUrl?: string
+  createBoard: boolean
+}
+
+/** `use <template> [--project-url <url> | --create-board]`; any other flag is refused rather than ignored. */
+export function parseUseArgs(args: string[]): UseOptions {
+  const options: UseOptions = { createBoard: false }
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--project-url' || arg.startsWith('--project-url=')) {
+      const value = arg === '--project-url' ? args[++i] : arg.slice('--project-url='.length)
+      if (!value || value.startsWith('-')) throw new Error('--project-url needs the board URL')
+      options.projectUrl = value
+    } else if (arg === '--create-board') {
+      options.createBoard = true
+    } else if (arg.startsWith('-')) {
+      throw new Error(`Unknown option for \`sf workflow use\`: ${arg}`)
+    } else if (options.templateName === undefined) {
+      options.templateName = arg
+    } else {
+      throw new Error(`Unexpected argument for \`sf workflow use\`: ${arg}`)
+    }
+  }
+  if (options.projectUrl && options.createBoard) throw new Error('--project-url and --create-board are exclusive: attach an existing board, or create one.')
+  return options
+}
+
+async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
+  let options: UseOptions
+  try {
+    options = parseUseArgs(args)
+  } catch (error) {
+    console.error(chalk.red(`\n❌ ${error instanceof Error ? error.message : String(error)}\n`))
+    console.log('Usage: sf workflow use <template-name> [--project-url <url> | --create-board]\n')
+    process.exit(1)
+  }
+  const templateName = options.templateName
   if (!templateName) {
     console.error(chalk.red('\n❌ Template name is required\n'))
-    console.log('Usage: sf workflow use <template-name>\n')
+    console.log('Usage: sf workflow use <template-name> [--project-url <url> | --create-board]\n')
     process.exit(1)
   }
 
@@ -201,23 +251,13 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
     process.exit(1)
   }
 
-  // Prompt for project-specific values
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'projectUrl',
-      message: `${template.tool} project URL:`,
-      default: manifest.workflow?.projectUrl,
-      validate: (input) => input.length > 0 || 'URL is required',
-      when: () => template.tool !== 'none'
-    }
-  ])
+  const projectUrl = await resolveUseBoard(manifest, template, options)
 
   // Apply template to project
   const workflow: NonNullable<SaaSFoundryManifest['workflow']> = {
     template: template.name ?? templateName,
     tool: template.tool,
-    projectUrl: answers.projectUrl,
+    projectUrl,
     workingBranch: template.workingBranch,
     prTargetBranch: template.prTargetBranch,
     requireCodeReview: template.requireCodeReview,
@@ -248,6 +288,46 @@ async function useTemplate(manifest: SaaSFoundryManifest, templateName?: string)
   }
 
   console.log(chalk.green(`\n✅ Workflow template "${templateName}" applied\n`))
+  if (appliedManifest.workflow && isMissingBoard(appliedManifest.workflow)) {
+    console.log(chalk.yellow(`⚠️  No ${appliedManifest.workflow.tool} board attached: the workflow scripts refuse ticket commands until one is.`))
+    console.log(chalk.gray(`   ${boardRemediation(appliedManifest.workflow)}\n`))
+  }
+}
+
+/**
+ * The board `use` applies: `--project-url`, a board created by `--create-board`,
+ * the project's current board when the tool is unchanged (never re-asked), or a
+ * prompt on a terminal. Without a terminal it stays empty and is reported (#821).
+ */
+async function resolveUseBoard(manifest: SaaSFoundryManifest, template: WorkflowTemplate, options: UseOptions): Promise<string | undefined> {
+  const fail = (message: string): never => {
+    console.error(chalk.red(`\n❌ ${message}\n`))
+    process.exit(1)
+  }
+  if (template.tool === 'none') return undefined
+  if (options.projectUrl) {
+    try {
+      return assertBoardUrl(template.tool, options.projectUrl)
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : String(error))
+    }
+  }
+  if (options.createBoard) {
+    if (template.tool !== 'github-projects') return fail(`--create-board creates a GitHub Projects board, not a ${template.tool} one: pass --project-url <url>.`)
+    const created = await setupGitHubProjectWithAutoCreation(manifest.projectName, template.statuses ?? [], getRemoteUrl(), { interactive: false })
+    return created ?? fail('--create-board: the GitHub Projects board was not created (see the reason above). Fix it and re-run, or attach an existing board with --project-url <url>.')
+  }
+  if (manifest.workflow?.projectUrl && manifest.workflow.tool === template.tool) return manifest.workflow.projectUrl
+  if (!process.stdin.isTTY) return undefined
+
+  const { projectUrl } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'projectUrl',
+      message: `${template.tool} project URL (leave empty to attach it later):`
+    }
+  ])
+  return projectUrl?.trim() ? projectUrl.trim() : undefined
 }
 
 const BRANCH_FIELDS = {
@@ -443,7 +523,7 @@ export function workflowConfigIssues(manifest: SaaSFoundryManifest): WorkflowCon
   const issues: WorkflowConfigIssue[] = []
   if (!workflow.tool) issues.push({ issue: 'Tool not specified', remediation: 'Set `workflow.tool` with `sf workflow use <template>`.' })
   if (workflow.tool && workflow.tool !== 'none' && !workflow.projectUrl) {
-    issues.push({ issue: `No ${workflow.tool} board attached (workflow.projectUrl is empty)`, remediation: 'Attach the board: `sf workflow use <template>` asks for its URL.' })
+    issues.push({ issue: `No ${workflow.tool} board attached (workflow.projectUrl is empty)`, remediation: boardRemediation(workflow) })
   }
   if (!workflow.workingBranch) issues.push({ issue: 'Working branch not specified', remediation: 'Run `sf workflow set-working-branch <branch>`.' })
   if (!workflow.prTargetBranch) issues.push({ issue: 'PR target branch not specified', remediation: 'Run `sf workflow set-pr-target-branch <branch>`.' })

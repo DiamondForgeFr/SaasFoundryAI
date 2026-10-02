@@ -204,6 +204,8 @@ Pour le démarrage local, suivez le README généré : les commandes dépendent 
 | `--workflow <config>` / `--no-workflow`          | Choisir un preset, `none`, ou ne pas configurer de workflow.                                                                        | -                     |
 | `--working-branch <branch>`                      | Branche de travail : les branches de ticket en partent et les pull requests la visent. Exige `--workflow` avec `--non-interactive`. | `develop`             |
 | `--pr-target-branch <branch>`                    | Branche visée par les pull requests, si elle diffère de la branche de travail.                                                      | la branche de travail |
+| `--project-url <url>`                            | Rattacher un board existant (GitHub Projects, Jira, Notion ou Linear). Exige `--workflow` avec `--non-interactive`.                 | -                     |
+| `--create-board`                                 | Créer le board GitHub Projects sous le compte du remote `origin`, sans question. Exclusif avec `--project-url`.                     | -                     |
 | `--start-services` / `--no-start-services`       | Lancer ou ignorer la base et le stockage locaux.                                                                                    | -                     |
 | `--start-apps <mode>`                            | Lancer `all`, `backend`, `frontend` ou `none`.                                                                                      | -                     |
 

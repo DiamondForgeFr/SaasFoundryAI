@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
+import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
 
 export type PreconditionStatus = 'ok' | 'warn' | 'fail' | 'skip'
@@ -38,6 +39,15 @@ function checkWorkflow(report: StatusReport): Precondition {
       status: 'warn',
       details: 'No workflow tool configured',
       remediation: 'Run `sf workflow use <template>` to configure a workflow.'
+    }
+  }
+  if (isMissingBoard(workflow)) {
+    return {
+      name: 'workflow',
+      description: 'Workflow configured',
+      status: 'warn',
+      details: `tool: ${workflow.tool}, no board attached (workflow.projectUrl is empty)`,
+      remediation: boardRemediation(workflow)
     }
   }
   return { name: 'workflow', description: 'Workflow configured', status: 'ok', details: `tool: ${workflow.tool}` }
