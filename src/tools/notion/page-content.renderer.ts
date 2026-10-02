@@ -7,9 +7,17 @@ type TableRequest = Extract<BlockObjectRequest, { table: { table_width: unknown 
 type TableRowChild = TableRequest['table']['children'][number]
 type RichTextItemRequest = ParagraphRequest['paragraph']['rich_text'][number]
 
+/** Notion refuses a text object longer than this, and with it the whole page. */
+const NOTION_TEXT_LIMIT = 2000
+
 function rt(text: string): RichTextItemRequest[] {
   if (!text) return []
-  return [{ type: 'text', text: { content: text } }]
+  // A long business value, scope or description is split into consecutive text objects (#843)
+  const chunks: RichTextItemRequest[] = []
+  for (let start = 0; start < text.length; start += NOTION_TEXT_LIMIT) {
+    chunks.push({ type: 'text', text: { content: text.slice(start, start + NOTION_TEXT_LIMIT) } })
+  }
+  return chunks
 }
 
 function headingRequest(level: 1 | 2 | 3, text: string): BlockObjectRequest {
