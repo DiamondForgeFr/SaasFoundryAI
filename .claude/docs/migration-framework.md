@@ -61,7 +61,7 @@ The dispatcher logs `Manifest migrated: vX → vY` per run, with one line per ap
 
 ## Module migrations
 
-**Where**: declared on the installer via the `migrations: ModuleMigration[]` array exported from each `<name>.installer.ts` (currently empty in v2.0.0 — the framework is what ships).
+**Where**: declared on the installer via the `migrations: ModuleMigration[]` array exported from each `<name>.installer.ts`, or a sibling `<name>.migrations.ts` it imports.
 
 **Contract** (`src/migrations/module/types.ts`):
 
@@ -86,7 +86,9 @@ export interface ModuleInstaller {
 
 ### How to add one
 
-1. Find the next number for the module: `installer.migrations.at(-1)?.to ?? 0` is your new `from`.
+1. Find the next number for the module: `installer.migrations.at(-1)?.to ?? installer.currentVersion` is your new `from`. Installed modules are stamped with `currentVersion` (1 before any migration),
+   and the dispatcher only runs migrations whose `from` is at least the installed version: a first migration `from: 0` never runs. The harness's `drop-stack-skills-without-stack`
+   (`src/installers/harness.migrations.ts`, 1 → 2) is the first module migration shipped, and the first to remove files.
 2. Add the migration to the installer file's `migrations` array (or pull into a sibling file and re-export — a `migrations/NNN-<name>.ts` folder per installer is fine once the chain grows).
 3. Bump the installer's `currentVersion` to match the new `to`.
 4. Register a synthetic-fixture integration test in `src/__tests__/integration/commands/update.module-migrations.spec.ts` if the migration touches files (the harness mocks the installer registry so

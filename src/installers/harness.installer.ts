@@ -4,6 +4,7 @@ import { join, resolve, sep } from 'path'
 
 import { installClaudeDocs } from './claude-docs.installer'
 import { installCoreSkills } from './core-skills.installer'
+import { harnessMigrations } from './harness.migrations'
 import { installOptionalSkills } from './optional-skills.installer'
 import { installToolSkill } from './tool-skill.installer'
 import { injectWorkflowSection, installWorkflowSkill } from './workflow-skill.installer'
@@ -16,8 +17,8 @@ import { computeFileHashes, fileExists } from '../utils'
 
 export const harnessInstallerMeta: ModuleInstaller = {
   name: 'harness',
-  currentVersion: 1,
-  migrations: []
+  currentVersion: 2,
+  migrations: harnessMigrations
 }
 
 /**
@@ -152,6 +153,12 @@ export interface InstallHarnessParams {
   advancedSkills?: string[]
   /** Declared coding-agent adapters. Omission keeps the legacy Claude declaration. */
   agents?: HarnessAgent[]
+  /**
+   * The project carries a generated technical stack (`hasTechnicalStack`), so
+   * the stack skills are deposited. Read from the manifest, never from
+   * `targetPath`: `sf update` deposits into an empty temp directory.
+   */
+  stackPresent?: boolean
 }
 
 const HARNESS_HOOKS: ClaudeHooksConfig = {
@@ -215,7 +222,8 @@ export async function installHarness({
   mainBranch = 'main',
   workflow,
   advancedSkills = [],
-  agents
+  agents,
+  stackPresent = false
 }: InstallHarnessParams): Promise<AgentInstructionsReport | undefined> {
   await assertHarnessWritePathsSafe(targetPath)
   const declaredAgents = resolveHarnessAgents(agents)
@@ -237,7 +245,7 @@ export async function installHarness({
   }
 
   await assertHarnessWritePathsSafe(targetPath)
-  await installCoreSkills({ targetPath })
+  await installCoreSkills({ targetPath, includeStackSkills: stackPresent })
   await assertHarnessWritePathsSafe(targetPath)
   await installClaudeDocs({ targetPath })
 
