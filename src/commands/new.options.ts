@@ -89,6 +89,8 @@ export interface NewCommandOptions {
   workflow?: string | boolean
   workingBranch?: string
   prTargetBranch?: string
+  projectUrl?: string
+  createBoard?: boolean
 
   // Post-setup behavior
   startServices?: boolean
@@ -226,6 +228,17 @@ export function buildPrefillFromOptions(opts: NewCommandOptions, env: NodeJS.Pro
       throw new Error('--working-branch and --pr-target-branch configure a workflow: pass --workflow solo or --workflow saasfoundry with them.')
     }
     prefill.workflowBranches = workflowBranches
+  }
+
+  if (opts.projectUrl !== undefined || opts.createBoard === true) {
+    if (opts.projectUrl !== undefined && opts.createBoard === true) throw new Error('--project-url and --create-board are exclusive: attach an existing board, or create one.')
+    if (opts.nonInteractive === true && !prefill.workflowPreset) {
+      throw new Error(`${opts.createBoard ? '--create-board' : '--project-url'} configures a workflow: pass --workflow solo or --workflow saasfoundry with it.`)
+    }
+    if (opts.createBoard === true && opts.tracker !== undefined && opts.tracker !== 'github-projects') {
+      throw new Error(`--create-board creates a GitHub Projects board, not a ${opts.tracker} one: pass --project-url <url> for an existing ${opts.tracker} board.`)
+    }
+    prefill.workflowBoard = opts.createBoard === true ? { create: true } : { projectUrl: opts.projectUrl }
   }
 
   return prefill
