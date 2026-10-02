@@ -128,17 +128,17 @@
     ".agents/skills/sf-workflow/scripts/detect-complexity.sh": "fe3e1b3b572e92124059615f6297104b05cdccfe5031ce76678ed82129becb51",
     ".agents/skills/sf-workflow/scripts/examine.sh": "41660c2beb101766f2c93528fd627d6af02582a4e26ef1b70d36e8e4eae5f320",
     ".agents/skills/sf-workflow/scripts/plan.sh": "c78508ed837e3cd1f98d30555c266c806a5d19b1da10d4d434f65caf94d5d594",
-    ".agents/skills/sf-workflow/SKILL.md": "a39835a90369c29b925cf9268259abd4caaa2845988acb5b6f959c8454c23b14",
+    ".agents/skills/sf-workflow/SKILL.md": "ed362df3ab07448014116c9f28f60b66890c36255e313f853f997fa0bb89ffc7",
     ".agents/skills/sf-workflow/statuses/1-backlog.md": "1f1d252421fb353ec955a624cd13389b7b7fc069e41c39ae4f4538a8268079b1",
     ".agents/skills/sf-workflow/statuses/2-ready.md": "cc67916a7cdedd0c8f8bb6184848b3ad5daa8cc87c146d2a1ab4f50d9c161137",
     ".agents/skills/sf-workflow/statuses/3-in-progress.md": "91f6103bfca390cd1f22377b41dc372564ffdec89afd4dc9afc641b872fa0ccf",
-    ".agents/skills/sf-workflow/statuses/3a-ai-drafting.md": "ab6bc2e19150fd4280910a1ba8660dd5de16f719b4fb92426019a93039463ac7",
-    ".agents/skills/sf-workflow/statuses/3b-human-review.md": "54616cd2dc8e4d728e5e37a7c5d21f80c07ab01426ab5acd29137d94da86b07a",
+    ".agents/skills/sf-workflow/statuses/3a-ai-drafting.md": "4c53767e3208b43135f4cd4b00326895793f55197b8ef5293b97437a25259e75",
+    ".agents/skills/sf-workflow/statuses/3b-human-review.md": "f6d10de01cb2e5c0b5c7271c3cfef12e57f013c655312e4e445cd11b962b1bb3",
     ".agents/skills/sf-workflow/statuses/3c-spawning.md": "81d7a64b7d8c566531f0ae97e432b1f9219d18a79c927770409ce2e4480552e1",
     ".agents/skills/sf-workflow/statuses/4-ai-testing.md": "f87415aa0288ce050474c3f07c7bccc12c92fbabeecfc3de745144628015fd03",
     ".agents/skills/sf-workflow/statuses/5-human-testing.md": "3b99530974d8fa72f4578c31f037565e4e9be882f0471cc14854e67162c5e42a",
     ".agents/skills/sf-workflow/statuses/6-in-review.md": "45ef602930b687818f4b32f1ed1544bf152a7115ad0d87c8ee7a27c5c83a1ec5",
     ".agents/skills/sf-workflow/statuses/7-done.md": "998216a270f6c80bb530c5c3d58e41bad05680b174c2477da36afdb11ce5e3fc",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "b4c6dca4fa869f379684c7346b17c91c91fedc70bb85f5b1aa4bb03dbb950ab6"
+    ".agents/skills/sf-workflow/workflow-cli.sh": "9127cc044458db26d725e2f2ccb6701492d299cc04fbf41a7bb4ff4b6d264a49"
   }
 }

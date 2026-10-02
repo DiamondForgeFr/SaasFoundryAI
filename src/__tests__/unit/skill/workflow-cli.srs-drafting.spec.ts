@@ -21,6 +21,8 @@ const BASH = '/bin/bash'
 async function buildSandbox(): Promise<{
   dir: string
   env: NodeJS.ProcessEnv
+  cli: string
+  srsShim: string
   srsLogPath: string
   toolLogPath: string
   cleanup: () => Promise<void>
@@ -98,6 +100,13 @@ echo "srs-cli: $*"
   writeFileSync(srsPath, srsShim)
   chmodSync(srsPath, 0o755)
 
+  // The CLI runs from inside the sandbox: it also looks for the SRS wrapper next to itself,
+  // which must not be this repository's real one.
+  const cli = path.join(dir, '.claude/skills/sf-workflow/workflow-cli.sh')
+  await mkdir(path.dirname(cli), { recursive: true })
+  writeFileSync(cli, readFileSync(CLI))
+  chmodSync(cli, 0o755)
+
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PWD: dir
@@ -106,15 +115,22 @@ echo "srs-cli: $*"
   return {
     dir,
     env,
+    cli,
+    srsShim,
     srsLogPath,
     toolLogPath,
     cleanup: () => rm(dir, { recursive: true, force: true })
   }
 }
 
-async function runCli(args: string[], sandbox: { dir: string; env: NodeJS.ProcessEnv }, envOverrides: NodeJS.ProcessEnv = {}): Promise<{ stdout: string; stderr: string; code: number }> {
+async function runCli(
+  args: string[],
+  sandbox: { dir: string; env: NodeJS.ProcessEnv; cli: string },
+  envOverrides: NodeJS.ProcessEnv = {},
+  cli: string = sandbox.cli
+): Promise<{ stdout: string; stderr: string; code: number }> {
   try {
-    const { stdout, stderr } = await execFileP(BASH, [CLI, ...args], {
+    const { stdout, stderr } = await execFileP(BASH, [cli, ...args], {
       cwd: sandbox.dir,
       env: { ...sandbox.env, ...envOverrides }
     })
@@ -239,14 +255,67 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       expect(res.stderr).toContain("Unknown phase 'wibble'")
     })
 
-    it('ai-draft dispatches to srs-cli.sh with --ticket', async () => {
-      const res = await runCli(['transition-drafting', '42', 'ai-draft'], sandbox, {
-        FAKE_LABELS: 'srs:drafting',
-        FAKE_BOARD_STATUS: 'In progress'
+    // #849 — `ai-draft` ran `srs-cli.sh draft --ticket <N>`, which no drafter accepts: the phase
+    // failed in every project. The agent drafts the spec; the phase writes it.
+    describe('ai-draft', () => {
+      const drafting = { FAKE_LABELS: 'srs:drafting', FAKE_BOARD_STATUS: 'In progress' }
+
+      it('prints the drafting procedure and dispatches nothing without an option', async () => {
+        const res = await runCli(['transition-drafting', '42', 'ai-draft'], sandbox, drafting)
+
+        expect(res.code).toBe(0)
+        expect(res.stdout).toContain('DraftCandidate[]')
+        expect(res.stdout).toContain('validate --spec <file>')
+        expect(res.stdout).toContain('transition-drafting 42 ai-draft --spec <file>')
+        expect(readLog(sandbox.srsLogPath)).toEqual([])
       })
-      expect(res.code).toBe(0)
-      const srsCalls = readLog(sandbox.srsLogPath)
-      expect(srsCalls).toEqual(['draft --ticket 42'])
+
+      it('writes a drafted spec with --spec', async () => {
+        writeFileSync(path.join(sandbox.dir, 'spec.json'), '[]')
+
+        const res = await runCli(['transition-drafting', '42', 'ai-draft', '--spec', 'spec.json', '--no-clear-pending'], sandbox, drafting)
+
+        expect(res.code).toBe(0)
+        expect(readLog(sandbox.srsLogPath)).toEqual(['write --spec spec.json --no-clear-pending'])
+      })
+
+      it('forwards --from to a drafter', async () => {
+        const res = await runCli(['transition-drafting', '42', 'ai-draft', '--from', 'codebase', '--path', 'src'], sandbox, drafting)
+
+        expect(res.code).toBe(0)
+        expect(readLog(sandbox.srsLogPath)).toEqual(['draft --from codebase --path src'])
+      })
+
+      it.each([
+        [['--spec', 'absent.json'], 'Spec file not found'],
+        [['--spec'], '--spec requires a path'],
+        [['--ticket', '42'], 'No drafter takes a ticket'],
+        [['--whatever'], 'ai-draft takes --spec <file>']
+      ])('refuses %j before dispatching', async (options, message) => {
+        const res = await runCli(['transition-drafting', '42', 'ai-draft', ...options], sandbox, drafting)
+
+        expect(res.code).toBe(2)
+        expect(res.stderr).toContain(message)
+        expect(readLog(sandbox.srsLogPath)).toEqual([])
+      })
+
+      it('finds the wrapper next to its own skill in a project that only carries .agents/', async () => {
+        await rm(path.join(sandbox.dir, '.claude/skills/sf-srs'), { recursive: true })
+        const agentsCli = path.join(sandbox.dir, '.agents/skills/sf-workflow/workflow-cli.sh')
+        const agentsSrs = path.join(sandbox.dir, '.agents/skills/sf-srs/scripts/srs-cli.sh')
+        await mkdir(path.dirname(agentsCli), { recursive: true })
+        await mkdir(path.dirname(agentsSrs), { recursive: true })
+        writeFileSync(agentsCli, readFileSync(CLI))
+        chmodSync(agentsCli, 0o755)
+        writeFileSync(agentsSrs, sandbox.srsShim)
+        chmodSync(agentsSrs, 0o755)
+        writeFileSync(path.join(sandbox.dir, 'spec.json'), '[]')
+
+        const res = await runCli(['transition-drafting', '42', 'ai-draft', '--spec', 'spec.json'], sandbox, drafting, agentsCli)
+
+        expect(res.code).toBe(0)
+        expect(readLog(sandbox.srsLogPath)).toEqual(['write --spec spec.json'])
+      })
     })
 
     it('spawning forwards the explicit evidence-first target', async () => {
@@ -351,7 +420,8 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       // workflow CLI should refuse to dispatch instead of crashing with
       // "No such file or directory".
       chmodSync(path.join(sandbox.dir, '.claude/skills/sf-srs/scripts/srs-cli.sh'), 0o644)
-      const res = await runCli(['transition-drafting', '42', 'ai-draft'], sandbox, {
+      writeFileSync(path.join(sandbox.dir, 'spec.json'), '[]')
+      const res = await runCli(['transition-drafting', '42', 'ai-draft', '--spec', 'spec.json'], sandbox, {
         FAKE_LABELS: 'srs:drafting',
         FAKE_BOARD_STATUS: 'In progress'
       })

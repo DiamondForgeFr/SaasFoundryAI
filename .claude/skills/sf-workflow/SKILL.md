@@ -184,7 +184,7 @@ When a ticket crosses into **Ready** and requires Software Requirements Specific
 
 - `.claude/skills/sf-srs/SKILL.md` — selects the configured SRS backend from `.saasfoundry.json → tools.srs.backend`
 - `.claude/skills/sf-srs/scripts/srs-cli.sh validate` — smoke-tests the backend adapter (init OK, exit 0)
-- `.claude/skills/sf-srs/scripts/srs-cli.sh draft|spawn|eval` — backend-neutral actions (sibling SUBs under #174 fill the body)
+- `.claude/skills/sf-srs/scripts/srs-cli.sh write|draft|spawn|validate|eval` — backend-neutral actions
 
 Never bypass the skill to write SRS by hand — the backend dispatch is how new projects get to swap Notion for Confluence / local markdown without touching the workflow logic.
 
@@ -194,7 +194,7 @@ SRS tickets don't flow through the code-path statuses — they have their own li
 
 ```
 Ready → In progress (brainstorm)
-         → ai-draft        (srs-cli.sh draft)
+         → ai-draft        (agent drafts the spec; ai-draft --spec runs srs-cli.sh write)
          → human-review    (owner reviews the backend page)
          → spawning        (srs-cli.sh spawn — creates Backlog children)
          → done            (board status → Done)

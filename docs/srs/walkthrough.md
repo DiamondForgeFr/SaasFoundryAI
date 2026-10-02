@@ -116,10 +116,11 @@ Once the spec reads right :
 .claude/skills/sf-workflow/workflow-cli.sh transition-drafting 42 ai-draft
 ```
 
-Claude then saves the `DraftCandidate[]` to a temp JSON file and runs :
+Without an option, the phase prints the drafting procedure and touches nothing. Claude saves the `DraftCandidate[]` to a JSON file, checks it offline, then writes it through the phase :
 
 ```bash
-.claude/skills/sf-srs/scripts/srs-cli.sh write --spec /tmp/draft-42.json
+.claude/skills/sf-srs/scripts/srs-cli.sh validate --spec /tmp/draft-42.json
+.claude/skills/sf-workflow/workflow-cli.sh transition-drafting 42 ai-draft --spec /tmp/draft-42.json
 ```
 
 On success :

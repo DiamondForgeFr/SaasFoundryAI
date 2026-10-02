@@ -4,7 +4,7 @@ banner_ai: Waiting — apply your review feedback to the draft pages
 banner_human: Review the SRS pages and approve, or request changes on the ticket
 complexity_profiles: [srs-drafting, srs-update, srs-new]
 entry_conditions:
-  - `3a-ai-drafting.md` complete — `srs-cli.sh draft` exited 0
+  - `3a-ai-drafting.md` complete — the drafted spec is written (`ai-draft --spec <file>` exited 0)
   - Backend page URL posted as ticket comment
   - Ticket still carries its `srs:*` label
 mandatory_actions:
