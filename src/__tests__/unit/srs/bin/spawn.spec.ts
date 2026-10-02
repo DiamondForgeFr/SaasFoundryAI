@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../../builders/srs/types'
 import { parseArgs, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
 import { parseFrPageTitle } from '../../../../srs/tree/fr-title'
+import { renderEpicPage } from '../../../../builders/srs/templates/pages/epic.tpl'
+import { renderFrPage } from '../../../../builders/srs/templates/pages/fr.tpl'
+import { asRead } from '../../../helpers/srs-pages'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../../srs'
 
 class StubAdapter implements SrsAdapter {
@@ -12,7 +15,8 @@ class StubAdapter implements SrsAdapter {
     private readonly children: PageRef[] = [],
     private readonly onInit: () => Promise<void> | void = () => undefined,
     private readonly onResolveParent: (input: string) => Promise<ResolvedParent> | ResolvedParent = (input) => ({ id: input, name: input, url: 'https://example.test/epic' }),
-    private readonly onListChildren: ((parentId: string) => Promise<PageRef[]> | PageRef[]) | null = null
+    private readonly onListChildren: ((parentId: string) => Promise<PageRef[]> | PageRef[]) | null = null,
+    private readonly onFetchPage: ((pageId: string) => Promise<RawContent> | RawContent) | null = null
   ) {}
 
   async init(): Promise<void> {
@@ -36,6 +40,7 @@ class StubAdapter implements SrsAdapter {
     void content
   }
   async fetchPage(pageId: string): Promise<RawContent> {
+    if (this.onFetchPage) return this.onFetchPage(pageId)
     return { pageId, title: '', url: '', blocks: [] }
   }
   async listChildren(parentPageId: string): Promise<PageRef[]> {
@@ -712,6 +717,109 @@ describe('runSpawn', () => {
       expect(io.createSubtask.mock.calls[0][1]).toBe('FR-LIVE-007: Topic-aware AI note taking')
       // The Epic it created goes on the board with its Story (#836)
       expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual([epicNumber, io.createSubtask.mock.results[0].value.childNumber])
+    })
+
+    // #837 — spawn read titles only: every Story said "No acceptance criteria yet." and the
+    // Epic kept its placeholders, although the pages held all of it
+    describe('ticket bodies', () => {
+      const pages: Record<string, RawContent> = {
+        feat: asRead(
+          renderEpicPage({
+            title: 'Réunion live',
+            parentPageId: 'root',
+            businessValue: 'A participant leaves with a usable record.',
+            urs: [{ id: 'UR-LIVE-1', narrative: 'follow a meeting without taking notes' }],
+            frs: [],
+            dsItems: [{ id: 'DS-LIVE-1', title: 'Topic segmentation' }]
+          }),
+          'feat'
+        ),
+        v2: asRead(
+          renderEpicPage({
+            title: 'v2 — Prise de notes vivante',
+            parentPageId: 'feat',
+            parentId: 'feat',
+            businessValue: 'Notes that read like minutes.',
+            scope: 'AI notes during the meeting.',
+            version: { changes: ['Notes are grouped by topic'] },
+            urs: [],
+            frs: []
+          }),
+          'v2'
+        ),
+        f2: asRead(
+          renderFrPage({
+            parentEpicPageId: 'v2',
+            fr: {
+              id: 'FR-LIVE-007',
+              title: 'Topic-aware AI note taking',
+              description: 'Notes are grouped by the topic being discussed.',
+              acceptanceCriteria: ['A topic change opens a new group', 'Each group | names its topic'],
+              urRefs: ['UR-LIVE-1'],
+              dsRefs: ['DS-LIVE-1'],
+              validationRules: ['A group has at least one note']
+            }
+          }),
+          'f2'
+        )
+      }
+
+      const registerWithPages = (fetch: (pageId: string) => RawContent = (pageId) => pages[pageId]): void => {
+        registerSrsBackend(
+          'stub',
+          () =>
+            new StubAdapter(
+              [],
+              undefined,
+              () => ({ id: 'feat', name: 'Réunion live', url: 'https://example.test/feat' }),
+              (parentId) => (parentId in tree ? tree[parentId] : feature),
+              fetch
+            )
+        )
+        writeManifest({ tools: { srs: { backend: 'stub' } } })
+      }
+
+      it('builds each Story from its FR page and the feature page', async () => {
+        registerWithPages()
+        const io = makeIO()
+
+        await expect(runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined }, io)).resolves.toBe(0)
+
+        const story = io.createSubtask.mock.calls[0][2] as string
+        expect(story).toContain('## Objective\n\nNotes are grouped by the topic being discussed.')
+        expect(story).toContain('- **UR-LIVE-1** — follow a meeting without taking notes')
+        expect(story).toContain('| AC-1 | A topic change opens a new group | FR-LIVE-007 |')
+        expect(story).toContain('| AC-2 | Each group \\| names its topic | FR-LIVE-007 |')
+        expect(story).toContain('- **DS-LIVE-1** — Topic segmentation')
+        expect(story).toContain('- A group has at least one note')
+        expect(story).not.toMatch(/No UR references yet|No acceptance criteria yet|No design references yet/)
+      })
+
+      it('gives the Epic the business value and scope of its version', async () => {
+        registerWithPages()
+        const io = makeIO()
+
+        await expect(runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined }, io)).resolves.toBe(0)
+
+        const epic = io.createEpic.mock.calls[0][1] as string
+        expect(epic).toContain('## Business Value\n\nNotes that read like minutes.')
+        expect(epic).toContain('### Included\n\n- AI notes during the meeting.\n- Notes are grouped by topic')
+        expect(epic).toContain('Every Story below is Done')
+        expect(epic).not.toContain('_Describe the business impact of this Epic._')
+      })
+
+      it('creates nothing when a page cannot be read', async () => {
+        registerWithPages((pageId) => {
+          if (pageId === 'f2') throw new Error('rate limited')
+          return pages[pageId]
+        })
+        const io = makeIO()
+
+        await expect(runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined }, io)).resolves.toBe(7)
+        expect(io.stderrBuffer.join('')).toContain('could not read the SRS pages')
+        expect(io.createEpic).not.toHaveBeenCalled()
+        expect(io.createSubtask).not.toHaveBeenCalled()
+      })
     })
 
     it('creates nothing at all on a dry run', async () => {

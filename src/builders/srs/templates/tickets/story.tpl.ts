@@ -7,7 +7,7 @@ function bulletList(items: string[] | undefined, placeholder: string): string {
 
 function urRefsList(refs: UrItem[] | undefined): string {
   if (!refs || refs.length === 0) return '_No UR references yet._'
-  return refs.map((ur) => `- **${ur.id}** — ${ur.narrative}`).join('\n')
+  return refs.map((ur) => `- **${ur.id}**${ur.narrative ? ` — ${ur.narrative}` : ''}`).join('\n')
 }
 
 function frRefsList(refs: StoryTicketBodySpec['frRefs'], currentFrId: string): string {
@@ -18,7 +18,8 @@ function frRefsList(refs: StoryTicketBodySpec['frRefs'], currentFrId: string): s
 function acceptanceCriteriaTable(criteria: AcceptanceCriterion[] | undefined): string {
   if (!criteria || criteria.length === 0) return '_No acceptance criteria yet._'
   const header = ['| AC | Criterion | Source FR |', '| --- | --- | --- |']
-  const rows = criteria.map((ac) => `| ${ac.id} | ${ac.text} | ${ac.sourceFr ?? '—'} |`)
+  // A `|` in a criterion would split the Markdown table cell
+  const rows = criteria.map((ac) => `| ${ac.id} | ${ac.text.replace(/\|/g, '\\|').replace(/\n/g, ' ')} | ${ac.sourceFr ?? '—'} |`)
   return [...header, ...rows].join('\n')
 }
 
