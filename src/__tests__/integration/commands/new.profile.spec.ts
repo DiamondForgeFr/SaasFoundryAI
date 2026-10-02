@@ -41,6 +41,7 @@ jest.mock('terminal-link', () => ({
 }))
 
 import { newCommand } from '../../../commands/new'
+import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import { renderTechnicalStack } from '../../../renderers/technical-stack.renderer'
 import { collectStatus } from '../../../status/collect'
 import { evaluatePreconditions } from '../../../status/preconditions'
@@ -98,7 +99,7 @@ describe('newCommand (--profile integration)', () => {
     expect(manifest.workflow).toBeUndefined()
     expect(manifest.tools).toBeUndefined()
     expect(manifest.modules.advancedSkills).toEqual([])
-    expect(manifest.modules.harness).toEqual({ version: 1, managed: false })
+    expect(manifest.modules.harness).toEqual({ version: harnessInstallerMeta.currentVersion, managed: false })
   })
 
   it('stack profile never asks workflow/skills/SRS questions', async () => {
@@ -123,7 +124,7 @@ describe('newCommand (--profile integration)', () => {
     // (scoped to the deposit dirs only — never the user's own code)
     const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
     expect(manifest).toMatchObject({ structure: 'cli', projectName: 'acme', mainBranch: 'main' })
-    expect(manifest.modules).toEqual({ harness: { version: 1, managed: true }, advancedSkills: [] })
+    expect(manifest.modules).toEqual({ harness: { version: harnessInstallerMeta.currentVersion, managed: true }, advancedSkills: [] })
     // computeFileHashes is mocked to {} in this spec — the field wiring is
     // asserted here, real hash content is covered by the installer unit spec.
     expect(manifest.fileHashes).toBeDefined()

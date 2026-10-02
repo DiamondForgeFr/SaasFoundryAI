@@ -65,6 +65,16 @@ export function hasLegacyMultirepoChildShape(manifest: SaaSFoundryManifest): boo
   )
 }
 
+/**
+ * Whether the project carries a generated technical stack, for deposits that
+ * only make sense with one. An inconsistent manifest counts as one: removing
+ * a stack's tooling on a guess is worse than keeping it on a harness.
+ */
+export function hasTechnicalStack(manifest: SaaSFoundryManifest): boolean {
+  const capabilities = classifyProjectCapabilities(manifest)
+  return capabilities.technicalStack !== 'absent' || capabilities.effectiveProfile === 'projection'
+}
+
 /** Derive current capabilities without persisting or guessing an installation profile. */
 export function classifyProjectCapabilities(manifest: SaaSFoundryManifest): ProjectCapabilities {
   const technicalStack = technicalStackCapability(manifest)

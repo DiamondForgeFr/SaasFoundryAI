@@ -11,15 +11,24 @@ export const coreSkillsInstallerMeta: ModuleInstaller = {
   migrations: []
 }
 
+/**
+ * Core skills that describe the generated NestJS/React/Prisma stack. On a
+ * codebase without that stack they trigger on generic requests ("add a
+ * module") and push conventions that do not apply (#831).
+ */
+export const STACK_SKILLS = ['sf-integration-rules']
+
 interface InstallCoreSkillsParams {
   targetPath: string
+  /** False on a project without a generated technical stack: the stack skills are left out. */
+  includeStackSkills?: boolean
 }
 
 /**
  * Install core skills from centralized template.
  *
- * Core skills are ALWAYS installed (not optional).
- * These are the 7 essential skills:
+ * Core skills are ALWAYS installed (not optional), except the STACK_SKILLS on
+ * a project without a generated technical stack. These are the 7 essential skills:
  * - sf-git-commit
  * - sf-git-create-pr
  * - sf-git-fix-pr-comments
@@ -34,7 +43,7 @@ interface InstallCoreSkillsParams {
  * This is a COPY operation - skills are copied to the target project
  * (unlike tool skills which may be installed dynamically)
  */
-export async function installCoreSkills({ targetPath }: InstallCoreSkillsParams) {
+export async function installCoreSkills({ targetPath, includeStackSkills = true }: InstallCoreSkillsParams) {
   const coreTemplatesPath = join(skillsTemplatesPath, 'core')
   const targetSkillsPath = join(targetPath, '.claude', 'skills')
 
@@ -45,7 +54,7 @@ export async function installCoreSkills({ targetPath }: InstallCoreSkillsParams)
   const coreSkills = ['sf-git-commit', 'sf-git-create-pr', 'sf-git-fix-pr-comments', 'sf-git-merge', 'sf-utils-fix-errors', 'sf-utils-fix-grammar', 'sf-integration-rules']
 
   // Copy each core skill
-  for (const skill of coreSkills) {
+  for (const skill of coreSkills.filter((name) => includeStackSkills || !STACK_SKILLS.includes(name))) {
     const skillTemplatePath = join(coreTemplatesPath, skill)
     const skillTargetPath = join(targetSkillsPath, skill)
     await copy(skillTemplatePath, skillTargetPath)

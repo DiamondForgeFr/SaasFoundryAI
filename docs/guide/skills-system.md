@@ -10,7 +10,7 @@ They do not replace the CLI. A skill gives the coding agent context and procedur
 SaaSFoundryAI reserves the `sf-` prefix for project-owned behavior:
 
 - `sf-workflow` — status routing, complexity and delivery guards;
-- `sf-integration-rules` — backend-to-frontend wiring grammar;
+- `sf-integration-rules` — backend-to-frontend wiring grammar of the generated stack, installed only with it (`stack` and `full` profiles);
 - `sf-git-commit` / `sf-git-create-pr` — repository-aware Git operations;
 - `sf-srs` — specification lifecycle;
 - `sf-tool-*` — adapters for boards, documentation, design and technical context.

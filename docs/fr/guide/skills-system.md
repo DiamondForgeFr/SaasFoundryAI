@@ -10,7 +10,7 @@ Ils ne remplacent pas le CLI. Un skill apporte à l’agent de développement le
 SaaSFoundryAI réserve le préfixe `sf-` aux comportements appartenant au projet :
 
 - `sf-workflow` — routage des statuts, complexité et garde-fous de livraison ;
-- `sf-integration-rules` — grammaire de raccordement du backend au frontend ;
+- `sf-integration-rules` — grammaire de raccordement du backend au frontend de la stack générée, installée seulement avec elle (profils `stack` et `full`) ;
 - `sf-git-commit` et `sf-git-create-pr` — opérations Git conscientes du dépôt ;
 - `sf-srs` — cycle de vie des spécifications ;
 - `sf-tool-*` — adaptateurs pour les boards, la documentation, le design et le contexte technique.

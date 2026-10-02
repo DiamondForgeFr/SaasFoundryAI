@@ -29,7 +29,7 @@ import { bootstrapSrs } from '../runners/srs.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { runManifestMigrations } from '../migrations/manifest/registry'
 import { runModuleMigrations } from '../migrations/module/registry'
-import { classifyProjectCapabilities } from '../project-capabilities'
+import { classifyProjectCapabilities, hasTechnicalStack } from '../project-capabilities'
 import { recoverTechnicalStackTransition, TECHNICAL_TRANSITION_JOURNAL, TECHNICAL_TRANSITION_LOCK, TECHNICAL_TRANSITION_RECOVERY_LOCK } from '../scaffold/technical-stack.transaction'
 import { acquireManifestMutationLock } from '../scaffold/technical-stack.transaction'
 import { createManifestFileSafe, readManifestFileSafe, replaceManifestFileSafe } from '../manifest-file'
@@ -905,7 +905,8 @@ async function depositHarnessInTempDir(
       version: cliVersion,
       mainBranch: manifest.mainBranch,
       workflow: overrides?.workflow ?? manifest.workflow,
-      advancedSkills: overrides?.advancedSkills ?? manifest.modules?.advancedSkills ?? []
+      advancedSkills: overrides?.advancedSkills ?? manifest.modules?.advancedSkills ?? [],
+      stackPresent: hasTechnicalStack(manifest)
     })
     if (manifest.tools?.srs?.enabled) {
       await installSrsSkill({ targetPath: tempDir })
@@ -1653,7 +1654,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             version: cliVersion,
             mainBranch: manifest.mainBranch,
             workflow: harnessConfig.workflow,
-            advancedSkills: harnessConfig.advancedSkills
+            advancedSkills: harnessConfig.advancedSkills,
+            stackPresent: hasTechnicalStack(manifest)
           })
           harnessTargetHashes = await computeHarnessFileHashes('.')
           manifest.fileHashes = { ...(manifest.fileHashes ?? {}), ...harnessTargetHashes }
