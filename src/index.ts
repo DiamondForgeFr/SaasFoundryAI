@@ -21,7 +21,10 @@ void maybeEmitStaleSkillWarning(process.argv, version)
 
 const program = new Command()
 
-program.name('sf').description('SaaSFoundryAI CLI - Create and manage your SaaS projects').version(describeCliVersion(version))
+// Program options are matched only before the subcommand: without this, `--version` anywhere on
+// the line was the program's, so `sf srs spawn --version <v>` printed the CLI version and
+// exited 0 without spawning (#834).
+program.name('sf').description('SaaSFoundryAI CLI - Create and manage your SaaS projects').version(describeCliVersion(version)).enablePositionalOptions()
 program
   .command('new')
   .description('Create a new SaaSFoundryAI project')
