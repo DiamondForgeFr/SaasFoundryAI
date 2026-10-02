@@ -109,6 +109,13 @@ describe('parseArgs', () => {
     expect(opts.bypassReason).toBe('spawned-from-srs')
   })
 
+  // #834 — the form every sf-srs example uses; `sf srs` used to swallow its `--version`
+  it('reads the version and milestone of a versioned spawn', () => {
+    const opts = parseArgs(['--epic', 'feature-url', '--version', 'v0 — Bootstrap', '--milestone', 'v0.1.0'])
+    expect(opts).toMatchObject({ epic: 'feature-url', version: 'v0 — Bootstrap', milestone: 'v0.1.0' })
+    expect(opts.ticket).toBeUndefined()
+  })
+
   it('accepts --dry-run and custom --manifest / --bypass-reason', () => {
     const opts = parseArgs(['--ticket', '1', '--epic', 'e', '--dry-run', '--manifest', '/tmp/m.json', '--bypass-reason', 'bootstrap', '--reconciliation-plan', '/tmp/reconcile.json'])
     expect(opts.dryRun).toBe(true)
