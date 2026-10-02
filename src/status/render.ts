@@ -44,7 +44,8 @@ export function renderHuman(payload: RenderPayload): string {
   if (report.git.available) {
     const dirty = report.git.isClean === false ? chalk.yellow(' (dirty)') : ''
     const tracking = report.git.upstream ? chalk.gray(` → ${report.git.upstream} [ahead ${report.git.ahead ?? '?'}, behind ${report.git.behind ?? '?'}]`) : ''
-    lines.push(`${chalk.gray('Git:')} ${report.git.branch ?? 'detached'}${dirty}${tracking}`)
+    const unborn = report.git.unborn ? chalk.gray(' (no commits yet)') : ''
+    lines.push(`${chalk.gray('Git:')} ${report.git.branch ?? 'detached'}${unborn}${dirty}${tracking}`)
   }
   if (report.installedSkills.length > 0) {
     lines.push(`${chalk.gray('Skills:')} ${report.installedSkills.join(', ')}`)
@@ -124,7 +125,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
     lines.push('- project: NOT a SaaSFoundryAI project (no .saasfoundry.json)')
   }
   if (report.git.available) {
-    const state = report.git.isClean === false ? 'dirty' : 'clean'
+    const state = [report.git.unborn ? 'no commits yet' : null, report.git.isClean === false ? 'dirty' : 'clean'].filter(Boolean).join(', ')
     lines.push(`- git: ${report.git.branch ?? 'detached'} (${state})`)
   }
   if (report.installedSkills.length > 0) {
