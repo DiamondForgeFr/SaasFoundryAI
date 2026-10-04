@@ -1,6 +1,6 @@
 ---
 name: sf-srs
-description: "SaaSFoundry srs procedures. Follow the project workflow and CLI guards."
+description: "SRS host of the project: draft and write SRS pages (features, versions, functional requirements), audit a codebase for an SRS, evaluate SRS freshness and spawn tickets from it, through the configured SRS backend. Triggers on \"create SRS\", \"draft SRS\", \"draft FR\", \"audit codebase for SRS\", \"SRS status\", \"evaluate SRS\", \"spawn tickets from SRS\", \"new epic\", a Notion SRS root URL, or an srs:drafting label event."
 ---
 
 ## Execution capabilities

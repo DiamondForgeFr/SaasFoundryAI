@@ -1,6 +1,6 @@
 ---
 name: sf-workflow
-description: "SaaSFoundry workflow procedures. Follow the project workflow and CLI guards."
+description: "Development workflow of this project (SaaSFoundry AI): ticket statuses and their guards, complexity labels (bug, low, medium, complex), branches and pull requests, driven through workflow-cli.sh. Read it before any ticket status change. Triggers on \"workflow status\", \"check workflow\", \"what should I do\", \"next step\", \"workflow help\", \"current status\", \"complexity\", \"detect complexity\"."
 ---
 
 ## Execution capabilities

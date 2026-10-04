@@ -1,3 +1,10 @@
+---
+name: sf-tool-linear
+description: >-
+  Linear adapter of the workflow: issues, subtasks, status transitions and cycles in the configured Linear team. Triggers on "linear issue", "create linear subtask", "update linear status", "linear
+  project", "linear cycle".
+---
+
 # Linear Tool
 
 Integration with Linear for issue management, status updates, and workflow automation.
