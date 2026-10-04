@@ -1691,7 +1691,7 @@ case "$COMMAND" in
     route_to_tool "$WORKFLOW_TOOL" "$COMMAND" "$@"
     ;;
 
-  create-subtask|create-epic|list|get-labels|inspect-srs-tickets|link-subtask|add-to-project)
+  create-ticket|create-subtask|create-epic|list|get-labels|inspect-srs-tickets|link-subtask|add-to-project)
     load_config
     route_to_tool "$WORKFLOW_TOOL" "$COMMAND" "$@"
     ;;
@@ -1920,6 +1920,8 @@ case "$COMMAND" in
     echo "    Dispatches to the sf-srs wrapper (srs-cli.sh) for write/draft/spawn."
     echo ""
     echo "Tool commands (delegated to tool-specific CLI):"
+    echo "  create-ticket <story|task|issue> <title> [--body-file <f>] [--complexity <c>] [--nature <n>] [--milestone <m>]"
+    echo "                               Create a top-level ticket on the board in Backlog, typed and labelled"
     echo "  create-subtask ...           Create a sub-issue/task"
     echo "  create-epic <title> [body]   Create a top-level Epic (no parent)"
     echo "  update-status ...            Update ticket status (SRS-label guarded)"
@@ -1937,7 +1939,7 @@ case "$COMMAND" in
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
     echo ""
-    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-subtask, add-to-project, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, ai-status, list, get-labels, inspect-srs-tickets, link-subtask, transition-drafting"
+    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-ticket, create-subtask, create-epic, add-to-project, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, ai-status, list, get-labels, inspect-srs-tickets, link-subtask, transition-drafting"
     echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;

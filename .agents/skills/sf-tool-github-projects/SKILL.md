@@ -1,6 +1,6 @@
 ---
 name: sf-tool-github-projects
-description: "GitHub Projects V2 adapter of the workflow: create subtasks and epics, put tickets on the board, move statuses, set complexity, issue types and milestones, open and track pull requests, through github-projects-cli.sh. Triggers on \"github project\", \"create subtask\", \"update ticket status\", \"github issue\", \"project board\", \"set complexity\"."
+description: "GitHub Projects V2 adapter of the workflow: create tickets, subtasks and epics, put tickets on the board, move statuses, set complexity, issue types and milestones, open and track pull requests, through github-projects-cli.sh. Triggers on \"github project\", \"create ticket\", \"create subtask\", \"update ticket status\", \"github issue\", \"project board\", \"set complexity\"."
 ---
 
 ## Execution capabilities
@@ -82,6 +82,8 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 
 | Command                                  | Purpose                                                                                           |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `create-ticket <story\|task\|issue> <title> [--body-file <f>] [--complexity <c>] [--nature <n>] [--milestone <m>]` | Create a top-level ticket on the board in Backlog, with its issue type and labels; `--bypass-srs <reason>` on SRS projects |
+| `create-epic <title> [body]` | Create a top-level Epic (no parent) |
 | `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue`                              |
 | `status <ticket>`                        | Read status from Projects V2 board                                                                |
 | `update-status <ticket> <status-name>`   | Write status on Projects V2 board (`gh project item-edit`)                                        |
