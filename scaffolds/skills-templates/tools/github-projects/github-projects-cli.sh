@@ -689,6 +689,162 @@ cmd_create_epic() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# Command: create-ticket — a top-level Story / Task / Issue, ready for the workflow
+#
+# create-subtask needs a parent and create-epic makes the grouper, so the first ticket
+# of a project, or any standalone one, had no guarded path: `gh issue create`, then the
+# board, the type and the labels by hand (#832). This verb leaves the ticket where every
+# later command expects it: on the board in Backlog, typed and labelled.
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_create_ticket() {
+  local usage="Usage: $0 create-ticket <story|task|issue> <title> [--body-file <file>] [--complexity <bug|low|medium|complex>] [--nature <user-facing|internal>] [--milestone <name>] [--bypass-srs <reason>]"
+  local -a POSITIONAL=()
+  local BODY_FILE="" COMPLEXITY="" NATURE="" MILESTONE="" BYPASS_SRS_REASON=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --body-file | --complexity | --nature | --milestone | --bypass-srs)
+        if [ -z "${2:-}" ] || [[ "${2}" == --* ]]; then
+          echo -e "${RED}Error: $1 requires a value${NC}" >&2
+          echo "$usage" >&2
+          exit 1
+        fi
+        case "$1" in
+          --body-file) BODY_FILE=$2 ;;
+          --complexity) COMPLEXITY=$2 ;;
+          --nature) NATURE=$2 ;;
+          --milestone) MILESTONE=$2 ;;
+          --bypass-srs) BYPASS_SRS_REASON=$2 ;;
+        esac
+        shift 2
+        ;;
+      --*)
+        echo -e "${RED}Error: unknown create-ticket option '$1'${NC}" >&2
+        echo "$usage" >&2
+        exit 1
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [ "${#POSITIONAL[@]}" -ne 2 ] || [ -z "${POSITIONAL[1]}" ]; then
+    echo "$usage" >&2
+    exit 1
+  fi
+  local TICKET_TYPE=${POSITIONAL[0]} TITLE=${POSITIONAL[1]}
+  # Everything is checked before the issue exists: a refused option must not leave a ticket behind
+  case "$TICKET_TYPE" in
+    story | task | issue) ;;
+    epic)
+      echo -e "${RED}Error: an Epic owns no PR and groups other tickets: use create-epic${NC}" >&2
+      exit 1
+      ;;
+    *)
+      echo -e "${RED}Error: the ticket type must be story, task or issue (got '${TICKET_TYPE}')${NC}" >&2
+      exit 1
+      ;;
+  esac
+  case "$COMPLEXITY" in
+    "" | bug | low | medium | complex) ;;
+    *)
+      echo -e "${RED}Error: --complexity must be one of: bug, low, medium, complex${NC}" >&2
+      exit 1
+      ;;
+  esac
+  case "$NATURE" in
+    "" | user-facing | internal) ;;
+    bundled-pr)
+      echo -e "${RED}Error: nature:bundled-pr belongs to the child of a delivery parent: use create-subtask${NC}" >&2
+      exit 1
+      ;;
+    *)
+      echo -e "${RED}Error: --nature must be user-facing or internal${NC}" >&2
+      exit 1
+      ;;
+  esac
+  if [ -n "$BODY_FILE" ] && [ ! -f "$BODY_FILE" ]; then
+    echo -e "${RED}Error: --body-file '${BODY_FILE}' does not exist${NC}" >&2
+    exit 1
+  fi
+
+  # Rule 8 — same contract as create-subtask and create-epic
+  if [ -f ".saasfoundry.json" ]; then
+    local srs_backend
+    srs_backend=$(jq -r '.tools.srs.backend // empty' .saasfoundry.json)
+    if [ -n "$srs_backend" ] && [ -z "$BYPASS_SRS_REASON" ]; then
+      echo -e "${RED}✗ Rule 8: this project has SRS enabled (tools.srs.backend=${srs_backend}).${NC}" >&2
+      echo "  Feature tickets are spawned from a drafted SRS version page via:" >&2
+      echo "    sf srs spawn --epic <feature-url> --version <version>" >&2
+      echo "" >&2
+      echo "  For a ticket that is genuinely off-spec (bootstrap, infra work, emergency fix, …):" >&2
+      echo "    $0 create-ticket ${TICKET_TYPE} \"${TITLE}\" --bypass-srs \"<reason>\"" >&2
+      exit 2
+    fi
+  fi
+
+  # The board configuration is read before creating anything, so a misconfigured
+  # projectUrl stops here instead of leaving an issue that no board command can reach
+  load_project_schema
+
+  echo -e "${YELLOW}Creating ${TICKET_TYPE}...${NC}"
+  if [ -n "$BYPASS_SRS_REASON" ]; then
+    printf '%b  (bypassing rule 8 — reason: %s)%b\n' "${BLUE}" "${BYPASS_SRS_REASON}" "${NC}"
+  fi
+
+  local ISSUE_URL TICKET_NUMBER CREATE_STATUS=0
+  if [ -n "$BODY_FILE" ]; then
+    ISSUE_URL=$(gh issue create --title "$TITLE" --body-file "$BODY_FILE") || CREATE_STATUS=$?
+  else
+    ISSUE_URL=$(gh issue create --title "$TITLE" --body "$(render_skeleton_body "$TICKET_TYPE" "$TITLE")") || CREATE_STATUS=$?
+  fi
+  if [ "$CREATE_STATUS" -ne 0 ] || [ -z "$ISSUE_URL" ]; then
+    echo -e "${RED}✗ Could not create the issue (gh exit ${CREATE_STATUS}). Nothing was created.${NC}" >&2
+    exit 1
+  fi
+  TICKET_NUMBER=$(echo "$ISSUE_URL" | grep -o '[0-9]*$')
+  if [ -z "$TICKET_NUMBER" ]; then
+    echo -e "${RED}✗ The issue was created but its number could not be read from: ${ISSUE_URL}${NC}" >&2
+    exit 1
+  fi
+  echo -e "${GREEN}✓ Ticket #${TICKET_NUMBER} created${NC}"
+  echo "Issue URL: $ISSUE_URL"
+
+  # Each step below is reported; the ticket exists whatever happens next, so a failed
+  # step names the command that finishes it rather than pretending nothing was done
+  local -a MISSING=()
+  "$0" add-to-project "$TICKET_NUMBER" || MISSING+=("$0 add-to-project ${TICKET_NUMBER}")
+
+  local declared_types
+  declared_types=$(jq -r '(.workflow.issueTypes // []) | length' .saasfoundry.json 2>/dev/null)
+  if [ "${declared_types:-0}" != "0" ]; then
+    "$0" assign-type "$TICKET_NUMBER" "sf-${TICKET_TYPE}" 2>/dev/null ||
+      echo -e "${YELLOW}  (issue type 'sf-${TICKET_TYPE}' not assigned — run 'ensure-issue-types' or assign manually)${NC}"
+  fi
+  if [ -n "$COMPLEXITY" ]; then
+    "$0" set-complexity "$TICKET_NUMBER" "$COMPLEXITY" || MISSING+=("$0 set-complexity ${TICKET_NUMBER} ${COMPLEXITY}")
+  fi
+  if [ -n "$NATURE" ]; then
+    if gh issue edit "$TICKET_NUMBER" --add-label "nature:${NATURE}" >/dev/null; then
+      echo -e "${GREEN}✓ Ticket #${TICKET_NUMBER} nature → ${NATURE}${NC}"
+    else
+      MISSING+=("gh issue edit ${TICKET_NUMBER} --add-label nature:${NATURE}")
+    fi
+  fi
+  if [ -n "$MILESTONE" ]; then
+    "$0" milestone assign "$TICKET_NUMBER" "$MILESTONE" || MISSING+=("$0 milestone assign ${TICKET_NUMBER} \"${MILESTONE}\"")
+  fi
+
+  if [ "${#MISSING[@]}" -gt 0 ]; then
+    echo -e "${RED}✗ Ticket #${TICKET_NUMBER} exists, but these steps failed — finish them with:${NC}" >&2
+    printf '    %s\n' "${MISSING[@]}" >&2
+    exit 1
+  fi
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Command: status — read status from Projects V2 board
 # Flags:
 #   --json   Emit machine-parseable JSON: {"ticket","title","state","status","labels"}
@@ -2141,6 +2297,7 @@ ${MILESTONE_ACK_MARKER} released with ${open} open — ${acknowledge}" >/dev/nul
 case "$COMMAND" in
   create-subtask)     cmd_create_subtask "$@" ;;
   create-epic)        cmd_create_epic "$@" ;;
+  create-ticket)      cmd_create_ticket "$@" ;;
   update-status)      cmd_update_status "$@" ;;
   add-to-project)     cmd_add_to_project "$@" ;;
   status)             cmd_status "$@" ;;
@@ -2168,9 +2325,11 @@ case "$COMMAND" in
     echo "Usage: $0 <command> [args...]"
     echo ""
     echo "Available commands:"
+    echo "  create-ticket <story|task|issue> <title> [--body-file <f>] [--complexity <c>] [--nature <n>] [--milestone <m>]"
+    echo "                                           Create a top-level ticket on the board in Backlog, typed and labelled"
     echo "  create-subtask <parent> <title> [body] [--type <epic|story|task|issue>]"
-    echo "  create-epic <title> [body]               Create a top-level Epic (no parent)"
     echo "                                           Create a sub-issue linked to parent (default type: story)"
+    echo "  create-epic <title> [body]               Create a top-level Epic (no parent)"
     echo "  status <ticket>                          Read status from the project board"
     echo "  update-status <ticket> <status-name>     Write status on the project board"
     echo "  add-to-project <ticket> [--status <s>]   Put an issue on the board (default Backlog; one already there keeps its status)"
@@ -2196,7 +2355,7 @@ case "$COMMAND" in
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-subtask, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type"
+    echo "Available: create-ticket, create-subtask, create-epic, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type, milestone"
     exit 1
     ;;
 esac

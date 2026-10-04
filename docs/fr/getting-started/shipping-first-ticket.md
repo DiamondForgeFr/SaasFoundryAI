@@ -36,11 +36,17 @@ transitions afin que l'humain et l'agent suivent les mêmes règles.
 
 ## Étape 1 — Backlog : créer le ticket
 
-Dans le tableau GitHub Project, créez un ticket :
+Créez le ticket avec le CLI du workflow. Il arrive sur le tableau en **Backlog**, avec son type et son étiquette de complexité :
 
-- **Titre** : `Add /api/version endpoint`
-- **Description** : `Expose the current package.json version at GET /api/version. Returns { version: string }. No auth required, public endpoint.`
-- **Colonne** : `Backlog`
+```bash
+WF=.claude/skills/sf-workflow/workflow-cli.sh
+$WF create-ticket story "Add /api/version endpoint" --body-file version.md --complexity low
+```
+
+`version.md` contient la description : `Expose the current package.json version at GET /api/version. Returns { version: string }. No auth required, public endpoint.` Sans `--body-file`, le ticket
+reçoit le squelette de son type. La commande affiche `✓ Ticket #42 created` ; les étapes suivantes utilisent 42 pour ce numéro.
+
+Sur un projet doté d'un SRS, les tickets de fonctionnalité viennent de `sf srs spawn`. Un ticket hors SRS en donne la raison avec `--bypass-srs "<raison>"`.
 
 ::: tip Laisser l'agent de code s'en charger
 
@@ -48,23 +54,17 @@ Si l'agent courant découvre la skill `sf-workflow`, demandez simplement :
 
 > « Create a backlog ticket: add a /api/version endpoint that returns the package.json version. Low complexity. »
 
-L'agent crée le ticket, applique la complexité et le place sur le tableau en appelant le même CLI que vous utiliseriez manuellement.
+L'agent exécute la même commande `create-ticket`.
 
 :::
 
-### Étiqueter la complexité
+### Complexité
 
-La complexité est portée par une **étiquette**, pas par le statut. Configuration unique par dépôt :
+La complexité est portée par une **étiquette**, pas par le statut. `--complexity` la pose à la création, et `$WF retag 42 <niveau>` la change ensuite. Le workflow refuse de sortir un ticket du Backlog
+sans elle. L'installation du harness crée les étiquettes ; sur un dépôt qui ne les a pas, créez-les une fois :
 
 ```bash
 gh label create "complexity: low"    --color 7CFC00 --description "🟢 Low complexity"
-```
-
-Puis appliquez-la au ticket :
-
-```bash
-CLI=.claude/skills/sf-tool-github-projects/github-projects-cli.sh
-$CLI set-complexity 42 low   # remplacez 42 par le numéro du ticket
 ```
 
 La complexité détermine le niveau de contrôle appliqué ensuite. Un ticket `low` reste léger, sans validation de plan et avec une analyse minimale. Un ticket `complex` déclenche une revue
@@ -81,7 +81,7 @@ Avant d'avancer, vérifiez que la spécification est claire. Pour un ticket `low
 Lorsque la spécification est prête :
 
 ```bash
-$CLI update-status 42 "Ready"
+$WF update-status 42 "Ready"
 ```
 
 Le ticket se trouve maintenant dans la file de l'équipe.
@@ -99,7 +99,7 @@ git checkout -b feature/42-version-endpoint
 Puis mettez à jour le tableau :
 
 ```bash
-$CLI update-status 42 "In progress"
+$WF update-status 42 "In progress"
 ```
 
 ### Décomposer si nécessaire
@@ -107,8 +107,8 @@ $CLI update-status 42 "In progress"
 La décomposition est souvent inutile pour un ticket `low`. Pour un ticket `medium` ou `complex`, le workflow exige de **vrais sous-tickets**, pas des éléments de checklist :
 
 ```bash
-$CLI create-subtask 42 "Backend endpoint"
-$CLI create-subtask 42 "Integration test"
+$WF create-subtask 42 "Backend endpoint"
+$WF create-subtask 42 "Integration test"
 ```
 
 Les sous-tickets sont reliés au moyen de la mutation GraphQL `addSubIssue`. Le workflow lit cette hiérarchie native via l'API GitHub : un parent ne peut atteindre `Done` tant que chaque enfant n'a pas
@@ -182,7 +182,7 @@ pendant AI testing avant Human testing.
 Lorsque le commit est présent sur le remote, confiez le ticket à la validation automatisée :
 
 ```bash
-$CLI update-status 42 "AI testing"
+$WF update-status 42 "AI testing"
 ```
 
 AI testing exécute le plan de test préparé par l'agent. Pour un endpoint de complexité `low`, il ressemble à ceci :
@@ -199,13 +199,13 @@ L'agent publie un plan avant l'exécution et un rapport après. Il exécute auss
 afin de figer le diff et les preuves pendant le test fonctionnel :
 
 ```bash
-$CLI create-pr 42 --draft
+$WF create-pr 42 --draft
 ```
 
 ## Étape 7 — AI testing → Human testing
 
 ```bash
-$CLI update-status 42 "Human testing"
+$WF update-status 42 "Human testing"
 ```
 
 **Human testing est le test de la fonctionnalité et sa validation fonctionnelle. Ce n'est pas la revue de code.** Démarrez les serveurs et vérifiez le comportement dans un navigateur ou avec curl. La
@@ -234,8 +234,8 @@ nouvelles preuves.
 La fonctionnalité a été validée. Rendez la PR existante prête et entrez en **revue de code** :
 
 ```bash
-$CLI ready-pr 42
-$CLI update-status 42 "In review"
+$WF ready-pr 42
+$WF update-status 42 "In review"
 ```
 
 La PR prête renvoie vers le ticket, contient les preuves de test et déclenche la CI complète. Les relecteurs examinent maintenant la qualité de l'implémentation. La CI doit être verte et les
@@ -246,7 +246,7 @@ approbations requises obtenues avant le merge.
 Lorsque la PR est approuvée et la CI verte, effectuez le merge dans l'interface GitHub. Finalisez ensuite :
 
 ```bash
-$CLI update-status 42 "Done"
+$WF update-status 42 "Done"
 git checkout develop
 git pull --rebase
 git branch -d feature/42-version-endpoint
