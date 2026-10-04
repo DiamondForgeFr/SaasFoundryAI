@@ -16,43 +16,38 @@ on:
 
 jobs:
   check-tests:
-    name: Check if tests passed
+    name: Wait for the tests of this commit
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-
-      - name: Install GitHub CLI
-        run: sudo apt-get install gh -y
-
-      - name: Check test status
+      # The Tests workflow starts on the same push: the deploy waits for its verdict on this
+      # commit instead of looking once and finding nothing (#889). A dispatch deploys on demand.
+      - name: Wait for Tests to succeed on this commit
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            # Check if tests have passed for this specific commit
-            gh run list --workflow=test.yml --branch={{MAIN_BRANCH}} --status=success --limit=1 --commit=${{ github.sha }}
-            if [ $? -ne 0 ]; then
-              echo "Tests have not passed for commit ${{ github.sha }}. Deployment blocked."
+          set -euo pipefail
+          for _ in $(seq 1 80); do
+            run=$(gh run list --workflow test.yml --event push --commit "$COMMIT_SHA" --limit 1 --json status,conclusion,url --jq '.[0] // empty')
+            if [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = "completed" ]; then
+              conclusion=$(jq -r .conclusion <<<"$run")
+              if [ "$conclusion" = "success" ]; then
+                echo "Tests passed on $COMMIT_SHA: $(jq -r .url <<<"$run")"
+                exit 0
+              fi
+              echo "Tests concluded '$conclusion' on $COMMIT_SHA ($(jq -r .url <<<"$run")): deployment blocked." >&2
               exit 1
             fi
-          fi
-
-      - name: Print last failed test run
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "Last 5 test runs:"
-          gh run list --workflow=test.yml --limit=5
-          echo "Detailed logs of the last failed run:"
-          LAST_FAILED_RUN=$(gh run list --workflow=test.yml --status=failure --limit=1 --json databaseId --jq '.[0].databaseId')
-          if [ ! -z "$LAST_FAILED_RUN" ]; then
-            gh run view $LAST_FAILED_RUN --log
-          fi
+            sleep 30
+          done
+          echo "No completed Tests run on $COMMIT_SHA within 40 minutes: deployment blocked." >&2
+          exit 1
 
   create-version-tag:
     name: Create version tag based on package.json
