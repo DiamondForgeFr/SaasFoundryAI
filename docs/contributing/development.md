@@ -186,13 +186,28 @@ Releases run from `master`. RC Git hooks validate state but never mutate commits
 2. Before the first push, run `npm version X.Y.Z --no-git-tag-version`, update the changelog, and commit both with the release ticket scope.
 3. Push the RC branch and open its PR to `master`. The branch version must match `X.Y.Z`, and the full Docker matrix must pass.
 4. Merge with a merge commit, update the local `master`, verify its exact commit and package contents, then create and push the annotated `vX.Y.Z` tag.
-5. Wait for the tag CI, then dispatch **Publish stable package** from and for the exact `vX.Y.Z` tag with `gh workflow run publish-stable.yml --ref vX.Y.Z -f tag=vX.Y.Z`. The protected
-   `npm-production` environment must hold the one-use or granular `NPM_TOKEN`; the workflow verifies the event ref, tag and package identity before running
-   `npm publish --provenance --access public --tag latest`.
+5. Pushing the tag starts **Publish stable package** (`.github/workflows/publish-stable.yml`):
+
+   - The workflow waits for the tag's own Tests run (the exhaustive lane) and stops unless it succeeds.
+   - It then requests the `npm-production` deployment. Approve it in the run page.
+   - It verifies the tag, the version, that the version is not on npm yet, the changelog section and the package boundary.
+   - It runs `npm publish --provenance --access public --tag latest`, then creates the GitHub Release from the `## [X.Y.Z]` section of `docs/changelog.md`.
+
+   A failed run can be retried with `gh workflow run publish-stable.yml --ref vX.Y.Z -f tag=vX.Y.Z`.
+
 6. Synchronize the release commit back to `develop` and verify a clean global install.
 
-The `npm-production` environment should require a maintainer review. The first publish needs the token to claim the package; after the package exists, configure npm trusted publishing and remove the
-stored token. Never dispatch the workflow from a branch or before the tag's exhaustive CI is green.
+npm authenticates the workflow through [trusted publishing](https://docs.npmjs.com/trusted-publishers): GitHub Actions OIDC, with provenance. No token is stored or renewed. One-time setup on
+npmjs.com, done once for the package:
+
+- Go to the package, then **Settings**, then **Trusted publishing**, and choose **GitHub Actions**. Enter:
+  - organization `DiamondForgeFr`;
+  - repository `SaasFoundryAI`;
+  - workflow `publish-stable.yml`;
+  - environment `npm-production`.
+- Under **Publishing access**, choose **Require two-factor authentication and disallow tokens**.
+
+The `npm-production` environment requires a maintainer review and deploys only from `v*` tags. Never push a stable tag before the RC pull request is merged into `master`.
 
 The v1 release also has divergent legacy `master` history. Its RC branch must first record that history with `git merge -s ours --no-ff origin/master`; see release ticket #488 for the verified
 commands. Do not use `-X ours`, which can retain non-conflicting stale files.
