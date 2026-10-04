@@ -1,3 +1,10 @@
+---
+name: sf-tool-jira
+description: >-
+  Jira adapter of the workflow: tickets, subtasks and status transitions on the configured Jira board. Triggers on "jira ticket", "create jira subtask", "update jira status", "jira issue", "jira
+  board".
+---
+
 # Jira Tool
 
 Integration with Jira for ticket management, status updates, and workflow automation.

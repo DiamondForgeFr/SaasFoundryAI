@@ -293,7 +293,7 @@ async function deposit(root: string, path: string, content: Buffer, mode: number
   report.fileHashes[path] = hash
 }
 
-function normalizeSkill(content: string, name: string, path: string, warnings: string[]): string | undefined {
+export function normalizeSkill(content: string, name: string, path: string, warnings: string[]): string | undefined {
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content)
   if (!match && content.startsWith('---')) {
     warnings.push(`${path}: malformed frontmatter; skill not installed.`)

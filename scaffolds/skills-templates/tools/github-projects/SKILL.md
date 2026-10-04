@@ -1,3 +1,10 @@
+---
+name: sf-tool-github-projects
+description: >-
+  GitHub Projects V2 adapter of the workflow: create subtasks and epics, put tickets on the board, move statuses, set complexity, issue types and milestones, open and track pull requests, through
+  github-projects-cli.sh. Triggers on "github project", "create subtask", "update ticket status", "github issue", "project board", "set complexity".
+---
+
 # GitHub Projects Tool
 
 Integration with GitHub Projects V2 for ticket management, status transitions, and complexity labeling.
