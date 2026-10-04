@@ -1,4 +1,4 @@
-import { renderEpicPage } from '../../../../builders/srs/templates/pages/epic.tpl'
+import { featureTableAdditions, renderEpicPage } from '../../../../builders/srs/templates/pages/epic.tpl'
 import { EpicSpec, PageBlock, TableBlock } from '../../../../builders/srs/types'
 
 function kinds(page: ReturnType<typeof renderEpicPage>): string[] {
@@ -310,5 +310,66 @@ describe('renderEpicPage — a feature whose FRs live in its versions', () => {
   it('writes each DS description and the FRs whose dsRefs point to it', () => {
     const dsTable = findTableAfterHeading(renderEpicPage(feature).blocks, 'Design Specifications (DS)')
     expect(dsTable.rows).toEqual([['DS-1', 'Mission diff', 'Edits are stored as a diff against the deployed mission.', 'FR-1']])
+  })
+})
+
+// #900 — the UR / DS / TC / NFR items a version or its FRs carry were rendered nowhere
+describe('feature page tables with the items its versions bring', () => {
+  const feature: EpicSpec = {
+    id: 'feat',
+    title: 'Réunion live',
+    parentPageId: 'root',
+    urs: [{ id: 'UR-1', narrative: 'Follow a meeting', priority: 'P1' }],
+    frs: [],
+    versionFrs: [{ id: 'FR-2', title: 'Topic grouping', urRefs: ['UR-2'], dsRefs: ['DS-1'], version: 'v1 — Topics' }],
+    versionItems: {
+      urs: [{ id: 'UR-2', narrative: 'See notes by topic', priority: 'P2', version: 'v1 — Topics' }],
+      dsItems: [{ id: 'DS-1', title: 'Topic store', description: 'One row per topic', version: 'v1 — Topics' }],
+      tcItems: [{ id: 'TC-1', title: 'Topics appear', steps: ['Start a meeting'], expectedResult: 'Topics listed', frRefs: ['FR-2'], version: 'v1 — Topics' }],
+      nfrItems: [{ id: 'NFR-1', title: 'Topic latency', target: '≤ 2 s', priority: 'P2', frRefs: ['FR-2'], version: 'v1 — Topics' }]
+    }
+  }
+
+  it("lists them with their version, after the feature's own items", () => {
+    const blocks = renderEpicPage(feature).blocks
+
+    expect(findTableAfterHeading(blocks, 'User Requirements (UR)')).toEqual({
+      kind: 'table',
+      header: ['ID', 'Requirement', 'Version', 'Priority', 'Related FR'],
+      rows: [
+        ['UR-1', 'Follow a meeting', '—', 'P1', '—'],
+        ['UR-2', 'See notes by topic', 'v1 — Topics', 'P2', 'FR-2']
+      ]
+    })
+    expect(findTableAfterHeading(blocks, 'Design Specifications (DS)').rows).toEqual([['DS-1', 'Topic store', 'v1 — Topics', 'One row per topic', 'FR-2']])
+    expect(findTableAfterHeading(blocks, 'Test Cases (TC)').header).toEqual(['ID', 'Title', 'Version', 'Steps', 'Expected Result', 'Related FR'])
+    expect(findTableAfterHeading(blocks, 'Non-Functional Requirements (NFR)').rows).toEqual([['NFR-1', 'Topic latency', 'v1 — Topics', '≤ 2 s', 'P2', 'FR-2']])
+  })
+
+  it('keeps the shape of a feature whose versions bring none', () => {
+    const blocks = renderEpicPage({ ...feature, versionItems: undefined }).blocks
+
+    expect(findTableAfterHeading(blocks, 'User Requirements (UR)').header).toEqual(['ID', 'Requirement', 'Priority', 'Related FR'])
+  })
+
+  it('gives an existing feature the same rows, in both shapes its tables may have', () => {
+    const additions = featureTableAdditions({ versionFrs: feature.versionFrs, versionItems: feature.versionItems })
+
+    expect(additions.map((addition) => addition.heading)).toEqual([
+      'User Requirements (UR)',
+      'Functional Requirements (FR)',
+      'Design Specifications (DS)',
+      'Test Cases (TC)',
+      'Non-Functional Requirements (NFR)'
+    ])
+    expect(additions[0]).toEqual({
+      kind: 'table-rows',
+      heading: 'User Requirements (UR)',
+      layouts: [
+        { header: ['ID', 'Requirement', 'Version', 'Priority', 'Related FR'], rows: [['UR-2', 'See notes by topic', 'v1 — Topics', 'P2', 'FR-2']] },
+        { header: ['ID', 'Requirement', 'Priority', 'Related FR'], rows: [['UR-2', 'See notes by topic', 'P2', 'FR-2']] }
+      ]
+    })
+    expect(featureTableAdditions({})).toEqual([])
   })
 })

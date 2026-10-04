@@ -60,6 +60,17 @@ export interface NfrItem {
   group?: string
 }
 
+/** An item with the title of the version that brought it. */
+export type Versioned<T> = T & { version: string }
+
+/** Requirements a feature's versions bring, for the feature page's tables (#900). */
+export interface VersionItems {
+  urs: Versioned<UrItem>[]
+  dsItems: Versioned<DsItem>[]
+  tcItems: Versioned<TcItem>[]
+  nfrItems: Versioned<NfrItem>[]
+}
+
 export interface EpicSpec {
   title: string
   parentPageId: string
@@ -90,6 +101,12 @@ export interface EpicSpec {
    * and its FR table stayed empty (#850).
    */
   versionFrs?: VersionFrItem[]
+  /**
+   * The UR / DS / TC / NFR items its versions and their FRs carry, each with the title of its
+   * version. Derived by `write-srs`, never authored: the feature page is the register of its
+   * requirements, and these items were rendered nowhere (#900).
+   */
+  versionItems?: VersionItems
   businessValue?: string
   scope?: string
   urs: UrItem[]
