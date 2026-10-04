@@ -178,6 +178,18 @@ The workflow skill automatically routes commands to the appropriate tool based o
 .claude/skills/sf-workflow/workflow-cli.sh create-subtask <parent> <title>
 ```
 
+**Example:** Creating a top-level ticket, and starting an empty repository
+
+```bash
+# On the board in Backlog, with its issue type and complexity
+.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low
+# Empty repository only: root commit on the main branch, working branch created, ticket closed
+.claude/skills/sf-workflow/workflow-cli.sh bootstrap <ticket>
+```
+
+`bootstrap` exists because a repository without a commit has no branch to start from and no pull request to merge. The Done guard accepts only the ticket that the repository's single root commit
+names; never reach for a bypass variable to close a first ticket.
+
 See your tool-specific skill documentation for complete command reference:
 
 - GitHub Projects: `.claude/skills/sf-tool-github-projects/SKILL.md`

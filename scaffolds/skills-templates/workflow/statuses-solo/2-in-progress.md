@@ -39,6 +39,7 @@ These stay in the `In progress` board column but flow through a **separate lifec
 
 - [ ] **Branch** — from `jq -r '.workflow.workingBranch' .saasfoundry.json`, pattern `jq -r '.workflow.branchNaming.feature'`
   - `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`
+  - **Empty repository** (no commit yet): there is no `workingBranch` to branch from. Run `workflow-cli.sh bootstrap <ticket>` instead: it commits the setup on the main branch, creates `workingBranch` and closes this first ticket
 - [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
 - [ ] **Per normal child:** branch → code → PR → verify merge → close the child; per bundled child: one atomic commit on the parent's branch → validate → close the child
 - [ ] **Parent implementation done:** `npm run build && npm run lint` → tests → push. Child tickets may continue through their own lifecycle.

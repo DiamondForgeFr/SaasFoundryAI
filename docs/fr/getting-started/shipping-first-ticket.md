@@ -34,6 +34,14 @@ transitions afin que l'humain et l'agent suivent les mêmes règles.
 
 :::
 
+::: tip Partir d'un dépôt vide
+
+Sans aucun commit, il n'existe pas de branche de travail d'où partir. Faites de l'installation elle-même le premier ticket :
+`.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low`, puis `.claude/skills/sf-workflow/workflow-cli.sh bootstrap <N>`. La commande commite
+l'installation sur la branche principale, crée la branche de travail et ferme ce ticket. Ce guide s'applique ensuite à partir du deuxième ticket.
+
+:::
+
 ## Étape 1 — Backlog : créer le ticket
 
 Créez le ticket avec le CLI du workflow. Il arrive sur le tableau en **Backlog**, avec son type et son étiquette de complexité :

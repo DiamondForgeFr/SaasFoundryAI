@@ -114,6 +114,27 @@ $WORKFLOW update-status 42 Done
 
 Solo peut créer directement une pull request prête après `AI testing`, car sa phase `In review` constitue déjà la barrière humaine.
 
+## Le premier ticket
+
+Créez les tickets avec le CLI : ils arrivent sur le tableau en Backlog, avec leur type et leur étiquette de complexité :
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low
+```
+
+Un dépôt sans aucun commit n'a ni branche de travail d'où partir, ni pull request à fusionner. Pour ce premier ticket seulement, `bootstrap` fait quatre choses :
+
+- il commite l'installation comme commit racine de la branche principale ;
+- il crée et pousse la branche de travail ;
+- il consigne la raison sur le ticket ;
+- il ferme le ticket.
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh bootstrap 1
+```
+
+Le garde-fou de Done accepte ce ticket parce que l'unique commit racine du dépôt le nomme. Tous les tickets suivants exigent une pull request fusionnée, sans aucune variable de contournement.
+
 ## Commandes de statut et de configuration
 
 ```bash

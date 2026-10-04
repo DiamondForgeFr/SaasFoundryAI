@@ -112,6 +112,27 @@ $WORKFLOW update-status 42 Done
 
 Solo can create a ready PR directly after AI testing because its In review phase is already the human gate.
 
+## The first ticket
+
+Create tickets through the CLI, so they land on the board in Backlog with their issue type and complexity label:
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low
+```
+
+A repository with no commit yet has no working branch to branch from and no pull request to merge. For that first ticket only, `bootstrap` does four things:
+
+- commits the setup as the root commit of the main branch;
+- creates and pushes the working branch;
+- records why on the ticket;
+- closes the ticket.
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh bootstrap 1
+```
+
+The Done guard accepts that ticket because the repository's single root commit names it. Every later ticket needs a merged pull request, and no bypass variable is involved.
+
 ## Status and configuration commands
 
 ```bash

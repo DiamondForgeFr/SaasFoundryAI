@@ -38,6 +38,14 @@ route; do not assume that saving a template creates those protections.
 
 :::
 
+::: tip Starting from an empty repository
+
+With no commit yet, there is no working branch to branch from. Make the setup itself the first ticket:
+`.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low`, then `.claude/skills/sf-workflow/workflow-cli.sh bootstrap <N>`. It commits the setup on
+the main branch, creates the working branch and closes that ticket. This guide then applies from the second ticket on.
+
+:::
+
 ## Step 1 — Backlog: create the ticket
 
 Create the ticket through the workflow CLI. It lands on your board in **Backlog**, with its issue type and its complexity label:
