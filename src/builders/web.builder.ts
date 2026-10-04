@@ -116,6 +116,11 @@ export async function renderWebApp({
       [/^FRONTEND_PORT=.*$/m, `FRONTEND_PORT="${webPort}"`]
     ])
   }
+  // The product name end users read, and a neutral logo built from it — never the generator's (#886)
+  await substitutePlaceholdersInFiles(
+    [`${webPath}/.env`, `${webPath}/.env.test`, `${webPath}/src/lib/app.ts`, `${webPath}/README.md`, ...['logo-long', 'logo-short', 'icon'].map((logo) => `${webPath}/public/img/${logo}.svg`)],
+    { PROJECT_NAME: projectName, PROJECT_INITIAL: projectName.charAt(0).toUpperCase(), LOGO_FONT_SIZE: String(logoFontSize(projectName)) }
+  )
   await replaceInFile(`${webPath}/vite.config.ts`, [[/5173/g, String(webPort)]])
   await replaceInFile(`${webPath}/playwright.config.ts`, [[/localhost:5173/g, `localhost:${webPort}`]])
   // The host AND the port. nginx proxies to the API container by name, and that name was
@@ -207,4 +212,9 @@ export async function provisionWebApp({ targetDir = '.', isMonorepo, projectName
   runBestEffortArgv('git add (web)', 'git', ['add', '.'], { cwd: webPath, onSkipped: warn })
   runBestEffortArgv('git commit (web)', 'git', ['commit', '-m', 'Initial commit'], { cwd: webPath, onSkipped: warn })
   if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch (web)', 'git', ['checkout', '-b', workingBranch], { cwd: webPath, onSkipped: warn })
+}
+
+/** The long logo leaves 363 px for the name after its mark: shrink the type to fit a long name. */
+export function logoFontSize(projectName: string): number {
+  return Math.max(20, Math.min(48, Math.floor(363 / (projectName.length * 0.62))))
 }

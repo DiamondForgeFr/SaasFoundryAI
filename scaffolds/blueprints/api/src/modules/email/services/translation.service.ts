@@ -5,6 +5,11 @@ import { Injectable } from '@nestjs/common'
 import { Locale } from '@/generated/prisma/client'
 
 /**
+ * Dependencies
+ */
+import { EnvConfig } from '@configs/env/services/env.service'
+
+/**
  * Locales
  */
 import { en } from '@modules/email/locales/en'
@@ -59,7 +64,13 @@ export class TranslationService {
     [Locale.EN]: en
   }
 
+  constructor(private readonly envConfig: EnvConfig) {}
+
+  /** A template in `locale`, its `{appName}` replaced by the product name of `APP_NAME`. */
   getTranslation<K extends TranslationKey>(locale: Locale, key: K): Translations[K] {
-    return this.translations[locale]?.[key] ?? this.translations[Locale.EN][key]
+    const template = this.translations[locale]?.[key] ?? this.translations[Locale.EN][key]
+    if (!template) return template
+    const appName = this.envConfig.get('APP_NAME')
+    return Object.fromEntries(Object.entries(template).map(([field, text]) => [field, typeof text === 'string' ? text.replaceAll('{appName}', appName) : text])) as Translations[K]
   }
 }
