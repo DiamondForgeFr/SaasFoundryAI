@@ -115,17 +115,9 @@ export async function installEmailModule({ apiPath, isMonorepo, projectName, mai
     await writeFile(envTestPath, envTestContent)
   }
 
-  // The API's deployment workflow writes the server's .env: give it the MailerSend values.
-  const deploymentYmlPath = `${apiPath}/.github/workflows/deployment.yml`
-  if (await fileExists(deploymentYmlPath)) {
-    let deploymentYmlContent = await readFile(deploymentYmlPath, 'utf8')
-    deploymentYmlContent = deploymentYmlContent
-      .replace(/# (MAILERSEND_API_KEY: .*)$/m, '$1')
-      .replace(/# (env_line MAILERSEND_API_KEY .*)$/m, '$1')
-      .replace(/# env_line MAILERSEND_SENDER_EMAIL .*$/m, `env_line MAILERSEND_SENDER_EMAIL ${shellQuote(mailersendSenderEmail)}`)
-      .replace(/# env_line MAILERSEND_SENDER_NAME .*$/m, `env_line MAILERSEND_SENDER_NAME ${shellQuote(mailersendSenderName)}`)
-    await writeFile(deploymentYmlPath, deploymentYmlContent)
-  }
+  // The deployment workflow writes the server's .env: give it the MailerSend values. In a
+  // monorepo `sf new` lays the root workflow down later and replays this deposit (#888).
+  await depositEmailDeployConfig({ apiPath, mailersendSenderEmail, mailersendSenderName })
 
   // Mono-only: deposit `EmailOptions` into @<proj>/shared-types and rewire the
   // MailerSend service to consume it. Gated on the workspace's presence: in
@@ -142,6 +134,41 @@ export async function installEmailModule({ apiPath, isMonorepo, projectName, mai
 interface DepositEmailSharedTypesParams {
   apiPath: string
   projectName: string
+}
+
+interface DepositEmailDeployConfigParams {
+  apiPath: string
+  /** Read from the API's `.env` when omitted: the replay in `createMonorepoRoot` has no answers. */
+  mailersendSenderEmail?: string
+  mailersendSenderName?: string
+}
+
+/**
+ * Give the API's deployment workflow its MailerSend configuration: the API key secret and the
+ * sender lines of the server `.env` it writes (#861 format). A multirepo keeps that workflow in
+ * the API repository; a monorepo keeps it at the root (`deployment-api.yml`), which `sf new` lays
+ * down after the email installer ran — so `createMonorepoRoot` replays this deposit, as it does
+ * `depositEmailSharedTypes` (#888). Gated on the installed mailer and idempotent.
+ */
+export async function depositEmailDeployConfig({ apiPath, mailersendSenderEmail, mailersendSenderName }: DepositEmailDeployConfigParams): Promise<void> {
+  if (!existsSync(`${apiPath}/src/modules/email/services/mailersend.service.ts`)) return
+
+  const env = existsSync(`${apiPath}/.env`) ? await readFile(`${apiPath}/.env`, 'utf8') : ''
+  const fromEnv = (key: string): string => new RegExp(`^${key}="?([^"\\n]*)"?$`, 'm').exec(env)?.[1] ?? ''
+  const senderEmail = mailersendSenderEmail ?? fromEnv('MAILERSEND_SENDER_EMAIL')
+  const senderName = mailersendSenderName ?? fromEnv('MAILERSEND_SENDER_NAME')
+
+  const workflows = [`${apiPath}/.github/workflows/deployment.yml`, `${resolve(apiPath, '..', '..')}/.github/workflows/deployment-api.yml`]
+  for (const workflowPath of workflows) {
+    if (!existsSync(workflowPath)) continue
+    const content = await readFile(workflowPath, 'utf8')
+    const configured = content
+      .replace(/# (MAILERSEND_API_KEY: .*)$/m, '$1')
+      .replace(/# (env_line MAILERSEND_API_KEY .*)$/m, '$1')
+      .replace(/# env_line MAILERSEND_SENDER_EMAIL .*$/m, `env_line MAILERSEND_SENDER_EMAIL ${shellQuote(senderEmail)}`)
+      .replace(/# env_line MAILERSEND_SENDER_NAME .*$/m, `env_line MAILERSEND_SENDER_NAME ${shellQuote(senderName)}`)
+    if (configured !== content) await writeFile(workflowPath, configured)
+  }
 }
 
 /**

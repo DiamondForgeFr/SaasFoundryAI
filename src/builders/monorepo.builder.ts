@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'fs/promises'
 import { join, resolve } from 'path'
 
-import { depositEmailSharedTypes } from '../installers/email.installer'
+import { depositEmailDeployConfig, depositEmailSharedTypes } from '../installers/email.installer'
 import { depositStorageSharedConfig } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
 import { DEFAULT_PORTS } from '../ports'
@@ -127,6 +127,7 @@ export async function renderMonorepoRoot({
   // `sf new`, `sf update`, and the docker harness uniformly.
   await depositStorageSharedConfig({ apiPath: at('apps/api'), projectName })
   await depositEmailSharedTypes({ apiPath: at('apps/api'), projectName })
+  await depositEmailDeployConfig({ apiPath: at('apps/api') })
 
   // Install workflow artefacts (skill + tool skill) when a workflow is configured
   await installWorkflowArtifacts({ targetPath: targetDir, workflow })
