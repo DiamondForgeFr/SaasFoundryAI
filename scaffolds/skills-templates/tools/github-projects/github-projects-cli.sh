@@ -845,6 +845,22 @@ cmd_create_ticket() {
 }
 
 # ───────────────────────────────────────────────────────────────────────────
+# Command: comment — record a note on a ticket (body read from a file, or stdin with -)
+# ───────────────────────────────────────────────────────────────────────────
+
+cmd_comment() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 comment <ticket-number> <body-file|->" >&2
+    exit 1
+  fi
+  gh issue comment "$1" --body-file "$2" >/dev/null || {
+    echo -e "${RED}Error: could not comment on #$1${NC}" >&2
+    exit 1
+  }
+  echo -e "${GREEN}✓ Comment recorded on #$1${NC}"
+}
+
+# ───────────────────────────────────────────────────────────────────────────
 # Command: status — read status from Projects V2 board
 # Flags:
 #   --json   Emit machine-parseable JSON: {"ticket","title","state","status","labels"}
@@ -2298,6 +2314,7 @@ case "$COMMAND" in
   create-subtask)     cmd_create_subtask "$@" ;;
   create-epic)        cmd_create_epic "$@" ;;
   create-ticket)      cmd_create_ticket "$@" ;;
+  comment)            cmd_comment "$@" ;;
   update-status)      cmd_update_status "$@" ;;
   add-to-project)     cmd_add_to_project "$@" ;;
   status)             cmd_status "$@" ;;
@@ -2330,6 +2347,7 @@ case "$COMMAND" in
     echo "  create-subtask <parent> <title> [body] [--type <epic|story|task|issue>]"
     echo "                                           Create a sub-issue linked to parent (default type: story)"
     echo "  create-epic <title> [body]               Create a top-level Epic (no parent)"
+    echo "  comment <ticket> <body-file|->           Record a note on the ticket"
     echo "  status <ticket>                          Read status from the project board"
     echo "  update-status <ticket> <status-name>     Write status on the project board"
     echo "  add-to-project <ticket> [--status <s>]   Put an issue on the board (default Backlog; one already there keeps its status)"
@@ -2355,7 +2373,7 @@ case "$COMMAND" in
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-ticket, create-subtask, create-epic, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type, milestone"
+    echo "Available: create-ticket, create-subtask, create-epic, comment, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type, milestone"
     exit 1
     ;;
 esac

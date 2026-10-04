@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
+import { BOOTSTRAP_COMMAND } from '../installers/harness-provisioning'
 import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
 
@@ -95,7 +96,10 @@ function checkGit(report: StatusReport): Precondition {
       description: 'Git branch has a first commit',
       status: 'warn',
       details: `Branch ${report.git.branch} has no commits yet`,
-      remediation: 'Make the first commit before running workflow transitions: the working branch is created from it.'
+      remediation:
+        report.manifest?.workflow?.tool && report.manifest.workflow.tool !== 'none'
+          ? `Create the first ticket, then run \`${BOOTSTRAP_COMMAND}\`: it makes the first commit on the main branch, creates the working branch and closes the ticket.`
+          : 'Make the first commit before running workflow transitions: the working branch is created from it.'
     }
   }
   if (report.git.isClean === false) {

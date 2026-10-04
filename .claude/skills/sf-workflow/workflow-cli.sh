@@ -722,6 +722,32 @@ get_merged_pr_for_ticket() {
   get_pr_for_ticket "$1" merged
 }
 
+# The message `bootstrap` commits with. The PR-merged guard recognises the first ticket of
+# an empty repository by it, on the repository's single root commit (#833).
+bootstrap_commit_message() {
+  echo "chore(#$1): bootstrap the repository"
+}
+
+# The single root commit of the main branch (origin's when it exists), or nothing.
+repository_root_commit() {
+  local main_branch ref roots
+  main_branch=$(jq -r '.mainBranch // "main"' .saasfoundry.json 2>/dev/null)
+  ref="origin/${main_branch}"
+  git rev-parse --verify -q "$ref" >/dev/null 2>&1 || ref="$main_branch"
+  roots=$(git rev-list --max-parents=0 "$ref" 2>/dev/null) || return 1
+  [[ -n "$roots" && "$(printf '%s\n' "$roots" | wc -l | tr -d ' ')" == "1" ]] || return 1
+  echo "$roots"
+}
+
+# The ticket the repository's root commit was bootstrapped for. No branch or PR can exist
+# before a first commit, so that one ticket closes on the commit itself; it cannot be
+# claimed afterwards without rewriting the history of the main branch.
+is_bootstrap_ticket() {
+  local root
+  root=$(repository_root_commit) || return 1
+  [[ "$(git log -1 --format=%s "$root" 2>/dev/null)" == "$(bootstrap_commit_message "$1")" ]]
+}
+
 check_pr_merged_guard() {
   # Returns 0 if the caller may proceed, 1 if blocked (message printed).
   local ticket=$1
@@ -750,6 +776,8 @@ check_pr_merged_guard() {
   # Parent completion is guarded separately by check_incomplete_children_guard.
   # An aggregate Epic has no delivery branch or PR of its own.
   [[ "$issue_type" == "sf-epic" ]] && return 0
+
+  is_bootstrap_ticket "$ticket" && return 0
 
   local pr_number
   pr_number=$(get_open_pr_for_ticket "$ticket") || {
@@ -1526,6 +1554,85 @@ case "$COMMAND" in
     ;;
 
   # Tool delegation commands - route to appropriate tool CLI
+  bootstrap)
+    # #833 — the first ticket of an empty repository has no base branch to branch from
+    # nor to open a pull request against. This commits the setup as the root commit of the
+    # main branch, creates the working branch from it, records why on the ticket and
+    # closes it: the PR-merged guard accepts that one ticket (is_bootstrap_ticket), and
+    # every later ticket keeps every guard. Re-running after a failed push resumes.
+    load_config
+    TICKET=${1:-}
+    if [[ ! "$TICKET" =~ ^[0-9]+$ ]] || [[ $# -ne 1 ]]; then
+      echo "Usage: workflow-cli.sh bootstrap <ticket>" >&2
+      exit 1
+    fi
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo -e "${RED}✗ Not a git repository — run 'git init' first.${NC}" >&2
+      exit 2
+    fi
+    MAIN_BRANCH=$(jq -r '.mainBranch // "main"' .saasfoundry.json)
+    MESSAGE=$(bootstrap_commit_message "$TICKET")
+    if ! git remote | grep -qx origin; then
+      echo -e "${RED}✗ No 'origin' remote: the main and working branches must reach GitHub for the workflow to work.${NC}" >&2
+      echo "  Add it, then re-run: git remote add origin <url>" >&2
+      exit 2
+    fi
+
+    if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+      ROOT=$(git rev-list --max-parents=0 HEAD 2>/dev/null)
+      if [[ "$(printf '%s\n' "$ROOT" | wc -l | tr -d ' ')" != "1" || "$(git log -1 --format=%s "$ROOT")" != "$MESSAGE" ]]; then
+        echo -e "${RED}✗ This repository already has commits: bootstrap only starts an empty repository.${NC}" >&2
+        echo "  Ticket #${TICKET} follows the normal workflow: branch from ${WORKING_BRANCH} and open a pull request." >&2
+        exit 2
+      fi
+      echo -e "${BLUE}Resuming the bootstrap of #${TICKET} (root commit $(git rev-parse --short "$ROOT")).${NC}"
+    else
+      CURRENT=$(git symbolic-ref --short -q HEAD)
+      if [[ "$CURRENT" != "$MAIN_BRANCH" ]]; then
+        echo -e "${RED}✗ The repository is on '${CURRENT}', the manifest's main branch is '${MAIN_BRANCH}'.${NC}" >&2
+        echo "  Switch the empty repository to it, then re-run: git symbolic-ref HEAD refs/heads/${MAIN_BRANCH}" >&2
+        exit 2
+      fi
+      # Guarded like any start of work: the ticket needs its complexity label
+      "$0" update-status "$TICKET" "In progress" || exit $?
+      git add -A
+      if git diff --cached --quiet; then
+        echo -e "${RED}✗ Nothing to commit: install the harness (or add the project files) first.${NC}" >&2
+        exit 2
+      fi
+      echo -e "${YELLOW}Committing $(git diff --cached --name-only | wc -l | tr -d ' ') file(s) on ${MAIN_BRANCH}:${NC}"
+      git diff --cached --name-only | sed 's/^/  /'
+      if ! git commit -q -m "$MESSAGE"; then
+        echo -e "${RED}✗ The commit failed (see git's message above); nothing was pushed. Fix it, then re-run: workflow-cli.sh bootstrap ${TICKET}${NC}" >&2
+        exit 1
+      fi
+    fi
+
+    if ! git push -u origin "$MAIN_BRANCH"; then
+      echo -e "${RED}✗ Could not push ${MAIN_BRANCH}. Fix access, then re-run: workflow-cli.sh bootstrap ${TICKET}${NC}" >&2
+      exit 1
+    fi
+    if [[ "$WORKING_BRANCH" != "$MAIN_BRANCH" ]]; then
+      if ! git rev-parse --verify -q "refs/heads/${WORKING_BRANCH}" >/dev/null 2>&1 && ! git branch "$WORKING_BRANCH" "$MAIN_BRANCH"; then
+        echo -e "${RED}✗ Could not create ${WORKING_BRANCH} from ${MAIN_BRANCH}.${NC}" >&2
+        exit 1
+      fi
+      if ! git push -u origin "$WORKING_BRANCH"; then
+        echo -e "${RED}✗ Could not push ${WORKING_BRANCH}. Fix access, then re-run: workflow-cli.sh bootstrap ${TICKET}${NC}" >&2
+        exit 1
+      fi
+      echo -e "${GREEN}✓ Working branch ${WORKING_BRANCH} created from ${MAIN_BRANCH}${NC}"
+    fi
+
+    ROOT=$(git rev-list --max-parents=0 HEAD)
+    printf '%s\n' \
+      "Bootstrapped with \`workflow-cli.sh bootstrap ${TICKET}\`: root commit ${ROOT} on \`${MAIN_BRANCH}\`, working branch \`${WORKING_BRANCH}\` created from it." \
+      "" \
+      "No branch or pull request can exist before a repository's first commit, so this ticket closes on that commit. The PR-merged guard accepts it because the repository's single root commit names it; every later ticket needs a merged pull request." |
+      route_to_tool "$WORKFLOW_TOOL" comment "$TICKET" -
+    "$0" update-status "$TICKET" "Done" || exit $?
+    ;;
+
   update-status)
     load_config
     TICKET=$1
@@ -1920,6 +2027,8 @@ case "$COMMAND" in
     echo "    Dispatches to the sf-srs wrapper (srs-cli.sh) for write/draft/spawn."
     echo ""
     echo "Tool commands (delegated to tool-specific CLI):"
+    echo "  bootstrap <ticket>           Empty repository only: commit the setup on the main branch, create the"
+    echo "                               working branch, and close the ticket on that root commit"
     echo "  create-ticket <story|task|issue> <title> [--body-file <f>] [--complexity <c>] [--nature <n>] [--milestone <m>]"
     echo "                               Create a top-level ticket on the board in Backlog, typed and labelled"
     echo "  create-subtask ...           Create a sub-issue/task"
@@ -1939,7 +2048,7 @@ case "$COMMAND" in
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
     echo ""
-    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, create-ticket, create-subtask, create-epic, add-to-project, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, ai-status, list, get-labels, inspect-srs-tickets, link-subtask, transition-drafting"
+    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, bootstrap, create-ticket, create-subtask, create-epic, add-to-project, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, ai-status, list, get-labels, inspect-srs-tickets, link-subtask, transition-drafting"
     echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;

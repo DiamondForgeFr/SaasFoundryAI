@@ -86,7 +86,8 @@ describe('harness-provisioning', () => {
       expect(result).toEqual({ action: 'skipped', reason: 'no-commits', branch: 'develop', base: 'main' })
       expect(describeBranchProvision(result)).toEqual({
         ok: false,
-        message: 'Working branch "develop" not created: "main" has no commits yet. After the first commit, run `git branch develop && git push -u origin develop`'
+        message:
+          'Working branch "develop" not created: "main" has no commits yet. Create the first ticket, then run `.claude/skills/sf-workflow/workflow-cli.sh bootstrap <ticket>`: it commits the setup on main, creates "develop" and closes the ticket'
       })
     })
 

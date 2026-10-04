@@ -120,6 +120,22 @@ describe('evaluatePreconditions', () => {
     expect(preconditions.find((p) => p.name === 'git')?.status).toBe('ok')
   })
 
+  // #833 — an empty repository with a workflow starts through the bootstrap command
+  it('points an unborn branch of a workflow project at the bootstrap command', () => {
+    const report = makeReport({
+      git: { available: true, branch: 'main', unborn: true, isClean: false },
+      manifest: {
+        version: '1.0.0',
+        generatedAt: '2026-10-04T00:00:00Z',
+        structure: 'cli',
+        projectName: 'acme',
+        workflow: { tool: 'github-projects', projectUrl: 'https://github.com/users/acme/projects/1' }
+      }
+    })
+
+    expect(evaluatePreconditions(report).find((p) => p.name === 'git')?.remediation).toContain('.claude/skills/sf-workflow/workflow-cli.sh bootstrap <ticket>')
+  })
+
   // #821 — a non-interactive setup left `tool: github-projects` without a board and status said ok
   it('warns when the workflow tool has no board attached, with the command that attaches one', () => {
     const report = makeReport({
