@@ -15,16 +15,6 @@ function asWorkflowTool(tracker?: string): WorkflowConfig['tool'] | undefined {
 }
 
 /**
- * Workflow configuration batch, moved verbatim from
- * `src/prompts/project.prompts.ts`.
- *
- * `promptWorkflowConfiguration` is a wrapped legacy flow: it prompts on its
- * own AND triggers external side effects (GitHub Project auto-creation via
- * `gh api graphql`). The tracker is now chosen once in the tools-first step
- * (FR-CONFIG-ENGINE-04) and threaded here as `preselectedTool`, so the
- * "which tool" question is no longer re-asked.
- */
-/**
  * The board of a non-interactive setup (#821). An explicit `--create-board`
  * that fails stops the setup before anything is written: the user asked for a
  * board, and a workflow silently left without one is the defect being fixed.
@@ -41,6 +31,16 @@ async function resolveBoard(tool: WorkflowConfig['tool'], board: ConfigState['wo
   return created
 }
 
+/**
+ * Workflow configuration batch, moved verbatim from
+ * `src/prompts/project.prompts.ts`.
+ *
+ * `promptWorkflowConfiguration` is a wrapped legacy flow: it prompts on its
+ * own AND triggers external side effects (GitHub Project auto-creation via
+ * `gh api graphql`). The tracker is now chosen once in the tools-first step
+ * (FR-CONFIG-ENGINE-04) and threaded here as `preselectedTool`, so the
+ * "which tool" question is no longer re-asked.
+ */
 export const workflowStep: StepDefinition = {
   id: 'workflow',
   title: 'AI workflow',
