@@ -11,7 +11,6 @@ import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, mono
 import { apiDocsIdentity, applyApiDocsIdentity } from '../utils/api-docs-identity'
 import { copyOverlay } from '../utils/overlay-copy'
 import { applyPackageIdentity } from '../utils/package-identity'
-import { layoutStringProperties } from '../utils/source-layout'
 import { assertGitBranchName, runBestEffortArgv, runRequired, warn } from '../run'
 import { impactValidationPlaceholders, installImpactValidation } from './impact-validation'
 
@@ -88,7 +87,10 @@ export async function renderApiApp({
   }
 
   // The ports this project was given, not the template's constants.
-  envContent = envContent.replace(/^PORT=.*$/m, `PORT="${apiPort}"`).replace(/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`)
+  envContent = envContent
+    .replace(/^PORT=.*$/m, `PORT="${apiPort}"`)
+    .replace(/^FRONTEND_URL=.*$/m, `FRONTEND_URL="http://localhost:${webPort}"`)
+    .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
 
   // Update JWT secrets in .env
   envContent = envContent
@@ -101,23 +103,8 @@ export async function renderApiApp({
   // The API documents itself as the project, not as SaaSFoundryAI and its author (#884)
   await applyApiDocsIdentity(apiPath, apiDocsIdentity(projectName, projectDescription))
 
-  // Update email templates with project name
-  const enLocalePath = `${apiPath}/src/modules/email/locales/en.ts`
-  const frLocalePath = `${apiPath}/src/modules/email/locales/fr.ts`
-
-  if (await fileExists(enLocalePath)) {
-    let enLocaleContent = await readFile(enLocalePath, 'utf8')
-    // The name's length moves these sentences across the print width: lay them out as prettier would (#867)
-    enLocaleContent = layoutStringProperties(enLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase()))
-    await writeFile(enLocalePath, enLocaleContent)
-  }
-
-  if (await fileExists(frLocalePath)) {
-    let frLocaleContent = await readFile(frLocalePath, 'utf8')
-    // The name's length moves these sentences across the print width: lay them out as prettier would (#867)
-    frLocaleContent = layoutStringProperties(frLocaleContent.replace(/SaaSFoundryAI/g, projectName.toUpperCase()))
-    await writeFile(frLocalePath, frLocaleContent)
-  }
+  // The product name end users read is APP_NAME, read at runtime; the project name is its default (#886)
+  await substitutePlaceholdersInFiles([`${apiPath}/.env.test`, `${apiPath}/src/configs/env/services/env.service.ts`, `${apiPath}/README.md`], { PROJECT_NAME: projectName })
 
   // Update database credentials if provided
   if (dbCredentials) {

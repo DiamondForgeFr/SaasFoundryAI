@@ -23,6 +23,8 @@ export const envSchema = z
     // Server Configuration
     PORT: z.string().default('3500').transform(Number),
     FRONTEND_URL: z.string().url(),
+    // The product name end users read, in emails. The deployed server's .env may leave it out
+    APP_NAME: z.string().min(1).default('{{PROJECT_NAME}}'),
 
     // Database Configuration
     DATABASE_URL: z.string().url(),
