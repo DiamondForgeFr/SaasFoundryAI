@@ -36,8 +36,9 @@ Le **format du commit** suit `.saasfoundry.json → workflow.commitFormat.patter
 <type>(#<ticket>): <description>
 ```
 
-Types : `feat`, `fix`, `update`, `docs`, `chore`, `refactor`, `test`, `perf`, `revert`. Le hook de pre-commit — Prettier, ESLint, tsc et Jest — s'exécute avant le push. En cas d'échec, le commit est
-bloqué. La skill respecte cette décision et n'utilise jamais `--no-verify`.
+Types : ceux de `workflow.commitFormat.types` dans le manifeste, par défaut `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`. Quand `requireTicket` vaut
+`true`, le numéro de ticket vient de la branche (`feature/<N>-…`) ; à défaut, le skill s'arrête au lieu de l'inventer. Sans workflow configuré, il revient aux commits conventionnels. Le hook de
+pre-commit — Prettier, ESLint, tsc et Jest — s'exécute avant le push. En cas d'échec, le commit est bloqué. La skill respecte cette décision et n'utilise jamais `--no-verify`.
 
 **Quand la contourner** : si vous souhaitez rédiger vous-même le message, faites simplement le commit à la main. `sf-git-commit` ne s'y oppose pas.
 
