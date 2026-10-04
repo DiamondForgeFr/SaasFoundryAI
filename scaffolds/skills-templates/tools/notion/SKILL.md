@@ -1,3 +1,10 @@
+---
+name: sf-tool-notion
+description: >-
+  Notion REST integration: pages, databases, comments and users of the workspace, used for SRS pages, note ingestion and workspace automation. Triggers on "notion", notion.so or notion.site links,
+  "@notion", "notion page", "notion database", "notion workspace", "notion comments", "notes database", "srs page", "functional requirement page".
+---
+
 # Notion Tool
 
 Direct REST-API integration with Notion for pages, databases, comments, and users. Drives SRS specifications, note ingestion, and general Notion workspace automation.

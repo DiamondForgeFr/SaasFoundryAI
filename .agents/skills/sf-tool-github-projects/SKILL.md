@@ -1,6 +1,6 @@
 ---
 name: sf-tool-github-projects
-description: "SaaSFoundry tool github projects procedures. Follow the project workflow and CLI guards."
+description: "GitHub Projects V2 adapter of the workflow: create subtasks and epics, put tickets on the board, move statuses, set complexity, issue types and milestones, open and track pull requests, through github-projects-cli.sh. Triggers on \"github project\", \"create subtask\", \"update ticket status\", \"github issue\", \"project board\", \"set complexity\"."
 ---
 
 ## Execution capabilities
