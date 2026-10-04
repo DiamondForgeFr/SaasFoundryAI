@@ -4,9 +4,9 @@ import { Client, isFullPage } from '@notionhq/client'
 
 import { renderEpicPage } from '../../builders/srs/templates/pages/epic.tpl'
 import { renderFrPage } from '../../builders/srs/templates/pages/fr.tpl'
-import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../builders/srs/types'
+import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SectionAddition, SectionAdditionOutcome, SrsAdapter } from '../../builders/srs/types'
 import { loadEnvFile } from '../../utils/env-file'
-import { renderPageContentToNotionBlocks } from './page-content.renderer'
+import { renderPageContentToNotionBlocks, renderTableRows } from './page-content.renderer'
 
 export interface NotionSrsAdapterOptions {
   apiToken: string
@@ -124,6 +124,67 @@ export class NotionSrsAdapter implements SrsAdapter {
 
   async move(pageId: string, newParentPageId: string): Promise<void> {
     await this.client.pages.move({ page_id: pageId, parent: { type: 'page_id', page_id: newParentPageId } })
+  }
+
+  async extendSections(pageId: string, additions: SectionAddition[]): Promise<SectionAdditionOutcome[]> {
+    const outcomes: SectionAdditionOutcome[] = []
+    // Read again for each addition: the previous one moved the blocks it is placed among
+    for (const addition of additions) outcomes.push(await this.extendSection(pageId, addition))
+    return outcomes
+  }
+
+  private async extendSection(pageId: string, addition: SectionAddition): Promise<SectionAdditionOutcome> {
+    const blocks = await this.listAllChildren(pageId)
+    const start = blocks.findIndex((block) => sameHeading(headingText(block), addition.heading))
+    const end = start === -1 ? -1 : nextHeadingIndex(blocks, start)
+    const section = start === -1 ? [] : blocks.slice(start + 1, end)
+
+    if (addition.kind === 'list-items') {
+      if (start === -1) {
+        const before = addition.createBefore ? blocks.findIndex((block) => sameHeading(headingText(block), addition.createBefore!)) : -1
+        if (before <= 0) return 'unplaced'
+        const children = renderPageContentToNotionBlocks({
+          blocks: [
+            { kind: 'heading', level: 2, text: addition.heading },
+            ...(addition.intro ? [{ kind: 'paragraph' as const, text: addition.intro }] : []),
+            { kind: 'bulleted_list', items: addition.items }
+          ]
+        })
+        await this.appendAfter(pageId, blockId(blocks[before - 1]), children)
+        return 'extended'
+      }
+      const listed = section.filter(isBulletBlock).map((block) => extractRichText(block.bulleted_list_item.rich_text).trim())
+      const missing = addition.items.filter((item) => !listed.includes(item.trim()))
+      if (missing.length === 0) return 'unchanged'
+      const lastBullet = [...section].reverse().find(isBulletBlock)
+      const anchor = lastBullet ?? section.at(-1) ?? blocks[start]
+      await this.appendAfter(pageId, blockId(anchor), renderPageContentToNotionBlocks({ blocks: [{ kind: 'bulleted_list', items: missing }] }))
+      return 'extended'
+    }
+
+    if (start === -1) return 'unplaced'
+    const table = section.find(isTableBlock)
+    if (!table) {
+      // A section written empty holds only its "No … yet." line: the table takes its place
+      const placeholder = section.length === 1 && isPlaceholder(section[0]) ? section[0] : undefined
+      const [first] = addition.layouts
+      if (!first) return 'unplaced'
+      const anchor = placeholder ?? section.at(-1) ?? blocks[start]
+      await this.appendAfter(pageId, blockId(anchor), renderPageContentToNotionBlocks({ blocks: [{ kind: 'table', header: first.header, rows: first.rows }] }))
+      if (placeholder) await this.client.blocks.delete({ block_id: blockId(placeholder) })
+      return 'extended'
+    }
+    const layout = addition.layouts.find((candidate) => candidate.header.length === table.table.table_width)
+    if (!layout) return 'unplaced'
+    const known = new Set((await this.listAllChildren(table.id)).filter(isTableRowBlock).map((row) => extractRichText(row.table_row.cells[0] ?? []).trim()))
+    const rows = layout.rows.filter((row) => !known.has((row[0] ?? '').trim()))
+    if (rows.length === 0) return 'unchanged'
+    await this.client.blocks.children.append({ block_id: table.id, children: renderTableRows(rows) })
+    return 'extended'
+  }
+
+  private async appendAfter(pageId: string, afterBlockId: string, children: AnyBlockRequest[]): Promise<void> {
+    await this.client.blocks.children.append({ block_id: pageId, children, position: { type: 'after_block', after_block: { id: afterBlockId } } })
   }
 
   private async createPageWithChildren(parent: { page_id: string }, titleContent: string, children: AnyBlockRequest[]): Promise<PageRef> {
@@ -246,6 +307,42 @@ function isTableRowBlock(block: BlockResult): block is BlockResult & { type: 'ta
 
 function isChildPageBlock(block: BlockResult): block is BlockResult & { type: 'child_page'; child_page: { title: string } } {
   return 'type' in block && block.type === 'child_page'
+}
+
+function headingText(block: BlockResult): string | undefined {
+  if (!('type' in block)) return undefined
+  if (block.type === 'heading_1') return extractRichText(block.heading_1.rich_text)
+  if (block.type === 'heading_2') return extractRichText(block.heading_2.rich_text)
+  if (block.type === 'heading_3') return extractRichText(block.heading_3.rich_text)
+  return undefined
+}
+
+function sameHeading(text: string | undefined, heading: string): boolean {
+  return text !== undefined && text.trim().toLowerCase() === heading.trim().toLowerCase()
+}
+
+function nextHeadingIndex(blocks: BlockResult[], start: number): number {
+  const next = blocks.findIndex((block, index) => index > start && headingText(block) !== undefined)
+  return next === -1 ? blocks.length : next
+}
+
+function blockId(block: BlockResult): string {
+  return block.id
+}
+
+type BulletBlock = Extract<BlockResult, { type: 'bulleted_list_item' }>
+type TableBlock = Extract<BlockResult, { type: 'table' }>
+
+function isBulletBlock(block: BlockResult): block is BulletBlock {
+  return 'type' in block && block.type === 'bulleted_list_item'
+}
+
+function isTableBlock(block: BlockResult): block is TableBlock {
+  return 'type' in block && block.type === 'table'
+}
+
+function isPlaceholder(block: BlockResult): boolean {
+  return 'type' in block && block.type === 'paragraph' && /^No .+ yet\.$/.test(extractRichText(block.paragraph.rich_text).trim())
 }
 
 function mapBlockToRaw(block: BlockResult): RawBlock {

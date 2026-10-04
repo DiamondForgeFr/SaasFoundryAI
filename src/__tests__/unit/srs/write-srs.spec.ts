@@ -2,9 +2,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { DraftCandidate, EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../builders/srs/types'
+import { DraftCandidate, EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SectionAddition, SectionAdditionOutcome, SrsAdapter } from '../../../builders/srs/types'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../srs'
-import { collectFrsByFeature, collectVersionsByFeature, runWriteSrs } from '../../../srs/bin/write-srs'
+import { checkSpec, collectFrsByFeature, collectVersionsByFeature, runWriteSrs } from '../../../srs/bin/write-srs'
 
 class StubAdapter implements SrsAdapter {
   createdEpics: EpicSpec[] = []
@@ -447,5 +447,142 @@ describe('write-srs — feature → version → FR in one spec', () => {
       unregisterSrsBackend('write-stub')
       rmSync(tmpDir, { recursive: true, force: true })
     }
+  })
+})
+
+// #899 — a version could hang only under a feature declared in the same batch, so the second
+// version of every feature needed a node script and a hand-edited Versions list
+describe('write-srs — a version under a feature written in an earlier batch', () => {
+  const FEATURE_URL = 'https://www.notion.so/Reunion-live-1234567890abcdef1234567890abcdef'
+  const FEATURE_ID = '12345678-90ab-cdef-1234-567890abcdef'
+
+  class ExistingFeatureAdapter extends StubAdapter {
+    extensions: Array<{ pageId: string; additions: SectionAddition[] }> = []
+    updates: Array<{ pageId: string; content: PageContent }> = []
+    extendSections?: (pageId: string, additions: SectionAddition[]) => Promise<SectionAdditionOutcome[]>
+    constructor(options: { outcome?: SectionAdditionOutcome; rootChildren?: string[]; canExtend?: boolean } = {}) {
+      super()
+      this.rootChildren = options.rootChildren ?? [FEATURE_ID]
+      if (options.canExtend !== false) {
+        this.extendSections = async (pageId, additions) => {
+          this.extensions.push({ pageId, additions })
+          return additions.map(() => options.outcome ?? 'extended')
+        }
+      }
+    }
+    private readonly rootChildren: string[]
+    async resolveParent(input: string): Promise<ResolvedParent> {
+      return { id: FEATURE_ID, name: 'Réunion live', url: input }
+    }
+    async listChildren(): Promise<PageRef[]> {
+      return this.rootChildren.map((id) => ({ id: id.replace(/-/g, ''), url: '', title: 'Feature' }))
+    }
+    async updatePage(pageId: string, content: PageContent): Promise<void> {
+      this.updates.push({ pageId, content })
+    }
+  }
+
+  const version = (id: string, parentId: string, title: string): DraftCandidate => ({
+    kind: 'epic',
+    confidence: 'high',
+    epic: { id, parentId, title, parentPageId: 'ignored', urs: [], frs: [], version: { changes: ['topic-aware notes'] } },
+    source: { kind: 'notion-pages' }
+  })
+  const fr = (parentEpicId: string, id: string): DraftCandidate => ({ kind: 'fr', confidence: 'high', fr: { parentEpicId, fr: { id, title: 'Something' } }, source: { kind: 'notion-pages' } })
+
+  let tmpDir: string
+  let stderr: string[]
+  let stdout: string[]
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'sf-srs-write-existing-'))
+    stderr = []
+    stdout = []
+    jest.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      stderr.push(String(chunk))
+      return true
+    })
+    jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout.push(String(chunk))
+      return true
+    })
+  })
+  afterEach(() => {
+    unregisterSrsBackend('write-stub')
+    rmSync(tmpDir, { recursive: true, force: true })
+    jest.restoreAllMocks()
+  })
+
+  const run = async (adapter: SrsAdapter, candidates: DraftCandidate[], rootPage: { id?: string } | null = { id: 'root-id' }) => {
+    registerSrsBackend('write-stub', () => adapter)
+    const manifestPath = join(tmpDir, '.saasfoundry.json')
+    writeFileSync(manifestPath, JSON.stringify({ tools: { srs: { backend: 'write-stub', ...(rootPage ? { rootPage } : {}) } } }))
+    const specPath = join(tmpDir, 'spec.json')
+    writeFileSync(specPath, JSON.stringify(candidates))
+    return runWriteSrs({ specPath, manifestPath, clearPendingIngestion: false })
+  }
+
+  it('passes the offline check with a page reference, and still refuses an unknown logical id', () => {
+    expect(checkSpec([version('v1', FEATURE_URL, 'v1 — Topics'), fr('v1', 'FR-1')]).errors).toEqual([])
+    expect(checkSpec([version('v1', FEATURE_ID, 'v1 — Topics')]).errors).toEqual([])
+    const typo = checkSpec([version('v1', 'feat', 'v1 — Topics')]).errors
+    expect(typo).toHaveLength(1)
+    expect(typo[0]).toContain("set parentId to that feature page's URL or id")
+  })
+
+  it('writes the version and its FRs under the existing feature, and lists the version there in place', async () => {
+    const adapter = new ExistingFeatureAdapter()
+
+    await expect(run(adapter, [version('v1', FEATURE_URL, 'v1 — Topics'), fr('v1', 'FR-1')])).resolves.toBe(0)
+
+    expect(adapter.createdEpics[0].parentPageId).toBe(FEATURE_ID)
+    expect(adapter.createdFrs[0].parentEpicPageId).toBe('epic-1')
+    expect(adapter.extensions).toEqual([
+      { pageId: FEATURE_ID, additions: [{ kind: 'list-items', heading: 'Versions', items: ['v1 — Topics'], createBefore: 'Traceability', intro: expect.stringContaining('Each version below') }] }
+    ])
+    expect(adapter.updates).toEqual([])
+  })
+
+  it('refuses a page that is not a feature of this SRS, before writing anything', async () => {
+    const adapter = new ExistingFeatureAdapter({ rootChildren: ['another-feature'] })
+
+    await expect(run(adapter, [version('v1', FEATURE_URL, 'v1 — Topics')])).resolves.toBe(2)
+
+    expect(adapter.createdEpics).toEqual([])
+    expect(stderr.join('')).toContain('is the page "Réunion live", which is not a feature of this SRS')
+  })
+
+  it('refuses without the SRS root page in the manifest, which the check needs', async () => {
+    const adapter = new ExistingFeatureAdapter()
+
+    await expect(run(adapter, [version('v1', FEATURE_URL, 'v1 — Topics')], null)).resolves.toBe(2)
+
+    expect(adapter.createdEpics).toEqual([])
+    expect(stderr.join('')).toContain('tools.srs.rootPage.id')
+  })
+
+  it('appends the Versions section to the end of a page that has nowhere to put it', async () => {
+    const adapter = new ExistingFeatureAdapter({ outcome: 'unplaced' })
+
+    await expect(run(adapter, [version('v1', FEATURE_URL, 'v1 — Topics')])).resolves.toBe(0)
+
+    expect(adapter.updates).toEqual([
+      {
+        pageId: FEATURE_ID,
+        content: {
+          blocks: [
+            { kind: 'heading', level: 2, text: 'Versions' },
+            { kind: 'bulleted_list', items: ['v1 — Topics'] }
+          ]
+        }
+      }
+    ])
+  })
+
+  it('reports what a backend that cannot edit pages leaves to add by hand', async () => {
+    const adapter = new ExistingFeatureAdapter({ canExtend: false })
+
+    await expect(run(adapter, [version('v1', FEATURE_URL, 'v1 — Topics')])).resolves.toBe(0)
+
+    expect(JSON.parse(stdout.join('')).notPlaced).toEqual(['v1 — Topics: add to "Versions" by hand — this SRS backend cannot edit an existing page.'])
   })
 })

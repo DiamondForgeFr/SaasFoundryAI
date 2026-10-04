@@ -2,6 +2,22 @@ import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, Tc
 
 const EMPTY_CELL = '—'
 
+/**
+ * The section headings of a feature page. `write-srs` adds to these sections on a feature
+ * written in an earlier batch (#899, #900), and the spawn parser reads them back: one source.
+ */
+export const FEATURE_HEADINGS = {
+  versions: 'Versions',
+  traceability: 'Traceability',
+  urs: 'User Requirements (UR)',
+  frs: 'Functional Requirements (FR)',
+  ds: 'Design Specifications (DS)',
+  tc: 'Test Cases (TC)',
+  nfr: 'Non-Functional Requirements (NFR)'
+} as const
+
+export const VERSIONS_INTRO = 'Each version below holds the FRs that belong to it. Doing the same thing again later means adding a version, not renaming this page.'
+
 function refsCell(refs?: string[]): string {
   return refs && refs.length > 0 ? refs.join(', ') : EMPTY_CELL
 }
@@ -114,7 +130,7 @@ function renderVersionPage(spec: EpicSpec): PageContent {
     blocks.push({ kind: 'bulleted_list', items: changes })
   }
 
-  blocks.push({ kind: 'heading', level: 2, text: 'Functional Requirements (FR)' })
+  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.frs })
   if (spec.frs.length === 0) {
     blocks.push({ kind: 'paragraph', text: 'No functional requirements yet.' })
   } else {
@@ -138,19 +154,19 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   const allFrs: FrItem[] = [...spec.frs, ...versionFrs]
 
   if (spec.versions && spec.versions.length > 0) {
-    blocks.push({ kind: 'heading', level: 2, text: 'Versions' })
-    blocks.push({ kind: 'paragraph', text: 'Each version below holds the FRs that belong to it. Doing the same thing again later means adding a version, not renaming this page.' })
+    blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.versions })
+    blocks.push({ kind: 'paragraph', text: VERSIONS_INTRO })
     blocks.push({ kind: 'bulleted_list', items: spec.versions })
   }
 
-  blocks.push({ kind: 'heading', level: 2, text: 'Traceability' })
+  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.traceability })
   blocks.push({ kind: 'code', language: 'plain text', text: TRACEABILITY_TREE })
   blocks.push({ kind: 'paragraph', text: TRACEABILITY_NOTE })
 
   blocks.push({ kind: 'heading', level: 2, text: 'Requirement Types' })
   blocks.push({ kind: 'table', header: ['Prefix', 'Type', 'Description', 'Example'], rows: REQUIREMENT_TYPES_ROWS })
 
-  blocks.push({ kind: 'heading', level: 2, text: 'User Requirements (UR)' })
+  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.urs })
   if (spec.urs.length === 0) {
     blocks.push({ kind: 'paragraph', text: 'No user requirements yet.' })
   } else {
@@ -165,7 +181,7 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
     })
   }
 
-  blocks.push({ kind: 'heading', level: 2, text: 'Functional Requirements (FR)' })
+  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.frs })
   if (allFrs.length === 0) {
     blocks.push({ kind: 'paragraph', text: 'No functional requirements yet.' })
   } else if (versionFrs.length > 0) {
@@ -183,7 +199,7 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   }
 
   const dsItems = spec.dsItems ?? []
-  blocks.push({ kind: 'heading', level: 2, text: 'Design Specifications (DS)' })
+  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.ds })
   if (dsItems.length === 0) {
     blocks.push({ kind: 'paragraph', text: 'No design specifications yet.' })
   } else {
@@ -199,7 +215,7 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   }
 
   const tcItems = spec.tcItems ?? []
-  blocks.push({ kind: 'heading', level: 2, text: 'Test Cases (TC)' })
+  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.tc })
   if (tcItems.length === 0) {
     blocks.push({ kind: 'paragraph', text: 'No test cases yet.' })
   } else {
@@ -211,7 +227,7 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   }
 
   const nfrItems = spec.nfrItems ?? []
-  blocks.push({ kind: 'heading', level: 2, text: 'Non-Functional Requirements (NFR)' })
+  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.nfr })
   if (nfrItems.length === 0) {
     blocks.push({ kind: 'paragraph', text: 'No non-functional requirements yet.' })
   } else {

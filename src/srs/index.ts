@@ -32,7 +32,9 @@ export type {
   FrPageLink,
   AcceptanceCriterion,
   DsRef,
-  ResolvedParent
+  ResolvedParent,
+  SectionAddition,
+  SectionAdditionOutcome
 } from '../builders/srs/types'
 export type {
   ScannerFinding,
