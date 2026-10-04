@@ -100,6 +100,15 @@ Run `sf srs help` to see the full action list.
 
 Order matters: a page can only reference a logical id declared before it in the batch. See `templates/examples/example-three-levels.spec.json`.
 
+**A version of a feature written earlier.** Set `epic.parentId` to that feature page's URL or id instead of a logical id. This is the normal path for every version after the first. `write-srs` then:
+
+- resolves the page before writing anything;
+- refuses a page that is not a feature of this SRS (a direct child of its root page);
+- writes the version and its FRs under the feature;
+- adds the version to the feature's Versions list in place.
+
+A backend that cannot edit an existing page lists what is left to add by hand in the report's `notPlaced`.
+
 **An FR attached to a feature is refused.**
 
 ```
@@ -384,19 +393,33 @@ Example mixed spec (a single `write` call creates both Epic and FRs, no intermed
     }
   },
   {
+    "kind": "epic",
+    "confidence": "high",
+    "source": { "kind": "notion-pages" },
+    "epic": {
+      "id": "AUTH-V1",
+      "parentId": "EPIC-AUTH",
+      "title": "v1 — Email login",
+      "parentPageId": "<resolved from parentId>",
+      "urs": [],
+      "frs": [],
+      "version": { "changes": ["Email and password login"] }
+    }
+  },
+  {
     "kind": "fr",
     "confidence": "high",
     "source": { "kind": "notion-pages" },
     "fr": {
-      "parentEpicId": "EPIC-AUTH",
+      "parentEpicId": "AUTH-V1",
       "fr": { "id": "FR-1", "title": "Login endpoint" }
     }
   }
 ]
 ```
 
-If `parentEpicId` references an Epic that is neither in the batch nor resolved via `parentEpicPageId`, `write-srs` exits 6 with an error listing every logical id known so far — easy to spot typos and
-missing Epics.
+If `parentEpicId` references an Epic that is neither in the batch nor resolved via `parentEpicPageId`, the batch check refuses the spec (exit 2) before any page is written, listing every logical id
+known so far: typos and missing Epics are easy to spot. An FR must hang under a version, never directly under a feature.
 
 ### Exit codes
 

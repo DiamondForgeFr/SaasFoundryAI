@@ -2,7 +2,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { titleCarriesOwnId } from '../../builders/srs/fr-title-format'
-import { DraftCandidate, EpicSpec, FrItem, FrSpec, PageRef, SrsAdapter, VersionFrItem } from '../../builders/srs/types'
+import { FEATURE_HEADINGS, VERSIONS_INTRO } from '../../builders/srs/templates/pages/epic.tpl'
+import { DraftCandidate, EpicSpec, FrItem, FrSpec, PageBlock, PageRef, SectionAddition, SrsAdapter, VersionFrItem } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { rejectUnknownOption, runFromCommandLine } from './args'
 
@@ -29,7 +30,20 @@ export interface WriteSrsReport {
   failed: WriteFailureEntry[]
   pendingIngestionCleared: boolean
   rollbackHint?: string
+  /** What an existing feature could not receive in place, for the operator to add by hand (#899). */
+  notPlaced?: string[]
 }
+
+/**
+ * A `parentId` naming a page that already exists rather than a logical id of the batch: a
+ * Notion URL or page id. That is how a version is added to a feature written in an earlier
+ * batch — the normal path for every version after the first (#899).
+ */
+export function isPageReference(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim()) || /^[0-9a-f]{32}$/i.test(value.trim().replace(/-/g, ''))
+}
+
+const normalizedPageId = (id: string): string => id.replace(/-/g, '').toLowerCase()
 
 function readJson<T>(path: string, label: string): T {
   const raw = readFileSync(path, 'utf8')
@@ -101,7 +115,8 @@ export function checkSpec(candidates: DraftCandidate[]): SpecCheck {
     warnOnDuplicatedFrId(candidate, index, (message) => warnings.push(message.trimEnd()))
     if (candidate.kind === 'epic') {
       const epic = candidate.epic!
-      if (epic.parentId !== undefined && !levels.has(epic.parentId)) errors.push(unresolvedParent('epic', 'parentId', epic.parentId, levels, index))
+      // A page reference names an existing feature; write resolves and checks it before writing anything
+      if (epic.parentId !== undefined && !levels.has(epic.parentId) && !isPageReference(epic.parentId)) errors.push(unresolvedParent('epic', 'parentId', epic.parentId, levels, index))
       if (epic.id) levels.set(epic.id, epic.parentId === undefined ? 'feature' : 'version')
       return
     }
@@ -122,7 +137,69 @@ export function checkSpec(candidates: DraftCandidate[]): SpecCheck {
 function unresolvedParent(kind: 'epic' | 'fr', field: string, logicalId: string, levels: Map<string, PageLevel>, index: number): string {
   const known = Array.from(levels.keys())
   const hint = known.length > 0 ? `Known logical IDs so far: ${known.join(', ')}.` : 'No page in this batch declared a logical "id" before this one.'
-  return `write-srs: candidate #${index} (${kind}) references ${field}="${logicalId}" but no page with that logical id is declared before it. ${hint}`
+  return `write-srs: candidate #${index} (${kind}) references ${field}="${logicalId}" but no page with that logical id is declared before it. ${hint}${kind === 'epic' ? " To add a version to a feature written earlier, set parentId to that feature page's URL or id." : ''}`
+}
+
+/**
+ * Resolves every `parentId` that names an existing page, before the first page is written,
+ * and requires it to be a feature: a direct child of the SRS root. Returns the errors; on
+ * success each reference maps to its page id and counts as a feature of the batch.
+ */
+async function resolveExistingFeatures(
+  adapter: SrsAdapter,
+  candidates: DraftCandidate[],
+  rootPageId: string | undefined,
+  logicalIdMap: Map<string, string>,
+  levels: Map<string, PageLevel>
+): Promise<string[]> {
+  const references = [
+    ...new Set(candidates.flatMap((candidate) => (candidate.kind === 'epic' && candidate.epic?.parentId && isPageReference(candidate.epic.parentId) ? [candidate.epic.parentId] : [])))
+  ]
+  if (references.length === 0) return []
+  if (!rootPageId) return ['write-srs: a version names an existing feature, but `.saasfoundry.json → tools.srs.rootPage.id` is not set, so that page cannot be checked to be a feature of this SRS.']
+  const features = new Set((await adapter.listChildren(rootPageId)).map((page) => normalizedPageId(page.id)))
+  const errors: string[] = []
+  for (const reference of references) {
+    try {
+      const page = await adapter.resolveParent(reference)
+      if (!features.has(normalizedPageId(page.id))) {
+        errors.push(`write-srs: parentId "${reference}" is the page "${page.name}", which is not a feature of this SRS (a direct child of its root page). A version goes under a feature.`)
+        continue
+      }
+      logicalIdMap.set(reference, page.id)
+      levels.set(reference, 'feature')
+    } catch (error) {
+      errors.push(`write-srs: parentId "${reference}" could not be resolved — ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return errors
+}
+
+/**
+ * Adds to a feature written in an earlier batch, in place, and returns what could not be
+ * placed. A section the page lacks is appended at its end rather than lost.
+ */
+async function extendExistingFeature(adapter: SrsAdapter, featurePageId: string, additions: SectionAddition[], fallbackTitle: string): Promise<string[]> {
+  if (additions.length === 0) return []
+  if (!adapter.extendSections) return additions.map((addition) => `${fallbackTitle}: add to "${addition.heading}" by hand — this SRS backend cannot edit an existing page.`)
+  const outcomes = await adapter.extendSections(featurePageId, additions)
+  const unplaced = additions.filter((_, index) => outcomes[index] === 'unplaced')
+  if (unplaced.length > 0) {
+    await adapter.updatePage(featurePageId, {
+      blocks: unplaced.flatMap((addition): PageBlock[] =>
+        addition.kind === 'list-items'
+          ? [
+              { kind: 'heading', level: 2, text: addition.heading },
+              { kind: 'bulleted_list', items: addition.items }
+            ]
+          : [
+              { kind: 'heading', level: 2, text: `${addition.heading} — added by ${fallbackTitle}` },
+              { kind: 'table', header: addition.layouts[0].header, rows: addition.layouts[0].rows }
+            ]
+      )
+    })
+  }
+  return []
 }
 
 function resolveFrParent(fr: FrSpec, logicalIdMap: Map<string, string>, index: number): FrSpec {
@@ -154,7 +231,8 @@ async function applyCandidate(
   levels: Map<string, PageLevel>,
   versionsByFeature: Map<string, string[]>,
   frsByFeature: Map<string, VersionFrItem[]>,
-  index: number
+  index: number,
+  notPlaced: string[] = []
 ): Promise<PageRef> {
   if (candidate.kind === 'epic') {
     const epic = resolveEpicParent(candidate.epic!, logicalIdMap, index)
@@ -164,6 +242,11 @@ async function applyCandidate(
     if (epic.id) {
       logicalIdMap.set(epic.id, page.id)
       levels.set(epic.id, level)
+    }
+    // A feature written in an earlier batch lists its versions too, which only it can show
+    if (epic.parentId !== undefined && isPageReference(epic.parentId)) {
+      const versions: SectionAddition = { kind: 'list-items', heading: FEATURE_HEADINGS.versions, items: [epic.title], createBefore: FEATURE_HEADINGS.traceability, intro: VERSIONS_INTRO }
+      notPlaced.push(...(await extendExistingFeature(adapter, epic.parentPageId, [versions], epic.title)))
     }
     return page
   }
@@ -302,6 +385,14 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   const report: WriteSrsReport = { created: [], failed: [], pendingIngestionCleared: false }
   const logicalIdMap = new Map<string, string>()
   const levels = new Map<string, PageLevel>()
+  const notPlaced: string[] = []
+
+  // A version under a feature written earlier: its page is checked before anything is written
+  const referenceErrors = await resolveExistingFeatures(adapter, candidates, manifest.tools?.srs?.rootPage?.id, logicalIdMap, levels)
+  if (referenceErrors.length > 0) {
+    for (const error of referenceErrors) process.stderr.write(`${error}\n`)
+    return 2
+  }
 
   // A feature page is created before its versions exist, and `updatePage` appends
   // rather than replaces — so indexing the versions afterwards would duplicate the
@@ -312,7 +403,7 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i]
     try {
-      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, frsByFeature, i)
+      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, frsByFeature, i, notPlaced)
       report.created.push({ index: i, kind: candidate.kind, page })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -324,6 +415,11 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
       return 6
     }
+  }
+
+  if (notPlaced.length > 0) {
+    report.notPlaced = notPlaced
+    for (const entry of notPlaced) process.stderr.write(`write-srs: ${entry}\n`)
   }
 
   if (options.clearPendingIngestion !== false) {

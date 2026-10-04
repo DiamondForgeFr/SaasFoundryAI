@@ -266,6 +266,36 @@ export interface DraftCandidate {
   notes?: string
 }
 
+/**
+ * An addition to one section of an existing page: the content under `heading`, up to the next
+ * heading. A feature written in an earlier batch gains a version and its requirements this way,
+ * where `updatePage` could only append to the end of the page (#899, #900).
+ */
+export type SectionAddition =
+  | {
+      kind: 'list-items'
+      heading: string
+      /** Added after the section's last bullet; an item already listed is not repeated. */
+      items: string[]
+      /** A missing section is created right before this heading, opened by `intro`. */
+      createBefore?: string
+      intro?: string
+    }
+  | {
+      kind: 'table-rows'
+      heading: string
+      /**
+       * The same rows in each table shape the section may have, most complete first: the
+       * section's table width picks one. A row whose first cell is already in the table is
+       * not repeated. A section holding only its "No … yet." placeholder gets a table of the
+       * first shape in place of it.
+       */
+      layouts: Array<{ header: string[]; rows: string[][] }>
+    }
+
+/** `extended`: added in place. `unchanged`: every entry was already there. `unplaced`: no section, or no table of a known shape, to add to. */
+export type SectionAdditionOutcome = 'extended' | 'unchanged' | 'unplaced'
+
 export interface SrsAdapter {
   init(): Promise<void>
 
@@ -291,4 +321,10 @@ export interface SrsAdapter {
    * on that — recreating 196 FR pages would break every reference to them.
    */
   move(pageId: string, newParentPageId: string): Promise<void>
+
+  /**
+   * Adds to sections of an existing page, in place, one outcome per addition. Optional: a
+   * backend without it leaves the caller to report what could not be placed.
+   */
+  extendSections?(pageId: string, additions: SectionAddition[]): Promise<SectionAdditionOutcome[]>
 }
