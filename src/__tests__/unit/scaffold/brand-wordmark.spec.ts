@@ -2,20 +2,20 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /**
- * #597 — the generated app's header read "SaaSFoundryAIAI".
+ * #597 — the generated app's header read "SaaSFoundryAIAI": a blind find-and-replace inside a
+ * literal already followed by `<span>AI</span>`.
  *
- * The rebrand replaced `SaaSFoundry` with `SaaSFoundryAI` inside a literal that was
- * already followed by a `<span>AI</span>`. The same edit made the same mistake in the SVG
- * logo (#567), and that one was found first — this is the second occurrence of one blind
- * find-and-replace.
+ * #886 — the wordmark was the generator's own name, shown to the generated app's end users. It
+ * now renders the product name, `APP_NAME` from `src/lib/app.ts`, which `VITE_APP_NAME` sets.
  *
- * The generated project ships its own test suites, but CI never runs them (#594), so the
- * guard lives here: it reads the template and runs on every commit.
+ * The generated project ships its own test suites, but CI never runs them (#594), so the guard
+ * lives here: it reads the template and runs on every commit.
  */
 
-const LAYOUT = resolve(__dirname, '../../../../scaffolds/blueprints/web/src/components/layout/layout-logged.tsx')
+const WEB = resolve(__dirname, '../../../../scaffolds/blueprints/web')
+const LAYOUT = resolve(WEB, 'src/components/layout/layout-logged.tsx')
 
-describe('generated app brand wordmark (#597)', () => {
+describe('generated app brand wordmark (#597, #886)', () => {
   const source = readFileSync(LAYOUT, 'utf8')
 
   it('never renders the AI suffix twice', () => {
@@ -23,17 +23,14 @@ describe('generated app brand wordmark (#597)', () => {
     expect(source.replace(/\s+/g, '')).not.toContain('>AI</span><span')
   })
 
-  it('splits the wordmark into the logo’s three segments', () => {
-    const compact = source.replace(/\s+/g, '')
-    expect(compact).toContain('<spanclassName="text-primary">SaaS</span>')
-    expect(compact).toContain('<spanclassName="text-muted-foreground">Foundry</span>')
-    expect(compact).toContain('<spanclassName="text-primary">AI</span>')
+  it("renders the product name, never the generator's", () => {
+    expect(source).toContain("import { APP_NAME } from '@/lib/app'")
+    expect(source.replace(/\s+/g, '')).toContain('select-none">{APP_NAME}</span>')
+    expect(source).not.toMatch(/>\s*(SaaS|Foundry|AI)\s*</)
   })
 
-  it('keeps it one word — the segments are adjacent, with no separator between them', () => {
-    const compact = source.replace(/\s+/g, '')
-    const oneWord = '<spanclassName="text-primary">SaaS</span><spanclassName="text-muted-foreground">Foundry</span><spanclassName="text-primary">AI</span>'
-    expect(compact).toContain(oneWord)
+  it('reads the name from VITE_APP_NAME, the project name by default', () => {
+    expect(readFileSync(resolve(WEB, 'src/lib/app.ts'), 'utf8')).toContain("import.meta.env.VITE_APP_NAME || '{{PROJECT_NAME}}'")
   })
 
   it('uses theme tokens, so the colours follow light and dark rather than being pinned to the SVG', () => {

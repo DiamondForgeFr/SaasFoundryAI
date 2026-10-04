@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm } from 'fs/promises'
+import { mkdir, readFile, readdir, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import shelljs from 'shelljs'
@@ -178,6 +178,37 @@ describe('generated project smoke tests', () => {
 
   // ── Tests ──────────────────────────────────────────────────────
 
+  /**
+   * #886 — a generated application introduced itself to its own end users as SaaSFoundryAI:
+   * emails, browser tab, header wordmark and logo now name the project, read at runtime.
+   */
+  async function assertBrandsTheProject(paths: { apiPath: string; webPath: string }, projectName: string) {
+    const read = (file: string) => readFile(file, 'utf8')
+    expect(await read(join(paths.apiPath, '.env'))).toContain(`APP_NAME="${projectName}"`)
+    expect(await read(join(paths.apiPath, 'src/configs/env/services/env.service.ts'))).toContain(`APP_NAME: z.string().min(1).default('${projectName}')`)
+    expect(await read(join(paths.webPath, '.env'))).toContain(`VITE_APP_NAME="${projectName}"`)
+    expect(await read(join(paths.webPath, 'index.html'))).toContain('<title>%VITE_APP_NAME%</title>')
+    expect(await read(join(paths.webPath, 'public/img/logo-long.svg'))).toContain(`>${projectName}</text>`)
+    expect(await read(join(paths.webPath, 'public/img/logo-short.svg'))).toContain(`>${projectName.charAt(0).toUpperCase()}</text>`)
+
+    const webLocales = (await readdir(join(paths.webPath, 'src/locales'), { recursive: true, withFileTypes: true }))
+      .filter((entry) => entry.isFile())
+      .map((entry) => join(entry.parentPath, entry.name))
+    const endUserFiles = [
+      join(paths.apiPath, 'src/modules/email/locales/en.ts'),
+      join(paths.apiPath, 'src/modules/email/locales/fr.ts'),
+      join(paths.webPath, 'index.html'),
+      join(paths.webPath, 'src/components/layout/layout-logged.tsx'),
+      join(paths.webPath, 'src/lib/app.ts'),
+      ...['logo-long', 'logo-short', 'icon'].map((logo) => join(paths.webPath, `public/img/${logo}.svg`)),
+      ...webLocales
+    ]
+    for (const file of endUserFiles) {
+      const content = await read(file)
+      expect([file, content.includes('SaaSFoundryAI'), /\{\{[A-Z_]+\}\}/.test(content)]).toEqual([file, false, false])
+    }
+  }
+
   describe('multirepo with all features', () => {
     let paths: { apiPath: string; webPath: string; projectDir: string }
 
@@ -197,6 +228,10 @@ describe('generated project smoke tests', () => {
 
     it('should have all critical Web files', async () => {
       await assertWebCriticalFiles(paths.webPath)
+    })
+
+    it('names the project, never the generator, to its end users', async () => {
+      await assertBrandsTheProject(paths, 'smoke-multi')
     })
 
     it('should have valid API package.json with correct dependencies', async () => {
@@ -281,6 +316,10 @@ describe('generated project smoke tests', () => {
         s3Setup: 'manual',
         includeAnalytics: false
       })
+    })
+
+    it('names the project, never the generator, to its end users', async () => {
+      await assertBrandsTheProject(paths, 'smoke-mono')
     })
 
     it('should have all critical API files in apps/api', async () => {

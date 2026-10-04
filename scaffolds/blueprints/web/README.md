@@ -10,7 +10,7 @@
 
 ## ✨ Overview
 
-Welcome to your new SaaSFoundryAI frontend project! This template provides a modern, production-ready frontend setup built with the latest technologies and best practices.
+This frontend was generated with SaaSFoundryAI. It provides a modern, production-ready frontend setup built with the latest technologies and best practices.
 
 ## 🛠️ Tech Stack
 
@@ -171,7 +171,7 @@ git push --no-verify
 
 ## 🤝 Contributing
 
-This project is part of the SaaSFoundryAI ecosystem. For contributing guidelines, please refer to the main SaaSFoundryAI documentation.
+This project was generated with SaaSFoundryAI; see its documentation for the conventions it follows.
 
 ## 📜 License
 
@@ -180,5 +180,5 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 ---
 
 <div align="center">
-  <sub>Built with ❤️ by the SaaSFoundryAI team</sub>
+  <sub>Generated with SaaSFoundryAI</sub>
 </div>

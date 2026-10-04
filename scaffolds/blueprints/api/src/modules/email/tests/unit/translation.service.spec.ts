@@ -8,6 +8,7 @@ import { Locale } from '@/generated/prisma/client'
  * Dependencies
  */
 import { TranslationService } from '@modules/email/services/translation.service'
+import { EnvConfig } from '@configs/env/services/env.service'
 
 /**
  * Test infrastructure
@@ -24,7 +25,7 @@ class TranslationServiceTest extends ServiceTestBase<TranslationService> {
   }
 
   protected getProviders(): Provider[] {
-    return [TranslationService]
+    return [TranslationService, { provide: EnvConfig, useValue: { get: (key: string) => (key === 'APP_NAME' ? 'Acme Portal' : undefined) } }]
   }
 
   /**
@@ -32,6 +33,17 @@ class TranslationServiceTest extends ServiceTestBase<TranslationService> {
    */
   testGetTranslation(): void {
     describe('getTranslation', () => {
+      it('names the product of APP_NAME in every template, never a placeholder', () => {
+        for (const locale of [Locale.EN, Locale.FR]) {
+          for (const key of ['accountConfirmation', 'passwordReset', 'invitation'] as const) {
+            const texts = Object.values(this.service.getTranslation(locale, key)).join(' ')
+            expect(texts).not.toContain('{appName}')
+            expect(texts).not.toContain('SaaSFoundryAI')
+          }
+        }
+        expect(this.service.getTranslation(Locale.EN, 'accountConfirmation').subject).toBe('Confirm your Acme Portal account')
+      })
+
       describe('for English locale', () => {
         const englishScenario = TestScenario.create('English translations', async () => {
           // No setup needed

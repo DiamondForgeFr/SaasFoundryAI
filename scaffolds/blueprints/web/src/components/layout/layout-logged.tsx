@@ -16,29 +16,21 @@ import { useBreadcrumb } from '@/hooks/ui/useBreadcrumb'
  * Components
  */
 import { LayoutSidebar } from '@/components/layout/layout-sidebar'
+import { APP_NAME } from '@/lib/app'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/shadcn/breadcrumb'
 import { Separator } from '@/components/ui/shadcn/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/shadcn/sidebar'
 
 /**
  * Brand wordmark shown in the top bar only while the sidebar is collapsed — the sidebar header
- * already carries it when expanded, so this keeps "SaaSFoundryAI" visible right next to the toggle.
+ * already carries the logo when expanded, so this keeps the product name next to the toggle.
  */
 const HeaderBrand = () => {
   const { state } = useSidebar()
   if (state !== 'collapsed') return null
   return (
     <>
-      {/*
-       * Three segments, one word, matching the logo: SaaS orange, Foundry grey, AI orange.
-       * Theme tokens rather than the SVG's hex — the logo grey holds on dark chrome and
-       * would lose contrast in light mode, and `--primary` already IS the brand orange.
-       */}
-      <span className="font-display text-sm font-bold tracking-tight select-none">
-        <span className="text-primary">SaaS</span>
-        <span className="text-muted-foreground">Foundry</span>
-        <span className="text-primary">AI</span>
-      </span>
+      <span className="font-display text-primary text-sm font-bold tracking-tight select-none">{APP_NAME}</span>
       <Separator orientation="vertical" className="mr-2 h-4" />
     </>
   )
