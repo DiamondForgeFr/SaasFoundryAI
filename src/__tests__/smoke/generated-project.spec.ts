@@ -230,7 +230,7 @@ describe('generated project smoke tests', () => {
       expect(testYml).toContain('branches: ["develop","main"]')
       expect(testYml).toContain('MAIN_BRANCH: "main"')
       expect(deployYml).toContain('branches: [main]')
-      expect(deployYml).toContain('--branch=main')
+      expect(deployYml).toContain('gh run list --workflow test.yml --event push --commit "$COMMIT_SHA"') // #889: the deploy waits for this commit's Tests
       for (const content of [testYml, deployYml]) {
         expect(content).not.toContain('{{MAIN_BRANCH}}')
         expect(content).not.toContain('{{CI_PR_BRANCHES}}')
@@ -293,7 +293,7 @@ describe('generated project smoke tests', () => {
       expect(testYml).toContain('branches: ["develop","main"]')
       expect(testYml).toContain('MAIN_BRANCH: "main"')
       expect(deployApiYml).toContain('branches: [main]')
-      expect(deployApiYml).toContain('--branch=main')
+      expect(deployApiYml).toContain('gh run list --workflow test.yml --event push --commit "$COMMIT_SHA"') // #889: the deploy waits for this commit's Tests
       for (const content of [testYml, deployApiYml]) {
         expect(content).not.toContain('{{MAIN_BRANCH}}')
         expect(content).not.toContain('{{CI_PR_BRANCHES}}')
