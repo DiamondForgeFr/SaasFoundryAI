@@ -42,7 +42,7 @@ sf srs write --spec <path> [--manifest <path>] [--no-clear-pending]
 sf srs versions [--root-page <id>] [--manifest <path>]
 
 sf srs spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>]
-             [--milestone <name>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]
+             [--milestone <name>] [--complexity <level>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]
 
 sf srs normalize [--feature <url-or-id>] [--version-name <name>] [--apply]
                  [--manifest <path>] [--root-page <id>]
@@ -53,6 +53,9 @@ sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--ma
 
 L'option `--milestone` de `spawn` **déclare la release dans laquelle ces tickets seront livrés** : le milestone est créé ou réutilisé, la page de version lui est associée et tous les tickets générés
 le rejoignent.
+
+L'option `--complexity <niveau>` de `spawn` étiquette chaque Story créée dont la page FR n'indique pas de complexité (`bug`, `low`, `medium` ou `complex`) ; la complexité de la page FR l'emporte. Le
+résumé liste les Stories restées sans complexité, que le workflow refuse de sortir du Backlog.
 
 ## Options communes
 

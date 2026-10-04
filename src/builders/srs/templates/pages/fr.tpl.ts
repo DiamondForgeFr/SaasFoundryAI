@@ -30,6 +30,7 @@ function detailRows(fr: FrItem): string[][] {
     ['Title', fr.title],
     ['Endpoint', textCell(fr.endpoint)],
     ['Priority', priorityCell(fr.priority)],
+    ['Complexity', textCell(fr.complexity)],
     ['Related UR', refsCell(fr.urRefs)],
     ['Related DS', refsCell(fr.dsRefs)],
     ['Related TC', refsCell(fr.tcRefs)],

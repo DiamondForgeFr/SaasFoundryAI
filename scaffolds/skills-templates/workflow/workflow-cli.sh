@@ -1936,7 +1936,7 @@ case "$COMMAND" in
         while [[ "$SPAWN_INDEX" -lt "${#DRAFTING_ARGS[@]}" ]]; do
           SPAWN_ARG="${DRAFTING_ARGS[$SPAWN_INDEX]}"
           case "$SPAWN_ARG" in
-            --epic|--version|--milestone|--reconciliation-plan|--manifest|--bypass-reason|--ticket)
+            --epic|--version|--milestone|--complexity|--reconciliation-plan|--manifest|--bypass-reason|--ticket)
               SPAWN_VALUE_INDEX=$((SPAWN_INDEX + 1))
               SPAWN_VALUE="${DRAFTING_ARGS[$SPAWN_VALUE_INDEX]:-}"
               if [[ -z "$SPAWN_VALUE" || "$SPAWN_VALUE" == --* ]]; then
@@ -2022,7 +2022,7 @@ case "$COMMAND" in
     echo "    phase: ai-draft | human-review | spawning | done"
     echo "    ai-draft: [--spec <file> | --from notion-pages --ids <ids> | --from codebase [--path <dir>]]"
     echo "      no option prints the drafting procedure; --spec writes a drafted DraftCandidate[] file"
-    echo "    spawning: --epic <feature> [--version <version>] [--milestone <name>] --reconciliation-plan <path> [--ticket <existing-epic>] [--dry-run]"
+    echo "    spawning: --epic <feature> [--version <version>] [--milestone <name>] [--complexity <level>] --reconciliation-plan <path> [--ticket <existing-epic>] [--dry-run]"
     echo "      the version Epic owns the Stories (created, or adopted on a re-run); the drafting ticket is only referenced"
     echo "    Dispatches to the sf-srs wrapper (srs-cli.sh) for write/draft/spawn."
     echo ""
