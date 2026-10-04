@@ -194,13 +194,28 @@ Les releases partent de `master`. Les hooks RC valident l'état mais ne créent 
 2. Avant le premier push, exécutez `npm version X.Y.Z --no-git-tag-version`, mettez à jour le changelog et committez avec le ticket de release.
 3. Poussez la branche RC et ouvrez sa PR vers `master`. La version et le nom de branche doivent correspondre, et la matrice Docker complète doit réussir.
 4. Fusionnez avec un merge commit, synchronisez `master`, vérifiez le commit et le contenu du package, puis créez le tag annoté `vX.Y.Z`.
-5. Attendez la CI du tag, puis lancez **Publish stable package** depuis et pour le tag exact `vX.Y.Z` avec `gh workflow run publish-stable.yml --ref vX.Y.Z -f tag=vX.Y.Z`. L'environnement protégé
-   `npm-production` doit contenir le secret `NPM_TOKEN` à usage unique ou granulaire ; le workflow vérifie la référence de l'événement, le tag et l'identité du paquet avant
-   `npm publish --provenance --access public --tag latest`.
+5. Pousser le tag lance **Publish stable package** (`.github/workflows/publish-stable.yml`) :
+
+   - le workflow attend l'exécution Tests du tag (le parcours exhaustif) et s'arrête si elle échoue ;
+   - il demande ensuite le déploiement `npm-production` ; approuvez-le depuis la page de l'exécution ;
+   - il vérifie le tag, la version, l'absence de cette version sur npm, la section du changelog et le contenu du paquet ;
+   - il exécute `npm publish --provenance --access public --tag latest`, puis crée la GitHub Release à partir de la section `## [X.Y.Z]` de `docs/changelog.md`.
+
+   Une exécution en échec se relance avec `gh workflow run publish-stable.yml --ref vX.Y.Z -f tag=vX.Y.Z`.
+
 6. Resynchronisez le commit de release vers `develop` et vérifiez une installation globale propre.
 
-L'environnement `npm-production` devrait exiger la validation d'un mainteneur. La première publication utilise le token pour réserver le paquet ; configurez ensuite la publication de confiance npm et
-supprimez le token stocké. Ne lancez jamais le workflow depuis une branche ni avant le succès de la CI exhaustive du tag.
+npm authentifie le workflow par la [publication de confiance](https://docs.npmjs.com/trusted-publishers) : OIDC de GitHub Actions, avec provenance. Aucun token n'est stocké ni renouvelé. Configuration
+unique sur npmjs.com, à faire une fois pour le paquet :
+
+- Ouvrez le paquet, puis **Settings**, puis **Trusted publishing**, et choisissez **GitHub Actions**. Renseignez :
+  - l'organisation `DiamondForgeFr` ;
+  - le dépôt `SaasFoundryAI` ;
+  - le workflow `publish-stable.yml` ;
+  - l'environnement `npm-production`.
+- Sous **Publishing access**, choisissez **Require two-factor authentication and disallow tokens**.
+
+L'environnement `npm-production` exige la validation d'un mainteneur et ne déploie que depuis les tags `v*`. Ne poussez jamais un tag stable avant la fusion de la PR RC dans `master`.
 
 La v1 possède un historique `master` divergent. Sa branche RC doit d'abord enregistrer cet historique avec `git merge -s ours --no-ff origin/master`, selon le ticket de release #488. N'utilisez pas
 `-X ours`, qui peut conserver des fichiers obsolètes non conflictuels.

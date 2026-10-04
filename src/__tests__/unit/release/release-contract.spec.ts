@@ -78,7 +78,8 @@ describe('v1 stable release contract (#488)', () => {
     expect(workflow).toContain('environment: npm-production')
     expect(workflow).toContain('id-token: write')
     expect(workflow).toContain('npm publish --provenance --access public --tag latest')
-    expect(workflow).toContain('secrets.NPM_TOKEN')
+    // #904 — trusted publishing (OIDC) replaced the stored granular token
+    expect(workflow).not.toContain('NPM_TOKEN')
     expect(workflow).toContain('refs/tags/$RELEASE_TAG')
     expect(workflow).toContain('git tag --points-at HEAD')
     expect(workflow).toContain('already exists; refusing to overwrite it')

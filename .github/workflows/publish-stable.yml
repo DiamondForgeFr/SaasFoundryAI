@@ -1,6 +1,11 @@
 name: Publish stable package
 
+# A stable vX.Y.Z tag publishes itself once its own Tests run (the exhaustive lane) is green.
+# npm authenticates this workflow through trusted publishing (GitHub OIDC): no token is
+# stored or renewed (#904). Manual dispatch remains for a retry from the same tag.
 on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
     inputs:
       tag:
@@ -10,22 +15,64 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: npm-stable-publish
   cancel-in-progress: false
 
+env:
+  RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+
 jobs:
+  wait-for-ci:
+    name: Wait for the tag's Tests run
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for Tests on this tag to succeed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The tag's own run, not the master push of the same merge commit
+          for _ in $(seq 1 140); do
+            run=$(gh run list --workflow test.yml --event push --commit "$TAG_SHA" --limit 20 \
+              --json headBranch,status,conclusion,url --jq "[.[] | select(.headBranch == \"$RELEASE_TAG\")][0] // empty")
+            if [[ -n "$run" && "$(jq -r .status <<<"$run")" == "completed" ]]; then
+              conclusion=$(jq -r .conclusion <<<"$run")
+              if [[ "$conclusion" == "success" ]]; then
+                echo "Tests passed on $RELEASE_TAG: $(jq -r .url <<<"$run")"
+                exit 0
+              fi
+              echo "Tests concluded '$conclusion' on $RELEASE_TAG ($(jq -r .url <<<"$run")): nothing is published." >&2
+              exit 1
+            fi
+            sleep 60
+          done
+          echo "The Tests run of $RELEASE_TAG did not complete within the wait budget: nothing is published." >&2
+          exit 1
+
   publish:
     name: Verify tag and publish with provenance
+    needs: wait-for-ci
+    # A dispatch skips the wait; a tag push publishes only after it
+    if: ${{ !cancelled() && (needs.wait-for-ci.result == 'success' || (github.event_name == 'workflow_dispatch' && needs.wait-for-ci.result == 'skipped')) }}
     runs-on: ubuntu-latest
     environment: npm-production
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout the requested tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -36,10 +83,14 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
+      # Trusted publishing needs npm >= 11.5.1; the Node of .nvmrc ships npm 10
+      - name: Use an npm that supports trusted publishing
+        run: |
+          npm install -g npm@11.21.0
+          npm --version
+
       - name: Verify stable tag and package identity
         shell: bash
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -48,7 +99,7 @@ jobs:
           fi
 
           if [[ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ]]; then
-            echo "Dispatch this workflow from $RELEASE_TAG, not from $GITHUB_REF." >&2
+            echo "Run this workflow from $RELEASE_TAG, not from $GITHUB_REF." >&2
             exit 1
           fi
 
@@ -75,13 +126,41 @@ jobs:
             exit "$status"
           fi
 
+      # The release notes come from this section: a forgotten changelog stops the publish
+      - name: Verify the changelog has this version
+        run: node scripts/release-notes.mjs "${RELEASE_TAG#v}" >/dev/null
+
       - name: Install exact dependencies
         run: npm ci
 
       - name: Verify package boundary
         run: npm run package:check
 
-      - name: Publish stable package with provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish through trusted publishing (no stored token)
         run: npm publish --provenance --access public --tag latest
+
+  release:
+    name: Create the GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the published tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Create the release from the changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "The $RELEASE_TAG release already exists; it is left as it is."
+            exit 0
+          fi
+          node scripts/release-notes.mjs "${RELEASE_TAG#v}" >"$RUNNER_TEMP/notes.md"
+          gh release create "$RELEASE_TAG" --verify-tag --title "SaaSFoundryAI $RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
