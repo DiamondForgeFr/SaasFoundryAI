@@ -2,8 +2,24 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { titleCarriesOwnId } from '../../builders/srs/fr-title-format'
-import { FEATURE_HEADINGS, VERSIONS_INTRO } from '../../builders/srs/templates/pages/epic.tpl'
-import { DraftCandidate, EpicSpec, FrItem, FrSpec, PageBlock, PageRef, SectionAddition, SrsAdapter, VersionFrItem } from '../../builders/srs/types'
+import { FEATURE_HEADINGS, VERSIONS_INTRO, featureTableAdditions } from '../../builders/srs/templates/pages/epic.tpl'
+import {
+  DraftCandidate,
+  DsItem,
+  EpicSpec,
+  FrItem,
+  FrSpec,
+  NfrItem,
+  PageBlock,
+  PageRef,
+  SectionAddition,
+  SrsAdapter,
+  TcItem,
+  UrItem,
+  Versioned,
+  VersionFrItem,
+  VersionItems
+} from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { rejectUnknownOption, runFromCommandLine } from './args'
 
@@ -113,6 +129,12 @@ export function checkSpec(candidates: DraftCandidate[]): SpecCheck {
       return
     }
     warnOnDuplicatedFrId(candidate, index, (message) => warnings.push(message.trimEnd()))
+    const untraceable = untraceableItems(candidate)
+    if (untraceable.length > 0) {
+      warnings.push(
+        `write-srs: candidate #${index} (fr) carries ${untraceable.join(', ')} but is attached by parentEpicPageId, so no feature table receives them. Attach it by parentEpicId to a version of the batch.`
+      )
+    }
     if (candidate.kind === 'epic') {
       const epic = candidate.epic!
       // A page reference names an existing feature; write resolves and checks it before writing anything
@@ -132,6 +154,24 @@ export function checkSpec(candidates: DraftCandidate[]): SpecCheck {
     }
   })
   return { errors, warnings }
+}
+
+/**
+ * The items of an FR attached by page id: write-srs cannot tell which feature the page belongs
+ * to, so they reach no feature table — said, rather than dropped in silence (#900).
+ */
+function untraceableItems(candidate: DraftCandidate): string[] {
+  if (candidate.kind !== 'fr' || !candidate.fr?.parentEpicPageId) return []
+  const fr = candidate.fr
+  return (
+    [
+      ['urs', fr.urs],
+      ['dsItems', fr.dsItems],
+      ['tcItems', fr.tcItems]
+    ] as const
+  )
+    .filter(([, items]) => (items?.length ?? 0) > 0)
+    .map(([field]) => field)
 }
 
 function unresolvedParent(kind: 'epic' | 'fr', field: string, logicalId: string, levels: Map<string, PageLevel>, index: number): string {
@@ -232,12 +272,13 @@ async function applyCandidate(
   versionsByFeature: Map<string, string[]>,
   frsByFeature: Map<string, VersionFrItem[]>,
   index: number,
-  notPlaced: string[] = []
+  notPlaced: string[] = [],
+  itemsByFeature: Map<string, VersionItems> = new Map()
 ): Promise<PageRef> {
   if (candidate.kind === 'epic') {
     const epic = resolveEpicParent(candidate.epic!, logicalIdMap, index)
     const level: PageLevel = epic.parentId === undefined ? 'feature' : 'version'
-    const withIndex = level === 'feature' && epic.id ? { ...epic, versions: versionsByFeature.get(epic.id), versionFrs: frsByFeature.get(epic.id) } : epic
+    const withIndex = level === 'feature' && epic.id ? { ...epic, versions: versionsByFeature.get(epic.id), versionFrs: frsByFeature.get(epic.id), versionItems: itemsByFeature.get(epic.id) } : epic
     const page = await adapter.createEpicPage(withIndex)
     if (epic.id) {
       logicalIdMap.set(epic.id, page.id)
@@ -338,6 +379,45 @@ export function collectFrsByFeature(candidates: DraftCandidate[]): Map<string, V
   return new Map([...byFeature].map(([feature, frs]) => [feature, [...frs.values()]]))
 }
 
+/**
+ * The UR / DS / TC / NFR items each feature's versions bring: those a version declares, then
+ * those its FR candidates carry, merged by id with the FR candidate winning. The feature page
+ * lists them with their version (#900). An FR attached by page id cannot be traced to a
+ * feature and is left out, with a warning from the batch check.
+ */
+export function collectItemsByFeature(candidates: DraftCandidate[]): Map<string, VersionItems> {
+  const versionOf = new Map<string, { feature: string; title: string }>()
+  for (const candidate of candidates) {
+    const epic = candidate.kind === 'epic' ? candidate.epic : undefined
+    if (epic?.id && epic.parentId) versionOf.set(epic.id, { feature: epic.parentId, title: epic.title })
+  }
+  type Buckets = { urs: Map<string, Versioned<UrItem>>; dsItems: Map<string, Versioned<DsItem>>; tcItems: Map<string, Versioned<TcItem>>; nfrItems: Map<string, Versioned<NfrItem>> }
+  const byFeature = new Map<string, Buckets>()
+  const add = (versionId: string, items: { urs?: UrItem[]; dsItems?: DsItem[]; tcItems?: TcItem[]; nfrItems?: NfrItem[] }): void => {
+    const version = versionOf.get(versionId)
+    if (!version) return
+    const buckets = byFeature.get(version.feature) ?? { urs: new Map(), dsItems: new Map(), tcItems: new Map(), nfrItems: new Map() }
+    for (const item of items.urs ?? []) buckets.urs.set(item.id, { ...item, version: version.title })
+    for (const item of items.dsItems ?? []) buckets.dsItems.set(item.id, { ...item, version: version.title })
+    for (const item of items.tcItems ?? []) buckets.tcItems.set(item.id, { ...item, version: version.title })
+    for (const item of items.nfrItems ?? []) buckets.nfrItems.set(item.id, { ...item, version: version.title })
+    byFeature.set(version.feature, buckets)
+  }
+  for (const candidate of candidates) {
+    const epic = candidate.kind === 'epic' ? candidate.epic : undefined
+    if (epic?.id && epic.parentId) add(epic.id, epic)
+  }
+  for (const candidate of candidates) {
+    if (candidate.kind === 'fr' && candidate.fr?.parentEpicId) add(candidate.fr.parentEpicId, candidate.fr)
+  }
+  const result = new Map<string, VersionItems>()
+  for (const [feature, buckets] of byFeature) {
+    const items: VersionItems = { urs: [...buckets.urs.values()], dsItems: [...buckets.dsItems.values()], tcItems: [...buckets.tcItems.values()], nfrItems: [...buckets.nfrItems.values()] }
+    if (items.urs.length + items.dsItems.length + items.tcItems.length + items.nfrItems.length > 0) result.set(feature, items)
+  }
+  return result
+}
+
 export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   if (!options.specPath) {
     process.stderr.write('write-srs: --spec <path> is required.\n')
@@ -399,11 +479,12 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   // list on every re-run. The batch already declares them, so read it up front.
   const versionsByFeature = collectVersionsByFeature(candidates)
   const frsByFeature = collectFrsByFeature(candidates)
+  const itemsByFeature = collectItemsByFeature(candidates)
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i]
     try {
-      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, frsByFeature, i, notPlaced)
+      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, frsByFeature, i, notPlaced, itemsByFeature)
       report.created.push({ index: i, kind: candidate.kind, page })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -414,6 +495,17 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
           : `Failure on the first candidate (#${i}). Nothing to roll back.`
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
       return 6
+    }
+  }
+
+  // A feature written earlier is the register of what its new versions bring (#900)
+  for (const [reference, featurePageId] of logicalIdMap) {
+    if (!isPageReference(reference)) continue
+    const additions = featureTableAdditions({ versionFrs: frsByFeature.get(reference), versionItems: itemsByFeature.get(reference) })
+    try {
+      notPlaced.push(...(await extendExistingFeature(adapter, featurePageId, additions, (versionsByFeature.get(reference) ?? []).join(', '))))
+    } catch (error) {
+      notPlaced.push(`${reference}: its tables could not be extended — ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

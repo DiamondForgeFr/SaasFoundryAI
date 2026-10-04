@@ -1,4 +1,4 @@
-import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, TcItem, UrItem, VersionFrItem } from '../../types'
+import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, SectionAddition, TcItem, UrItem } from '../../types'
 
 const EMPTY_CELL = '—'
 
@@ -78,8 +78,13 @@ function frRow(fr: FrItem): string[] {
   return [fr.id, fr.title, priorityCell(fr.priority), refsCell(fr.urRefs), refsCell(fr.dsRefs)]
 }
 
-function versionFrRow(fr: FrItem | VersionFrItem): string[] {
-  return [fr.id, fr.title, 'version' in fr ? fr.version : EMPTY_CELL, priorityCell(fr.priority), refsCell(fr.urRefs), refsCell(fr.dsRefs)]
+/** The Version column sits third, where #850 put it in the FR table. */
+function withVersionColumn(header: string[]): string[] {
+  return [...header.slice(0, 2), 'Version', ...header.slice(2)]
+}
+
+function withVersionCell(row: string[], version?: string): string[] {
+  return [...row.slice(0, 2), version ?? EMPTY_CELL, ...row.slice(2)]
 }
 
 /** The FRs a DS lists itself, and the FRs whose `dsRefs` point to it. */
@@ -99,6 +104,114 @@ function listCell(items?: string[]): string {
 
 function tcRow(tc: TcItem): string[] {
   return [tc.id, tc.title, listCell(tc.steps), tc.expectedResult ?? EMPTY_CELL, refsCell(tc.frRefs)]
+}
+
+interface TableDefinition<T> {
+  heading: string
+  header: string[]
+  empty: string
+  /** The feature's own items, then those its versions bring. */
+  own: T[]
+  fromVersions: Array<T & { version: string }>
+  group?: (item: T) => string | undefined
+  row: (item: T) => string[]
+}
+
+interface RenderedTable {
+  heading: string
+  header: string[]
+  empty: string
+  rows: string[][]
+  /** The rows of the items its versions bring, in the table's two possible shapes (#900). */
+  additions: Array<{ header: string[]; rows: string[][] }>
+}
+
+function renderTable<T>(table: TableDefinition<T>): RenderedTable {
+  const versioned = table.fromVersions.length > 0
+  const group = table.group ?? (() => undefined)
+  const items: Array<{ item: T; version?: string }> = [...table.own.map((item) => ({ item })), ...table.fromVersions.map((item) => ({ item, version: item.version }))]
+  const rows = buildGroupedRows(
+    items,
+    (entry) => group(entry.item),
+    (entry) => (versioned ? withVersionCell(table.row(entry.item), entry.version) : table.row(entry.item))
+  )
+  return {
+    heading: table.heading,
+    header: versioned ? withVersionColumn(table.header) : table.header,
+    empty: table.empty,
+    rows,
+    additions: versioned
+      ? [
+          { header: withVersionColumn(table.header), rows: buildGroupedRows(table.fromVersions, group, (item) => withVersionCell(table.row(item), item.version)) },
+          { header: table.header, rows: buildGroupedRows(table.fromVersions, group, table.row) }
+        ]
+      : []
+  }
+}
+
+/**
+ * The requirement tables of a feature page. The feature is their register: an item a version
+ * or one of its FRs carries is listed with that version, as #850 did for the FRs (#900).
+ */
+function featureTables(spec: EpicSpec, allFrs: FrItem[]): RenderedTable[] {
+  const versionItems = spec.versionItems
+  return [
+    renderTable<UrItem>({
+      heading: FEATURE_HEADINGS.urs,
+      header: ['ID', 'Requirement', 'Priority', 'Related FR'],
+      empty: 'No user requirements yet.',
+      own: spec.urs,
+      fromVersions: versionItems?.urs ?? [],
+      group: (ur) => ur.group,
+      row: (ur) => urRow(ur, allFrs)
+    }),
+    renderTable<FrItem>({
+      heading: FEATURE_HEADINGS.frs,
+      header: ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS'],
+      empty: 'No functional requirements yet.',
+      own: spec.frs,
+      fromVersions: spec.versionFrs ?? [],
+      group: (fr) => fr.group,
+      row: frRow
+    }),
+    renderTable<DsItem>({
+      heading: FEATURE_HEADINGS.ds,
+      header: ['ID', 'Specification', 'Description', 'Related FR'],
+      empty: 'No design specifications yet.',
+      own: spec.dsItems ?? [],
+      fromVersions: versionItems?.dsItems ?? [],
+      group: (ds) => ds.group,
+      row: (ds) => dsRow(ds, allFrs)
+    }),
+    renderTable<TcItem>({
+      heading: FEATURE_HEADINGS.tc,
+      header: ['ID', 'Title', 'Steps', 'Expected Result', 'Related FR'],
+      empty: 'No test cases yet.',
+      own: spec.tcItems ?? [],
+      fromVersions: versionItems?.tcItems ?? [],
+      row: tcRow
+    }),
+    renderTable<NfrItem>({
+      heading: FEATURE_HEADINGS.nfr,
+      header: ['ID', 'Requirement', 'Target', 'Priority', 'Related FR'],
+      empty: 'No non-functional requirements yet.',
+      own: spec.nfrItems ?? [],
+      fromVersions: versionItems?.nfrItems ?? [],
+      group: (nfr) => nfr.group,
+      row: nfrRow
+    })
+  ]
+}
+
+/**
+ * What a feature written in an earlier batch gains from a new version: the rows of each of
+ * its tables, in both shapes a table may have — the feature may predate the Version column.
+ */
+export function featureTableAdditions(spec: Pick<EpicSpec, 'versionFrs' | 'versionItems'>): SectionAddition[] {
+  const allFrs: FrItem[] = spec.versionFrs ?? []
+  return featureTables({ title: '', parentPageId: '', urs: [], frs: [], ...spec }, allFrs)
+    .filter((table) => table.additions.length > 0)
+    .map((table) => ({ kind: 'table-rows', heading: table.heading, layouts: table.additions }))
 }
 
 /**
@@ -166,76 +279,10 @@ export function renderEpicPage(spec: EpicSpec): PageContent {
   blocks.push({ kind: 'heading', level: 2, text: 'Requirement Types' })
   blocks.push({ kind: 'table', header: ['Prefix', 'Type', 'Description', 'Example'], rows: REQUIREMENT_TYPES_ROWS })
 
-  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.urs })
-  if (spec.urs.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No user requirements yet.' })
-  } else {
-    blocks.push({
-      kind: 'table',
-      header: ['ID', 'Requirement', 'Priority', 'Related FR'],
-      rows: buildGroupedRows(
-        spec.urs,
-        (ur) => ur.group,
-        (ur) => urRow(ur, allFrs)
-      )
-    })
-  }
-
-  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.frs })
-  if (allFrs.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No functional requirements yet.' })
-  } else if (versionFrs.length > 0) {
-    blocks.push({
-      kind: 'table',
-      header: ['ID', 'Requirement', 'Version', 'Priority', 'Related UR', 'Related DS'],
-      rows: buildGroupedRows(allFrs, (fr) => fr.group, versionFrRow)
-    })
-  } else {
-    blocks.push({
-      kind: 'table',
-      header: ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS'],
-      rows: buildGroupedRows(spec.frs, (fr) => fr.group, frRow)
-    })
-  }
-
-  const dsItems = spec.dsItems ?? []
-  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.ds })
-  if (dsItems.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No design specifications yet.' })
-  } else {
-    blocks.push({
-      kind: 'table',
-      header: ['ID', 'Specification', 'Description', 'Related FR'],
-      rows: buildGroupedRows(
-        dsItems,
-        (ds) => ds.group,
-        (ds) => dsRow(ds, allFrs)
-      )
-    })
-  }
-
-  const tcItems = spec.tcItems ?? []
-  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.tc })
-  if (tcItems.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No test cases yet.' })
-  } else {
-    blocks.push({
-      kind: 'table',
-      header: ['ID', 'Title', 'Steps', 'Expected Result', 'Related FR'],
-      rows: tcItems.map(tcRow)
-    })
-  }
-
-  const nfrItems = spec.nfrItems ?? []
-  blocks.push({ kind: 'heading', level: 2, text: FEATURE_HEADINGS.nfr })
-  if (nfrItems.length === 0) {
-    blocks.push({ kind: 'paragraph', text: 'No non-functional requirements yet.' })
-  } else {
-    blocks.push({
-      kind: 'table',
-      header: ['ID', 'Requirement', 'Target', 'Priority', 'Related FR'],
-      rows: buildGroupedRows(nfrItems, (nfr) => nfr.group, nfrRow)
-    })
+  for (const table of featureTables(spec, allFrs)) {
+    blocks.push({ kind: 'heading', level: 2, text: table.heading })
+    if (table.rows.length === 0) blocks.push({ kind: 'paragraph', text: table.empty })
+    else blocks.push({ kind: 'table', header: table.header, rows: table.rows })
   }
 
   return { title: spec.title, blocks }
