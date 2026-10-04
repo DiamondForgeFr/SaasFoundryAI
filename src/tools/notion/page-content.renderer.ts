@@ -30,6 +30,11 @@ function tableRow(cells: string[]): TableRowChild {
   return { type: 'table_row', table_row: { cells: cells.map(rt) } }
 }
 
+/** Rows to append to an existing table block, rendered as the table's own rows are. */
+export function renderTableRows(rows: string[][]): TableRowChild[] {
+  return rows.map(tableRow)
+}
+
 function renderBlock(block: PageBlock): BlockObjectRequest | BlockObjectRequest[] {
   switch (block.kind) {
     case 'heading':
