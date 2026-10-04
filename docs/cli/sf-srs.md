@@ -42,7 +42,7 @@ sf srs write --spec <path> [--manifest <path>] [--no-clear-pending]
 sf srs versions [--root-page <id>] [--manifest <path>]
 
 sf srs spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>]
-             [--milestone <name>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]
+             [--milestone <name>] [--complexity <level>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]
 
 sf srs normalize [--feature <url-or-id>] [--version-name <name>] [--apply]
                  [--manifest <path>] [--root-page <id>]
@@ -52,6 +52,9 @@ sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--ma
 ```
 
 `--milestone` on `spawn` **declares the release these tickets ship in**: the milestone is created or reused, the version page is linked to it, and every ticket spawned joins it.
+
+`--complexity <level>` on `spawn` labels every created Story whose FR page states no complexity (`bug`, `low`, `medium` or `complex`); an FR page's own Complexity wins. The summary lists any Story
+left without one, which the workflow refuses to move out of Backlog.
 
 ## Common options
 

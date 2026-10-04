@@ -218,6 +218,10 @@ why the CLI will not derive the name from the page it was handed. Ask the user f
 Omit the flag and spawn behaves as before, but says so: `release: none — pass --milestone <name> to declare what these tickets ship in`. That line exists because a version spawned into no release is
 the exact state #542 was filed to prevent, and the moment to raise it is while the tickets are being created — not when somebody later asks what v1 contains.
 
+### Complexity of the spawned Stories
+
+Every Story needs a `complexity:` label before it leaves Backlog. An FR candidate may carry `"complexity": "bug" | "low" | "medium" | "complex"`: the FR page shows it and spawn labels the Story with it. `--complexity <level>` labels the Stories whose FR page states none. The summary names any Story left without one; tag it with `workflow-cli.sh retag <ticket> <level>` before moving it.
+
 **Never assign the tickets one by one afterwards.** That loop is what `--milestone` replaces; running it by hand is how #562 was found.
 
 ### Evidence-first reconciliation

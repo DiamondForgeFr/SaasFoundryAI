@@ -1,4 +1,4 @@
-import { Priority, RawContent } from '../../builders/srs/types'
+import { Complexity, isComplexity, Priority, RawContent } from '../../builders/srs/types'
 
 /**
  * Reads back what `sf srs write` put on an FR page and on a feature or version page, so the
@@ -80,6 +80,7 @@ function tableRows(found: Section | undefined): string[][] {
 export interface FrPageContent {
   description?: string
   priority?: Priority
+  complexity?: Complexity
   acceptanceCriteria: string[]
   urRefs: string[]
   dsRefs: string[]
@@ -96,9 +97,11 @@ export function parseFrPage(raw: RawContent): FrPageContent {
     for (const [label, value] of block.rows.slice(1)) if (label) fields.set(label.trim(), value ?? '')
   }
   const priority = text(fields.get('Priority'))
+  const complexity = text(fields.get('Complexity'))
   return {
     description: text(fields.get('Description')),
     priority: priority === 'P1' || priority === 'P2' || priority === 'P3' ? priority : undefined,
+    complexity: isComplexity(complexity) ? complexity : undefined,
     acceptanceCriteria: cellList(fields.get('Acceptance Criteria')),
     urRefs: cellRefs(fields.get('Related UR')),
     dsRefs: cellRefs(fields.get('Related DS')),
