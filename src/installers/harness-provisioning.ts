@@ -103,6 +103,9 @@ export function ensureWorkingBranch(opts: { cwd?: string; workingBranch?: string
   }
 }
 
+/** How an empty repository gets its first commit and working branch through the workflow (#833). */
+export const BOOTSTRAP_COMMAND = '.claude/skills/sf-workflow/workflow-cli.sh bootstrap <ticket>'
+
 /** One line per outcome, naming the next step when the branch still needs one (#822). */
 export function describeBranchProvision(result: BranchProvisionResult): { ok: boolean; message: string } | null {
   const branch = result.branch
@@ -116,7 +119,7 @@ export function describeBranchProvision(result: BranchProvisionResult): { ok: bo
     case 'no-commits':
       return {
         ok: false,
-        message: `Working branch "${branch}" not created: ${result.base ? `"${result.base}"` : 'the repository'} has no commits yet. After the first commit, run \`git branch ${branch} && git push -u origin ${branch}\``
+        message: `Working branch "${branch}" not created: ${result.base ? `"${result.base}"` : 'the repository'} has no commits yet. Create the first ticket, then run \`${BOOTSTRAP_COMMAND}\`: it commits the setup on ${result.base ?? 'the main branch'}, creates "${branch}" and closes the ticket`
       }
     case 'branch-create-failed':
       return { ok: false, message: `Could not create the working branch "${branch}" from ${result.base} — create it with \`git branch ${branch} ${result.base}\`` }
