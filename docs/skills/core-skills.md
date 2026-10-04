@@ -36,8 +36,9 @@ AI: [auto-stages if nothing is staged]
 <type>(#<ticket>): <description>
 ```
 
-Types: `feat`, `fix`, `update`, `docs`, `chore`, `refactor`, `test`, `perf`, `revert`. The pre-commit hook (Prettier + ESLint + tsc + Jest) runs before the push — if anything fails, the commit is
-blocked. The skill respects that, never uses `--no-verify`.
+Types: the manifest's `workflow.commitFormat.types`, by default `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`. When `requireTicket` is true, the ticket
+number comes from the branch (`feature/<N>-…`); without one, the skill stops instead of inventing it. Without a configured workflow it falls back to conventional commits. The pre-commit hook
+(Prettier + ESLint + tsc + Jest) runs before the push — if anything fails, the commit is blocked. The skill respects that, never uses `--no-verify`.
 
 **When to override**: if you want to write the message yourself, just commit manually. `sf-git-commit` never fights you.
 
