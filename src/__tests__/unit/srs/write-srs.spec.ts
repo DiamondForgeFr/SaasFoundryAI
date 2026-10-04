@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { DraftCandidate, EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SectionAddition, SectionAdditionOutcome, SrsAdapter } from '../../../builders/srs/types'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../srs'
-import { checkSpec, collectFrsByFeature, collectVersionsByFeature, runWriteSrs } from '../../../srs/bin/write-srs'
+import { checkSpec, collectFrsByFeature, collectItemsByFeature, collectVersionsByFeature, runWriteSrs } from '../../../srs/bin/write-srs'
 
 class StubAdapter implements SrsAdapter {
   createdEpics: EpicSpec[] = []
@@ -536,9 +536,24 @@ describe('write-srs — a version under a feature written in an earlier batch', 
 
     expect(adapter.createdEpics[0].parentPageId).toBe(FEATURE_ID)
     expect(adapter.createdFrs[0].parentEpicPageId).toBe('epic-1')
-    expect(adapter.extensions).toEqual([
-      { pageId: FEATURE_ID, additions: [{ kind: 'list-items', heading: 'Versions', items: ['v1 — Topics'], createBefore: 'Traceability', intro: expect.stringContaining('Each version below') }] }
-    ])
+    expect(adapter.extensions[0]).toEqual({
+      pageId: FEATURE_ID,
+      additions: [{ kind: 'list-items', heading: 'Versions', items: ['v1 — Topics'], createBefore: 'Traceability', intro: expect.stringContaining('Each version below') }]
+    })
+    // #900 — the version's FRs join the feature's FR table, in whichever shape that table has
+    expect(adapter.extensions[1]).toEqual({
+      pageId: FEATURE_ID,
+      additions: [
+        {
+          kind: 'table-rows',
+          heading: 'Functional Requirements (FR)',
+          layouts: [
+            { header: ['ID', 'Requirement', 'Version', 'Priority', 'Related UR', 'Related DS'], rows: [['FR-1', 'Something', 'v1 — Topics', '—', '—', '—']] },
+            { header: ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS'], rows: [['FR-1', 'Something', '—', '—', '—']] }
+          ]
+        }
+      ]
+    })
     expect(adapter.updates).toEqual([])
   })
 
@@ -584,5 +599,82 @@ describe('write-srs — a version under a feature written in an earlier batch', 
     await expect(run(adapter, [version('v1', FEATURE_URL, 'v1 — Topics')])).resolves.toBe(0)
 
     expect(JSON.parse(stdout.join('')).notPlaced).toEqual(['v1 — Topics: add to "Versions" by hand — this SRS backend cannot edit an existing page.'])
+  })
+})
+
+// #900 — a version's and its FRs' UR / DS / TC / NFR items were dropped without a word
+describe('write-srs — the items of a version and its FRs reach the feature tables', () => {
+  const feature: DraftCandidate = { kind: 'epic', confidence: 'high', epic: { id: 'feat', title: 'Réunion live', parentPageId: 'root', urs: [], frs: [] }, source: { kind: 'notion-pages' } }
+  const version: DraftCandidate = {
+    kind: 'epic',
+    confidence: 'high',
+    epic: {
+      id: 'v1',
+      parentId: 'feat',
+      title: 'v1 — Topics',
+      parentPageId: 'ignored',
+      urs: [{ id: 'UR-2', narrative: 'Listed by the version' }],
+      frs: [],
+      nfrItems: [{ id: 'NFR-1', title: 'Topic latency', target: '≤ 2 s' }]
+    },
+    source: { kind: 'notion-pages' }
+  }
+  const frCandidate: DraftCandidate = {
+    kind: 'fr',
+    confidence: 'high',
+    fr: {
+      parentEpicId: 'v1',
+      fr: { id: 'FR-2', title: 'Topic grouping', urRefs: ['UR-2'], dsRefs: ['DS-1'] },
+      urs: [{ id: 'UR-2', narrative: 'See notes by topic' }],
+      dsItems: [{ id: 'DS-1', title: 'Topic store' }],
+      tcItems: [{ id: 'TC-1', title: 'Topics appear' }]
+    },
+    source: { kind: 'notion-pages' }
+  }
+
+  it('collects them per feature with their version, the FR candidate winning', () => {
+    expect(collectItemsByFeature([feature, version, frCandidate]).get('feat')).toEqual({
+      urs: [{ id: 'UR-2', narrative: 'See notes by topic', version: 'v1 — Topics' }],
+      dsItems: [{ id: 'DS-1', title: 'Topic store', version: 'v1 — Topics' }],
+      tcItems: [{ id: 'TC-1', title: 'Topics appear', version: 'v1 — Topics' }],
+      nfrItems: [{ id: 'NFR-1', title: 'Topic latency', target: '≤ 2 s', version: 'v1 — Topics' }]
+    })
+    expect(collectItemsByFeature([feature]).get('feat')).toBeUndefined()
+  })
+
+  it('hands them to the feature page it writes', async () => {
+    const adapter = new StubAdapter()
+    registerSrsBackend('write-stub', () => adapter)
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const tmpDir = mkdtempSync(join(tmpdir(), 'sf-srs-write-items-'))
+    try {
+      const manifestPath = join(tmpDir, '.saasfoundry.json')
+      writeFileSync(manifestPath, JSON.stringify({ tools: { srs: { backend: 'write-stub' } } }))
+      const specPath = join(tmpDir, 'spec.json')
+      writeFileSync(specPath, JSON.stringify([feature, version, frCandidate]))
+
+      await expect(runWriteSrs({ specPath, manifestPath, clearPendingIngestion: false })).resolves.toBe(0)
+
+      expect(adapter.createdEpics[0].versionItems?.dsItems).toEqual([{ id: 'DS-1', title: 'Topic store', version: 'v1 — Topics' }])
+    } finally {
+      unregisterSrsBackend('write-stub')
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('warns about the items of an FR attached by page id, which no feature table receives', () => {
+    const byPage: DraftCandidate = {
+      kind: 'fr',
+      confidence: 'high',
+      fr: { parentEpicPageId: 'page-1', fr: { id: 'FR-3', title: 'Elsewhere' }, dsItems: [{ id: 'DS-9', title: 'Lost' }] },
+      source: { kind: 'notion-pages' }
+    }
+
+    const check = checkSpec([byPage])
+
+    expect(check.errors).toEqual([])
+    expect(check.warnings).toEqual([
+      'write-srs: candidate #0 (fr) carries dsItems but is attached by parentEpicPageId, so no feature table receives them. Attach it by parentEpicId to a version of the batch.'
+    ])
   })
 })
