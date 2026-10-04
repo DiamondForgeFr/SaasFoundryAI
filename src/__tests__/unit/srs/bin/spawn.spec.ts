@@ -103,13 +103,20 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
   const inspectTickets = jest.fn(() => [])
   const linkSubtask = jest.fn()
   const addToProject = jest.fn()
+  const setComplexity = jest.fn()
   return Object.assign(
-    { stdout, stderr, createSubtask, createEpic, inspectTickets, linkSubtask, addToProject, ensureMilestone, assignMilestone, associateMilestone, stdoutBuffer, stderrBuffer },
+    { stdout, stderr, createSubtask, createEpic, inspectTickets, linkSubtask, addToProject, ensureMilestone, assignMilestone, associateMilestone, setComplexity, stdoutBuffer, stderrBuffer },
     overrides
   )
 }
 
 describe('parseArgs', () => {
+  // #901
+  it('reads --complexity, and refuses a level the workflow does not know', () => {
+    expect(parseArgs(['--epic', 'e', '--complexity', 'medium']).complexity).toBe('medium')
+    expect(() => parseArgs(['--epic', 'e', '--complexity', 'huge'])).toThrow('--complexity must be one of bug, low, medium, complex (got "huge")')
+  })
+
   it('parses the minimal happy path', () => {
     const opts = parseArgs(['--ticket', '42', '--epic', 'epic-url'])
     expect(opts.ticket).toBe('42')
@@ -889,6 +896,59 @@ describe('runSpawn', () => {
         )
         writeManifest({ tools: { srs: { backend: 'stub' } } })
       }
+
+      // #901 — spawned Stories carried no complexity, so each one was refused at its first move
+      describe('complexity', () => {
+        const withComplexity = (pageId: string): RawContent =>
+          pageId === 'f2' ? asRead(renderFrPage({ parentEpicPageId: 'v2', fr: { id: 'FR-LIVE-007', title: 'Topic-aware AI note taking', complexity: 'medium' } }), 'f2') : pages[pageId]
+        const storyNumber = (io: TestIO): string => (io.createSubtask.mock.results[0].value as { childNumber: string }).childNumber
+
+        it('labels each Story with the complexity its FR page states', async () => {
+          registerWithPages(withComplexity)
+          const io = makeIO()
+
+          await expect(runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante', complexity: 'low' }), ticket: undefined }, io)).resolves.toBe(0)
+
+          expect(io.setComplexity).toHaveBeenCalledWith(storyNumber(io), 'medium')
+          expect(io.stdoutBuffer.join('')).toContain('— complexity medium')
+          expect(io.stdoutBuffer.join('')).toContain('every created Story carries its complexity')
+        })
+
+        it('falls back to --complexity for an FR page that states none', async () => {
+          registerWithPages()
+          const io = makeIO()
+
+          await expect(runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante', complexity: 'low' }), ticket: undefined }, io)).resolves.toBe(0)
+
+          expect(io.setComplexity).toHaveBeenCalledWith(storyNumber(io), 'low')
+        })
+
+        it('names the Stories left without one, and never labels the Epic', async () => {
+          registerWithPages()
+          const io = makeIO()
+
+          await expect(runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined }, io)).resolves.toBe(0)
+
+          expect(io.setComplexity).not.toHaveBeenCalled()
+          expect(io.stdoutBuffer.join('')).toContain(
+            `1 Story ticket(s) without a complexity — tag each before it leaves Backlog: workflow-cli.sh retag <ticket> <bug|low|medium|complex>: #${storyNumber(io)}`
+          )
+        })
+
+        it('lists a Story whose label could not be set, without failing the spawn', async () => {
+          registerWithPages(withComplexity)
+          const io = makeIO({
+            setComplexity: jest.fn(() => {
+              throw new Error('gh: forbidden')
+            })
+          })
+
+          await expect(runSpawn({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined }, io)).resolves.toBe(0)
+
+          expect(io.stderrBuffer.join('')).toContain('complexity medium not set — gh: forbidden')
+          expect(io.stdoutBuffer.join('')).toContain('without a complexity')
+        })
+      })
 
       it('builds each Story from its FR page and the feature page', async () => {
         registerWithPages()

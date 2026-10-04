@@ -330,6 +330,8 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
           'v1 — MVP',
           '--milestone',
           'v1.0.0',
+          '--complexity',
+          'low',
           '--reconciliation-plan',
           '/tmp/reconcile.json',
           '--dry-run'
@@ -344,7 +346,10 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       const srsCalls = readLog(sandbox.srsLogPath)
       // #855 — the drafting ticket is referenced, never the Stories' parent: they hung under
       // a Task that `done` closes right away. Spawn creates or adopts the version Epic.
-      expect(srsCalls).toEqual(['spawn --drafting-ticket 42 --epic https://example.test/feature --version v1 — MVP --milestone v1.0.0 --reconciliation-plan /tmp/reconcile.json --dry-run'])
+      // #901 — the default complexity reaches spawn too
+      expect(srsCalls).toEqual([
+        'spawn --drafting-ticket 42 --epic https://example.test/feature --version v1 — MVP --milestone v1.0.0 --complexity low --reconciliation-plan /tmp/reconcile.json --dry-run'
+      ])
     })
 
     it('blocks spawning before dispatch when the target or evidence plan is missing', async () => {

@@ -60,7 +60,7 @@ describe('renderFrPage — five-category structure', () => {
     expect(summary.rows).toEqual([['FR-AUTH-01-01', 'Sign in', 'P1', 'UR-AUTH-01-01', 'DS-AUTH-01-01, DS-AUTH-01-02', 'TC-AUTH-01-01']])
   })
 
-  it('renders a vertical detail table with all 12 canonical rows', () => {
+  it('renders a vertical detail table with all 13 canonical rows', () => {
     const spec: FrSpec = {
       parentEpicPageId: 'epic',
       fr: {
@@ -69,6 +69,7 @@ describe('renderFrPage — five-category structure', () => {
         description: 'Authenticate user via email + password',
         endpoint: 'POST /auth/signin',
         priority: 'P1',
+        complexity: 'medium',
         urRefs: ['UR-AUTH-01-01'],
         dsRefs: ['DS-AUTH-01-01'],
         tcRefs: ['TC-AUTH-01-01', 'TC-AUTH-01-02'],
@@ -86,6 +87,7 @@ describe('renderFrPage — five-category structure', () => {
       ['Title', 'Sign in'],
       ['Endpoint', 'POST /auth/signin'],
       ['Priority', 'P1'],
+      ['Complexity', 'medium'],
       ['Related UR', 'UR-AUTH-01-01'],
       ['Related DS', 'DS-AUTH-01-01'],
       ['Related TC', 'TC-AUTH-01-01, TC-AUTH-01-02'],

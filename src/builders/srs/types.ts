@@ -14,6 +14,14 @@ export interface UrItem {
   group?: string
 }
 
+/** The workflow's complexity levels; every Story needs one before it leaves Backlog. */
+export const COMPLEXITIES = ['bug', 'low', 'medium', 'complex'] as const
+export type Complexity = (typeof COMPLEXITIES)[number]
+
+export function isComplexity(value: unknown): value is Complexity {
+  return typeof value === 'string' && (COMPLEXITIES as readonly string[]).includes(value)
+}
+
 export interface FrItem {
   id: string
   title: string
@@ -23,6 +31,8 @@ export interface FrItem {
   dsRefs?: string[]
   tcRefs?: string[]
   priority?: Priority
+  /** Estimated by the drafter; spawn labels the FR's Story with it (#901). */
+  complexity?: Complexity
   group?: string
   endpoint?: string
   requestBody?: string

@@ -6,6 +6,15 @@ import { asRead } from '../../../helpers/srs-pages'
 // #837 — read back through the renderers that write the pages, so a template change that
 // the parser does not follow fails here rather than as empty ticket bodies
 describe('parseFrPage', () => {
+  // #901 — the FR page carries the complexity spawn labels the Story with
+  it('reads the complexity the FR page states, and ignores an unknown one', () => {
+    const page = (complexity?: string) => asRead(renderFrPage({ parentEpicPageId: 'v', fr: { id: 'FR-1', title: 'T', ...(complexity ? { complexity: complexity as 'low' } : {}) } }), 'f')
+
+    expect(parseFrPage(page('complex')).complexity).toBe('complex')
+    expect(parseFrPage(page()).complexity).toBeUndefined()
+    expect(parseFrPage(page('huge')).complexity).toBeUndefined()
+  })
+
   it('reads back what renderFrPage wrote', () => {
     const page = renderFrPage({
       parentEpicPageId: 'v',

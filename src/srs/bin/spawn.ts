@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 
 import { renderEpicTicketBody } from '../../builders/srs/templates/tickets/epic.tpl'
 import { renderStoryTicketBody } from '../../builders/srs/templates/tickets/story.tpl'
-import { FrItem, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
+import { COMPLEXITIES, Complexity, FrItem, isComplexity, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { EpicPageContent, FrPageContent, parseEpicPage, parseFrPage } from '../spawn/page-content'
 import { canonicalSrsIdentity, ExistingSrsTicket, loadReconciliationPlan, reconcileRequirements, ReconciliationError, ReconciliationRequirement, ReconciliationResult } from '../spawn/reconciliation'
@@ -51,6 +51,8 @@ export interface SpawnOptions {
    * creates names it, so GitHub links the two; it is never the Stories' parent (#855).
    */
   draftingTicket?: string
+  /** Complexity for every Story whose FR page states none (#901). */
+  complexity?: Complexity
 }
 
 export interface PlannedCreation {
@@ -58,6 +60,8 @@ export interface PlannedCreation {
   title: string
   frPageUrl: string
   body: string
+  /** From the FR page, else `--complexity`: the label the Story needs to leave Backlog (#901). */
+  complexity?: Complexity
 }
 
 export interface SpawnIO {
@@ -78,6 +82,8 @@ export interface SpawnIO {
   assignMilestone: (ticket: string, name: string) => void
   /** Link the SRS version page to the release. Already a no-op when repeated. */
   associateMilestone: (name: string, versionPageUrl: string) => void
+  /** Label a Story with its complexity, which the workflow requires before it leaves Backlog. */
+  setComplexity: (ticket: string, level: Complexity) => void
 }
 
 function takeValue(argv: string[], i: number, flag: string): string {
@@ -117,6 +123,11 @@ export function parseArgs(argv: string[]): SpawnOptions {
       i++
     } else if (a === '--drafting-ticket') {
       opts.draftingTicket = takeValue(argv, i, '--drafting-ticket')
+      i++
+    } else if (a === '--complexity') {
+      const level = takeValue(argv, i, '--complexity')
+      if (!isComplexity(level)) throw new SrsUsageError(`spawn: --complexity must be one of ${COMPLEXITIES.join(', ')} (got "${level}")`)
+      opts.complexity = level
       i++
     } else {
       rejectUnknownOption('spawn', a)
@@ -176,6 +187,9 @@ function defaultIO(): SpawnIO {
     },
     addToProject: (ticket) => {
       execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['add-to-project', ticket, '--status', 'Backlog'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
+    },
+    setComplexity: (ticket, level) => {
+      execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['retag', ticket, level], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
     },
     // `milestone create` refuses a name that already exists on purpose — two
     // releases sharing one milestone is a scope error. So reuse is detected by
@@ -383,7 +397,16 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       return 2
     }
     const page = frContents.get(child.id)
-    const fr: FrItem = { id: parsed.id, title: parsed.title, description: page?.description, priority: page?.priority, urRefs: page?.urRefs, dsRefs: page?.dsRefs, tcRefs: page?.tcRefs }
+    const fr: FrItem = {
+      id: parsed.id,
+      title: parsed.title,
+      description: page?.description,
+      priority: page?.priority,
+      complexity: page?.complexity,
+      urRefs: page?.urRefs,
+      dsRefs: page?.dsRefs,
+      tcRefs: page?.tcRefs
+    }
     const spec: StoryTicketBodySpec = {
       fr,
       frPageUrl: child.url,
@@ -394,7 +417,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       dsRefs: page?.dsRefs.map((id) => ({ id, title: featureContent.ds.get(id) || undefined })),
       constraints: page ? [...page.validationRules, ...(page.securityRationale ? [page.securityRationale] : [])] : undefined
     }
-    planned.push({ frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec) })
+    planned.push({ frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec), complexity: fr.complexity ?? options.complexity })
   }
 
   let reconciliation: ReconciliationResult[] | undefined
@@ -421,7 +444,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   const parentLabel = options.ticket ? `#${options.ticket}` : adoptedEpic ? `the existing Epic #${adoptedEpic} « ${holderTitle} »` : `a new Epic « ${holderTitle} »`
   io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s), planning Story tickets under ${parentLabel}\n`)
   for (const p of planned) {
-    io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl})\n`)
+    io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl}) — ${p.complexity ? `complexity ${p.complexity}` : 'no complexity'}\n`)
   }
 
   if (reconciliation) {
@@ -506,6 +529,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   const created: string[] = []
+  const complexityOf = new Map<string, Complexity | undefined>()
   const reused = reconciliation?.filter((result) => result.action === 'reuse' && result.ticket).map((result) => result.ticket!.number) ?? []
   // A reused ticket with no parent joins the delivery parent: it was counted, never linked
   for (const result of reconciliation ?? []) {
@@ -529,6 +553,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       }
       io.stdout(`  ✓ ${p.frId} → #${childNumber}\n`)
       created.push(childNumber)
+      complexityOf.set(childNumber, p.complexity)
     } catch (error) {
       if (reconciliation) {
         try {
@@ -577,6 +602,30 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
   io.stdout(`spawn: ${boarded.length} ticket(s) on the project board.\n`)
 
+  // A Story leaves Backlog only with a complexity label; the FR page states it, else
+  // --complexity does, else the Story is named here rather than found by the guard (#901)
+  const untagged: string[] = []
+  for (const ticket of created) {
+    const level = complexityOf.get(ticket)
+    if (!level) {
+      untagged.push(ticket)
+      continue
+    }
+    try {
+      io.setComplexity(ticket, level)
+    } catch (error) {
+      io.stderr(`  ✗ #${ticket}: complexity ${level} not set — ${error instanceof Error ? error.message : String(error)}\n`)
+      untagged.push(ticket)
+    }
+  }
+  if (untagged.length > 0) {
+    io.stdout(
+      `spawn: ${untagged.length} Story ticket(s) without a complexity — tag each before it leaves Backlog: workflow-cli.sh retag <ticket> <${COMPLEXITIES.join('|')}>: ${untagged.map((ticket) => `#${ticket}`).join(', ')}\n`
+    )
+  } else if (created.length > 0) {
+    io.stdout(`spawn: every created Story carries its complexity.\n`)
+  }
+
   if (options.milestone) {
     // The Epic joins too: a milestone read after the release should show the
     // grouping that composed it, not a flat list of Stories. It closes on its
@@ -620,6 +669,6 @@ if (require.main === module) {
   runFromCommandLine(
     'spawn',
     (argv) => runSpawn(parseArgs(argv)),
-    'Usage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--reconciliation-plan <path>] [--drafting-ticket <n>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]'
+    'Usage: spawn.ts --epic <page-url-or-id> [--ticket <ticket-number>] [--version <title-url-or-id>] [--milestone <name>] [--complexity <bug|low|medium|complex>] [--reconciliation-plan <path>] [--drafting-ticket <n>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]'
   )
 }

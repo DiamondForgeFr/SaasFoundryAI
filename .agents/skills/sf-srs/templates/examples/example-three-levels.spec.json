@@ -70,6 +70,7 @@
           "title": "Topic-aware AI note taking",
           "description": "Live notes are grouped under the topic being discussed rather than appended in order of arrival.",
           "priority": "P1",
+          "complexity": "medium",
           "acceptanceCriteria": ["A topic change creates a new group.", "A note arriving after a topic change lands under the new topic."],
           "urRefs": ["UR-LIVE-004"],
           "dsRefs": ["DS-LIVE-002"]
