@@ -155,7 +155,7 @@ export function documentationLines({ isMonorepo, projectName, apiPort, hasHarnes
 
   lines.push(
     { label: 'API reference', target: `./${apiDir}/docs/index.html`, condition: 'offline' },
-    { label: '', target: `http://localhost:${apiPort}/api/docs`, condition: 'live, needs the API up' },
+    { label: 'API reference (live)', target: `http://localhost:${apiPort}/api/docs`, condition: 'live, needs the API up' },
     { label: 'SaaSFoundryAI docs', target: 'sf docs' }
   )
 
