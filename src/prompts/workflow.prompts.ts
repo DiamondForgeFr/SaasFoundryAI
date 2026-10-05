@@ -3,7 +3,7 @@ import chalk from 'chalk'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { execFileSync, execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import type { WorkflowConfig, AIRules, WorkflowTemplate, WorkflowStatus, GitHubProjectColor } from '../types'
 import { fileExists } from '../utils'
 import { githubRepoOf } from '../status/collect'
@@ -111,17 +111,22 @@ export const WORKFLOW_PRESETS = {
   }
 }
 
-/**
- * Check if GitHub CLI is authenticated
- * @returns true if gh CLI is authenticated and ready to use
- */
-function checkGhAuth(): boolean {
+/** Whether the GitHub CLI can create a board: installed and logged in, or which of the two is missing. */
+export type GhState = 'ready' | 'unauthenticated' | 'missing'
+
+export function ghState(): GhState {
   try {
-    execSync('gh auth status', { stdio: 'ignore' })
-    return true
-  } catch {
-    return false
+    gh(['auth', 'status'], { quiet: true })
+    return 'ready'
+  } catch (error) {
+    // execFileSync reports a binary absent from PATH as ENOENT; any other failure is a gh that answered
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'unauthenticated'
   }
+}
+
+/** What to do about a GitHub CLI that cannot create a board (#898): `gh auth login` only exists once gh is installed. */
+export function ghRemedy(state: Exclude<GhState, 'ready'>): string {
+  return state === 'missing' ? 'GitHub CLI (gh) is not installed. Install it from https://cli.github.com, then run: gh auth login' : 'GitHub CLI not authenticated. Run: gh auth login'
 }
 
 /**
@@ -150,7 +155,7 @@ export async function detectAvailableTools(): Promise<{
   const tools = ['jira', 'notion', 'linear']
 
   // Check GitHub Projects (via gh CLI authentication)
-  if (checkGhAuth()) {
+  if (ghState() === 'ready') {
     available.push('github-projects')
   }
 
@@ -268,8 +273,9 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
   const interactive = options.interactive ?? true
   try {
     // Check gh auth
-    if (!checkGhAuth()) {
-      console.log(chalk.yellow('\n⚠️  GitHub CLI not authenticated. Run: gh auth login\n'))
+    const ghStatus = ghState()
+    if (ghStatus !== 'ready') {
+      console.log(chalk.yellow(`\n⚠️  ${ghRemedy(ghStatus)}\n`))
       return null
     }
 
@@ -450,8 +456,9 @@ const UPDATE_STATUS_OPTIONS_MUTATION = `mutation($fieldId: ID!, $options: [Proje
  */
 export async function updateGitHubProjectStatuses(projectUrl: string, statuses: WorkflowStatus[]): Promise<boolean> {
   try {
-    if (!checkGhAuth()) {
-      console.log(chalk.yellow('⚠️  gh CLI not authenticated — update the GitHub Project Status field manually (Project settings → Status).'))
+    const ghStatus = ghState()
+    if (ghStatus !== 'ready') {
+      console.log(chalk.yellow(`⚠️  ${ghRemedy(ghStatus)} Until then, update the GitHub Project Status field manually (Project settings → Status).`))
       return false
     }
 
@@ -823,9 +830,9 @@ export async function promptWorkflowConfiguration(
       // Prompt for project-specific values (same as new workflow creation)
       if (template.tool === 'github-projects') {
         // Check if GitHub CLI is authenticated
-        const isGhAuthenticated = checkGhAuth()
+        const ghStatus = ghState()
 
-        if (isGhAuthenticated) {
+        if (ghStatus === 'ready') {
           const { autoCreate } = await inquirer.prompt([
             {
               type: 'confirm',
@@ -889,7 +896,8 @@ export async function promptWorkflowConfiguration(
             workflowConfig.projectUrl = url
           }
         } else {
-          // GitHub CLI not authenticated, ask for URL
+          // GitHub CLI missing or not authenticated, ask for URL
+          console.log(chalk.yellow(`\n💡 ${ghRemedy(ghStatus)}\n`))
           const { url } = await inquirer.prompt([
             {
               type: 'input',
@@ -1107,7 +1115,8 @@ export async function promptWorkflowConfiguration(
       isPreconfiguredWorkflow = presetResult.isPreconfigured
       selectedPresetKey = presetResult.presetKey
 
-      console.log(chalk.yellow('\n💡 Tip: Run "gh auth login" to enable auto-creation of GitHub Projects\n'))
+      const ghStatus = ghState()
+      if (ghStatus !== 'ready') console.log(chalk.yellow(`\n💡 ${ghRemedy(ghStatus)} — it lets sf create GitHub Projects for you.\n`))
       const { url } = await inquirer.prompt([
         {
           type: 'input',
