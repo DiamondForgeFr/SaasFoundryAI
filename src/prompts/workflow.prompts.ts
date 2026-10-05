@@ -3,7 +3,7 @@ import chalk from 'chalk'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import type { WorkflowConfig, AIRules, WorkflowTemplate, WorkflowStatus, GitHubProjectColor } from '../types'
 import { fileExists } from '../utils'
 import { githubRepoOf } from '../status/collect'
@@ -125,6 +125,19 @@ function checkGhAuth(): boolean {
 }
 
 /**
+ * Run `gh` with an argument vector, never through a shell, so a project name
+ * or an owner login reaches GitHub as given (#897).
+ */
+function gh(args: string[], options: { input?: string; quiet?: boolean } = {}): string {
+  return execFileSync('gh', args, { encoding: 'utf-8', input: options.input, stdio: ['pipe', 'pipe', options.quiet ? 'ignore' : 'pipe'] })
+}
+
+/** A GraphQL call whose values travel as variables, never spliced into the query (#897). */
+function ghGraphql<T = Record<string, unknown>>(query: string, variables: Record<string, unknown> = {}): T {
+  return JSON.parse(gh(['api', 'graphql', '--input', '-'], { input: JSON.stringify({ query, variables }) })).data as T
+}
+
+/**
  * Detect available workflow tools based on credentials and gh auth status
  * Scans ~/.claude/credentials/ directories for tool credentials
  * @returns {available: string[], recommended: string} object with tool detection results
@@ -216,7 +229,7 @@ async function promptOwnerSelection(): Promise<{ owner: string; isOrg: boolean }
     ])
     const owner = orgName.trim()
     try {
-      execSync(`gh api orgs/${owner}`, { stdio: 'ignore' })
+      gh(['api', `orgs/${encodeURIComponent(owner)}`], { quiet: true })
     } catch {
       console.log(chalk.yellow(`\n⚠️  Organization "${owner}" not found or you don't have access\n`))
       return null
@@ -225,7 +238,7 @@ async function promptOwnerSelection(): Promise<{ owner: string; isOrg: boolean }
   }
 
   try {
-    const owner = execSync('gh api user --jq .login', { encoding: 'utf-8' }).trim()
+    const owner = gh(['api', 'user', '--jq', '.login']).trim()
     return { owner, isOrg: false }
   } catch {
     console.log(chalk.yellow('\n⚠️  Could not get authenticated user\n'))
@@ -274,7 +287,7 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
         repoName = parsed.repo
         // Verify owner exists and get its type
         try {
-          const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8' }).trim()
+          const ownerType = gh(['api', `users/${repoOwner}`, '--jq', '.type']).trim()
           isOrg = ownerType === 'Organization'
         } catch {
           console.log(chalk.yellow(`\n⚠️  Could not verify GitHub user/org: ${repoOwner}\n`))
@@ -290,11 +303,11 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     } else {
       // 2) From the current git repository (existing repos)
       try {
-        const repoInfo = execSync('gh repo view --json owner,name', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] })
+        const repoInfo = gh(['repo', 'view', '--json', 'owner,name'], { quiet: true })
         const repo = JSON.parse(repoInfo)
         repoOwner = repo.owner.login
         repoName = repo.name
-        const ownerType = execSync(`gh api users/${repoOwner} --jq .type`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim()
+        const ownerType = gh(['api', `users/${repoOwner}`, '--jq', '.type'], { quiet: true }).trim()
         isOrg = ownerType === 'Organization'
       } catch {
         // Not in a git repo — fall through to the manual picker below.
@@ -330,29 +343,20 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     console.log(chalk.blue(`\n🔨 Creating GitHub Project "${projectName}"...\n`))
 
     // Get owner ID (user or org)
-    const ownerIdQuery = isOrg ? `query { organization(login: "${repoOwner}") { id } }` : `query { user(login: "${repoOwner}") { id } }`
-
-    const ownerIdResult = execSync(`gh api graphql -f query='${ownerIdQuery}'`, { encoding: 'utf-8' })
-    const ownerId = JSON.parse(ownerIdResult).data[isOrg ? 'organization' : 'user'].id
+    const ownerField = isOrg ? 'organization' : 'user'
+    const owner = ghGraphql<Record<string, { id: string }>>(`query($login: String!) { ${ownerField}(login: $login) { id } }`, { login: repoOwner })
+    const ownerId = owner[ownerField].id
 
     // Create project
-    const mutation = `
-      mutation {
-        createProjectV2(input: {
-          ownerId: "${ownerId}"
-          title: "${projectName}"
-        }) {
-          projectV2 {
-            id
-            number
-            url
-          }
+    const created = ghGraphql<{ createProjectV2: { projectV2: { id: string; number: number; url: string } } }>(
+      `mutation($ownerId: ID!, $title: String!) {
+        createProjectV2(input: { ownerId: $ownerId, title: $title }) {
+          projectV2 { id number url }
         }
-      }
-    `
-
-    const result = execSync(`gh api graphql -f query='${mutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
-    const projectData = JSON.parse(result).data.createProjectV2.projectV2
+      }`,
+      { ownerId, title: projectName }
+    )
+    const projectData = created.createProjectV2.projectV2
     const projectId = projectData.id
 
     console.log(chalk.green(`✅ Project created: ${projectData.url}`))
@@ -361,7 +365,7 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     // Projects tab — best-effort, never fail creation on it (#463 finding 2).
     if (repoName) {
       try {
-        execSync(`gh project link ${projectData.number} --owner ${repoOwner} --repo ${repoOwner}/${repoName}`, { stdio: 'ignore' })
+        gh(['project', 'link', String(projectData.number), '--owner', repoOwner, '--repo', `${repoOwner}/${repoName}`], { quiet: true })
         console.log(chalk.green(`✅ Linked the project to ${repoOwner}/${repoName}`))
       } catch {
         console.log(chalk.yellow(`⚠️  Could not link the project to ${repoOwner}/${repoName} — link it manually from the repo's Projects tab.`))
@@ -372,23 +376,19 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     console.log(chalk.blue(`🔧 Configuring Status field with ${statuses.length} states...\n`))
 
     // Get the Status field (GitHub Projects creates it by default)
-    const getFieldQuery = `
-      query {
-        node(id: "${projectId}") {
+    const fieldResult = ghGraphql<{ node: { field: { id: string; name: string } | null } }>(
+      `query($projectId: ID!) {
+        node(id: $projectId) {
           ... on ProjectV2 {
             field(name: "Status") {
-              ... on ProjectV2SingleSelectField {
-                id
-                name
-              }
+              ... on ProjectV2SingleSelectField { id name }
             }
           }
         }
-      }
-    `
-
-    const fieldResult = execSync(`gh api graphql -f query='${getFieldQuery.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
-    const statusField = JSON.parse(fieldResult).data.node.field
+      }`,
+      { projectId }
+    )
+    const statusField = fieldResult.node.field
 
     if (!statusField) {
       console.log(chalk.yellow('⚠️  Status field not found, skipping configuration'))
@@ -397,37 +397,9 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
 
     const statusFieldId = statusField.id
 
-    // Build options array for the mutation
-    const optionsJson = statuses
-      .map((status) => {
-        const color = status.color || 'GRAY'
-        const description = status.description ? `, description: "${status.description.replace(/"/g, '\\"')}"` : ''
-        return `{ name: "${status.name.replace(/"/g, '\\"')}", color: ${color}${description} }`
-      })
-      .join(', ')
-
     // Update Status field with custom options
-    const updateFieldMutation = `
-      mutation {
-        updateProjectV2Field(input: {
-          fieldId: "${statusFieldId}"
-          singleSelectOptions: [${optionsJson}]
-        }) {
-          projectV2Field {
-            ... on ProjectV2SingleSelectField {
-              id
-              name
-              options {
-                id
-                name
-              }
-            }
-          }
-        }
-      }
-    `
-
-    execSync(`gh api graphql -f query='${updateFieldMutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
+    const options = statuses.map((status) => ({ name: status.name, color: status.color || 'GRAY', description: status.description ?? '' }))
+    ghGraphql(UPDATE_STATUS_OPTIONS_MUTATION, { fieldId: statusFieldId, options })
 
     // Display concise confirmation (full descriptions already shown when selecting the workflow)
     console.log(chalk.green(`✅ Status field configured with ${statuses.length} states`))
@@ -438,7 +410,7 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     let userId: number | undefined
     if (!isOrg) {
       try {
-        userId = Number(execSync(`gh api users/${repoOwner} --jq .id`, { encoding: 'utf-8' }).trim())
+        userId = Number(gh(['api', `users/${repoOwner}`, '--jq', '.id']).trim())
       } catch {
         // fall through — configureBoardView reports the failure as best-effort
       }
@@ -458,6 +430,15 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     return null
   }
 }
+
+/** Replace a board's Status options; names and descriptions travel as variables (#897). */
+const UPDATE_STATUS_OPTIONS_MUTATION = `mutation($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
+  updateProjectV2Field(input: { fieldId: $fieldId, singleSelectOptions: $options }) {
+    projectV2Field {
+      ... on ProjectV2SingleSelectField { id name }
+    }
+  }
+}`
 
 /**
  * Align an EXISTING GitHub Project's Status field with a preset's statuses
@@ -482,10 +463,11 @@ export async function updateGitHubProjectStatuses(projectUrl: string, statuses: 
     const [, kind, owner, number] = match
     const ownerField = kind === 'orgs' ? 'organization' : 'user'
 
-    const projectQuery = `
-      query {
-        ${ownerField}(login: "${owner}") {
-          projectV2(number: ${number}) {
+    type StatusField = { id: string; options?: { name: string; color?: string; description?: string }[] }
+    const fieldResult = ghGraphql<Record<string, { projectV2?: { field?: StatusField } } | null>>(
+      `query($login: String!, $number: Int!) {
+        ${ownerField}(login: $login) {
+          projectV2(number: $number) {
             field(name: "Status") {
               ... on ProjectV2SingleSelectField {
                 id
@@ -494,10 +476,10 @@ export async function updateGitHubProjectStatuses(projectUrl: string, statuses: 
             }
           }
         }
-      }
-    `
-    const fieldResult = execSync(`gh api graphql -f query='${projectQuery.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
-    const statusField = JSON.parse(fieldResult).data[ownerField]?.projectV2?.field
+      }`,
+      { login: owner, number: Number(number) }
+    )
+    const statusField = fieldResult[ownerField]?.projectV2?.field
     if (!statusField) {
       console.log(chalk.yellow('⚠️  Status field not found on the project — not updated.'))
       return false
@@ -523,21 +505,7 @@ export async function updateGitHubProjectStatuses(projectUrl: string, statuses: 
       ...extras.map((o) => ({ name: o.name, color: o.color || 'GRAY', description: o.description || '' }))
     ]
 
-    const optionsJson = merged.map((o) => `{ name: "${o.name.replace(/"/g, '\\"')}", color: ${o.color}, description: "${o.description.replace(/"/g, '\\"')}" }`).join(', ')
-
-    const updateFieldMutation = `
-      mutation {
-        updateProjectV2Field(input: {
-          fieldId: "${statusField.id}"
-          singleSelectOptions: [${optionsJson}]
-        }) {
-          projectV2Field {
-            ... on ProjectV2SingleSelectField { id name }
-          }
-        }
-      }
-    `
-    execSync(`gh api graphql -f query='${updateFieldMutation.replace(/\n/g, ' ')}'`, { encoding: 'utf-8' })
+    ghGraphql(UPDATE_STATUS_OPTIONS_MUTATION, { fieldId: statusField.id, options: merged })
 
     console.log(chalk.green(`✅ GitHub Project Status field updated (${missing.length} status(es) added: ${missing.map((s) => s.name).join(', ')})`))
     return true
