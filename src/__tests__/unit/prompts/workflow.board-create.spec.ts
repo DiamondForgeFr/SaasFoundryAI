@@ -1,19 +1,19 @@
 import inquirer from 'inquirer'
-import { execFileSync, execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 
 jest.mock('inquirer')
 jest.mock('../../../prompts/workflow.board-view', () => ({ configureBoardView: jest.fn(() => ({ created: true, visible: [], missing: [] })) }))
-jest.mock('child_process', () => ({ ...jest.requireActual('child_process'), execSync: jest.fn(), execFileSync: jest.fn() }))
+jest.mock('child_process', () => ({ ...jest.requireActual('child_process'), execFileSync: jest.fn() }))
 
-import { githubOwnerOf, setupGitHubProjectWithAutoCreation } from '../../../prompts/workflow.prompts'
+import { ghRemedy, ghState, githubOwnerOf, setupGitHubProjectWithAutoCreation } from '../../../prompts/workflow.prompts'
 
-const mockedExec = execSync as unknown as jest.Mock
 const mockedExecFile = execFileSync as unknown as jest.Mock
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
 
 /** A `gh` that knows one user, `acme`, and answers the calls board creation makes. */
 function fakeGh(file: string, args: string[], options: { input?: string } = {}): string {
   const cmd = [file, ...args].join(' ')
+  if (cmd === 'gh auth status') return ''
   if (cmd === 'gh api users/acme --jq .type') return 'User\n'
   if (cmd.startsWith('gh project link')) return ''
   if (cmd === 'gh api graphql --input -') {
@@ -51,10 +51,6 @@ describe('setupGitHubProjectWithAutoCreation without prompts (--create-board)', 
 
   beforeEach(() => {
     jest.clearAllMocks()
-    mockedExec.mockImplementation((cmd: string) => {
-      if (cmd === 'gh auth status') return ''
-      throw new Error(`unexpected command: ${cmd}`)
-    })
     mockedExecFile.mockImplementation(fakeGh)
     logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
   })
@@ -74,7 +70,7 @@ describe('setupGitHubProjectWithAutoCreation without prompts (--create-board)', 
 
     expect(url).toBeNull()
     expect(mockedPrompt).not.toHaveBeenCalled()
-    expect(mockedExec.mock.calls.map(([cmd]) => cmd)).toEqual(['gh auth status'])
+    expect(mockedExecFile.mock.calls.map(([, args]) => args.join(' '))).toEqual(['auth status'])
     expect(logSpy.mock.calls.flat().join('\n')).toContain('No GitHub remote to take the board owner from')
   })
 
@@ -86,7 +82,6 @@ describe('setupGitHubProjectWithAutoCreation without prompts (--create-board)', 
     const create = graphqlBodies().find((body) => body.query.includes('createProjectV2'))
     expect(create?.variables).toEqual({ ownerId: 'U_1', title })
     expect(create?.query).not.toContain(title)
-    expect(mockedExec.mock.calls.map(([cmd]) => cmd)).toEqual(['gh auth status'])
   })
 
   it('sends the Status options as a variable, quotes included', async () => {
@@ -110,5 +105,45 @@ describe('setupGitHubProjectWithAutoCreation without prompts (--create-board)', 
     await setupGitHubProjectWithAutoCreation('acme', [], 'https://github.com/acme/notulia.git')
 
     expect(mockedPrompt).toHaveBeenCalledWith([expect.objectContaining({ name: 'confirmOwner' })])
+  })
+})
+
+// #898 — a machine without gh was told to run `gh auth login`
+describe('ghState', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  const failWith = (error: Partial<NodeJS.ErrnoException> & { status?: number }) =>
+    mockedExecFile.mockImplementation(() => {
+      throw Object.assign(new Error('gh failed'), error)
+    })
+
+  it('is ready when gh auth status succeeds', () => {
+    mockedExecFile.mockReturnValue('')
+    expect(ghState()).toBe('ready')
+  })
+
+  it('is missing when gh is not on PATH, and names the install page instead of gh auth login', () => {
+    failWith({ code: 'ENOENT' })
+    expect(ghState()).toBe('missing')
+    expect(ghRemedy('missing')).toBe('GitHub CLI (gh) is not installed. Install it from https://cli.github.com, then run: gh auth login')
+  })
+
+  it('is unauthenticated when gh answers with an error', () => {
+    failWith({ status: 1 })
+    expect(ghState()).toBe('unauthenticated')
+    expect(ghRemedy('unauthenticated')).toBe('GitHub CLI not authenticated. Run: gh auth login')
+  })
+
+  it('tells --create-board that gh is missing and creates nothing', async () => {
+    failWith({ code: 'ENOENT' })
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+
+    const url = await setupGitHubProjectWithAutoCreation('acme', [], 'https://github.com/acme/notulia.git', { interactive: false })
+
+    expect(url).toBeNull()
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('GitHub CLI (gh) is not installed')
+    expect(output).not.toContain('not authenticated')
+    logSpy.mockRestore()
   })
 })
