@@ -3,7 +3,6 @@ import {
   buildUpdatePrefillFromOptions,
   parseAddModules,
   parseConflictStrategy,
-  parseUpdateWorkflow,
   parseTargetProfile,
   UpdateCommandOptions,
   validateLegacyAdoptionOptions,
@@ -54,20 +53,6 @@ describe('parseTargetProfile', () => {
 
   it.each(['stack', 'harness', 'FULL', '', ' full '])('rejects unsupported or non-canonical target %p', (value) => {
     expect(() => parseTargetProfile(value)).toThrow(/Invalid --target-profile.*V1 supports only: full/)
-  })
-})
-
-describe('parseUpdateWorkflow', () => {
-  it.each(['solo', 'saasfoundry'] as const)('accepts the %s preset', (preset) => {
-    expect(parseUpdateWorkflow(preset)).toEqual({ preset })
-  })
-
-  it.each([false, 'none'] as const)('supports an explicit disabled workflow with %p', (value) => {
-    expect(parseUpdateWorkflow(value)).toEqual({ disabled: true })
-  })
-
-  it('rejects unsupported presets', () => {
-    expect(() => parseUpdateWorkflow('custom')).toThrow(/Invalid --workflow/)
   })
 })
 
