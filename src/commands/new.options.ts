@@ -2,6 +2,7 @@ import { DEFAULT_OUTPUT_LANGUAGE } from '../language'
 import { getAgentIds, isHarnessAgent } from '../harness/agent-registry'
 import { assertGitBranchName } from '../run'
 import { Answers, DbCredentials, HarnessAgent, S3Credentials } from '../types'
+import { parseWorkflowFlag } from './workflow-flag'
 
 export interface NewCommandOptions {
   nonInteractive?: boolean
@@ -214,12 +215,10 @@ export function buildPrefillFromOptions(opts: NewCommandOptions, env: NodeJS.Pro
   // `--no-network` (Commander → network === false) degrades checks to presence.
   if (opts.network === false) prefill.toolsNoNetwork = true
 
-  // `--workflow <preset>` preselects a workflow preset for the interactive
-  // flow ('none'/false keep their skip semantics — see shouldSkipWorkflow).
-  if (typeof opts.workflow === 'string') {
-    const preset = opts.workflow.toLowerCase()
-    if (preset === 'solo' || preset === 'saasfoundry') prefill.workflowPreset = preset
-  }
+  // `--workflow <preset>` preselects a workflow preset; an unknown value is
+  // refused here, before any question, as `sf update` does.
+  const workflow = parseWorkflowFlag(opts.workflow)
+  if (workflow.preset) prefill.workflowPreset = workflow.preset
 
   const workflowBranches = parseWorkflowBranches(opts)
   if (workflowBranches) {

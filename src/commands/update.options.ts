@@ -3,6 +3,7 @@ import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import type { ProjectCapabilities } from '../project-capabilities'
 import type { TechnicalStackDryRunReport } from '../scaffold/technical-stack.planner'
 import type { Answers, DbCredentials, S3Credentials } from '../types'
+import { parseWorkflowFlag } from './workflow-flag'
 
 export type ConflictStrategy = 'keep' | 'replace' | 'save-new'
 export type UpdateTargetProfile = 'full'
@@ -199,14 +200,6 @@ export function parseAddModules(value: string | undefined): string[] | undefined
     .filter(Boolean)
 }
 
-/** Parse the workflow choice shared with `sf new` without provisioning a board. */
-export function parseUpdateWorkflow(value: string | boolean | undefined): { preset?: 'solo' | 'saasfoundry'; disabled?: boolean } {
-  if (value === undefined) return {}
-  if (value === false || value === 'none') return { disabled: true }
-  if (value === 'solo' || value === 'saasfoundry') return { preset: value }
-  throw new Error(`Invalid --workflow "${String(value)}". Expected one of: solo, saasfoundry, none.`)
-}
-
 /**
  * Convert the technical stack flags shared with `sf new` into config-engine
  * prefill. Ports stay flat on UpdateCommandOptions because they are resolved
@@ -267,7 +260,7 @@ export function buildUpdatePrefillFromOptions(opts: UpdateCommandOptions): Updat
 
   const modules = parseAddModules(opts.addModules)
   if (modules !== undefined) prefill.selectedModules = modules
-  const workflow = parseUpdateWorkflow(opts.workflow)
+  const workflow = parseWorkflowFlag(opts.workflow)
   if (workflow.preset) prefill.workflowPreset = workflow.preset
   if (workflow.disabled) prefill.workflowDisabled = true
 

@@ -253,6 +253,18 @@ describe('buildPrefillFromOptions — output language', () => {
     expect(buildPrefillFromOptions({}).outputLanguage).toBeUndefined()
   })
 
+  // #895 — an unknown preset produced a project with no workflow and no error
+  describe('--workflow', () => {
+    it.each(['solo', 'saasfoundry'] as const)('preselects the %s preset', (preset) => {
+      expect(buildPrefillFromOptions({ workflow: preset }).workflowPreset).toBe(preset)
+    })
+
+    it.each(['sollo', 'team'])('refuses %p before any question, listing the valid values', (value) => {
+      expect(() => buildPrefillFromOptions({ workflow: value })).toThrow('Expected one of: solo, saasfoundry, none.')
+      expect(() => buildPrefillFromOptions({ nonInteractive: true, workflow: value })).toThrow(`Invalid --workflow "${value}"`)
+    })
+  })
+
   // #822 — the non-interactive path had no branch flags and always wrote develop
   describe('--working-branch / --pr-target-branch', () => {
     it('maps the branch flags into workflowBranches', () => {
