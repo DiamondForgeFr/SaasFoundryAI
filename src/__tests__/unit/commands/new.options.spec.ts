@@ -1,4 +1,4 @@
-import { buildPrefillFromOptions, parseAgentsOption, shouldSkipWorkflow, NewCommandOptions } from '../../../commands/new.options'
+import { buildPrefillFromOptions, parseAgentsOption, NewCommandOptions } from '../../../commands/new.options'
 
 describe('buildPrefillFromOptions', () => {
   it('returns an empty prefill when no options are provided', () => {
@@ -265,6 +265,24 @@ describe('buildPrefillFromOptions — output language', () => {
     })
   })
 
+  // #896 — --no-workflow / --workflow none were read by nothing, so the step still asked
+  describe('--no-workflow', () => {
+    it.each([false, 'none'] as const)('marks the workflow disabled for %p, interactive or not', (workflow) => {
+      expect(buildPrefillFromOptions({ workflow }).workflowDisabled).toBe(true)
+      expect(buildPrefillFromOptions({ nonInteractive: true, workflow }).workflowDisabled).toBe(true)
+    })
+
+    it('leaves the workflow enabled without the flag or with a preset', () => {
+      expect(buildPrefillFromOptions({})).not.toHaveProperty('workflowDisabled')
+      expect(buildPrefillFromOptions({ workflow: 'solo' })).not.toHaveProperty('workflowDisabled')
+    })
+
+    it('refuses a workflow flag it would drop', () => {
+      expect(() => buildPrefillFromOptions({ workflow: false, createBoard: true })).toThrow('--create-board configures a workflow, which --no-workflow skips')
+      expect(() => buildPrefillFromOptions({ workflow: 'none', workingBranch: 'main' })).toThrow('--working-branch configures a workflow')
+    })
+  })
+
   // #822 — the non-interactive path had no branch flags and always wrote develop
   describe('--working-branch / --pr-target-branch', () => {
     it('maps the branch flags into workflowBranches', () => {
@@ -300,25 +318,5 @@ describe('buildPrefillFromOptions — output language', () => {
       expect(() => buildPrefillFromOptions({ nonInteractive: true, createBoard: true })).toThrow('--create-board configures a workflow')
       expect(() => buildPrefillFromOptions({ workflow: 'solo', tracker: 'jira', createBoard: true })).toThrow('creates a GitHub Projects board, not a jira one')
     })
-  })
-})
-
-describe('shouldSkipWorkflow', () => {
-  it('returns true when --no-workflow is used (workflow=false)', () => {
-    expect(shouldSkipWorkflow({ workflow: false })).toBe(true)
-  })
-
-  it('returns true when --workflow none is used', () => {
-    expect(shouldSkipWorkflow({ workflow: 'none' })).toBe(true)
-    expect(shouldSkipWorkflow({ workflow: 'NONE' })).toBe(true)
-  })
-
-  it('returns false when --workflow is omitted', () => {
-    expect(shouldSkipWorkflow({})).toBe(false)
-  })
-
-  it('returns false for other workflow strings', () => {
-    expect(shouldSkipWorkflow({ workflow: 'github-projects' })).toBe(false)
-    expect(shouldSkipWorkflow({ workflow: 'jira' })).toBe(false)
   })
 })
