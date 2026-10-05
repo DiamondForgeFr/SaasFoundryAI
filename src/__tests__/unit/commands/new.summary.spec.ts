@@ -239,6 +239,17 @@ describe('documentation is what can be read, not what is running', () => {
     expect(live?.condition).toBe('live, needs the API up')
   })
 
+  // #890 — the live line had an empty label, rendered as a bullet and a lone colon
+  it('labels every line, the live reference included', () => {
+    expect(label('API reference (live)')?.target).toBe('http://localhost:3501/api/docs')
+    const lines = docs()
+    const column = labelColumn(lines.map((l) => ({ label: l.label, url: l.target })))
+    for (const line of lines) {
+      expect(line.label).not.toBe('')
+      expect(column({ label: line.label, url: line.target })).not.toMatch(/•\s+:/)
+    }
+  })
+
   it('derives the live URL from the resolved API port, not from a default', () => {
     const live = docs({ apiPort: 3507 }).find((d) => d.target.startsWith('http'))
     expect(live?.target).toBe('http://localhost:3507/api/docs')
