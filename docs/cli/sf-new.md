@@ -200,7 +200,7 @@ For local startup commands, follow the generated README because they depend on t
 | `--srs-parent-page-input <url>`                  | SRS root page URL or ID.                                                                                                      | -                  |
 | `--srs-ingest-enable` / `--no-srs-ingest-enable` | Configure one-shot ingestion of existing notes.                                                                               | -                  |
 | `--srs-ingest-parent-input <url>`                | Source parent page for ingestion.                                                                                             | -                  |
-| `--workflow <config>` / `--no-workflow`          | Choose a workflow preset, `none`, or omit workflow configuration.                                                             | -                  |
+| `--workflow <preset>` / `--no-workflow`          | `solo`, `saasfoundry` or `none`; any other value is refused. `none` and `--no-workflow` skip the workflow step.               | -                  |
 | `--working-branch <branch>`                      | Working branch: feature branches start from it and pull requests target it. Needs `--workflow` with `--non-interactive`.      | `develop`          |
 | `--pr-target-branch <branch>`                    | Branch pull requests target, when it differs from the working branch.                                                         | the working branch |
 | `--project-url <url>`                            | Attach an existing board (GitHub Projects, Jira, Notion or Linear). Needs `--workflow` with `--non-interactive`.              | -                  |

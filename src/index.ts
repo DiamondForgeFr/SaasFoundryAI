@@ -97,7 +97,7 @@ program
   .option('--design <tools>', 'Comma-separated design tools (figma,miro)')
   .option('--no-network', 'Skip live connection checks; verify credential presence only')
   // Workflow
-  .option('--workflow <config>', 'Workflow preset or "none" to skip')
+  .option('--workflow <preset>', 'Workflow preset: solo, saasfoundry, or none')
   .option('--no-workflow', 'Skip workflow configuration entirely')
   .option('--working-branch <branch>', 'Working branch: feature branches start from it and pull requests target it (default: develop)')
   .option('--pr-target-branch <branch>', 'Branch pull requests target (default: the working branch)')
