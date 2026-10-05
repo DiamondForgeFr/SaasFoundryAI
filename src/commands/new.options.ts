@@ -216,9 +216,22 @@ export function buildPrefillFromOptions(opts: NewCommandOptions, env: NodeJS.Pro
   if (opts.network === false) prefill.toolsNoNetwork = true
 
   // `--workflow <preset>` preselects a workflow preset; an unknown value is
-  // refused here, before any question, as `sf update` does.
+  // refused here, before any question, as `sf update` does. `none` and
+  // `--no-workflow` skip the workflow step, interactive or not.
   const workflow = parseWorkflowFlag(opts.workflow)
   if (workflow.preset) prefill.workflowPreset = workflow.preset
+  if (workflow.disabled) {
+    const workflowFlags = (
+      [
+        ['workingBranch', '--working-branch'],
+        ['prTargetBranch', '--pr-target-branch'],
+        ['projectUrl', '--project-url'],
+        ['createBoard', '--create-board']
+      ] as const
+    ).filter(([key]) => opts[key] !== undefined && opts[key] !== false)
+    if (workflowFlags.length > 0) throw new Error(`${workflowFlags[0][1]} configures a workflow, which --no-workflow skips: drop one of them.`)
+    prefill.workflowDisabled = true
+  }
 
   const workflowBranches = parseWorkflowBranches(opts)
   if (workflowBranches) {
@@ -278,18 +291,4 @@ export function parseAgentsOption(value: string): HarnessAgent[] {
     throw new Error(`Unknown coding agent '${unsupported[0]}'. Supported profiles: ${getAgentIds().join(', ')}. Model names and providers are separate.`)
   }
   return agents as HarnessAgent[]
-}
-
-/**
- * Whether the workflow step should be skipped entirely, based on the
- * `--workflow` / `--no-workflow` flags.
- *
- * - `--no-workflow` → Commander sets `opts.workflow = false`
- * - `--workflow none` → explicit skip
- * - anything else → interactive config (or prefilled `workflow` object, handled upstream)
- */
-export function shouldSkipWorkflow(opts: NewCommandOptions): boolean {
-  if (opts.workflow === false) return true
-  if (typeof opts.workflow === 'string' && opts.workflow.toLowerCase() === 'none') return true
-  return false
 }

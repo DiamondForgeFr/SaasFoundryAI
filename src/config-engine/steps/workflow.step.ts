@@ -47,6 +47,9 @@ export const workflowStep: StepDefinition = {
   effects: ['May create a GitHub Project (4 GraphQL calls through the gh CLI) during collection', 'May save a workflow template to ~/.claude/workflows/'],
   appliesTo: (state) => state.profile !== 'stack',
   collect: async ({ state, prefill, nonInteractive, derived, render }) => {
+    // `--no-workflow` / `--workflow none`: no workflow, and no question about one
+    if (prefill.workflowDisabled) return {}
+
     // Non-interactive: use a complete prefilled workflow when supplied. An
     // explicit built-in preset is otherwise materialized here because
     // `buildPrefillFromOptions` intentionally stores only the preset key.
