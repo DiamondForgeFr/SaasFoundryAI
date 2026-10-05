@@ -164,6 +164,16 @@ describe('workflowStep', () => {
     expect(promptWorkflowConfiguration).not.toHaveBeenCalled()
   })
 
+  // #896 — the interactive session still asked "Do you want to configure an AI workflow tool now?"
+  it.each([false, true])('skips without a question when the workflow is disabled (nonInteractive: %p)', async (nonInteractive) => {
+    const render = jest.fn(async () => ({ configureWorkflow: true }) as unknown as ConfigState)
+    const result = await workflowStep.collect?.(stepContext({ nonInteractive, render, prefill: { workflowDisabled: true } }))
+
+    expect(result).toEqual({})
+    expect(render).not.toHaveBeenCalled()
+    expect(promptWorkflowConfiguration).not.toHaveBeenCalled()
+  })
+
   it('non-interactive: skips silently without a prefilled workflow', async () => {
     const result = await workflowStep.collect?.(stepContext({ nonInteractive: true }))
 

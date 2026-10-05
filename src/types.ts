@@ -66,6 +66,8 @@ export interface Answers {
   workflow?: WorkflowConfig
   /** Collection-only preset preselection from `--workflow <preset>`; never persisted. */
   workflowPreset?: 'saasfoundry' | 'solo'
+  /** Collection-only skip from `--no-workflow` / `--workflow none`: the workflow step asks nothing; never persisted. */
+  workflowDisabled?: boolean
   /** Collection-only branch choices from `--working-branch` / `--pr-target-branch`; persisted through `workflow`. */
   workflowBranches?: { workingBranch?: string; prTargetBranch?: string }
   /** Collection-only board choice from `--project-url` / `--create-board`; persisted as `workflow.projectUrl`. */
