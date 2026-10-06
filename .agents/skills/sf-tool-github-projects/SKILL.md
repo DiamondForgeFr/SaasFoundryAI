@@ -86,7 +86,7 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 | `create-epic <title> [body]` | Create a top-level Epic (no parent) |
 | `create-subtask <parent> <title> [body] [--milestone <m>]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue`; it joins the parent's milestone unless `--milestone` names another |
 | `status <ticket>`                        | Read status from Projects V2 board                                                                |
-| `update-status <ticket> <status-name>`   | Write status on Projects V2 board (`gh project item-edit`)                                        |
+| `update-status <ticket> <status-name>` | Write status on Projects V2 board (`gh project item-edit`); on `Done`, also close the issue when the board has not, and fail if it stays open |
 | `add-to-project <ticket> [--status <s>]` | Put an issue on the board (default Backlog; one already there keeps its status) |
 | `set-complexity <ticket> <level>`        | Set label `complexity: <bug\|low\|medium\|complex>` (removes any existing complexity label first) |
 | `get-complexity <ticket>`                | Read current complexity label                                                                     |
