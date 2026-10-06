@@ -43,7 +43,7 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 - [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel review agents (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
       automated tests.
 - [ ] **On green** — post the test report summary (include examine findings if complex), then:
-  - default: take the draft out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**
+  - default: take the PR out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**
   - `nature:bundled-pr` children: move to **Done** directly (no individual PR — the delivery parent owns the branch and PR)
 
 ## Errors to avoid
