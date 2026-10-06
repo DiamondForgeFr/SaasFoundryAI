@@ -128,6 +128,8 @@ case "$1" in
 EOF
     ;;
   issue)
+    # The state read after Done (#920): the board's automation already closed it
+    case "$*" in *"--json state"*) echo "CLOSED"; exit 0 ;; esac
     # gh issue view <n> --json ... used by get-ticket / set-complexity / create-pr
     echo '{"title":"Fake ticket","body":"Fake body","labels":[],"url":"https://github.com/FakeOrg/FakeRepo/issues/1","state":"OPEN","id":"I_FAKE"}'
     ;;

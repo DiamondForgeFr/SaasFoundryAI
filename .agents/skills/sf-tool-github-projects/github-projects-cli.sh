@@ -1056,6 +1056,23 @@ cmd_update_status() {
     --single-select-option-id "$option_id" >/dev/null
 
   echo -e "${GREEN}✓ Ticket #${ticket} → ${status_name}${NC}"
+
+  # Done means closed (#920). Closing used to rest on the board's "Auto-close issue"
+  # automation, which a board may not have: a drafting ticket owns no PR, so nothing else
+  # would ever close it. Close it here when the board has not, and verify.
+  if [ "$(printf '%s' "$status_name" | tr '[:upper:]' '[:lower:]')" = "done" ]; then
+    local state
+    state=$(gh issue view "$ticket" --json state --jq .state 2>/dev/null) || state=""
+    if [ "$state" != "CLOSED" ]; then
+      gh issue close "$ticket" --reason completed >/dev/null 2>&1 || true
+      state=$(gh issue view "$ticket" --json state --jq .state 2>/dev/null) || state=""
+      if [ "$state" != "CLOSED" ]; then
+        echo -e "${RED}✗ #${ticket} is Done on the board but its issue is still open (state: ${state:-unknown}). Close it: gh issue close ${ticket} --reason completed${NC}" >&2
+        exit 1
+      fi
+      echo -e "${GREEN}✓ Issue #${ticket} closed${NC}"
+    fi
+  fi
 }
 
 # ───────────────────────────────────────────────────────────────────────────
