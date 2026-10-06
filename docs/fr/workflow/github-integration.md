@@ -81,8 +81,7 @@ npm run test:pre-push
 $CLI create-pr 42 --draft
 $CLI update-status 42 "Human testing"
 
-# Après validation fonctionnelle : PR prête et revue de code
-$CLI ready-pr 42
+# Après validation fonctionnelle : le développeur clique sur Ready for review (ready-pr n'est à l'agent que sans Human testing)
 $CLI update-status 42 "In review"
 
 # Après approbation, CI verte et fusion

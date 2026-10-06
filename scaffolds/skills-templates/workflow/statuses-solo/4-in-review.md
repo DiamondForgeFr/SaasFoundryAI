@@ -8,7 +8,7 @@ entry_conditions:
   - "**An open, non-draft Pull Request exists for the ticket** (PR-existence guard — `In Review` without a PR is rejected by the CLI)"
   - Ticket is **not** `nature:bundled-pr` — bundled children go AI Testing → Done directly (no individual child PR)
 mandatory_actions:
-  - Create the Pull Request (title + description + test plan + test list + ticket link)
+  - Confirm the PR is out of draft (you ran `ready-pr` at the end of AI Testing) and its description carries the title, test plan, test list and ticket link
   - Move ticket to `In Review`
   - Monitor CI until green
   - Answer reviewer comments and implement requested changes
@@ -33,7 +33,7 @@ next_status: Done
 
 ## Action checklist
 
-- [ ] **Create a ready PR** — title = ticket title; description = ticket link + change summary + test plan (copy from ticket) + created tests; link PR to ticket
+- [ ] **Ready PR** — the draft opened during AI Testing, marked ready by you with `ready-pr <ticket>`; title = ticket title; description = ticket link + change summary + test plan (copy from ticket) + created tests
 - [ ] **Move ticket** to `In Review` via `workflow-cli.sh update-status`
 - [ ] **Monitor CI** — on red: analyze logs, fix, commit, push, wait for green
 - [ ] **Monitor the review** — answer questions, implement requested changes

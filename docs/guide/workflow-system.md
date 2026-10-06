@@ -95,7 +95,7 @@ For the team preset:
 2. publish the test plan and report;
 3. create or reuse a **draft PR** before Human testing;
 4. let the developer perform functional feature testing;
-5. after approval and non-regression tests, mark the same PR ready;
+5. after approval and non-regression tests, the developer marks the same PR ready (the agent never does on this route);
 6. enter In review for code review and full CI;
 7. wait for the developer to merge;
 8. verify the merge before Done.
@@ -103,14 +103,16 @@ For the team preset:
 ```bash
 WORKFLOW=.claude/skills/sf-workflow/workflow-cli.sh
 
-$WORKFLOW create-pr 42 --draft
-$WORKFLOW ready-pr 42
+$WORKFLOW create-pr 42 --draft      # during AI testing at the latest
+# the developer clicks Ready for review; the review listener moves the ticket to In review
+# without the listener, once the PR is out of draft:
 $WORKFLOW update-status 42 "In review"
 # developer merges
 $WORKFLOW update-status 42 Done
 ```
 
-Solo can create a ready PR directly after AI testing because its In review phase is already the human gate.
+Without Human testing (the Solo preset, or a `nature:internal` ticket), the agent also opens the draft during AI testing, and marks it ready itself with `ready-pr` at the end of AI testing: In review
+is then the human gate.
 
 ## The first ticket
 

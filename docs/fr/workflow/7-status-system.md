@@ -79,9 +79,10 @@ stable.
 1. Le développeur teste les parcours et confirme que la fonctionnalité répond au besoin.
 2. Si un défaut est trouvé, l'agent explique la correction, l'implémente, pousse puis retourne en `AI testing`.
 3. Après validation, les tests de non-régression nécessaires sont ajoutés et vérifiés.
+4. Le développeur rend alors la PR prête (**Ready for review**) : sur ce parcours, sortir du brouillon lui revient, jamais à l'agent.
 
 Les tickets `nature:internal` peuvent ne pas exiger cette phase selon les règles configurées. Le preset Solo n'a pas de statut `Human testing` distinct : sa validation humaine a lieu pendant
-`In review`.
+`In review`. Sans `Human testing`, l'agent ouvre la PR en brouillon pendant `AI testing` et la rend prête lui-même avec `ready-pr` à la fin d'`AI testing`.
 
 ## 6. In review — revue de code
 
