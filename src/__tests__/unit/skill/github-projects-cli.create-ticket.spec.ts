@@ -46,6 +46,8 @@ case "$1 $2" in
   "issue edit") echo "https://github.com/FakeOrg/FakeRepo/issues/12" ;;
   "api graphql") echo '{"data":{"repository":{"issue":{"title":"T","state":"OPEN","projectItems":{"nodes":[]}}}}}' ;;
   "api repos/FakeOrg/FakeRepo/milestones?state=all&per_page=100") echo '[{"number":3,"title":"v1.0.1"}]' ;;
+  # The milestone PATCH, already through its --jq: the issue and milestone GitHub confirms
+  "api repos/FakeOrg/FakeRepo/issues/12") echo "12 3" ;;
   *) echo '{}' ;;
 esac
 `
@@ -99,7 +101,7 @@ describe('github-projects-cli.sh create-ticket', () => {
     expect(log.find((call) => call.startsWith('project item-edit'))).toContain('--single-select-option-id opt_backlog')
     expect(log).toContain('issue edit 12 --add-label complexity: low')
     expect(log).toContain('issue edit 12 --add-label nature:internal')
-    expect(log).toContain('api repos/FakeOrg/FakeRepo/issues/12 -X PATCH -F milestone=3')
+    expect(log.some((line) => line.startsWith('api repos/FakeOrg/FakeRepo/issues/12 -X PATCH -F milestone=3'))).toBe(true)
   })
 
   it('renders the type skeleton without a body file, and adds no optional label', async () => {
