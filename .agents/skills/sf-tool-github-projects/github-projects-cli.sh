@@ -2107,14 +2107,31 @@ Progress:  \(.closed_issues)/\(.open_issues + .closed_issues) closed" +
       ;;
 
     assign)
-      local ticket=$1 name=$2
-      local number
+      local ticket=${1:-} name=${2:-}
+      # One bare issue number. A list used to reach the API as `issues/482 483 …`, which
+      # GitHub resolves to #482, and the success line echoed the whole list back (#562).
+      if ! [[ "$ticket" =~ ^[0-9]+$ ]]; then
+        if [[ "$name" =~ ^[0-9]+$ ]]; then
+          echo -e "${RED}milestone assign: arguments in the wrong order — expected <ticket> <milestone>, got \"${ticket}\" \"${name}\".${NC}" >&2
+        else
+          echo -e "${RED}milestone assign: <ticket> must be one issue number, got \"${ticket}\". Assign several tickets with one call each.${NC}" >&2
+        fi
+        echo "Usage: $0 milestone assign <ticket> <milestone>" >&2
+        exit 1
+      fi
+      [ -z "$name" ] && { echo "Usage: $0 milestone assign <ticket> <milestone>" >&2; exit 1; }
+      local number patched
       number=$(milestone_number_by_title "$repo" "$name")
       [ -z "$number" ] && milestone_not_found "$repo" "$name"
-      gh api "repos/${repo}/issues/${ticket}" -X PATCH -F "milestone=${number}" >/dev/null 2>&1 || {
+      patched=$(gh api "repos/${repo}/issues/${ticket}" -X PATCH -F "milestone=${number}" --jq '"\(.number) \(.milestone.number // "")"' 2>/dev/null) || {
         echo -e "${RED}Failed to assign #${ticket} to \"${name}\"${NC}" >&2
         exit 1
       }
+      # Report only what the API confirms: the issue it patched, now on that milestone.
+      if [ "$patched" != "${ticket} ${number}" ]; then
+        echo -e "${RED}Failed to assign #${ticket} to \"${name}\": GitHub answered \"${patched}\" instead of \"${ticket} ${number}\"${NC}" >&2
+        exit 1
+      fi
       echo -e "${GREEN}✓ #${ticket} → milestone \"${name}\"${NC}"
       ;;
 
