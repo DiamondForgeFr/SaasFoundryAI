@@ -45,14 +45,26 @@ if [ "$1" = "api" ]; then
   target="$2"; shift 2
   jq_expr=""
   is_mutation=0
+  milestone_field=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --jq) jq_expr="$2"; shift 2 ;;
       -X) is_mutation=1; shift 2 ;;
-      -f|-F) is_mutation=1; shift 2 ;;
+      -f|-F) is_mutation=1; case "$2" in milestone=*) milestone_field="\${2#milestone=}" ;; esac; shift 2 ;;
       *) shift ;;
     esac
   done
+
+  # A PATCH on an issue answers with the issue, as GitHub does; FAKE_PATCHED overrides it.
+  case "$target" in
+    */issues/[0-9]*)
+      if [ "$is_mutation" = "1" ]; then
+        patched="\${FAKE_PATCHED:-}"
+        [ -z "$patched" ] && patched=$(jq -nc --argjson n "\${target##*/}" --argjson m "\${milestone_field:-0}" '{number: $n, milestone: {number: $m}}')
+        if [ -n "$jq_expr" ]; then printf '%s' "$patched" | jq -r "$jq_expr"; else printf '%s' "$patched"; fi
+        exit 0
+      fi ;;
+  esac
 
   # A create is POST to the collection with fields but no -X.
   case "$target" in
@@ -238,6 +250,36 @@ describe('github-projects-cli.sh milestone', () => {
   })
 
   describe('assign', () => {
+    // #562 — `"482 483 …"` reached the API as issues/482 and the success line echoed the whole list
+    it.each([
+      [['482 483 484', 'v1.0.0'], 'must be one issue number'],
+      [['#482', 'v1.0.0'], 'must be one issue number'],
+      [['v1.0.0', '482'], 'arguments in the wrong order']
+    ])('refuses %p before any API call', async (args, message) => {
+      const box = await sandbox([milestone({ number: 4, title: 'v1.0.0' })])
+      try {
+        const res = await run(box, ['assign', ...args])
+        expect(res.code).toBe(1)
+        expect(res.stderr).toContain(message)
+        expect(res.stdout).not.toContain('✓')
+        expect(calls(box)).not.toContain('api')
+      } finally {
+        await box.cleanup()
+      }
+    })
+
+    it('fails when GitHub does not confirm the issue and milestone it was asked to patch', async () => {
+      const box = await sandbox([milestone({ number: 4, title: 'v1.0.0' })])
+      box.env.FAKE_PATCHED = JSON.stringify({ number: 123, milestone: null })
+      try {
+        const res = await run(box, ['assign', '123', 'v1.0.0'])
+        expect(res.code).toBe(1)
+        expect(res.stdout).not.toContain('✓')
+      } finally {
+        await box.cleanup()
+      }
+    })
+
     it('resolves the title to a number and patches the issue', async () => {
       const box = await sandbox([milestone({ number: 4, title: 'v1.0.0' })])
       try {
@@ -245,6 +287,7 @@ describe('github-projects-cli.sh milestone', () => {
         expect(res.code).toBe(0)
         expect(calls(box)).toContain('issues/123')
         expect(calls(box)).toContain('milestone=4')
+        expect(res.stdout).toContain('✓ #123 → milestone "v1.0.0"')
       } finally {
         await box.cleanup()
       }
