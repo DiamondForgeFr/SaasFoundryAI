@@ -63,8 +63,8 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 
 Status names are case-insensitive — the CLI matches against the options defined on the board.
 
-`ready-pr <ticket>` verifies the pushed branch and promotes its existing draft PR; retries are idempotent. Use it only after developer validation when Human Testing applies. `draft-pr <ticket>`
-explicitly returns a ready PR to draft for further human testing, with the same branch/head checks.
+`ready-pr <ticket>` verifies the pushed branch and promotes its existing draft PR; retries are idempotent. Run it yourself only on a route without Human Testing (`nature:internal`, Solo), at the end
+of AI Testing; after Human Testing, the developer marks the PR ready, never you. `draft-pr <ticket>` explicitly returns a ready PR to draft for further human testing, with the same branch/head checks.
 
 ## How the orchestration skill uses this CLI
 

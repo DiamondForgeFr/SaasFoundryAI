@@ -237,10 +237,10 @@ Keep the PR in draft. Document the bug on the issue, fix it on the feature branc
 
 ## Step 8 — Human testing → In review
 
-Human testing approved the feature. Mark the existing pull request ready and enter **code review**:
+Human testing approved the feature. Once the agent has pushed the non-regression tests, **you** mark the existing pull request ready with GitHub's **Ready for review** button: on this route the agent
+never takes the PR out of draft. The review listener then moves the ticket to **code review**. Without the listener, the agent runs, once the PR is out of draft:
 
 ```bash
-$WF ready-pr 42
 $WF update-status 42 "In review"
 ```
 

@@ -10,7 +10,7 @@ entry_conditions:
   - **An open, non-draft Pull Request exists for the ticket** (PR-existence guard — `In Review` without a PR is rejected by the CLI)
   - Ticket is **not** `nature:bundled-pr` — bundled children go AI Testing → Done directly (no individual child PR)
 mandatory_actions:
-  - Promote the approved draft via `workflow-cli.sh ready-pr <ticket>`; internal tickets may create a ready PR directly
+  - Confirm the PR is out of draft: the developer marked it ready after Human Testing, or you ran `workflow-cli.sh ready-pr <ticket>` at the end of AI Testing on a route without Human Testing
   - Move ticket to `In Review`
   - Monitor CI until green
   - Answer reviewer comments and implement requested changes
@@ -35,8 +35,8 @@ Code review with mandatory green CI.
 
 ## Action checklist
 
-- [ ] **Ready PR** — promote the approved draft using `workflow-cli.sh ready-pr <ticket>`. Internal tickets may use `create-pr <ticket>` directly. Keep the ticket link, change summary, test
-      plan/results and created tests in its description; assign configured reviewers.
+- [ ] **Ready PR** — after Human Testing the developer marks the draft ready; without Human Testing (`nature:internal`) you ran `ready-pr <ticket>` at the end of AI Testing. Keep the ticket link,
+      change summary, test plan/results and created tests in its description; assign configured reviewers.
 - [ ] **Confirm ticket** is `In Review`: the configured GitHub Ready for review listener performs the guarded transition automatically. If it is not installed, use `workflow-cli.sh update-status`.
       Investigate listener errors instead of bypassing guards.
 - [ ] **Monitor CI** — readiness starts the complete applicable suite, and later non-draft pushes rerun it. Draft-skipped checks are not successful validation.

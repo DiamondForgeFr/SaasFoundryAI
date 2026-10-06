@@ -8,6 +8,7 @@ entry_conditions:
 mandatory_actions:
   - Generate test plan and post as ticket comment
   - Move ticket to `AI Testing`
+  - Open the draft PR if it is not open yet (`create-pr <ticket> --draft`)
   - Run automated tests (build, lint, type-check, unit tests)
   - Execute the test plan manually (nominal + edge cases)
   - Adversarial review — only for complexity `complex` (`examine.sh`)
@@ -19,7 +20,7 @@ exit_conditions:
   - Adversarial review complete (complex tickets only)
   - All Critical/High findings fixed
   - Code pushed
-next_status: Human Testing (default) | In Review (nature:internal) | Done (nature:bundled-pr)
+next_status: Human Testing (default; the PR stays a draft) | In Review (nature:internal; you mark the PR ready) | Done (nature:bundled-pr)
 ---
 
 # STATUS: AI Testing
@@ -44,15 +45,16 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 - [ ] **Returning from review** — if human retesting is needed, use `workflow-cli.sh draft-pr <ticket>` before returning to Human Testing. `create-pr --draft` reuses a PR without changing its state.
 - [ ] **On green** — post test report summary (include examine findings if complex), then transition:
 
-  - `nature:user-facing` (or no `nature:*` label): open/reuse a draft with `workflow-cli.sh create-pr <ticket> --draft`, include test plan/results, then → **Human Testing**
-  - `nature:internal`: open a ready PR with `workflow-cli.sh create-pr <ticket>` (or promote an existing draft with `ready-pr <ticket>`), then → **In Review** directly (skip Human Testing — see
-    SKILL.md "Nature axis" section). The transition is enforced by the workflow guard.
+  - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing**. Do not mark it ready: after Human Testing, the developer does
+  - `nature:internal`: no Human Testing, so taking the PR out of draft is yours: `workflow-cli.sh ready-pr <ticket>`, then → **In Review** directly (see SKILL.md "Nature axis" section). The transition
+    is enforced by the workflow guard.
 
   - `nature:bundled-pr`: → **Done** after validation; no individual draft or ready PR. The delivery parent owns the branch, PR, and human validation.
 
 ## Errors to avoid
 
 - Moving to Human Testing with failing tests
+- Marking a PR ready on the Human Testing route: that click belongs to the developer
 - Skipping test plan steps
 - Saying "it should work" — RUN the tests
 - Skipping examine for complex tickets

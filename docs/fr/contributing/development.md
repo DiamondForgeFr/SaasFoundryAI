@@ -127,8 +127,9 @@ Le hook de pre-commit ne réécrit jamais les fichiers. Si `format:check` échou
 Les branches et tags RC, les cibles de release protégées, les exécutions planifiées et les lancements manuels utilisent la voie exhaustive. Les pushes ordinaires et les PR prêtes classent leur plage
 Git et ne démarrent que les voies sélectionnées. La validation de cycle de vie exigée par le ticket reste exécutée et documentée pendant `AI testing`.
 
-Dans le workflow d'équipe, la PR de `Human testing` reste en brouillon pour la validation fonctionnelle. Après approbation et ajout des tests de non-régression requis,
-`workflow-cli.sh ready-pr <ticket>` la rend prête et déclenche la CI complète. `draft-pr <ticket>` permet de revenir en validation fonctionnelle.
+Dans le workflow d'équipe, la PR de `Human testing` reste en brouillon pour la validation fonctionnelle. Après approbation et ajout des tests de non-régression requis, le développeur clique sur
+**Ready for review**, ce qui déclenche la CI complète. Sans `Human testing` (`nature:internal`), l'agent lance lui-même `workflow-cli.sh ready-pr <ticket>` à la fin d'`AI testing`. `draft-pr <ticket>`
+permet de revenir en validation fonctionnelle.
 
 ## Framework de migration — obligatoire
 
