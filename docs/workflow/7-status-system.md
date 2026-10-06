@@ -48,8 +48,8 @@ Before AI testing, the implementation must compile, lint, pass the relevant test
 
 The agent publishes a test plan, runs the configured automated and manual scenarios, documents results, and fixes failures before proceeding. Complex work also receives independent adversarial review.
 
-For a user-facing ticket, the agent then opens or reuses a **draft pull request**. The draft contains the diff, test plan and current evidence but does not start ready-PR CI yet. This gives Human
-testing a stable artifact to validate.
+The agent opens the **draft pull request** during AI testing at the latest, or reuses the one it opened at the first push. The draft contains the diff, test plan and current evidence but does not
+start ready-PR CI yet. This gives Human testing a stable artifact to validate.
 
 ## 5. Human testing — feature testing
 
@@ -58,7 +58,8 @@ Human testing answers: **does the feature behave correctly for its users?**
 The developer uses the draft PR, test instructions and a real runtime to exercise the behavior. This is not code review. If a bug appears, the ticket returns to AI testing after the fix, push and full
 retest.
 
-After approval, required non-regression tests are committed and pushed. The same pull request is then marked ready for review.
+After approval, required non-regression tests are committed and pushed. The developer then marks the same pull request ready for review: on this route, leaving draft is the developer's call, never the
+agent's. Without Human testing (`nature:internal`, or the Solo preset), the agent marks the PR ready itself at the end of AI testing.
 
 ## 6. In review — code review
 

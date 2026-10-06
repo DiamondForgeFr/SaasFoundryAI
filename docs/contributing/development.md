@@ -133,8 +133,9 @@ The pre-commit hook never rewrites files. If `format:check` fails, run `npm run 
 RC branches and tags, protected release targets, weekly schedules, and manual runs execute the exhaustive lane. Ordinary working-branch pushes and ready PRs classify their Git range and start only the
 selected lanes. Run and record the ticket's required lifecycle validation during AI Testing before opening the Human Testing draft PR.
 
-Draft PRs provide the diff and manual test plan without running test/build CI. After human approval, push the required non-regression tests and use `workflow-cli.sh ready-pr <ticket>` to start full
-CI. Later ready-PR pushes rerun it; `draft-pr <ticket>` returns the PR to draft for further human testing and cancels obsolete CI.
+Draft PRs provide the diff and manual test plan without running test/build CI. After human approval, push the required non-regression tests; the developer then clicks **Ready for review**, which
+starts full CI. Without Human testing (`nature:internal`), the agent runs `workflow-cli.sh ready-pr <ticket>` itself at the end of AI Testing. Later ready-PR pushes rerun it; `draft-pr <ticket>`
+returns the PR to draft for further human testing and cancels obsolete CI.
 
 ## Migration framework — non-negotiable
 

@@ -13,18 +13,20 @@ mandatory_actions:
   - On approval — create non-regression tests (E2E for complex/critical, unit for edge-case bugs; none for typo/doc/CSS)
   - Run created tests locally and ensure they pass
   - Commit and push tests (`test(#<N>): <description>`)
+  - Ask the developer to mark the PR Ready for review; never run `ready-pr` yourself
   - Be transparent when tests are intentionally skipped
 exit_conditions:
   - Developer validated the feature
   - Non-regression tests created (when applicable)
   - Tests pass locally
   - Code with tests pushed
-next_status: In Review (promote the existing draft PR)
+next_status: In Review (the developer marks the draft PR ready)
 ---
 
 # STATUS: Human Testing
 
-Manual validation in a draft PR, followed by non-regression test creation and explicit promotion to review. Draft PR events skip test/build CI; a skipped check is not proof that tests passed.
+Manual validation in a draft PR, followed by non-regression test creation. The developer, not the agent, takes the PR out of draft. Draft PR events skip test/build CI; a skipped check is not proof
+that tests passed.
 
 ## Applicability
 
@@ -38,8 +40,7 @@ In Review directly. See SKILL.md "Nature axis" section.
 
 ## Action checklist
 
-- [ ] **Draft PR** — reuse the PR opened at the end of AI Testing via `workflow-cli.sh create-pr <ticket> --draft`; keep its description, test plan and results current. Do not promote it before
-      developer approval.
+- [ ] **Draft PR** — reuse the PR opened at the end of AI Testing via `workflow-cli.sh create-pr <ticket> --draft`; keep its description, test plan and results current. Never promote it yourself.
 - [ ] **Wait for validation** — developer tests manually, you stay available to answer
 - [ ] **On bugs reported:**
   - Read the comments carefully, summarize the fix plan as a reply
@@ -51,11 +52,12 @@ In Review directly. See SKILL.md "Nature axis" section.
 - [ ] **Coverage** — main scenarios validated, edge cases identified, critical workflows
 - [ ] **Verify locally** — `npm run test:e2e` (or relevant runner) must be green
 - [ ] **Commit + push** — `test(#<N>): add E2E tests for <feature>` (pattern from `jq -r '.workflow.commitFormat.pattern' .saasfoundry.json`)
-- [ ] **Promote after tests are pushed** — `workflow-cli.sh ready-pr <ticket>`, then move to `In review`. The `ready_for_review` event starts full CI. When the configured GitHub review listener and
-      `SF_PROJECTS_TOKEN` are installed on the default branch, clicking **Ready for review** also moves the ticket to In review; otherwise run the guarded status transition manually.
+- [ ] **Hand over for review** — once the tests are pushed, ask the developer to mark the PR **Ready for review**. Do not run `ready-pr`: on this route the click is the developer's approval. The
+      `ready_for_review` event starts full CI, and when the GitHub review listener and `SF_PROJECTS_TOKEN` are installed on the default branch it also moves the ticket to In review. Otherwise run the
+      guarded `update-status <ticket> "In review"` once the PR is out of draft.
 
 ## Errors to avoid
 
 - Creating tests BEFORE developer validation
-- Marking the draft PR ready before developer approval and the required non-regression coverage
+- Running `ready-pr` yourself: taking the PR out of draft is the developer's call on this route
 - Pushing failing tests

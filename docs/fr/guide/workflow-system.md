@@ -97,7 +97,7 @@ Pour le preset équipe :
 2. publier le plan et le rapport de test ;
 3. créer ou réutiliser une **pull request en brouillon** avant `Human testing` ;
 4. laisser le développeur effectuer la validation fonctionnelle de la feature ;
-5. après approbation et tests de non-régression, rendre la même PR prête ;
+5. après approbation et tests de non-régression, le développeur rend la même PR prête (jamais l'agent sur ce parcours) ;
 6. entrer dans `In review` pour la revue de code et la CI complète ;
 7. attendre que le développeur fusionne ;
 8. vérifier la fusion avant `Done`.
@@ -105,14 +105,16 @@ Pour le preset équipe :
 ```bash
 WORKFLOW=.claude/skills/sf-workflow/workflow-cli.sh
 
-$WORKFLOW create-pr 42 --draft
-$WORKFLOW ready-pr 42
+$WORKFLOW create-pr 42 --draft      # during AI testing at the latest
+# the developer clicks Ready for review; the review listener moves the ticket to In review
+# without the listener, once the PR is out of draft:
 $WORKFLOW update-status 42 "In review"
 # developer merges
 $WORKFLOW update-status 42 Done
 ```
 
-Solo peut créer directement une pull request prête après `AI testing`, car sa phase `In review` constitue déjà la barrière humaine.
+Sans `Human testing` (preset Solo, ou ticket `nature:internal`), l'agent ouvre aussi la PR en brouillon pendant `AI testing`, puis la rend prête lui-même avec `ready-pr` à la fin d'`AI testing` :
+`In review` est alors la barrière humaine.
 
 ## Le premier ticket
 

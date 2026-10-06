@@ -239,10 +239,10 @@ nouvelles preuves.
 
 ## Étape 8 — Human testing → In review
 
-La fonctionnalité a été validée. Rendez la PR existante prête et entrez en **revue de code** :
+La fonctionnalité a été validée. Une fois les tests de non-régression poussés par l'agent, c'est **vous** qui rendez la PR existante prête avec le bouton **Ready for review** de GitHub : sur ce
+parcours, l'agent ne sort jamais la PR du brouillon. Le listener de revue passe alors le ticket en **revue de code**. Sans listener, l'agent lance, une fois la PR sortie du brouillon :
 
 ```bash
-$WF ready-pr 42
 $WF update-status 42 "In review"
 ```
 

@@ -1,6 +1,6 @@
 ---
 status: AI Testing
-banner_ai: Post the test plan, run automated + manual tests, fix on red, post the report, open the PR
+banner_ai: Post the test plan, run automated + manual tests, fix on red, post the report, mark the draft PR ready
 banner_human: Nothing yet — get ready to review the PR (your review is the validation gate)
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
@@ -9,18 +9,20 @@ entry_conditions:
 mandatory_actions:
   - Generate test plan and post as ticket comment
   - Move ticket to `AI Testing`
+  - Open the draft PR if it is not open yet (`create-pr <ticket> --draft`)
   - Run automated tests (build, lint, type-check, unit tests)
   - Execute the test plan manually (nominal + edge cases)
   - Adversarial review — only for complexity `complex` (`examine.sh`)
   - If problems found — fix, commit, push, restart from automated tests
   - Post test report summary as comment when all green
+  - Mark the PR ready (`ready-pr <ticket>`): the solo workflow has no Human Testing, so leaving draft is yours
 exit_conditions:
   - All automated tests pass
   - Test plan fully executed and validated
   - Adversarial review complete (complex tickets only)
   - All Critical/High findings fixed
   - Code pushed
-next_status: In Review (create PR) | Done (nature:bundled-pr Subs only)
+next_status: In Review (you mark the PR ready) | Done (nature:bundled-pr Subs only)
 ---
 
 # STATUS: AI Testing
@@ -41,7 +43,7 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 - [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel review agents (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
       automated tests.
 - [ ] **On green** — post the test report summary (include examine findings if complex), then:
-  - default: create the PR and move to **In Review**
+  - default: take the draft out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**
   - `nature:bundled-pr` children: move to **Done** directly (no individual PR — the delivery parent owns the branch and PR)
 
 ## Errors to avoid
@@ -51,4 +53,4 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 - Saying "it should work" — RUN the tests
 - Skipping examine for complex tickets
 - Ignoring Critical/High security findings
-- Opening the PR before the test report is posted — the report is the reviewer's map
+- Marking the PR ready before the test report is posted — the report is the reviewer's map
