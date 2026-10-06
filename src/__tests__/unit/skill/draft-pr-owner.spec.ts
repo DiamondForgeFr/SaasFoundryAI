@@ -41,7 +41,7 @@ describe('who takes a pull request out of draft (#915)', () => {
   it('has the Solo agent open a draft during AI Testing and mark it ready itself', () => {
     const aiTesting = read('statuses-solo/3-ai-testing.md')
     expect(aiTesting).toContain('`create-pr <ticket> --draft`')
-    expect(aiTesting).toContain('default: take the draft out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**')
+    expect(aiTesting).toContain('default: take the PR out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**')
     expect(aiTesting).not.toContain('create the PR and move')
     expect(read('statuses-solo/4-in-review.md')).not.toContain('Create a ready PR')
   })
