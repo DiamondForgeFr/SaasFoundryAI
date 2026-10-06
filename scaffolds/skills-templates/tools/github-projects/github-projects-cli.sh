@@ -407,7 +407,7 @@ EOF
 cmd_create_subtask() {
   if [ "$#" -lt 2 ]; then
     echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--type <epic|story|task|issue>] [--bypass-srs <reason>]"
+    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--type <epic|story|task|issue>] [--milestone <name>] [--bypass-srs <reason>]"
     exit 1
   fi
 
@@ -418,8 +418,21 @@ cmd_create_subtask() {
   local -a POSITIONAL=()
   local BYPASS_SRS_REASON=""
   local TICKET_TYPE="story"
+  local MILESTONE=""
   while [ $# -gt 0 ]; do
     case "$1" in
+      --milestone=*)
+        MILESTONE="${1#--milestone=}"
+        shift
+        ;;
+      --milestone)
+        if [ -z "${2:-}" ] || [[ "${2}" == --* ]]; then
+          echo -e "${RED}Error: --milestone requires a milestone name${NC}" >&2
+          exit 1
+        fi
+        MILESTONE=$2
+        shift 2
+        ;;
       --bypass-srs=*)
         BYPASS_SRS_REASON="${1#--bypass-srs=}"
         if [ -z "$BYPASS_SRS_REASON" ]; then
@@ -465,7 +478,7 @@ cmd_create_subtask() {
 
   if [ "${#POSITIONAL[@]}" -lt 2 ]; then
     echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--type <epic|story|task|issue>] [--bypass-srs <reason>]"
+    echo "Usage: $0 create-subtask <parent-number> <title> [body] [--type <epic|story|task|issue>] [--milestone <name>] [--bypass-srs <reason>]"
     exit 1
   fi
 
@@ -588,6 +601,23 @@ cmd_create_subtask() {
     if [ -n "$target_type" ]; then
       "$0" assign-type "$CHILD_NUMBER" "$target_type" 2>/dev/null || \
         echo -e "${YELLOW}  (issue type '${target_type}' not assigned — run 'ensure-issue-types' or assign manually)${NC}"
+    fi
+  fi
+
+  # A child joins its parent's milestone (#617): one created during release work used to
+  # be invisible to that release. --milestone picks another. The child already exists and
+  # is linked, so a failed assignment is reported with the command to rerun, not fatal.
+  local milestone_source="--milestone"
+  if [ -z "$MILESTONE" ]; then
+    MILESTONE=$(gh issue view "$PARENT_NUMBER" --json milestone --jq '.milestone.title // empty' 2>/dev/null) || MILESTONE=""
+    milestone_source="inherited from #${PARENT_NUMBER}"
+  fi
+  if [ -n "$MILESTONE" ]; then
+    if "$0" milestone assign "$CHILD_NUMBER" "$MILESTONE" >/dev/null 2>&1; then
+      echo -e "${GREEN}✓ #${CHILD_NUMBER} → milestone \"${MILESTONE}\" (${milestone_source})${NC}"
+    else
+      echo -e "${YELLOW}⚠ #${CHILD_NUMBER} is not on milestone \"${MILESTONE}\" (${milestone_source}). Assign it with:${NC}" >&2
+      echo "    $0 milestone assign ${CHILD_NUMBER} \"${MILESTONE}\"" >&2
     fi
   fi
 }
@@ -2361,7 +2391,7 @@ case "$COMMAND" in
     echo "Available commands:"
     echo "  create-ticket <story|task|issue> <title> [--body-file <f>] [--complexity <c>] [--nature <n>] [--milestone <m>]"
     echo "                                           Create a top-level ticket on the board in Backlog, typed and labelled"
-    echo "  create-subtask <parent> <title> [body] [--type <epic|story|task|issue>]"
+    echo "  create-subtask <parent> <title> [body] [--type <epic|story|task|issue>] [--milestone <m>]"
     echo "                                           Create a sub-issue linked to parent (default type: story)"
     echo "  create-epic <title> [body]               Create a top-level Epic (no parent)"
     echo "  comment <ticket> <body-file|->           Record a note on the ticket"

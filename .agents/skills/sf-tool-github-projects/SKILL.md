@@ -84,7 +84,7 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `create-ticket <story\|task\|issue> <title> [--body-file <f>] [--complexity <c>] [--nature <n>] [--milestone <m>]` | Create a top-level ticket on the board in Backlog, with its issue type and labels; `--bypass-srs <reason>` on SRS projects |
 | `create-epic <title> [body]` | Create a top-level Epic (no parent) |
-| `create-subtask <parent> <title> [body]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue`                              |
+| `create-subtask <parent> <title> [body] [--milestone <m>]` | Create a GitHub sub-issue linked to parent via GraphQL `addSubIssue`; it joins the parent's milestone unless `--milestone` names another |
 | `status <ticket>`                        | Read status from Projects V2 board                                                                |
 | `update-status <ticket> <status-name>`   | Write status on Projects V2 board (`gh project item-edit`)                                        |
 | `add-to-project <ticket> [--status <s>]` | Put an issue on the board (default Backlog; one already there keeps its status) |
@@ -201,7 +201,7 @@ $CLI assign-type 42 Story
 $CLI delete-issue-type Bug
 ```
 
-`create-subtask` automatically calls `assign-type` for the matching native type after creation (best-effort — subtask creation never fails because of a type-assignment hiccup).
+`create-subtask` automatically calls `assign-type` for the matching native type after creation (best-effort — subtask creation never fails because of a type-assignment hiccup). It also puts the child on its parent's milestone, or on the one `--milestone` names, and prints which; a failed assignment is a warning with the command to rerun.
 
 **Permissions** — `ensure-issue-types`, `assign-type`, and `delete-issue-type` write to org-level config and require the `admin:org` scope on the `gh` token. Refresh once with:
 
