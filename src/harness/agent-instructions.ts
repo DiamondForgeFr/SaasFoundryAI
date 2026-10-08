@@ -323,7 +323,8 @@ export function normalizeSkill(content: string, name: string, path: string, warn
   let body = match ? content.slice(match[0].length) : content
   body = body
     .replace(/\$ARGUMENTS\b/g, 'the current user request')
-    .replace(/!`([^`]+)`/g, 'run `$1` and read its output')
+    // Only a `!` that opens a span is context injection: `generate_handler!` closing one span must not swallow the next (#903)
+    .replace(/(^|[\s:])!`([^`\n]+)`/gm, '$1run `$2` and read its output')
     .replace(/\bPARALLEL ONLY\b/g, 'Prefer parallel delegation when available; otherwise execute sequentially')
     .replace(/`?Task`? tool/gi, 'native delegation when available (otherwise execute the same work sequentially)')
   if (/\bTask\s*\(|\bsubagent_type\b|\b(?:haiku|sonnet|opus)\b|\bclaude\s+-[a-z]|\$\{?CLAUDE_|\/(?:task|sf-)\b|SessionStart|UserPromptSubmit/i.test(body)) {
