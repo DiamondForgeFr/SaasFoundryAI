@@ -12,7 +12,7 @@ Elles sont au nombre de sept.
 | [`sf-git-commit`](#sf-git-commit)                   | « commit », « save changes »                                              | Génère un message conventionnel, commit et pousse                    |
 | [`sf-git-create-pr`](#sf-git-create-pr)             | « open a PR », « create a pull request »                                  | Ouvre une PR vers la branche cible configurée avec un corps généré   |
 | [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments) | « implement the review comments », « address the PR feedback »            | Récupère les commentaires, applique chaque modification et commit    |
-| [`sf-git-merge`](#sf-git-merge)                     | « merge the branches », « resolve conflicts »                             | Résout les conflits en tenant compte du contexte                     |
+| [`sf-git-merge`](#sf-git-merge)                     | « update my branch », « resolve conflicts »                               | Rebase sur la branche cible, conflits déterministes uniquement       |
 | [`sf-utils-fix-errors`](#sf-utils-fix-errors)       | « fix errors », « fix typescript », « fix eslint »                        | Répartit la correction des erreurs ESLint et TypeScript dans le code |
 | [`sf-utils-fix-grammar`](#sf-utils-fix-grammar)     | « fix grammar », « spellcheck the docs »                                  | Corrige grammaire et orthographe sans modifier la mise en forme      |
 | [`sf-workflow`](#sf-workflow)                       | « workflow status », « next step », « complexity », « detect complexity » | Orchestre le cycle configuré et ses garde-fous                       |
@@ -74,11 +74,11 @@ Elle appelle en interne `gh api repos/:owner/:repo/pulls/:number/comments` et pa
 
 ## `sf-git-merge`
 
-Un résolveur de conflits léger et conscient du contexte pour les rares cas où `git merge` s'interrompt. Il lit les blocs en conflit, consulte `.saasfoundry.json` pour comprendre le rôle des branches —
-travail ou release — et propose une résolution. L'utilisateur approuve avant toute écriture.
+Met la branche du ticket à jour avec la branche cible des pull requests (`workflow.prTargetBranch` dans `.saasfoundry.json`) : elle rebase dessus puis pousse avec `--force-with-lease`. Elle ne résout
+que les conflits qui ont une seule bonne réponse — un lockfile est régénéré, un fichier généré est reconstruit, deux ajouts distincts à la même liste sont conservés. Tout autre conflit annule le
+rebase et vous est rendu avec les deux versions de chaque bloc.
 
-Ce n'est pas un bouton de merge magique. La plupart des merges SaaSFoundryAI restent sans conflit car l'équipe rebase habituellement les branches. Utilisez cette skill lorsqu'une branche de
-fonctionnalité longue doit rejoindre un `develop` très actif.
+Elle ne merge jamais une pull request : dans un workflow SaaSFoundryAI, c'est l'étape du développeur sur la forge. Utilisez-la avant d'ouvrir une pull request, ou quand celle-ci signale des conflits.
 
 ## `sf-utils-fix-errors`
 
