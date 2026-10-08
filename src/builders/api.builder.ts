@@ -54,6 +54,8 @@ export async function renderApiApp({
     await copyOverlay(resolve(overlaysPath, 'monorepo/api'), apiPath)
     // Remove per-app CI workflows (monorepo uses root-level workflows)
     await rm(`${apiPath}/.github`, { recursive: true, force: true })
+    // The monorepo root holds the only .claude/: a per-app copy duplicated its SessionStart hook (#425)
+    await rm(`${apiPath}/.claude`, { recursive: true, force: true })
     // Point ESLint custom rule to monorepo root shared file
     const eslintConfigPath = `${apiPath}/eslint.config.mjs`
     let eslintConfig = await readFile(eslintConfigPath, 'utf8')

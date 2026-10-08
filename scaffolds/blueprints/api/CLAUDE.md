@@ -36,7 +36,7 @@ exact replacement. No change runs no mutating command. Replacement changes inven
 
 - ✅ Use `sf-git-commit` instead of `git-commit`
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
-- ✅ Use `sf-workflow-apex` instead of `workflow-apex`
+- ✅ Use `sf-git-create-pr` instead of `git-create-pr`
 - ✅ Use `sf-tool-atlassian` instead of `tool-atlassian`
 
 SaaSFoundryAI skills are specifically optimized for this project's structure, conventions, and workflows.
@@ -197,13 +197,10 @@ Located in `.claude/skills/`:
   - Preserves code formatting
   - Works on markdown, comments, docs
 
-#### Development Workflows
+#### Integration grammar
 
-- **`/sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate)
-  - Systematic feature implementation
-  - Parallel agents for exploration
-  - Self-validation with tests
-  - Use for complex features
+- **`/sf-integration-rules`** - How to add a module, an endpoint, a Prisma model or an RBAC permission
+  - Routes to the backend, frontend and topology guides
 
 ### 🎯 Common AI Workflows
 
@@ -211,7 +208,7 @@ Located in `.claude/skills/`:
 
 ```
 User: "Add a user profile endpoint with avatar upload"
-Claude: Uses /workflow-apex-free
+Claude: Uses /sf-integration-rules
 1. Analyzes existing user module
 2. Plans implementation (DTO, service, controller, tests)
 3. Executes changes

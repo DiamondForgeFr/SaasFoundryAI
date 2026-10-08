@@ -17,7 +17,7 @@ import { computeFileHashes, fileExists } from '../utils'
 
 export const harnessInstallerMeta: ModuleInstaller = {
   name: 'harness',
-  currentVersion: 2,
+  currentVersion: 3,
   migrations: harnessMigrations
 }
 
