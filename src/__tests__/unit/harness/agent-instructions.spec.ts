@@ -11,6 +11,7 @@ import {
   HarnessAgent,
   inspectInstructionSource,
   installAgentInstructions,
+  normalizeSkill,
   installPlannedAgentInstructions,
   planAgentInstructions
 } from '../../../harness/agent-instructions'
@@ -30,6 +31,19 @@ Use Task tool for work. PARALLEL ONLY.
 User: $ARGUMENTS
 Run .claude/skills/sf-workflow/workflow-cli.sh.
 `
+
+describe('normalizeSkill', () => {
+  const body = (content: string) => normalizeSkill(`---\nname: x\ndescription: y\n---\n${content}`, 'x', 'x/SKILL.md', [])
+
+  it('rewrites context injection that opens a span', () => {
+    expect(body('Git state: !`git status`\n!`git log -1`')).toContain('Git state: run `git status` and read its output\nrun `git log -1` and read its output')
+  })
+
+  it('keeps inline code that ends in an exclamation mark (#903)', () => {
+    const line = 'a Tauri `generate_handler!` list, a Go/Express router, `routes.go`'
+    expect(body(line)).toContain(line)
+  })
+})
 
 describe('shared agent instructions', () => {
   let root: string

@@ -483,8 +483,8 @@ For projects where the codebase already exists and Notion is empty (or sparse), 
 
 > **Stack coverage — the scanner is best-effort, the agent is the backstop.** The deterministic scanner parses a SUBSET of stacks today (NestJS controllers, React pages, Prisma models, Jest/Vitest
 > tests). On any other stack — Rust/Tauri, Go, Python/FastAPI, Rails, mobile, raw SQL — it returns sparse or empty `endpoint`/`entity` findings. **That is not evidence the surface is empty.** When the
-> findings look thin for a non-parsed stack, the agent MUST read the project's own operation/model registry directly (a Tauri `generate_handlerrun ` list, a Go/Express router, a FastAPI app, SQL
-> migrations, a gRPC service) and synthesise the findings itself before clustering. The finding ` and read its outputkind`s are concepts, not frameworks — `endpoint` is any invocable operation (HTTP route, RPC/command,
+> findings look thin for a non-parsed stack, the agent MUST read the project's own operation/model registry directly (a Tauri `generate_handler!` list, a Go/Express router, a FastAPI app, SQL
+> migrations, a gRPC service) and synthesise the findings itself before clustering. The finding `kind`s are concepts, not frameworks — `endpoint` is any invocable operation (HTTP route, RPC/command,
 > CLI command, queue handler), `entity` is any persistent record (any ORM, raw DDL, a struct, a protobuf message), `ui-flow` is any user-facing view (web/native/TUI/CLI). See
 > `data/clustering-rules.json` for the full stack-neutral mapping.
 
