@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sf status --claude-friendly --no-network"
+          }
+        ]
+      }
+    ]
+  }
+}

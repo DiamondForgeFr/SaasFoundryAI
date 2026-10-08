@@ -16,7 +16,10 @@ describe('moduleInstallers registry', () => {
   })
 
   it('harness installer is at v2 through its first migration (#831)', () => {
-    expect(getModuleInstaller('harness')).toMatchObject({ currentVersion: 2, migrations: [expect.objectContaining({ from: 1, to: 2, name: 'drop-stack-skills-without-stack' })] })
+    expect(getModuleInstaller('harness')).toMatchObject({
+      currentVersion: 3,
+      migrations: [expect.objectContaining({ from: 1, to: 2, name: 'drop-stack-skills-without-stack' }), expect.objectContaining({ from: 2, to: 3, name: 'drop-per-app-claude-in-monorepo' })]
+    })
   })
 
   it('every installer migrations array is contiguous and ends at its currentVersion', () => {

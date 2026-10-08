@@ -122,7 +122,7 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     await updateCommand({ nonInteractive: true })
 
     const manifest = await readManifest()
-    expect(manifest.modules.harness.version).toBe(2)
+    expect(manifest.modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(existsSync(join(projectDir, '.claude/skills/sf-integration-rules'))).toBe(false)
     expect(Object.keys(manifest.fileHashes).filter((path: string) => path.includes('sf-integration-rules'))).toEqual([])
     expect(existsSync(join(projectDir, '.claude/skills/sf-git-commit/SKILL.md'))).toBe(true)

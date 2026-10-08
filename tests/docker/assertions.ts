@@ -303,15 +303,14 @@ export function assertMonorepoSkills(projectPath: string): AssertionResult[] {
     results.push(assertDirExists(join(projectPath, '.claude', 'skills', skill)))
   }
 
-  // Individual apps should NOT have skills
+  // Individual apps have no .claude/ at all: a per-app copy duplicated the root SessionStart hook (#425)
   for (const app of ['apps/api', 'apps/web']) {
-    const appSkillsDir = join(projectPath, app, '.claude', 'skills')
-    if (existsSync(appSkillsDir)) {
-      results.push({
-        passed: false,
-        message: `FAIL: Skills should not be in ${appSkillsDir} (monorepo centralizes at root)`
-      })
-    }
+    const appClaudeDir = join(projectPath, app, '.claude')
+    results.push(
+      existsSync(appClaudeDir)
+        ? { passed: false, message: `FAIL: ${appClaudeDir} should not exist (monorepo centralizes .claude/ at root)` }
+        : { passed: true, message: `PASS: no per-app .claude/ in ${app}` }
+    )
   }
 
   return results
