@@ -12,7 +12,7 @@ There are seven of them.
 | [`sf-git-commit`](#sf-git-commit)                   | "commit", "save changes"                                          | Generates a conventional commit message and pushes                      |
 | [`sf-git-create-pr`](#sf-git-create-pr)             | "open a PR", "create a pull request"                              | Opens a PR targeting your release branch with an auto-written body      |
 | [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments) | "implement the review comments", "address the PR feedback"        | Fetches PR comments, applies each change, commits                       |
-| [`sf-git-merge`](#sf-git-merge)                     | "merge the branches", "resolve conflicts"                         | Context-aware conflict resolution                                       |
+| [`sf-git-merge`](#sf-git-merge)                     | "update my branch", "resolve conflicts"                           | Rebase on the PR target branch, deterministic conflicts only            |
 | [`sf-utils-fix-errors`](#sf-utils-fix-errors)       | "fix errors", "fix typescript", "fix eslint"                      | Fans out across the codebase to resolve ESLint + TS errors              |
 | [`sf-utils-fix-grammar`](#sf-utils-fix-grammar)     | "fix grammar", "spellcheck the docs"                              | Grammar / spelling pass on markdown and comments (preserves formatting) |
 | [`sf-workflow`](#sf-workflow)                       | "workflow status", "next step", "complexity", "detect complexity" | Runs the configured lifecycle and its transition guards                 |
@@ -74,11 +74,11 @@ abc1234").
 
 ## `sf-git-merge`
 
-A slim, context-aware conflict resolver for the rare cases where `git merge` bails out. It reads the conflict hunks, consults `.saasfoundry.json` for branch semantics (working vs release), and
-proposes resolutions — the user approves before anything is written.
+Brings the current ticket branch up to date with the pull request target branch (`workflow.prTargetBranch` in `.saasfoundry.json`): it rebases on it and pushes with `--force-with-lease`. It resolves
+only the conflicts with one right answer — a lockfile is regenerated, a generated file is rebuilt, two distinct additions to the same list are both kept. Any other conflict aborts the rebase and is
+handed back to you with both versions of each hunk.
 
-Not intended as a magic merge button. Most merges in a SaaSFoundryAI project never produce conflicts because the team rebases rather than merges day-to-day. Reach for this skill when rebasing a
-long-lived feature branch onto a fast-moving `develop`.
+It never merges a pull request: on a SaaSFoundryAI workflow, that is the developer's step on the forge. Reach for it before opening a pull request, or when one reports conflicts.
 
 ## `sf-utils-fix-errors`
 

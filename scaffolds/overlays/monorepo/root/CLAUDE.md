@@ -137,7 +137,7 @@ All skills are located in `.claude/` at the root and are available across the en
 - **`sf-git-commit`** - Create commits with conventional messages
 - **`sf-git-create-pr`** - Generate PR with auto-generated description
 - **`sf-git-fix-pr-comments`** - Implement PR review feedback
-- **`sf-git-merge`** - Intelligent branch merging
+- **`sf-git-merge`** - Rebase the ticket branch on the PR target branch
 
 #### Code Quality
 - **`sf-utils-fix-errors`** - Fix ESLint and TypeScript errors in parallel

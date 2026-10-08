@@ -2,7 +2,7 @@
 name: commit
 description: Quick commit and push, with a message in the project's commit format (workflow.commitFormat in .saasfoundry.json)
 model: haiku
-allowed-tools: Bash(git :*), Bash(npm :*), Bash(pnpm :*), Bash(node :*)
+allowed-tools: Bash(git :*), Bash(npm :*), Bash(node :*)
 ---
 
 # Commit
