@@ -36,7 +36,7 @@ exact replacement. No change runs no mutating command. Replacement changes inven
 
 - ✅ Use `sf-git-commit` instead of `git-commit`
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
-- ✅ Use `sf-utils-oneshot` instead of `utils-oneshot`
+- ✅ Use `sf-git-create-pr` instead of `git-create-pr`
 - ✅ Use `sf-tool-figma` instead of `tool-figma`
 
 SaaSFoundryAI skills are specifically optimized for this project's structure, conventions, and workflows.

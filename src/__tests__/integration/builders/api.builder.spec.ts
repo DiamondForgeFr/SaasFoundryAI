@@ -1,3 +1,4 @@
+import { existsSync } from 'fs'
 import { mkdir, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -103,6 +104,14 @@ describe('createApiApp (integration)', () => {
   // ── Monorepo Tests ──────────────────────────────────────────
 
   describe('monorepo', () => {
+    // #425 — the monorepo root holds the only .claude/
+    it('leaves no per-app .claude/ in a monorepo, one per repository in a multirepo', async () => {
+      await createApiApp(apiParams({ isMonorepo: true }))
+      await createApiApp(apiParams())
+      expect(existsSync(join(tempDir, 'apps/api/.claude'))).toBe(false)
+      expect(existsSync(join(tempDir, 'apps/test-project-api/.claude/settings.json'))).toBe(true)
+    })
+
     it('should create API app in monorepo layout (apps/api)', async () => {
       const result = await createApiApp(apiParams({ isMonorepo: true }))
 

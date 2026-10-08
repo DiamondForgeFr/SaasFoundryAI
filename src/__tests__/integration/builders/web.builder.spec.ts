@@ -1,3 +1,4 @@
+import { existsSync } from 'fs'
 import { mkdir, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -62,6 +63,14 @@ describe('createWebApp (integration)', () => {
   // ── Monorepo Tests ──────────────────────────────────────────
 
   describe('monorepo', () => {
+    // #425 — the monorepo root holds the only .claude/
+    it('leaves no per-app .claude/ in a monorepo, one per repository in a multirepo', async () => {
+      await createWebApp(webParams({ isMonorepo: true }))
+      await createWebApp(webParams())
+      expect(existsSync(join(tempDir, 'apps/web/.claude'))).toBe(false)
+      expect(existsSync(join(tempDir, 'apps/test-project-web/.claude/settings.json'))).toBe(true)
+    })
+
     it('should create Web app in monorepo layout (apps/web)', async () => {
       const result = await createWebApp(webParams({ isMonorepo: true }))
 

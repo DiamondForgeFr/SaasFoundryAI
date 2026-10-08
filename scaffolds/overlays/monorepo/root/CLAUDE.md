@@ -26,8 +26,7 @@ This is a **Turborepo monorepo** with centralized tooling and shared skills.
 ```
 {{PROJECT_NAME}}/
 ├── .claude/              # ⭐ Centralized Claude skills (shared by all apps)
-│   ├── skills/           # Core skills for git, utils, workflows
-│   └── skills-optional/  # Advanced skills (Context7, Atlassian, etc.)
+│   └── skills/           # Core, workflow and tool skills (sf-*)
 ├── apps/
 │   ├── api/              # NestJS backend
 │   │   └── CLAUDE.md     # API-specific context
@@ -89,7 +88,7 @@ Edit these files like any other shared file once they exist — they're just can
 
 - ✅ Use `sf-git-commit` instead of `git-commit`
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
-- ✅ Use `sf-workflow-apex` instead of `workflow-apex`
+- ✅ Use `sf-git-create-pr` instead of `git-create-pr`
 - ✅ Use `sf-tool-atlassian` instead of `tool-atlassian`
 
 SaaSFoundryAI skills are located in `.claude/` at the repository root and are optimized for this monorepo structure.
@@ -146,12 +145,11 @@ All skills are located in `.claude/` at the root and are available across the en
 #### Integration grammar
 - **`sf-integration-rules`** - Integration grammar router. Triggers when adding a backend module, a page, an API hook, a form, an RBAC permission, or any cross-cutting wire-up. Routes to `backend.md` / `frontend.md` / `topology.md` sub-guides.
 
-#### Development Workflows
-- **`sf-utils-oneshot`** - Ultra-fast feature implementation
-- **`sf-workflow-apex-free`** - APEX methodology (Analyze-Plan-Execute-Validate)
-- **`sf-workflow-apex`** - APEX with adversarial review (for critical features)
+#### Workflow and requirements (installed with their module)
+- **`sf-workflow`** - Ticket statuses, guards and pull requests
+- **`sf-srs`** - Software requirements: draft, write, evaluate and spawn tickets
 
-### Advanced Skills (Optional - Require Configuration)
+### Tool integrations (selected at setup, installed as `.claude/skills/sf-tool-<name>`)
 
 - **`sf-tool-context7`** - Up-to-date library documentation (React, Vite, Prisma, etc.)
 - **`sf-tool-atlassian`** - Jira/Confluence integration
@@ -207,8 +205,8 @@ docs(#44): update API documentation
 # Fix errors across the monorepo
 "Fix all TypeScript errors"  # → sf-utils-fix-errors
 
-# Implement complex features
-"Use APEX workflow to add real-time notifications"  # → sf-workflow-apex
+# Add a feature the project's way
+"Add a notifications module with its page"  # → sf-integration-rules
 ```
 
 ### Best Practices

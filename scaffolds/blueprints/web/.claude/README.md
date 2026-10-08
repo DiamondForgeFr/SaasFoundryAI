@@ -1,83 +1,59 @@
 # Claude Code Integration
 
-This directory contains Claude Code configuration and skills for AI-assisted development.
+This directory holds the Claude Code configuration and skills of this project.
 
 ## 📁 Structure
 
 ```
 .claude/
-├── skills/              # Core skills (always installed)
-│   ├── sf-git-commit/      # Quick commit with conventional messages
-│   ├── sf-git-create-pr/   # Create PR with auto-generated description
-│   ├── sf-git-fix-pr-comments/  # Implement PR review feedback
-│   ├── sf-git-merge/       # Intelligent branch merging
+├── settings.json        # Hooks (session preflight with `sf status`)
+├── skills/
+│   ├── sf-git-commit/           # Commit in the project's commit format
+│   ├── sf-git-create-pr/        # Open a pull request against the configured target branch
+│   ├── sf-git-fix-pr-comments/  # Implement pull request review feedback
+│   ├── sf-git-merge/            # Rebase the ticket branch on the PR target branch
 │   ├── sf-utils-fix-errors/     # Fix ESLint and TypeScript errors
 │   ├── sf-utils-fix-grammar/    # Fix grammar and spelling
-│   ├── sf-utils-oneshot/   # Ultra-fast feature implementation
-│   ├── sf-workflow-apex/   # APEX methodology (full with review)
-│   └── sf-workflow-apex-free/   # APEX methodology (free)
-│
-├── skills-optional/     # Advanced skills (require external services)
-│   ├── sf-tool-context7/   # Up-to-date library documentation
-│   ├── sf-tool-atlassian/  # Jira/Confluence integration
-│   ├── sf-tool-notion/     # Notion workspace integration
-│   └── sf-tool-figma/      # Figma design integration
-│
+│   ├── sf-integration-rules/    # How to add modules, pages, endpoints, hooks and forms
+│   ├── sf-workflow/             # Ticket workflow (when a workflow is configured)
+│   ├── sf-srs/                  # SRS drafting and spawning (when the SRS module is enabled)
+│   └── sf-tool-<name>/          # Tool integrations you selected (github-projects, notion, figma, …)
 └── README.md            # This file
 ```
 
-## 🛠️ Available Skills
+Only the skills matching your setup are installed: `sf status` lists what this project actually has.
 
-### Core Skills (Always Available)
+## 🛠️ Skills
 
-#### Git Workflows
-- **sf-git-commit** - Create commits with conventional commit messages
-- **sf-git-create-pr** - Create PR with auto-generated title and description
-- **sf-git-fix-pr-comments** - Automatically implement PR review feedback
-- **sf-git-merge** - Intelligent branch merging with conflict resolution
+### Always installed
 
-#### Code Quality
-- **sf-utils-fix-errors** - Fix all ESLint and TypeScript errors in parallel
-- **sf-utils-fix-grammar** - Fix grammar and spelling errors while preserving formatting
+- **sf-git-commit** - Commit with the message format declared in `.saasfoundry.json`
+- **sf-git-create-pr** - Open a pull request against `workflow.prTargetBranch`
+- **sf-git-fix-pr-comments** - Implement pull request review feedback
+- **sf-git-merge** - Rebase the ticket branch on the PR target branch and resolve deterministic conflicts; never merges a pull request
+- **sf-utils-fix-errors** - Fix ESLint and TypeScript errors
+- **sf-utils-fix-grammar** - Fix grammar and spelling while preserving formatting
+- **sf-integration-rules** - The project's integration grammar (backend modules, pages, API hooks, forms, RBAC)
 
-#### Development Workflows
-- **sf-utils-oneshot** - Ultra-fast feature implementation (Explore → Code → Test)
-- **sf-workflow-apex-free** - APEX methodology (Analyze-Plan-Execute-Validate)
-- **sf-workflow-apex** - APEX methodology with adversarial review (for critical features)
+### Installed with a module
 
-### Advanced Skills (Optional - Require Configuration)
+- **sf-workflow** - Ticket statuses, guards and pull requests, driven by `workflow-cli.sh`
+- **sf-srs** - Software requirements: draft, write, evaluate and spawn tickets
 
-These skills integrate with external services and require API tokens/credentials:
+### Tool integrations (selected at setup)
 
-- **sf-tool-context7** - Fetch up-to-date library documentation (React, Vite, Tailwind, etc.)
-- **sf-tool-atlassian** - Jira/Confluence integration (create tickets, update status, etc.)
-- **sf-tool-notion** - Notion workspace integration (create pages, databases, etc.)
-- **sf-tool-figma** - Figma design system integration (get designs, components, etc.)
+Installed as `sf-tool-<name>` and configured with your own credentials:
 
-> **Note**: Advanced skills are located in `skills-optional/`. To enable them, configure the required credentials during project setup or when Claude prompts you.
+- **sf-tool-github-projects**, **sf-tool-jira**, **sf-tool-linear**, **sf-tool-notion** - Ticket board and documentation tools
+- **sf-tool-context7** - Up-to-date library documentation
+- **sf-tool-atlassian** - Jira and Confluence
+- **sf-tool-figma** - Figma designs and components
 
 ## 📖 How to Use
 
-Skills are automatically loaded by Claude Code when you open this project. You can invoke them by:
-
-1. **Asking directly**: "fix all TypeScript errors"
-2. **Using skill name**: "use sf-git-commit to commit these changes"
-3. **Auto-trigger**: Many skills auto-trigger based on keywords
-
-## 🚀 Getting Started
-
-1. Open this project in your IDE with Claude Code installed
-2. Claude will automatically load the CLAUDE.md file and available skills
-3. Start coding with AI assistance - skills are ready to use
-
-## ✨ Best Practices
-
-- Let skills handle repetitive tasks (commits, error fixes, etc.)
-- Use APEX workflow for complex features
-- Review AI-generated code, especially for UI components
-- Skills respect project conventions (ESLint, Prettier, TypeScript)
-- Test React components after AI generation
+Claude Code loads the skills of this directory when you open the project. Ask for the task ("fix all TypeScript errors", "open the pull request") or name the skill; most skills also trigger on
+their keywords.
 
 ---
 
-**Note**: These skills are part of SaaSFoundryAI's AI-First development approach. They work seamlessly with the project's existing tooling (tests, CI/CD, git hooks).
+**Note**: The skills follow the project's own tooling and rules (`.saasfoundry.json`, tests, git hooks); they never bypass them.

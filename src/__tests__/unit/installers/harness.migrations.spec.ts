@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
-import { dropStackSkillsWithoutStack, harnessMigrations } from '../../../installers/harness.migrations'
+import { dropPerAppClaudeInMonorepo, dropStackSkillsWithoutStack, harnessMigrations } from '../../../installers/harness.migrations'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import type { SaaSFoundryManifest } from '../../../types'
 import { hashFileContent } from '../../../utils'
@@ -49,10 +49,10 @@ describe('harness migration v1 → v2: drop-stack-skills-without-stack', () => {
 
   const output = () => logSpy.mock.calls.flat().join('\n')
 
-  it('is the harness chain v1 → v2', () => {
-    expect(harnessMigrations).toEqual([dropStackSkillsWithoutStack])
+  it('is the start of the harness chain', () => {
+    expect(harnessMigrations).toEqual([dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo])
     expect(dropStackSkillsWithoutStack).toMatchObject({ from: 1, to: 2 })
-    expect(harnessInstallerMeta).toMatchObject({ currentVersion: 2, migrations: harnessMigrations })
+    expect(harnessInstallerMeta).toMatchObject({ currentVersion: 3, migrations: harnessMigrations })
   })
 
   it('removes the untouched deposit and its mirror, and their fileHashes entries', async () => {
@@ -124,5 +124,73 @@ describe('harness migration v1 → v2: drop-stack-skills-without-stack', () => {
 
     expect(manifest.fileHashes).toEqual({})
     expect(output()).toBe('')
+  })
+})
+
+// #425 — a monorepo has one .claude/, at its root
+describe('harness migration v2 → v3: drop-per-app-claude-in-monorepo', () => {
+  const FIXTURES = join(__dirname, '../../fixtures/per-app-claude')
+  let dir: string
+  let logSpy: jest.SpyInstance
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'sf-harness-migration-'))
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(async () => {
+    logSpy.mockRestore()
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  /** Copies the per-app files a blueprint shipped into each app. The fixtures are `.txt` so that no formatter changes their bytes. */
+  const shipped = async (apps: string[]): Promise<void> => {
+    for (const app of apps) {
+      await mkdir(join(dir, app, '.claude'), { recursive: true })
+      for (const name of ['settings.json', 'README.md']) await writeFile(join(dir, app, '.claude', name), await readFile(join(FIXTURES, `${name}.txt`)))
+    }
+  }
+
+  const manifest = (structure: SaaSFoundryManifest['structure']): SaaSFoundryManifest => ({
+    version: '1.0.0',
+    generatedAt: '2026-10-08T00:00:00Z',
+    structure,
+    projectName: 'acme',
+    modules: { harness: { version: 2, managed: true } }
+  })
+
+  it('follows the stack-skills migration', () => {
+    expect(dropPerAppClaudeInMonorepo).toMatchObject({ from: 2, to: 3 })
+  })
+
+  it('removes the untouched per-app .claude of a monorepo', async () => {
+    await shipped(['apps/api', 'apps/web'])
+    await dropPerAppClaudeInMonorepo.up(dir, manifest('monorepo'))
+    expect(existsSync(join(dir, 'apps/api/.claude'))).toBe(false)
+    expect(existsSync(join(dir, 'apps/web/.claude'))).toBe(false)
+  })
+
+  it('keeps and reports an edited or added file', async () => {
+    await shipped(['apps/api'])
+    await writeFile(join(dir, 'apps/api/.claude/settings.json'), '{ "hooks": {} }\n')
+    await writeFile(join(dir, 'apps/api/.claude/notes.md'), 'mine\n')
+    await dropPerAppClaudeInMonorepo.up(dir, manifest('monorepo'))
+    expect(existsSync(join(dir, 'apps/api/.claude/README.md'))).toBe(false)
+    expect(await readFile(join(dir, 'apps/api/.claude/settings.json'), 'utf8')).toBe('{ "hooks": {} }\n')
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('apps/api/.claude/settings.json')
+    expect(output).toContain('apps/api/.claude/notes.md')
+  })
+
+  it('leaves a multirepo alone', async () => {
+    await shipped(['apps/api'])
+    await dropPerAppClaudeInMonorepo.up(dir, manifest('multirepo'))
+    expect(existsSync(join(dir, 'apps/api/.claude/settings.json'))).toBe(true)
+  })
+
+  it('is idempotent', async () => {
+    await shipped(['apps/web'])
+    await dropPerAppClaudeInMonorepo.up(dir, manifest('monorepo'))
+    await expect(dropPerAppClaudeInMonorepo.up(dir, manifest('monorepo'))).resolves.toBeUndefined()
   })
 })
