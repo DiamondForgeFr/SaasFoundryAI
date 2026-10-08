@@ -41,7 +41,7 @@ scaffolds/overlays/monorepo/root/.claude/
 - `sf-git-commit` - Quick commit and push
 - `sf-git-create-pr` - Create pull requests
 - `sf-git-fix-pr-comments` - Implement PR feedback
-- `sf-git-merge` - Intelligent branch merging
+- `sf-git-merge` - Rebase the ticket branch on the PR target branch
 - `sf-utils-fix-errors` - Fix ESLint/TypeScript errors
 - `sf-utils-fix-grammar` - Fix spelling/grammar
 - `sf-utils-oneshot` - Ultra-fast feature implementation
