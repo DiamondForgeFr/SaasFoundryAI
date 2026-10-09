@@ -37,7 +37,7 @@ Actions:
   normalize [--feature <url-or-id>] [--version-name <name>] [--apply] [--manifest] [--root-page <id>]
                                          Enumerate FR page children of an Epic and create Story sub-tickets
   apply-update [--patch <path>] [--manifest]
-                                         Apply a conversational eval-hook patch (ADD-only)
+                                         Apply a conversational eval-hook patch (ADD-only; placed in the feature and version tables)
   eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--manifest]
                                          Score SRS freshness vs. codebase (batch)
 

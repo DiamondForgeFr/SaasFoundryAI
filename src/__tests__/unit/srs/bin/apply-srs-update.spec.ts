@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../../builders/srs/types'
+import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SectionAddition, SectionAdditionOutcome, SrsAdapter } from '../../../../builders/srs/types'
 import { ApplyIO, ApplyOptions, assertPatchShape, parseArgs, renderAppendBlocks, runApplyUpdate, SrsUpdatePatch } from '../../../../srs/bin/apply-srs-update'
 import { registerSrsBackend, unregisterSrsBackend } from '../../../../srs'
 
@@ -38,7 +38,8 @@ class StubAdapter implements SrsAdapter {
   async fetchPage(pageId: string): Promise<RawContent> {
     return { pageId, title: '', url: '', blocks: [] }
   }
-  async listChildren(): Promise<PageRef[]> {
+  async listChildren(parentPageId?: string): Promise<PageRef[]> {
+    void parentPageId
     return []
   }
   async move(pageId: string, newParentPageId: string): Promise<void> {
@@ -294,5 +295,96 @@ describe('runApplyUpdate', () => {
     const { code, io } = runWithStdin('{ this stdin must be ignored }', { patchPath })
     await expect(code).resolves.toBe(0)
     expect(io.readStdin).not.toHaveBeenCalled()
+  })
+})
+
+// #917 — what is added lands in the tables `write` fills, not under an "Added …" heading
+describe('runApplyUpdate — placement in the existing tables', () => {
+  const BACKEND = 'apply-tables-backend'
+
+  /** root → feature "Live" → version "v1 — Topics" → FR-LIVE-001 */
+  class TreeAdapter extends StubAdapter {
+    readonly extensions: Array<{ pageId: string; additions: SectionAddition[] }> = []
+    constructor(private readonly outcome: SectionAdditionOutcome = 'extended') {
+      super()
+    }
+    async listChildren(parentPageId?: string): Promise<PageRef[]> {
+      if (parentPageId === 'root') return [{ id: 'feature', url: '', title: 'Live' }]
+      if (parentPageId === 'feature') return [{ id: 'version', url: '', title: 'v1 — Topics' }]
+      if (parentPageId === 'version') return [{ id: 'fr-page', url: '', title: 'FR-LIVE-001 — Notes' }]
+      return []
+    }
+    extendSections = async (pageId: string, additions: SectionAddition[]): Promise<SectionAdditionOutcome[]> => {
+      this.extensions.push({ pageId, additions })
+      return additions.map(() => this.outcome)
+    }
+  }
+
+  let tmpDir: string
+  let manifestPath: string
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'sf-apply-tables-'))
+    manifestPath = join(tmpDir, 'manifest.json')
+    writeFileSync(manifestPath, JSON.stringify({ tools: { srs: { backend: BACKEND, rootPage: { id: 'root' } } } }))
+  })
+  afterEach(() => {
+    unregisterSrsBackend(BACKEND)
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  const apply = async (adapter: SrsAdapter, patch: SrsUpdatePatch) => {
+    registerSrsBackend(BACKEND, () => adapter)
+    const io = makeIO(JSON.stringify(patch))
+    const code = await runApplyUpdate({ patchPath: '', manifestPath }, io)
+    return { code, result: JSON.parse(io.stdoutBuffer.join('')), stderr: io.stderrBuffer.join('') }
+  }
+
+  it('adds an NFR to the feature NFR table with the version of the page it was added from', async () => {
+    const adapter = new TreeAdapter()
+    const { code, result } = await apply(adapter, { kind: 'add-nfr', pageId: 'version', item: { id: 'NFR-LIVE-002', title: 'Fast notes', target: '≤ 2 s' } })
+    expect(code).toBe(0)
+    expect(result.placed).toBe('tables')
+    expect(adapter.updatePageCalls).toEqual([])
+    const [extension] = adapter.extensions
+    expect(extension.pageId).toBe('feature')
+    expect(extension.additions[0]).toMatchObject({ kind: 'table-rows', heading: 'Non-Functional Requirements (NFR)' })
+    expect(JSON.stringify(extension.additions[0])).toContain('NFR-LIVE-002')
+    expect(JSON.stringify(extension.additions[0])).toContain('v1 — Topics')
+  })
+
+  it('adds a DS given on an FR page to the feature DS table, with that FR version', async () => {
+    const adapter = new TreeAdapter()
+    const { result } = await apply(adapter, { kind: 'add-ds', pageId: 'fr-page', item: { id: 'DS-LIVE-003', title: 'Segmentation', frRefs: ['FR-LIVE-001'] } })
+    expect(result.placed).toBe('tables')
+    expect(adapter.extensions[0].pageId).toBe('feature')
+    expect(adapter.extensions[0].additions[0]).toMatchObject({ heading: 'Design Specifications (DS)' })
+  })
+
+  it('adds an FR to an existing version: its change line, its FR row, and the feature row', async () => {
+    const adapter = new TreeAdapter()
+    const { result } = await apply(adapter, { kind: 'add-fr', pageId: 'version', item: { fr: { id: 'FR-LIVE-002', title: 'Consolidation', priority: 'P2' }, change: 'Notes consolidate per topic' } })
+    expect(result.placed).toBe('tables')
+    const versionExtension = adapter.extensions.find((extension) => extension.pageId === 'version')!
+    expect(versionExtension.additions).toEqual([
+      { kind: 'list-items', heading: 'What changed in this version', items: ['Notes consolidate per topic'] },
+      { kind: 'table-rows', heading: 'Functional Requirements (FR)', layouts: [{ header: ['ID', 'Requirement', 'Priority'], rows: [['FR-LIVE-002', 'Consolidation', 'P2']] }] }
+    ])
+    expect(JSON.stringify(adapter.extensions.find((extension) => extension.pageId === 'feature')!.additions)).toContain('FR-LIVE-002')
+  })
+
+  it('falls back to the "Added …" heading when the table is not on the page, and says so', async () => {
+    const adapter = new TreeAdapter('unplaced')
+    const { code, result, stderr } = await apply(adapter, { kind: 'add-ur', pageId: 'version', item: { id: 'UR-LIVE-009', narrative: 'Late need' } })
+    expect(code).toBe(0)
+    expect(result.placed).toBe('appended')
+    expect(adapter.updatePageCalls[0].content.blocks[0]).toMatchObject({ text: 'Added User Requirement — UR-LIVE-009' })
+    expect(stderr).toContain('User Requirements (UR)')
+  })
+
+  it('falls back when the page is not part of this SRS', async () => {
+    const adapter = new TreeAdapter()
+    const { result } = await apply(adapter, { kind: 'add-tc', pageId: 'elsewhere', item: { id: 'TC-1', title: 'x' } })
+    expect(result.placed).toBe('appended')
+    expect(result.notPlaced[0]).toContain('is not a feature, version or FR page of this SRS')
   })
 })

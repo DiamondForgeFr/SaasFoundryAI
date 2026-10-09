@@ -156,9 +156,12 @@ export class NotionSrsAdapter implements SrsAdapter {
       const listed = section.filter(isBulletBlock).map((block) => extractRichText(block.bulleted_list_item.rich_text).trim())
       const missing = addition.items.filter((item) => !listed.includes(item.trim()))
       if (missing.length === 0) return 'unchanged'
+      // A section written empty holds only its "No … yet." line: the list takes its place, as a table does
+      const placeholder = section.length === 1 && isPlaceholder(section[0]) ? section[0] : undefined
       const lastBullet = [...section].reverse().find(isBulletBlock)
       const anchor = lastBullet ?? section.at(-1) ?? blocks[start]
       await this.appendAfter(pageId, blockId(anchor), renderPageContentToNotionBlocks({ blocks: [{ kind: 'bulleted_list', items: missing }] }))
+      if (placeholder) await this.client.blocks.delete({ block_id: blockId(placeholder) })
       return 'extended'
     }
 

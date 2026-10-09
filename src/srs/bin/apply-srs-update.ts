@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { DsItem, FrSpec, PageBlock, PageContent, PageRef, SrsAdapter, TcItem, UrItem } from '../../builders/srs/types'
+import { DsItem, FrSpec, NfrItem, PageBlock, PageContent, PageRef, SrsAdapter, TcItem, UrItem } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { locatePage, PageLocation, placeFrInExistingVersion, placeItemInFeature, readSrsTree, RequirementItem } from '../version-extension'
 import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
 
 // The conversational eval hook (SUB-10 / #170) lives inside SKILL.md as
@@ -10,16 +11,22 @@ import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
 // utterance describes a new UR / FR / DS / TC and the user approves the
 // proposed diff, this bin applies the ADD to the configured SRS backend.
 //
-// Scope : ADD-only. Modifying an existing UR / FR / DS / TC is out of scope
-// because `SrsAdapter.updatePage` is append-only on Notion (block-level
-// replace / delete is not available through the current contract).
-// Modifications are tracked as a follow-up SUB.
-export type SrsUpdateKind = 'add-ur' | 'add-fr' | 'add-ds' | 'add-tc'
+// Scope : ADD-only. Changing an existing FR in place needs an update capability
+// the adapter contract does not have yet: #945.
+//
+// What is added goes where `write` puts it (#917): a UR / DS / TC / NFR to its
+// table on the feature page, with the version of the page it was added from; an
+// FR added to an existing version to that version's FR table and change list, and
+// to the feature's tables. Only when that cannot be done is it appended to the page
+// under an "Added …" heading, and the result says so.
+export type SrsUpdateKind = 'add-ur' | 'add-fr' | 'add-ds' | 'add-tc' | 'add-nfr'
+
+const KINDS: SrsUpdateKind[] = ['add-ur', 'add-fr', 'add-ds', 'add-tc', 'add-nfr']
 
 export interface SrsUpdatePatch {
   kind: SrsUpdateKind
   pageId: string
-  item: UrItem | DsItem | TcItem | FrSpec
+  item: UrItem | DsItem | TcItem | NfrItem | FrSpec
   note?: string
 }
 
@@ -27,6 +34,15 @@ export interface ApplyResult {
   kind: SrsUpdateKind
   targetPageId: string
   newPage?: PageRef
+  /** `tables`: in the canonical tables; `appended`: under an "Added …" heading at the end of the page. */
+  placed?: 'tables' | 'appended'
+  /** Why something was appended rather than placed, or what is left to add by hand. */
+  notPlaced?: string[]
+}
+
+/** `SrsManifestSubset` does not carry `rootPage`; the tree walk needs it to locate the page. */
+interface ApplyManifest extends SrsManifestSubset {
+  tools?: { srs?: { backend?: string; rootPage?: { id?: string } } }
 }
 
 export interface ApplyIO {
@@ -89,8 +105,8 @@ function parsePatchJson(raw: string): SrsUpdatePatch {
 export function assertPatchShape(patch: SrsUpdatePatch): void {
   if (!patch || typeof patch !== 'object') throw new Error('apply-srs-update: patch must be a JSON object')
   const kind = (patch as { kind?: unknown }).kind
-  if (kind !== 'add-ur' && kind !== 'add-fr' && kind !== 'add-ds' && kind !== 'add-tc') {
-    throw new Error(`apply-srs-update: unknown kind="${String(kind)}" (expected add-ur | add-fr | add-ds | add-tc)`)
+  if (!KINDS.includes(kind as SrsUpdateKind)) {
+    throw new Error(`apply-srs-update: unknown kind="${String(kind)}" (expected ${KINDS.join(' | ')})`)
   }
   if (!patch.pageId || typeof patch.pageId !== 'string') throw new Error('apply-srs-update: patch is missing `pageId`')
   if (!patch.item || typeof patch.item !== 'object') throw new Error('apply-srs-update: patch is missing `item`')
@@ -117,6 +133,12 @@ export function renderAppendBlocks(patch: SrsUpdatePatch): PageBlock[] {
     const suffix = tc.expectedResult ? ` → ${tc.expectedResult}` : ''
     blocks.push({ kind: 'bulleted_list', items: [`${tc.id}: ${tc.title}${suffix}`] })
     if (tc.steps && tc.steps.length > 0) blocks.push({ kind: 'numbered_list', items: tc.steps })
+  } else if (patch.kind === 'add-nfr') {
+    const nfr = patch.item as NfrItem
+    if (!nfr.id || !nfr.title) throw new Error('apply-srs-update: add-nfr requires item.id and item.title')
+    blocks.push({ kind: 'heading', level: 2, text: `Added Non-Functional Requirement — ${nfr.id}` })
+    const suffix = nfr.target ? ` (target: ${nfr.target})` : ''
+    blocks.push({ kind: 'bulleted_list', items: [`${nfr.id}: ${nfr.title}${suffix}`] })
   }
   if (patch.note) blocks.push({ kind: 'paragraph', text: `Note: ${patch.note}` })
   return blocks
@@ -124,10 +146,10 @@ export function renderAppendBlocks(patch: SrsUpdatePatch): PageBlock[] {
 
 export async function runApplyUpdate(options: ApplyOptions, io: ApplyIO = defaultIO()): Promise<number> {
   const manifestPath = resolve(options.manifestPath)
-  let manifest: SrsManifestSubset
+  let manifest: ApplyManifest
   let patch: SrsUpdatePatch
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as SrsManifestSubset
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as ApplyManifest
     const raw = options.patchPath ? readFileSync(resolve(options.patchPath), 'utf8') : io.readStdin()
     patch = parsePatchJson(raw)
     assertPatchShape(patch)
@@ -152,17 +174,28 @@ export async function runApplyUpdate(options: ApplyOptions, io: ApplyIO = defaul
 
   const result: ApplyResult = { kind: patch.kind, targetPageId: patch.pageId }
   try {
+    const location = await locate(adapter, manifest.tools?.srs?.rootPage?.id, patch.pageId)
     if (patch.kind === 'add-fr') {
       const spec = patch.item as FrSpec
       if (!spec.fr || !spec.fr.id || !spec.fr.title) throw new Error('apply-srs-update: add-fr requires item.fr.id and item.fr.title')
       if (!spec.parentEpicPageId) spec.parentEpicPageId = patch.pageId
-      const page = await adapter.createFrPage(spec)
-      result.newPage = page
+      result.newPage = await adapter.createFrPage(spec)
+      const notPlaced = location.found ? await placeFrInExistingVersion(adapter, location.found, spec) : [location.reason]
+      result.placed = notPlaced.length === 0 ? 'tables' : undefined
+      if (notPlaced.length > 0) result.notPlaced = notPlaced
     } else {
       const blocks = renderAppendBlocks(patch)
-      const content: PageContent = { blocks }
-      await adapter.updatePage(patch.pageId, content)
+      const notPlaced = location.found ? await placeItemInFeature(adapter, location.found, requirementOf(patch)) : [location.reason]
+      if (notPlaced.length === 0) {
+        result.placed = 'tables'
+      } else {
+        const content: PageContent = { blocks }
+        await adapter.updatePage(patch.pageId, content)
+        result.placed = 'appended'
+        result.notPlaced = notPlaced
+      }
     }
+    for (const entry of result.notPlaced ?? []) io.stderr(`apply-srs-update: ${entry}\n`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     io.stderr(`✗ apply-srs-update: failed to apply patch — ${message}\n`)
@@ -179,4 +212,19 @@ if (require.main === module) {
     (argv) => runApplyUpdate(parseArgs(argv)),
     'Usage: apply-srs-update.ts [--patch <path>] [--manifest <path>]\n(Patch JSON is read from stdin when --patch is omitted.)'
   )
+}
+
+function requirementOf(patch: SrsUpdatePatch): RequirementItem {
+  if (patch.kind === 'add-ur') return { kind: 'ur', item: patch.item as UrItem }
+  if (patch.kind === 'add-ds') return { kind: 'ds', item: patch.item as DsItem }
+  if (patch.kind === 'add-tc') return { kind: 'tc', item: patch.item as TcItem }
+  return { kind: 'nfr', item: patch.item as NfrItem }
+}
+
+/** Where the patch's page sits, or why it cannot be placed in the tables. */
+async function locate(adapter: SrsAdapter, rootPageId: string | undefined, pageId: string): Promise<{ found: PageLocation; reason?: undefined } | { found?: undefined; reason: string }> {
+  if (!rootPageId) return { reason: 'tools.srs.rootPage.id is not set, so the page cannot be found in the SRS: appended under an "Added …" heading.' }
+  const tree = await readSrsTree(adapter, rootPageId)
+  const found = tree ? locatePage(tree, pageId) : undefined
+  return found ? { found } : { reason: `page ${pageId} is not a feature, version or FR page of this SRS: appended under an "Added …" heading.` }
 }
