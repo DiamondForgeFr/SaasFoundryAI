@@ -1,4 +1,4 @@
-import { featureTableAdditions, renderEpicPage } from '../../../../builders/srs/templates/pages/epic.tpl'
+import { featureTableAdditions, renderEpicPage, versionFrAdditions } from '../../../../builders/srs/templates/pages/epic.tpl'
 import { EpicSpec, PageBlock, TableBlock } from '../../../../builders/srs/types'
 
 function kinds(page: ReturnType<typeof renderEpicPage>): string[] {
@@ -371,5 +371,21 @@ describe('feature page tables with the items its versions bring', () => {
       ]
     })
     expect(featureTableAdditions({})).toEqual([])
+  })
+})
+
+// #917 — what an existing version gains when an FR joins it
+describe('versionFrAdditions', () => {
+  it('adds the change line, by default "Adds <id> — <title>", and the FR row', () => {
+    expect(versionFrAdditions({ id: 'FR-1', title: 'One', priority: 'P1' })).toEqual([
+      { kind: 'list-items', heading: 'What changed in this version', items: ['Adds FR-1 — One'] },
+      { kind: 'table-rows', heading: 'Functional Requirements (FR)', layouts: [{ header: ['ID', 'Requirement', 'Priority'], rows: [['FR-1', 'One', 'P1']] }] }
+    ])
+    expect(versionFrAdditions({ id: 'FR-1', title: 'One' }, 'Worded by hand')[0]).toMatchObject({ items: ['Worded by hand'] })
+  })
+
+  it('writes a version with no change as a "No … yet." line a later addition replaces', () => {
+    const page = renderEpicPage({ title: 'v1', parentId: 'F', parentPageId: 'f', urs: [], frs: [] })
+    expect(page.blocks).toContainEqual({ kind: 'paragraph', text: 'No changes listed yet.' })
   })
 })

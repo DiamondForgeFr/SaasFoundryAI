@@ -125,6 +125,18 @@ describe('NotionSrsAdapter.extendSections', () => {
     expect(deletes).toEqual(['b-ds-empty'])
   })
 
+  // #917 — a version written with no change listed gains its first one in place of the placeholder
+  it('replaces a "No … yet." placeholder with the list it gains', async () => {
+    const versionPage = [h2('b-changes', 'What changed in this version'), p('b-changes-empty', 'No changes listed yet.'), h2('b-frs', 'Functional Requirements (FR)')]
+    const { adapter, appends, deletes } = fakeClient({ version: versionPage })
+
+    const [outcome] = await adapter.extendSections('version', [{ kind: 'list-items', heading: 'What changed in this version', items: ['Adds FR-1 — One'] }])
+
+    expect(outcome).toBe('extended')
+    expect(appends[0]).toMatchObject({ block_id: 'version', position: { type: 'after_block', after_block: { id: 'b-changes-empty' } } })
+    expect(deletes).toEqual(['b-changes-empty'])
+  })
+
   it('leaves unplaced a table of an unknown width, or a missing section', async () => {
     const { adapter, appends } = fakeClient({ page: featurePage })
 

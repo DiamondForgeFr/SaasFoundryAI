@@ -148,6 +148,10 @@ Order matters: a page can only reference a logical id declared before it in the 
 
 A backend that cannot edit an existing page lists what is left to add by hand in the report's `notPlaced`.
 
+**An FR added to a version written earlier.** Set the FR candidate's `parentEpicPageId` to that version page. `write` creates the FR page, adds its row to the version's FR table and a line to
+its "What changed in this version" (the candidate's optional `change`, `Adds <id> — <title>` by default), and adds its row and the UR / DS / TC rows it carries to the feature's tables, with the
+version. A page that is not a version of this SRS still receives the FR page, and the report says no table lists it.
+
 **Ids and version numbers come from the SRS, not from your last reading.** Before the first page, `write` re-reads the feature it adds a version to and refuses the batch (exit 2, nothing
 written) when that feature already holds the version title or number, or any UR / FR / DS / TC / NFR id the batch declares: two sessions extending one feature a minute apart used to write the same
 `v3` and the same ids (#919). Take the numbers from `sf srs next-ids --feature <page-url-or-id>` right before writing the spec.
@@ -280,7 +284,7 @@ A feature holding its FRs directly still spawns from `--epic` alone — 25 real 
 | `draft`        | Run the drafter matching `--from <source>` (notion-pages \| codebase) | SUB-6, 13    |
 | `write`        | Apply a `DraftCandidate[]` spec to the backend + clear pending flag   | SUB-6        |
 | `spawn`        | Spawn GitHub tickets from a published SRS                             | SUB-9        |
-| `apply-update` | Apply a conversational eval-hook patch (ADD-only : UR / FR / DS / TC) | SUB-10       |
+| `apply-update` | Apply a conversational eval-hook patch (ADD-only : UR / FR / DS / TC / NFR) | SUB-10       |
 | `eval`         | Compute freshness score comparing the SRS to the codebase (batch)     | SUB-16       |
 
 ## Freshness eval (SUB-16)
@@ -592,8 +596,10 @@ Detection heuristics, confirmation prompt, patch shape, and v1 scope limits live
 - `detect-eval-signals.sh --classify "<text>"` (or stdin) — crude regex prefilter over a turn, returns `{signal, confidence, target}`. Use it to cheap-skip trivial turns; the agent still has the final
   say on whether to fire.
 
-Fire at most **once per conversation turn**. On a signal hit, propose a diff in plain text, wait for `accept / edit / reject`, and — on accept — pipe the patch through `sf srs apply-update`. v1 is
-ADD-only and appends to an "Added …" heading on the target page; the reviewer folds it back into the canonical section during the next human SRS review.
+Fire at most **once per conversation turn**. On a signal hit, propose a diff in plain text, wait for `accept / edit / reject`, and — on accept — pipe the patch through `sf srs apply-update`. It is
+ADD-only (changing an existing FR is #945). What it adds goes where `write` puts it: a UR / DS / TC / NFR to its table on the feature page, with the version of the target page; an FR to the
+target version's FR table and change list, and to the feature's tables. Only when the page is not part of the SRS or the table is missing does it fall back to an "Added …" heading at the end of the
+page; the result's `placed` and `notPlaced` say so.
 
 After any change to the rules or classifier, run a short dogfood session: 5 utterances (one per signal row + one trivial control), confirm the hook fires exactly on the four signals and skips the
 trivial one.

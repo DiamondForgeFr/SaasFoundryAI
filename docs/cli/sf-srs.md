@@ -57,6 +57,10 @@ sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--ma
 UR/FR/DS/TC/NFR id the batch declares — two sessions extending one feature used to write the same `v3` and the same ids. `next-ids` gives the numbers to use instead, read from the SRS itself rather
 than from an earlier reading.
 
+`apply-update` adds a UR, FR, DS, TC or NFR (`add-ur`, `add-fr`, `add-ds`, `add-tc`, `add-nfr`) where `write` would have put it: in its table on the feature page, with the version of the target page,
+and an FR also in its version's FR table and change list. It appends under an "Added …" heading only when the page is not part of the SRS or the table is missing, and says so. Changing an existing FR
+is not supported yet.
+
 `--milestone` on `spawn` **declares the release these tickets ship in**: the milestone is created or reused, the version page is linked to it, and every ticket spawned joins it.
 
 `--complexity <level>` on `spawn` labels every created Story whose FR page states no complexity (`bug`, `low`, `medium` or `complex`); an FR page's own Complexity wins. The summary lists any Story

@@ -57,6 +57,10 @@ sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--ma
 version, ou l’un des identifiants UR/FR/DS/TC/NFR que le lot déclare : deux sessions qui étendaient la même fonctionnalité écrivaient le même `v3` et les mêmes identifiants. `next-ids` donne les
 numéros à utiliser, lus dans le SRS lui-même plutôt que dans une lecture antérieure.
 
+`apply-update` ajoute une UR, une FR, un DS, un TC ou une NFR (`add-ur`, `add-fr`, `add-ds`, `add-tc`, `add-nfr`) là où `write` l’aurait mis : dans son tableau sur la page de la fonctionnalité, avec
+la version de la page visée, et pour une FR aussi dans le tableau des FR et la liste des changements de sa version. Il n’ajoute sous un titre « Added … » que si la page n’appartient pas au SRS ou si
+le tableau manque, et le signale. Modifier une FR existante n’est pas encore possible.
+
 L'option `--milestone` de `spawn` **déclare la release dans laquelle ces tickets seront livrés** : le milestone est créé ou réutilisé, la page de version lui est associée et tous les tickets générés
 le rejoignent.
 
