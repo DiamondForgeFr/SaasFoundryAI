@@ -46,9 +46,12 @@ export type ApiRunner = (args: string) => string
 
 const defaultRun: ApiRunner = (args) => execSync(`gh api ${args}`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).toString()
 
-/** REST scope segment: `orgs/<login>` or `users/<numeric-id>`. */
-export function ownerScope(opts: { owner: string; isOrg: boolean; userId?: number }): string {
-  return opts.isOrg ? `orgs/${opts.owner}` : `users/${opts.userId}`
+/**
+ * REST scope segment: `orgs/<login>` or `users/<login>`. GitHub answers 404 on
+ * `users/<numeric-id>`, so a board created under a personal account never got its view (#913).
+ */
+export function ownerScope(opts: { owner: string; isOrg: boolean }): string {
+  return `${opts.isOrg ? 'orgs' : 'users'}/${opts.owner}`
 }
 
 /** Build the `gh api` argument string that creates the Board view. */
@@ -72,10 +75,7 @@ export interface BoardViewResult {
  * Best-effort: any REST failure is captured in `error` and never thrown — board
  * creation must not fail because the (newer) view endpoint is unavailable.
  */
-export function configureBoardView(
-  opts: { owner: string; isOrg: boolean; userId?: number; projectNumber: number; viewName?: string; desiredFields?: string[] },
-  run: ApiRunner = defaultRun
-): BoardViewResult {
+export function configureBoardView(opts: { owner: string; isOrg: boolean; projectNumber: number; viewName?: string; desiredFields?: string[] }, run: ApiRunner = defaultRun): BoardViewResult {
   const viewName = opts.viewName ?? 'Board'
   const desired = opts.desiredFields ?? DEFAULT_BOARD_VISIBLE_FIELDS
 

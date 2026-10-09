@@ -31,8 +31,9 @@ describe('workflow.board-view', () => {
       expect(ownerScope({ owner: 'DiamondForgeFr', isOrg: true })).toBe('orgs/DiamondForgeFr')
     })
 
-    it('uses users/<numeric-id> for user-owned projects', () => {
-      expect(ownerScope({ owner: 'agachet', isOrg: false, userId: 12345 })).toBe('users/12345')
+    // #913 — GitHub answers 404 on users/<numeric-id> and 200 on users/<login>
+    it('uses users/<login> for user-owned projects', () => {
+      expect(ownerScope({ owner: 'agachet', isOrg: false })).toBe('users/agachet')
     })
   })
 
@@ -69,7 +70,7 @@ describe('workflow.board-view', () => {
       expect(calls[1]).toContain("-F 'visible_fields[]=269932803'")
     })
 
-    it('targets the user endpoint with the numeric id for user-owned projects', () => {
+    it('targets the user endpoint with the login for user-owned projects', () => {
       const calls: string[] = []
       const run: ApiRunner = (args) => {
         calls.push(args)
@@ -77,10 +78,10 @@ describe('workflow.board-view', () => {
         return '{}'
       }
 
-      configureBoardView({ owner: 'agachet', isOrg: false, userId: 999, projectNumber: 3 }, run)
+      configureBoardView({ owner: 'agachet', isOrg: false, projectNumber: 3 }, run)
 
-      expect(calls[0]).toContain('/users/999/projectsV2/3/fields')
-      expect(calls[1]).toContain('--method POST /users/999/projectsV2/3/views')
+      expect(calls[0]).toContain('/users/agachet/projectsV2/3/fields')
+      expect(calls[1]).toContain('--method POST /users/agachet/projectsV2/3/views')
     })
 
     it('is best-effort: a REST failure returns created=false with the error, never throws', () => {
