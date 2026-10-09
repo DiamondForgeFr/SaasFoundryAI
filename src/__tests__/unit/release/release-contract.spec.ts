@@ -18,13 +18,18 @@ const stableInstallSurfaces = [
 
 const stableVersionSurfaces = ['README.md', 'docs/.vitepress/config/navigation.ts', 'docs/guide/project-structure.md', 'docs/fr/guide/project-structure.md']
 
-describe('v1 stable release contract (#488)', () => {
+// The contract follows the version being released rather than pinning 1.0.0, which every later release had to rewrite (#953)
+const version = json<{ version: string }>('package.json').version
+const changelogDate = (path: string): string => read(path).match(new RegExp(`## \\[${version.replace(/\./g, '\\.')}\\] - (\\d{4}-\\d{2}-\\d{2})`))?.[1] ?? 'missing'
+
+describe('stable release contract (#488)', () => {
   it('keeps package, lockfile and project manifest on the same stable version', () => {
     const packageJson = json<{ name: string; version: string }>('package.json')
     const lockfile = json<{ version: string; packages: Record<string, { version?: string }> }>('package-lock.json')
     const manifest = json<{ version: string }>('.saasfoundry.json')
 
-    expect(packageJson).toMatchObject({ name: 'saasfoundryai-cli', version: '1.0.0' })
+    expect(packageJson.name).toBe('saasfoundryai-cli')
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/)
     expect(lockfile.version).toBe(packageJson.version)
     expect(lockfile.packages['']?.version).toBe(packageJson.version)
     expect(manifest.version).toBe(packageJson.version)
@@ -39,14 +44,15 @@ describe('v1 stable release contract (#488)', () => {
 
   it.each(stableVersionSurfaces)('labels the stable version on %s', (path) => {
     const content = read(path)
-    expect(content).toContain('1.0.0')
-    expect(content).not.toContain('1.0.0-beta')
+    expect(content).toContain(version)
+    expect(content).not.toContain(`${version}-beta`)
   })
 
   it.each([
-    ['docs/changelog.md', '## [Unreleased]', '## [1.0.0] - 2026-09-27'],
-    ['docs/fr/changelog.md', '## [Non publié]', '## [1.0.0] - 2026-09-27']
-  ])('promotes the shipped changelog while preserving an empty next-release section in %s', (path, unreleased, release) => {
+    ['docs/changelog.md', '## [Unreleased]'],
+    ['docs/fr/changelog.md', '## [Non publié]']
+  ])('promotes the shipped changelog while preserving an empty next-release section in %s', (path, unreleased) => {
+    const release = `## [${version}] - ${changelogDate(path)}`
     const content = read(path)
     const start = content.indexOf(unreleased) + unreleased.length
     const end = content.indexOf(release)
@@ -90,11 +96,11 @@ describe('v1 stable release contract (#488)', () => {
   it('rejects local publication and accepts only the matching tag context', () => {
     const script = resolve(root, 'scripts/verify-publish-context.js')
     const local = spawnSync(process.execPath, [script], { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: '', GITHUB_REF: '' } })
-    const tagged = spawnSync(process.execPath, [script], { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: 'true', GITHUB_REF: 'refs/tags/v1.0.0' } })
+    const tagged = spawnSync(process.execPath, [script], { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: 'true', GITHUB_REF: `refs/tags/v${version}` } })
 
     expect(local.status).toBe(1)
     expect(local.stderr).toContain('publication must run in GitHub Actions')
     expect(tagged.status).toBe(0)
-    expect(tagged.stdout).toContain('Verified protected publish context for v1.0.0')
+    expect(tagged.stdout).toContain(`Verified protected publish context for v${version}`)
   })
 })
