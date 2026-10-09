@@ -413,15 +413,7 @@ export async function setupGitHubProjectWithAutoCreation(projectName: string, st
     // Add a Board-layout view with the team's default visible fields. The REST
     // view endpoint is create-only, so the default Table view stays — surface
     // that so the user knows they can drop it in the UI. Best-effort (#478).
-    let userId: number | undefined
-    if (!isOrg) {
-      try {
-        userId = Number(gh(['api', `users/${repoOwner}`, '--jq', '.id']).trim())
-      } catch {
-        // fall through — configureBoardView reports the failure as best-effort
-      }
-    }
-    const view = configureBoardView({ owner: repoOwner, isOrg, userId, projectNumber: projectData.number })
+    const view = configureBoardView({ owner: repoOwner, isOrg, projectNumber: projectData.number })
     if (view.created) {
       console.log(chalk.green(`✅ Added a Board view (${view.visible.length} fields)`) + chalk.gray(' — the default Table view remains; remove it from the board if you prefer.'))
       if (view.missing.length > 0) console.log(chalk.gray(`   Skipped fields not exposed by the API: ${view.missing.join(', ')}`))
