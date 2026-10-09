@@ -139,6 +139,14 @@ packages/api-client/src/generated/api/
 └── health/health.ts
 ```
 
+### Direct call or wrapper
+
+| The endpoint…                                                                 | Monorepo                                                                                                                                              | Multirepo                                       |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| is a plain read with no transformation                                        | use the generated hook or function directly (e.g. `useMe` calls `authControllerGetMe`)                                                                | hand-written hook in `src/hooks/api/<feature>/` |
+| needs a Zod-parsed result, i18n messages, a scope filter or a stable queryKey | wrap it in `apps/web/src/hooks/api/<feature>/`, calling `apiClientMutator` from `@<project>/api-client` with a local schema (e.g. `usePlatformUsers`) | same, hand-written                              |
+| combines several endpoints                                                    | hand-written hook that composes the generated functions                                                                                               | hand-written hook that composes the calls       |
+
 A web page consumes the generated hook directly — no hand-written wrapper unless cross-cutting logic is needed:
 
 ```ts
@@ -285,6 +293,12 @@ bits land**.
 
 The two paths produce equivalent runtime behaviour. The monorepo path enforces type identity and saves you from hand-writing API hooks; the multirepo path keeps each app independent at the cost of
 duplication.
+
+## Query provider (anchor)
+
+`src/lib/providers/query-provider.tsx` is the one non-hook web file that differs by topology. The blueprint version (used as is on multirepo) rehydrates the cached `authMe` and persists it. The
+monorepo overlay (`scaffolds/overlays/monorepo/web/src/lib/providers/query-provider.tsx`) does the same and also registers `setUnauthorizedHandler` from `@<project>/api-client/http-client`, so a 401
+from a generated call clears the session. Change both files together.
 
 ## Decision matrix (anchor)
 

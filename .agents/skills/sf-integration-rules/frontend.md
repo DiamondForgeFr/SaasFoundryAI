@@ -159,7 +159,7 @@ import { authControllerSignIn } from '@<project>/api-client/generated/api/authen
 mutationFn: async (data) => schemas.response.parse(await authControllerSignIn(data))
 ```
 
-`topology.md` covers when to call the generated function directly vs wrapping it.
+`topology.md` → _Direct call or wrapper_ says when to call the generated function directly and when to wrap it.
 
 ## Forms (anchor)
 
