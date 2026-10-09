@@ -250,6 +250,19 @@
         "prTargetBranch": {
           "type": "string"
         },
+        "localCi": {
+          "type": "object",
+          "description": "The project's local CI gate: commit statuses that must be green on a pull request's head before create-pr opens it for review or ready-pr marks it ready (#918).",
+          "required": ["requiredStatuses"],
+          "additionalProperties": false,
+          "properties": {
+            "requiredStatuses": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            }
+          }
+        },
         "releaseBranch": {
           "type": "string"
         },
