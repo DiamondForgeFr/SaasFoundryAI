@@ -3,6 +3,7 @@ import { readFile, mkdir, lstat, open, readdir, writeFile } from 'node:fs/promis
 import { join } from 'node:path'
 
 import { canonicalTreeDigest, materializeLegacyReleaseFixture } from './legacy-release-fixture'
+import { NPM_NETWORK_RETRY_ENV } from './lifecycle/npm-network'
 
 const PROJECT_NAME = 'previous-release'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
@@ -197,6 +198,8 @@ async function runUpdate(options: PreviousReleaseUpdateLifecycleOptions, project
     NPM_CONFIG_USERCONFIG: join(sterileHome, '.npmrc'),
     npm_config_ignore_scripts: options.env?.npm_config_ignore_scripts ?? 'true',
     NPM_CONFIG_IGNORE_SCRIPTS: options.env?.NPM_CONFIG_IGNORE_SCRIPTS ?? options.env?.npm_config_ignore_scripts ?? 'true',
+    // The update runs `npm ci` itself: give its fetches the same retries as the lifecycle's (#908)
+    ...NPM_NETWORK_RETRY_ENV,
     CI: 'true',
     HUSKY: '0',
     NO_COLOR: '1',
