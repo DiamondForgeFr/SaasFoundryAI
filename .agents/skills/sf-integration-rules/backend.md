@@ -167,6 +167,59 @@ To add a new permission key:
 **`PermissionsGuard` is wired per-route** (via `@UseGuards(PermissionsGuard)`), not globally. Route-level opt-in keeps purely-authenticated endpoints (e.g. `/me`) cheap. There is no
 `@SkipPermissions()` decorator in the blueprint — endpoints that don't need RBAC simply omit the guard.
 
+**Read vs write.** A read endpoint uses `@RequireAccess({ module, subModule? })` (same file): it requires the module and, when given, the sub-module (the section a role can see), and no action
+permission — a read-only role granted the section can read. A write keeps `@RequirePermissions`. `FULL_ACCESS` (`'$_FULL_ACCESS'`) is the permission that satisfies any requirement of its module.
+
+### Scopes (RBAC v2)
+
+A user holds **role assignments**, not roles: `UserRoleAssignment` (`prisma/schema/users.prisma`) links a user to a `Role` whose `scope` is `PLATFORM`, `ACCOUNT` or `ENTITY`, with the matching
+`accountId` / `entityId`. A database trigger (`check_role_assignment_scope.sql`) rejects an assignment whose ids do not match its scope. The authenticated user carries them as
+`request.user.roleAssignments` (`src/common/types/authenticated-request.type.ts`).
+
+`PermissionsGuard` only counts the assignments that apply to the request's scope, resolved in this order (`resolveScopeContext`):
+
+1. `X-Scope-Account-Id` header
+2. `X-Scope-Entity-Id` header
+3. `:accountId` path param
+4. `:entityId` path param
+
+Without any of them the guard falls back to the union of all assignments, which keeps unscoped endpoints (`/me`, `/auth/*`) working. A `PLATFORM` assignment applies to every scope.
+
+The shipped account routes are named `/accounts/:id/...`, which the guard does not read: it checks them against the union of assignments, and their services enforce the account with
+`validateUserAccountAccess`. **For a new endpoint acting on one account or entity, name the parameter `:accountId` or `:entityId`** so the guard scopes the permission check, and still validate access
+in the service.
+
+The guard answers "may this user call this route in this scope"; **which rows they may see is the service's job**. Do not filter by hand: use `AccountAccessService`
+(`src/common/services/account-access/account-access.service.ts`):
+
+| Need                                                 | Method                                                                             |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Reject a user with no access to an account           | `validateUserAccountAccess(userId, accountId, methodName)`                         |
+| Reject a user with no access to an entity            | `validateUserEntityAccess(userId, entityId, methodName)`                           |
+| Platform administrator / account administrator check | `isPlatformAdmin(userId)` / `isAccountAdminOn(userId, accountId)`                  |
+| Entities a user may see in an account                | `resolveVisibleEntityIdsForAccount(userId, accountId)` — `null` means unrestricted |
+| An entity and everything below it                    | `getSubtreeEntityIds(rootEntityIds)`                                               |
+
+Entities form a tree (`Entity.parentEntityId`, `prisma/schema/organizations.prisma`): an entity administrator sees the subtree under their entity, never its siblings. Pass the ids these methods return
+into the Prisma `where` (`{ id: { in: visibleIds } }`) — see `AccountService` for the pattern.
+
+The scope the web app starts in is elected by the server (`AuthService`: platform, then account, then entity) and returned as `currentScope` on `GET /me` (`src/shared-types/auth.ts`).
+
+## Administration surfaces (anchor)
+
+The blueprint ships the administration screens a SaaS needs; extend them rather than adding parallel ones. They live in `src/modules/accounts/controllers/account.controller.ts`:
+
+| Surface                           | Routes (`/accounts/...`)                                                                                     | Gate (module `PLATFORM_ADMINISTRATION` or `ACCOUNT_ADMINISTRATION`)                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Platform administration           | `GET platform/{overview,users,modules,reactivation-requests}`, `PATCH platform/modules/...`                  | `@RequireAccess` per sub-module (`PLATFORM_ACCOUNTS`, `PLATFORM_USERS`, …); writes `MODULE_MANAGEMENT`       |
+| Account overview, users, entities | `GET :id`, `GET :id/users`, `GET :id/entities`; `PATCH :id/users`, `PATCH :id/users/:userId`                 | `@RequireAccess` (`OVERVIEW`, `USERS`, `ENTITIES`); writes `ACCOUNT_USER_MANAGEMENT`, `USER_ROLE_ALLOCATION` |
+| Roles                             | `GET :id/roles`, `GET system/roles`, `POST :id/roles`, `POST platform/roles`, `PATCH`/`DELETE roles/:roleId` | `@RequireAccess` (`ROLES`); writes `ROLE_CUSTOM_MANAGEMENT`                                                  |
+| Account status and reactivation   | `PATCH :id/status`, `POST :id/reactivation-requests`, `GET :id/reactivation-requests/latest`                 | `ACCOUNT_UPDATE`                                                                                             |
+| Reactivation review               | `POST platform/reactivation-requests/:requestId/{approve,reject}`                                            | `ACCOUNT_REACTIVATION_REVIEW`                                                                                |
+
+The matching pages are `src/pages/private/account/` (one tabbed `account-management.tsx`, selected by `?tab=`) and `src/pages/private/platform/platform-modules.tsx`. A new administration screen is a
+new tab there, gated with the same module / sub-module as its endpoint.
+
 ## Validation (anchor)
 
 - Schemas live in `src/shared-validation/<domain>.ts`.
