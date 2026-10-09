@@ -560,12 +560,14 @@ Propose the name from what they said. Never invent a version number, and never d
       "name": null,
       "rationale": "Epic #482 holds 16 tickets, 1 still open",
       "evidence": "grouped by sub-issue relationship to #482 — \"[EPIC] Release v1.0.0 …\"",
+      "epics": [482],
+      "epicDone": false,
       "tickets": [483, 484, 486],
       "scopeSize": 16,
       "openCount": 1
     }
   ],
-  "droppedCandidates": [{ "source": "unaffiliated", "rationale": "30 open tickets belong to no Epic and no milestone", "scopeSize": 30, "openCount": 30 }],
+  "droppedCandidates": [{ "source": "unaffiliated", "rationale": "30 open tickets belong to no Epic and no milestone", "epics": [], "scopeSize": 30, "openCount": 30 }],
   "cap": 3,
   "considered": 6,
   "dropped": 3,
@@ -578,7 +580,9 @@ Propose the name from what they said. Never invent a version number, and never d
 
 `scopeSize` and `openCount` answer different questions. **What a release contains** is `scopeSize` — that is what a milestone records, and what people read after the release, when everything in it is closed. **What is left to do** is `openCount` — the right question when re-scoping something already in flight. Use the one the conversation is actually about.
 
-**`scopeSize` is a floor, not a total, while #560 and #561 are open.** The retrofit on this project's own board (#554) framed a release the engine put at 16 tickets and the human record put at 33: it cannot see a finished Epic, and it names one Epic where a release spans four. Before quoting `scopeSize` for a release, ask whether closed Epics or sibling Epics belong to it — the engine will not raise either.
+**An Epic is proposed while its children carry no milestone — whatever its status.** A closed Epic is a finished scope, the most defensible one on a board, and it is proposed (`epicDone: true`), ranked after the open Epics so the board's history does not push the next release below the fold. An Epic whose children all carry a milestone is covered and is not proposed; `notes` names it, with the milestone. Nothing is set aside in silence (#560).
+
+**`scopeSize` is a floor, not a total, while #561 is open.** The retrofit on this project's own board (#554) framed a release the engine put at 16 tickets and the human record put at 33: it names one Epic where a release spans four. Before quoting `scopeSize` for a release, ask whether sibling Epics belong to it — the engine will not raise it.
 
 ### Never do these
 
@@ -588,7 +592,7 @@ Propose the name from what they said. Never invent a version number, and never d
 - **Never treat a milestone as a gate.** It reports where a release stands and asks for an acknowledgement to continue; it does not refuse one. A gate that blocks a hotfix behind an unfinished milestone gets disabled permanently, and it would contradict a standing decision that the tag is a joint call.
 - **Never read `counts` as exact when `notes` says the board was truncated.** Every number is then a floor, and a grouping may be missing tickets outright.
 - **Never read "the SRS declares no version pages" as "this product has no versions".** It usually means the features hold their FRs directly and `sf srs normalize` has not run. `notes` distinguishes that from *"the SRS could not be read"*, which is a gap in the evidence — do not treat the second as the first.
-- **Never present a candidate as the whole release without checking for the parts it cannot see.** A closed Epic produces no candidate at all, and no `droppedCandidates` entry either — silence here means "not looked at", not "nothing there". See #560, #561.
+- **Never present a candidate as the whole release without checking for the parts it cannot see.** An Epic left out of `candidates` is in `droppedCandidates` or named in `notes` (covered by a milestone, no sub-issue on the board) — read both before framing a release. See #560, #561.
 
 ## Feedback — Module Request
 

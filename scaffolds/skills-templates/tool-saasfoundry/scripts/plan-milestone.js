@@ -22,9 +22,13 @@
 //     "srsVersions":[{ "title": "v2 — ...", "url": "..." }]        // optional
 //   }
 //
+// `parent` must be gathered for every Epic, closed ones included: a child that arrives
+// with `parent: null` is invisible as part of its Epic (#560).
+//
 // Every candidate carries both `scopeSize` (what the release would contain) and
 // `openCount` (what is left to do). They answer different questions and the ranking uses
-// the first — see the sort below.
+// the first — see the sort below. `epics` lists the Epic numbers a candidate spans (empty
+// for a version page or the leftover pile); an `epic` candidate also carries `epicDone`.
 //
 // Output (stdout, JSON): see plan-milestone.sh
 //
@@ -89,21 +93,58 @@ const byNumber = new Map(tickets.map((t) => [t.number, t]))
 
 const candidates = []
 
-// 1. An open Epic with unfinished children is the most defensible release scope there is:
-//    somebody already decided those tickets belong together.
-for (const epic of tickets.filter((t) => t.isEpic && !isDone(t))) {
+const milestoneOf = (t) => (typeof t.milestone === 'string' && t.milestone.length > 0 ? t.milestone : null)
+const unique = (list) => [...new Set(list)]
+const listNumbers = (numbers) => numbers.map((n) => '#' + n).join(', ')
+
+// Epics the engine looked at and deliberately did not propose. Each one is named in
+// `notes`: an exclusion nobody can see reads as "not looked at" (#560).
+const coveredEpics = [] // every child already carries a milestone
+const emptyEpics = [] // no sub-issue on the board, so there is nothing to group
+
+// 1. An Epic is the most defensible release scope there is: somebody already decided
+//    those tickets belong together.
+//
+//    The discriminator is milestone coverage, NOT the Epic's status (#560). Filtering on
+//    status made a release invisible exactly when it was ready to cut: a finished Epic, or
+//    an open one whose last child just closed, vanished without a trace. A scope is
+//    undeclared when its children carry no milestone, whatever the Epic's status — and
+//    declared (covered) once they all do, which is what stops the history of the board
+//    from competing with the next release.
+for (const epic of tickets.filter((t) => t.isEpic)) {
   const children = tickets.filter((t) => t.parent === epic.number)
+  if (children.length === 0) {
+    emptyEpics.push(epic.number)
+    continue
+  }
+  const declared = children.filter((t) => milestoneOf(t) !== null)
+  if (declared.length === children.length) {
+    coveredEpics.push({ number: epic.number, milestones: unique(declared.map(milestoneOf)) })
+    continue
+  }
   const openChildren = children.filter((t) => !isDone(t))
-  if (openChildren.length === 0) continue
+  const epicDone = isDone(epic)
   candidates.push({
     source: 'epic',
     name: null, // the model proposes a release name; the script will not invent semver
-    rationale: 'Epic #' + epic.number + ' holds ' + children.length + ' ticket' + (children.length === 1 ? '' : 's') + ', ' + openChildren.length + ' still open',
+    rationale:
+      'Epic #' +
+      epic.number +
+      (epicDone ? ' (closed)' : '') +
+      ' holds ' +
+      children.length +
+      ' ticket' +
+      (children.length === 1 ? '' : 's') +
+      ', ' +
+      openChildren.length +
+      ' still open',
     evidence: 'grouped by sub-issue relationship to #' + epic.number + ' — "' + String(epic.title || '').slice(0, 80) + '"',
+    epics: [epic.number],
     tickets: children.map((t) => t.number),
     scopeSize: children.length,
     openCount: openChildren.length,
-    doneCount: children.length - openChildren.length
+    doneCount: children.length - openChildren.length,
+    epicDone
   })
 }
 
@@ -123,6 +164,7 @@ for (const version of unmilestonedVersions) {
       (feature ? ' under « ' + feature.slice(0, 60) + ' »' : '') +
       (frCount !== null ? ', ' + frCount + ' FR' + (frCount === 1 ? '' : 's') : ''),
     evidence: 'SRS version page' + (version.url ? ' ' + version.url : ''),
+    epics: [],
     tickets: [],
     // The FRs are on the SRS side, not the board — this scope is what the product
     // declared, not what has been spawned from it yet. Saying 0 would read as "empty".
@@ -142,6 +184,7 @@ if (leftovers.length >= 3) {
     name: null,
     rationale: leftovers.length + ' open tickets belong to no Epic and no milestone',
     evidence: 'grouped only by being unaffiliated — this is a leftover set, not a theme',
+    epics: [],
     tickets: leftovers.map((t) => t.number),
     scopeSize: leftovers.length,
     openCount: leftovers.length,
@@ -163,8 +206,15 @@ if (leftovers.length >= 3) {
 // declared a version, or somebody decided these tickets belong together, or they are
 // simply what is left — and size within it. Both counts are emitted; the model picks the
 // one its question needs.
-const SOURCE_RANK = { 'srs-version': 0, epic: 1, unaffiliated: 2 }
-candidates.sort((a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || b.scopeSize - a.scopeSize)
+//
+// Within Epics, an open one ranks before a closed one (#560). Not because remaining work
+// matters — #482 with every child closed still ranks by its size — but because a closed
+// Epic with no milestone is most often history: work shipped before milestones existed.
+// It stays proposable and is named in `droppedCandidates` when the cap cuts it; it just
+// does not get to push the next release below the fold. This board carries ten of them.
+const SOURCE_RANK = { 'srs-version': 0, epic: 1, unaffiliated: 3 }
+const rankOf = (c) => (c.source === 'epic' && c.epicDone ? 2 : SOURCE_RANK[c.source])
+candidates.sort((a, b) => rankOf(a) - rankOf(b) || b.scopeSize - a.scopeSize)
 
 const considered = candidates.length
 const dropped = Math.max(0, considered - CAP)
@@ -173,7 +223,7 @@ const kept = candidates.slice(0, CAP)
 // Naming what was cut, not just counting it. A cap that reports "2 more" reads as "nothing
 // you care about"; the one you care about is exactly the one you cannot see. Found on the
 // real board, where five Epics competed for three slots.
-const droppedSummary = candidates.slice(CAP).map((c) => ({ source: c.source, rationale: c.rationale, scopeSize: c.scopeSize, openCount: c.openCount }))
+const droppedSummary = candidates.slice(CAP).map((c) => ({ source: c.source, rationale: c.rationale, epics: c.epics, scopeSize: c.scopeSize, openCount: c.openCount }))
 
 // ── the trigger ─────────────────────────────────────────────────────────────────────
 
@@ -195,7 +245,7 @@ let reason = null
 const versionNamed = typeof input.versionNamed === 'string' && input.versionNamed.trim().length > 0 ? input.versionNamed.trim() : null
 
 if (kept.length === 0) {
-  reason = tickets.length === 0 ? 'the board is empty — there is nothing to group' : 'nothing on the board groups into a release scope: no open Epic with unfinished children, no SRS version, and too few unaffiliated tickets'
+  reason = tickets.length === 0 ? 'the board is empty — there is nothing to group' : 'nothing on the board groups into a release scope: no Epic without a milestone, no SRS version, and too few unaffiliated tickets'
 } else if (versionNamed && openMilestones.length === 0) {
   // Below the threshold on purpose. The evidence rule still holds: `kept.length === 0`
   // was handled above, so there is something groundable to point at. Being told a
@@ -226,6 +276,25 @@ if (input.boardTruncated === true) {
 }
 if (dropped > 0) {
   notes.push(dropped + ' further candidate(s) did not fit the cap — they are listed in `droppedCandidates`, not hidden')
+}
+// What was looked at and set aside, named — never dropped in silence (#560).
+if (coveredEpics.length > 0) {
+  notes.push(
+    coveredEpics.length +
+      ' Epic(s) not proposed because every child already carries a milestone: ' +
+      coveredEpics.map((e) => '#' + e.number + ' (' + e.milestones.join(', ') + ')').join(', ')
+  )
+}
+if (emptyEpics.length > 0) {
+  notes.push(emptyEpics.length + ' Epic(s) not proposed because no sub-issue of theirs is on the board: ' + listNumbers(emptyEpics))
+}
+const closedEpicCandidates = candidates.filter((c) => c.source === 'epic' && c.epicDone)
+if (closedEpicCandidates.length > 0) {
+  notes.push(
+    closedEpicCandidates.length +
+      ' closed Epic(s) carry no milestone and are ranked after the open ones — a finished scope nobody declared, or work shipped before milestones existed: ' +
+      listNumbers(closedEpicCandidates.flatMap((c) => c.epics))
+  )
 }
 // The old note said "no SRS versions were supplied" on every single run, describing a
 // gap the script could close itself. Now it distinguishes the three real cases.
