@@ -38,8 +38,10 @@ export async function installSrsSkill({ targetPath, onExisting }: InstallSrsSkil
       if (st.isFile()) {
         await chmod(scriptPath, 0o755)
       }
-    } catch {
-      // missing scripts are ignored — sibling SUBs may not have landed yet
+    } catch (error) {
+      // A script missing from the bundle is expected; any other failure leaves the CLI unusable, so say so (#433)
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      console.warn(`Could not make ${scriptPath} executable (${(error as Error).message}). Run: chmod +x ${scriptPath}`)
     }
   }
 
