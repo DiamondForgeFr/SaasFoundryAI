@@ -1,6 +1,7 @@
 import { DEFAULT_OUTPUT_LANGUAGE } from '../language'
 import { getAgentIds, isHarnessAgent } from '../harness/agent-registry'
 import { assertGitBranchName } from '../run'
+import { findTool, ToolCategory, toolsByCategory } from '../tools/catalogue'
 import { Answers, DbCredentials, HarnessAgent, S3Credentials } from '../types'
 import { parseWorkflowFlag } from './workflow-flag'
 
@@ -210,6 +211,7 @@ export function buildPrefillFromOptions(opts: NewCommandOptions, env: NodeJS.Pro
       .map((name) => ({ name }))
     if (design.length > 0) toolSelections.design = design
   }
+  assertKnownTools(toolSelections)
   if (Object.keys(toolSelections).length > 0) prefill.toolSelections = toolSelections
 
   // `--no-network` (Commander → network === false) degrades checks to presence.
@@ -254,6 +256,18 @@ export function buildPrefillFromOptions(opts: NewCommandOptions, env: NodeJS.Pro
   }
 
   return prefill
+}
+
+/** `--tracker`, `--docs` and `--design` name catalogue tools or `none`; anything else is refused before any question (#914). */
+function assertKnownTools(selections: NonNullable<Answers['toolSelections']>): void {
+  const check = (category: ToolCategory, flag: string, name: string | undefined, allowNone: boolean): void => {
+    if (name === undefined || (allowNone && name === 'none') || findTool(category, name)) return
+    const valid = [...toolsByCategory(category).map((tool) => tool.name), ...(allowNone ? ['none'] : [])]
+    throw new Error(`${flag} ${name}: unknown ${category} tool. Use one of: ${valid.join(', ')}.`)
+  }
+  check('tracker', '--tracker', selections.tracker?.name, true)
+  check('docs', '--docs', selections.docs?.name, true)
+  for (const tool of selections.design ?? []) check('design', '--design', tool.name, false)
 }
 
 /** `--working-branch` / `--pr-target-branch`, validated as Git does: `sf new` passes them to git. */
