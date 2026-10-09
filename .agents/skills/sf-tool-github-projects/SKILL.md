@@ -106,6 +106,9 @@ Status names are case-insensitive — the CLI matches against the options define
 `ready-pr <ticket>` verifies the pushed branch and promotes its existing draft PR; retries are idempotent. Run it yourself only on a route without Human Testing (`nature:internal`, Solo), at the end of AI Testing; after Human Testing, the developer marks the PR ready, never you. `draft-pr <ticket>`
 explicitly returns a ready PR to draft for further human testing, with the same branch/head checks.
 
+A project that declares `workflow.localCi.requiredStatuses` in `.saasfoundry.json` gates review on its local CI: `create-pr` without `--draft` and `ready-pr` refuse a head commit on which any
+declared status is missing or not green, and say which. A draft still opens early. `--skip-local-ci "<reason>"` bypasses the gate explicitly and records the reason on the pull request.
+
 ## How the orchestration skill uses this CLI
 
 `sf-workflow/workflow-cli.sh` routes every tool-specific call through this CLI:

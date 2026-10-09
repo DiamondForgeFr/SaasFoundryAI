@@ -1610,9 +1610,62 @@ verify_pr_head() {
   fi
 }
 
+# The project's local CI gate (#918). A project that verifies pull requests locally declares
+# the commit statuses its local CI publishes in `workflow.localCi.requiredStatuses`. An agent
+# once ran a narrower check, judged a one-file diff did not need more, and opened a PR that
+# waited forever for statuses nobody would publish. No diff is too small: a PR opened for
+# review, or marked ready, needs every declared status green on its exact head commit. A draft
+# is allowed — it is opened early and waits for them. `--skip-local-ci "<reason>"` is the
+# explicit escape hatch, recorded on the pull request.
+LOCAL_CI_SKIP_REASON=""
+
+local_ci_gate() {
+  local head=$1 required statuses name state
+  local -a failing=()
+  required=$(jq -r '.workflow.localCi.requiredStatuses // [] | .[]' .saasfoundry.json 2>/dev/null)
+  [[ -z "$required" ]] && return 0
+  if [[ -n "$LOCAL_CI_SKIP_REASON" ]]; then
+    echo -e "${YELLOW}⚠ Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}${NC}" >&2
+    return 0
+  fi
+  statuses=$(gh api "repos/$(get_repo_owner_name)/commits/${head}/status" --jq '[.statuses[] | {context, state}]' 2>/dev/null) || {
+    echo -e "${RED}✗ Could not read the commit statuses of ${head:0:8}, so the local CI gate cannot be checked.${NC}" >&2
+    return 1
+  }
+  while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    state=$(echo "$statuses" | jq -r --arg c "$name" 'map(select(.context == $c))[0].state // "missing"')
+    [[ "$state" == success ]] || failing+=("${name}: ${state}")
+  done <<<"$required"
+  if [[ ${#failing[@]} -gt 0 ]]; then
+    echo -e "${RED}✗ The project's local CI is not green on ${head:0:8}:${NC}" >&2
+    printf '    %s\n' "${failing[@]}" >&2
+    echo "  Run the local CI on this exact commit (no diff is too small), or pass --skip-local-ci \"<reason>\"." >&2
+    return 1
+  fi
+  echo -e "${GREEN}✓ Local CI green on ${head:0:8}: $(echo "$required" | paste -sd ',' - | sed 's/,/, /g')${NC}"
+}
+
+# `--skip-local-ci "<reason>"` and the remaining positional arguments, for create-pr and ready-pr.
+parse_local_ci_args() {
+  PR_ARGS=()
+  while [[ "$#" -gt 0 ]]; do
+    if [[ "$1" == "--skip-local-ci" ]]; then
+      [[ -n "${2:-}" && "${2:-}" != --* ]] || { echo "Error: --skip-local-ci requires a reason" >&2; return 1; }
+      LOCAL_CI_SKIP_REASON=$2
+      shift 2
+    else
+      PR_ARGS+=("$1")
+      shift
+    fi
+  done
+}
+
 cmd_create_pr() {
+  parse_local_ci_args "$@" || return 1
+  set -- ${PR_ARGS[@]+"${PR_ARGS[@]}"}
   if [[ "$#" -lt 1 || "$#" -gt 2 || ( "$#" -eq 2 && "$2" != "--draft" ) ]]; then
-    echo "Usage: $0 create-pr <ticket-number> [--draft]" >&2
+    echo "Usage: $0 create-pr <ticket-number> [--draft] [--skip-local-ci \"<reason>\"]" >&2
     return 1
   fi
   local TICKET_NUMBER=$1
@@ -1656,9 +1709,15 @@ cmd_create_pr() {
     return 0
   fi
 
+  # A PR opened for review needs the local CI verdict; a draft waits for it
+  if [[ ${#draft_args[@]} -eq 0 ]]; then
+    local_ci_gate "$LOCAL_HEAD" || { echo "  No pull request was created." >&2; return 1; }
+  fi
+
   local PR_CREATE_STATUS=0 PR_OUTPUT PR_URL PR_BODY
   PR_BODY="Resolves #${TICKET_NUMBER}"
   [[ "$PR_CONTEXT_KIND" == release ]] && PR_BODY="Closes #${TICKET_NUMBER}"
+  [[ -n "$LOCAL_CI_SKIP_REASON" && ${#draft_args[@]} -eq 0 ]] && PR_BODY+=$'\n\n'"Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}"
   PR_OUTPUT=$(gh pr create --title "[#${TICKET_NUMBER}] $ISSUE_TITLE" \
     --body "$PR_BODY" --base "$PR_TARGET_BRANCH" "${draft_args[@]}" 2>&1) || PR_CREATE_STATUS=$?
   PR_URL=$(echo "$PR_OUTPUT" | grep -oE 'https://[^[:space:]]+/pull/[0-9]+' | head -n 1 || true)
@@ -1675,8 +1734,10 @@ cmd_create_pr() {
 cmd_set_pr_draft() {
   local desired_draft=$1 action=$2
   shift 2
+  parse_local_ci_args "$@" || return 1
+  set -- ${PR_ARGS[@]+"${PR_ARGS[@]}"}
   if [[ "$#" -ne 1 ]]; then
-    echo "Usage: $0 ${action}-pr <ticket-number>" >&2
+    echo "Usage: $0 ${action}-pr <ticket-number>$([[ "$action" == ready ]] && echo ' [--skip-local-ci "<reason>"]')" >&2
     return 1
   fi
   pr_branch_context "$1" true || return 1
@@ -1685,6 +1746,11 @@ cmd_set_pr_draft() {
   verify_pr_head || return 1
   local pr_number state_args=()
   pr_number=$(echo "$BRANCH_PRS" | jq -r '.[0].number')
+  # Marking ready asks for review: the local CI verdict must be on the head first (#918)
+  if [[ "$desired_draft" == false ]]; then
+    local_ci_gate "$LOCAL_HEAD" || { echo "  Pull request #${pr_number} stays a draft." >&2; return 1; }
+    [[ -n "$LOCAL_CI_SKIP_REASON" ]] && gh pr comment "$pr_number" --body "Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}" >/dev/null
+  fi
   [[ "$desired_draft" == true ]] && state_args=(--undo)
   if [[ $(echo "$BRANCH_PRS" | jq -r '.[0].isDraft') != "$desired_draft" ]]; then
     gh pr ready "$pr_number" "${state_args[@]}" || { echo "Error: changing PR draft state failed." >&2; return 1; }
