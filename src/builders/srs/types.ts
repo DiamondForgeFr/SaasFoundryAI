@@ -130,6 +130,8 @@ export interface FrSpec {
   parentEpicPageId?: string
   parentEpicId?: string
   fr: FrItem
+  /** The line an existing version's "What changed" gains with this FR; `Adds <id> — <title>` when unset (#917). */
+  change?: string
   urs?: UrItem[]
   dsItems?: DsItem[]
   tcItems?: TcItem[]

@@ -22,6 +22,7 @@ import {
 } from '../../builders/srs/types'
 import { describeNextIds, readFeatureRegister, RequirementCategory } from '../feature-register'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
+import { locatePage, PageLocation, placeFrInExistingVersion, readSrsTree } from '../version-extension'
 import { rejectUnknownOption, runFromCommandLine } from './args'
 
 export interface WriteSrsOptions {
@@ -133,7 +134,7 @@ export function checkSpec(candidates: DraftCandidate[]): SpecCheck {
     const untraceable = untraceableItems(candidate)
     if (untraceable.length > 0) {
       warnings.push(
-        `write-srs: candidate #${index} (fr) carries ${untraceable.join(', ')} but is attached by parentEpicPageId, so no feature table receives them. Attach it by parentEpicId to a version of the batch.`
+        `write-srs: candidate #${index} (fr) carries ${untraceable.join(', ')} and is attached by parentEpicPageId: they reach the feature tables only if that page is a version of this SRS, which write checks before writing anything.`
       )
     }
     if (candidate.kind === 'epic') {
@@ -158,8 +159,8 @@ export function checkSpec(candidates: DraftCandidate[]): SpecCheck {
 }
 
 /**
- * The items of an FR attached by page id: write-srs cannot tell which feature the page belongs
- * to, so they reach no feature table — said, rather than dropped in silence (#900).
+ * The items of an FR attached by page id: they reach the feature tables only when that page is
+ * a version of this SRS, which the offline check cannot see — said, rather than assumed (#900, #917).
  */
 function untraceableItems(candidate: DraftCandidate): string[] {
   if (candidate.kind !== 'fr' || !candidate.fr?.parentEpicPageId) return []
@@ -273,6 +274,30 @@ export async function findExistingFeatureClashes(adapter: SrsAdapter, candidates
   return errors
 }
 
+/** The same refusal for FRs attached by page id to a version written earlier (#917, #919). */
+async function findAttachedFrClashes(adapter: SrsAdapter, attached: { location: PageLocation; fr: FrSpec }[]): Promise<string[]> {
+  const errors: string[] = []
+  const byFeature = new Map<string, { location: PageLocation; frs: FrSpec[] }>()
+  for (const { location, fr } of attached) {
+    if (location.level !== 'version') continue
+    const group = byFeature.get(location.featurePageId) ?? { location, frs: [] }
+    group.frs.push(fr)
+    byFeature.set(location.featurePageId, group)
+  }
+  for (const [featurePageId, { location, frs }] of byFeature) {
+    const register = await readFeatureRegister(adapter, featurePageId)
+    const declared: [RequirementCategory, string][] = frs.flatMap((fr) => [
+      ['FR', fr.fr.id] as [RequirementCategory, string],
+      ...(fr.urs ?? []).map((item): [RequirementCategory, string] => ['UR', item.id]),
+      ...(fr.dsItems ?? []).map((item): [RequirementCategory, string] => ['DS', item.id]),
+      ...(fr.tcItems ?? []).map((item): [RequirementCategory, string] => ['TC', item.id])
+    ])
+    const clashes = [...new Set(declared.filter(([category, id]) => id && register.ids[category].has(id.toUpperCase())).map(([, id]) => id))]
+    if (clashes.length > 0) errors.push(`write-srs: the feature "${location.featureTitle}" already holds ${clashes.join(', ')}. Nothing was written. Renumber — ${describeNextIds(register)}.`)
+  }
+  return errors
+}
+
 /**
  * Adds to a feature written in an earlier batch, in place, and returns what could not be
  * placed. A section the page lacks is appended at its end rather than lost.
@@ -331,12 +356,15 @@ async function applyCandidate(
   frsByFeature: Map<string, VersionFrItem[]>,
   index: number,
   notPlaced: string[] = [],
-  itemsByFeature: Map<string, VersionItems> = new Map()
+  itemsByFeature: Map<string, VersionItems> = new Map(),
+  frsByVersion: Map<string, FrItem[]> = new Map()
 ): Promise<PageRef> {
   if (candidate.kind === 'epic') {
     const epic = resolveEpicParent(candidate.epic!, logicalIdMap, index)
     const level: PageLevel = epic.parentId === undefined ? 'feature' : 'version'
-    const withIndex = level === 'feature' && epic.id ? { ...epic, versions: versionsByFeature.get(epic.id), versionFrs: frsByFeature.get(epic.id), versionItems: itemsByFeature.get(epic.id) } : epic
+    const attached = level === 'version' && epic.id ? (frsByVersion.get(epic.id) ?? []).filter((fr) => !epic.frs.some((listed) => listed.id === fr.id)) : []
+    const withFrs = attached.length > 0 ? { ...epic, frs: [...epic.frs, ...attached] } : epic
+    const withIndex = level === 'feature' && epic.id ? { ...epic, versions: versionsByFeature.get(epic.id), versionFrs: frsByFeature.get(epic.id), versionItems: itemsByFeature.get(epic.id) } : withFrs
     const page = await adapter.createEpicPage(withIndex)
     if (epic.id) {
       logicalIdMap.set(epic.id, page.id)
@@ -393,6 +421,20 @@ function clearPendingIngestion(manifestPath: string): boolean {
   delete srs.pendingIngestion
   writeFileSync(manifestPath, `${JSON.stringify(parsed, null, 2)}\n`)
   return true
+}
+
+/**
+ * The FRs each version of the batch receives as \`fr\` candidates, by the version's logical id:
+ * its page lists them in its FR table, not only those it names in \`frs\` (#917).
+ */
+export function collectFrsByVersion(candidates: DraftCandidate[]): Map<string, FrItem[]> {
+  const byVersion = new Map<string, FrItem[]>()
+  for (const candidate of candidates) {
+    const fr = candidate.kind === 'fr' ? candidate.fr : undefined
+    if (!fr?.parentEpicId) continue
+    byVersion.set(fr.parentEpicId, [...(byVersion.get(fr.parentEpicId) ?? []), fr.fr])
+  }
+  return byVersion
 }
 
 export function collectVersionsByFeature(candidates: DraftCandidate[]): Map<string, string[]> {
@@ -532,8 +574,26 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
     return 2
   }
 
+  // An FR attached by page id to a version written earlier extends that version and its feature (#917)
+  const attachedLocations = new Map<number, PageLocation>()
+  const attachedByPage = candidates.flatMap((candidate, index) => (candidate.kind === 'fr' && candidate.fr?.parentEpicPageId && !candidate.fr.parentEpicId ? [{ index, fr: candidate.fr }] : []))
+  if (attachedByPage.length > 0) {
+    const tree = await readSrsTree(adapter, manifest.tools?.srs?.rootPage?.id)
+    for (const { index, fr } of attachedByPage) {
+      const location = tree ? locatePage(tree, fr.parentEpicPageId!) : undefined
+      if (location) attachedLocations.set(index, location)
+      else notPlaced.push(`${fr.fr.id}: its parent page is not a version of this SRS${tree ? '' : ' (no tools.srs.rootPage.id to find it in)'}, so no version or feature table lists it.`)
+    }
+  }
+
   // What the feature already holds is read last, so a session that extended it meanwhile is seen
-  const clashes = await findExistingFeatureClashes(adapter, candidates, logicalIdMap)
+  const clashes = [
+    ...(await findExistingFeatureClashes(adapter, candidates, logicalIdMap)),
+    ...(await findAttachedFrClashes(
+      adapter,
+      [...attachedLocations].map(([index, location]) => ({ location, fr: candidates[index].fr! }))
+    ))
+  ]
   if (clashes.length > 0) {
     for (const error of clashes) process.stderr.write(`${error}\n`)
     return 2
@@ -545,12 +605,15 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   const versionsByFeature = collectVersionsByFeature(candidates)
   const frsByFeature = collectFrsByFeature(candidates)
   const itemsByFeature = collectItemsByFeature(candidates)
+  const frsByVersion = collectFrsByVersion(candidates)
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i]
     try {
-      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, frsByFeature, i, notPlaced, itemsByFeature)
+      const page = await applyCandidate(adapter, candidate, logicalIdMap, levels, versionsByFeature, frsByFeature, i, notPlaced, itemsByFeature, frsByVersion)
       report.created.push({ index: i, kind: candidate.kind, page })
+      const location = attachedLocations.get(i)
+      if (location) notPlaced.push(...(await placeFrInExistingVersion(adapter, location, candidate.fr!)))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       report.failed.push({ index: i, kind: candidate.kind, error: message })

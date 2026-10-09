@@ -16,6 +16,27 @@ export const FEATURE_HEADINGS = {
   nfr: 'Non-Functional Requirements (NFR)'
 } as const
 
+/** The sections of a version page: an FR added to an existing version extends both (#917). */
+export const VERSION_HEADINGS = {
+  changes: 'What changed in this version',
+  frs: FEATURE_HEADINGS.frs
+} as const
+
+export const VERSION_FR_HEADER = ['ID', 'Requirement', 'Priority']
+
+/** The line "What changed" gains when an FR joins an existing version, unless the spec words it. */
+export function versionChangeLine(fr: Pick<FrItem, 'id' | 'title'>, change?: string): string {
+  return change?.trim() || `Adds ${fr.id} — ${fr.title}`
+}
+
+/** What a version written in an earlier batch gains from a new FR: its change line and its FR row. */
+export function versionFrAdditions(fr: FrItem, change?: string): SectionAddition[] {
+  return [
+    { kind: 'list-items', heading: VERSION_HEADINGS.changes, items: [versionChangeLine(fr, change)] },
+    { kind: 'table-rows', heading: VERSION_HEADINGS.frs, layouts: [{ header: VERSION_FR_HEADER, rows: [[fr.id, fr.title, priorityCell(fr.priority)]] }] }
+  ]
+}
+
 export const VERSIONS_INTRO = 'Each version below holds the FRs that belong to it. Doing the same thing again later means adding a version, not renaming this page.'
 
 function refsCell(refs?: string[]): string {
@@ -235,10 +256,11 @@ function intentBlocks(spec: EpicSpec): PageBlock[] {
 function renderVersionPage(spec: EpicSpec): PageContent {
   const blocks: PageBlock[] = intentBlocks(spec)
 
-  blocks.push({ kind: 'heading', level: 2, text: 'What changed in this version' })
+  blocks.push({ kind: 'heading', level: 2, text: VERSION_HEADINGS.changes })
   const changes = spec.version?.changes ?? []
   if (changes.length === 0) {
-    blocks.push({ kind: 'paragraph', text: '_Describe what this version adds or changes relative to the previous one._' })
+    // "No … yet." is the shape a later addition replaces in place (#917)
+    blocks.push({ kind: 'paragraph', text: 'No changes listed yet.' })
   } else {
     blocks.push({ kind: 'bulleted_list', items: changes })
   }
@@ -249,7 +271,7 @@ function renderVersionPage(spec: EpicSpec): PageContent {
   } else {
     blocks.push({
       kind: 'table',
-      header: ['ID', 'Requirement', 'Priority'],
+      header: VERSION_FR_HEADER,
       rows: spec.frs.map((fr) => [fr.id, fr.title, priorityCell(fr.priority)])
     })
   }
