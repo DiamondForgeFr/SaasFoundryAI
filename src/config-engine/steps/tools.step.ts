@@ -43,12 +43,16 @@ export const toolsStep: StepDefinition = {
   }
 }
 
-/** Drop empty categories so the manifest never carries `{ tracker: undefined }`. */
+/** A category set to `none` on the command line is an answer, not a tool. */
+const isTool = (name?: string): name is string => Boolean(name) && name !== 'none'
+
+/** Drop empty categories so the manifest never carries `{ tracker: undefined }`, nor `none`. */
 function normalize(selections: ToolSelections): ToolSelections {
   const out: ToolSelections = {}
-  if (selections.tracker?.name) out.tracker = selections.tracker
-  if (selections.docs?.name) out.docs = selections.docs
-  if (selections.design?.length) out.design = selections.design
+  if (isTool(selections.tracker?.name)) out.tracker = selections.tracker
+  if (isTool(selections.docs?.name)) out.docs = selections.docs
+  const design = (selections.design ?? []).filter((tool) => isTool(tool.name))
+  if (design.length) out.design = design
   return out
 }
 
@@ -60,14 +64,18 @@ async function collectInteractive(ctx: StepContext): Promise<ConfigState> {
   console.log(chalk.gray('Pick the entry-point tools for this project — one tracker, one docs backend, any design tools.'))
   console.log()
 
-  const tracker = await pickSingle(render, 'tracker', 'Issue / project tracker:', derived.selectedTracker ?? prefill.workflow?.tool)
-  const docs = await pickSingle(render, 'docs', 'Docs / SRS backend:', derived.selectedDocs)
-  const design = await pickDesign(render)
+  // A category given on the command line (--tracker / --docs / --design, `none` included) is
+  // answered: asking it anyway stopped a scripted TTY run on a question it meant to skip (#914)
+  const flagged = prefill.toolSelections ?? {}
+  const tracker = flagged.tracker ? flagged.tracker.name : await pickSingle(render, 'tracker', 'Issue / project tracker:', derived.selectedTracker ?? prefill.workflow?.tool)
+  const docs = flagged.docs ? flagged.docs.name : await pickSingle(render, 'docs', 'Docs / SRS backend:', derived.selectedDocs)
+  const design = flagged.design ? flagged.design.map((tool) => tool.name) : await pickDesign(render)
 
   const selections: ToolSelections = {}
-  if (tracker) selections.tracker = { name: tracker }
-  if (docs) selections.docs = { name: docs }
-  if (design.length) selections.design = design.map((name) => ({ name }))
+  if (isTool(tracker)) selections.tracker = { name: tracker }
+  if (isTool(docs)) selections.docs = { name: docs }
+  const designTools = design.filter(isTool)
+  if (designTools.length) selections.design = designTools.map((name) => ({ name }))
 
   await runChecks(selections, Boolean((prefill as Answers).toolsNoNetwork))
 

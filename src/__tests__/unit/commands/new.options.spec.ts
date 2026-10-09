@@ -5,6 +5,14 @@ describe('buildPrefillFromOptions', () => {
     expect(buildPrefillFromOptions({})).toEqual({})
   })
 
+  // #914 — an unknown tool is refused before any question; `none` is an answer
+  it('refuses an unknown --tracker, --docs or --design value and accepts none', () => {
+    expect(() => buildPrefillFromOptions({ tracker: 'trello' })).toThrow('--tracker trello: unknown tracker tool')
+    expect(() => buildPrefillFromOptions({ docs: 'wiki' })).toThrow('--docs wiki: unknown docs tool')
+    expect(() => buildPrefillFromOptions({ design: 'figma,paint' })).toThrow('--design paint: unknown design tool')
+    expect(buildPrefillFromOptions({ tracker: 'none' }).toolSelections).toEqual({ tracker: { name: 'none' } })
+  })
+
   it('maps simple project fields', () => {
     const prefill = buildPrefillFromOptions({
       projectName: 'acme',

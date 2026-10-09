@@ -95,6 +95,16 @@ describe('toolsStep', () => {
       expect(trackerCall?.[0][0].default).toBe('jira')
     })
 
+    // #914 — `sf new --tracker none` still asked "Issue / project tracker:"
+    it('asks nothing for a category given on the command line, none included', async () => {
+      const render = renderReturning({ tool_design: [] })
+      const result = await toolsStep.collect?.(stepContext({ render, prefill: { toolSelections: { tracker: { name: 'none' }, docs: { name: 'notion' } } } }))
+
+      const asked = (render as jest.Mock).mock.calls.map((call) => call[0][0].name)
+      expect(asked).toEqual(['tool_design'])
+      expect(result).toEqual({ toolSelections: { docs: { name: 'notion' } } })
+    })
+
     it('passes the --no-network flag through to the connection check', async () => {
       const render = renderReturning({ tool_tracker: 'notion', tool_docs: '__none__', tool_design: [] })
       await toolsStep.collect?.(stepContext({ render, prefill: { toolsNoNetwork: true } }))
