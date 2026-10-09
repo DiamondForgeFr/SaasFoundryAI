@@ -16,12 +16,16 @@ set -euo pipefail
 #     shouldPropose: boolean   whether this is worth interrupting the user for
 #     trigger:       why it is (null when it is not)
 #     reason:        why it is not (null when it is)
-#     candidates:    [{ source, name, rationale, evidence, tickets, openCount, doneCount }]
+#     candidates:    [{ source, name, rationale, evidence, epics, tickets, scopeSize, openCount, doneCount }]
 #                    source   — epic | srs-version | unaffiliated
 #                    name     — always null: the script never invents a release number
 #                    evidence — what the grouping rests on; a candidate without it is not emitted
+#                    epics    — the Epic numbers the candidate spans ([] when none)
+#                    epicDone — on an `epic` candidate: the Epic itself is closed. It is
+#                               still proposed while its children carry no milestone
 #     cap/considered/dropped   the bound, and what did not fit
-#     counts, notes
+#     counts, notes            notes name every Epic set aside (covered by a milestone,
+#                              no sub-issue on the board) — nothing is excluded silently
 #   }
 #
 # Exit codes:
@@ -74,12 +78,17 @@ BOARD_TRUNCATED=false
 
 MILESTONES=$(gh api "repos/${REPO}/milestones?state=all&per_page=100" 2>/dev/null || echo '[]')
 
-# Which tickets already carry a milestone. One call, not one per ticket.
-ASSIGNED=$(gh api "repos/${REPO}/issues?state=all&per_page=100" 2>/dev/null || echo '[]')
+# Which tickets already carry a milestone. Only issues that carry one (`milestone=*`),
+# every page of them: an unpaginated first page held the 100 most recent issues, so an
+# older Epic's children read as undeclared — and coverage is what decides whether an
+# Epic is proposed at all (#560).
+ASSIGNED=$(gh api --paginate "repos/${REPO}/issues?state=all&milestone=*&per_page=100" 2>/dev/null | jq -s 'add // []' 2>/dev/null || echo '[]')
 
-# Sub-issue relationships, for open Epics only. That is a handful of queries rather than
-# one per ticket, and an Epic is the only grouping the board can vouch for.
-EPIC_NUMBERS=$(printf '%s' "$ITEMS" | jq -r '.items[]? | select((.content.title // "") | test("^\\[EPIC\\]")) | select((.status // "") != "Done") | .content.number' 2>/dev/null || true)
+# Sub-issue relationships, for EVERY Epic — closed ones included. Gathering them for open
+# Epics only sent every child of a finished Epic to the engine with `parent: null`, so a
+# release disappeared at exactly the moment it was ready to cut (#560). Coverage by a
+# milestone, not the Epic's status, is what decides whether it is proposed.
+EPIC_NUMBERS=$(printf '%s' "$ITEMS" | jq -r '.items[]? | select((.content.title // "") | test("^\\[EPIC\\]")) | .content.number' 2>/dev/null || true)
 
 PARENTS="[]"
 for epic in $EPIC_NUMBERS; do
