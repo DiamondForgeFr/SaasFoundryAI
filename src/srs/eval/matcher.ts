@@ -106,7 +106,7 @@ function unsupportedCategory(label: 'UR' | 'DS' | 'TC' | 'NFR'): CategoryScore {
     total: 0,
     covered: 0,
     score: null,
-    note: `${label} drift is not evaluated in v1 — rendered Notion tables return empty cells via fetchPage. Follow-up work will extend the adapter to preserve table rows.`
+    note: `${label} drift is not evaluated in v1 — the inventory reads FR pages only, not the feature's UR / DS / TC / NFR tables.`
   }
 }
 

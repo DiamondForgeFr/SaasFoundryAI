@@ -109,6 +109,10 @@ Order matters: a page can only reference a logical id declared before it in the 
 
 A backend that cannot edit an existing page lists what is left to add by hand in the report's `notPlaced`.
 
+**Ids and version numbers come from the SRS, not from your last reading.** Before the first page, `write` re-reads the feature it adds a version to and refuses the batch (exit 2, nothing written) when
+that feature already holds the version title or number, or any UR / FR / DS / TC / NFR id the batch declares: two sessions extending one feature a minute apart used to write the same `v3` and the same
+ids (#919). Take the numbers from `sf srs next-ids --feature <page-url-or-id>` right before writing the spec.
+
 **An FR attached to a feature is refused.**
 
 ```
@@ -300,7 +304,7 @@ Overall     : 62%
 
 Per category:
   UR     n/a  (0/0)
-       UR drift is not evaluated in v1 — rendered Notion tables return empty cells via fetchPage…
+       UR drift is not evaluated in v1 — the inventory reads FR pages only, not the feature's UR / DS / TC / NFR tables
   FR    50%  (3/6)
   DS     n/a  (0/0)
   …

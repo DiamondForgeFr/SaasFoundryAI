@@ -20,6 +20,7 @@ import {
   VersionFrItem,
   VersionItems
 } from '../../builders/srs/types'
+import { describeNextIds, readFeatureRegister, RequirementCategory } from '../feature-register'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { rejectUnknownOption, runFromCommandLine } from './args'
 
@@ -210,6 +211,63 @@ async function resolveExistingFeatures(
       levels.set(reference, 'feature')
     } catch (error) {
       errors.push(`write-srs: parentId "${reference}" could not be resolved — ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return errors
+}
+
+/** The version number a title starts with (`v3 — …` → `v3`), compared case-insensitively. */
+function versionLabel(title: string): string | undefined {
+  return title
+    .trim()
+    .match(/^v\d+\b/i)?.[0]
+    .toLowerCase()
+}
+
+/**
+ * Refuses a batch that would write, under a feature written earlier, a version title or number
+ * or a requirement id the feature already holds (#919). Two sessions extending one feature a
+ * minute apart each took the next free ids from their own reading and both wrote them; the
+ * feature is read again here, right before the first page is written.
+ */
+export async function findExistingFeatureClashes(adapter: SrsAdapter, candidates: DraftCandidate[], logicalIdMap: Map<string, string>): Promise<string[]> {
+  const errors: string[] = []
+  for (const [reference, featurePageId] of logicalIdMap) {
+    if (!isPageReference(reference)) continue
+    const versions = candidates.flatMap((candidate) => (candidate.kind === 'epic' && candidate.epic?.parentId === reference ? [candidate.epic] : []))
+    const versionIds = new Set(versions.flatMap((version) => (version.id ? [version.id] : [])))
+    const declared: [RequirementCategory, string][] = []
+    for (const version of versions) {
+      for (const fr of version.frs ?? []) declared.push(['FR', fr.id])
+      for (const item of version.urs ?? []) declared.push(['UR', item.id])
+      for (const item of version.dsItems ?? []) declared.push(['DS', item.id])
+      for (const item of version.tcItems ?? []) declared.push(['TC', item.id])
+      for (const item of version.nfrItems ?? []) declared.push(['NFR', item.id])
+    }
+    for (const candidate of candidates) {
+      const fr = candidate.kind === 'fr' ? candidate.fr : undefined
+      if (!fr?.parentEpicId || !versionIds.has(fr.parentEpicId)) continue
+      declared.push(['FR', fr.fr.id])
+      for (const item of fr.urs ?? []) declared.push(['UR', item.id])
+      for (const item of fr.dsItems ?? []) declared.push(['DS', item.id])
+      for (const item of fr.tcItems ?? []) declared.push(['TC', item.id])
+    }
+
+    const register = await readFeatureRegister(adapter, featurePageId)
+    const clashes: string[] = []
+    const existingLabels = new Set(register.versionTitles.flatMap((title) => versionLabel(title) ?? []))
+    const existingTitles = new Set(register.versionTitles.map((title) => title.trim().toLowerCase()))
+    for (const version of versions) {
+      const label = versionLabel(version.title)
+      if (existingTitles.has(version.title.trim().toLowerCase())) clashes.push(`version "${version.title}"`)
+      else if (label && existingLabels.has(label)) clashes.push(`version number ${label} ("${version.title}")`)
+    }
+    for (const id of [...new Set(declared.filter(([category, id]) => id && register.ids[category].has(id.toUpperCase())).map(([, id]) => id))]) clashes.push(id)
+    if (clashes.length > 0) {
+      errors.push(
+        `write-srs: the feature "${reference}" already holds ${clashes.join(', ')}. Nothing was written: another session may have extended it since you read it. ` +
+          `Re-read it (\`sf srs next-ids --feature ${reference}\`) and renumber — ${describeNextIds(register)}.`
+      )
     }
   }
   return errors
@@ -471,6 +529,13 @@ export async function runWriteSrs(options: WriteSrsOptions): Promise<number> {
   const referenceErrors = await resolveExistingFeatures(adapter, candidates, manifest.tools?.srs?.rootPage?.id, logicalIdMap, levels)
   if (referenceErrors.length > 0) {
     for (const error of referenceErrors) process.stderr.write(`${error}\n`)
+    return 2
+  }
+
+  // What the feature already holds is read last, so a session that extended it meanwhile is seen
+  const clashes = await findExistingFeatureClashes(adapter, candidates, logicalIdMap)
+  if (clashes.length > 0) {
+    for (const error of clashes) process.stderr.write(`${error}\n`)
     return 2
   }
 
