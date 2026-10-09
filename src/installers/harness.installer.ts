@@ -12,7 +12,7 @@ import { AgentInstructionsReport, HarnessAgent, installAgentInstructions } from 
 import { needsSharedInstructions, resolveHarnessAgents } from '../harness/agent-registry'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { SaaSFoundryManifest, WorkflowConfig, skillsTemplatesPath } from '../types'
-import { ClaudeHooksConfig, mergeClaudeSettingsHooks } from '../utils/claude-settings'
+import { ClaudeHooksConfig, mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
 import { computeFileHashes, fileExists } from '../utils'
 
 export const harnessInstallerMeta: ModuleInstaller = {
@@ -165,6 +165,31 @@ const HARNESS_HOOKS: ClaudeHooksConfig = {
   SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }]
 }
 
+const WORKFLOW_CLI = '.claude/skills/sf-workflow/workflow-cli.sh'
+const BOARD_CLI = '.claude/skills/sf-tool-github-projects/github-projects-cli.sh'
+
+/**
+ * The read-only commands the harness itself tells the agent to run at every workflow step
+ * (#947). Undeclared, each one asked the developer for permission, all day, in every project
+ * not running in bypass mode. Commands that change a ticket, a board or a pull request stay out.
+ */
+export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
+  `Bash(${WORKFLOW_CLI} status *)`,
+  `Bash(${WORKFLOW_CLI} next *)`,
+  `Bash(${WORKFLOW_CLI} help)`,
+  ...['status', 'get-ticket', 'get-labels', 'get-complexity', 'get-parent', 'get-issue-type', 'list', 'list-incomplete-children'].map((command) => `Bash(${BOARD_CLI} ${command} *)`),
+  'Bash(sf status *)',
+  'Bash(sf agents list *)',
+  'Bash(gh project item-list *)',
+  'Bash(gh project view *)',
+  'Bash(gh project field-list *)'
+]
+
+async function mergeHarnessSettings(targetPath: string): Promise<void> {
+  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
+  await mergeClaudeSettingsPermissions(targetPath, HARNESS_ALLOWED_COMMANDS)
+}
+
 export interface MergeHarnessUserFilesParams {
   targetPath: string
   projectName: string
@@ -203,7 +228,7 @@ export async function mergeHarnessUserFiles({ targetPath, projectName, version, 
   }
 
   await assertHarnessWritePathsSafe(targetPath)
-  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
+  await mergeHarnessSettings(targetPath)
 }
 
 /**
@@ -258,7 +283,7 @@ export async function installHarness({
   await installWorkflowArtifacts({ targetPath, workflow })
 
   await assertHarnessWritePathsSafe(targetPath)
-  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
+  await mergeHarnessSettings(targetPath)
 
   if (depositedClaudeMd) {
     let content = await readFile(claudeMdPath, 'utf8')

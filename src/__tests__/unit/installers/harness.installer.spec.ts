@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { installHarness, installWorkflowArtifacts } from '../../../installers/harness.installer'
+import { HARNESS_ALLOWED_COMMANDS, installHarness, installWorkflowArtifacts } from '../../../installers/harness.installer'
 import { HarnessAgent, WorkflowConfig } from '../../../types'
 import { fileExists } from '../../../utils'
 
@@ -96,8 +96,19 @@ describe('harness installer', () => {
       await installHarness({ targetPath: dir, ...params })
 
       const settings = JSON.parse(await readFile(join(dir, '.claude', 'settings.json'), 'utf8'))
-      expect(settings.permissions).toEqual({ allow: ['Bash(make test)'] })
+      // #947 — the user's rule stays first; the harness adds its read-only commands, once
+      expect(settings.permissions).toEqual({ allow: ['Bash(make test)', ...HARNESS_ALLOWED_COMMANDS] })
       expect(settings.hooks.SessionStart).toBeDefined()
+
+      await installHarness({ targetPath: dir, ...params })
+      const again = JSON.parse(await readFile(join(dir, '.claude', 'settings.json'), 'utf8'))
+      expect(again.permissions.allow).toHaveLength(1 + HARNESS_ALLOWED_COMMANDS.length)
+    })
+
+    it('allows only read-only harness commands, never ones that change a ticket, board or PR', () => {
+      expect(HARNESS_ALLOWED_COMMANDS).toContain('Bash(.claude/skills/sf-workflow/workflow-cli.sh status *)')
+      for (const mutating of ['update-status', 'create-subtask', 'create-ticket', 'create-pr', 'ready-pr', 'draft-pr', 'comment', 'milestone'])
+        expect(HARNESS_ALLOWED_COMMANDS.some((rule) => rule.includes(` ${mutating} `) || rule.includes(` ${mutating})`))).toBe(false)
     })
 
     it('installs optional skills when requested', async () => {

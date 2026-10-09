@@ -54,6 +54,23 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
 }
 
+/**
+ * Add permission rules to `permissions.allow` of `<targetPath>/.claude/settings.json`. Same
+ * contract as the hooks: idempotent, a rule already present is never duplicated, and every
+ * rule or key the user configured is kept.
+ */
+export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[]): Promise<void> {
+  const settingsPath = join(targetPath, '.claude', 'settings.json')
+  const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? (JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>) : {}
+  const permissions = (settings.permissions ?? {}) as Record<string, unknown>
+  const existing = Array.isArray(permissions.allow) ? (permissions.allow as string[]) : []
+  const missing = allow.filter((rule) => !existing.includes(rule))
+  if (missing.length === 0 && settings.permissions) return
+  settings.permissions = { ...permissions, allow: [...existing, ...missing] }
+  await mkdir(dirname(settingsPath), { recursive: true })
+  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+}
+
 /** Keep only the SaaSFoundry SRS hook in sync with the installed SRS skill. */
 export async function reconcileSrsIntentHook(targetPath: string, srsEnabled: boolean): Promise<void> {
   const settingsPath = join(targetPath, '.claude', 'settings.json')
