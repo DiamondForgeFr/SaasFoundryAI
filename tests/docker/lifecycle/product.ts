@@ -2,6 +2,7 @@ import { access, readdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
 import { BrowserFailureBridge, type BrowserCapability } from './browser'
+import { NPM_NETWORK_RETRY_ENV, withNpmNetworkRetry } from './npm-network'
 import { lifecycleProcessApi, type LifecycleProcessApi, type PrivatePostgres } from './postgres'
 import { validateApiHealth, validateWebDocument, waitForHttpProbe, type HttpProbeResult } from './probes'
 import { startProviderFixture, type ProviderFixture } from './provider-fixture'
@@ -95,7 +96,8 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
   const common = {
     CI: 'true',
     HUSKY: '0',
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
+    ...NPM_NETWORK_RETRY_ENV
   }
   const apiEnv: NodeJS.ProcessEnv = {
     ...common,
@@ -126,11 +128,13 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
     processApi.run({ label, executable, args, cwd, env, deadline: options.deadline, signal: options.signal })
 
   const packageRoot = layout.topology === 'monorepo' ? options.projectRoot : layout.apiRoot
+  // A registry reset is retried; any other npm failure still fails the lane at once (#908)
+  const npmCi = (label: string, args: readonly string[], cwd: string, env: NodeJS.ProcessEnv) => withNpmNetworkRetry(() => run(label, 'npm', args, cwd, env))
   if (layout.topology === 'monorepo') {
-    await run(`${options.phase} monorepo npm ci`, 'npm', ['ci'], packageRoot, apiBuildEnv)
+    await npmCi(`${options.phase} monorepo npm ci`, ['ci'], packageRoot, apiBuildEnv)
   } else {
-    await run(`${options.phase} api npm ci`, 'npm', ['ci'], layout.apiRoot, apiBuildEnv)
-    await run(`${options.phase} web npm ci`, 'npm', ['ci', '--ignore-scripts'], layout.webRoot, webEnv)
+    await npmCi(`${options.phase} api npm ci`, ['ci'], layout.apiRoot, apiBuildEnv)
+    await npmCi(`${options.phase} web npm ci`, ['ci', '--ignore-scripts'], layout.webRoot, webEnv)
   }
   const prisma = join(packageRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma')
   await applySqlDirectory(options.postgres, join(layout.apiRoot, 'prisma', 'sql', 'migrations', 'pre-schema'), 'pre-schema migration')
