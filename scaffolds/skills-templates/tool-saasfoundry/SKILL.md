@@ -536,7 +536,7 @@ Like the Anti-Reinvention Guardrail, it **informs and does not block**. A milest
 2. **Check `shouldPropose` before saying anything.** `true` → raise it, quoting `trigger`. `false` → say nothing about milestones; if the user asked directly, answer with `reason`.
 
    **When the user named a version, `--version-named` is not optional.** Without it the script judges a young board on ticket count alone, returns `shouldPropose: false`, and the rule below turns that into silence — so someone who just said *"I want to ship an MVP"* gets a quoted threshold, with the right candidate sitting unused in the output. That is the contradiction this flag removes: silence is not an option once they have raised it.
-3. **Propose from the candidates, never around them.** Each carries `evidence` — a sub-issue relationship, an SRS version page, or an admission of being a leftover pile. A proposal that cites none of those is invented.
+3. **Propose from the candidates, never around them.** Each carries `evidence` — a sub-issue relationship, a milestone linking several Epics, an SRS version page, or an admission of being a leftover pile. A proposal that cites none of those is invented.
 4. **Name the release yourself.** `name` is always `null`: the script will not invent a version number, because choosing one is a decision. Propose it, and say what it is based on.
 5. **Read `droppedCandidates` before presenting.** The cap hides nothing, but it does put things below the fold. On this project's own board the release Epic was in the dropped set — see #551.
 6. **Create only on approval** — `workflow-cli.sh milestone create <name>`, then `assign` per ticket, then `associate` for any SRS version page.
@@ -564,7 +564,8 @@ Propose the name from what they said. Never invent a version number, and never d
       "epicDone": false,
       "tickets": [483, 484, 486],
       "scopeSize": 16,
-      "openCount": 1
+      "openCount": 1,
+      "undeclaredCount": 16
     }
   ],
   "droppedCandidates": [{ "source": "unaffiliated", "rationale": "30 open tickets belong to no Epic and no milestone", "epics": [], "scopeSize": 30, "openCount": 30 }],
@@ -582,7 +583,11 @@ Propose the name from what they said. Never invent a version number, and never d
 
 **An Epic is proposed while its children carry no milestone — whatever its status.** A closed Epic is a finished scope, the most defensible one on a board, and it is proposed (`epicDone: true`), ranked after the open Epics so the board's history does not push the next release below the fold. An Epic whose children all carry a milestone is covered and is not proposed; `notes` names it, with the milestone. Nothing is set aside in silence (#560).
 
-**`scopeSize` is a floor, not a total, while #561 is open.** The retrofit on this project's own board (#554) framed a release the engine put at 16 tickets and the human record put at 33: it names one Epic where a release spans four. Before quoting `scopeSize` for a release, ask whether sibling Epics belong to it — the engine will not raise it.
+**A release spanning several Epics is one `epic-union` candidate** (#561). v1.0.0 was four Epics plus four tickets in none, and a flat list of alternatives presented three of its parts as three competing releases. Epics are united **only through a milestone the board shows linking them** — the Epic carries it, some of its children carry it, or its SRS version page (`srsVersion`, when the payload carries one) is associated with it. Two Epics that are merely both open are never merged. The union carries `parts`: one per Epic, plus one for tickets that carry the milestone outside any Epic, each with its own `evidence`. A covered Epic in the same milestone is a part (`covered: true`), not a separate candidate. `undeclaredCount` is what `milestone assign` would still have to add.
+
+**A part's `scopeSize` is one part, never the release** — every part carries `scopeSizePartial: true`. Quote the union's own `scopeSize`, which is the sum, when framing a release.
+
+**Prose-claimed membership is refused, not offered.** An Epic body that lists `#NNN` under "pulled into this Epic" or "tracked on #488" is a sentence, not a link the board can verify; the engine never reads it. If a human-written scope names tickets the candidate lacks, say so and offer to `milestone assign` them — the milestone then makes the link real, and the next run sees it.
 
 ### Never do these
 
@@ -593,6 +598,7 @@ Propose the name from what they said. Never invent a version number, and never d
 - **Never read `counts` as exact when `notes` says the board was truncated.** Every number is then a floor, and a grouping may be missing tickets outright.
 - **Never read "the SRS declares no version pages" as "this product has no versions".** It usually means the features hold their FRs directly and `sf srs normalize` has not run. `notes` distinguishes that from *"the SRS could not be read"*, which is a gap in the evidence — do not treat the second as the first.
 - **Never present a candidate as the whole release without checking for the parts it cannot see.** An Epic left out of `candidates` is in `droppedCandidates` or named in `notes` (covered by a milestone, no sub-issue on the board) — read both before framing a release. See #560, #561.
+- **Never quote a part's `scopeSize` as a release, and never merge candidates yourself.** Separate `epic` candidates are separate because no milestone links them; if the user says they ship together, that is their decision to record with `milestone assign`, not a grouping to present as derived.
 
 ## Feedback — Module Request
 

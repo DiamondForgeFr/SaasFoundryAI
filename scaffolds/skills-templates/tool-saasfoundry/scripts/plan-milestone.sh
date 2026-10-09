@@ -17,7 +17,11 @@ set -euo pipefail
 #     trigger:       why it is (null when it is not)
 #     reason:        why it is not (null when it is)
 #     candidates:    [{ source, name, rationale, evidence, epics, tickets, scopeSize, openCount, doneCount }]
-#                    source   — epic | srs-version | unaffiliated
+#                    source   — epic | epic-union | srs-version | unaffiliated
+#                    parts    — on an `epic-union` only: one per Epic linked by a milestone
+#                               (plus tickets carrying it outside any Epic), each with its
+#                               own evidence and `scopeSizePartial: true`
+#                    undeclaredCount — on Epic candidates: tickets with no milestone yet
 #                    name     — always null: the script never invents a release number
 #                    evidence — what the grouping rests on; a candidate without it is not emitted
 #                    epics    — the Epic numbers the candidate spans ([] when none)

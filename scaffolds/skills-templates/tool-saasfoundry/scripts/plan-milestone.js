@@ -28,7 +28,15 @@
 // Every candidate carries both `scopeSize` (what the release would contain) and
 // `openCount` (what is left to do). They answer different questions and the ranking uses
 // the first — see the sort below. `epics` lists the Epic numbers a candidate spans (empty
-// for a version page or the leftover pile); an `epic` candidate also carries `epicDone`.
+// for a version page or the leftover pile); an `epic` candidate also carries `epicDone`
+// and `undeclaredCount` (children with no milestone yet).
+//
+// An `epic-union` candidate (#561) is several Epics the board links through a milestone,
+// with `parts` — one per Epic, plus one for tickets carrying the milestone outside any
+// Epic — each with its own evidence and a `scopeSize` flagged `scopeSizePartial: true`.
+// The candidate's own `scopeSize` is the sum. A ticket may carry an optional
+// `srsVersion` (the URL of the SRS version page an Epic implements); a milestone whose
+// description holds that URL (`milestone associate`) links the Epic to it.
 //
 // Output (stdout, JSON): see plan-milestone.sh
 //
@@ -97,6 +105,9 @@ const milestoneOf = (t) => (typeof t.milestone === 'string' && t.milestone.lengt
 const unique = (list) => [...new Set(list)]
 const listNumbers = (numbers) => numbers.map((n) => '#' + n).join(', ')
 
+const plural = (count, word) => count + ' ' + word + (count === 1 ? '' : 's')
+const quoteTitle = (t) => '"' + String(t.title || '').slice(0, 80) + '"'
+
 // Epics the engine looked at and deliberately did not propose. Each one is named in
 // `notes`: an exclusion nobody can see reads as "not looked at" (#560).
 const coveredEpics = [] // every child already carries a milestone
@@ -111,6 +122,12 @@ const emptyEpics = [] // no sub-issue on the board, so there is nothing to group
 //    undeclared when its children carry no milestone, whatever the Epic's status — and
 //    declared (covered) once they all do, which is what stops the history of the board
 //    from competing with the next release.
+//
+//    Each Epic also records the milestones the board links it to (#561): the Epic itself
+//    carrying one, a child carrying one, or — when the payload says which SRS version page
+//    the Epic implements (`srsVersion`) — that page being associated with one. Those are
+//    the only links a union may rest on; an Epic number quoted in prose is not one.
+const epicInfos = []
 for (const epic of tickets.filter((t) => t.isEpic)) {
   const children = tickets.filter((t) => t.parent === epic.number)
   if (children.length === 0) {
@@ -118,33 +135,149 @@ for (const epic of tickets.filter((t) => t.isEpic)) {
     continue
   }
   const declared = children.filter((t) => milestoneOf(t) !== null)
-  if (declared.length === children.length) {
-    coveredEpics.push({ number: epic.number, milestones: unique(declared.map(milestoneOf)) })
-    continue
+  const links = new Map() // milestone title → why this Epic is linked to it
+  const addLink = (title, why) => links.set(title, [...(links.get(title) || []), why])
+  if (milestoneOf(epic)) addLink(milestoneOf(epic), 'the Epic itself carries it')
+  for (const title of unique(declared.map(milestoneOf))) {
+    addLink(title, declared.filter((t) => milestoneOf(t) === title).length + ' of ' + children.length + ' children carry it')
   }
-  const openChildren = children.filter((t) => !isDone(t))
-  const epicDone = isDone(epic)
-  candidates.push({
+  if (typeof epic.srsVersion === 'string' && epic.srsVersion.length > 0) {
+    for (const m of milestones) {
+      if (m && m.title && String(m.description || '').includes(epic.srsVersion)) addLink(m.title, 'its SRS version page ' + epic.srsVersion + ' is associated with it')
+    }
+  }
+  epicInfos.push({ epic, children, covered: declared.length === children.length, links })
+}
+
+const describeEpic = (info) => {
+  const openChildren = info.children.filter((t) => !isDone(t))
+  return {
+    tickets: info.children.map((t) => t.number),
+    scopeSize: info.children.length,
+    openCount: openChildren.length,
+    doneCount: info.children.length - openChildren.length,
+    undeclaredCount: info.children.filter((t) => milestoneOf(t) === null).length
+  }
+}
+
+const epicCandidate = (info) => {
+  const d = describeEpic(info)
+  const epicDone = isDone(info.epic)
+  return {
     source: 'epic',
     name: null, // the model proposes a release name; the script will not invent semver
-    rationale:
-      'Epic #' +
-      epic.number +
-      (epicDone ? ' (closed)' : '') +
-      ' holds ' +
-      children.length +
-      ' ticket' +
-      (children.length === 1 ? '' : 's') +
-      ', ' +
-      openChildren.length +
-      ' still open',
-    evidence: 'grouped by sub-issue relationship to #' + epic.number + ' — "' + String(epic.title || '').slice(0, 80) + '"',
-    epics: [epic.number],
-    tickets: children.map((t) => t.number),
-    scopeSize: children.length,
-    openCount: openChildren.length,
-    doneCount: children.length - openChildren.length,
+    rationale: 'Epic #' + info.epic.number + (epicDone ? ' (closed)' : '') + ' holds ' + plural(d.scopeSize, 'ticket') + ', ' + d.openCount + ' still open',
+    evidence:
+      'grouped by sub-issue relationship to #' +
+      info.epic.number +
+      ' — ' +
+      quoteTitle(info.epic) +
+      [...info.links].map(([title, why]) => '; linked to milestone "' + title + '": ' + why.join(', ')).join(''),
+    epics: [info.epic.number],
+    ...d,
     epicDone
+  }
+}
+
+// 1b. A release is a union of Epics (#561) — v1.0.0 was four of them — and a flat list of
+//     alternatives presented three parts of one release as three competing ones. Epics are
+//     united only through a milestone the board shows linking them, transitively; two
+//     Epics that merely happen to be open are never merged. Each part keeps its own
+//     evidence, and its `scopeSize` is marked partial so it is never quoted as the release.
+//
+//     Tickets that carry one of those milestones directly and hang off no Epic (v1.0.0's
+//     four strays) are a part too: the milestone vouches for them, not a sentence.
+const epicNumbers = new Set(epicInfos.map((i) => i.epic.number))
+const components = [] // { infos: [], milestones: Set }
+for (const info of epicInfos) {
+  const joined = components.filter((c) => [...info.links.keys()].some((m) => c.milestones.has(m)))
+  const merged = { infos: [info, ...joined.flatMap((c) => c.infos)], milestones: new Set([...info.links.keys(), ...joined.flatMap((c) => [...c.milestones])]) }
+  for (const c of joined) components.splice(components.indexOf(c), 1)
+  components.push(merged)
+}
+
+const milestoneState = (title) => {
+  const m = milestones.find((x) => x && x.title === title)
+  return m && m.state ? ' (' + m.state + ')' : ''
+}
+
+for (const component of components) {
+  const proposable = component.infos.filter((i) => !i.covered)
+  // Every Epic already declared, or nothing linked: no union to propose. A covered Epic is
+  // named in `notes`; an unlinked one stands on its own.
+  if (proposable.length === 0) {
+    for (const info of component.infos) coveredEpics.push({ number: info.epic.number, milestones: [...info.links.keys()] })
+    continue
+  }
+  const strays = tickets.filter((t) => !t.isEpic && component.milestones.has(milestoneOf(t)) && !(t.parent != null && epicNumbers.has(t.parent)))
+  if (component.infos.length === 1 && strays.length === 0) {
+    candidates.push(epicCandidate(component.infos[0]))
+    continue
+  }
+
+  const infos = [...component.infos].sort((a, b) => a.epic.number - b.epic.number)
+  const parts = infos.map((info) => {
+    const c = epicCandidate(info)
+    return {
+      epic: info.epic.number,
+      covered: info.covered,
+      epicDone: c.epicDone,
+      evidence: c.evidence,
+      tickets: c.tickets,
+      scopeSize: c.scopeSize,
+      scopeSizePartial: true,
+      openCount: c.openCount,
+      doneCount: c.doneCount,
+      undeclaredCount: c.undeclaredCount
+    }
+  })
+  if (strays.length > 0) {
+    const openStrays = strays.filter((t) => !isDone(t))
+    parts.push({
+      epic: null,
+      covered: true,
+      epicDone: null,
+      evidence:
+        plural(strays.length, 'ticket') +
+        ' in no Epic ' +
+        (strays.length === 1 ? 'carries ' : 'carry ') +
+        [...component.milestones].map((m) => '"' + m + '"').join(' or ') + ' directly',
+      tickets: strays.map((t) => t.number),
+      scopeSize: strays.length,
+      scopeSizePartial: true,
+      openCount: openStrays.length,
+      doneCount: strays.length - openStrays.length,
+      undeclaredCount: 0
+    })
+  }
+  const sum = (key) => parts.reduce((total, p) => total + p[key], 0)
+  const milestoneList = [...component.milestones].map((m) => '"' + m + '"' + milestoneState(m)).join(', ')
+  candidates.push({
+    source: 'epic-union',
+    name: null,
+    rationale:
+      'Epics ' +
+      listNumbers(infos.map((i) => i.epic.number)) +
+      (strays.length > 0 ? ' and ' + plural(strays.length, 'ticket') + ' in no Epic' : '') +
+      ' are one release by milestone ' +
+      milestoneList +
+      ' — ' +
+      plural(sum('scopeSize'), 'ticket') +
+      ', ' +
+      sum('openCount') +
+      ' still open, ' +
+      sum('undeclaredCount') +
+      ' without a milestone yet',
+    evidence: 'united by milestone ' + milestoneList + ' on the board — each part names its own link in `parts`; no Epic was joined on prose',
+    epics: infos.map((i) => i.epic.number),
+    tickets: parts.flatMap((p) => p.tickets),
+    scopeSize: sum('scopeSize'),
+    openCount: sum('openCount'),
+    doneCount: sum('doneCount'),
+    undeclaredCount: sum('undeclaredCount'),
+    // Ranked with the open Epics while any part is still open, with the closed ones otherwise.
+    epicDone: infos.every((i) => isDone(i.epic)),
+    parts
   })
 }
 
@@ -212,8 +345,12 @@ if (leftovers.length >= 3) {
 // Epic with no milestone is most often history: work shipped before milestones existed.
 // It stays proposable and is named in `droppedCandidates` when the cap cuts it; it just
 // does not get to push the next release below the fold. This board carries ten of them.
-const SOURCE_RANK = { 'srs-version': 0, epic: 1, unaffiliated: 3 }
-const rankOf = (c) => (c.source === 'epic' && c.epicDone ? 2 : SOURCE_RANK[c.source])
+//
+// A union of Epics ranks above a single Epic (#561): it rests on two relations the board
+// shows — sub-issues and a shared milestone — where a lone Epic rests on one. Once every
+// Epic in it is closed, it ranks with the closed Epics, for the same reason they do.
+const SOURCE_RANK = { 'srs-version': 0, 'epic-union': 1, epic: 2, unaffiliated: 4 }
+const rankOf = (c) => ((c.source === 'epic' || c.source === 'epic-union') && c.epicDone ? 3 : SOURCE_RANK[c.source])
 candidates.sort((a, b) => rankOf(a) - rankOf(b) || b.scopeSize - a.scopeSize)
 
 const considered = candidates.length
