@@ -25,12 +25,22 @@ async function run(input: unknown): Promise<ExecResult> {
 }
 
 interface Candidate {
-  source: 'epic' | 'srs-version' | 'unaffiliated'
+  source: 'epic' | 'epic-union' | 'srs-version' | 'unaffiliated'
   name: string | null
   rationale: string
   evidence: string
   epics: number[]
   epicDone?: boolean
+  undeclaredCount?: number
+  parts?: Array<{
+    epic: number | null
+    covered: boolean
+    evidence: string
+    tickets: number[]
+    scopeSize: number
+    scopeSizePartial: true
+    openCount: number
+  }>
   tickets: number[]
   scopeSize: number
   openCount: number
@@ -56,6 +66,7 @@ interface Ticket {
   isEpic?: boolean
   parent?: number | null
   milestone?: string | null
+  srsVersion?: string
 }
 
 async function plan(
@@ -491,6 +502,116 @@ describe('a finished Epic is a release scope, not a blind spot (#560)', () => {
         expect(everywhere(p).some((c) => c.epics.includes(epic))).toBe(false)
         expect(p.notes.join(' ')).toContain(`#${epic} (v1.0.0)`)
       }
+    })
+  })
+})
+
+/**
+ * #561 — a release is a union of Epics, and the engine could only name one of them. v1.0.0
+ * is #482 + #511 + #512 + #542 plus four strays; the run proposed #482 alone at 16 and
+ * offered #542 as a competing release.
+ *
+ * Two board-verifiable shapes link them: the Epics themselves assigned to the milestone
+ * (children not yet), and a retrofit in progress where only some children carry it.
+ */
+const V100 = { milestones: [{ title: 'v1.0.0', state: 'open' }] }
+
+/** The four Epics and the strays carry v1.0.0; no child does yet. */
+const epicsDeclared = (board: Ticket[]): Ticket[] => board.map((t) => (RELEASE_EPICS.includes(t.number) || STRAYS.includes(t.number) ? { ...t, milestone: 'v1.0.0' } : t))
+
+/** Only the first child of each Epic carries v1.0.0 — an assignment half done. */
+const firstChildDeclared = (board: Ticket[]): Ticket[] => assignRelease(board, 'v1.0.0', (t) => STRAYS.includes(t.number) || t.number === 488 || t.number === (t.parent ?? 0) * 100 + 0)
+
+describe('a release spanning several Epics is one candidate (#561)', () => {
+  it('reproduces v1.0.0 as a single candidate #482 + #511 + #512 + #542', async () => {
+    const p = await plan(epicsDeclared(v100Board()), V100)
+    const union = p.candidates[0]
+
+    expect(union.source).toBe('epic-union')
+    expect(union.epics).toEqual(RELEASE_EPICS)
+    expect(union.scopeSize).toBe(16 + 7 + 5 + 6 + STRAYS.length)
+    expect(union.openCount).toBe(2) // #488 and #542's last child
+    expect(union.evidence).toContain('united by milestone "v1.0.0" (open)')
+    expect(union.evidence).toContain('no Epic was joined on prose')
+    // Not offered again as competing alternatives.
+    for (const epic of RELEASE_EPICS) expect(everywhere(p).filter((c) => c.epics.includes(epic))).toHaveLength(1)
+  })
+
+  it('keeps the evidence per part, and marks every part scopeSize as partial', async () => {
+    const p = await plan(epicsDeclared(v100Board()), V100)
+    const parts = p.candidates[0].parts ?? []
+
+    expect(parts.map((x) => x.epic)).toEqual([...RELEASE_EPICS, null])
+    expect(parts.find((x) => x.epic === 511)?.evidence).toMatch(/sub-issue relationship to #511 .*linked to milestone "v1\.0\.0": the Epic itself carries it/)
+    expect(parts.find((x) => x.epic === null)?.tickets).toEqual(STRAYS)
+    expect(parts.find((x) => x.epic === null)?.evidence).toContain('in no Epic carry "v1.0.0" directly')
+    for (const part of parts) expect(part.scopeSizePartial).toBe(true)
+    expect(parts.find((x) => x.epic === 482)?.scopeSize).toBe(16)
+    expect(parts.reduce((sum, x) => sum + x.scopeSize, 0)).toBe(p.candidates[0].scopeSize)
+  })
+
+  it('still yields the same candidate once #488 is closed — the #560 counterfactual', async () => {
+    const p = await plan(with488Done(epicsDeclared(v100Board())), V100)
+
+    expect(p.candidates[0].source).toBe('epic-union')
+    expect(p.candidates[0].epics).toEqual(RELEASE_EPICS)
+    expect(p.candidates[0].openCount).toBe(1)
+  })
+
+  it('unites through children carrying the milestone, mid-assignment', async () => {
+    const p = await plan(with488Done(firstChildDeclared(v100Board())), V100)
+    const union = p.candidates[0]
+
+    expect(union.epics).toEqual(RELEASE_EPICS)
+    expect(union.parts?.find((x) => x.epic === 511)?.evidence).toContain('1 of 7 children carry it')
+    // One child per Epic carries it — #488 for #482, the first synthetic child elsewhere.
+    expect(union.undeclaredCount).toBe(16 + 7 + 5 + 6 - 4)
+  })
+
+  it('leaves the Epics unrelated to v1.0.0 as their own candidates', async () => {
+    const p = await plan(epicsDeclared(v100Board()), V100)
+
+    for (const epic of [393, 440, 296]) {
+      const own = everywhere(p).filter((c) => c.epics.includes(epic))
+      expect(own).toHaveLength(1)
+      expect(own[0].epics).toEqual([epic])
+    }
+  })
+
+  describe('combining is derived, never invented', () => {
+    it('never merges two Epics just because both are open', async () => {
+      const p = await plan([...epicWith(1, 3), ...epicWith(2, 4)])
+
+      expect(p.candidates.map((c) => c.source)).toEqual(['epic', 'epic'])
+    })
+
+    it('never merges two Epics declared in different milestones', async () => {
+      const a = epicWith(1, 3).map((t) => (t.isEpic ? { ...t, milestone: 'v1' } : t))
+      const b = epicWith(2, 4).map((t) => (t.isEpic ? { ...t, milestone: 'v2' } : t))
+      const p = await plan([...a, ...b])
+
+      expect(p.candidates.every((c) => c.source === 'epic' && c.epics.length === 1)).toBe(true)
+    })
+
+    it('never reads an Epic number quoted in prose as membership', async () => {
+      // #482's body listed #511, #512, #520, #522 as "tracked on #488, not here". A
+      // sentence is not a link the board can verify.
+      const release = epicWith(482, 1, 3).map((t) => (t.isEpic ? { ...t, title: '[EPIC] Release — tracked on #488: #511 #512' } : t))
+      const p = await plan([...release, ...epicTickets(511, 'Done', n(7, 'Done'))])
+
+      expect(p.candidates.every((c) => c.epics.length === 1)).toBe(true)
+    })
+
+    it('unites Epics whose SRS version pages are associated with the same milestone', async () => {
+      const a = epicWith(1, 3).map((t) => (t.isEpic ? { ...t, srsVersion: 'https://notion.so/v1-live' } : t))
+      const b = epicWith(2, 2).map((t) => (t.isEpic ? { ...t, srsVersion: 'https://notion.so/v1-auth' } : t))
+      const p = await plan([...a, ...b], {
+        milestones: [{ title: 'v1.0.0', state: 'open', description: 'SRS versions: https://notion.so/v1-live https://notion.so/v1-auth' }]
+      })
+
+      expect(p.candidates[0].source).toBe('epic-union')
+      expect(p.candidates[0].epics).toEqual([1, 2])
+      expect(p.candidates[0].parts?.[0].evidence).toContain('SRS version page https://notion.so/v1-live is associated with it')
     })
   })
 })
