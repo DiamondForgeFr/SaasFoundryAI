@@ -205,6 +205,11 @@ export interface WorkflowConfig {
   projectUrl?: string
   workingBranch?: string
   prTargetBranch?: string
+  /**
+   * The project's local CI gate (#918): the commit statuses its local CI publishes, which must
+   * be green on a pull request's head before it is opened for review or marked ready.
+   */
+  localCi?: { requiredStatuses: string[] }
   requireCodeReview?: boolean
   statuses?: WorkflowStatus[]
   issueTypes?: WorkflowIssueType[]

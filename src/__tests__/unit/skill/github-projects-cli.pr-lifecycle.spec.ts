@@ -53,6 +53,8 @@ case "$1 $2" in
     else printf '%s' "$PRS"; fi;;
   'pr create') echo 'https://github.com/FakeOrg/FakeRepo/pull/123';;
   'pr ready') [ "$READY_FAIL" = 1 ] && exit 1; if [ "$4" = --undo ]; then echo true; else echo false; fi > "$READY_MARKER";;
+  'pr comment') ;;
+  'api repos/FakeOrg/FakeRepo/commits/abc123/status') printf '%s' "\${STATUSES:-[]}";;
   *) exit 1;;
 esac
 `
@@ -158,6 +160,47 @@ esac
     expect(calls()).not.toContain('pr create')
     expect(calls()).not.toContain('pr ready')
   })
+  // #918 — a PR opened for review, or marked ready, needs the project's declared local CI statuses
+  describe('local CI gate', () => {
+    const gated = () =>
+      writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { workingBranch: 'develop', prTargetBranch: 'develop', localCi: { requiredStatuses: ['local-check', 'local-e2e'] } } }))
+    const statuses = (local_check: string, local_e2e?: string) => JSON.stringify([{ context: 'local-check', state: local_check }, ...(local_e2e ? [{ context: 'local-e2e', state: local_e2e }] : [])])
+
+    it('refuses a ready PR while a declared status is missing or red, and creates nothing', async () => {
+      await gated()
+      const result = await run(['create-pr', '42'], { PRS: '[]', STATUSES: statuses('success') })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain('local-e2e: missing')
+      expect(calls()).not.toContain('pr create')
+    })
+    it('lets a draft open before the local CI has run', async () => {
+      await gated()
+      expect((await run(['create-pr', '42', '--draft'], { PRS: '[]' })).code).toBe(0)
+      expect(calls()).toContain('pr create')
+    })
+    it('opens a ready PR once every declared status is green on the head', async () => {
+      await gated()
+      expect((await run(['create-pr', '42'], { PRS: '[]', STATUSES: statuses('success', 'success') })).code).toBe(0)
+      expect(calls()).toContain('pr create')
+    })
+    it('records the reason of an explicit --skip-local-ci on the PR', async () => {
+      await gated()
+      expect((await run(['create-pr', '42', '--skip-local-ci', 'docs only, owner approved'], { PRS: '[]' })).code).toBe(0)
+      expect(calls()).toContain('Local CI gate skipped: docs only, owner approved')
+    })
+    it('keeps the PR a draft when ready-pr meets a red status', async () => {
+      await gated()
+      const result = await run(['ready-pr', '42'], { STATUSES: statuses('failure', 'success') })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain('local-check: failure')
+      expect(calls()).not.toContain('pr ready')
+    })
+    it('changes nothing for a project that declares no gate', async () => {
+      expect((await run(['ready-pr', '42'])).code).toBe(0)
+      expect(calls()).not.toContain('commits/abc123/status')
+    })
+  })
+
   it('promotes explicitly and verifies the new state', async () => {
     expect((await run(['ready-pr', '42'])).code).toBe(0)
     expect(calls()).toContain('pr ready 123')
