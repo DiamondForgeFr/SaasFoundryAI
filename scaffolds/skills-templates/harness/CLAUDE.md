@@ -31,6 +31,10 @@ Everything you produce — SRS pages, tickets and their comments, code comments,
 
 **The language of the conversation is not the signal.** Talking with the user in French does not make the artefacts French. `sf status --claude-friendly` prints the resolved values.
 
+## File edits and shell calls
+
+Edit files with your native file tools (Read, Edit, Write), never with interpreter heredocs or scripts that rewrite files (`python3 - <<EOF`, `node -e`): Claude Code cannot analyse those, so each one asks for permission, even in bypass mode. Keep each shell call to one plain command, run from the project root. The harness's read-only commands are allowed in `.claude/settings.json`; commands that change a ticket, a board or a pull request still ask.
+
 ## Git Workflow
 
 - Main branch: `{{MAIN_BRANCH}}` (see `.saasfoundry.json` → `workflow.workingBranch` / `prTargetBranch` — never hardcode branch names)

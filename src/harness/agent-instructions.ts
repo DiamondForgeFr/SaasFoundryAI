@@ -116,6 +116,20 @@ additive transition with \`sf update --target-profile full --dry-run --json\`. D
 the harness path; a throwaway POC uses the documented POC-preservation and clean-project flow.
 `
 
+/**
+ * How to touch files and the shell so the host can check each call (#947). An interpreter
+ * heredoc that writes files cannot be analysed and asks the developer every time, even in
+ * bypass mode; sub-agents see no memory of that, only these instructions.
+ */
+export const TOOLING_HYGIENE_INSTRUCTIONS = `## File edits and shell calls
+
+Edit files with the agent's native file tools (read, edit, write), never with interpreter
+heredocs or scripts that rewrite files (\`python3 - <<EOF\`, \`node -e\`). Keep each shell call
+to one plain command, run from the project root. The harness's read-only commands
+(\`workflow-cli.sh status|next|help\`, \`sf status\`, \`sf agents list\`) are allowed in
+\`.claude/settings.json\`; commands that change a ticket, a board or a pull request still ask.
+`
+
 export const COMMON_INSTRUCTIONS = `# SaaSFoundry agent instructions
 
 Read \`CLAUDE.md\` in this project before working: it remains the authoritative project
@@ -133,6 +147,7 @@ need a verified merge before Done, except for a validated \`nature:bundled-pr\` 
 commit ships in its non-Epic delivery parent's PR. An Epic has no PR: its first child entering
 In progress starts it, and it reaches Done only after every native child has board status Done.
 
+${TOOLING_HYGIENE_INSTRUCTIONS}
 ${PROFILE_TRANSITION_INSTRUCTIONS}
 
 ${SELF_ONBOARDING_INSTRUCTIONS}
@@ -165,6 +180,7 @@ Before a status transition, read the matching status document and execute the gu
 \`.claude/skills/sf-workflow/workflow-cli.sh\`. Use its configured board tool and preserve
 all workflow guards, tests and approval requirements.
 
+${TOOLING_HYGIENE_INSTRUCTIONS}
 ${PROFILE_TRANSITION_INSTRUCTIONS}
 
 ${SELF_ONBOARDING_INSTRUCTIONS}
