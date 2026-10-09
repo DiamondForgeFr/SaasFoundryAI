@@ -13,12 +13,13 @@ Figma, figma.com, design, mockup, FigJam, design system, UI component, design-to
 
 ## CLI
 
-All commands use: `~/.claude/skills/tool-figma/figma-cli.sh`
+All commands use: `.claude/skills/sf-tool-figma/figma-cli.sh`
 
-### Known IDs
-- Team ID: `1598288737680195069` (DNA Script)
-- BioFoundry project: `542545441`
-- Perso project: `572423435`
+### Finding your IDs
+
+- Team ID: the number after `/team/` in the URL of your team page on figma.com
+- Project IDs: `figma-cli.sh team-projects <TEAM_ID>`
+- Your account: `figma-cli.sh me`
 
 ### Files & Metadata
 
