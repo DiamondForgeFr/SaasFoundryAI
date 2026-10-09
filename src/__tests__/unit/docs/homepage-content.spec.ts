@@ -136,7 +136,7 @@ describe('the bilingual product landing (#395)', () => {
   })
 
   it('keeps the stable release and installation visible in the shared navigation', () => {
-    expect(navigation).toContain("text: 'v1.0.0'")
+    expect(navigation).toContain("text: 'v1.0.1'")
     expect(navigation).not.toContain("text: 'v1.0.0-beta'")
     expect(navigation).toContain("install: 'Install'")
     expect(navigation).toContain("install: 'Installer'")

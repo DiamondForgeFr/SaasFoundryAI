@@ -331,7 +331,7 @@ export const createThemeConfig = (locale: DocumentationLocale, translatedRoutes:
         ]
       },
       {
-        text: 'v1.0.0',
+        text: 'v1.0.1',
         items: [
           { text: nav.changelog, link: documentationLink(locale, '/changelog', translatedRoutes) },
           { text: labels[locale].pages.troubleshooting, link: documentationLink(locale, '/troubleshooting', translatedRoutes) },
