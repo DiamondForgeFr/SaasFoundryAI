@@ -1,4 +1,5 @@
 import { PageContent } from '../../../../builders/srs/types'
+import { renderFrPage } from '../../../../builders/srs/templates/pages/fr.tpl'
 import { renderPageContentToNotionBlocks } from '../../../../tools/notion/page-content.renderer'
 
 describe('renderPageContentToNotionBlocks', () => {
@@ -35,6 +36,27 @@ describe('renderPageContentToNotionBlocks', () => {
     const parts = block.paragraph.rich_text.map((item) => item.text.content)
     expect(parts.map((part) => part.length)).toEqual([2000, 2000, 500])
     expect(parts.join('')).toBe(text)
+  })
+
+  // #916 — an FR's acceptance criteria are joined into one table cell, which crossed the limit
+  it('splits a table cell longer than 2000 characters, as an FR with many criteria produces', () => {
+    const acceptanceCriteria = Array.from({ length: 12 }, (_, i) => `Criterion ${i + 1}: ${'the behaviour holds under every documented condition. '.repeat(4)}`)
+    const blocks = renderPageContentToNotionBlocks(renderFrPage({ parentEpicPageId: 'version', fr: { id: 'FR-X-001', title: 'Long', acceptanceCriteria } })) as unknown as {
+      type: string
+      table?: { children: { table_row: { cells: { text: { content: string } }[][] } }[] }
+    }[]
+
+    const cells = blocks.flatMap((block) => block.table?.children ?? []).flatMap((row) => row.table_row.cells)
+    const criteriaCell = cells.find((cell) =>
+      cell
+        .map((item) => item.text.content)
+        .join('')
+        .includes('Criterion 12')
+    )
+    expect(criteriaCell).toBeDefined()
+    expect(criteriaCell!.length).toBeGreaterThan(1)
+    for (const cell of cells) for (const item of cell) expect(item.text.content.length).toBeLessThanOrEqual(2000)
+    expect(criteriaCell!.map((item) => item.text.content).join('')).toBe(acceptanceCriteria.map((criterion) => `• ${criterion}`).join('\n'))
   })
 
   it('expands bulleted_list into one bulleted_list_item per entry', () => {
