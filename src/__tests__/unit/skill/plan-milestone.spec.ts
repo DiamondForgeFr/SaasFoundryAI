@@ -29,6 +29,8 @@ interface Candidate {
   name: string | null
   rationale: string
   evidence: string
+  epics: number[]
+  epicDone?: boolean
   tickets: number[]
   scopeSize: number
   openCount: number
@@ -39,7 +41,7 @@ interface Plan {
   trigger: string | null
   reason: string | null
   candidates: Candidate[]
-  droppedCandidates: Array<{ source: string; rationale: string; scopeSize: number; openCount: number }>
+  droppedCandidates: Array<{ source: string; rationale: string; epics: number[]; scopeSize: number; openCount: number }>
   cap: number
   considered: number
   dropped: number
@@ -118,9 +120,14 @@ describe('plan-milestone.js', () => {
       expect(c?.name).toBeNull()
     })
 
-    it('ignores an Epic whose children are all finished', async () => {
+    it('still proposes an open Epic whose children are all finished (#560)', async () => {
+      // Used to be ignored: a release vanished at exactly the moment it was ready to cut.
       const p = await plan(epicWith(300, 0, 5))
-      expect(p.candidates.filter((c) => c.source === 'epic')).toEqual([])
+      const c = p.candidates.find((x) => x.source === 'epic')
+      expect(c?.epics).toEqual([300])
+      expect(c?.scopeSize).toBe(5)
+      expect(c?.openCount).toBe(0)
+      expect(c?.epicDone).toBe(false)
     })
   })
 
@@ -213,11 +220,14 @@ describe('plan-milestone.js', () => {
     })
 
     it('says so when nothing groups, rather than proposing a milestone anyway', async () => {
-      // Two loose tickets and a finished Epic: real, but not a release scope.
-      const p = await plan([...epicWith(1, 0, 3), ...loose(2)])
+      // Two loose tickets and an Epic already declared in a milestone: real, but not an
+      // undeclared release scope.
+      const covered = epicWith(1, 0, 3).map((t) => (t.isEpic ? t : { ...t, milestone: 'v0.9.0' }))
+      const p = await plan([...covered, ...loose(2)])
       expect(p.shouldPropose).toBe(false)
       expect(p.reason).toContain('nothing on the board groups into a release scope')
       expect(p.candidates).toEqual([])
+      expect(p.notes.join(' ')).toContain('#1 (v0.9.0)')
     })
 
     it('says when it could only read the board, and why', async () => {
@@ -364,5 +374,123 @@ describe('a named version outranks the ticket-count threshold (#571)', () => {
     expect(out.trigger).toContain('the user named a version')
     expect(out.candidates[0].source).toBe('srs-version')
     expect(out.candidates[0].rationale).toContain('v1 — MVP')
+  })
+})
+
+/**
+ * A reduced copy of the board #554 ran the engine against (2026-08-24): no real payload
+ * was kept in the repository, so this captures exactly the shapes #560 and #561 describe —
+ * the Epic numbers, statuses and child counts are the real ones, the child numbers are
+ * synthetic (`epic * 100 + i`), except #488, the one open child #482 survived on.
+ *
+ * - #482 open, 16 children, only #488 open      - #511 closed, 7 children all closed
+ * - #512 closed, 5 children all closed          - #542 open, 6 children, 1 open
+ * - #393 / #440 / #296 open, unrelated to v1.0.0 (marketing docs, post-v1, one-off)
+ * - #298 / #310 / #305 closed history, never declared in a milestone
+ * - strays #426 #428 #520 #522 (in v1.0.0 by prose only), and 30 open unaffiliated tickets
+ */
+const RELEASE_EPICS = [482, 511, 512, 542]
+const STRAYS = [426, 428, 520, 522]
+
+function epicTickets(number: number, epicStatus: string, children: Array<{ status: string; number?: number }>): Ticket[] {
+  const out: Ticket[] = [{ number, title: `[EPIC] epic ${number}`, status: epicStatus, isEpic: true }]
+  children.forEach((c, i) => out.push({ number: c.number ?? number * 100 + i, status: c.status, parent: number }))
+  return out
+}
+const n = (count: number, status: string) => Array.from({ length: count }, () => ({ status }))
+
+function v100Board(): Ticket[] {
+  return [
+    ...epicTickets(482, 'In progress', [{ number: 488, status: 'In progress' }, ...n(15, 'Done')]),
+    ...epicTickets(511, 'Done', n(7, 'Done')),
+    ...epicTickets(512, 'Done', n(5, 'Done')),
+    ...epicTickets(542, 'In progress', [...n(5, 'Done'), ...n(1, 'Backlog')]),
+    ...epicTickets(393, 'Backlog', n(7, 'Backlog')),
+    ...epicTickets(440, 'Backlog', n(3, 'Backlog')),
+    ...epicTickets(296, 'Backlog', n(1, 'Backlog')),
+    ...epicTickets(298, 'Done', n(8, 'Done')),
+    ...epicTickets(310, 'Done', n(6, 'Done')),
+    ...epicTickets(305, 'Done', n(4, 'Done')),
+    ...STRAYS.map((number) => ({ number, status: 'Done' })),
+    ...loose(30)
+  ]
+}
+
+/** The #560 counterfactual: the same board with #488 closed. */
+const with488Done = (board: Ticket[]): Ticket[] => board.map((t) => (t.number === 488 ? { ...t, status: 'Done' } : t))
+
+/** Every ticket of the release — the four Epics' children and the strays — carries `milestone`. */
+function assignRelease(board: Ticket[], milestone: string, select: (t: Ticket) => boolean = () => true): Ticket[] {
+  return board.map((t) => {
+    const inRelease = (t.parent != null && RELEASE_EPICS.includes(t.parent)) || STRAYS.includes(t.number)
+    return inRelease && select(t) ? { ...t, milestone } : t
+  })
+}
+
+const everywhere = (p: Plan) => [...p.candidates, ...p.droppedCandidates]
+
+/**
+ * #560 — two filters, one in the gatherer and two in the engine, made a finished Epic
+ * invisible: not proposed, not dropped, not mentioned. The discriminator is now milestone
+ * coverage, never the Epic's status.
+ */
+describe('a finished Epic is a release scope, not a blind spot (#560)', () => {
+  it('proposes a closed Epic whose children carry no milestone', async () => {
+    const p = await plan(epicTickets(511, 'Done', n(7, 'Done')))
+
+    const c = p.candidates.find((x) => x.epics.includes(511))
+    expect(c?.source).toBe('epic')
+    expect(c?.epicDone).toBe(true)
+    expect(c?.scopeSize).toBe(7)
+    expect(c?.rationale).toContain('Epic #511 (closed)')
+  })
+
+  it('does not propose an Epic whose children all carry a milestone, and names it', async () => {
+    const covered = epicTickets(511, 'Done', n(7, 'Done')).map((t) => (t.isEpic ? t : { ...t, milestone: 'v1.0.0' }))
+    const p = await plan([...covered, ...epicWith(1, 3)])
+
+    expect(everywhere(p).some((c) => c.epics.includes(511))).toBe(false)
+    expect(p.notes.join(' ')).toMatch(/every child already carries a milestone: #511 \(v1\.0\.0\)/)
+  })
+
+  it('names an Epic with no sub-issue on the board instead of skipping it silently', async () => {
+    const p = await plan([{ number: 77, title: '[EPIC] empty', status: 'Backlog', isEpic: true }, ...epicWith(1, 3)])
+
+    expect(p.notes.join(' ')).toMatch(/no sub-issue of theirs is on the board: #77/)
+  })
+
+  it('ranks a closed Epic after an open one, whatever its size, and says so', async () => {
+    // Ten closed Epics on this board: by size alone, history would push the next release
+    // below the fold — the trap the ticket names.
+    const p = await plan([...epicTickets(298, 'Done', n(20, 'Done')), ...epicWith(1, 2)])
+
+    expect(p.candidates.map((c) => c.epics[0])).toEqual([1, 298])
+    expect(p.notes.join(' ')).toMatch(/closed Epic\(s\) carry no milestone .*#298/)
+  })
+
+  describe('on the #554 board (reduced fixture)', () => {
+    it('sees #511 and #512 — proposed or named as dropped, never absent', async () => {
+      const p = await plan(v100Board())
+
+      expect(p.candidates[0].epics).toEqual([482])
+      for (const epic of [511, 512]) expect(everywhere(p).some((c) => c.epics.includes(epic))).toBe(true)
+    })
+
+    it('still surfaces #482 first once #488 is closed — the counterfactual', async () => {
+      const p = await plan(with488Done(v100Board()))
+
+      expect(p.candidates[0].epics).toEqual([482])
+      expect(p.candidates[0].scopeSize).toBe(16)
+      expect(p.candidates[0].openCount).toBe(0)
+    })
+
+    it('stops proposing the release once v1.0.0 declares it, and names the four Epics as covered', async () => {
+      const p = await plan(assignRelease(v100Board(), 'v1.0.0'), { milestones: [{ title: 'v1.0.0', state: 'open' }] })
+
+      for (const epic of RELEASE_EPICS) {
+        expect(everywhere(p).some((c) => c.epics.includes(epic))).toBe(false)
+        expect(p.notes.join(' ')).toContain(`#${epic} (v1.0.0)`)
+      }
+    })
   })
 })
