@@ -44,7 +44,8 @@ class StubAdapter implements SrsAdapter {
   async fetchPage(pageId: string): Promise<RawContent> {
     return { pageId, title: '', url: '', blocks: [] }
   }
-  async listChildren(): Promise<PageRef[]> {
+  async listChildren(parentPageId?: string): Promise<PageRef[]> {
+    void parentPageId
     return []
   }
   async move(pageId: string, newParentPageId: string): Promise<void> {
@@ -676,5 +677,108 @@ describe('write-srs — the items of a version and its FRs reach the feature tab
     expect(check.warnings).toEqual([
       'write-srs: candidate #0 (fr) carries dsItems but is attached by parentEpicPageId, so no feature table receives them. Attach it by parentEpicId to a version of the batch.'
     ])
+  })
+})
+
+// #919 — two sessions extending one feature both wrote "v3" and the same ids
+describe('write-srs — refuses what the existing feature already holds', () => {
+  const FEATURE_ID = '12345678-90ab-cdef-1234-567890abcdef'
+  const FEATURE_URL = 'https://www.notion.so/Reunion-live-1234567890abcdef1234567890abcdef'
+
+  /** Root → feature → `v1 — Existing` → FR-LIVE-007; the feature's UR table lists UR-LIVE-004. */
+  class FeatureWithHistory extends StubAdapter {
+    async resolveParent(input: string): Promise<ResolvedParent> {
+      return { id: FEATURE_ID, name: 'Réunion live', url: input }
+    }
+    async listChildren(parentPageId?: string): Promise<PageRef[]> {
+      if (parentPageId === 'root-id') return [{ id: FEATURE_ID.replace(/-/g, ''), url: '', title: 'Réunion live' }]
+      if (parentPageId === FEATURE_ID) return [{ id: 'version-1', url: '', title: 'v1 — Existing' }]
+      if (parentPageId === 'version-1') return [{ id: 'fr-page', url: '', title: 'FR-LIVE-007 — Topic notes' }]
+      return []
+    }
+    async fetchPage(pageId: string): Promise<RawContent> {
+      return {
+        pageId,
+        title: 'Réunion live',
+        url: '',
+        blocks: [
+          {
+            kind: 'table',
+            text: '',
+            rows: [
+              ['ID', 'Requirement', 'Version', 'Priority', 'Related FR'],
+              ['UR-LIVE-004', 'Notes by topic', 'v1 — Existing', 'P1', 'FR-LIVE-007']
+            ]
+          }
+        ]
+      }
+    }
+    extendSections = async (_pageId: string, additions: SectionAddition[]): Promise<SectionAdditionOutcome[]> => additions.map(() => 'extended')
+  }
+
+  const version = (title: string, frs: { id: string; title: string }[] = []): DraftCandidate => ({
+    kind: 'epic',
+    confidence: 'high',
+    epic: { id: 'NEW', parentId: FEATURE_URL, title, parentPageId: 'ignored', urs: [], frs, version: { changes: ['more'] } },
+    source: { kind: 'notion-pages' }
+  })
+  const fr = (id: string, urs: { id: string; narrative: string }[] = []): DraftCandidate => ({
+    kind: 'fr',
+    confidence: 'high',
+    fr: { parentEpicId: 'NEW', fr: { id, title: 'Something' }, urs },
+    source: { kind: 'notion-pages' }
+  })
+
+  let tmpDir: string
+  let stderr: string[]
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'sf-srs-write-clash-'))
+    stderr = []
+    jest.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      stderr.push(String(chunk))
+      return true
+    })
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  })
+  afterEach(() => {
+    unregisterSrsBackend('clash-stub')
+    rmSync(tmpDir, { recursive: true, force: true })
+    jest.restoreAllMocks()
+  })
+
+  const run = async (adapter: SrsAdapter, candidates: DraftCandidate[]) => {
+    registerSrsBackend('clash-stub', () => adapter)
+    const manifestPath = join(tmpDir, '.saasfoundry.json')
+    writeFileSync(manifestPath, JSON.stringify({ tools: { srs: { backend: 'clash-stub', rootPage: { id: 'root-id' } } } }))
+    const specPath = join(tmpDir, 'spec.json')
+    writeFileSync(specPath, JSON.stringify(candidates))
+    return runWriteSrs({ specPath, manifestPath, clearPendingIngestion: false })
+  }
+
+  it('refuses a version number the feature already has, and names the next one', async () => {
+    const adapter = new FeatureWithHistory()
+    await expect(run(adapter, [version('v1 — Another take')])).resolves.toBe(2)
+    expect(adapter.createdEpics).toEqual([])
+    expect(stderr.join('')).toContain('version number v1')
+    expect(stderr.join('')).toContain('next version: v2')
+  })
+
+  it('refuses an FR id an FR page carries and a UR id a feature table lists, before writing anything', async () => {
+    const adapter = new FeatureWithHistory()
+    await expect(run(adapter, [version('v2 — Live topics'), fr('FR-LIVE-007', [{ id: 'UR-LIVE-004', narrative: 'again' }])])).resolves.toBe(2)
+    expect(adapter.createdEpics).toEqual([])
+    expect(adapter.createdFrs).toEqual([])
+    const message = stderr.join('')
+    expect(message).toContain('FR-LIVE-007')
+    expect(message).toContain('UR-LIVE-004')
+    expect(message).toContain('FR-LIVE-008')
+    expect(message).toContain('UR-LIVE-005')
+  })
+
+  it('writes a version whose title and ids are new', async () => {
+    const adapter = new FeatureWithHistory()
+    await expect(run(adapter, [version('v2 — Live topics', [{ id: 'FR-LIVE-008', title: 'Consolidation' }]), fr('FR-LIVE-008', [{ id: 'UR-LIVE-005', narrative: 'new' }])])).resolves.toBe(0)
+    expect(adapter.createdEpics).toHaveLength(1)
+    expect(adapter.createdFrs).toHaveLength(1)
   })
 })

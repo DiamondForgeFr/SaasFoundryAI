@@ -5,6 +5,7 @@ import { parseArgs as parseDraftCodebaseArgs, runDraftFromCodebase } from '../sr
 import { parseArgs as parseDraftNotionPagesArgs, runDraftFromNotionPages } from '../srs/bin/draft-from-notion-pages'
 import { parseArgs as parseEvalArgs, runEvalSrs } from '../srs/bin/eval-srs'
 import { parseArgs as parseListVersionsArgs, runListVersions } from '../srs/bin/list-versions'
+import { parseArgs as parseNextIdsArgs, runNextIds } from '../srs/bin/next-ids'
 import { parseArgs as parseNormalizeArgs, runNormalize } from '../srs/bin/normalize'
 import { parseArgs as parseSpawnArgs, runSpawn } from '../srs/bin/spawn'
 import { parseArgs as parseValidateArgs, runValidate } from '../srs/bin/validate'
@@ -25,6 +26,8 @@ Actions:
                                          Apply a DraftCandidate[] spec file through the adapter
   versions [--root-page <id>] [--manifest]
                                          List the versions the SRS declares (JSON) — what a release scope is proposed from
+  next-ids --feature <page-url-or-id> [--json] [--manifest]
+                                         The next version number and free UR/FR/DS/TC/NFR ids of a feature, read from the SRS
   spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>] [--milestone <name>] [--complexity <level>] [--reconciliation-plan <path>] [--drafting-ticket <n>] [--dry-run] [--manifest] [--bypass-reason <text>]
                                          --milestone declares the release these tickets ship in: created or reused,
                                          the version page is linked to it, and every ticket spawned joins it
@@ -119,6 +122,9 @@ export async function srsCommand(subcommand?: string, ...rest: string[]): Promis
         code = await runListVersions(options)
         break
       }
+      case 'next-ids':
+        code = await runNextIds(parseNextIdsArgs(argv))
+        break
       case 'spawn': {
         const options = parseSpawnArgs(argv)
         code = await runSpawn(options)
