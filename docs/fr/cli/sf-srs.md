@@ -23,6 +23,7 @@ Le [module SRS](/fr/modules/srs) doit être installé et un backend doit être c
 | `draft`        | Produire un brouillon depuis des pages du backend ou une analyse du code                   |
 | `write`        | Appliquer un fichier de spécification `DraftCandidate[]` via l'adaptateur                  |
 | `versions`     | Lister les versions déclarées dans le SRS, source des propositions de périmètre de release |
+| `next-ids`     | Prochain numéro de version et prochains identifiants libres d’une fonctionnalité           |
 | `spawn`        | Transformer une page Epic en tickets                                                       |
 | `normalize`    | Énumérer les pages FR d'un Epic et créer les sous-tickets Story                            |
 | `apply-update` | Appliquer un correctif du hook d'évaluation conversationnel, en ajout uniquement           |
@@ -40,6 +41,7 @@ sf srs draft --from codebase [--path <dir>] [--manifest <path>]
 
 sf srs write --spec <path> [--manifest <path>] [--no-clear-pending]
 sf srs versions [--root-page <id>] [--manifest <path>]
+sf srs next-ids --feature <page-url-or-id> [--json] [--manifest <path>]
 
 sf srs spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>]
              [--milestone <name>] [--complexity <level>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]
@@ -50,6 +52,10 @@ sf srs normalize [--feature <url-or-id>] [--version-name <name>] [--apply]
 sf srs apply-update [--patch <path>] [--manifest <path>]
 sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--manifest <path>]
 ```
+
+`write` relit la fonctionnalité à laquelle il ajoute une version, juste avant la première page, et refuse le lot (code 2, rien n’est écrit) si cette fonctionnalité porte déjà le titre ou le numéro de
+version, ou l’un des identifiants UR/FR/DS/TC/NFR que le lot déclare : deux sessions qui étendaient la même fonctionnalité écrivaient le même `v3` et les mêmes identifiants. `next-ids` donne les
+numéros à utiliser, lus dans le SRS lui-même plutôt que dans une lecture antérieure.
 
 L'option `--milestone` de `spawn` **déclare la release dans laquelle ces tickets seront livrés** : le milestone est créé ou réutilisé, la page de version lui est associée et tous les tickets générés
 le rejoignent.

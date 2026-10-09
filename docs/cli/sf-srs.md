@@ -23,6 +23,7 @@ Requires the [SRS module](/modules/srs) to be installed and a backend configured
 | `draft`        | Produce draft material — from backend pages, or by scanning the codebase   |
 | `write`        | Apply a `DraftCandidate[]` spec file through the adapter                   |
 | `versions`     | List the versions the SRS declares — what a release scope is proposed from |
+| `next-ids`     | The next version number and free requirement ids of a feature              |
 | `spawn`        | Turn an Epic page into tickets                                             |
 | `normalize`    | Enumerate an Epic's FR pages and create Story sub-tickets                  |
 | `apply-update` | Apply a conversational eval-hook patch (ADD-only)                          |
@@ -40,6 +41,7 @@ sf srs draft --from codebase [--path <dir>] [--manifest <path>]
 
 sf srs write --spec <path> [--manifest <path>] [--no-clear-pending]
 sf srs versions [--root-page <id>] [--manifest <path>]
+sf srs next-ids --feature <page-url-or-id> [--json] [--manifest <path>]
 
 sf srs spawn --epic <page-url-or-id> [--ticket <n>] [--version <title-url-or-id>]
              [--milestone <name>] [--complexity <level>] [--dry-run] [--manifest <path>] [--bypass-reason <text>]
@@ -50,6 +52,10 @@ sf srs normalize [--feature <url-or-id>] [--version-name <name>] [--apply]
 sf srs apply-update [--patch <path>] [--manifest <path>]
 sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--manifest <path>]
 ```
+
+`write` re-reads a feature it adds a version to, right before the first page, and refuses the batch (exit 2, nothing written) when that feature already holds the version title or number, or any
+UR/FR/DS/TC/NFR id the batch declares — two sessions extending one feature used to write the same `v3` and the same ids. `next-ids` gives the numbers to use instead, read from the SRS itself rather
+than from an earlier reading.
 
 `--milestone` on `spawn` **declares the release these tickets ship in**: the milestone is created or reused, the version page is linked to it, and every ticket spawned joins it.
 
