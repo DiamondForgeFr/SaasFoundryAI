@@ -202,8 +202,8 @@ Use `workflow-cli.sh transition-drafting`; the CLI rejects code-path transitions
 ## Escape hatches
 
 A guard refusal means a condition or a piece of proof is missing; the answer is to supply it. For the rare case where a guard is wrong or cannot be satisfied, the scripts accept a few explicit escape
-hatches. Set a variable inline for one command only, never with `export`, and leave a ticket comment saying why. The environment variables print nothing when they take effect, so the comment is the
-audit trail. A coding agent never sets one on its own; it stops and asks you.
+hatches. Set a variable inline for one command only, never with `export`, with `SF_WORKFLOW_BYPASS_REASON="<why>"` beside it. `update-status` then prints a warning naming the variable and records it,
+with the reason, as a ticket comment; add the evidence to that comment. A coding agent never sets one on its own; it stops and asks you.
 
 | Hatch                                                                       | What it switches off                                                         |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -220,8 +220,9 @@ audit trail. A coding agent never sets one on its own; it stops and asks you.
 | `SF_CACHE_BUST=1`                                                           | Not a guard: refetches the cached board schema                               |
 | `SF_DISABLE_SRS_HOOK=1`                                                     | Not a guard: silences the SRS intent-detector reminder                       |
 
-`--bypass-srs` and `--skip-local-ci` carry a mandatory reason. The reason is the record: choose a grep-able token such as `meta-srs-tooling`, and expect `--skip-local-ci` to write its reason on the
-pull request. The legitimate and illegitimate uses of each hatch, and the record to leave, are in `.claude/skills/sf-workflow/escape-hatches.md` in every project that installs the workflow.
+`--bypass-srs` and `--skip-local-ci` carry a mandatory reason. The reason is the record: choose a grep-able token such as `meta-srs-tooling`. `--bypass-srs` posts it on the created ticket and
+`--skip-local-ci` writes it on the pull request. The legitimate and illegitimate uses of each hatch, and the record to leave, are in `.claude/skills/sf-workflow/escape-hatches.md` in every project
+that installs the workflow.
 
 ## Continue
 

@@ -13,16 +13,18 @@ This file lists every hatch the workflow scripts accept, what each one switches 
 3. **Scope it to one command.** Set the variable inline for the single command that needs it, never with `export` and never in a shell profile or a CI job:
 
    ```bash
-   SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1 .claude/skills/sf-workflow/workflow-cli.sh update-status 42 Done
+   SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1 SF_WORKFLOW_BYPASS_REASON="hotfix a1b2c3d pushed directly" \
+     .claude/skills/sf-workflow/workflow-cli.sh update-status 42 Done
    ```
 
-4. **The environment hatches are silent.** `SF_WORKFLOW_BYPASS_*` variables print nothing when they take effect, so the person who uses one is the only audit trail. Leave a ticket comment (template
-   below) and, when a pull request exists, one line in its body.
+4. **The environment hatches announce themselves.** When `update-status` finds a `SF_WORKFLOW_BYPASS_*` variable set to `1`, it prints a warning naming it and posts a ticket comment listing the
+   variables and `SF_WORKFLOW_BYPASS_REASON` (or "no reason given"). That comment is the minimum; complete it with the evidence (template below) and, when a pull request exists, one line in its body.
+   If the comment cannot be posted, the warning says so and the transition goes on: record it by hand.
 5. **Value is exactly `1`.** `SF_WORKFLOW_BYPASS_*` variables are honored only when set to `1`.
 6. **Never bypass the CLI itself.** Editing the board by hand, or calling `gh project item-edit` or a raw GraphQL mutation, is not a hatch: it skips every guard at once and leaves no trace. A rejected
    transition is never fixed that way.
-7. **The automated listener ignores them.** The pull-request listener (`sync-pr-review`: Ready for review and merge events) runs `update-status` with the SRS, complexity, nature, PR-existence and
-   PR-merged variables cleared, so a variable present in a CI environment never reaches it.
+7. **The automated listener ignores them.** The pull-request listener (`sync-pr-review`: Ready for review and merge events) runs `update-status` with every `SF_WORKFLOW_BYPASS_*` variable cleared, so
+   a variable present in a CI environment never reaches it.
 
 Guards run in this order on `update-status`: SRS, complexity, Epic derived status, nature, incomplete children, bundled-PR parent, PR existence, PR merged. A refusal exits with code `2`.
 
@@ -47,7 +49,8 @@ The Epic derived-status guard (an aggregate Epic cannot enter AI testing, Human 
 
 ## Record to leave
 
-For every hatch that switches a guard off, post a ticket comment before or right after the command:
+`update-status` posts a short comment for every `SF_WORKFLOW_BYPASS_*` variable it honours, and `--bypass-srs` / `--skip-local-ci` record their reason. For every hatch that switches a guard off,
+complete that record with a ticket comment before or right after the command:
 
 ```text
 Escape hatch used: <hatch> on #<ticket> -> <target status or command>
@@ -102,7 +105,7 @@ When a pull request exists, add `Escape hatch: <hatch> (#<ticket>), see ticket c
 ### `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD`
 
 - **Protects:** a `nature:bundled-pr` child skips its own PR only if GitHub verifies a native sub-issue link to a delivery parent that is not an aggregate Epic. The PR lives on the parent.
-- **Applies to:** `update-status <child> Done` for `nature:bundled-pr` tickets. Fails closed. The refusal message does not mention the hatch.
+- **Applies to:** `update-status <child> Done` for `nature:bundled-pr` tickets. Fails closed; each refusal names the hatch.
 - **Legitimate:** the parent relation exists but cannot be verified through the API (outage), and you checked it by hand. A missing link is not a case for the hatch: add it with `link-subtask`.
 - **Illegitimate:** declaring a child bundled to avoid opening a PR; pointing a bundled child at an Epic.
 - **Record:** ticket comment naming the parent ticket and its PR.
@@ -140,8 +143,8 @@ When a pull request exists, add `Escape hatch: <hatch> (#<ticket>), see ticket c
   - `bootstrap-epic-<N>`: creating an Epic's own subtasks during rollout, before its page tree exists (for example `bootstrap-epic-174`).
   - Free text for a genuine one-off such as an emergency hotfix or infrastructure work, kept to a short phrase.
 - **Illegitimate:** any ticket that represents a product feature or requirement. The answer is "draft it first, then spawn". Also a reason invented to get past the refusal.
-- **Record:** the reason is echoed once (`(bypassing rule 8 — reason: ...)`) and is not stored on the ticket. State the same reason in the ticket body so it survives, and reuse the same token for the
-  same kind of work.
+- **Record:** automatic. The reason is echoed (`(bypassing rule 8 — reason: ...)`) and posted as a comment on the created ticket. If the comment cannot be posted, a warning asks you to add it by hand.
+  Reuse the same token for the same kind of work.
 
 ### `--bypass-reason <text>`
 
@@ -183,6 +186,7 @@ These are switches you may meet in the same scripts. They do not weaken a guard.
 
 ### Other switches
 
+- `SF_WORKFLOW_BYPASS_REASON="<text>"` is the reason `update-status` writes in its bypass comment. It switches nothing off on its own.
 - `SF_SKILL_NO_WARN=1` hides the "installed skill is stale" warning of the `sf` CLI.
 - `--force-full --force-reason "<reason>"` is passed by the generated validation workflow on release targets and scheduled or manual runs. It widens the impact-aware checks to the full suite, so it
   tightens validation instead of loosening it.

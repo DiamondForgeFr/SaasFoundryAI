@@ -205,8 +205,9 @@ Utilisez `workflow-cli.sh transition-drafting` ; le CLI refuse pour ces tickets 
 ## Échappatoires
 
 Le refus d’un garde-fou signifie qu’une condition ou une preuve manque : la réponse est de la fournir. Pour le cas rare où un garde-fou se trompe ou ne peut pas être satisfait, les scripts acceptent
-quelques échappatoires explicites. Positionnez la variable en ligne pour une seule commande, jamais avec `export`, et laissez un commentaire sur le ticket qui explique pourquoi. Les variables
-d’environnement n’affichent rien lorsqu’elles agissent : le commentaire est la piste d’audit. Un agent de développement n’en active jamais une de lui-même ; il s’arrête et vous demande.
+quelques échappatoires explicites. Positionnez la variable en ligne pour une seule commande, jamais avec `export`, accompagnée de `SF_WORKFLOW_BYPASS_REASON="<raison>"`. `update-status` affiche alors
+un avertissement qui nomme la variable et l’enregistre, avec la raison, dans un commentaire du ticket ; complétez ce commentaire avec les preuves. Un agent de développement n’en active jamais une de
+lui-même ; il s’arrête et vous demande.
 
 | Échappatoire                                                                 | Ce qu’elle désactive                                                                     |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -223,9 +224,9 @@ d’environnement n’affichent rien lorsqu’elles agissent : le commentaire es
 | `SF_CACHE_BUST=1`                                                            | Pas un garde-fou : recharge le schéma du board mis en cache                              |
 | `SF_DISABLE_SRS_HOOK=1`                                                      | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
 
-`--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`, et comptez sur `--skip-local-ci` pour
-écrire sa raison sur la pull request. Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à laisser, sont décrits dans `.claude/skills/sf-workflow/escape-hatches.md` de tout
-projet qui installe le workflow.
+`--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`. `--bypass-srs` la publie sur le ticket
+créé et `--skip-local-ci` l’écrit sur la pull request. Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à laisser, sont décrits dans
+`.claude/skills/sf-workflow/escape-hatches.md` de tout projet qui installe le workflow.
 
 ## Continuer
 

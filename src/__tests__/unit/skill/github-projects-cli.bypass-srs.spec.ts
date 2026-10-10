@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -28,6 +28,7 @@ async function buildSandbox(manifest: object): Promise<{
   // Minimal gh shim — the guard runs before any gh call, but we still need
   // the create-subtask happy path to succeed when the guard is disarmed.
   const shim = `#!/bin/bash
+printf '%s\\n' "$*" >> '${dir}/gh-calls.log'
 case "$1" in
   issue)
     case "$2" in
@@ -101,6 +102,14 @@ describe('sf-tool-github-projects — create-subtask Rule 8 guard', () => {
       expect(res.code).toBe(0)
       expect(res.stdout).toMatch(/bypassing rule 8/)
       expect(res.stdout).toMatch(/meta-srs-tooling/)
+    })
+
+    // #961 — the reason is kept on the ticket, not only echoed.
+    it('records the --bypass-srs reason as a comment on the created ticket', async () => {
+      const res = await runCli(['create-subtask', '42', 'Meta tooling', '--bypass-srs', 'meta-srs-tooling'], sandbox)
+      expect(res.code).toBe(0)
+      const calls = readFileSync(path.join(sandbox.dir, 'gh-calls.log'), 'utf8')
+      expect(calls).toMatch(/^issue comment 999 --body Created without an SRS source \(`--bypass-srs`\)\. Reason: meta-srs-tooling$/m)
     })
 
     it('accepts --bypass-srs with a body positional argument between parent and title', async () => {

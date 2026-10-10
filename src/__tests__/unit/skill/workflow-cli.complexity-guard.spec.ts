@@ -55,6 +55,9 @@ case "$1" in
   update-status)
     echo "✓ Ticket #$2 → $3"
     ;;
+  comment)
+    cat > '${toolLogPath}.comment'
+    ;;
   *)
     echo "fake-tool-cli: unhandled $*" >&2
     exit 0
@@ -143,6 +146,35 @@ describe('sf-workflow CLI — complexity guard', () => {
     expect(res.code).toBe(0)
     const toolCalls = readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))
     expect(toolCalls).toHaveLength(1)
+  })
+
+  // #961 — a bypass is announced and recorded on the ticket, never silent.
+  it('names the bypass on stderr and records it with its reason as a ticket comment', async () => {
+    const res = await runCli(['update-status', '42', 'Ready'], sandbox, {
+      FAKE_LABELS: '',
+      SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD: '1',
+      SF_WORKFLOW_BYPASS_REASON: 'label missing on the repository'
+    })
+    expect(res.code).toBe(0)
+    expect(res.stderr).toContain('SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD')
+    expect(res.stderr).toContain('label missing on the repository')
+    expect(readLog(sandbox.toolLogPath)).toContain('comment 42 -')
+    const comment = readFileSync(`${sandbox.toolLogPath}.comment`, 'utf8')
+    expect(comment).toContain('`SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`')
+    expect(comment).toContain('`Ready`')
+    expect(comment).toContain('Reason: label missing on the repository')
+  })
+
+  it('records "no reason given" when SF_WORKFLOW_BYPASS_REASON is absent', async () => {
+    await runCli(['update-status', '42', 'Ready'], sandbox, { FAKE_LABELS: '', SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD: '1' })
+    expect(readFileSync(`${sandbox.toolLogPath}.comment`, 'utf8')).toContain('Reason: no reason given')
+  })
+
+  it('posts no bypass comment when no bypass variable is set', async () => {
+    const res = await runCli(['update-status', '42', 'Ready'], sandbox, { FAKE_LABELS: 'complexity: low' })
+    expect(res.code).toBe(0)
+    expect(res.stderr).not.toContain('Guard bypass')
+    expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('comment'))).toEqual([])
   })
 
   it('fails open when the tool CLI errors on get-labels (offline / auth issue)', async () => {

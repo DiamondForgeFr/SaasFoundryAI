@@ -251,6 +251,31 @@ get_ticket_srs_label() {
   echo "$raw" | grep -E "$SRS_DRAFTING_LABELS_REGEX" | head -n1
 }
 
+# A guard bypass is never silent. Every SF_WORKFLOW_BYPASS_*=1 in the
+# environment is named on stderr and recorded as a comment on the ticket, with
+# SF_WORKFLOW_BYPASS_REASON when set, so escape-hatches.md's audit trail does
+# not depend on the operator remembering to write it. Recording is best effort:
+# a failed comment is reported, never turned into a refused transition.
+announce_bypasses() {
+  local ticket=$1 target=$2 var active=()
+  for var in $(compgen -v SF_WORKFLOW_BYPASS_); do
+    [[ "$var" == "SF_WORKFLOW_BYPASS_REASON" ]] && continue
+    [[ "${!var}" == "1" ]] && active+=("$var")
+  done
+  [[ ${#active[@]} -eq 0 ]] && return 0
+
+  local reason="${SF_WORKFLOW_BYPASS_REASON:-no reason given}"
+  echo -e "${YELLOW}⚠ Guard bypass for #${ticket} → '${target}': ${active[*]} (reason: ${reason})${NC}" >&2
+  {
+    echo "**Workflow guard bypassed** on the transition to \`${target}\`."
+    echo ""
+    for var in "${active[@]}"; do echo "- \`${var}=1\`"; done
+    echo ""
+    echo "Reason: ${reason}"
+  } | route_to_tool "$WORKFLOW_TOOL" comment "$ticket" - >/dev/null 2>&1 ||
+    echo -e "${YELLOW}  The bypass could not be recorded on #${ticket}; record it by hand.${NC}" >&2
+}
+
 check_srs_guard() {
   # Returns 0 if the caller may proceed, 1 if blocked (message already printed).
   local ticket=$1
@@ -528,20 +553,24 @@ check_bundled_pr_parent_guard() {
 
   nature=$(get_ticket_nature_label "$ticket") || {
     echo "Error: unable to verify ticket nature for bundled-PR transition." >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
     return 1
   }
   [[ "$nature" == "bundled-pr" ]] || return 0
 
   parent_number=$(get_native_parent_number "$ticket") || {
     echo "Error: unable to verify that bundled-PR ticket #${ticket} is a native child issue." >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
     return 1
   }
   parent_type=$(get_ticket_issue_type "$parent_number") || {
     echo "Error: unable to verify native parent #${parent_number} for bundled-PR ticket #${ticket}." >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
     return 1
   }
   if [[ "$parent_type" == "sf-epic" ]]; then
     echo "Error: bundled-PR ticket #${ticket} cannot use an aggregate sf-epic as its delivery parent." >&2
+    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
     return 1
   fi
   return 0
@@ -1227,7 +1256,7 @@ sync_pr_merge() {
       ;;
   esac
   (
-    unset SF_WORKFLOW_BYPASS_NATURE_GUARD SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD SF_WORKFLOW_BYPASS_PR_MERGED_GUARD SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD SF_WORKFLOW_BYPASS_SRS_GUARD
+    unset $(compgen -v SF_WORKFLOW_BYPASS_)
     export GH_REPO="$repo"
     bash "$SKILL_DIR/workflow-cli.sh" update-status "$ticket" "Done"
   )
@@ -1419,7 +1448,7 @@ sync_pr_review() {
   fi
   # The normal workflow command owns mutations and all status guards.
   (
-    unset SF_WORKFLOW_BYPASS_NATURE_GUARD SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD SF_WORKFLOW_BYPASS_SRS_GUARD
+    unset $(compgen -v SF_WORKFLOW_BYPASS_)
     export GH_REPO="$repo"
     bash "$SKILL_DIR/workflow-cli.sh" update-status "$ticket" "In review"
   )
@@ -1641,6 +1670,7 @@ case "$COMMAND" in
       echo "Usage: workflow-cli.sh update-status <ticket> <status-name>" >&2
       exit 1
     fi
+    announce_bypasses "$TICKET" "$TARGET"
     if ! check_srs_guard "$TICKET" "$TARGET"; then
       exit 2
     fi

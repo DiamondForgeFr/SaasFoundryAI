@@ -26,10 +26,20 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 1
 fi
 
+# Read one key of one step block. The block ends at the next step or top-level
+# key, so a key the step does not declare is never read from the step after it.
+step_value() {
+  awk -v step="$2" -v key="$3" -v q="'" '
+    /^[^ #]/ { inside = 0 }
+    /^  [^ #]/ { inside = ($1 == step ":"); next }
+    inside && $1 == key ":" { v = $2; gsub("[\"" q "]", "", v); print v; exit }
+  ' "$1"
+}
+
 # Extract configuration
-ANALYZE_ENABLED=$(grep -A 10 "^  analyze:" "$CONFIG_FILE" | grep "enabled:" | awk '{print $2}')
-ANALYZE_DEPTH=$(grep -A 10 "^  analyze:" "$CONFIG_FILE" | grep "depth:" | awk '{print $2}' | tr -d '"')
-ANALYZE_AGENTS=$(grep -A 10 "^  analyze:" "$CONFIG_FILE" | grep "agents:" | awk '{print $2}')
+ANALYZE_ENABLED=$(step_value "$CONFIG_FILE" analyze enabled)
+ANALYZE_DEPTH=$(step_value "$CONFIG_FILE" analyze depth)
+ANALYZE_AGENTS=$(step_value "$CONFIG_FILE" analyze agents)
 
 # Display guidance
 echo "==================================================================="
