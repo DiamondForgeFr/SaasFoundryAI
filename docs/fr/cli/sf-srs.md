@@ -67,6 +67,11 @@ le rejoignent.
 L'option `--complexity <niveau>` de `spawn` étiquette chaque Story créée dont la page FR n'indique pas de complexité (`bug`, `low`, `medium` ou `complex`) ; la complexité de la page FR l'emporte. Le
 résumé liste les Stories restées sans complexité, que le workflow refuse de sortir du Backlog.
 
+`--version` accepte le titre de la version, l’identifiant de sa page avec ou sans tirets, ou son URL, en `www.notion.so` comme en `app.notion.com`.
+
+Avant de créer quoi que ce soit, `spawn` cherche dans le dépôt les tickets qui portent déjà chaque FR, trois FR par recherche GitHub. GitHub autorise 30 recherches par minute ; quand une recherche
+atteint cette limite, `spawn` attend 60 secondes puis réessaie, jusqu’à trois fois. La variable `SF_SEARCH_RATE_LIMIT_WAIT` (en secondes) change cette attente.
+
 ## Options communes
 
 | Option              | Description                  | Valeur par défaut   |

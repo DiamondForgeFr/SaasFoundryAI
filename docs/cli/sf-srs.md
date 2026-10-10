@@ -66,6 +66,11 @@ is not supported yet.
 `--complexity <level>` on `spawn` labels every created Story whose FR page states no complexity (`bug`, `low`, `medium` or `complex`); an FR page's own Complexity wins. The summary lists any Story
 left without one, which the workflow refuses to move out of Backlog.
 
+`--version` accepts the version's title, its page id with or without dashes, or its URL from either `www.notion.so` or `app.notion.com`.
+
+Before creating anything, `spawn` searches the repository for tickets that already carry each FR, three FRs per GitHub search. GitHub allows 30 searches a minute; when a search hits that limit,
+`spawn` waits 60 seconds and retries, up to three times. Set `SF_SEARCH_RATE_LIMIT_WAIT` (seconds) to change the wait.
+
 ## Common options
 
 | Flag                | Description           | Default             |
