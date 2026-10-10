@@ -47,6 +47,8 @@ all three surfaces (`srs`, `tickets`, `codeComments`).
 - **Heavy validation before Human Testing:** run `npm test` and `npm run test:pre-push` explicitly during AI Testing and record the results. Commits only check what they touch, and iterative pushes do
   not run Docker.
 - **Commit + push BEFORE moving to AI Testing.** Code must be on remote before any testing phase.
+- **Escape hatches** (`SF_WORKFLOW_BYPASS_*`, `--bypass-srs`, `--skip-local-ci`) are used only when the developer says so, for the cases and with the record listed in
+  `.claude/skills/sf-workflow/escape-hatches.md`.
 - **Subtasks must be real GitHub issues** (not checkboxes), created via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`
 
 ### Migration framework — NEVER bypass

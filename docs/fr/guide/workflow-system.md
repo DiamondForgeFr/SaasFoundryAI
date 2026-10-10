@@ -202,6 +202,31 @@ AI draft → Human review → Spawning → Done
 
 Utilisez `workflow-cli.sh transition-drafting` ; le CLI refuse pour ces tickets les transitions du parcours de code.
 
+## Échappatoires
+
+Le refus d’un garde-fou signifie qu’une condition ou une preuve manque : la réponse est de la fournir. Pour le cas rare où un garde-fou se trompe ou ne peut pas être satisfait, les scripts acceptent
+quelques échappatoires explicites. Positionnez la variable en ligne pour une seule commande, jamais avec `export`, et laissez un commentaire sur le ticket qui explique pourquoi. Les variables
+d’environnement n’affichent rien lorsqu’elles agissent : le commentaire est la piste d’audit. Un agent de développement n’en active jamais une de lui-même ; il s’arrête et vous demande.
+
+| Échappatoire                                                                 | Ce qu’elle désactive                                                                     |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                             | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                      | Exige un label `complexity:` pour quitter Backlog                                        |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                          | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                        | Exige que chaque enfant natif soit Done avant le parent                                  |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                  | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                    | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                       | Exige une PR fusionnée vérifiée avant Done                                               |
+| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic` | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
+| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                             | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
+| `--skip-local-ci "<raison>"` sur `create-pr` et `ready-pr`                   | Exige que les statuts de CI locale déclarés soient verts sur le commit de tête           |
+| `SF_CACHE_BUST=1`                                                            | Pas un garde-fou : recharge le schéma du board mis en cache                              |
+| `SF_DISABLE_SRS_HOOK=1`                                                      | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
+
+`--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`, et comptez sur `--skip-local-ci` pour
+écrire sa raison sur la pull request. Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à laisser, sont décrits dans `.claude/skills/sf-workflow/escape-hatches.md` de tout
+projet qui installe le workflow.
+
 ## Continuer
 
 - [Référence du workflow équipe à 7 statuts](/fr/workflow/7-status-system)
