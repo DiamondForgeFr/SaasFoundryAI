@@ -12,10 +12,56 @@ import { DEFAULT_PORTS, isPortFree, resolvePorts } from '../../ports'
 
 jest.mock('../../run', () => ({ run: jest.fn(() => ({ code: 1, stdout: '', stderr: '' })) }))
 
-// A quiet range, far from anything this machine is likely to be running.
-const BASE = { db: 45435, api: 43500, web: 45173 }
-
 const held: Server[] = []
+
+/**
+ * #963 — the ports used to be literals between 43500 and 49032. On Linux that is inside the
+ * ephemeral range (32768–60999): any outgoing connection on a CI runner can hold one as its
+ * local port, and a test failed with EADDRINUSE before asserting anything. Each test now
+ * works in a run of ports the OS handed out and that was verified free just before.
+ */
+const RUN_LENGTH = 60
+
+function canBind(port: number, host: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer()
+    server.once('error', (error: NodeJS.ErrnoException) => resolve(error.code === 'EAFNOSUPPORT' || error.code === 'EADDRNOTAVAIL'))
+    server.listen(port, host, () => server.close(() => resolve(true)))
+  })
+}
+
+function osPort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once('error', reject)
+    server.listen(0, '0.0.0.0', () => {
+      const { port } = server.address() as { port: number }
+      server.close(() => resolve(port))
+    })
+  })
+}
+
+async function freeRun(length: number): Promise<number> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const start = await osPort()
+    if (start + length > 65000) continue
+    let free = true
+    for (let port = start; port < start + length && free; port++) {
+      free = (await canBind(port, '0.0.0.0')) && (await canBind(port, '::'))
+    }
+    if (free) return start
+  }
+  throw new Error(`No run of ${length} free ports found`)
+}
+
+// Every port a test touches is an offset from P, set before each test.
+let P = 0
+let BASE = { db: 0, api: 0, web: 0 }
+
+beforeEach(async () => {
+  P = await freeRun(RUN_LENGTH)
+  BASE = { db: P, api: P + 10, web: P + 20 }
+})
 
 function hold(port: number, host = '0.0.0.0'): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -81,23 +127,23 @@ describe('a taken default moves to the next free port', () => {
     await hold(BASE.web)
     await hold(BASE.web + 1)
 
-    await expect(resolve({ scanLimit: 2 })).rejects.toThrow(/Could not find a free web port between 45173 and 45174/)
+    await expect(resolve({ scanLimit: 2 })).rejects.toThrow(new RegExp(`Could not find a free web port between ${BASE.web} and ${BASE.web + 1}`))
   })
 })
 
 describe('an explicit flag is honoured or refused, never moved', () => {
   it('uses the requested port when it is free', async () => {
-    const { api } = await resolve({ requested: { api: '43999' } })
+    const { api } = await resolve({ requested: { api: String(P + 30) } })
 
-    expect(api.port).toBe(43999)
+    expect(api.port).toBe(P + 30)
     expect(api.movedFrom).toBeUndefined()
   })
 
   it('fails instead of quietly picking another one', async () => {
-    await hold(43999)
+    await hold(P + 30)
 
-    await expect(resolve({ requested: { api: '43999' } })).rejects.toThrow(/Port 43999 is already in use by another process/)
-    await expect(resolve({ requested: { api: '43999' } })).rejects.toThrow(/requested explicitly with --api-port, so it will not be moved/)
+    await expect(resolve({ requested: { api: String(P + 30) } })).rejects.toThrow(new RegExp(`Port ${P + 30} is already in use by another process`))
+    await expect(resolve({ requested: { api: String(P + 30) } })).rejects.toThrow(/requested explicitly with --api-port, so it will not be moved/)
   })
 
   it('rejects a value that is not a port', async () => {
@@ -121,11 +167,11 @@ describe('the three ports are resolved against each other', () => {
 
 describe('a database the project does not host is not ours to move', () => {
   it.each(['credentials', 'manual'] as const)('leaves an explicit %s port alone even when something local holds it', async (dbSetup) => {
-    await hold(46543)
+    await hold(P + 31)
 
-    const { db } = await resolve({ dbSetup, requested: { db: '46543' } })
+    const { db } = await resolve({ dbSetup, requested: { db: String(P + 31) } })
 
-    expect(db.port).toBe(46543)
+    expect(db.port).toBe(P + 31)
     expect(db.movedFrom).toBeUndefined()
   })
 
@@ -163,14 +209,14 @@ describe('the scan stops at the end of the port range', () => {
 
 describe('isPortFree answers by trying to take the port', () => {
   it('sees a listener that no container publishes', async () => {
-    await hold(46000)
+    await hold(P + 32)
 
-    expect(await isPortFree(46000)).toBe(false)
+    expect(await isPortFree(P + 32)).toBe(false)
   })
 
   it('reports a quiet port as free, and does not keep it', async () => {
-    expect(await isPortFree(46001)).toBe(true)
-    expect(await isPortFree(46001)).toBe(true)
+    expect(await isPortFree(P + 33)).toBe(true)
+    expect(await isPortFree(P + 33)).toBe(true)
   })
 
   /**
@@ -186,18 +232,18 @@ describe('isPortFree answers by trying to take the port', () => {
     ['IPv6 loopback only', '::1']
   ])('sees a listener bound to %s', async (_label, host) => {
     try {
-      await hold(46100, host)
+      await hold(P + 34, host)
     } catch {
       // No IPv6 on this machine — nothing to detect, and nothing this test can assert.
       return
     }
 
-    expect(await isPortFree(46100)).toBe(false)
+    expect(await isPortFree(P + 34)).toBe(false)
   })
 
   it('does not read a missing address family as a holder', async () => {
     // Every probe host must be attempted; an unbindable one contributes nothing either way.
-    expect(await isPortFree(46101)).toBe(true)
+    expect(await isPortFree(P + 35)).toBe(true)
   })
 })
 
@@ -219,25 +265,25 @@ describe('storage ports are resolved like every other published port (#623)', ()
   })
 
   it('resolves both published ports when the project hosts its own MinIO', async () => {
-    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: 49000, s3Console: 49001 } })
-    expect(resolved.s3?.port).toBe(49000)
-    expect(resolved.s3Console?.port).toBe(49001)
+    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: P + 40, s3Console: P + 41 } })
+    expect(resolved.s3?.port).toBe(P + 40)
+    expect(resolved.s3Console?.port).toBe(P + 41)
     expect(resolved.s3?.movedFrom).toBeUndefined()
   })
 
   it('moves off a taken storage port and says which default it left', async () => {
-    await hold(49010)
-    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: 49010, s3Console: 49020 } })
-    expect(resolved.s3?.port).toBe(49011)
-    expect(resolved.s3?.movedFrom).toBe(49010)
+    await hold(P + 42)
+    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: P + 42, s3Console: P + 44 } })
+    expect(resolved.s3?.port).toBe(P + 43)
+    expect(resolved.s3?.movedFrom).toBe(P + 42)
   })
 
   it('never lands the console on the port the S3 API just moved to', async () => {
     // The two defaults are adjacent, so a naive scan would hand 9001 to both.
-    await hold(49030)
-    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: 49030, s3Console: 49031 } })
-    expect(resolved.s3?.port).toBe(49031)
+    await hold(P + 50)
+    const resolved = await resolvePorts({ dbSetup: 'docker', s3Setup: 'docker', defaults: { ...BASE, s3: P + 50, s3Console: P + 51 } })
+    expect(resolved.s3?.port).toBe(P + 51)
     expect(resolved.s3Console?.port).not.toBe(resolved.s3?.port)
-    expect(resolved.s3Console?.port).toBe(49032)
+    expect(resolved.s3Console?.port).toBe(P + 52)
   })
 })
