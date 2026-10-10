@@ -49,6 +49,13 @@ const stackManifest = (): SaaSFoundryManifest => ({
   }
 })
 
+/**
+ * A whole `sf update` profile transition. Alone it takes about 2 minutes; a full `npm test`
+ * beside Docker builds took it past the former 120 s budget (#892). The budget is for a
+ * loaded machine, not a fast one.
+ */
+const FULL_TRANSITION_BUDGET_MS = 300_000
+
 describe('updateCommand profile transition', () => {
   let projectDir: string
   let originalCwd: string
@@ -65,7 +72,8 @@ describe('updateCommand profile transition', () => {
   afterEach(async () => {
     process.exitCode = originalExitCode
     process.chdir(originalCwd)
-    await rm(projectDir, { recursive: true, force: true })
+    // A timed-out transition may still be writing here: retry instead of failing on ENOTEMPTY (#892)
+    await rm(projectDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
     jest.restoreAllMocks()
   })
 
@@ -413,44 +421,52 @@ describe('updateCommand profile transition', () => {
     expect(await readFile('.saasfoundry.json')).toEqual(before)
   })
 
-  it('atomically adopts the technical stack and commits a full-profile manifest', async () => {
-    const before = Buffer.from(JSON.stringify(harnessManifest(), null, 2))
-    await writeFile('.saasfoundry.json', before)
-    await writeEmptyTransitionJournal(before, 'applying')
-    jest.spyOn(console, 'log').mockImplementation(() => {})
+  it(
+    'atomically adopts the technical stack and commits a full-profile manifest',
+    async () => {
+      const before = Buffer.from(JSON.stringify(harnessManifest(), null, 2))
+      await writeFile('.saasfoundry.json', before)
+      await writeEmptyTransitionJournal(before, 'applying')
+      jest.spyOn(console, 'log').mockImplementation(() => {})
 
-    await updateCommand(technicalOptions)
+      await updateCommand(technicalOptions)
 
-    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest
-    expect(classifyProjectCapabilities(manifest).effectiveProfile).toBe('full')
-    expect(manifest.structure).toBe('monorepo')
-    expect(manifest.modules).toMatchObject({
-      harness: { managed: true },
-      email: { provider: 'none' },
-      dbSetup: 'manual',
-      s3Setup: 'manual',
-      includeAnalytics: false
-    })
-    expect(await readFile('package.json', 'utf8')).toContain('"name": "acme"')
-    expect(await readFile('apps/api/package.json', 'utf8')).toContain('"name": "acme-api"')
-    expect(await readFile('apps/web/package.json', 'utf8')).toContain('"name": "acme-web"')
-    await expect(readFile(TECHNICAL_TRANSITION_JOURNAL)).rejects.toMatchObject({ code: 'ENOENT' })
-  }, 120_000)
+      const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest
+      expect(classifyProjectCapabilities(manifest).effectiveProfile).toBe('full')
+      expect(manifest.structure).toBe('monorepo')
+      expect(manifest.modules).toMatchObject({
+        harness: { managed: true },
+        email: { provider: 'none' },
+        dbSetup: 'manual',
+        s3Setup: 'manual',
+        includeAnalytics: false
+      })
+      expect(await readFile('package.json', 'utf8')).toContain('"name": "acme"')
+      expect(await readFile('apps/api/package.json', 'utf8')).toContain('"name": "acme-api"')
+      expect(await readFile('apps/web/package.json', 'utf8')).toContain('"name": "acme-web"')
+      await expect(readFile(TECHNICAL_TRANSITION_JOURNAL)).rejects.toMatchObject({ code: 'ENOENT' })
+    },
+    FULL_TRANSITION_BUDGET_MS
+  )
 
-  it('migrates a legacy harness manifest inside the atomic full-profile commit', async () => {
-    const legacy = harnessManifest()
-    delete legacy.modules!.harness!.managed
-    await writeFile('.saasfoundry.json', JSON.stringify(legacy, null, 2))
-    jest.spyOn(console, 'log').mockImplementation(() => {})
+  it(
+    'migrates a legacy harness manifest inside the atomic full-profile commit',
+    async () => {
+      const legacy = harnessManifest()
+      delete legacy.modules!.harness!.managed
+      await writeFile('.saasfoundry.json', JSON.stringify(legacy, null, 2))
+      jest.spyOn(console, 'log').mockImplementation(() => {})
 
-    await updateCommand(technicalOptions)
+      await updateCommand(technicalOptions)
 
-    const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest & { modules: Record<string, unknown> }
-    expect(manifest.manifestVersion).toBe(targetManifestVersion())
-    expect(manifest.$schema).toBe(manifestSchemaUrl)
-    expect(manifest.modules.harness).toMatchObject({ managed: true })
-    expect(classifyProjectCapabilities(manifest).effectiveProfile).toBe('full')
-  }, 120_000)
+      const manifest = JSON.parse(await readFile('.saasfoundry.json', 'utf8')) as SaaSFoundryManifest & { modules: Record<string, unknown> }
+      expect(manifest.manifestVersion).toBe(targetManifestVersion())
+      expect(manifest.$schema).toBe(manifestSchemaUrl)
+      expect(manifest.modules.harness).toMatchObject({ managed: true })
+      expect(classifyProjectCapabilities(manifest).effectiveProfile).toBe('full')
+    },
+    FULL_TRANSITION_BUDGET_MS
+  )
 
   it('cleans a committed recovery journal before returning an already-full no-op', async () => {
     const full = stackManifest()
