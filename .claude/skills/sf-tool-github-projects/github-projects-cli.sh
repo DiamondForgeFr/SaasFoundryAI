@@ -1288,19 +1288,42 @@ cmd_inspect_srs_tickets() {
   }
   native_issues=$(printf '%s' "$children_pages" | jq -ce '[.[][]]') || return 1
 
-  # GitHub's issue index is searched once per requested FR instead of downloading
-  # the repository's complete issue history. Native children are merged back in
-  # independently, so a stale search index can never hide an existing child.
-  while IFS= read -r request; do
-    [ -z "$request" ] && continue
-    fr_id=$(printf '%s' "$request" | jq -er '.frId') || return 1
-    identity=$(printf '%s' "$request" | jq -er '.identity') || return 1
-    query="repo:${repo} is:issue in:title,body (\"${fr_id}\" OR \"${identity}\")"
-    search_pages=$(gh api --method GET --paginate --slurp -H "Accept: application/vnd.github+json" \
-      search/issues -f "q=${query}" -f per_page=100 2>/dev/null) || {
-        echo "Error: could not inspect repository issues for SRS evidence." >&2
-        return 1
-      }
+  # GitHub's issue index is searched instead of downloading the repository's complete
+  # issue history. Native children are merged back in independently, so a stale search
+  # index can never hide an existing child.
+  #
+  # The search API allows 30 requests a minute, and a 17-FR version spent 34 of them on a
+  # dry run and the real run, then stopped with nothing created (#952). Up to three FRs
+  # share one query — a query takes at most five OR and 256 characters — and a
+  # rate-limited search waits for the window to reset instead of aborting.
+  local queries prefix="repo:${repo} is:issue in:title,body " search_error attempt
+  queries=$(printf '%s' "$requests" | jq -r --arg prefix "$prefix" '
+    def term: "\"\(.frId)\" OR \"\(.identity)\"";
+    def query(group): $prefix + "(" + (group | map(term) | join(" OR ")) + ")";
+    reduce .[] as $request ([[]];
+      (.[-1] + [$request]) as $grown
+      | if (.[-1] | length) < 3 and (query($grown) | length) <= 256 then .[:-1] + [$grown] else . + [[$request]] end)
+    | map(select(length > 0)) | .[] | query(.)
+  ') || return 1
+  while IFS= read -r query; do
+    [ -z "$query" ] && continue
+    for attempt in 1 2 3 4; do
+      search_error=$(mktemp)
+      if search_pages=$(gh api --method GET --paginate --slurp -H "Accept: application/vnd.github+json" \
+        search/issues -f "q=${query}" -f per_page=100 2>"$search_error"); then
+        rm -f "$search_error"
+        break
+      fi
+      if grep -qi 'rate limit' "$search_error" && [ "$attempt" -lt 4 ]; then
+        echo "  GitHub search rate limit reached; waiting ${SF_SEARCH_RATE_LIMIT_WAIT:-60}s before retrying (${attempt}/3)." >&2
+        rm -f "$search_error"
+        sleep "${SF_SEARCH_RATE_LIMIT_WAIT:-60}"
+        continue
+      fi
+      rm -f "$search_error"
+      echo "Error: could not inspect repository issues for SRS evidence." >&2
+      return 1
+    done
     searched=$(jq -cn --argjson current "$searched" --argjson pages "$search_pages" '
       if ($pages | type) != "array" or any($pages[]; (.items | type) != "array")
       then error("Expected paginated issue-search responses")
@@ -1310,7 +1333,7 @@ cmd_inspect_srs_tickets() {
       echo "Error: invalid repository issue-search response for SRS evidence." >&2
       return 1
     }
-  done < <(printf '%s' "$requests" | jq -c '.[]')
+  done <<<"$queries"
 
   candidates=$(jq -cn --arg parent "$parent" --argjson native "$children" --argjson nativeIssues "$native_issues" --argjson searched "$searched" --argjson requested "$requests" '
     ($nativeIssues + $searched)
