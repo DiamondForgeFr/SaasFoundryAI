@@ -118,7 +118,7 @@ Two kinds of keys exist, and the difference matters when you edit one:
 | ---------------------------- | --------------------------- | -------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                       | string                      | yes      | agent                          | The level identifier. Must equal the file name without `.yml` and the label suffix.                                                                                  |
 | `label`                      | string                      | yes      | agent                          | Display label with its emoji. `detect-complexity.sh` prints its own copy of these labels; it does not read this key.                                                 |
-| `description`                | string, double-quoted       | yes      | `scripts/detect-complexity.sh` | One line printed as "What this means" after a suggestion. Parsed with `grep` + `sed`, which strip only **double** quotes (see the limitations below).                |
+| `description`                | string, quoted              | yes      | `scripts/detect-complexity.sh` | One line printed as "What this means" after a suggestion. Parsed with `grep` + `sed`, which strip one pair of double or single quotes.                               |
 | `skipStatuses`               | list of status names        | yes      | agent                          | Statuses the level may skip. `[]` means none. Only `bug` uses it (`Backlog`). No script enforces it: the status guards are in `workflow-cli.sh` and ignore this key. |
 | `steps.analyze.enabled`      | boolean                     | yes      | `scripts/analyze.sh`           | `false` makes the script print "Analysis SKIPPED" and exit.                                                                                                          |
 | `steps.analyze.depth`        | string or `null`            | yes      | `scripts/analyze.sh`           | `minimal`, `standard` or `deep` (`null` when disabled). Printed as the analysis depth.                                                                               |
@@ -146,26 +146,21 @@ or a gap in the agent's guidance).
 
 ### How the scripts read a profile
 
-The scripts do not parse YAML. They run `grep` and `awk` on the file:
+The scripts do not parse YAML. `analyze.sh` and `plan.sh` read one key of one step block with a small `awk` function, `step_value`:
 
 ```bash
-# scripts/analyze.sh (plan.sh does the same for "  plan:")
-grep -A 10 "^  analyze:" "$CONFIG_FILE" | grep "enabled:" | awk '{print $2}'
+# scripts/analyze.sh (plan.sh reads the "plan" block the same way)
+ANALYZE_ENABLED=$(step_value "$CONFIG_FILE" analyze enabled)
 ```
+
+The block starts at its two-space header and ends at the next two-space header or top-level key, so a key is never read from a neighbouring block.
 
 Consequences to respect when editing:
 
 - The block header must be indented exactly two spaces (`  analyze:`, `  plan:`), under `steps:`.
-- The keys are matched by name within the 10 lines that follow the header, and the value is the second whitespace-separated token of the line. Write scalar values without spaces; a trailing
-  `# comment` is fine.
-- `description` must be wrapped in double quotes, on one line, for `detect-complexity.sh`.
-- Do not reorder the blocks or insert long comments between a header and its keys.
-
-Limitations of this reader, kept visible rather than hidden:
-
-- Because the 10-line window runs past the end of a block, `enabled`, `depth`, `agents` and `approval` can be read from the **next** block too. For `bug`, `analyze.sh` therefore receives three `false`
-  values instead of one and does not take its "SKIPPED" branch. Keep this in mind before relying on `enabled: false`.
-- A formatter that rewrites `description: "..."` with single quotes (Prettier does this to YAML) makes `detect-complexity.sh` print the key with its quotes. Keep the double quotes.
+- The keys are indented four spaces under their header and matched by name; the value is the second whitespace-separated token of the line, with its quotes removed. Write scalar values without spaces;
+  a trailing `# comment` is fine.
+- `description` stays on one line, in double or single quotes, for `detect-complexity.sh`. Either style works, so a formatter that rewrites the quotes (Prettier does this to YAML) changes nothing.
 
 ### Where the level names are fixed
 
@@ -186,7 +181,7 @@ The four level names are not discovered from the directory. They are repeated in
 ```yaml
 name: medium # agent: must equal the file name and the label suffix
 label: '🟡 Medium Complexity' # agent: display only
-description: 'Standard feature with structured analysis and planning' # detect-complexity.sh: keep DOUBLE quotes in the file
+description: 'Standard feature with structured analysis and planning' # detect-complexity.sh: one line, either quote style
 
 skipStatuses: [] # agent: no status may be skipped
 
@@ -232,7 +227,7 @@ minimal analyze and plan without approval; `complex` adds mandatory approval, ma
 
 **Changing the behaviour of an existing level** (the common case): edit its `.yml`.
 
-1. Edit only the values; keep the structure, the two-space indentation of `analyze:` and `plan:`, and the double-quoted `description`.
+1. Edit only the values; keep the structure, the two-space indentation of `analyze:` and `plan:`, and the one-line quoted `description`.
 2. Mirror the change in the "Adaptive Steps" summary above, and in `aiInstructions` when the agent's guidance changes.
 3. Check what the scripts read: `bash scripts/analyze.sh 0 <level>` and `bash scripts/plan.sh 0 <level>` print the values they extracted.
 4. The profiles are part of the installed skill: a skill refresh can overwrite a local edit, so keep project-specific changes under review in version control.

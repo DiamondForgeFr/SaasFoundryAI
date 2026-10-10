@@ -555,6 +555,7 @@ cmd_create_subtask() {
     echo -e "  It exists and is usable; it is not linked to #${PARENT_NUMBER}." >&2
     exit 1
   fi
+  record_srs_bypass "$CHILD_NUMBER" "$BYPASS_SRS_REASON"
 
   VIEW_STATUS=0
   CHILD_NODE_ID=$(gh issue view "$CHILD_NUMBER" --json id --jq ".id") || VIEW_STATUS=$?
@@ -707,6 +708,7 @@ cmd_create_epic() {
 
   echo -e "${GREEN}✓ Epic #${EPIC_NUMBER} created${NC}"
   echo "Issue URL: $ISSUE_URL"
+  record_srs_bypass "$EPIC_NUMBER" "$BYPASS_SRS_REASON"
 
   # Best-effort type chip, same policy as create-subtask: a missing org type must
   # not fail the creation — the issue exists and is usable either way.
@@ -841,6 +843,7 @@ cmd_create_ticket() {
   fi
   echo -e "${GREEN}✓ Ticket #${TICKET_NUMBER} created${NC}"
   echo "Issue URL: $ISSUE_URL"
+  record_srs_bypass "$TICKET_NUMBER" "$BYPASS_SRS_REASON"
 
   # Each step below is reported; the ticket exists whatever happens next, so a failed
   # step names the command that finishes it rather than pretending nothing was done
@@ -877,6 +880,15 @@ cmd_create_ticket() {
 # ───────────────────────────────────────────────────────────────────────────
 # Command: comment — record a note on a ticket (body read from a file, or stdin with -)
 # ───────────────────────────────────────────────────────────────────────────
+
+# A ticket created with --bypass-srs carries its reason as a comment, the audit
+# trail escape-hatches.md asks for. Best effort: the ticket exists either way.
+record_srs_bypass() {
+  local number=$1 reason=$2
+  [ -n "$reason" ] || return 0
+  gh issue comment "$number" --body "Created without an SRS source (\`--bypass-srs\`). Reason: ${reason}" >/dev/null 2>&1 ||
+    echo -e "${YELLOW}  The --bypass-srs reason could not be recorded on #${number}; record it by hand.${NC}" >&2
+}
 
 cmd_comment() {
   if [ "$#" -ne 2 ]; then

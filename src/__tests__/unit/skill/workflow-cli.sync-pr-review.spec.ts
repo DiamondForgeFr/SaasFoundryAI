@@ -81,7 +81,7 @@ case "$1" in
   get-labels) [ "$LABEL_FAIL" = 1 ] && exit 1; printf '%s\\n' "$LABELS";;
   update-status) echo "Ticket #$2 → $3";;
   get-issue-type) printf '{"name":"sf-issue"}';;
-  list-incomplete-children) printf '[]';;
+  list-incomplete-children) printf '%s' "\${CHILDREN:-[]}";;
   *) exit 1;;
 esac
 `
@@ -278,6 +278,18 @@ esac
       const result = await merge()
       expect(result.code).toBe(0)
       expect(calls()).toContain('tool update-status 42 Done')
+    })
+
+    // #961 — every SF_WORKFLOW_BYPASS_* variable is cleared, not only the first five.
+    it('ignores a children-guard bypass present in the listener environment', async () => {
+      const result = await merge({
+        CHILDREN: JSON.stringify([{ number: 43, title: 'Open child', status: 'In progress' }]),
+        SF_WORKFLOW_BYPASS_CHILDREN_GUARD: '1',
+        SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD: '1'
+      })
+      expect(result.code).not.toBe(0)
+      expect(changedTicket()).toBe(false)
+      expect(calls()).not.toContain('tool comment')
     })
 
     it('does not let a merge skip review', async () => {
