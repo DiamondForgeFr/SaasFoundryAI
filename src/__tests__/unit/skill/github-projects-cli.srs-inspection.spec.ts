@@ -58,6 +58,12 @@ if [ "$1" = api ] && [[ "$*" == *'/parent'* ]]; then
   exit 0
 fi
 if [ "$1" = api ] && [[ "$*" == *'search/issues'* ]]; then
+  [ -n "$SEARCH_LOG" ] && printf '%s\\n' "$*" >> "$SEARCH_LOG"
+  if [ -n "$RATE_LIMIT_ONCE" ] && [ ! -f "$RATE_LIMIT_ONCE" ]; then
+    : > "$RATE_LIMIT_ONCE"
+    echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2
+    exit 1
+  fi
   if [[ "$*" != *'q=repo:Fake/repo is:issue in:title,body ("FR-MAH-'*' OR "'*'")'* ]]; then
     echo "unscoped issue search: $*" >&2
     exit 1
@@ -98,6 +104,39 @@ describe('github-projects CLI — SRS ticket inspection and recovery', () => {
         expect.objectContaining({ number: '11', state: 'OPEN', boardStatus: 'Backlog', parentNumber: null, frIds: ['FR-MAH-002'] })
       ])
       expect(JSON.parse(stdout)[0]).not.toHaveProperty('body')
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  // #952 — one search per FR spent GitHub's 30-a-minute search budget on a 17-FR version
+  it('searches several FRs per query, within the search syntax limits', async () => {
+    const s = await sandbox()
+    const log = path.join(s.dir, 'searches')
+    try {
+      const frs = Array.from({ length: 7 }, (_, i) => ['--fr', `FR-MAH-${String(i + 1).padStart(3, '0')}=https://www.notion.so/${String(i).repeat(32).slice(0, 32)}`]).flat()
+      await execFileP('/bin/bash', [CLI, 'inspect-srs-tickets', '42', ...frs], { cwd: s.dir, env: { ...s.env, SEARCH_LOG: log } })
+      const queries = (await import('fs')).readFileSync(log, 'utf8').trim().split('\n')
+      expect(queries).toHaveLength(3)
+      for (const query of queries) {
+        const q = query.match(/q=(.*?) -f per_page/)![1]
+        expect(q.length).toBeLessThanOrEqual(256)
+        expect((q.match(/ OR /g) ?? []).length).toBeLessThanOrEqual(5)
+      }
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  it('waits and retries a search refused by the rate limit instead of aborting', async () => {
+    const s = await sandbox()
+    try {
+      const { stdout, stderr } = await execFileP('/bin/bash', [CLI, 'inspect-srs-tickets', '42', '--fr', 'FR-MAH-001=https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], {
+        cwd: s.dir,
+        env: { ...s.env, RATE_LIMIT_ONCE: path.join(s.dir, 'limited'), SF_SEARCH_RATE_LIMIT_WAIT: '0' }
+      })
+      expect(stderr).toContain('GitHub search rate limit reached')
+      expect(JSON.parse(stdout)).toEqual(expect.arrayContaining([expect.objectContaining({ number: '10' })]))
     } finally {
       await s.cleanup()
     }
