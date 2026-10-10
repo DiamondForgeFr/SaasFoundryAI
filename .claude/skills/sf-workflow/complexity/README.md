@@ -103,6 +103,150 @@ aiInstructions: |
   Guidance for AI on how to approach this complexity level
 ```
 
+## Schema
+
+The format above is the summary; this section is the reference. A profile is one file, `complexity/<name>.yml`, where `<name>` is the value of the ticket label `complexity: <name>` and equals the
+`name` key.
+
+Two kinds of keys exist, and the difference matters when you edit one:
+
+- **Script-read** keys are parsed by a shell script. Their exact spelling, indentation and position count (see [How the scripts read a profile](#how-the-scripts-read-a-profile)).
+- **Agent-read** keys are read by the coding agent when it opens the file (the `prepare` and `test` commands tell it to follow the profile). No script reads them. Changing one changes the guidance the
+  agent works from, not the behaviour of any guard.
+
+| Key                          | Type                        | Required | Read by                        | Meaning                                                                                                                                                              |
+| ---------------------------- | --------------------------- | -------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                       | string                      | yes      | agent                          | The level identifier. Must equal the file name without `.yml` and the label suffix.                                                                                  |
+| `label`                      | string                      | yes      | agent                          | Display label with its emoji. `detect-complexity.sh` prints its own copy of these labels; it does not read this key.                                                 |
+| `description`                | string, double-quoted       | yes      | `scripts/detect-complexity.sh` | One line printed as "What this means" after a suggestion. Parsed with `grep` + `sed`, which strip only **double** quotes (see the limitations below).                |
+| `skipStatuses`               | list of status names        | yes      | agent                          | Statuses the level may skip. `[]` means none. Only `bug` uses it (`Backlog`). No script enforces it: the status guards are in `workflow-cli.sh` and ignore this key. |
+| `steps.analyze.enabled`      | boolean                     | yes      | `scripts/analyze.sh`           | `false` makes the script print "Analysis SKIPPED" and exit.                                                                                                          |
+| `steps.analyze.depth`        | string or `null`            | yes      | `scripts/analyze.sh`           | `minimal`, `standard` or `deep` (`null` when disabled). Printed as the analysis depth.                                                                               |
+| `steps.analyze.agents`       | integer                     | yes      | `scripts/analyze.sh`           | Number of parallel exploration agents to launch (`0` = direct tools only). Printed.                                                                                  |
+| `steps.analyze.agentTypes`   | list of strings             | no       | agent                          | Agent types worth launching, for example `explore-codebase`, `explore-docs`, `websearch`.                                                                            |
+| `steps.plan.enabled`         | boolean                     | yes      | `scripts/plan.sh`              | `false` makes the script print "Planning SKIPPED" and exit.                                                                                                          |
+| `steps.plan.depth`           | string or `null`            | yes      | `scripts/plan.sh`              | `minimal`, `detailed` or `comprehensive` (`null` when disabled). Printed.                                                                                            |
+| `steps.plan.approval`        | boolean                     | yes      | `scripts/plan.sh`              | Whether the user must approve the plan before implementation. Printed as "Approval required".                                                                        |
+| `steps.subtasks.enabled`     | boolean                     | yes      | agent                          | Whether the work is split into subtasks (real tickets, created with `create-subtask`).                                                                               |
+| `steps.subtasks.mandatory`   | boolean                     | yes      | agent                          | Whether skipping subtasks is a violation.                                                                                                                            |
+| `steps.subtasks.threshold`   | integer                     | no       | agent                          | Number of impacted files above which subtasks are created although `enabled` is `false` (`low` uses `3`).                                                            |
+| `steps.subtasks.detailed`    | boolean                     | no       | agent                          | More granular subtasks (`complex` sets it).                                                                                                                          |
+| `steps.examine.enabled`      | boolean                     | yes      | agent                          | Adversarial review. The `test` command runs `scripts/examine.sh` when the level is literally `complex`, whatever this key says.                                      |
+| `steps.examine.agents`       | integer                     | no       | agent                          | Parallel review agents (`complex` sets `3`).                                                                                                                         |
+| `steps.examine.checks`       | list of strings             | no       | agent                          | Review lenses: `security`, `logic`, `performance`.                                                                                                                   |
+| `steps.tests.type`           | string                      | yes      | agent                          | `regression` (bug), `optional`, `recommended` or `mandatory`.                                                                                                        |
+| `steps.tests.mandatory`      | boolean                     | yes      | agent                          | Whether the tests phase can be skipped.                                                                                                                              |
+| `testing.unit` `testing.e2e` | boolean                     | yes      | agent                          | Which test kinds the level expects.                                                                                                                                  |
+| `testing.regression`         | boolean                     | yes      | agent                          | Whether a regression test is expected.                                                                                                                               |
+| `testing.coverage`           | integer (percent) or `null` | yes      | agent                          | Minimum coverage target; `null` means none. Only `complex` sets one (`80`).                                                                                          |
+| `aiInstructions`             | block scalar (`\|`)         | yes      | agent                          | Phase-by-phase guidance for the agent: Analyze, Plan, Execute, Validate, Examine, Tests, and optionally Save Mode or Output.                                         |
+
+"Required" means every shipped profile sets the key and the scripts or the agent expect it; nothing validates a profile against a schema, so a missing key fails silently (an empty value in a script,
+or a gap in the agent's guidance).
+
+### How the scripts read a profile
+
+The scripts do not parse YAML. They run `grep` and `awk` on the file:
+
+```bash
+# scripts/analyze.sh (plan.sh does the same for "  plan:")
+grep -A 10 "^  analyze:" "$CONFIG_FILE" | grep "enabled:" | awk '{print $2}'
+```
+
+Consequences to respect when editing:
+
+- The block header must be indented exactly two spaces (`  analyze:`, `  plan:`), under `steps:`.
+- The keys are matched by name within the 10 lines that follow the header, and the value is the second whitespace-separated token of the line. Write scalar values without spaces; a trailing
+  `# comment` is fine.
+- `description` must be wrapped in double quotes, on one line, for `detect-complexity.sh`.
+- Do not reorder the blocks or insert long comments between a header and its keys.
+
+Limitations of this reader, kept visible rather than hidden:
+
+- Because the 10-line window runs past the end of a block, `enabled`, `depth`, `agents` and `approval` can be read from the **next** block too. For `bug`, `analyze.sh` therefore receives three `false`
+  values instead of one and does not take its "SKIPPED" branch. Keep this in mind before relying on `enabled: false`.
+- A formatter that rewrites `description: "..."` with single quotes (Prettier does this to YAML) makes `detect-complexity.sh` print the key with its quotes. Keep the double quotes.
+
+### Where the level names are fixed
+
+The four level names are not discovered from the directory. They are repeated in code, so a new file in `complexity/` is not picked up on its own:
+
+| Place                                                                      | What it fixes                                                                                        |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `github-projects-cli.sh` `set-complexity` and `create-ticket --complexity` | The accepted values (`bug`, `low`, `medium`, `complex`). `retag` goes through this command.          |
+| `workflow-cli.sh` complexity guard and the `sync-pr-review` label check    | The label values the guards recognise.                                                               |
+| `scripts/analyze.sh`, `scripts/plan.sh`                                    | A `case` per level holding the long-form guidance text; any other level prints "Unknown complexity". |
+| `scripts/detect-complexity.sh`                                             | The keyword scoring and the score thresholds that choose `bug`, `low`, `medium` or `complex`.        |
+| `workflow-cli.sh test`                                                     | Adversarial review is tied to the literal level `complex`.                                           |
+
+## Annotated example
+
+`medium.yml`, with each key annotated by who reads it:
+
+```yaml
+name: medium # agent: must equal the file name and the label suffix
+label: '🟡 Medium Complexity' # agent: display only
+description: 'Standard feature with structured analysis and planning' # detect-complexity.sh: keep DOUBLE quotes in the file
+
+skipStatuses: [] # agent: no status may be skipped
+
+steps:
+  analyze:
+    enabled: true # analyze.sh
+    depth: 'standard' # analyze.sh
+    agents: 3 # analyze.sh: 2-4 parallel agents
+    agentTypes: # agent
+      - explore-codebase
+      - explore-docs # if the library is unfamiliar
+  plan:
+    enabled: true # plan.sh
+    depth: 'detailed' # plan.sh: file-by-file plan
+    approval: true # plan.sh: the user approves before implementation
+  subtasks:
+    enabled: true # agent: split into real subtask tickets
+    mandatory: true # agent
+  examine:
+    enabled: false # agent: no adversarial review at this level
+  tests:
+    type: 'recommended' # agent
+    mandatory: false # agent: recommended, not forced
+
+testing:
+  unit: true # agent: unit tests for business logic
+  e2e: true # agent: end-to-end for user workflows
+  regression: true # agent
+  coverage: null # agent: no numeric target
+
+aiInstructions: | # agent: one paragraph per phase
+  This is a medium-complexity feature. Use a structured approach:
+
+  **Analyze Phase (STANDARD):**
+  - Launch 2-4 parallel exploration agents
+  ...
+```
+
+The other three profiles follow the same shape. What sets them apart is which steps are on: `bug` turns analyze, plan, subtasks and examine off and keeps a mandatory regression test; `low` keeps a
+minimal analyze and plan without approval; `complex` adds mandatory approval, mandatory granular subtasks, the adversarial review (3 agents, three checks) and an 80% coverage target.
+
+## Adding or changing a profile
+
+**Changing the behaviour of an existing level** (the common case): edit its `.yml`.
+
+1. Edit only the values; keep the structure, the two-space indentation of `analyze:` and `plan:`, and the double-quoted `description`.
+2. Mirror the change in the "Adaptive Steps" summary above, and in `aiInstructions` when the agent's guidance changes.
+3. Check what the scripts read: `bash scripts/analyze.sh 0 <level>` and `bash scripts/plan.sh 0 <level>` print the values they extracted.
+4. The profiles are part of the installed skill: a skill refresh can overwrite a local edit, so keep project-specific changes under review in version control.
+
+**Adding a new level** needs more than a new file, because the names are fixed in code (see the table above):
+
+1. Create `complexity/<name>.yml` from the closest existing profile.
+2. Add the name to the accepted values in `set-complexity` and `create-ticket --complexity` (`github-projects-cli.sh`), and to the label checks in `workflow-cli.sh`.
+3. Add a `case` branch to `scripts/analyze.sh` and `scripts/plan.sh`, and a score range to `scripts/detect-complexity.sh` if it should be suggested automatically.
+4. Create the `complexity: <name>` label on the board repository, document the level in the tables of this file and of `SKILL.md`.
+5. Add a test for the new accepted value; a level that exists only as a file is rejected by `retag` and by the guard.
+
+Changing a level's rigor is a workflow change: ticket by ticket, `retag` is the supported way to move a ticket to another level, not editing the profile.
+
 ## Changing Complexity
 
 If a ticket's complexity changes during development:
