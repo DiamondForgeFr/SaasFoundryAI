@@ -8,6 +8,7 @@ import { COMPLEXITIES, Complexity, FrItem, isComplexity, PageRef, StoryTicketBod
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { EpicPageContent, FrPageContent, parseEpicPage, parseFrPage } from '../spawn/page-content'
 import { canonicalSrsIdentity, ExistingSrsTicket, loadReconciliationPlan, reconcileRequirements, ReconciliationError, ReconciliationRequirement, ReconciliationResult } from '../spawn/reconciliation'
+import { samePage } from '../page-key'
 import { parseFrPageTitle } from '../tree/fr-title'
 import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
 
@@ -255,9 +256,10 @@ async function selectVersion(
 
   // Exact matches only. A substring match on the URL would let `--version v1` pick
   // a page whose URL merely contains "v1" — a silent wrong target on a command that
-  // writes to the board. A near-miss falls through to the list, which is help.
+  // writes to the board. A near-miss falls through to the list, which is help. An id
+  // or URL matches by the page id it carries, dashed or not, on any Notion host (#927).
   const needle = requested.trim().toLowerCase()
-  const match = versions.find((version) => version.title.trim().toLowerCase() === needle || version.id === requested || version.url === requested)
+  const match = versions.find((version) => version.title.trim().toLowerCase() === needle || version.id === requested || version.url === requested || samePage(version.id, requested))
 
   if (!match) {
     io.stderr(`✗ spawn: no version "${requested}" under « ${featureTitle} ». Available:\n\n`)
