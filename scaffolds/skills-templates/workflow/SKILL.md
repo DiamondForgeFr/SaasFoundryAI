@@ -25,6 +25,8 @@ This workflow adapts its rigor based on ticket complexity:
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 
+Each level is a YAML profile in `complexity/`. [complexity/README.md](complexity/README.md) documents the schema (which keys the scripts read, which the agent reads) and how to change or add a profile.
+
 ## 🎚️ Nature axis (user-facing / internal / bundled-pr)
 
 Orthogonal to complexity. Controls whether **Human Testing** and **In Review** are mandatory or optional in the lifecycle.
@@ -47,6 +49,8 @@ Orthogonal to complexity. Controls whether **Human Testing** and **In Review** a
 - **PR-state guard** — `→ Human Testing` requires an open draft PR; `→ In Review` requires an open non-draft PR. Unknown PR state blocks these transitions. Epic groupers without a PR keep their derived lifecycle. Escape hatch: `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`.
 - **Nature guard** on `→ Done` from `AI Testing` — allowed **only** for `nature:bundled-pr` (everyone else must go through `In Review` first). Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`.
 - **PR-merged guard** on `→ Done` — normal delivery tickets require a matching PR verified merged into the working branch. Aggregate Epics and verified `nature:bundled-pr` children are exempt because they own no PR. Escape hatch: `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`.
+
+Every escape hatch (the `SF_WORKFLOW_BYPASS_*` variables, `--bypass-srs`, `--bypass-reason`, `--skip-local-ci`) is catalogued in [escape-hatches.md](escape-hatches.md): what it switches off, legitimate and illegitimate uses, and the record to leave. An agent never sets one on its own.
 
 ## 🧩 Ticket Hierarchy (Epic / Delivery parent / Child ticket)
 
@@ -153,7 +157,7 @@ Developer always has final say.
 Changes ticket complexity level (bug | low | medium | complex).
 Adjusts remaining workflow steps to match new complexity.
 
-**Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. Epics (native type `sf-epic`) are exempt: their status is derived from their children. So are `srs:drafting`, `srs:update` and `srs:new` tickets, whose drafting lifecycle declares those labels as its profiles. `detect-complexity` only suggests — you must call `retag` to persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare).
+**Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. Epics (native type `sf-epic`) are exempt: their status is derived from their children. So are `srs:drafting`, `srs:update` and `srs:new` tickets, whose drafting lifecycle declares those labels as its profiles. `detect-complexity` only suggests — you must call `retag` to persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare; see [escape-hatches.md](escape-hatches.md)).
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 
@@ -256,7 +260,7 @@ On SRS-enabled projects (`tools.srs.backend` is set), `create-subtask` refuses c
 - Meta tickets that don't map to an FR page (SRS tooling, drafter refactors, eval polish)
 - Bootstrapping an Epic's own SUBs during rollout before the page tree exists
 
-Typing the reason is the audit trail — pick something a reviewer can grep for (`spawned-from-srs`, `meta-srs-tooling`, `bootstrap-epic-174`…). If the ticket represents a feature requirement, the answer is always "go draft it first, then spawn."
+Typing the reason is the audit trail — pick something a reviewer can grep for (`spawned-from-srs`, `meta-srs-tooling`, `bootstrap-epic-174`…). If the ticket represents a feature requirement, the answer is always "go draft it first, then spawn." See [escape-hatches.md](escape-hatches.md) for the full list of reasons and the record to leave.
 
 ### Conversational eval hook (SRS-enabled projects)
 

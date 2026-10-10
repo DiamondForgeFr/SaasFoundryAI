@@ -109,6 +109,8 @@ explicitly returns a ready PR to draft for further human testing, with the same 
 A project that declares `workflow.localCi.requiredStatuses` in `.saasfoundry.json` gates review on its local CI: `create-pr` without `--draft` and `ready-pr` refuse a head commit on which any
 declared status is missing or not green, and say which. A draft still opens early. `--skip-local-ci "<reason>"` bypasses the gate explicitly and records the reason on the pull request.
 
+On a project with an SRS backend (`tools.srs.backend` in `.saasfoundry.json`), `create-ticket`, `create-subtask` and `create-epic` refuse to run (exit code `2`) unless the ticket comes from the SRS spawner or you pass `--bypass-srs <reason>`. The reason is echoed, not stored on the ticket, so pick a grep-able token (`meta-srs-tooling`, `bootstrap-epic-<N>`) and repeat it in the ticket body. When a bypass is legitimate, what it must never cover, and the record to leave for it and for `--skip-local-ci` are in [escape-hatches.md](../sf-workflow/escape-hatches.md).
+
 ## How the orchestration skill uses this CLI
 
 `sf-workflow/workflow-cli.sh` routes every tool-specific call through this CLI:

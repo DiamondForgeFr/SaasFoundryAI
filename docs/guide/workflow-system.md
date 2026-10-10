@@ -199,6 +199,30 @@ AI draft → Human review → Spawning → Done
 
 Use `workflow-cli.sh transition-drafting`; the CLI rejects code-path transitions for these tickets.
 
+## Escape hatches
+
+A guard refusal means a condition or a piece of proof is missing; the answer is to supply it. For the rare case where a guard is wrong or cannot be satisfied, the scripts accept a few explicit escape
+hatches. Set a variable inline for one command only, never with `export`, and leave a ticket comment saying why. The environment variables print nothing when they take effect, so the comment is the
+audit trail. A coding agent never sets one on its own; it stops and asks you.
+
+| Hatch                                                                       | What it switches off                                                         |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                            | Keeps `srs:*` tickets off the code-path statuses                             |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                     | Requires a `complexity:` label to leave Backlog                              |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                         | Routes by `nature:*` (Human testing, In review, bundled-PR to Done)          |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                       | Requires every native child to be Done before the parent                     |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                 | Requires a verified, non-Epic native parent for a bundled-PR child           |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                   | Requires a matching open PR (draft or ready) for Human testing and In review |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                      | Requires a verified merged PR before Done                                    |
+| `--bypass-srs <reason>` on `create-ticket`, `create-subtask`, `create-epic` | Rule 8: tickets of an SRS-enabled project come from the SRS spawner          |
+| `--bypass-reason <text>` on `srs-cli.sh spawn`                              | Sets the `--bypass-srs` reason of spawned tickets; disables no check         |
+| `--skip-local-ci "<reason>"` on `create-pr` and `ready-pr`                  | Requires the declared local CI statuses to be green on the head commit       |
+| `SF_CACHE_BUST=1`                                                           | Not a guard: refetches the cached board schema                               |
+| `SF_DISABLE_SRS_HOOK=1`                                                     | Not a guard: silences the SRS intent-detector reminder                       |
+
+`--bypass-srs` and `--skip-local-ci` carry a mandatory reason. The reason is the record: choose a grep-able token such as `meta-srs-tooling`, and expect `--skip-local-ci` to write its reason on the
+pull request. The legitimate and illegitimate uses of each hatch, and the record to leave, are in `.claude/skills/sf-workflow/escape-hatches.md` in every project that installs the workflow.
+
 ## Continue
 
 - [Team 7-status reference](/workflow/7-status-system)
