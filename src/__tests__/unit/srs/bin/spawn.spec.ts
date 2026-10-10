@@ -637,6 +637,30 @@ describe('runSpawn', () => {
       expect(io.stdoutBuffer.join('')).toMatch(/FR-LIVE-001 → FR-LIVE-001: Transcript/)
     })
 
+    // #927 — the undashed id every Notion URL shows, or an app.notion.com URL, was refused
+    it.each([
+      ['the undashed id', '3f2a31bb4f3f8101bac0efcf1cd84347'],
+      ['an app.notion.com slug URL', 'https://app.notion.com/p/v2-Prise-de-notes-3f2a31bb4f3f8101bac0efcf1cd84347?pvs=4'],
+      ['the dashed id', '3f2a31bb-4f3f-8101-bac0-efcf1cd84347']
+    ])('selects a version by %s', async (_label, reference) => {
+      const notionVersion: PageRef = { id: '3f2a31bb-4f3f-8101-bac0-efcf1cd84347', url: 'https://www.notion.so/3f2a31bb4f3f8101bac0efcf1cd84347', title: 'v2 — Prise de notes vivante' }
+      registerSrsBackend(
+        'stub',
+        () =>
+          new StubAdapter(
+            [],
+            undefined,
+            () => ({ id: 'feat', name: 'Réunion live : transcript & notes', url: 'https://example.test/feat' }),
+            (parentId) => (parentId === notionVersion.id ? tree.v2 : [feature[0], notionVersion])
+          )
+      )
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+      const io = makeIO()
+      const code = await runSpawn(baseOptions({ dryRun: true, version: reference }), io)
+      expect(code).toBe(0)
+      expect(io.stdoutBuffer.join('')).toMatch(/FR-LIVE-007 → FR-LIVE-007: Topic-aware AI note taking/)
+    })
+
     // Adversarial review: an empty version would produce an Epic with no Story —
     // a promise on the board that no page backs.
     it('refuses a version that holds no page', async () => {
