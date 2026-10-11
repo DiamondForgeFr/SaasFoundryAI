@@ -262,7 +262,9 @@ async function assertDeposits(projectRoot: string): Promise<void> {
   const api = join(projectRoot, 'apps', `${PROJECT_NAME}-api`)
   const web = join(projectRoot, 'apps', `${PROJECT_NAME}-web`)
   await Promise.all([
-    requireRegularFile(join(projectRoot, 'CLAUDE.md')),
+    // The fixture carries no instruction file, so the late harness transition writes the
+    // current one: AGENTS.md since #937, and no CLAUDE.md.
+    requireRegularFile(join(projectRoot, 'AGENTS.md')),
     requireRegularFile(join(projectRoot, '.claude', 'skills', 'sf-workflow', 'SKILL.md')),
     requireRegularFile(join(api, '.claude', 'skills', 'sf-tool-context7', 'SKILL.md')),
     requireRegularFile(join(web, '.claude', 'skills', 'sf-tool-context7', 'SKILL.md')),
@@ -280,6 +282,16 @@ async function assertDeposits(projectRoot: string): Promise<void> {
     requireRegularFile(join(web, '.saasfoundry', 'validation.json')),
     requireRegularFile(join(web, '.github', 'workflows', 'test.yml'))
   ])
+
+  const instructions = await readFile(join(projectRoot, 'AGENTS.md'), 'utf8')
+  if (!instructions.includes('<!-- saasfoundry:generated:start -->')) throw new Error('The harness transition wrote an AGENTS.md without its generated region.')
+  if (
+    await lstat(join(projectRoot, 'CLAUDE.md')).then(
+      () => true,
+      () => false
+    )
+  )
+    throw new Error('The harness transition wrote a CLAUDE.md; new installs use AGENTS.md (#937).')
 
   const apiClassifier = await readFile(join(api, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))
   const webClassifier = await readFile(join(web, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))
