@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import { execFileSync } from 'child_process'
+import { existsSync } from 'fs'
 import { readFile, stat } from 'fs/promises'
 import { resolve } from 'path'
 
@@ -10,13 +11,18 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
     const manifest = JSON.parse(await readFile(resolve(ROOT, '.saasfoundry.json'), 'utf8'))
     expect(manifest.modules.harness.agents).toEqual(['claude-code', 'codex'])
 
+    // AGENTS.md holds the project instructions since the harness v3 → v4 migration (#938)
     const agents = await readFile(resolve(ROOT, 'AGENTS.md'), 'utf8')
-    expect(agents).toContain('Read `CLAUDE.md`')
+    expect(agents).toContain('### Migration framework — NEVER bypass')
+    expect(agents).toContain('<!-- saasfoundry:generated:start -->')
     expect(agents).toContain('Coding-agent identity and onboarding')
+    expect(existsSync(resolve(ROOT, 'CLAUDE.md'))).toBe(false)
     expect(await readFile(resolve(ROOT, 'GEMINI.md'), 'utf8')).toContain('@AGENTS.md')
 
     const baselines = manifest.fileHashes as Record<string, string>
-    expect(Object.keys(baselines)).toEqual(expect.arrayContaining(['AGENTS.md', 'GEMINI.md', '.agents/skills/sf-workflow/workflow-cli.sh']))
+    expect(Object.keys(baselines)).toEqual(expect.arrayContaining(['GEMINI.md', '.claude/rules/claude-code.md', '.agents/skills/sf-workflow/workflow-cli.sh']))
+    // A merged AGENTS.md (generated region) is never hash-tracked (#937)
+    expect(baselines).not.toHaveProperty('AGENTS.md')
     expect(Object.keys(baselines).some((path) => path.startsWith('.codex/'))).toBe(false)
     const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean)
     expect(tracked).toEqual(expect.arrayContaining(['AGENTS.md', 'GEMINI.md', '.agents/skills/sf-workflow/workflow-cli.sh']))

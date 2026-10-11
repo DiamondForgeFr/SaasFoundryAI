@@ -43,11 +43,12 @@ describe('Preconditions first directive (scaffold mirrors)', () => {
     expect(GENERATED_INSTRUCTIONS).toMatch(/sf agents replace/)
   })
 
-  it('repo-root CLAUDE.md contains the Preconditions first section', () => {
-    const content = readFileSync(path.resolve(ROOT, 'CLAUDE.md'), 'utf8')
+  // The repository's own instructions moved to AGENTS.md with the harness v3 → v4 migration (#938)
+  it('repo-root AGENTS.md contains the Preconditions first section', () => {
+    const content = readFileSync(path.resolve(ROOT, 'AGENTS.md'), 'utf8')
     expect(content).toMatch(/Preconditions first/)
     expect(content).toMatch(/\.saasfoundry\.json/)
-    expect(content).toMatch(/sf status --claude-friendly/)
+    expect(content).toMatch(/sf status --agent-friendly/)
   })
 
   it('the generated region previews profile promotion instead of scaffolding over existing code', () => {

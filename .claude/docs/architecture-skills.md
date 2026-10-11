@@ -269,7 +269,7 @@ export async function installSkills({
 
     - README.md
     - Blueprint AGENTS.md files
-    - This CLAUDE.md (add to Current Skills Inventory)
+    - The root AGENTS.md (add to Current Skills Inventory)
 
 12. **Test complete workflow**
     - `sf new` → select skill → verify credentials prompted

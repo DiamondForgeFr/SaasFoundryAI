@@ -141,7 +141,8 @@ Reserve `ModuleMigration`s on `harnessInstallerMeta` for **structural** changes 
 Boundaries to respect:
 
 - The `sf-` prefix under `.claude/skills/` is reserved for deposits — user-authored skills outside it are never tracked nor touched.
-- `CLAUDE.md` and `.claude/settings.json` are user-owned: managed through targeted merges (workflow-section re-injection, hook merging), never the file sweep.
+- `AGENTS.md` and `.claude/settings.json` are user-owned: managed through targeted merges (generated-region refresh, workflow-section re-injection, hook merging), never the file sweep. A pre-#937
+  `CLAUDE.md` is moved into `AGENTS.md` by the harness v3 → v4 migration (#938).
 - Scaffolded projects refresh their harness through FLOW 1 (full template regen) — FLOW 1b only runs on non-scaffold manifests (`isScaffoldManifest()` is the gate; the marker is `modules.email`, never
   the mere presence of the `modules` block).
 

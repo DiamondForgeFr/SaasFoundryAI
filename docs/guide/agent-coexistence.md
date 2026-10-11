@@ -126,9 +126,9 @@ guarded workflow command. Provider login or a filesystem smoke alone does not sa
 
 ## SaaSFoundryAI dogfood baseline
 
-This repository declares `claude-code` and `codex` together in `.saasfoundry.json`. `CLAUDE.md`, `AGENTS.md`, and the reviewed `.claude/skills` / `.agents/skills` trees are shared project artifacts.
-`AGENTS.md` points Codex back to the same authoritative project rules and guarded workflow used by Claude Code. Private `.codex` settings, credentials, plugins, MCP configuration, model selection, and
-host permissions are not part of the declaration and must not be committed as acceptance evidence.
+This repository declares `claude-code` and `codex` together in `.saasfoundry.json`. `AGENTS.md`, `.claude/rules/claude-code.md`, and the reviewed `.claude/skills` / `.agents/skills` trees are shared
+project artifacts. `AGENTS.md` holds the project rules both hosts read, with no `CLAUDE.md` since the harness v3 → v4 migration moved it (#938), and points both to the same guarded workflow. Private
+`.codex` settings, credentials, plugins, MCP configuration, model selection, and host permissions are not part of the declaration and must not be committed as acceptance evidence.
 
 Test the declaration from a disposable clone or worktree containing only reviewed tracked files. Both hosts must resolve the same manifest, ticket, SRS root and status document, and both workflow help
 commands must expose the same guards. Record hashes and modes before and after the read-only checks. Classify file parity and direct script execution as `structural`; classify native instruction
