@@ -26,10 +26,13 @@ non-Claude profiles:
 ```text
 .claude/skills/           managed source and guarded scripts
 .agents/skills/           portable shared copies
-CLAUDE.md                 Claude Code entrypoint
-AGENTS.md                 portable/Codex entrypoint
-GEMINI.md                 Gemini CLI entrypoint when selected
+AGENTS.md                 authoritative project instructions, read by every agent
+.claude/rules/claude-code.md  Claude-Code-only instructions when `claude-code` is declared
+GEMINI.md                 imports AGENTS.md when `gemini-cli` is declared
 ```
+
+`.agents/skills/` copies are written only for declared profiles other than Claude Code, which discovers `.claude/skills/` directly. A new project gets no `CLAUDE.md`; a project installed before
+`AGENTS.md` became authoritative keeps its own until its migration in a later `sf update` release.
 
 Do not infer runtime support from a directory name. `sf agents doctor` checks files and documented capabilities, but only a native observation in the actual host can prove discovery, hooks,
 permissions or model access.
@@ -45,7 +48,7 @@ The project manifest records the topology and managed baselines. `sf update` use
 
 Invocation is host-specific:
 
-- Claude Code can discover the historical `.claude/skills` surface and slash-command conventions.
+- Claude Code discovers `.claude/skills` and invokes a skill as `/sf-<name>`, as described in `.claude/rules/claude-code.md`.
 - Codex and other declared profiles follow their native project instructions and the shared `.agents/skills` procedures.
 - A generic host may require the user or agent to open `SKILL.md` explicitly.
 

@@ -93,13 +93,12 @@ Your project structure:
 ```
 my-first-saas/
 ├── apps/
-│   ├── api/              # Backend (NestJS)
-│   └── web/              # Frontend (React)
-├── CLAUDE.md              # Canonical Claude entrypoint
-├── AGENTS.md              # Shared agent entrypoint
-├── GEMINI.md              # Gemini entrypoint
-├── .claude/skills/        # Existing harness skill source
-├── .agents/skills/        # Shared-profile skill surface when declared
+│   ├── api/              # Backend (NestJS), with its own AGENTS.md
+│   └── web/              # Frontend (React), with its own AGENTS.md
+├── AGENTS.md              # Authoritative agent instructions
+├── .claude/rules/         # claude-code.md, when claude-code is declared
+├── .claude/skills/        # Managed skill source
+├── .agents/skills/        # Skill copies for declared profiles other than Claude Code
 ├── docker-compose.dev-services.yml
 ├── turbo.json
 └── package.json

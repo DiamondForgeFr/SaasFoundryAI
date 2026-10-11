@@ -236,7 +236,7 @@ Read [Updating projects](/guide/updating-projects) for preview, three-way compar
 prompts.
 
 ```bash
-sf status --claude-friendly --no-network
+sf status --agent-friendly --no-network
 ```
 
 That command gives a coding agent a deterministic, offline summary before it changes the project. See [Project structure](/guide/project-structure).

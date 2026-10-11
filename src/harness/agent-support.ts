@@ -6,7 +6,9 @@ import {
   AgentInstructionsReport,
   AgentInstructionsError,
   ADOPTION_COMMON_INSTRUCTIONS,
+  CLAUDE_CODE_RULE_PATH,
   CODEX_SOURCE_CLAUDE_BRIDGE,
+  hasGeneratedRegion,
   HarnessAgent,
   installAgentInstructions,
   installPlannedAgentInstructions,
@@ -140,9 +142,11 @@ async function snapshot(root: string): Promise<ManifestSnapshot> {
   return { manifest, content, mode: (await lstat(path)).mode & 0o777 }
 }
 
-function configured(manifest: SaaSFoundryManifest, source: 'claude' | 'codex' | 'mixed' | 'missing' = 'claude'): HarnessAgent[] {
-  // Legacy managed harnesses already provide Claude instruction discovery.
-  return [...new Set(manifest.modules?.harness?.agents ?? (source === 'codex' ? ['codex'] : ['claude-code']))] as HarnessAgent[]
+function configured(manifest: SaaSFoundryManifest, source: 'claude' | 'codex' | 'mixed' | 'missing' = 'claude', scaffolded = false): HarnessAgent[] {
+  // An omitted declaration means Claude Code for every SaaSFoundry install: a CLAUDE.md
+  // one, or since #937 an AGENTS.md carrying the generated region. Only a user-written
+  // AGENTS.md (a Codex-first adoption) falls back to Codex.
+  return [...new Set(manifest.modules?.harness?.agents ?? (source === 'codex' && !scaffolded ? ['codex'] : ['claude-code']))] as HarnessAgent[]
 }
 
 async function inspect(root: string) {
@@ -151,15 +155,20 @@ async function inspect(root: string) {
   if (instructions.source === 'missing') throw new Error(`No managed harness at ${root}: CLAUDE.md or AGENTS.md is required. Configure project instructions before adoption.`)
   await regularPath(root, '.claude/skills', 'directory', false)
   const sharedSkills = await regularPath(root, '.agents/skills', 'directory', false)
-  return { before, source: instructions.source, discovered: { claudeInstructions: instructions.claudeInstructions, sharedInstructions: instructions.sharedInstructions, sharedSkills } }
+  return {
+    before,
+    source: instructions.source,
+    scaffolded: await hasGeneratedRegion(root),
+    discovered: { claudeInstructions: instructions.claudeInstructions, sharedInstructions: instructions.sharedInstructions, sharedSkills }
+  }
 }
 
 export async function readAgentSupport(targetPath: string): Promise<AgentSupportInventory> {
   const root = resolve(targetPath)
-  const { before, discovered, source } = await inspect(root)
+  const { before, discovered, source, scaffolded } = await inspect(root)
   const git = await optionalGitScope(root)
   const local = git ? await readLocalState(git) : emptyLocalState()
-  const sharedAgents = configured(before.manifest, source)
+  const sharedAgents = configured(before.manifest, source, scaffolded)
   return { configuredAgents: union(sharedAgents, local.agents), sharedAgents, localAgents: local.agents, discovered, runtime: 'not-checked' }
 }
 
@@ -194,11 +203,11 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
   const mode = params.mode ?? 'add'
   if (scope === 'local') return applyLocal(params, requested)
   const root = resolve(params.targetPath)
-  const { before, source } = await inspect(root)
+  const { before, source, scaffolded } = await inspect(root)
   const git = await optionalGitScope(root)
   const local = git ? await readLocalState(git) : emptyLocalState()
   if (params.preview) {
-    const previous = configured(before.manifest, source)
+    const previous = configured(before.manifest, source, scaffolded)
     const candidates = selectAgents(previous, requested, mode)
     const plan = await planAgentInstructions({
       targetPath: root,
@@ -211,9 +220,10 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
     for (const file of plan.files) {
       const current = await checkLocalPath(root, file.path)
       if (current?.equals(file.content)) report.unchanged.push(file.path)
-      else if (current && before.manifest.fileHashes?.[file.path] !== hash(current)) report.conflicts.push(file.path)
+      else if (current && !file.merge && before.manifest.fileHashes?.[file.path] !== hash(current)) report.conflicts.push(file.path)
       else report.written.push(file.path)
-      if (!report.conflicts.includes(file.path)) report.fileHashes[file.path] = hash(file.content)
+      // A merged file (AGENTS.md's generated region) is project-owned: no baseline.
+      if (!report.conflicts.includes(file.path) && !file.merge) report.fileHashes[file.path] = hash(file.content)
     }
     return {
       scope,
@@ -246,7 +256,7 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
     // checked again before saving. No installer, hooks, Git commands or credentials.
     if ((await snapshot(root)).content !== before.content) throw new Error('Manifest changed before agent setup; retry with the current configuration.')
     if (git && JSON.stringify(await readLocalState(git)) !== JSON.stringify(local)) throw new Error('Private agent inventory changed before shared setup; retry with current configuration.')
-    const previous = configured(before.manifest, source)
+    const previous = configured(before.manifest, source, scaffolded)
     const candidates = selectAgents(previous, requested, mode)
     const report = verifiedPlan
       ? await installPlannedAgentInstructions(root, verifiedPlan, before.manifest.fileHashes ?? {})
@@ -347,7 +357,7 @@ async function readLocalState(git: GitAgentScope): Promise<LocalAgentState> {
     isObject(value) &&
     !Object.entries(value).some(
       ([path, hash]) =>
-        !(['CLAUDE.md', ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path)) ||
+        !(['CLAUDE.md', CLAUDE_CODE_RULE_PATH, ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path)) ||
         path.split('/').includes('..') ||
         typeof hash !== 'string' ||
         !/^[0-9a-f]{64}$/.test(hash)
@@ -414,10 +424,10 @@ async function checkLocalPath(root: string, path: string): Promise<Buffer | unde
 
 async function applyLocal(params: SupportParams, requested?: HarnessAgent[]): Promise<AgentSupportResult> {
   const root = resolve(params.targetPath)
-  const { before, source } = await inspect(root)
+  const { before, source, scaffolded } = await inspect(root)
   const git = await inspectGitAgentScope(root, { requireLocalSetup: true })
   const local = await readLocalState(git)
-  const sharedAgents = configured(before.manifest, source)
+  const sharedAgents = configured(before.manifest, source, scaffolded)
   const mode = params.mode ?? 'add'
   const localAgents = selectAgents(local.agents, requested, mode)
   const effective = union(sharedAgents, localAgents)

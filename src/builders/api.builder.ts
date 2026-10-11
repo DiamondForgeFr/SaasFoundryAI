@@ -2,6 +2,7 @@ import { copy } from 'fs-extra'
 import { chmod, readFile, rm, writeFile } from 'fs/promises'
 import { join, resolve } from 'path'
 
+import { GENERATED_REGION_END, GENERATED_REGION_START } from '../harness/agent-instructions'
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
@@ -150,7 +151,7 @@ export async function renderApiApp({
   }
 
   // Install workflow artefacts (skill + tool skill) when a workflow is configured
-  await installWorkflowArtifacts({ targetPath: apiPath, workflow })
+  await installWorkflowArtifacts({ targetPath: apiPath, workflow, injectSection: !isMonorepo })
 
   // Install optional skills (if selected)
   // TODO: Add optional skills selection to CreateApiAppParams and call installOptionalSkills
@@ -208,6 +209,11 @@ export async function renderApiApp({
     [/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`],
     [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
   ])
+  // The agent instructions name the API docs URL.
+  await replaceInFile(`${apiPath}/AGENTS.md`, [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
+  // A multirepo app is its own repository: its AGENTS.md is the root instructions file and
+  // carries the generated region the agent-instruction planner fills (#937).
+  if (!isMonorepo) await replaceInFile(`${apiPath}/AGENTS.md`, [[/\s*$/, `\n\n${GENERATED_REGION_START}\n${GENERATED_REGION_END}\n`]])
 
   if (!isMonorepo) await installImpactValidation(apiPath, 'api')
 

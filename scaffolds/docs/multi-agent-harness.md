@@ -1,6 +1,6 @@
 # Shared agent instructions
 
-The shared-instructions foundation adds Codex and Kimi entry points alongside the existing Claude harness. It does not select an exclusive agent for the project. The adapters direct configured agents to use the project's workflow and SRS backend through the same guarded CLI scripts; verify instruction loading and actual invocation in the host.
+`AGENTS.md` is the project's authoritative instruction file, read by Codex, Claude Code (natively from 2.1.277), Qwen, Kimi and generic agents. It does not select an exclusive agent for the project. The adapters direct configured agents to use the project's workflow and SRS backend through the same guarded CLI scripts; verify instruction loading and actual invocation in the host.
 
 ## Current scope
 
@@ -12,19 +12,27 @@ For a newly generated harness, `sf new` asks which registered coding tools to su
 Code declaration. This declaration selects tool entrypoints only; private model/provider settings, credentials, plugins, MCP configuration, and host permissions stay outside the repository. For an
 existing harness, `installAgentInstructions` adds the instruction surfaces without reinstalling its legacy files.
 
-Universal `AGENTS.md` and `GEMINI.md` bootstrap entrypoints are deposited even when their tools are not declared. They expose the consent flow to a newly arriving supported host; the manifest
-inventory and declared profiles still determine active support and shared skill copies. A custom entrypoint owned by an undeclared tool is preserved and does not block onboarding another tool.
+`AGENTS.md` is deposited for every project, whichever tools are declared. Declared profiles add only their own surfaces: `.claude/rules/claude-code.md` for `claude-code` (SessionStart hook,
+`/sf-<name>` skill invocation, `.claude/settings.json` allowlist), `GEMINI.md` importing `AGENTS.md` for `gemini-cli`, and `.agents/skills/` copies for declared profiles other than Claude Code. The
+manifest inventory and declared profiles determine active support. A custom entrypoint owned by an undeclared tool, such as an existing `GEMINI.md`, is preserved and does not block onboarding another
+tool.
 
-Every generated universal entrypoint contains the same onboarding contract. The host supplies its coding-tool identity; the agent never infers identity from a model/provider, executable, project
+The root `AGENTS.md` ends with a generated region between `<!-- saasfoundry:generated:start -->` and `<!-- saasfoundry:generated:end -->`: file-edit and shell hygiene, managed project capabilities,
+coding-agent identity and onboarding, and execution capabilities. `sf update` and `sf agents enable` rewrite only that region; the rest of the file belongs to the project. An `AGENTS.md` without the
+markers is user-written and never rewritten.
+
+The generated region contains the onboarding contract. The host supplies its coding-tool identity; the agent never infers identity from a model/provider, executable, project
 files, or PATH. If that tool is undeclared, inspect `sf agents list --json` and let the user choose add, exact replacement with a named non-empty set, or no change. Ask for local versus shared scope
 only after a mutation is chosen. Use `sf agents enable` for add and `sf agents replace` for exact replacement. No change performs no write, and replacement retains existing instruction, skill, hook,
 settings, and exclusion files.
 
-In a multirepo project, the API and web repositories each receive a minimal `structure: cli` manifest plus their own agent entrypoints. They can run `sf status` and `sf agents` independently. The
+In a monorepo, `apps/api/AGENTS.md` and `apps/web/AGENTS.md` add app-specific instructions; only the root `AGENTS.md` carries the `## Workflow System` section. In a multirepo project, the API and
+web repositories each receive a minimal `structure: cli` manifest plus their own root `AGENTS.md`. They can run `sf status` and `sf agents` independently. The
 outer multirepo manifest alone remains responsible for regenerating the technical stack.
 
-For managed Claude-first harnesses, the existing `CLAUDE.md` remains the source of project instructions. Generated `AGENTS.md` directs portable agents to read it. A Codex-only repository may instead
-retain its original `AGENTS.md` as the source and does not need `.claude/skills`; requesting Claude may add a small reference when the plan can do so without replacing custom instructions. Portable
+New installs no longer write `CLAUDE.md` or `CLAUDE.local.md`. Claude Code reads `AGENTS.md` only when no `CLAUDE.md` exists in the project or a parent directory. Harnesses installed before this
+change keep their `CLAUDE.md` and its `AGENTS.md` bridge untouched; their migration is a later `sf update` release. Adopting a repository that already has a user-written `CLAUDE.md` keeps it and
+writes a reference-only `AGENTS.md`. A Codex-only repository may retain its original `AGENTS.md` as the source and does not need `.claude/skills`. Portable
 skill copies live under `.agents/skills/` when the source has managed skills to share. Do not manually maintain divergent copies of generated procedures.
 
 ## Conflicts and ownership
@@ -97,4 +105,4 @@ Use `sf agents catalog --json` to inspect versioned profiles, declared discovery
 
 Profiles identify coding tools, not model brands. Configure model/provider selection in the tool's personal settings. For an unknown tool, `sf agents enable generic --scope shared` deposits portable instructions to load manually; it does not certify tool execution or workflow compliance. Existing local/shared scope rules still apply.
 
-Gemini receives a small GEMINI.md import of AGENTS.md. Qwen reads AGENTS.md directly, with explicit shared-skill reading fallback. The common source remains CLAUDE.md during this compatibility phase. Adding a profile must preserve this one-way instruction chain, user files, safe path constraints and workflow guards.
+Gemini receives a small GEMINI.md import of AGENTS.md. Qwen reads AGENTS.md directly, with explicit shared-skill reading fallback. The common source is AGENTS.md. Adding a profile must preserve this one-way instruction chain, user files, safe path constraints and workflow guards.

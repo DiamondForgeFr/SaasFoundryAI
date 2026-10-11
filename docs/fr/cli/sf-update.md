@@ -228,7 +228,7 @@ Avant une mise à jour importante :
 
 ```bash
 git status
-sf status --claude-friendly --no-network
+sf status --agent-friendly --no-network
 sf update --dry-run --json > plan-mise-a-jour-saasfoundry.json
 ```
 

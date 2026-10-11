@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { applyFileUpdates, computeFileUpdates, enforceAtomicImpactValidationBundles, FileUpdate, moduleSelectionPrefill, templateBaselines } from '../../../commands/update'
+import { applyFileUpdates, comparableTemplateHashes, computeFileUpdates, enforceAtomicImpactValidationBundles, FileUpdate, moduleSelectionPrefill, templateBaselines } from '../../../commands/update'
 import { hashFileContent } from '../../../utils'
 
 describe('moduleSelectionPrefill', () => {
@@ -357,6 +357,26 @@ describe('templateBaselines', () => {
     const manifest = { fileHashes: { 'src/app.module.ts': hashFileContent('older template\n') } } as never
 
     expect(templateBaselines(manifest, target)).toEqual(target)
+  })
+
+  // #937 — the CLI no longer generates CLAUDE.md. A template refresh of a project generated
+  // before it would delete its CLAUDE.md files and add AGENTS.md ones; that move is #938's migration.
+  it('never adds, updates or removes an instruction file through the template merge', () => {
+    const legacy = {
+      'CLAUDE.md': hashFileContent('root rules\n'),
+      'apps/api/CLAUDE.md': hashFileContent('api rules\n'),
+      '.claude/rules/claude-code.md': hashFileContent('old rule\n'),
+      'README.md': hashFileContent('readme\n')
+    }
+    const target = {
+      'AGENTS.md': hashFileContent('root rules\n'),
+      'apps/api/AGENTS.md': hashFileContent('api rules\n'),
+      '.claude/rules/claude-code.md': hashFileContent('new rule\n'),
+      'README.md': hashFileContent('new readme\n')
+    }
+    const comparable = comparableTemplateHashes(legacy, legacy, target)
+    expect(computeFileUpdates(comparable.baseHashes, comparable.currentHashes, comparable.targetHashes)).toEqual([{ path: 'README.md', action: 'update' }])
+    expect(templateBaselines({ fileHashes: legacy } as never, target)).toEqual({ ...legacy, 'README.md': target['README.md'] })
   })
 
   it('keeps the shared agent adapter baselines the previous manifest recorded', () => {

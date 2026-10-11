@@ -150,8 +150,8 @@ The front-matter at the top of each `SKILL.md` declares:
 - optional host-specific metadata, such as a preferred model
 - `allowed-tools`, when the host supports it — what the skill may invoke (`Bash(git :*)`, `Bash(npm :*)`, …)
 
-These files are the source of truth. Reading them is the fastest way to understand what a skill will actually do before you run it. Discovery depends on the coding-agent host: Claude Code uses
-`CLAUDE.md` and `.claude/skills`, while Codex uses `AGENTS.md` and `.agents/skills`.
+These files are the source of truth. Reading them is the fastest way to understand what a skill will actually do before you run it. Every host reads the project instructions from `AGENTS.md`; skill
+discovery depends on the host: Claude Code uses `.claude/skills`, while Codex uses `.agents/skills`.
 
 ## Next steps
 

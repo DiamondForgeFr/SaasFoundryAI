@@ -128,7 +128,7 @@ export async function installSkills({
 
    - Add the skill to the structure and the skill list
 
-4. **Update the CLAUDE.md templates**
+4. **Update the AGENTS.md templates**
 
    - Add skill to the skills section of the API, Web and monorepo root templates
    - Update skills priority section if needed
@@ -173,7 +173,7 @@ export async function installSkills({
 7. **Update documentation**
 
    - README.md
-   - Blueprint CLAUDE.md files
+   - Blueprint AGENTS.md files
 
 8. **Test**
    - Generate project with skill → verify no credentials prompted
@@ -268,7 +268,7 @@ export async function installSkills({
 11. **Update documentation**
 
     - README.md
-    - Blueprint CLAUDE.md files
+    - Blueprint AGENTS.md files
     - This CLAUDE.md (add to Current Skills Inventory)
 
 12. **Test complete workflow**
@@ -361,7 +361,7 @@ Regression guard: `src/__tests__/integration/skill/srs-intent-detector-eval.spec
 
 ### Skills Priority in Generated Projects
 
-Generated projects have this note in their CLAUDE.md:
+Generated projects have this note in their AGENTS.md:
 
 ```markdown
 ## 🎯 Skills Priority
@@ -372,4 +372,4 @@ Generated projects have this note in their CLAUDE.md:
 - ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
 ```
 
-This ensures Claude uses project-specific skills over global ones when there are conflicts.
+This ensures agents use project-specific skills over global ones when there are conflicts.

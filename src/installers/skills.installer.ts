@@ -63,10 +63,10 @@ export async function installSkills({ targetDir = '.', isMonorepo, apiPath, webP
       })
     }
 
-    // Update CLAUDE.md placeholders at root + per-app (blueprints copy CLAUDE.md with placeholders)
-    await updateClaudeMdPlaceholders({ targetPath: targetDir, projectName, version, mainBranch })
-    await updateClaudeMdPlaceholders({ targetPath: apiTarget, projectName, version, mainBranch })
-    await updateClaudeMdPlaceholders({ targetPath: webTarget, projectName, version, mainBranch })
+    // Update AGENTS.md placeholders at root + per-app (blueprints copy AGENTS.md with placeholders)
+    await updateAgentsMdPlaceholders({ targetPath: targetDir, projectName, version, mainBranch })
+    await updateAgentsMdPlaceholders({ targetPath: apiTarget, projectName, version, mainBranch })
+    await updateAgentsMdPlaceholders({ targetPath: webTarget, projectName, version, mainBranch })
 
     // Copy README.md to .claude/
     await copyClaudeReadme({ targetPath: targetDir })
@@ -89,9 +89,9 @@ export async function installSkills({ targetDir = '.', isMonorepo, apiPath, webP
       })
     }
 
-    // Update CLAUDE.md placeholders
-    await updateClaudeMdPlaceholders({ targetPath: apiTarget, projectName, version, mainBranch })
-    await updateClaudeMdPlaceholders({ targetPath: webTarget, projectName, version, mainBranch })
+    // Update AGENTS.md placeholders
+    await updateAgentsMdPlaceholders({ targetPath: apiTarget, projectName, version, mainBranch })
+    await updateAgentsMdPlaceholders({ targetPath: webTarget, projectName, version, mainBranch })
 
     // Copy README.md
     await copyClaudeReadme({ targetPath: apiTarget })
@@ -100,18 +100,18 @@ export async function installSkills({ targetDir = '.', isMonorepo, apiPath, webP
 }
 
 /**
- * Update CLAUDE.md placeholders ({{PROJECT_NAME}}, {{VERSION}}, {{MAIN_BRANCH}})
+ * Update AGENTS.md placeholders ({{PROJECT_NAME}}, {{VERSION}}, {{MAIN_BRANCH}})
  */
-async function updateClaudeMdPlaceholders({ targetPath, projectName, version, mainBranch }: { targetPath: string; projectName: string; version: string; mainBranch: string }) {
-  const claudeMdPath = join(targetPath, 'CLAUDE.md')
+async function updateAgentsMdPlaceholders({ targetPath, projectName, version, mainBranch }: { targetPath: string; projectName: string; version: string; mainBranch: string }) {
+  const agentsMdPath = join(targetPath, 'AGENTS.md')
 
-  if (await fileExists(claudeMdPath)) {
-    let claudeMdContent = await readFile(claudeMdPath, 'utf8')
-    claudeMdContent = claudeMdContent
+  if (await fileExists(agentsMdPath)) {
+    let agentsMdContent = await readFile(agentsMdPath, 'utf8')
+    agentsMdContent = agentsMdContent
       .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
       .replace(/\{\{VERSION\}\}/g, version)
       .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
-    await writeFile(claudeMdPath, claudeMdContent)
+    await writeFile(agentsMdPath, agentsMdContent)
   }
 }
 

@@ -7,17 +7,8 @@ Production-ready SaaS monorepo generated with **SaaSFoundryAI** - An AI-First de
 Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
 
 1. Read `.saasfoundry.json` — the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
-2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this summary at session start.
+2. Run `sf status --agent-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. Some hosts run it automatically at session start (Claude Code through the hook described in `.claude/rules/claude-code.md`).
 3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead of opening a scope dialogue.
-
-## Coding-agent identity and onboarding
-
-Use the coding-agent identity explicitly supplied by the current host or session. Never infer it from a model/provider name, executable, repository file, or PATH. If the identity is absent or
-ambiguous, ask the user to choose a registered coding-agent profile and do not change the project.
-
-Run `sf agents list --json`. When the current supported tool is undeclared, ask the user to choose one action: add it, replace the declaration with an explicitly named non-empty set, or leave the
-project unchanged. Ask whether the choice is local to this checkout or shared through the repository only after add or replace is accepted. Use `sf agents enable` for add and `sf agents replace` for
-exact replacement. No change runs no mutating command. Replacement changes inventory only and never deletes existing instructions, skills, hooks, settings, credentials, or exclusions.
 
 ## 🏗️ Monorepo Structure
 
@@ -25,19 +16,22 @@ This is a **Turborepo monorepo** with centralized tooling and shared skills.
 
 ```
 {{PROJECT_NAME}}/
-├── .claude/              # ⭐ Centralized Claude skills (shared by all apps)
+├── .claude/              # ⭐ Centralized skills and docs (shared by all apps)
 │   └── skills/           # Core, workflow and tool skills (sf-*)
+├── .agents/              # Shared skill copies for other coding agents
+│   └── skills/
 ├── apps/
 │   ├── api/              # NestJS backend
-│   │   └── CLAUDE.md     # API-specific context
+│   │   └── AGENTS.md     # API-specific context
 │   └── web/              # React frontend
-│       └── CLAUDE.md     # Web-specific context
+│       └── AGENTS.md     # Web-specific context
 ├── packages/             # Shared workspaces consumed by apps/api and apps/web
 │   ├── shared-types/     # TypeScript types (User, Organization, RBAC, …)
 │   ├── shared-validation/# Zod schemas (signup, signin, org CRUD, …)
 │   ├── shared-config/    # Runtime constants (MIME lists, size thresholds, …)
 │   ├── ui-primitives/    # Headless ShadCN/Radix + Tailwind v4 theme tokens
 │   └── api-client/       # Auto-generated typed React Query hooks (via orval)
+├── AGENTS.md             # Root instructions for every coding agent
 ├── turbo.json            # Turborepo configuration
 └── package.json          # Root workspace configuration
 ```
@@ -91,7 +85,7 @@ Edit these files like any other shared file once they exist — they're just can
 - ✅ Use `sf-git-create-pr` instead of `git-create-pr`
 - ✅ Use `sf-tool-atlassian` instead of `tool-atlassian`
 
-SaaSFoundryAI skills are located in `.claude/` at the repository root and are optimized for this monorepo structure.
+SaaSFoundryAI skills live at the repository root and are optimized for this monorepo structure. Claude Code discovers them under `.claude/skills/`; other agents read the copies under `.agents/skills/` (or the `.claude/skills/<name>/SKILL.md` file explicitly when no copy exists).
 
 ## 📣 Long-running commands (announce + stream)
 
@@ -128,7 +122,7 @@ The screen must never freeze silently. For any command expected to take more tha
 
 ## 🛠️ Available Skills
 
-All skills are located in `.claude/` at the root and are available across the entire monorepo.
+All skills live at the repository root and are available across the entire monorepo. Claude Code discovers them under `.claude/skills/`; other agents read the copies under `.agents/skills/` (or the `.claude/skills/<name>/SKILL.md` file explicitly when no copy exists).
 
 ### Core Skills (Always Available)
 
@@ -149,14 +143,14 @@ All skills are located in `.claude/` at the root and are available across the en
 - **`sf-workflow`** - Ticket statuses, guards and pull requests
 - **`sf-srs`** - Software requirements: draft, write, evaluate and spawn tickets
 
-### Tool integrations (selected at setup, installed as `.claude/skills/sf-tool-<name>`)
+### Tool integrations (selected at setup, installed as skill `sf-tool-<name>`)
 
 - **`sf-tool-context7`** - Up-to-date library documentation (React, Vite, Prisma, etc.)
 - **`sf-tool-atlassian`** - Jira/Confluence integration
 - **`sf-tool-notion`** - Notion workspace integration
 - **`sf-tool-figma`** - Figma design system integration
 
-> **Note**: Advanced skills require API tokens. Configure them during `sf new` or when Claude prompts you.
+> **Note**: Advanced skills require API tokens. Configure them during `sf new` or when your coding agent prompts you.
 
 ## 🚀 Common Commands
 
@@ -199,7 +193,7 @@ docs(#44): update API documentation
 
 ### Using Skills
 ```bash
-# Let Claude handle commits
+# Let the agent handle commits
 "Commit these changes"  # → sf-git-commit
 
 # Fix errors across the monorepo
@@ -213,12 +207,12 @@ docs(#44): update API documentation
 - ✅ Skills respect monorepo structure (apps/api, apps/web)
 - ✅ Git hooks validate all AI-generated commits
 - ✅ Tests run automatically before push
-- ✅ Use CLAUDE.md files in apps/ for app-specific context
+- ✅ Use the AGENTS.md files in apps/ for app-specific context
 
 ## 📚 Documentation
 
 - **API Docs**: `http://localhost:3500/api/docs` (when API is running)
-- **App-specific context**: Check `apps/api/CLAUDE.md` and `apps/web/CLAUDE.md`
+- **App-specific context**: Check `apps/api/AGENTS.md` and `apps/web/AGENTS.md`
 - **Skills**: Check `.claude/README.md` for detailed skill documentation
 
 ## 🔧 Troubleshooting
@@ -235,9 +229,12 @@ npx husky
 ```
 
 **Skills not loading?**
-- Ensure you're at the monorepo root when starting Claude
-- Check `.claude/` directory exists and contains skills
+- Ensure you're at the monorepo root when starting your coding agent
+- Check `.claude/skills/` (and `.agents/skills/` for agents other than Claude Code) exists and contains skills
 
 ---
 
 **Generated with SaaSFoundryAI v1.0.0-beta** - Check `.saasfoundry.json` for configuration and installed modules.
+
+<!-- saasfoundry:generated:start -->
+<!-- saasfoundry:generated:end -->

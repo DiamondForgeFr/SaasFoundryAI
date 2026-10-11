@@ -153,8 +153,8 @@ Le frontmatter en tête de chaque `SKILL.md` déclare notamment :
 - les éventuelles métadonnées propres à l'hôte ;
 - `allowed-tools` lorsque l'hôte le prend en charge — outils que la skill est autorisée à appeler.
 
-Ces fichiers sont la source de vérité. Les lire reste le moyen le plus rapide de comprendre ce qu'une skill fera réellement. Le mécanisme exact de découverte dépend de l'hôte : Claude Code s'appuie
-sur ses fichiers `CLAUDE.md` et `.claude/skills`, tandis que Codex utilise `AGENTS.md` et `.agents/skills`.
+Ces fichiers sont la source de vérité. Les lire reste le moyen le plus rapide de comprendre ce qu'une skill fera réellement. Tous les hôtes lisent les instructions du projet dans `AGENTS.md` ; la
+découverte des skills dépend de l'hôte : Claude Code s'appuie sur `.claude/skills`, tandis que Codex utilise `.agents/skills`.
 
 ## Étapes suivantes
 

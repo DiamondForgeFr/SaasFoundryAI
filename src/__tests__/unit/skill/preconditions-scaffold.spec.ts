@@ -1,18 +1,21 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 
-// Regression guard for #243: every CLAUDE.md shipped by a SaaSFoundryAI scaffold
-// must carry the "Preconditions first" directive, and every scaffolded
+import { GENERATED_INSTRUCTIONS, GENERATED_REGION_START } from '../../../harness/agent-instructions'
+
+// Regression guard for #243: every AGENTS.md shipped by a SaaSFoundryAI scaffold
+// (CLAUDE.md before #937) must carry the "Preconditions first" directive, and every scaffolded
 // `.claude/` must ship a `settings.json` wiring a SessionStart hook that calls
 // `sf status --claude-friendly`. If a new blueprint or overlay forgets either,
 // generated projects will regress to re-asking scope questions already answered
 // by the manifest.
 const ROOT = path.resolve(__dirname, '../../../..')
 
-const CLAUDE_MD_SCAFFOLDS = [
-  path.resolve(ROOT, 'scaffolds/blueprints/api/CLAUDE.md'),
-  path.resolve(ROOT, 'scaffolds/blueprints/web/CLAUDE.md'),
-  path.resolve(ROOT, 'scaffolds/overlays/monorepo/root/CLAUDE.md')
+const AGENTS_MD_SCAFFOLDS = [
+  path.resolve(ROOT, 'scaffolds/blueprints/api/AGENTS.md'),
+  path.resolve(ROOT, 'scaffolds/blueprints/web/AGENTS.md'),
+  path.resolve(ROOT, 'scaffolds/overlays/monorepo/root/AGENTS.md'),
+  path.resolve(ROOT, 'scaffolds/skills-templates/harness/AGENTS.md')
 ]
 
 const SETTINGS_SCAFFOLDS = [
@@ -22,19 +25,22 @@ const SETTINGS_SCAFFOLDS = [
 ]
 
 describe('Preconditions first directive (scaffold mirrors)', () => {
-  it.each(CLAUDE_MD_SCAFFOLDS)('%s contains the Preconditions first section', (file) => {
+  it.each(AGENTS_MD_SCAFFOLDS)('%s contains the Preconditions first section', (file) => {
     const content = readFileSync(file, 'utf8')
     expect(content).toMatch(/Preconditions first/)
     expect(content).toMatch(/\.saasfoundry\.json/)
-    expect(content).toMatch(/sf status --claude-friendly/)
+    expect(content).toMatch(/sf status --agent-friendly/)
+    expect(content).not.toMatch(/--claude-friendly/)
   })
 
-  it.each(CLAUDE_MD_SCAFFOLDS)('%s contains the coding-agent onboarding contract', (file) => {
-    const content = readFileSync(file, 'utf8')
-    expect(content).toMatch(/Coding-agent identity and onboarding/)
-    expect(content).toMatch(/sf agents list --json/)
-    expect(content).toMatch(/sf agents enable/)
-    expect(content).toMatch(/sf agents replace/)
+  // The onboarding contract is generated into the root file's region (#937), so a
+  // template cannot drift from it; the multirepo builders add the region to the app files.
+  it('the root templates carry the generated region holding the coding-agent onboarding contract', () => {
+    for (const file of AGENTS_MD_SCAFFOLDS.slice(2)) expect(readFileSync(file, 'utf8')).toContain(GENERATED_REGION_START)
+    expect(GENERATED_INSTRUCTIONS).toMatch(/Coding-agent identity and onboarding/)
+    expect(GENERATED_INSTRUCTIONS).toMatch(/sf agents list --json/)
+    expect(GENERATED_INSTRUCTIONS).toMatch(/sf agents enable/)
+    expect(GENERATED_INSTRUCTIONS).toMatch(/sf agents replace/)
   })
 
   it('repo-root CLAUDE.md contains the Preconditions first section', () => {
@@ -44,11 +50,10 @@ describe('Preconditions first directive (scaffold mirrors)', () => {
     expect(content).toMatch(/sf status --claude-friendly/)
   })
 
-  it('the harness template previews profile promotion instead of scaffolding over existing code', () => {
-    const content = readFileSync(path.resolve(ROOT, 'scaffolds/skills-templates/harness/CLAUDE.md'), 'utf8')
-    expect(content).toContain('sf status --claude-friendly --no-network')
-    expect(content).toContain('sf update --target-profile full --dry-run --json')
-    expect(content).toContain('Do not run `sf new --profile full` inside this repository')
+  it('the generated region previews profile promotion instead of scaffolding over existing code', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain('sf status --agent-friendly --no-network')
+    expect(GENERATED_INSTRUCTIONS).toContain('sf update --target-profile full --dry-run --json')
+    expect(GENERATED_INSTRUCTIONS).toContain('Do not run\n`sf new --profile full` inside an existing repository')
   })
 })
 

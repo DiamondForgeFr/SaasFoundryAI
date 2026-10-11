@@ -93,13 +93,12 @@ La structure du projet est la suivante :
 ```
 my-first-saas/
 ├── apps/
-│   ├── api/              # Backend (NestJS)
-│   └── web/              # Frontend (React)
-├── CLAUDE.md              # Canonical Claude entrypoint
-├── AGENTS.md              # Shared agent entrypoint
-├── GEMINI.md              # Gemini entrypoint
-├── .claude/skills/        # Existing harness skill source
-├── .agents/skills/        # Shared-profile skill surface when declared
+│   ├── api/              # Backend (NestJS), avec son propre AGENTS.md
+│   └── web/              # Frontend (React), avec son propre AGENTS.md
+├── AGENTS.md              # Instructions de référence des agents
+├── .claude/rules/         # claude-code.md, si claude-code est déclaré
+├── .claude/skills/        # Source gérée des skills
+├── .agents/skills/        # Copies des skills pour les profils déclarés autres que Claude Code
 ├── docker-compose.dev-services.yml
 ├── turbo.json
 └── package.json

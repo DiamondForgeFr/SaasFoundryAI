@@ -5,7 +5,11 @@ import { dirname, join } from 'path'
 import {
   ADOPTION_COMMON_INSTRUCTIONS,
   AgentInstructionsError,
+  CLAUDE_CODE_RULE_PATH,
   CODEX_SOURCE_CLAUDE_BRIDGE,
+  GENERATED_INSTRUCTIONS,
+  GENERATED_REGION_END,
+  GENERATED_REGION_START,
   COMMON_INSTRUCTIONS,
   SELF_ONBOARDING_INSTRUCTIONS,
   HarnessAgent,
@@ -13,7 +17,9 @@ import {
   installAgentInstructions,
   normalizeSkill,
   installPlannedAgentInstructions,
-  planAgentInstructions
+  planAgentInstructions,
+  resolveInstructionFile,
+  withGeneratedInstructions
 } from '../../../harness/agent-instructions'
 
 const SKILL = `---
@@ -114,11 +120,11 @@ describe('shared agent instructions', () => {
     }
   })
 
-  it('publishes universal onboarding entrypoints without copying shared skills for Claude-only configuration', async () => {
+  it('publishes onboarding without an undeclared Gemini entrypoint or shared skills for Claude-only configuration', async () => {
     const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
-    expect(result.written).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(result.written).toEqual(['AGENTS.md'])
     expect(await get('AGENTS.md')).toContain(SELF_ONBOARDING_INSTRUCTIONS)
-    expect(await get('GEMINI.md')).toContain('@AGENTS.md')
+    await expect(get('GEMINI.md')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(get('.agents/skills/sf-git-commit/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -145,7 +151,7 @@ describe('shared agent instructions', () => {
     expect(await inspectInstructionSource(root)).toEqual({ source: 'missing', claudeInstructions: false, sharedInstructions: false })
   })
 
-  it('adopts a Codex source additively without changing its instructions or copying agent-private files', async () => {
+  it('adopts a Codex source additively without changing its instructions, writing CLAUDE.md or copying agent-private files', async () => {
     const original = Buffer.from('# Codex project rules\n\x00keep exact bytes\n')
     await rm(join(root, 'CLAUDE.md'))
     await writeFile(join(root, 'AGENTS.md'), original)
@@ -155,9 +161,10 @@ describe('shared agent instructions', () => {
     const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'gemini-cli'] })
 
     expect(await readFile(join(root, 'AGENTS.md'))).toEqual(original)
-    expect(await get('CLAUDE.md')).toBe(CODEX_SOURCE_CLAUDE_BRIDGE)
+    // Claude Code reads AGENTS.md natively (#937): no bridge is written.
+    await expect(get('CLAUDE.md')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await get('GEMINI.md')).toBe('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
-    expect(result.written).toEqual(['CLAUDE.md', 'GEMINI.md'])
+    expect(result.written).toEqual(['GEMINI.md'])
     await expect(get('.claude/skills/sf-private/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(get('.claude/settings.json')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await get('.agents/skills/sf-private/credentials.json')).toBe('secret-value')
@@ -171,8 +178,8 @@ describe('shared agent instructions', () => {
     await expect(get('CLAUDE.md')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('keeps a Codex-source Claude bridge stable across repeated refreshes', async () => {
-    await rm(join(root, 'CLAUDE.md'))
+  it('leaves an existing Codex-source Claude bridge untouched across repeated refreshes', async () => {
+    await put('CLAUDE.md', CODEX_SOURCE_CLAUDE_BRIDGE)
     await put('AGENTS.md', '# Authoritative Codex rules\n')
     const first = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'gemini-cli'] })
     const second = await installAgentInstructions({
@@ -182,7 +189,8 @@ describe('shared agent instructions', () => {
     })
     expect(second.written).toEqual([])
     expect(second.conflicts).toEqual([])
-    expect(second.unchanged).toEqual(['CLAUDE.md', 'GEMINI.md'])
+    expect(second.unchanged).toEqual(['GEMINI.md'])
+    expect(await get('CLAUDE.md')).toBe(CODEX_SOURCE_CLAUDE_BRIDGE)
     expect(await inspectInstructionSource(root)).toEqual({ source: 'codex', claudeInstructions: true, sharedInstructions: true })
   })
 
@@ -207,7 +215,7 @@ describe('shared agent instructions', () => {
   it('allows a Claude source without installed compatibility skills and warns explicitly', async () => {
     await rm(join(root, '.claude/skills'), { recursive: true })
     const result = await installAgentInstructions({ targetPath: root, agents: ['codex'] })
-    expect(result.written).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(result.written).toEqual(['AGENTS.md'])
     expect(result.warnings).toContain('.claude/skills: no installed compatibility skills found.')
   })
 
@@ -235,12 +243,12 @@ describe('shared agent instructions', () => {
     await put('.claude/skills/project-custom/SKILL.md', '# Custom procedure\n')
     const first = await installAgentInstructions({ targetPath: root, agents: ['codex'], referenceOnly: true })
     const secondPlan = await planAgentInstructions({ targetPath: root, agents: ['codex'], manifest: { fileHashes: first.fileHashes } })
-    expect(secondPlan.files.map((file) => file.path)).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(secondPlan.files.map((file) => file.path)).toEqual(['AGENTS.md'])
     expect(secondPlan.files[0].content.toString()).toContain('.claude/skills/*/SKILL.md')
     const second = await installPlannedAgentInstructions(root, secondPlan, first.fileHashes)
     expect(second.written).toEqual([])
     expect(second.conflicts).toEqual([])
-    expect(second.unchanged).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(second.unchanged).toEqual(['AGENTS.md'])
     await expect(get('.agents/skills/project-custom/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -273,7 +281,7 @@ describe('shared agent instructions', () => {
     expect(failure).toBeInstanceOf(AgentInstructionsError)
     expect(failure).toMatchObject({
       message: expect.stringContaining('.agents/skills/sf-git-commit/SKILL.md'),
-      report: { written: ['AGENTS.md', 'GEMINI.md'] }
+      report: { written: ['AGENTS.md'] }
     })
     expect((failure as AgentInstructionsError).cause).toBeDefined()
     expect((failure as Error).message).not.toContain('Custom project')
@@ -310,11 +318,11 @@ describe('shared agent instructions', () => {
     await expect(get('GEMINI.md.saasfoundry.new')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it.each(['qwen-code', 'generic'] as const)('renders universal portable entrypoints for %s', async (agent) => {
+  it.each(['qwen-code', 'generic'] as const)('renders portable entrypoints without an undeclared GEMINI.md for %s', async (agent) => {
     const result = await installAgentInstructions({ targetPath: root, agents: [agent] })
     expect(result.written).toContain('AGENTS.md')
     expect(result.written).toContain('.agents/skills/sf-git-commit/SKILL.md')
-    expect(await get('GEMINI.md')).toContain('@AGENTS.md')
+    await expect(get('GEMINI.md')).rejects.toMatchObject({ code: 'ENOENT' })
     if (agent === 'generic') {
       expect(result.warnings.join('\n')).toMatch(/manual/i)
       expect(result.warnings.join('\n')).toMatch(/not verified|unverified|not checked|not-checked/i)
@@ -416,7 +424,7 @@ describe('shared agent instructions', () => {
     await put('AGENTS.md.saasfoundry.new', '# Existing user reconciliation')
     const result = await install(first.fileHashes)
     expect(result.conflicts).toEqual(['AGENTS.md', '.agents/skills/sf-git-commit/SKILL.md'])
-    expect(Object.keys(result.fileHashes)).toEqual(['GEMINI.md'])
+    expect(Object.keys(result.fileHashes)).toEqual([])
     expect(await get('AGENTS.md')).toBe('# User rules')
     expect(await get('AGENTS.md.saasfoundry.new')).toBe('# Existing user reconciliation')
     expect(await get('.agents/skills/sf-git-commit/SKILL.md')).toBe('# Custom skill')
@@ -452,5 +460,87 @@ describe('shared agent instructions', () => {
     expect(result.warnings.some((w) => w.includes('symbolic link sidecar'))).toBe(true)
     expect(result.warnings.some((w) => w.includes('sf-linked'))).toBe(true)
     await expect(get('.agents/skills/sf-linked/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
+describe('AGENTS.md as the authoritative instruction file (#937)', () => {
+  let root: string
+  const get = (path: string) => readFile(join(root, path), 'utf8')
+  const scaffolded = `# Project\n\nProject rules written by the team.\n\n${GENERATED_REGION_START}\n${GENERATED_REGION_END}\n`
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'sf-agents-md-'))
+    await writeFile(join(root, 'AGENTS.md'), scaffolded)
+    await mkdir(join(root, '.claude/skills/sf-git-commit'), { recursive: true })
+    await writeFile(join(root, '.claude/skills/sf-git-commit/SKILL.md'), SKILL)
+  })
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('fills the generated region and keeps the project text, without writing CLAUDE.md', async () => {
+    const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
+    const agents = await get('AGENTS.md')
+    expect(agents.startsWith('# Project\n\nProject rules written by the team.\n\n')).toBe(true)
+    expect(agents).toContain(GENERATED_INSTRUCTIONS)
+    expect(agents).toContain(SELF_ONBOARDING_INSTRUCTIONS)
+    expect(agents).toContain('sf status --agent-friendly --no-network')
+    expect(agents).not.toContain('Read `CLAUDE.md`')
+    expect(result.written).toEqual(['AGENTS.md', CLAUDE_CODE_RULE_PATH])
+    // AGENTS.md is project-owned: only the Claude rule gets a baseline.
+    expect(Object.keys(result.fileHashes)).toEqual([CLAUDE_CODE_RULE_PATH])
+    expect(await get(CLAUDE_CODE_RULE_PATH)).toContain('SessionStart')
+    await expect(get('CLAUDE.md')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(get('CLAUDE.local.md')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(get('GEMINI.md')).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await inspectInstructionSource(root)).toEqual({ source: 'codex', claudeInstructions: false, sharedInstructions: true })
+  })
+
+  it('rewrites only the generated region on refresh, keeping edits made around it', async () => {
+    const first = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
+    const edited = (await get('AGENTS.md')).replace('Project rules written by the team.', 'Project rules, edited after install.')
+    const stale = edited.replace('## File edits and shell calls', '## Stale block from an older CLI')
+    await writeFile(join(root, 'AGENTS.md'), stale)
+    const second = await installAgentInstructions({ targetPath: root, agents: ['claude-code'], manifest: { fileHashes: first.fileHashes } })
+    expect(second.conflicts).toEqual([])
+    expect(second.written).toEqual(['AGENTS.md'])
+    expect(await get('AGENTS.md')).toBe(edited)
+    const third = await installAgentInstructions({ targetPath: root, agents: ['claude-code'], manifest: { fileHashes: first.fileHashes } })
+    expect(third.written).toEqual([])
+    expect(third.unchanged).toEqual(['AGENTS.md', CLAUDE_CODE_RULE_PATH])
+  })
+
+  it('writes GEMINI.md and shared skill copies only for declared hosts', async () => {
+    const result = await installAgentInstructions({ targetPath: root, agents: ['codex', 'gemini-cli'] })
+    expect(result.written).toEqual(['AGENTS.md', 'GEMINI.md', '.agents/skills/sf-git-commit/SKILL.md'])
+    expect(await get('GEMINI.md')).toBe('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
+    await expect(get(CLAUDE_CODE_RULE_PATH)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('leaves an AGENTS.md without the generated region exactly as written', async () => {
+    await writeFile(join(root, 'AGENTS.md'), '# User-authored rules\n')
+    const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'codex'] })
+    expect(await get('AGENTS.md')).toBe('# User-authored rules\n')
+    expect(result.written).toEqual([])
+    await expect(get(CLAUDE_CODE_RULE_PATH)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('names the file that holds the instructions, never a generated bridge', async () => {
+    expect(await resolveInstructionFile(root)).toBe('AGENTS.md')
+    await writeFile(join(root, 'CLAUDE.md'), '# Rules a user added later\n')
+    expect(await resolveInstructionFile(root)).toBe('AGENTS.md')
+    await writeFile(join(root, 'AGENTS.md'), COMMON_INSTRUCTIONS)
+    expect(await resolveInstructionFile(root)).toBe('CLAUDE.md')
+    await writeFile(join(root, 'AGENTS.md'), '# Codex rules\n')
+    expect(await resolveInstructionFile(root)).toBe('CLAUDE.md')
+    await writeFile(join(root, 'CLAUDE.md'), CODEX_SOURCE_CLAUDE_BRIDGE)
+    expect(await resolveInstructionFile(root)).toBe('AGENTS.md')
+    await rm(join(root, 'AGENTS.md'))
+    expect(await resolveInstructionFile(root)).toBeUndefined()
+  })
+
+  it('keeps the generated blocks free of Claude-only instructions', () => {
+    expect(GENERATED_INSTRUCTIONS).not.toMatch(/\.claude\/settings\.json|--claude-friendly|SessionStart/)
+    expect(withGeneratedInstructions('# No region\n')).toBeUndefined()
   })
 })

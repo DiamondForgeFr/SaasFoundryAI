@@ -56,18 +56,21 @@ sf agents doctor codex claude-code
 ```
 
 Claude Code dispose actuellement d'un installateur facultatif en une phrase pour son skill `tool-saasfoundry`. Les autres hôtes capables de piloter le CLI peuvent aussi guider la même installation
-sans ce skill : sélectionnez leur profil déclaré, puis suivez le fichier `AGENTS.md` généré ou leur point d'entrée propre.
+sans ce skill : sélectionnez leur profil déclaré, puis suivez le fichier `AGENTS.md` généré.
 
 ## 3. Instructions du projet et skills
 
-La source gérée historique reste sous `.claude/` ; les copies portables partagées des agents déclarés se trouvent sous `.agents/` :
+`AGENTS.md` est le fichier d'instructions de référence pour tous les agents. La source gérée des skills reste sous `.claude/` ; les copies partagées des profils déclarés autres que Claude Code se
+trouvent sous `.agents/` :
 
 ```text
-CLAUDE.md
 AGENTS.md
+.claude/rules/claude-code.md   # si claude-code est déclaré
 .claude/skills/sf-*/
 .agents/skills/sf-*/
 ```
+
+Claude Code lit `AGENTS.md` nativement à partir de la version 2.1.277, à condition qu'aucun `CLAUDE.md` n'existe dans le projet ni dans un répertoire parent.
 
 Dans un projet SaaSFoundry, privilégiez les procédures `sf-*` aux skills globales génériques. Les versions du projet connaissent `.saasfoundry.json`, la politique de branches, la topologie et les
 garde-fous du workflow.

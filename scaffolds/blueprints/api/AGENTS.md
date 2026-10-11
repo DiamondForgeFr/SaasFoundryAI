@@ -7,19 +7,10 @@ Production-ready NestJS API generated with **SaaSFoundryAI** - An AI-First devel
 Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
 
 1. Read `.saasfoundry.json` — the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
-2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this
-   summary at session start.
+2. Run `sf status --agent-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. Some hosts run it automatically at session start (Claude Code through
+   the hook described in `.claude/rules/claude-code.md`).
 3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead
    of opening a scope dialogue.
-
-## Coding-agent identity and onboarding
-
-Use the coding-agent identity explicitly supplied by the current host or session. Never infer it from a model/provider name, executable, repository file, or PATH. If the identity is absent or
-ambiguous, ask the user to choose a registered coding-agent profile and do not change the project.
-
-Run `sf agents list --json`. When the current supported tool is undeclared, ask the user to choose one action: add it, replace the declaration with an explicitly named non-empty set, or leave the
-project unchanged. Ask whether the choice is local to this checkout or shared through the repository only after add or replace is accepted. Use `sf agents enable` for add and `sf agents replace` for
-exact replacement. No change runs no mutating command. Replacement changes inventory only and never deletes existing instructions, skills, hooks, settings, credentials, or exclusions.
 
 ## Tech Stack
 
@@ -100,7 +91,7 @@ This blueprint always carries vendored copies of `src/shared-types/` and `src/sh
   **inlined** in the consumer here (e.g. `STORAGE_LOGO_MAX_BYTES` in `organization.controller.ts`, `EmailOptions` interface in `mailersend.service.ts`). Keep the inlined values stable — the
   SaaSFoundryAI CLI's docker assertions enforce that the multirepo path stays inlined.
 
-When in doubt, run `sf status --claude-friendly --no-network` to confirm topology before editing shared shapes.
+When in doubt, run `sf status --agent-friendly --no-network` to confirm topology before editing shared shapes.
 
 ### Prisma Schema
 
@@ -156,7 +147,7 @@ docker compose -f docker-compose.dev-services.yml down   # Stop services
 
 ## 🤖 AI-Assisted Development
 
-This project is pre-configured for AI development with Claude Code.
+This project is pre-configured for AI-assisted development with coding agents (Claude Code, Codex and other AGENTS.md readers).
 
 ### 📣 Long-running commands (announce + stream)
 
@@ -168,39 +159,34 @@ The screen must never freeze silently. For any command expected to take more tha
 
 ### 🛠️ Available Skills
 
-Located in `.claude/skills/`:
+Claude Code discovers them under `.claude/skills/`; other agents read the copies under `.agents/skills/` (or the `.claude/skills/<name>/SKILL.md` file explicitly when no copy exists).
 
 #### Git Workflows
 
-- **`/sf-git-commit`** - Quick commit with conventional messages
+- **`sf-git-commit`** - Quick commit with conventional messages
   - Auto-generates commit messages following project conventions
   - Includes ticket number and proper type
 
-- **`/sf-git-fix-pr-comments`** - Implement PR review feedback
+- **`sf-git-fix-pr-comments`** - Implement PR review feedback
   - Fetches PR comments from GitHub
   - Implements requested changes automatically
   - Creates new commits with fixes
 
 #### Integration grammar
 
-- **`/sf-integration-rules`** - Integration grammar router. Triggers when adding a backend module, an API endpoint, a Prisma model, an RBAC permission, validation, or tests. Routes to `backend.md` /
+- **`sf-integration-rules`** - Integration grammar router. Triggers when adding a backend module, an API endpoint, a Prisma model, an RBAC permission, validation, or tests. Routes to `backend.md` /
   `frontend.md` / `topology.md` sub-guides — read first before scaffolding.
 
 #### Code Quality
 
-- **`/sf-utils-fix-errors`** - Fix ESLint and TypeScript errors
+- **`sf-utils-fix-errors`** - Fix ESLint and TypeScript errors
   - Parallel processing for fast fixes
   - Respects project conventions
   - Safe refactoring
 
-- **`/sf-utils-fix-grammar`** - Fix grammar and spelling
+- **`sf-utils-fix-grammar`** - Fix grammar and spelling
   - Preserves code formatting
   - Works on markdown, comments, docs
-
-#### Integration grammar
-
-- **`/sf-integration-rules`** - How to add a module, an endpoint, a Prisma model or an RBAC permission
-  - Routes to the backend, frontend and topology guides
 
 ### 🎯 Common AI Workflows
 
@@ -208,7 +194,7 @@ Located in `.claude/skills/`:
 
 ```
 User: "Add a user profile endpoint with avatar upload"
-Claude: Uses /sf-integration-rules
+Agent: uses the `sf-integration-rules` skill
 1. Analyzes existing user module
 2. Plans implementation (DTO, service, controller, tests)
 3. Executes changes
@@ -219,7 +205,7 @@ Claude: Uses /sf-integration-rules
 
 ```
 User: "Fix all TypeScript errors"
-Claude: Uses /utils-fix-errors
+Agent: uses the `sf-utils-fix-errors` skill
 - Scans all files in parallel
 - Fixes type errors
 - Maintains code style
@@ -229,10 +215,10 @@ Claude: Uses /utils-fix-errors
 
 ```
 User: "Commit these changes"
-Claude: Uses /git-commit
+Agent: uses the `sf-git-commit` skill
 - Analyzes changed files
 - Generates conventional commit message
-- Includes Co-Authored-By: Claude
+- Includes the agent's Co-Authored-By trailer when the host adds one
 ```
 
 ### ✅ Best Practices
@@ -241,7 +227,7 @@ Claude: Uses /git-commit
 
 - Trust the skills - they respect project conventions
 - Let AI handle repetitive tasks (commits, error fixes)
-- Use APEX workflow for complex features
+- Plan complex features before coding (break them into reviewed steps)
 - Review security-critical code manually
 
 **DON'T**:
@@ -264,7 +250,7 @@ All AI-generated code passes through:
 
 ## API Documentation
 
-- **Interactive docs**: `http://localhost:3000/api/docs`
+- **Interactive docs**: `http://localhost:3500/api/docs`
 - **OpenAPI spec**: Auto-generated in `docs/openapi.json`
 - **Update docs**: Decorators automatically update OpenAPI spec
 
@@ -321,9 +307,9 @@ npm run test:e2e
 
 - This is a **generated project** from SaaSFoundryAI v1.0.0-beta
 - Check `.saasfoundry.json` for installed modules and configuration
-- Update this CLAUDE.md as your project evolves
+- Update this AGENTS.md as your project evolves
 - No migration history — the DB is base setup: edit `prisma/schema` + `prisma/sql/*`, then `npx prisma db push` (schema sync) or `npm run db:setup:dev` (full rebuild + re-seed)
 
 ---
 
-**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaasFoundryAI) or use Claude Code skills for assistance.
+**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaasFoundryAI) or use the project skills for assistance.

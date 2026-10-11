@@ -7,19 +7,10 @@ Production-ready React application generated with **SaaSFoundryAI** - An AI-Firs
 Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
 
 1. Read `.saasfoundry.json` — the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
-2. Run `sf status --claude-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. A `SessionStart` hook in `.claude/settings.json` also auto-injects this
-   summary at session start.
+2. Run `sf status --agent-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. Some hosts run it automatically at session start (Claude Code through
+   the hook described in `.claude/rules/claude-code.md`).
 3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead
    of opening a scope dialogue.
-
-## Coding-agent identity and onboarding
-
-Use the coding-agent identity explicitly supplied by the current host or session. Never infer it from a model/provider name, executable, repository file, or PATH. If the identity is absent or
-ambiguous, ask the user to choose a registered coding-agent profile and do not change the project.
-
-Run `sf agents list --json`. When the current supported tool is undeclared, ask the user to choose one action: add it, replace the declaration with an explicitly named non-empty set, or leave the
-project unchanged. Ask whether the choice is local to this checkout or shared through the repository only after add or replace is accepted. Use `sf agents enable` for add and `sf agents replace` for
-exact replacement. No change runs no mutating command. Replacement changes inventory only and never deletes existing instructions, skills, hooks, settings, credentials, or exclusions.
 
 ## Tech Stack
 
@@ -126,7 +117,7 @@ topology:
   - No generated API client — hand-write React Query hooks under `src/hooks/api/`.
   - Module-shared values (storage MIME list, email envelope, …) are inlined per side; keep them stable — the SaaSFoundryAI CLI's docker assertions enforce the inlined shape.
 
-Run `sf status --claude-friendly --no-network` to confirm topology before changing shared shapes.
+Run `sf status --agent-friendly --no-network` to confirm topology before changing shared shapes.
 
 ## Git Workflow
 
@@ -169,7 +160,7 @@ npm run preview             # Preview production build
 
 ## 🤖 AI-Assisted Development
 
-This project is pre-configured for AI development with Claude Code.
+This project is pre-configured for AI-assisted development with coding agents (Claude Code, Codex and other AGENTS.md readers).
 
 ### 📣 Long-running commands (announce + stream)
 
@@ -181,32 +172,32 @@ The screen must never freeze silently. For any command expected to take more tha
 
 ### 🛠️ Available Skills
 
-Located in `.claude/skills/`:
+Claude Code discovers them under `.claude/skills/`; other agents read the copies under `.agents/skills/` (or the `.claude/skills/<name>/SKILL.md` file explicitly when no copy exists).
 
 #### Git Workflows
 
-- **`/sf-git-commit`** - Quick commit with conventional messages
+- **`sf-git-commit`** - Quick commit with conventional messages
   - Auto-generates commit messages following project conventions
   - Includes ticket number and proper type
 
-- **`/sf-git-fix-pr-comments`** - Implement PR review feedback
+- **`sf-git-fix-pr-comments`** - Implement PR review feedback
   - Fetches PR comments from GitHub
   - Implements requested changes automatically
   - Creates new commits with fixes
 
 #### Integration grammar
 
-- **`/sf-integration-rules`** - Integration grammar router. Triggers when adding a page, an API hook, a form, a ShadCN composition, RBAC wiring, or i18n keys. Routes to `backend.md` / `frontend.md` /
+- **`sf-integration-rules`** - Integration grammar router. Triggers when adding a page, an API hook, a form, a ShadCN composition, RBAC wiring, or i18n keys. Routes to `backend.md` / `frontend.md` /
   `topology.md` sub-guides — read first before scaffolding.
 
 #### Code Quality
 
-- **`/sf-utils-fix-errors`** - Fix ESLint and TypeScript errors
+- **`sf-utils-fix-errors`** - Fix ESLint and TypeScript errors
   - Parallel processing for fast fixes
   - Respects project conventions
   - Safe refactoring
 
-- **`/sf-utils-fix-grammar`** - Fix grammar and spelling
+- **`sf-utils-fix-grammar`** - Fix grammar and spelling
   - Preserves code formatting
   - Works on markdown, comments, docs
 
@@ -216,7 +207,7 @@ Located in `.claude/skills/`:
 
 ```
 User: "Add a user settings page with form validation"
-Claude:
+Agent: uses the `sf-integration-rules` skill
 1. Creates page component in src/pages/private/
 2. Adds route in router/routes.tsx
 3. Creates form with React Hook Form + Zod
@@ -228,7 +219,7 @@ Claude:
 
 ```
 User: "Make this page responsive for mobile"
-Claude:
+Agent:
 - Analyzes current layout
 - Adds Tailwind responsive classes (sm:, md:, lg:)
 - Tests on different breakpoints
@@ -238,7 +229,7 @@ Claude:
 
 ```
 User: "Add French translation for the login page"
-Claude:
+Agent:
 - Updates src/locales/fr/auth.yml
 - Ensures translation keys match English version
 - Uses i18next best practices
@@ -328,7 +319,7 @@ See `.env.example` for required variables:
 
 ```bash
 # API Configuration
-VITE_API_URL="http://localhost:3000/api"
+VITE_API_URL="http://localhost:3500/api"
 
 # Optional: Analytics
 VITE_ANALYTICS_URL="..."
@@ -364,9 +355,9 @@ test('user can login', async ({ page }) => {
 
 - This is a **generated project** from SaaSFoundryAI v1.0.0-beta
 - Check `.saasfoundry.json` for installed modules and configuration
-- Update this CLAUDE.md as your project evolves
+- Update this AGENTS.md as your project evolves
 - Add new components to ShadCN collection as needed
 
 ---
 
-**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaasFoundryAI) or use Claude Code skills for assistance.
+**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaasFoundryAI) or use the project skills for assistance.

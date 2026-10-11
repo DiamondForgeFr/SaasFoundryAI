@@ -41,6 +41,7 @@ jest.mock('terminal-link', () => ({
 }))
 
 import { newCommand } from '../../../commands/new'
+import { GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import { renderTechnicalStack } from '../../../renderers/technical-stack.renderer'
 import { collectStatus } from '../../../status/collect'
@@ -129,13 +130,19 @@ describe('newCommand (--profile integration)', () => {
     // asserted here, real hash content is covered by the installer unit spec.
     expect(manifest.fileHashes).toBeDefined()
     for (const trackedPath of Object.keys(manifest.fileHashes)) {
-      expect(trackedPath).toMatch(/^(?:\.claude\/(?:skills|docs)\/|AGENTS\.md$|GEMINI\.md$)/)
+      expect(trackedPath).toMatch(/^(?:\.claude\/(?:skills|docs)\/|\.claude\/rules\/claude-code\.md$)/)
     }
+    // AGENTS.md is project-owned: only its generated region is refreshed, it carries no baseline
+    expect(manifest.fileHashes['AGENTS.md']).toBeUndefined()
 
     // Harness deposits, no scaffold directories
-    expect(await readFile('CLAUDE.md', 'utf8')).toContain('# acme')
-    expect(await readFile('AGENTS.md', 'utf8')).toContain('SaaSFoundry agent instructions')
-    expect(await readFile('GEMINI.md', 'utf8')).toContain('@AGENTS.md')
+    const agentsMd = await readFile('AGENTS.md', 'utf8')
+    expect(agentsMd).toContain('# acme')
+    expect(agentsMd).toContain(GENERATED_INSTRUCTIONS)
+    expect(await readFile(join(tempDir, '.claude', 'rules', 'claude-code.md'), 'utf8')).not.toBe('')
+    expect(await readdir(tempDir)).not.toContain('CLAUDE.md')
+    expect(await readdir(tempDir)).not.toContain('CLAUDE.local.md')
+    expect(await readdir(tempDir)).not.toContain('GEMINI.md')
     const settings = JSON.parse(await readFile(join(tempDir, '.claude', 'settings.json'), 'utf8'))
     expect(JSON.stringify(settings.hooks.SessionStart)).toContain('sf status --claude-friendly --no-network')
     expect(await readdir(tempDir)).not.toContain('apps')
@@ -146,7 +153,7 @@ describe('newCommand (--profile integration)', () => {
     expect(failing).toEqual([])
 
     const output = logSpy.mock.calls.flat().join('\n')
-    expect(output).toContain('Claude Code (claude-code) — CLAUDE.md')
+    expect(output).toContain('Claude Code (claude-code) — AGENTS.md')
     expect(output).toContain('sf status --agent-friendly --no-network')
   })
 
@@ -164,6 +171,10 @@ describe('newCommand (--profile integration)', () => {
     expect(output).toContain('Gemini CLI (gemini-cli) — GEMINI.md')
     expect(output).toContain('sf agents doctor codex gemini-cli')
     expect(output).not.toContain('open the project in Claude Code')
+
+    // Only the declared Gemini CLI gets its entrypoint; Claude Code is not declared, so no rule
+    expect(await readFile('GEMINI.md', 'utf8')).toBe('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
+    expect(await readdir(tempDir)).not.toContain('CLAUDE.md')
   })
 
   it('harness profile persists and installs an explicit non-interactive workflow preset', async () => {

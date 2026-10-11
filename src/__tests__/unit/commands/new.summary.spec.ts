@@ -31,7 +31,7 @@ describe('the summary reports configured coding-agent profiles from the registry
   })
 
   it('shows the historical Claude Code declaration when selection is omitted or empty', () => {
-    const fallback = [{ id: 'claude-code', displayName: 'Claude Code', instructionFile: 'CLAUDE.md' }]
+    const fallback = [{ id: 'claude-code', displayName: 'Claude Code', instructionFile: 'AGENTS.md' }]
     expect(agentProfileLines()).toEqual(fallback)
     expect(agentProfileLines([])).toEqual(fallback)
   })

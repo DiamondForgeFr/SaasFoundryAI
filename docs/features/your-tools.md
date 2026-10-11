@@ -138,7 +138,7 @@ project, page or file.
 Use the project status command for a local-only diagnostic:
 
 ```bash
-sf status --claude-friendly --no-network
+sf status --agent-friendly --no-network
 ```
 
 ## What the agent actually does

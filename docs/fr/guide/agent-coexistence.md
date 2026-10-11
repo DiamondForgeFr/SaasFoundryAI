@@ -39,11 +39,10 @@ Exécutez ce protocole manuellement sur une machine de confiance, jamais sur un 
 
 1. Relevez la date, le système d’exploitation, le chemin exact de l’exécutable et sa sortie `--version`.
 2. Générez un harness dans un répertoire intermédiaire jetable ; l’installateur peut y créer des réglages et hooks.
-3. Créez un second dépôt Git jetable pour l’observation. Copiez uniquement son `.saasfoundry.json` borné, le point d’entrée vérifié, les dossiers de skills et la documentation référencée. Si le
-   `AGENTS.md` généré référence `CLAUDE.md`, copiez aussi ce fichier et les documents `.claude/` référencés. Ne copiez ni réglages, hooks, `.codex/config.toml`, plugins, configuration MCP ou
-   identifiants secrets.
-4. Pour Claude Code, utilisez `CLAUDE.md` et `.claude/skills`. Pour Codex, utilisez la référence à sens unique de `AGENTS.md` vers `CLAUDE.md` et `.agents/skills`. Ne créez pas de seconde source
-   d’instructions divergente.
+3. Créez un second dépôt Git jetable pour l’observation. Copiez uniquement son `.saasfoundry.json` borné, le point d’entrée vérifié, les dossiers de skills et la documentation référencée, y compris
+   les documents `.claude/` référencés par ses skills. Ne copiez ni réglages, hooks, `.codex/config.toml`, plugins, configuration MCP ou identifiants secrets.
+4. Les deux fixtures utilisent le même `AGENTS.md`. Pour Claude Code, ajoutez `.claude/rules/claude-code.md` et `.claude/skills`, sans aucun `CLAUDE.md` dans la fixture ni dans un répertoire parent
+   (Claude Code ne lit `AGENTS.md` qu’à cette condition, à partir de la version 2.1.277). Pour Codex, ajoutez `.agents/skills`. Ne créez pas de seconde source d’instructions divergente.
 5. Ajoutez une valeur aléatoire aux instructions et des valeurs distinctes à la `description` et au corps du skill sonde. Le prompt demande ces preuves et invoque `sf-native-smoke` par son nom, sans
    contenir les valeurs ni le chemin.
 6. Relevez le hash et le mode de chaque fichier avant et après chaque commande.

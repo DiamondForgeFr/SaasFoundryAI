@@ -168,7 +168,8 @@ The scanner emits **one finding per file**, not one per case — `cases[]` is th
 
 ## `doc-context` — Markdown docs
 
-Emitted by `docs.scanner.ts`. One finding per H1/H2/H3 heading found in `README.md`, `CLAUDE.md` (root + `api/` + `web/`), and `docs/**/*.md`. YAML frontmatter is stripped; H4+ headings are ignored.
+Emitted by `docs.scanner.ts`. One finding per H1/H2/H3 heading found in `README.md`, `AGENTS.md` and `CLAUDE.md` (root + `api/` + `web/`), and `docs/**/*.md`. YAML frontmatter is stripped; H4+
+headings are ignored.
 
 ```ts
 interface DocContextFinding extends BaseScannerFinding {
