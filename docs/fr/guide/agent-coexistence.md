@@ -130,9 +130,9 @@ transition passe par la commande protégée. Une connexion fournisseur ou un sim
 
 ## Référence dogfood SaaSFoundryAI
 
-Ce dépôt déclare ensemble `claude-code` et `codex` dans `.saasfoundry.json`. `CLAUDE.md`, `AGENTS.md` et les arbres vérifiés `.claude/skills` et `.agents/skills` sont partagés. `AGENTS.md` renvoie
-Codex aux mêmes règles faisant autorité et au même workflow protégé. Les réglages privés `.codex`, identifiants secrets, plugins, configurations MCP, choix de modèle et permissions de l’hôte ne font
-pas partie de la déclaration et ne doivent pas être committés comme preuves.
+Ce dépôt déclare ensemble `claude-code` et `codex` dans `.saasfoundry.json`. `AGENTS.md`, `.claude/rules/claude-code.md` et les arbres vérifiés `.claude/skills` et `.agents/skills` sont partagés.
+`AGENTS.md` porte les règles du projet que lisent les deux hôtes, sans `CLAUDE.md` depuis que la migration harness v3 → v4 l’a déplacé (#938), et les renvoie au même workflow protégé. Les réglages
+privés `.codex`, identifiants secrets, plugins, configurations MCP, choix de modèle et permissions de l’hôte ne font pas partie de la déclaration et ne doivent pas être committés comme preuves.
 
 Testez la déclaration depuis un clone ou worktree jetable contenant uniquement les fichiers suivis et revus. Les deux hôtes doivent résoudre le même manifeste, ticket, SRS et document de statut ; les
 deux commandes d’aide doivent exposer les mêmes garde-fous. Les parités de fichiers et exécutions directes restent `structural`. Chargement natif, hooks, authentification, délégation et comportement

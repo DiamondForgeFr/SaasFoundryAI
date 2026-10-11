@@ -18,7 +18,8 @@ La résolution des voies de cycle de vie utilise le runtime TypeScript du dépô
 
 ## Structure du dépôt
 
-Le fichier [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md) expose les règles opérationnelles. Les principaux répertoires sont :
+Le fichier [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md), lu par tous les agents de code dont Claude Code, expose les règles opérationnelles. Les principaux
+répertoires sont :
 
 | Chemin                        | Rôle                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------ |
@@ -240,7 +241,7 @@ numéro présent dans la branche et conserve tous les garde-fous. Après une err
 
 ## Voir aussi
 
-- [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md)
+- [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md)
 - [Compétences principales](/fr/skills/core-skills)
 - [Système de modules](/fr/guide/module-system)
 - [Architecture des modules](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md)

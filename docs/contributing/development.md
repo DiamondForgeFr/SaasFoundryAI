@@ -17,7 +17,8 @@ Lifecycle lane resolution uses the repository's TypeScript runtime and has no se
 
 ## Repository layout
 
-The high-level shape is documented in [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md) — the same file Claude Code reads at session start. Key directories:
+The high-level shape is documented in [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md) — the same file every coding agent, Claude Code included, reads at session
+start. Key directories:
 
 | Path                          | Purpose                                                                                                    |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -223,7 +224,7 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 
 ## See also
 
-- [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md) — the agent's session prompt; mirrors most of this page in operational form
+- [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md) — the agents' session prompt; mirrors most of this page in operational form
 - [Workflow skill](/skills/core-skills) — full reference for the workflow CLI and status transitions
 - [Module system](/guide/module-system) — user-facing view (what modules are and how to add them to a project)
 - [Architecture: modules](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md) — internal reference for adding new modules
