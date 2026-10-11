@@ -37,11 +37,10 @@ Run this protocol manually on a trusted machine. Do not point it at a working pr
 
 1. Record the date, operating system, exact executable path and `--version` output.
 2. Generate a harness in one disposable staging directory. The installer may create settings and hooks there.
-3. Create a second disposable Git repository for the observation. Copy its bounded `.saasfoundry.json`, reviewed entrypoint, skill directories and referenced documentation from staging. A Codex
-   fixture whose generated `AGENTS.md` references `CLAUDE.md` must copy that file and the `.claude/` documentation referenced by its skills. Do not copy settings, hooks, `.codex/config.toml`, plugins,
-   MCP configuration or credentials.
-4. Use `CLAUDE.md` plus `.claude/skills` for the Claude fixture. Use the one-way `AGENTS.md` to `CLAUDE.md` reference plus `.agents/skills` for the Codex fixture. Do not create a second divergent
-   instruction source.
+3. Create a second disposable Git repository for the observation. Copy its bounded `.saasfoundry.json`, reviewed entrypoint, skill directories and referenced documentation from staging, including the
+   `.claude/` documentation referenced by its skills. Do not copy settings, hooks, `.codex/config.toml`, plugins, MCP configuration or credentials.
+4. Both fixtures use the same `AGENTS.md`. Add `.claude/rules/claude-code.md` and `.claude/skills` for the Claude fixture, with no `CLAUDE.md` in the fixture or a parent directory (Claude Code reads
+   `AGENTS.md` only then, from version 2.1.277). Add `.agents/skills` for the Codex fixture. Do not create a second divergent instruction source.
 5. Add a random instruction value and separate random values to the probe skill's `description` and body. The prompt requests those evidence labels and invokes `sf-native-smoke` by name, without
    containing the values or skill path.
 6. Snapshot every fixture file's hash and mode before and after each command.

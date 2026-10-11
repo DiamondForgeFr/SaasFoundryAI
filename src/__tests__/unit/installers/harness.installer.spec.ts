@@ -2,6 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
+import { COMMON_INSTRUCTIONS, GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
 import { HARNESS_ALLOWED_COMMANDS, installHarness, installWorkflowArtifacts } from '../../../installers/harness.installer'
 import { HarnessAgent, WorkflowConfig } from '../../../types'
 import { fileExists } from '../../../utils'
@@ -50,12 +51,16 @@ describe('harness installer', () => {
     it('deposits the full harness on a bare repository', async () => {
       await installHarness({ targetPath: dir, ...params })
 
-      // CLAUDE.md from the harness template, placeholders resolved
-      const claudeMd = await readFile(join(dir, 'CLAUDE.md'), 'utf8')
-      expect(claudeMd).toContain('# notulias')
-      expect(claudeMd).toContain('CLI v9.9.9')
-      expect(claudeMd).not.toContain('{{')
-      expect(claudeMd).toContain('## Workflow System')
+      // AGENTS.md from the harness template, placeholders resolved, region filled (#937)
+      const agentsMd = await readFile(join(dir, 'AGENTS.md'), 'utf8')
+      expect(agentsMd).toContain('# notulias')
+      expect(agentsMd).toContain('CLI v9.9.9')
+      expect(agentsMd).not.toContain('{{')
+      expect(agentsMd).toContain('## Workflow System')
+      expect(agentsMd).toContain(GENERATED_INSTRUCTIONS)
+      expect(await fileExists(join(dir, 'CLAUDE.md'))).toBe(false)
+      expect(await fileExists(join(dir, 'CLAUDE.local.md'))).toBe(false)
+      expect(await readFile(join(dir, '.claude', 'rules', 'claude-code.md'), 'utf8')).toContain('SessionStart')
 
       // Skills + docs + workflow artefacts
       expect(await fileExists(join(dir, '.claude', 'skills', 'sf-workflow', 'SKILL.md'))).toBe(true)
@@ -87,6 +92,8 @@ describe('harness installer', () => {
       expect(claudeMd).toContain('My own instructions, hands off.')
       expect(claudeMd).toContain('## Workflow System')
       expect(claudeMd).not.toContain('{{PROJECT_NAME}}')
+      // A CLAUDE.md that predates #937 stays authoritative until its migration (#938)
+      expect(await readFile(join(dir, 'AGENTS.md'), 'utf8')).toBe(COMMON_INSTRUCTIONS)
     })
 
     it('merges into an existing .claude/settings.json without clobbering it', async () => {
@@ -122,16 +129,18 @@ describe('harness installer', () => {
 
       expect(await fileExists(join(dir, '.claude', 'skills', 'sf-workflow'))).toBe(false)
       expect(await fileExists(join(dir, '.claude', 'docs'))).toBe(true)
-      const claudeMd = await readFile(join(dir, 'CLAUDE.md'), 'utf8')
-      expect(claudeMd).toContain('# bare')
+      const agentsMd = await readFile(join(dir, 'AGENTS.md'), 'utf8')
+      expect(agentsMd).toContain('# bare')
+      expect(agentsMd).not.toContain('## Workflow System')
     })
 
     it('adds shared discovery without removing the Claude workflow', async () => {
       await installHarness({ targetPath: dir, ...params, agents: ['claude-code', 'codex', 'kimi'] })
 
       const instructions = await readFile(join(dir, 'AGENTS.md'), 'utf8')
-      expect(instructions).toContain('CLAUDE.md')
-      expect(await readFile(join(dir, 'CLAUDE.md'), 'utf8')).toContain('Coding-agent identity and onboarding')
+      expect(instructions).toContain('Coding-agent identity and onboarding')
+      expect(instructions).toContain('## Workflow System')
+      expect(await fileExists(join(dir, 'CLAUDE.md'))).toBe(false)
       for (const root of ['.claude', '.agents']) {
         expect(await fileExists(join(dir, root, 'skills', 'sf-workflow', 'SKILL.md'))).toBe(true)
         expect(await fileExists(join(dir, root, 'skills', 'sf-tool-github-projects', 'github-projects-cli.sh'))).toBe(true)
@@ -143,10 +152,10 @@ describe('harness installer', () => {
       expect(settings.hooks.SessionStart).toBeDefined()
     })
 
-    it('installs universal onboarding entrypoints without shared skill copies by default', async () => {
+    it('writes no undeclared host entrypoint and no shared skill copies by default', async () => {
       await installHarness({ targetPath: dir, ...params })
       expect(await fileExists(join(dir, 'AGENTS.md'))).toBe(true)
-      expect(await fileExists(join(dir, 'GEMINI.md'))).toBe(true)
+      expect(await fileExists(join(dir, 'GEMINI.md'))).toBe(false)
       expect(await fileExists(join(dir, '.agents'))).toBe(false)
     })
 
@@ -155,16 +164,16 @@ describe('harness installer', () => {
       const path = join(dir, '.claude', 'skills', 'sf-git-commit', 'SKILL.md')
       const customized = '# Custom commit procedure\nUse the project workflow.\n'
       await writeFile(path, customized)
-      const instructions = await readFile(join(dir, 'CLAUDE.md'), 'utf8')
+      const instructions = await readFile(join(dir, 'AGENTS.md'), 'utf8')
       await installHarness({ targetPath: dir, ...params, agents: [agent] })
       expect(await readFile(path, 'utf8')).toBe(customized)
-      expect(await readFile(join(dir, 'CLAUDE.md'), 'utf8')).toBe(instructions)
+      expect(await readFile(join(dir, 'AGENTS.md'), 'utf8')).toBe(instructions)
       expect(await readFile(join(dir, '.agents', 'skills', 'sf-git-commit', 'SKILL.md'), 'utf8')).toContain('Custom commit procedure')
     })
 
     it('rejects unknown mixed agent selections before depositing the legacy harness', async () => {
       await expect(installHarness({ targetPath: dir, ...params, agents: ['codex', 'unknown-agent' as HarnessAgent] })).rejects.toThrow()
-      expect(await fileExists(join(dir, 'CLAUDE.md'))).toBe(false)
+      expect(await fileExists(join(dir, 'AGENTS.md'))).toBe(false)
       expect(await fileExists(join(dir, '.claude'))).toBe(false)
     })
 
@@ -172,7 +181,7 @@ describe('harness installer', () => {
       await mkdir(join(dir, '.claude', 'skills', 'personal'), { recursive: true })
       await writeFile(join(dir, '.claude', 'skills', 'personal', 'SKILL.md'), 'personal')
       await expect(installHarness({ targetPath: dir, ...params, agents: ['codex'] })).rejects.toThrow('partial harness')
-      expect(await fileExists(join(dir, 'CLAUDE.md'))).toBe(false)
+      expect(await fileExists(join(dir, 'AGENTS.md'))).toBe(false)
       expect(await fileExists(join(dir, '.claude', 'settings.json'))).toBe(false)
       expect(await readFile(join(dir, '.claude', 'skills', 'personal', 'SKILL.md'), 'utf8')).toBe('personal')
     })

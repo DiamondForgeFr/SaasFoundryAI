@@ -17,6 +17,7 @@ my-saas/
 │   │   │   └── main.ts
 │   │   ├── prisma/
 │   │   ├── test/
+│   │   ├── AGENTS.md     # Instructions des agents propres à l’API
 │   │   └── package.json
 │   └── web/              # Frontend React
 │       ├── src/
@@ -26,10 +27,17 @@ my-saas/
 │       │   ├── lib/
 │       │   └── main.tsx
 │       ├── public/
+│       ├── AGENTS.md     # Instructions des agents propres au Web
 │       └── package.json
 ├── packages/
 │   └── shared/           # Code partagé optionnel
-├── .claude/ et .agents/  # Instructions et skills partagés des agents configurés
+├── .claude/
+│   ├── rules/            # claude-code.md, si claude-code est déclaré
+│   └── skills/           # Source gérée des skills et scripts protégés
+├── .agents/
+│   └── skills/           # Skills partagés des profils déclarés autres que Claude Code
+├── AGENTS.md             # Instructions de référence des agents (système de workflow inclus)
+├── GEMINI.md             # Importe AGENTS.md, si gemini-cli est déclaré
 ├── .github/
 │   └── workflows/        # Pipelines CI/CD
 ├── docker-compose.*.yml  # Services de développement
@@ -37,6 +45,9 @@ my-saas/
 ├── package.json          # package.json racine
 └── .saasfoundry.json     # Manifeste du projet
 ```
+
+Seul le `AGENTS.md` racine contient la section `## Workflow System`. Il se termine par une région générée, délimitée par `<!-- saasfoundry:generated:start -->` et `<!-- saasfoundry:generated:end -->`,
+que `sf update` et `sf agents enable` réécrivent ; le reste du fichier appartient au projet. En multirepo, chaque dépôt d’application possède son propre `AGENTS.md` racine.
 
 ## Structure de l’API
 

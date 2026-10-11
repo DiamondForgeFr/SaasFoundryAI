@@ -24,18 +24,19 @@ project-specific capability exist.
 
 ## One source, several agent entrypoints
 
-Claude Code remains the compatibility source during the multi-agent transition:
+`AGENTS.md` holds the project instructions for every agent; `.claude/skills/` remains the managed skill source:
 
 ```text
-.claude/skills/          # managed source used by Claude Code and guarded scripts
-.agents/skills/          # shared copies for Codex and other declared agent profiles
-CLAUDE.md                # Claude entrypoint
-AGENTS.md                # portable/Codex entrypoint; points back to project rules
-GEMINI.md                # Gemini entrypoint when selected
+AGENTS.md                     # authoritative project instructions for every agent
+.claude/skills/               # managed source used by Claude Code and guarded scripts
+.claude/rules/claude-code.md  # Claude-Code-only instructions, when claude-code is declared
+.agents/skills/               # shared copies for declared profiles other than Claude Code
+GEMINI.md                     # imports AGENTS.md, when gemini-cli is declared
 ```
 
-The exact files depend on the declared profiles in `.saasfoundry.json`. `sf agents list`, `sf agents doctor` and `sf status --agent-friendly --no-network` report declarations and file presence. They
-do not claim that a host discovered skills, executed hooks or received credentials; verify those behaviors in the actual host.
+The exact files depend on the declared profiles in `.saasfoundry.json`. A new project gets no `CLAUDE.md`; a project installed before `AGENTS.md` became authoritative keeps its `CLAUDE.md` until its
+migration in a later `sf update` release. `sf agents list`, `sf agents doctor` and `sf status --agent-friendly --no-network` report declarations and file presence. They do not claim that a host
+discovered skills, executed hooks or received credentials; verify those behaviors in the actual host.
 
 Generated multirepos place the managed harness where each repository needs it. Monorepos can centralize the shared instruction surface at the root. See [Agent coexistence](/guide/agent-coexistence)
 and [Project structure](/guide/project-structure) for the exact topology.

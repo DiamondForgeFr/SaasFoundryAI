@@ -2,9 +2,9 @@ import { copy, ensureDir, move, remove } from 'fs-extra'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
+import { resolveInstructionFile } from '../harness/agent-instructions'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { WorkflowConfig, skillsTemplatesPath } from '../types'
-import { fileExists } from '../utils'
 
 export const workflowSkillInstallerMeta: ModuleInstaller = {
   name: 'workflow-skill',
@@ -16,6 +16,8 @@ interface InstallWorkflowSkillParams {
   targetPath: string
   workflow: WorkflowConfig
   projectUrl?: string
+  /** False for a monorepo app: its AGENTS.md sits under the root one, which carries the section. */
+  injectSection?: boolean
 }
 
 /**
@@ -24,13 +26,13 @@ interface InstallWorkflowSkillParams {
  * This function:
  * 1. Copies workflow skill template from scaffolds/skills-templates/workflow/
  * 2. Replaces placeholders in SKILL.md
- * 3. Injects workflow section into CLAUDE.md
+ * 3. Injects workflow section into the project instructions (AGENTS.md)
  *
  * Configuration is read from .saasfoundry.json (no .env needed).
  *
  * Used by builders when workflow is configured during project generation.
  */
-export async function installWorkflowSkill({ targetPath, workflow, projectUrl }: InstallWorkflowSkillParams) {
+export async function installWorkflowSkill({ targetPath, workflow, projectUrl, injectSection = true }: InstallWorkflowSkillParams) {
   // Source: scaffolds/skills-templates/workflow/
   const templatePath = resolve(skillsTemplatesPath, 'workflow')
   const targetSkillPath = `${targetPath}/.claude/skills/sf-workflow`
@@ -79,21 +81,19 @@ export async function installWorkflowSkill({ targetPath, workflow, projectUrl }:
     .replace(/\{\{STATUSES_LIST\}\}/g, statusesList || 'No statuses configured.')
   await writeFile(skillMdPath, skillMdContent)
 
-  // Inject workflow section into CLAUDE.md
-  await injectWorkflowSection({ targetPath, workflow, projectUrl })
+  if (injectSection) await injectWorkflowSection({ targetPath, workflow, projectUrl })
 }
 
 /**
- * Generate and inject workflow section into CLAUDE.md
+ * Generate and inject workflow section into the project instructions: AGENTS.md,
+ * or the CLAUDE.md of a project that predates #937 (see resolveInstructionFile).
  */
 export async function injectWorkflowSection({ targetPath, workflow, projectUrl }: InstallWorkflowSkillParams) {
-  const claudeMdPath = `${targetPath}/CLAUDE.md`
+  const instructionFile = await resolveInstructionFile(targetPath)
+  if (!instructionFile) return
+  const instructionsPath = `${targetPath}/${instructionFile}`
 
-  if (!(await fileExists(claudeMdPath))) {
-    return
-  }
-
-  let claudeMdContent = await readFile(claudeMdPath, 'utf8')
+  let instructionsContent = await readFile(instructionsPath, 'utf8')
 
   // Generate workflow section
   const workflowSection = generateWorkflowSection(workflow, projectUrl)
@@ -102,24 +102,24 @@ export async function injectWorkflowSection({ targetPath, workflow, projectUrl }
   const gitWorkflowMarker = '## Git Workflow'
   const developmentCommandsMarker = '## Development Commands'
 
-  if (claudeMdContent.includes(sectionMarker)) {
+  if (instructionsContent.includes(sectionMarker)) {
     // Idempotent re-install (preset upgrade): replace the existing section,
     // which spans from its heading to the next top-level heading (or EOF).
     const sectionRegex = /## Workflow System[\s\S]*?(?=\n## |$)/
-    claudeMdContent = claudeMdContent.replace(sectionRegex, `${workflowSection}\n`)
-  } else if (claudeMdContent.includes(gitWorkflowMarker) && claudeMdContent.includes(developmentCommandsMarker)) {
+    instructionsContent = instructionsContent.replace(sectionRegex, `${workflowSection}\n`)
+  } else if (instructionsContent.includes(gitWorkflowMarker) && instructionsContent.includes(developmentCommandsMarker)) {
     // Inject between Git Workflow and Development Commands
-    claudeMdContent = claudeMdContent.replace(developmentCommandsMarker, `${workflowSection}\n\n${developmentCommandsMarker}`)
+    instructionsContent = instructionsContent.replace(developmentCommandsMarker, `${workflowSection}\n\n${developmentCommandsMarker}`)
   } else {
     // Append at the end
-    claudeMdContent += `\n\n${workflowSection}`
+    instructionsContent += `\n\n${workflowSection}`
   }
 
-  await writeFile(claudeMdPath, claudeMdContent)
+  await writeFile(instructionsPath, instructionsContent)
 }
 
 /**
- * Generate workflow section content for CLAUDE.md
+ * Generate workflow section content for the project instructions
  */
 function generateWorkflowSection(workflow: WorkflowConfig, projectUrl?: string): string {
   const workingBranch = workflow.workingBranch || 'develop'

@@ -1,112 +1,105 @@
 # Vue d'ensemble des skills
 
-SaaSFoundryAI fournit un catalogue de **skills pour agents de code** dans chaque projet généré. Une skill est une capacité courte et ciblée, chargée automatiquement selon les mécanismes de l'hôte ou
-appelée explicitement. Elle permet à l'agent de suivre durablement les conventions du projet.
+SaaSFoundryAI installe des skills `sf-*` appartenant au projet, qui expliquent comment travailler en sécurité dans l'architecture générée. Elles constituent une documentation exécutable pour les
+agents de code : garde-fous du workflow, grammaire d'intégration, opérations Git, procédures SRS et adaptateurs d'outils externes vivent à côté du code qu'ils encadrent.
 
-## Le préfixe `sf-` et son importance
+## Pourquoi chaque skill du projet commence par `sf-`
 
-Chaque skill SaaSFoundryAI commence par `sf-` :
+- `sf-workflow`, et non un `workflow` générique ;
+- `sf-git-commit`, et non un `commit` générique ;
+- `sf-tool-github-projects`, et non un assistant GitHub générique.
 
-- `sf-git-commit`, et non `git-commit` ;
-- `sf-tool-atlassian`, et non `tool-atlassian` ;
-- `sf-workflow`, et non `workflow`.
+Le préfixe empêche une skill installée globalement de remplacer silencieusement la politique du projet. Dans un projet SaaSFoundryAI, les agents privilégient la procédure `sf-*` du dépôt chaque fois
+qu'une capacité générique et une capacité propre au projet coexistent.
 
-Ce préfixe est le contrat qui permet aux skills du projet de coexister avec celles installées globalement sans collision. Lorsqu'une instruction générée demande de privilégier les skills `sf-*`, c'est
-parce qu'une skill globale `git-commit` pourrait appliquer de mauvaises règles à ce dépôt ; la variante `sf-` est celle du projet.
+## Catégories de skills
 
-## Trois catégories
+| Catégorie               | Installation                                    | Exemples                                                                   |
+| ----------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| Principale              | À chaque installation du harness                | `sf-git-commit`, `sf-git-create-pr`, `sf-utils-fix-errors`                 |
+| Workflow                | Lorsqu'un workflow est configuré                | `sf-workflow` et la skill du tableau choisi                                |
+| Grammaire d'intégration | Lorsqu'une application générée est gérée        | `sf-integration-rules`                                                     |
+| SRS                     | Lorsque le SRS est activé                       | `sf-srs` et son adaptateur de backend                                      |
+| Outil facultatif        | Choisi pendant l'installation ou la mise à jour | `sf-tool-context7`, `sf-tool-atlassian`, `sf-tool-notion`, `sf-tool-figma` |
 
-| Catégorie             | Installation                                                  | Identifiants  | Exemples                                                  |
-| --------------------- | ------------------------------------------------------------- | ------------- | --------------------------------------------------------- |
-| **Principale**        | Toujours, dans chaque projet généré                           | Aucun         | `sf-git-commit`, `sf-utils-fix-errors`, `sf-workflow`     |
-| **Outil**             | Sur demande pendant `sf new` ou via `sf update --add-modules` | Parfois       | `sf-tool-context7`, `sf-tool-atlassian`, `sf-tool-notion` |
-| **Outil du workflow** | Un par projet, aligné sur l'outil de tableau choisi           | Selon l'outil | `sf-tool-github-projects` pour le workflow V1 complet     |
+## Une source, plusieurs points d'entrée d'agents
 
-GitHub Projects fournit aujourd'hui le workflow V1 complet. Jira et Linear restent expérimentaux. Notion est le backend SRS V1 complet, mais pas un outil de suivi complet du workflow.
+`AGENTS.md` contient les instructions du projet pour tous les agents ; `.claude/skills/` reste la source gérée des skills :
 
-Consultez les [skills principales](/fr/skills/core-skills), les [skills d'outils](/fr/skills/tool-skills) et le guide pour [créer vos propres skills](/fr/skills/creating-skills).
-
-## Emplacement des skills
-
-Dans un projet **multirepo**, chaque application possède sa propre copie des surfaces de skills correspondant aux agents activés :
-
-```
-apps/api/.claude/skills/
-apps/api/.agents/skills/
-apps/web/.claude/skills/
-apps/web/.agents/skills/
+```text
+AGENTS.md                     # instructions de référence du projet pour tous les agents
+.claude/skills/               # source gérée utilisée par Claude Code et scripts protégés
+.claude/rules/claude-code.md  # instructions propres à Claude Code, si claude-code est déclaré
+.agents/skills/               # copies partagées pour les profils déclarés autres que Claude Code
+GEMINI.md                     # importe AGENTS.md, si gemini-cli est déclaré
 ```
 
-Dans un **monorepo**, elles sont centralisées à la racine :
+Les fichiers exacts dépendent des profils déclarés dans `.saasfoundry.json`. Un nouveau projet ne reçoit pas de `CLAUDE.md` ; un projet installé avant que `AGENTS.md` ne fasse foi conserve son
+`CLAUDE.md` jusqu'à sa migration dans une version ultérieure de `sf update`. `sf agents list`, `sf agents doctor` et `sf status --agent-friendly --no-network` rapportent les déclarations et la
+présence des fichiers. Ils ne prétendent pas qu'un hôte a découvert les skills, exécuté les hooks ou reçu des identifiants ; vérifiez ces comportements dans l'hôte réel.
 
-```
-.claude/skills/
-.agents/skills/
-```
+Les multirepos générés placent le harness géré là où chaque dépôt en a besoin. Les monorepos peuvent centraliser la surface d'instructions partagée à la racine. Consultez
+[la coexistence des agents](/fr/guide/agent-coexistence) et [la structure du projet](/fr/guide/project-structure) pour la topologie exacte.
 
-Les répertoires réellement déposés dépendent des agents déclarés dans le harness. Claude Code lit les instructions `CLAUDE.md` et les skills Claude ; Codex suit `AGENTS.md` et `.agents/skills`. Le CLI
-conserve un inventaire explicite au lieu de déduire un agent de la présence d'un fichier.
+## Comment un agent utilise une skill
 
-## Invocation des skills
+1. Lire le point d'entrée d'instructions du projet.
+2. Inspecter `.saasfoundry.json` pour la topologie, les modules, les profils d'agents et le workflow.
+3. Choisir la skill `sf-*` correspondante dans la racine de skills déclarée.
+4. Lire son `SKILL.md` complet ainsi que les fichiers de statut et de référence qu'il cite.
+5. Exécuter les scripts protégés au lieu de reproduire manuellement leurs effets.
 
-**Déclenchement automatique** — lorsque l'hôte le permet, l'agent active une skill en reconnaissant des mots-clés pertinents :
+Certains hôtes prennent en charge la découverte par mots-clés ou les commandes slash ; d'autres exigent que l'agent lise la skill explicitement. SaaSFoundryAI documente à la fois la capacité attendue
+et la limite de l'hôte, au lieu de prétendre que chaque runtime se comporte comme Claude Code.
 
-| Demande                              | Skill chargée automatiquement |
-| ------------------------------------ | ----------------------------- |
-| « commit these changes »             | `sf-git-commit`               |
-| « fix the typescript errors »        | `sf-utils-fix-errors`         |
-| « create a PR »                      | `sf-git-create-pr`            |
-| « what's the status of ticket #42? » | `sf-workflow`                 |
-| « use context7 for the NestJS docs » | `sf-tool-context7`            |
+## Skill de workflow et adaptateurs de tableau
 
-**Invocation explicite** — utilisez la forme prise en charge par votre hôte, par exemple avec Claude Code :
+`sf-workflow` porte la sémantique de livraison. Une skill de tableau effectue les opérations réelles sur les tickets.
 
-```
-/sf-git-commit
-/sf-workflow status 42
-/sf-tool-atlassian jira issue PROJ-123
-```
+| Adaptateur                | Statut v1                                                                |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `sf-tool-github-projects` | Contrat de livraison v1 complet                                          |
+| Adaptateur Jira           | Expérimental ; aucune promesse de parité des garde-fous ni de hiérarchie |
+| Adaptateur Linear         | Expérimental ; aucune promesse de parité des garde-fous ni de hiérarchie |
+| Notion                    | Backend SRS v1 complet ; pas un outil de suivi complet du workflow       |
 
-Avec un hôte qui ne propose pas de commande `/skill-name`, demandez simplement la capacité en langage naturel ou lisez explicitement le `SKILL.md` référencé par les instructions du projet.
+La skill de workflow lit la séquence de statuts configurée, qu'il s'agisse du préréglage d'équipe à sept statuts, du préréglage Solo à cinq statuts ou d'un modèle personnalisé. Elle n'a jamais besoin
+d'une skill de workflow « avancée » distincte : la complexité règle la profondeur de l'analyse et de la revue au sein de l'unique workflow.
 
-**Chaînage** — une skill peut en appeler une autre. `sf-workflow` s'appuie sur `sf-tool-github-projects` pour déplacer les tickets sur le tableau ; vous n'avez pas à manipuler directement GraphQL.
-
-## Synchronisation par le CLI
-
-`sf update` propage l'évolution des skills comme celle des autres fichiers du scaffold. Si une nouvelle version de `sf-git-commit` est publiée, `sf update` propose de remplacer votre copie ou signale
-un conflit si vous l'avez personnalisée.
-
-Deux invariants traversent les mises à jour :
-
-- **Les skills principales restent installées.** `sf update` les redépose si elles manquent. Leur suppression manuelle n'est pas conservée comme désinstallation.
-- **Les identifiants des skills d'outils sont préservés.** La logique de la skill peut évoluer, mais les secrets restent dans l'espace utilisateur et ne sont jamais écrasés par `sf update`.
-
-## Découverte
-
-Listez les skills du projet courant :
+## Découverte et diagnostic
 
 ```bash
 sf skill list
+sf skill describe sf-workflow
+sf agents list --json
+sf agents doctor codex claude-code
+sf status --agent-friendly --no-network
 ```
 
-Affichez les détails d'une skill — déclencheurs, outils autorisés et point d'entrée CLI :
+Pour consulter directement la source gérée :
 
 ```bash
-sf skill describe sf-git-commit
+cat .claude/skills/sf-workflow/SKILL.md
+cat .agents/skills/sf-workflow/SKILL.md
 ```
 
-Lisez directement la référence la plus explicite :
+Utilisez le chemin qui existe pour l'hôte courant déclaré. Ne copiez pas de skills personnelles ou globales dans le dépôt et ne déduisez aucun consentement d'un répertoire découvert.
 
-```bash
-cat .claude/skills/sf-git-commit/SKILL.md
-```
+## Mises à jour et personnalisation locale
 
-Pour un autre hôte déclaré, consultez son point d'entrée et son répertoire partagés, par exemple `AGENTS.md` et `.agents/skills` pour Codex. La présence d'un fichier ne prouve pas à elle seule sa
-découverte native ; `sf agents doctor` distingue les artefacts présents des capacités vérifiées de l'hôte.
+`sf update` compare les fichiers de skills gérés avec la référence enregistrée dans `.saasfoundry.json` :
 
-## Étapes suivantes
+- les fichiers gérés inchangés peuvent être mis à jour automatiquement ;
+- les modifications locales deviennent des conflits explicites au lieu d'être écrasées silencieusement ;
+- les identifiants restent hors du dépôt ;
+- les déclarations d'agents partagées et les fichiers d'instructions restent des modifications examinables.
 
-- **Utiliser une skill précise** → [skills principales](/fr/skills/core-skills) ou [skills d'outils](/fr/skills/tool-skills)
-- **Créer une skill absente** → [créer des skills](/fr/skills/creating-skills)
-- **Comprendre l'architecture** → [système de skills](/fr/guide/skills-system)
-- **Gérer les comptes des outils** → [référence de `sf tools`](/fr/cli/sf-tools)
+Si une convention est propre à votre produit, créez une skill personnalisée `sf-*` dans le projet et documentez qui en est responsable. Consultez [créer des skills](/fr/skills/creating-skills).
+
+## Pour aller plus loin
+
+- [Skills principales](/fr/skills/core-skills)
+- [Skills d'outils](/fr/skills/tool-skills)
+- [Créer des skills](/fr/skills/creating-skills)
+- [Architecture du système de skills](/fr/guide/skills-system)
+- [Coexistence des agents](/fr/guide/agent-coexistence)

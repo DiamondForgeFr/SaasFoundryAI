@@ -54,7 +54,7 @@ import {
 import { handleProfileTransition } from './update.profile-transition'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
-import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../harness/agent-instructions'
+import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 import { readLivePackageIdentity } from '../utils/package-identity'
@@ -62,14 +62,23 @@ import { describeCliVersion, resolveCliChannel } from '../cli-channel'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
 // scaffold refreshes must neither delete them nor adopt user edits/private skills.
-const SHARED_AGENT_ENTRYPOINTS = new Set(getSharedAgentEntrypoints())
-function isSharedAgentPath(path: string, protectClaude = false): boolean {
+// The instruction files (AGENTS.md, and the CLAUDE.md of a project that predates
+// #937) are project-owned at every depth: a template refresh would delete a
+// CLAUDE.md the CLI no longer generates. Moving them is a migration (#938).
+const SHARED_AGENT_ENTRYPOINTS = new Set([...getSharedAgentEntrypoints(), CLAUDE_CODE_RULE_PATH])
+function isSharedAgentPath(path: string): boolean {
   const normalized = path.replaceAll('\\', '/')
-  return (protectClaude && normalized === 'CLAUDE.md') || SHARED_AGENT_ENTRYPOINTS.has(normalized) || normalized.startsWith('.agents/')
+  const name = normalized.split('/').pop()
+  return name === 'CLAUDE.md' || name === 'AGENTS.md' || SHARED_AGENT_ENTRYPOINTS.has(normalized) || normalized.startsWith('.agents/')
 }
 
-function withoutSharedAgentHashes(hashes: Record<string, string>, protectClaude = false): Record<string, string> {
-  return Object.fromEntries(Object.entries(hashes).filter(([path]) => !isSharedAgentPath(path, protectClaude)))
+function withoutSharedAgentHashes(hashes: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(hashes).filter(([path]) => !isSharedAgentPath(path)))
+}
+
+/** The three hash sets of a template refresh, without the shared agent paths it must never touch. */
+export function comparableTemplateHashes(baseHashes: Record<string, string>, currentHashes: Record<string, string>, targetHashes: Record<string, string>): FileHashComparison {
+  return { baseHashes: withoutSharedAgentHashes(baseHashes), currentHashes: withoutSharedAgentHashes(currentHashes), targetHashes: withoutSharedAgentHashes(targetHashes) }
 }
 
 export const DEPENDENCY_REFRESH_JOURNAL = '.saasfoundry-dependency-refresh.json'
@@ -351,10 +360,9 @@ export async function refreshDependencyLockAndInstall(label: string, packageRoot
  * tracking with it.
  */
 export function templateBaselines(manifest: SaaSFoundryManifest, targetHashes: Record<string, string>): Record<string, string> {
-  const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
-  const sharedBaselines = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([path]) => isSharedAgentPath(path, protectClaude)))
+  const sharedBaselines = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([path]) => isSharedAgentPath(path)))
   const unmanaged = new Set(manifest.unmanagedPaths ?? [])
-  return { ...Object.fromEntries(Object.entries(withoutSharedAgentHashes(targetHashes, protectClaude)).filter(([path]) => !unmanaged.has(path))), ...sharedBaselines }
+  return { ...Object.fromEntries(Object.entries(withoutSharedAgentHashes(targetHashes)).filter(([path]) => !unmanaged.has(path))), ...sharedBaselines }
 }
 
 export interface FileUpdate {
@@ -887,7 +895,7 @@ async function stageStackModuleChanges(
 
 /**
  * Deposit the current CLI's harness artefacts into a temp dir — the `target`
- * side of the FLOW 1b three-way merge. CLAUDE.md / settings.json land in the
+ * side of the FLOW 1b three-way merge. AGENTS.md / settings.json land in the
  * temp dir too but are outside the tracked scope (merge-managed, never swept).
  */
 async function depositHarnessInTempDir(
@@ -1306,12 +1314,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
           // Three-way comparison
           spinner.text = 'Comparing files...'
-          const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
-          const comparableHashes = {
-            baseHashes: withoutSharedAgentHashes(manifest.fileHashes, protectClaude),
-            currentHashes: withoutSharedAgentHashes(currentHashes, protectClaude),
-            targetHashes: withoutSharedAgentHashes(targetHashes, protectClaude)
-          }
+          const comparableHashes = comparableTemplateHashes(manifest.fileHashes, currentHashes, targetHashes)
           const updates = enforceAtomicImpactValidationBundles(computeFileUpdates(comparableHashes.baseHashes, comparableHashes.currentHashes, comparableHashes.targetHashes), comparableHashes)
 
           if (updates.length === 0) {
@@ -1648,7 +1651,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
         if (Object.keys(preExisting).length === 0) {
           // No prior deposits — plain install.
-          await installHarness({
+          const instructions = await installHarness({
             targetPath: '.',
             projectName: manifest.projectName,
             version: cliVersion,
@@ -1657,7 +1660,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             advancedSkills: harnessConfig.advancedSkills,
             stackPresent: hasTechnicalStack(manifest)
           })
-          harnessTargetHashes = await computeHarnessFileHashes('.')
+          // The instruction deposits (.claude/rules, GEMINI.md, .agents/skills) need their baselines too.
+          harnessTargetHashes = { ...(await computeHarnessFileHashes('.')), ...instructions?.fileHashes }
           manifest.fileHashes = { ...(manifest.fileHashes ?? {}), ...harnessTargetHashes }
         } else {
           // Deposits already exist (stack scaffolds ship core skills; earlier
@@ -1673,7 +1677,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               updates = updates.map((u) => (u.action === 'update' ? { ...u, action: 'conflict' as const } : u))
             }
             await applyFileUpdates(updates, deposit.tempDir, moduleSpinner, conservative ? 'save-new' : conflictStrategy, async () => assertHarnessWritePathsSafe('.'))
-            await mergeHarnessUserFiles({
+            const instructions = await mergeHarnessUserFiles({
               targetPath: '.',
               projectName: manifest.projectName,
               version: cliVersion,
@@ -1681,8 +1685,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               workflow: harnessConfig.workflow
             })
             const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
-            harnessTargetHashes = deposit.hashes
-            manifest.fileHashes = { ...untracked, ...deposit.hashes }
+            harnessTargetHashes = { ...deposit.hashes, ...instructions?.fileHashes }
+            manifest.fileHashes = { ...untracked, ...harnessTargetHashes }
           } finally {
             await rm(deposit.tempDir, { recursive: true, force: true }).catch(() => {})
           }

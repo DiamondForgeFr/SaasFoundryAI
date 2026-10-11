@@ -3,14 +3,14 @@
   "profiles": {
     "claude-code": {
       "displayName": "Claude Code",
-      "instructionFile": "CLAUDE.md",
+      "instructionFile": "AGENTS.md",
       "sharedInstructions": false,
       "instructions": "documented",
       "skills": "documented",
       "runtime": "not-checked",
       "sources": ["https://code.claude.com/docs/en/memory", "https://code.claude.com/docs/en/skills"],
       "limitations": [
-        "Existing Claude instructions and skills remain the common source during the additive compatibility phase.",
+        "Claude Code reads AGENTS.md natively from version 2.1.277, but only when no CLAUDE.md exists in the project or a parent directory.",
         "Installed instructions do not verify runtime access, hook execution or permissions."
       ]
     },

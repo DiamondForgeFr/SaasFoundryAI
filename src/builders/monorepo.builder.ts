@@ -62,7 +62,7 @@ export async function renderMonorepoRoot({
 
   // Substitute {{PROJECT_NAME}} in root package.json BEFORE the JSON merge below so the
   // `codegen:api-client -w @<name>/api-client` script ends up with the project's npm scope.
-  // README.md is substituted here rather than in the skills installer, where CLAUDE.md is
+  // README.md is substituted here rather than in the skills installer, where AGENTS.md is
   // handled: a README addresses a human and belongs to the project whatever profile was
   // chosen, while the AI harness may not be installed at all (#627).
   await substitutePlaceholdersInFiles([at('package.json'), at('README.md')], { PROJECT_NAME: projectName })
@@ -104,8 +104,8 @@ export async function renderMonorepoRoot({
     await writeFile(deployWebPath, content)
   }
 
-  // The root CLAUDE.md tells the AI where the API docs live.
-  await replaceInFile(at('CLAUDE.md'), [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
+  // The root AGENTS.md tells the agent where the API docs live.
+  await replaceInFile(at('AGENTS.md'), [[/http:\/\/localhost:3500/g, `http://localhost:${apiPort}`]])
 
   await installImpactValidation(targetDir, 'monorepo')
 

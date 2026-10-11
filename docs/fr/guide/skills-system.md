@@ -26,10 +26,13 @@ profils non-Claude déclarés :
 ```text
 .claude/skills/           source gérée et scripts protégés
 .agents/skills/           copies partagées portables
-CLAUDE.md                 point d’entrée Claude Code
-AGENTS.md                 point d’entrée portable/Codex
-GEMINI.md                 point d’entrée Gemini CLI si sélectionné
+AGENTS.md                 instructions de référence du projet, lues par tous les agents
+.claude/rules/claude-code.md  instructions propres à Claude Code si `claude-code` est déclaré
+GEMINI.md                 importe AGENTS.md si `gemini-cli` est déclaré
 ```
+
+Les copies `.agents/skills/` ne sont écrites que pour les profils déclarés autres que Claude Code, qui découvre directement `.claude/skills/`. Un nouveau projet ne reçoit pas de `CLAUDE.md` ; un
+projet installé avant que `AGENTS.md` ne fasse foi conserve le sien jusqu’à sa migration dans une version ultérieure de `sf update`.
 
 Ne déduisez jamais la prise en charge d’un runtime du nom d’un dossier. `sf agents doctor` vérifie les fichiers et les capacités documentées, mais seule une observation native dans l’hôte réel peut
 prouver la découverte, les hooks, les permissions ou l’accès au modèle.
@@ -45,7 +48,7 @@ Le manifeste enregistre la topologie et les bases gérées. `sf update` utilise 
 
 L’invocation dépend de l’hôte :
 
-- Claude Code peut découvrir la surface historique `.claude/skills` et ses conventions de commandes ;
+- Claude Code découvre `.claude/skills` et invoque un skill par `/sf-<name>`, comme le décrit `.claude/rules/claude-code.md` ;
 - Codex et les autres profils déclarés suivent leurs instructions natives de projet et les procédures partagées dans `.agents/skills` ;
 - un hôte générique peut demander à l’utilisateur ou à l’agent d’ouvrir explicitement `SKILL.md`.
 

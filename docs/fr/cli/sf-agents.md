@@ -19,14 +19,22 @@ sf agents adopt claude-code codex --mode replace --scope shared --apply --plan <
 
 ## Portée et prérequis
 
-Un projet géré possède `.saasfoundry.json`, `CLAUDE.md` et `.claude/skills`. Utilisez `sf agents catalog` pour connaître les identifiants d'outils enregistrés : les noms de modèles ne sont pas des
-profils d'agent.
+Un projet géré possède `.saasfoundry.json`, un fichier d'instructions `AGENTS.md` et `.claude/skills`. Utilisez `sf agents catalog` pour connaître les identifiants d'outils enregistrés : les noms de
+modèles ne sont pas des profils d'agent.
 
-Les nouveaux harness reçoivent aussi les points d'entrée universels `AGENTS.md` et `GEMINI.md`. Leur présence ne déclare ni Codex ni Gemini : le manifest et l'inventaire local au checkout font foi. Un
-point d'entrée personnalisé appartenant à un outil non déclaré est conservé et n'empêche pas l'activation d'un autre profil.
+`AGENTS.md` est le fichier d'instructions de référence d'un nouveau projet ; le CLI n'écrit plus `CLAUDE.md` ni `CLAUDE.local.md` lors d'une nouvelle installation. Sa présence ne déclare ni Codex ni
+aucun autre outil : le manifest et l'inventaire local au checkout font foi. Les profils déclarés n'ajoutent que ce dont leur outil a besoin : `.claude/rules/claude-code.md` pour `claude-code`,
+`GEMINI.md` (qui importe `AGENTS.md`) pour `gemini-cli`, et les copies `.agents/skills` pour chaque profil déclaré autre que Claude Code. Un point d'entrée personnalisé appartenant à un outil non
+déclaré, comme un `GEMINI.md` existant, est conservé et n'empêche pas l'activation d'un autre profil.
 
-**La portée locale est utilisée par défaut.** Exécutez la commande à la racine d'un checkout Git non bare. La configuration locale écrit les fichiers de découverte enregistrés — dont `AGENTS.md` et le
-`GEMINI.md` de Gemini — ainsi que les fichiers `.agents/skills`. Elle stocke l'inventaire personnel et les références validées dans le répertoire Git du checkout. Les fichiers suivis, l'index, la
+Le `AGENTS.md` racine se termine par une région générée, délimitée par `<!-- saasfoundry:generated:start -->` et `<!-- saasfoundry:generated:end -->`. `sf update` et `sf agents enable` ne réécrivent
+que cette région ; le reste du fichier appartient au projet. Un `AGENTS.md` sans ces marqueurs a été écrit par vous et n'est jamais réécrit.
+
+Les projets installés avant ce changement conservent leur `CLAUDE.md` et sa passerelle `AGENTS.md` sans modification ; leur migration vers `AGENTS.md` est prévue dans une version ultérieure de
+`sf update`.
+
+**La portée locale est utilisée par défaut.** Exécutez la commande à la racine d'un checkout Git non bare. La configuration locale écrit les fichiers de découverte des profils déclarés — par exemple
+le `GEMINI.md` de Gemini — ainsi que les fichiers `.agents/skills`. Elle stocke l'inventaire personnel et les références validées dans le répertoire Git du checkout. Les fichiers suivis, l'index, la
 branche et le manifest partagé restent inchangés. Si une destination suivie doit être modifiée, toute la configuration locale échoue avant d'écrire un fichier. Un fichier suivi identique peut être
 réutilisé sans devenir propriété de la configuration locale.
 
@@ -137,8 +145,8 @@ Pour un protocole reproductible d'observation native et des passages sûrs entre
 
 ### Initialiser une session lorsque les hooks sont absents ou non vérifiés
 
-1. Chargez le point d'entrée choisi — `CLAUDE.md`, `AGENTS.md` ou `GEMINI.md` — et toutes les instructions projet qu'il référence. Lisez `.saasfoundry.json` pour le workflow, le backend SRS et les
-   langues de sortie. Réconciliez toute instruction absente ou contradictoire avant l'implémentation.
+1. Chargez le point d'entrée du projet — `AGENTS.md`, `GEMINI.md`, ou `CLAUDE.md` dans un projet installé avant que `AGENTS.md` ne fasse foi — et toutes les instructions projet qu'il référence. Lisez
+   `.saasfoundry.json` pour le workflow, le backend SRS et les langues de sortie. Réconciliez toute instruction absente ou contradictoire avant l'implémentation.
 2. Exécutez `sf status --agent-friendly --no-network` et traitez ses préconditions. L'option destinée aux agents conserve un code de sortie nul pour rester compatible avec les hooks ; un `fail` dans
    le rapport exige tout de même une résolution. Les hooks `--claude-friendly` existants restent compatibles.
 3. Exécutez `sf agents doctor <tool-id>`. Lisez explicitement les skills applicables si leur découverte native n'est pas vérifiée. Une adoption par références peut volontairement laisser les
@@ -211,12 +219,16 @@ rapporte ses capacités d'exécution comme `not-checked` : une déclaration ne c
 
 | Profil        | Instructions                        | Skills partagées                                                                             |
 | ------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
-| `claude-code` | `CLAUDE.md` existant                | Skills Claude existantes                                                                     |
+| `claude-code` | `AGENTS.md`                         | `.claude/skills`                                                                             |
 | `codex`       | `AGENTS.md`                         | `.agents/skills`                                                                             |
 | `kimi`        | `AGENTS.md`                         | Voir les limites déclarées du profil                                                         |
 | `gemini-cli`  | `GEMINI.md` importe `AGENTS.md`     | Alias `.agents/skills` documenté                                                             |
 | `qwen-code`   | Chargement de `AGENTS.md` documenté | Lecture explicite de repli ; la découverte native des skills partagées n'est pas revendiquée |
 | `generic`     | Chargement manuel de `AGENTS.md`    | Lecture manuelle des skills référencées ; compatibilité non vérifiée                         |
+
+Claude Code lit `AGENTS.md` nativement à partir de la version 2.1.277, mais uniquement lorsqu'aucun `CLAUDE.md` n'existe dans le projet ni dans un répertoire parent. `sf agents list` et
+`sf agents catalog` affichent le profil sous la forme `Claude Code — AGENTS.md`. Les instructions propres à Claude Code (hook `SessionStart`, invocation des skills par `/sf-<name>`, liste
+d'autorisations de `.claude/settings.json`) se trouvent dans `.claude/rules/claude-code.md`.
 
 La documentation Gemini sur les [fichiers de contexte](https://geminicli.com/docs/cli/gemini-md/) et les [skills](https://geminicli.com/docs/cli/skills/) décrit ses mécanismes de découverte. La
 [documentation mémoire de Qwen](https://qwenlm.github.io/qwen-code-docs/en/users/features/memory/) décrit la lecture d'un fichier `AGENTS.md` existant.

@@ -34,7 +34,7 @@ describe('bundled declarative agent registry (#666)', () => {
     expect(schema.properties.modules.properties.harness.properties.agents.items.enum).toEqual(getAgentIds())
   })
   it('declares bounded instruction and skill compatibility without runtime promises', () => {
-    expect(getAgentProfile('claude-code')).toMatchObject({ instructionFile: 'CLAUDE.md', sharedInstructions: false })
+    expect(getAgentProfile('claude-code')).toMatchObject({ instructionFile: 'AGENTS.md', sharedInstructions: false })
     expect(getAgentProfile('gemini-cli')).toMatchObject({ instructionFile: 'GEMINI.md', instructions: 'documented', skills: 'documented' })
     expect(getAgentProfile('qwen-code')).toMatchObject({ instructionFile: 'AGENTS.md', instructions: 'documented', skills: 'manual' })
     expect(getAgentProfile('generic')).toMatchObject({ instructions: 'manual', skills: 'manual' })
@@ -72,7 +72,7 @@ describe('bundled declarative agent registry (#666)', () => {
     expect(getAgentProfile('codex').displayName).toBe('Codex')
     expect(getAgentProfile('codex').sources).not.toContain('https://example.test/changed')
     expect(getAgentProfile('codex').limitations.length).toBeGreaterThan(0)
-    expect(getAgentProfile('claude-code').instructionFile).toBe('CLAUDE.md')
+    expect(getAgentProfile('claude-code').instructionFile).toBe('AGENTS.md')
     expect(getAgentIds()).toHaveLength(6)
   })
   it('uses an independent snapshot rather than the mutable imported JSON object', () => {

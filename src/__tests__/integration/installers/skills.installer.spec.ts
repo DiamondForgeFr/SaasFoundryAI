@@ -93,8 +93,8 @@ describe('installSkills (integration)', () => {
       await expectFileExists(join(webPath, '.claude/skills/sf-tool-context7'))
     })
 
-    it('should replace CLAUDE.md placeholders with project name, version and main branch', async () => {
-      await writeFile(join(apiPath, 'CLAUDE.md'), '# {{PROJECT_NAME}} v{{VERSION}}\n- Main branch: `{{MAIN_BRANCH}}`\n')
+    it('should replace AGENTS.md placeholders with project name, version and main branch', async () => {
+      await writeFile(join(apiPath, 'AGENTS.md'), '# {{PROJECT_NAME}} v{{VERSION}}\n- Main branch: `{{MAIN_BRANCH}}`\n')
 
       await installSkills({
         isMonorepo: false,
@@ -105,10 +105,10 @@ describe('installSkills (integration)', () => {
         mainBranch: 'master'
       })
 
-      const apiClaudeMd = await readFile(join(apiPath, 'CLAUDE.md'), 'utf8')
-      expect(apiClaudeMd).toContain('# my-app v2.0.0')
-      expect(apiClaudeMd).toContain('- Main branch: `master`')
-      expect(apiClaudeMd).not.toContain('{{')
+      const apiAgentsMd = await readFile(join(apiPath, 'AGENTS.md'), 'utf8')
+      expect(apiAgentsMd).toContain('# my-app v2.0.0')
+      expect(apiAgentsMd).toContain('- Main branch: `master`')
+      expect(apiAgentsMd).not.toContain('{{')
     })
 
     it('should not install optional skills when none selected', async () => {
