@@ -28,7 +28,7 @@ import { promptSrsConfiguration } from '../prompts/srs.prompts'
 import { bootstrapSrs } from '../runners/srs.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { runManifestMigrations } from '../migrations/manifest/registry'
-import { runModuleMigrations } from '../migrations/module/registry'
+import { previewModuleMigrations, runModuleMigrations } from '../migrations/module/registry'
 import { classifyProjectCapabilities, hasTechnicalStack } from '../project-capabilities'
 import { recoverTechnicalStackTransition, TECHNICAL_TRANSITION_JOURNAL, TECHNICAL_TRANSITION_LOCK, TECHNICAL_TRANSITION_RECOVERY_LOCK } from '../scaffold/technical-stack.transaction'
 import { acquireManifestMutationLock } from '../scaffold/technical-stack.transaction'
@@ -64,7 +64,8 @@ import { describeCliVersion, resolveCliChannel } from '../cli-channel'
 // scaffold refreshes must neither delete them nor adopt user edits/private skills.
 // The instruction files (AGENTS.md, and the CLAUDE.md of a project that predates
 // #937) are project-owned at every depth: a template refresh would delete a
-// CLAUDE.md the CLI no longer generates. Moving them is a migration (#938).
+// CLAUDE.md the CLI no longer generates. Moving them is the harness v3 → v4
+// migration (#938, harness.migrations.ts).
 const SHARED_AGENT_ENTRYPOINTS = new Set([...getSharedAgentEntrypoints(), CLAUDE_CODE_RULE_PATH])
 function isSharedAgentPath(path: string): boolean {
   const normalized = path.replaceAll('\\', '/')
@@ -1220,7 +1221,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     // to user files go through `writeMigratedFile`, which falls back to a
     // `.saasfoundry.new` sidecar when the user has hand-edited the target.
     // Module migrations may write project files. A preview must remain strictly
-    // read-only; pending module migrations are applied only by the real update.
+    // read-only; pending module migrations are applied only by the real update,
+    // and the preview lists what each would change.
+    const pendingModuleMigrations = dryRun ? await previewModuleMigrations(manifest, '.') : []
     const moduleMigrationResult = dryRun ? { applied: [], manifest } : await runModuleMigrations(manifest, '.')
     if (moduleMigrationResult.applied.length > 0) {
       manifest = moduleMigrationResult.manifest
@@ -1254,6 +1257,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           projectVersion: manifest.version,
           conflictStrategy,
           profileTransition: requestedProfileTransition,
+          ...(pendingModuleMigrations.length > 0 ? { moduleMigrations: pendingModuleMigrations } : {}),
           templateUpdate: { status: 'up-to-date' },
           moduleAddition: { available: [], selected: [], skills: [], wouldRunNpmInstall: false }
         }

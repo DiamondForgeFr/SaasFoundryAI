@@ -52,6 +52,7 @@ jest.mock('../../../installers/registry', () => {
             from: 1,
             to: 2,
             name: 'rename-mailersend-config',
+            preview: async () => [{ action: 'create', source: 'email/config.txt', reason: 'provider config moves to its own file' }],
             up: async (projectDir: string, manifest: SaaSFoundryManifest) => {
               recordedRuns.push({ name: 'rename-mailersend-config', manifestVersion: manifest.manifestVersion })
               await conflict.writeMigratedFile(projectDir, 'email/config.txt', 'PROVIDER=mailersend\n', manifest)
@@ -130,6 +131,27 @@ describe('updateCommand — module migration dispatch', () => {
     expect(email.version).toBe(2)
     expect(await readFile(join(tempDir, 'email/config.txt'), 'utf8')).toBe('PROVIDER=mailersend\n')
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Migrated module 'email' v1 → v2"))
+  })
+
+  // #938 — the dry run lists what each pending migration would change, and changes nothing
+  it('lists pending migrations and their preview in the dry-run report without running them', async () => {
+    const manifest = JSON.stringify(buildManifest())
+    await writeFile('.saasfoundry.json', manifest)
+
+    await updateCommand({ nonInteractive: true, dryRun: true })
+
+    expect(recordedRuns).toEqual([])
+    expect(await readFile('.saasfoundry.json', 'utf8')).toBe(manifest)
+    const output = logSpy.mock.calls.flat().join('\n')
+    const report = JSON.parse(output.slice(output.indexOf('<sf-update-dry-run-report>') + '<sf-update-dry-run-report>'.length, output.indexOf('</sf-update-dry-run-report>')))
+    expect(report.moduleMigrations).toEqual([
+      {
+        module: 'email',
+        fromVersion: 1,
+        toVersion: 2,
+        migrations: [{ name: 'rename-mailersend-config', preview: [{ action: 'create', source: 'email/config.txt', reason: 'provider config moves to its own file' }] }]
+      }
+    ])
   })
 
   it('is a no-op when modules.email.version already matches the installer currentVersion', async () => {

@@ -32,7 +32,7 @@ GEMINI.md                 imports AGENTS.md when `gemini-cli` is declared
 ```
 
 `.agents/skills/` copies are written only for declared profiles other than Claude Code, which discovers `.claude/skills/` directly. A new project gets no `CLAUDE.md`; a project installed before
-`AGENTS.md` became authoritative keeps its own until its migration in a later `sf update` release.
+`AGENTS.md` became authoritative has its `CLAUDE.md` moved into `AGENTS.md` by [`sf update`](/cli/sf-update#claude-md-moves-to-agents-md-harness-v4).
 
 Do not infer runtime support from a directory name. `sf agents doctor` checks files and documented capabilities, but only a native observation in the actual host can prove discovery, hooks,
 permissions or model access.

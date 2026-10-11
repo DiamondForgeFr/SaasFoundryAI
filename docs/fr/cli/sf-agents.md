@@ -30,8 +30,8 @@ déclaré, comme un `GEMINI.md` existant, est conservé et n'empêche pas l'acti
 Le `AGENTS.md` racine se termine par une région générée, délimitée par `<!-- saasfoundry:generated:start -->` et `<!-- saasfoundry:generated:end -->`. `sf update` et `sf agents enable` ne réécrivent
 que cette région ; le reste du fichier appartient au projet. Un `AGENTS.md` sans ces marqueurs a été écrit par vous et n'est jamais réécrit.
 
-Les projets installés avant ce changement conservent leur `CLAUDE.md` et sa passerelle `AGENTS.md` sans modification ; leur migration vers `AGENTS.md` est prévue dans une version ultérieure de
-`sf update`.
+Le `CLAUDE.md` des projets installés avant ce changement est déplacé dans `AGENTS.md` par [`sf update`](/fr/cli/sf-update#claude-md-passe-dans-agents-md-harness-v4) ; `sf agents` lui-même ne déplace
+ni ne supprime jamais un fichier d'instructions.
 
 **La portée locale est utilisée par défaut.** Exécutez la commande à la racine d'un checkout Git non bare. La configuration locale écrit les fichiers de découverte des profils déclarés — par exemple
 le `GEMINI.md` de Gemini — ainsi que les fichiers `.agents/skills`. Elle stocke l'inventaire personnel et les références validées dans le répertoire Git du checkout. Les fichiers suivis, l'index, la

@@ -307,6 +307,12 @@ your own:
 git checkout HEAD -- path/to/removed-file.ts
 ```
 
+### My CLAUDE.md is gone
+
+Since harness v4, `AGENTS.md` is the instruction file every agent reads, Claude Code included. `sf update` moved each section of `CLAUDE.md` into `AGENTS.md` before removing it, and kept any edited
+copy of a generated section under **Kept from CLAUDE.md for review**. Compare with `git show HEAD:CLAUDE.md`; [the move](/cli/sf-update#claude-md-moves-to-agents-md-harness-v4) lists what goes where.
+If your own `AGENTS.md` already existed, look for `AGENTS.md.saasfoundry.new` instead: `CLAUDE.md` stays until you merge it.
+
 ### Where are the tests for this merge?
 
 - `src/__tests__/integration/commands/update.spec.ts`

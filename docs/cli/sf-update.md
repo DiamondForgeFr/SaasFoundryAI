@@ -50,8 +50,8 @@ Machine-readable preview:
 sf update --dry-run --json > saasfoundry-update-plan.json
 ```
 
-`--json` requires `--dry-run`. The CLI reserves stdout for one versioned JSON object and sends diagnostics to stderr. A report can list template actions, module selections, profile-transition
-blockers, reason codes, and executable remediation without exposing candidate file contents or requiring provider secrets.
+`--json` requires `--dry-run`. The CLI reserves stdout for one versioned JSON object and sends diagnostics to stderr. A report can list template actions, pending module migrations with the change each
+would make (`moduleMigrations`), module selections, profile-transition blockers, reason codes, and executable remediation without exposing candidate file contents or requiring provider secrets.
 
 A dry run does not become an authorization token for a normal update. Review it, keep the Git tree clean, then run the apply command with the same intent.
 
@@ -109,6 +109,25 @@ Updates can involve three distinct mechanisms:
 1. **Manifest migrations** bring older manifest schemas to the current version.
 2. **Module migrations** run each installed module's ordered migration chain and advance its module version only after success.
 3. **Template refresh** applies the file comparison above; it is not itself a production database migration.
+
+### CLAUDE.md moves to AGENTS.md (harness v4)
+
+`AGENTS.md` is the single instruction file every coding agent reads, Claude Code included (2.1.277 or later). A project installed before it keeps its instructions in `CLAUDE.md`, and Claude Code
+ignores `AGENTS.md` while a `CLAUDE.md` exists. The harness v3 → v4 migration moves them, section by section, in the root and in each app of a monorepo or multirepo:
+
+| `CLAUDE.md` section                                                                     | Where it lands                                                                                      |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Your own sections, the `## Workflow System` section                                     | `AGENTS.md`, verbatim and in the same order                                                         |
+| A template section still identical to a version SaaSFoundry shipped                     | `AGENTS.md`, in its current tool-neutral wording                                                    |
+| A shipped section the generated region now holds (onboarding, capabilities, file edits) | Dropped: the `saasfoundry:generated` region at the end of `AGENTS.md` regenerates it                |
+| An edited copy of one of those sections                                                 | `AGENTS.md`, verbatim under **Kept from CLAUDE.md for review**: merge what you need, then delete it |
+| Claude-only notes (session hook, `/sf-<name>` skills, permissions)                      | `.claude/rules/claude-code.md`, deposited when Claude Code is declared                              |
+
+`CLAUDE.md` is removed only once `AGENTS.md` is written and every moved section is read back in it. If `AGENTS.md` is a file you wrote rather than the generated bridge, nothing is overwritten: the
+proposal goes to `AGENTS.md.saasfoundry.new` and both files stay until you merge them. A `CLAUDE.local.md` is never deleted; the update reports it, because while it exists Claude Code still ignores
+`AGENTS.md`.
+
+Preview the move first: `sf update --dry-run --json` lists every section under `moduleMigrations`, with its action (`move`, `refresh`, `drop`, `keep-for-review`), its source and its target.
 
 When adding a technical stack to a harness project, SaaSFoundry uses a journaled transaction. A later `sf update --target-profile full` first attempts safe recovery if a previous process stopped
 mid-transition. If it cannot prove a complete commit or safe rollback, it stops and reports the unresolved paths rather than guessing.

@@ -34,9 +34,9 @@ AGENTS.md                     # instructions de référence du projet pour tous 
 GEMINI.md                     # importe AGENTS.md, si gemini-cli est déclaré
 ```
 
-Les fichiers exacts dépendent des profils déclarés dans `.saasfoundry.json`. Un nouveau projet ne reçoit pas de `CLAUDE.md` ; un projet installé avant que `AGENTS.md` ne fasse foi conserve son
-`CLAUDE.md` jusqu'à sa migration dans une version ultérieure de `sf update`. `sf agents list`, `sf agents doctor` et `sf status --agent-friendly --no-network` rapportent les déclarations et la
-présence des fichiers. Ils ne prétendent pas qu'un hôte a découvert les skills, exécuté les hooks ou reçu des identifiants ; vérifiez ces comportements dans l'hôte réel.
+Les fichiers exacts dépendent des profils déclarés dans `.saasfoundry.json`. Un nouveau projet ne reçoit pas de `CLAUDE.md` ; un projet installé avant que `AGENTS.md` ne fasse foi voit son `CLAUDE.md`
+déplacé dans `AGENTS.md` par [`sf update`](/fr/cli/sf-update#claude-md-passe-dans-agents-md-harness-v4). `sf agents list`, `sf agents doctor` et `sf status --agent-friendly --no-network` rapportent
+les déclarations et la présence des fichiers. Ils ne prétendent pas qu'un hôte a découvert les skills, exécuté les hooks ou reçu des identifiants ; vérifiez ces comportements dans l'hôte réel.
 
 Les multirepos générés placent le harness géré là où chaque dépôt en a besoin. Les monorepos peuvent centraliser la surface d'instructions partagée à la racine. Consultez
 [la coexistence des agents](/fr/guide/agent-coexistence) et [la structure du projet](/fr/guide/project-structure) pour la topologie exacte.

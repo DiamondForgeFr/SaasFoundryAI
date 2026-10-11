@@ -360,7 +360,7 @@ describe('templateBaselines', () => {
   })
 
   // #937 — the CLI no longer generates CLAUDE.md. A template refresh of a project generated
-  // before it would delete its CLAUDE.md files and add AGENTS.md ones; that move is #938's migration.
+  // before it would delete its CLAUDE.md files and add AGENTS.md ones; that move is the harness v3 → v4 migration (#938).
   it('never adds, updates or removes an instruction file through the template merge', () => {
     const legacy = {
       'CLAUDE.md': hashFileContent('root rules\n'),

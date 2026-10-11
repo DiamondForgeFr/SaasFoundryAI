@@ -176,7 +176,7 @@ export const CLAUDE_CODE_RULE_PATH = '.claude/rules/claude-code.md'
 
 /**
  * Legacy bridge: AGENTS.md pointing at an authoritative CLAUDE.md. Still written for a project whose
- * CLAUDE.md predates #937 (until its migration, #938) and recognised by its bytes; a new install
+ * CLAUDE.md predates #937 (until the harness v3 → v4 migration moves it, #938) and recognised by its bytes; a new install
  * never generates it.
  */
 export const COMMON_INSTRUCTIONS = `# SaaSFoundry agent instructions

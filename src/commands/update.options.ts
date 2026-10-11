@@ -1,4 +1,5 @@
 import type { CliChannel } from '../cli-channel'
+import type { PendingModuleMigrations } from '../migrations/module/registry'
 import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import type { ProjectCapabilities } from '../project-capabilities'
 import type { TechnicalStackDryRunReport } from '../scaffold/technical-stack.planner'
@@ -115,6 +116,8 @@ export interface UpdateDryRunReport {
         conflict: string[]
         remove: string[]
       }
+  /** Module migrations the real update would run, with what each would change (#938). */
+  moduleMigrations?: PendingModuleMigrations[]
   harnessRefresh?:
     | { status: 'adoption-needed' }
     | {

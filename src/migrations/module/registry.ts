@@ -1,6 +1,6 @@
 import { moduleInstallers } from '../../installers/registry'
 import type { SaaSFoundryManifest } from '../../types'
-import type { ModuleInstaller, ModuleMigration } from './types'
+import type { ModuleInstaller, ModuleMigration, ModuleMigrationPreview } from './types'
 
 export interface AppliedModuleMigrations {
   module: string
@@ -67,6 +67,32 @@ export async function runModuleMigrations(manifest: SaaSFoundryManifest, project
   const nextManifest = manifestChanged ? { ...manifest, modules: nextModules as SaaSFoundryManifest['modules'] } : manifest
 
   return { applied, manifest: nextManifest }
+}
+
+export interface PendingModuleMigrations {
+  module: string
+  fromVersion: number
+  toVersion: number
+  migrations: { name: string; preview: ModuleMigrationPreview[] | null }[]
+}
+
+/** Read-only twin of runModuleMigrations for `sf update --dry-run`: what would run, and what each migration would change. */
+export async function previewModuleMigrations(manifest: SaaSFoundryManifest, projectDir: string): Promise<PendingModuleMigrations[]> {
+  const pending: PendingModuleMigrations[] = []
+  for (const [moduleName, moduleEntry] of Object.entries((manifest.modules ?? {}) as Record<string, unknown>)) {
+    if (!isVersionedModuleEntry(moduleEntry)) continue
+    const installer = moduleInstallers.find((i) => i.name === moduleName)
+    if (!installer) continue
+    const migrations = pendingMigrations(installer, moduleEntry.version)
+    if (migrations.length === 0) continue
+    pending.push({
+      module: moduleName,
+      fromVersion: moduleEntry.version,
+      toVersion: migrations[migrations.length - 1].to,
+      migrations: await Promise.all(migrations.map(async (m) => ({ name: m.name, preview: m.preview ? await m.preview(projectDir, manifest) : null })))
+    })
+  }
+  return pending
 }
 
 /**

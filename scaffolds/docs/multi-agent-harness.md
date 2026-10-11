@@ -31,7 +31,8 @@ web repositories each receive a minimal `structure: cli` manifest plus their own
 outer multirepo manifest alone remains responsible for regenerating the technical stack.
 
 New installs no longer write `CLAUDE.md` or `CLAUDE.local.md`. Claude Code reads `AGENTS.md` only when no `CLAUDE.md` exists in the project or a parent directory. Harnesses installed before this
-change keep their `CLAUDE.md` and its `AGENTS.md` bridge untouched; their migration is a later `sf update` release. Adopting a repository that already has a user-written `CLAUDE.md` keeps it and
+change are moved by `sf update` (harness v3 → v4): `CLAUDE.md` is carried into `AGENTS.md` section by section, Claude-only notes go to `.claude/rules/claude-code.md`, and `CLAUDE.md` is
+removed once every section is placed — a user-written `AGENTS.md` gets a `.saasfoundry.new` proposal instead, and `CLAUDE.local.md` is only reported. Adopting a repository that already has a user-written `CLAUDE.md` keeps it and
 writes a reference-only `AGENTS.md`. A Codex-only repository may retain its original `AGENTS.md` as the source and does not need `.claude/skills`. Portable
 skill copies live under `.agents/skills/` when the source has managed skills to share. Do not manually maintain divergent copies of generated procedures.
 
