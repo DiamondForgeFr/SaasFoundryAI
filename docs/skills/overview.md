@@ -34,9 +34,9 @@ AGENTS.md                     # authoritative project instructions for every age
 GEMINI.md                     # imports AGENTS.md, when gemini-cli is declared
 ```
 
-The exact files depend on the declared profiles in `.saasfoundry.json`. A new project gets no `CLAUDE.md`; a project installed before `AGENTS.md` became authoritative keeps its `CLAUDE.md` until its
-migration in a later `sf update` release. `sf agents list`, `sf agents doctor` and `sf status --agent-friendly --no-network` report declarations and file presence. They do not claim that a host
-discovered skills, executed hooks or received credentials; verify those behaviors in the actual host.
+The exact files depend on the declared profiles in `.saasfoundry.json`. A new project gets no `CLAUDE.md`; a project installed before `AGENTS.md` became authoritative has its `CLAUDE.md` moved into
+`AGENTS.md` by [`sf update`](/cli/sf-update#claude-md-moves-to-agents-md-harness-v4). `sf agents list`, `sf agents doctor` and `sf status --agent-friendly --no-network` report declarations and file
+presence. They do not claim that a host discovered skills, executed hooks or received credentials; verify those behaviors in the actual host.
 
 Generated multirepos place the managed harness where each repository needs it. Monorepos can centralize the shared instruction surface at the root. See [Agent coexistence](/guide/agent-coexistence)
 and [Project structure](/guide/project-structure) for the exact topology.

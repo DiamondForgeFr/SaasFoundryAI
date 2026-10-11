@@ -15,10 +15,14 @@ describe('moduleInstallers registry', () => {
     expect(installer!.migrations).toEqual([])
   })
 
-  it('harness installer is at v2 through its first migration (#831)', () => {
+  it('harness installer is at v4 through its migration chain (#831, #425, #938)', () => {
     expect(getModuleInstaller('harness')).toMatchObject({
-      currentVersion: 3,
-      migrations: [expect.objectContaining({ from: 1, to: 2, name: 'drop-stack-skills-without-stack' }), expect.objectContaining({ from: 2, to: 3, name: 'drop-per-app-claude-in-monorepo' })]
+      currentVersion: 4,
+      migrations: [
+        expect.objectContaining({ from: 1, to: 2, name: 'drop-stack-skills-without-stack' }),
+        expect.objectContaining({ from: 2, to: 3, name: 'drop-per-app-claude-in-monorepo' }),
+        expect.objectContaining({ from: 3, to: 4, name: 'move-claude-md-to-agents-md' })
+      ]
     })
   })
 

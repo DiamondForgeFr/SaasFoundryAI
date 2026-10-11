@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { readdir, readFile, rmdir, unlink } from 'fs/promises'
 import { join } from 'path'
 
+import { applyClaudeMdMigration, planClaudeMdMigration, previewClaudeMdMigration } from '../harness/claude-md-migration'
 import type { ModuleMigration } from '../migrations/module/types'
 import { hasTechnicalStack } from '../project-capabilities'
 import { hashFileContent } from '../utils'
@@ -129,7 +130,36 @@ export const dropPerAppClaudeInMonorepo: ModuleMigration = {
   }
 }
 
-export const harnessMigrations: ModuleMigration[] = [dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo]
+/**
+ * harness v3 → v4 (#938). AGENTS.md is the single instruction file since #937; a project
+ * installed before keeps its instructions in CLAUDE.md, which hides AGENTS.md from Claude Code.
+ * The instructions move to AGENTS.md section by section — see claude-md-migration.ts for what
+ * moves where — and CLAUDE.md goes once every section is read back in AGENTS.md. An AGENTS.md
+ * the user wrote gets a `.saasfoundry.new` proposal instead, and CLAUDE.md stays.
+ */
+export const moveClaudeMdToAgentsMd: ModuleMigration = {
+  from: 3,
+  to: 4,
+  name: 'move-claude-md-to-agents-md',
+  preview: async (projectDir, manifest) => previewClaudeMdMigration(await planClaudeMdMigration(projectDir, manifest)),
+  up: async (projectDir, manifest) => {
+    const result = await applyClaudeMdMigration(projectDir, manifest, await planClaudeMdMigration(projectDir, manifest))
+    for (const path of result.migrated) console.log(chalk.gray(`  Moved ${path} into ${path.replace(/CLAUDE\.md$/, 'AGENTS.md')}, the instruction file every agent reads, and removed it.`))
+    for (const path of result.removedBridges) console.log(chalk.gray(`  Removed ${path}: a generated bridge to AGENTS.md, which Claude Code now reads directly.`))
+    for (const path of result.keptForReview)
+      console.log(chalk.yellow(`  ${path}: sections you had edited are kept under "Kept from CLAUDE.md for review" — merge what you still need, then delete them.`))
+    for (const path of result.sidecars) {
+      const claude = path.replace(/AGENTS\.md\.saasfoundry\.new$/, 'CLAUDE.md')
+      console.log(
+        chalk.yellow(`  Wrote ${path}: your AGENTS.md was kept as is. Review the proposal, replace AGENTS.md with it, then delete ${claude} — while it exists, Claude Code ignores AGENTS.md.`)
+      )
+    }
+    for (const path of result.localShadows)
+      console.log(chalk.yellow(`  Kept ${path}: while it exists, Claude Code ignores AGENTS.md. Move its notes into AGENTS.md or .claude/rules/, then delete it.`))
+  }
+}
+
+export const harnessMigrations: ModuleMigration[] = [dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo, moveClaudeMdToAgentsMd]
 
 /** Files under `dir` with no `fileHashes` entry: not deposited by the harness, so never removed. */
 async function untrackedFiles(projectDir: string, dir: string, hashes: Record<string, string>): Promise<string[]> {

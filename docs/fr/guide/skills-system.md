@@ -31,8 +31,8 @@ AGENTS.md                 instructions de référence du projet, lues par tous l
 GEMINI.md                 importe AGENTS.md si `gemini-cli` est déclaré
 ```
 
-Les copies `.agents/skills/` ne sont écrites que pour les profils déclarés autres que Claude Code, qui découvre directement `.claude/skills/`. Un nouveau projet ne reçoit pas de `CLAUDE.md` ; un
-projet installé avant que `AGENTS.md` ne fasse foi conserve le sien jusqu’à sa migration dans une version ultérieure de `sf update`.
+Les copies `.agents/skills/` ne sont écrites que pour les profils déclarés autres que Claude Code, qui découvre directement `.claude/skills/`. Un nouveau projet ne reçoit pas de `CLAUDE.md` ; le
+`CLAUDE.md` d'un projet installé avant que `AGENTS.md` ne fasse foi est déplacé dans `AGENTS.md` par [`sf update`](/fr/cli/sf-update#claude-md-passe-dans-agents-md-harness-v4).
 
 Ne déduisez jamais la prise en charge d’un runtime du nom d’un dossier. `sf agents doctor` vérifie les fichiers et les capacités documentées, mais seule une observation native dans l’hôte réel peut
 prouver la découverte, les hooks, les permissions ou l’accès au modèle.

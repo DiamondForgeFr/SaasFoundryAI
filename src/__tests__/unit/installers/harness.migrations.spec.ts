@@ -50,9 +50,9 @@ describe('harness migration v1 → v2: drop-stack-skills-without-stack', () => {
   const output = () => logSpy.mock.calls.flat().join('\n')
 
   it('is the start of the harness chain', () => {
-    expect(harnessMigrations).toEqual([dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo])
+    expect(harnessMigrations.slice(0, 2)).toEqual([dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo])
     expect(dropStackSkillsWithoutStack).toMatchObject({ from: 1, to: 2 })
-    expect(harnessInstallerMeta).toMatchObject({ currentVersion: 3, migrations: harnessMigrations })
+    expect(harnessInstallerMeta).toMatchObject({ currentVersion: 4, migrations: harnessMigrations })
   })
 
   it('removes the untouched deposit and its mirror, and their fileHashes entries', async () => {

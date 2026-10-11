@@ -92,7 +92,7 @@ describe('harness installer', () => {
       expect(claudeMd).toContain('My own instructions, hands off.')
       expect(claudeMd).toContain('## Workflow System')
       expect(claudeMd).not.toContain('{{PROJECT_NAME}}')
-      // A CLAUDE.md that predates #937 stays authoritative until its migration (#938)
+      // A CLAUDE.md that predates #937 stays authoritative until the harness v3 → v4 migration (#938)
       expect(await readFile(join(dir, 'AGENTS.md'), 'utf8')).toBe(COMMON_INSTRUCTIONS)
     })
 

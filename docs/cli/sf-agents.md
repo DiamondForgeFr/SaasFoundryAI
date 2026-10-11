@@ -29,7 +29,8 @@ does not block enabling a different profile.
 The root `AGENTS.md` ends with a generated region between `<!-- saasfoundry:generated:start -->` and `<!-- saasfoundry:generated:end -->`. `sf update` and `sf agents enable` rewrite only that region;
 the rest of the file belongs to the project. An `AGENTS.md` without these markers was written by you and is never rewritten.
 
-Projects installed before this change keep their `CLAUDE.md` and its `AGENTS.md` bridge unchanged; their migration to `AGENTS.md` is planned for a later `sf update` release.
+Projects installed before this change have their `CLAUDE.md` moved into `AGENTS.md` by [`sf update`](/cli/sf-update#claude-md-moves-to-agents-md-harness-v4); `sf agents` itself never moves or deletes
+an instruction file.
 
 **Local is the default.** Run at the root of a non-bare Git checkout. Local setup writes the declared profiles' discovery files (for example Gemini’s `GEMINI.md`) and `.agents/skills` files while
 storing the personal inventory and successful baselines inside the checkout's Git directory. It leaves tracked files, the index, branch and shared manifest unchanged. If a tracked destination needs

@@ -51,8 +51,9 @@ Prévisualisation exploitable par une machine :
 sf update --dry-run --json > plan-mise-a-jour-saasfoundry.json
 ```
 
-`--json` exige `--dry-run`. Le CLI réserve stdout à un seul objet JSON versionné et envoie les diagnostics sur stderr. Le rapport peut lister les actions de template, modules choisis, blocages de
-transition, codes de raison et remédiations exécutables, sans exposer le contenu des fichiers candidats ni demander les secrets fournisseurs.
+`--json` exige `--dry-run`. Le CLI réserve stdout à un seul objet JSON versionné et envoie les diagnostics sur stderr. Le rapport peut lister les actions de template, les migrations de modules en
+attente avec le changement que chacune ferait (`moduleMigrations`), les modules choisis, les blocages de transition, codes de raison et remédiations exécutables, sans exposer le contenu des fichiers
+candidats ni demander les secrets fournisseurs.
 
 Un dry-run n'est pas un jeton d'autorisation pour l'application. Relisez-le, gardez un arbre Git propre, puis relancez une commande d'application qui exprime la même intention.
 
@@ -110,6 +111,25 @@ Une mise à jour peut combiner trois mécanismes distincts :
 1. Les **migrations de manifeste** amènent les anciens schémas au format actuel.
 2. Les **migrations de modules** exécutent la chaîne ordonnée de chaque module installé et n'avancent sa version qu'après succès.
 3. Le **rafraîchissement du template** applique la comparaison ci-dessus ; ce n'est pas une migration de base de données de production.
+
+### CLAUDE.md passe dans AGENTS.md (harness v4)
+
+`AGENTS.md` est le seul fichier d'instructions que lisent tous les agents de code, Claude Code compris (2.1.277 ou plus récent). Un projet installé avant garde ses instructions dans `CLAUDE.md`, et
+Claude Code ignore `AGENTS.md` tant qu'un `CLAUDE.md` existe. La migration harness v3 → v4 les déplace, section par section, à la racine et dans chaque application d'un monorepo ou multirepo :
+
+| Section de `CLAUDE.md`                                                                                    | Destination                                                                                                  |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Vos propres sections, la section `## Workflow System`                                                     | `AGENTS.md`, à l'identique et dans le même ordre                                                             |
+| Une section du template encore identique à une version livrée par SaaSFoundry                             | `AGENTS.md`, dans sa formulation actuelle, neutre vis-à-vis de l'outil                                       |
+| Une section livrée que la région générée contient désormais (onboarding, capacités, éditions de fichiers) | Retirée : la région `saasfoundry:generated` en fin d'`AGENTS.md` la régénère                                 |
+| Une copie modifiée de l'une de ces sections                                                               | `AGENTS.md`, à l'identique sous **Kept from CLAUDE.md for review** : reprenez ce qui sert, puis supprimez-la |
+| Les notes propres à Claude (hook de session, skills `/sf-<name>`, permissions)                            | `.claude/rules/claude-code.md`, déposé quand Claude Code est déclaré                                         |
+
+`CLAUDE.md` n'est supprimé qu'une fois `AGENTS.md` écrit et chaque section déplacée relue dedans. Si `AGENTS.md` est un fichier que vous avez écrit et non le pont généré, rien n'est écrasé : la
+proposition va dans `AGENTS.md.saasfoundry.new` et les deux fichiers restent jusqu'à ce que vous les fusionniez. Un `CLAUDE.local.md` n'est jamais supprimé ; la mise à jour le signale, car tant qu'il
+existe Claude Code ignore toujours `AGENTS.md`.
+
+Prévisualisez d'abord : `sf update --dry-run --json` liste chaque section sous `moduleMigrations`, avec son action (`move`, `refresh`, `drop`, `keep-for-review`), sa source et sa cible.
 
 Lorsqu'un projet `harness` reçoit le stack technique, SaaSFoundry utilise une transaction journalisée. Un prochain `sf update --target-profile full` tente d'abord une récupération sûre si un processus
 s'est arrêté pendant la transition. S'il ne peut prouver ni commit complet ni retour arrière sûr, il s'arrête et signale les chemins non résolus.
