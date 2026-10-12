@@ -1,6 +1,6 @@
 # sf status
 
-Report the current SaaSFoundryAI project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI).
+Report the current SaaSFoundryAI project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI, agent instruction files).
 
 ## Usage
 
@@ -31,6 +31,17 @@ What the manifest declares, and whether the tooling around it is wired up.
 | `srs`      | `tools.srs.enabled` with a `rootPage` configured (skipped when SRS is not installed) |
 | `git`      | Project is a git repo and the working tree is clean                                  |
 | `gh`       | GitHub CLI available in `$PATH` (only when `--check-gh` is passed)                   |
+
+### Agent instructions
+
+Whether the coding agents the project declares (`sf agents list`) read `AGENTS.md` whole. Each problem is a `warn`: the agent still starts, but without some or all of the project's rules, and nothing
+in the host says so. A check is skipped when its agent is not declared.
+
+| Name                   | Checks                                                                                                                                                                                                                                                                | Remediation                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instructionShadowing` | Claude Code: no `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the project, its app directories or any parent directory. Claude Code reads them instead of `AGENTS.md`; each one found is listed with its path                                              | Move its content into `AGENTS.md` and delete it. `sf update` does this for files an older harness left; a file above the project is yours to move |
+| `claudeCodeVersion`    | Claude Code: the `claude` on `$PATH` is 2.1.277 or newer, the first release that reads `AGENTS.md`. Read with `claude --version`, locally, with no network call — also under `--no-network`. Skipped when `claude` is not on `$PATH`                                  | `claude update`                                                                                                                                   |
+| `codexInstructionSize` | Codex: what Codex loads in the root and in each app directory with an `AGENTS.md` stays within 32 KiB, its default `project_doc_max_bytes`. The count adds every `AGENTS.md` (or `AGENTS.override.md`) from the Git root down, and the files they import with `@path` | Move detail into docs or skills that `AGENTS.md` names, or raise `project_doc_max_bytes` in `.codex/config.toml`                                  |
 
 ### Runtime
 

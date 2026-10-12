@@ -1,6 +1,6 @@
 # sf status
 
-Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git et, facultativement, CLI GitHub.
+Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, fichiers d'instructions des agents et, facultativement, CLI GitHub.
 
 ## Utilisation
 
@@ -31,6 +31,17 @@ Ce que déclare le manifest et la présence des outils nécessaires autour de lu
 | `srs`      | `tools.srs.enabled` est actif avec un `rootPage` configuré ; ignoré si le module SRS n'est pas installé |
 | `git`      | Le projet est un dépôt Git et son arbre de travail est propre                                           |
 | `gh`       | Le CLI GitHub est présent dans `$PATH` ; contrôlé uniquement avec `--check-gh`                          |
+
+### Instructions des agents
+
+Ces contrôles déterminent si les agents de code déclarés par le projet (`sf agents list`) lisent `AGENTS.md` en entier. Chaque problème est un `warn` : l'agent démarre, mais sans tout ou partie des
+règles du projet, et rien ne le signale dans l'hôte. Un contrôle est ignoré quand son agent n'est pas déclaré.
+
+| Nom                    | Vérification                                                                                                                                                                                                                                                                                                   | Remédiation                                                                                                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instructionShadowing` | Claude Code : aucun `CLAUDE.md`, `.claude/CLAUDE.md` ni `CLAUDE.local.md` dans le projet, ses dossiers d'applications ou un dossier parent. Claude Code les lit à la place d'`AGENTS.md` ; chaque fichier trouvé est listé avec son chemin                                                                     | Reporter son contenu dans `AGENTS.md` puis le supprimer. `sf update` le fait pour les fichiers laissés par un ancien harness ; un fichier au-dessus du projet est à déplacer vous-même |
+| `claudeCodeVersion`    | Claude Code : le `claude` du `$PATH` est en version 2.1.277 ou plus, la première qui lit `AGENTS.md`. Lu avec `claude --version`, en local et sans appel réseau, y compris avec `--no-network`. Ignoré si `claude` n'est pas dans le `$PATH`                                                                   | `claude update`                                                                                                                                                                        |
+| `codexInstructionSize` | Codex : ce que Codex charge à la racine et dans chaque dossier d'application doté d'un `AGENTS.md` tient dans 32 Kio, sa valeur par défaut de `project_doc_max_bytes`. Le calcul additionne chaque `AGENTS.md` (ou `AGENTS.override.md`) depuis la racine Git, et les fichiers qu'ils importent avec `@chemin` | Déplacer le détail dans des docs ou skills cités par `AGENTS.md`, ou relever `project_doc_max_bytes` dans `.codex/config.toml`                                                         |
 
 ### Exécution
 

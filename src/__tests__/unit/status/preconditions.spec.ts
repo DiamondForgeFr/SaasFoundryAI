@@ -352,3 +352,55 @@ describe('runtime preconditions (#587)', () => {
     })
   })
 })
+
+describe('instruction preconditions (#939)', () => {
+  const find = (report: StatusReport, name: string) => evaluatePreconditions(report).find((p) => p.name === name)
+
+  it('skips every instruction check when the declaration could not be read', () => {
+    const report = makeReport({ instructions: { shadowing: [] } })
+    for (const name of ['instructionShadowing', 'claudeCodeVersion', 'codexInstructionSize']) expect(find(report, name)?.status).toBe('skip')
+  })
+
+  it('skips the checks of an agent that is not declared', () => {
+    const report = makeReport({ instructions: { agents: ['codex'], shadowing: [], codexSizes: [] } })
+    expect(find(report, 'instructionShadowing')).toMatchObject({ status: 'skip', details: 'claude-code is not declared (sf agents list)' })
+    expect(find(report, 'claudeCodeVersion')?.status).toBe('skip')
+    expect(find(report, 'codexInstructionSize')?.status).toBe('ok')
+  })
+
+  it('names each shadowing file and how to remove it, including one above the project', () => {
+    const report = makeReport({ instructions: { agents: ['claude-code'], shadowing: ['/tmp/demo/CLAUDE.md', '/tmp/CLAUDE.md'], claudeCode: { version: '2.1.296' } } })
+    const shadowing = find(report, 'instructionShadowing')
+    expect(shadowing?.status).toBe('warn')
+    expect(shadowing?.details).toContain('/tmp/demo/CLAUDE.md, /tmp/CLAUDE.md')
+    expect(shadowing?.remediation).toContain('sf update')
+    expect(shadowing?.remediation).toContain('Files above the project (/tmp/CLAUDE.md)')
+  })
+
+  it('warns on a Claude Code older than 2.1.277 and accepts that release', () => {
+    const old = makeReport({ instructions: { agents: ['claude-code'], shadowing: [], claudeCode: { version: '2.1.276' } } })
+    expect(find(old, 'claudeCodeVersion')).toMatchObject({ status: 'warn', remediation: expect.stringContaining('claude update') })
+    const current = makeReport({ instructions: { agents: ['claude-code'], shadowing: [], claudeCode: { version: '2.1.277' } } })
+    expect(find(current, 'claudeCodeVersion')).toMatchObject({ status: 'ok', details: '2.1.277' })
+    const missing = makeReport({ instructions: { agents: ['claude-code'], shadowing: [], claudeCode: { reason: '`claude` not found on PATH' } } })
+    expect(find(missing, 'claudeCodeVersion')).toMatchObject({ status: 'skip', details: '`claude` not found on PATH' })
+  })
+
+  it('warns when Codex would load more than 32 KiB, naming the files counted', () => {
+    const report = makeReport({
+      instructions: {
+        agents: ['codex'],
+        shadowing: [],
+        codexSizes: [
+          { directory: '.', bytes: 20000, files: ['AGENTS.md'] },
+          { directory: 'apps/api', bytes: 40000, files: ['AGENTS.md', 'apps/api/AGENTS.md'] }
+        ]
+      }
+    })
+    const size = find(report, 'codexInstructionSize')
+    expect(size?.status).toBe('warn')
+    expect(size?.details).toContain('apps/api loads 40000 bytes (AGENTS.md + apps/api/AGENTS.md)')
+    expect(size?.details).not.toContain('20000')
+    expect(size?.remediation).toContain('project_doc_max_bytes')
+  })
+})

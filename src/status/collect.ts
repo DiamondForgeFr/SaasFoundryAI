@@ -6,6 +6,7 @@ import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
+import { collectInstructionDiagnostics, type InstructionDiagnostics } from './instruction-diagnostics'
 
 export interface GitInfo {
   available: boolean
@@ -43,6 +44,8 @@ export interface StatusReport {
    * `--no-network`, or on a project that hosts no database of its own (#587).
    */
   database?: DatabaseReachability
+  /** Instruction files the declared coding agents would miss or cut (#939). Optional for legacy reports. */
+  instructions?: InstructionDiagnostics
 }
 
 export interface StatusCapabilities extends ProjectCapabilities {
@@ -230,6 +233,8 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   const capabilities = manifest ? describeProjectCapabilities(manifest) : null
 
   const git = collectGit(projectRoot)
+  const apps = appPaths(manifest)
+  const instructions = await collectInstructionDiagnostics(projectRoot, apps ? [apps.api, apps.web] : [], findGitDir(projectRoot))
 
   const tools: ToolAvailability[] = []
   if (options.checkGh) tools.push(checkTool('gh', 'gh --version', projectRoot))
@@ -254,6 +259,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     checkedNetwork: options.checkNetwork === true,
     installedSkills,
     capabilities,
+    instructions,
     ...(database ? { database } : {})
   }
 }
