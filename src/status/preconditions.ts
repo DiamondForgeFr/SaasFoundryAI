@@ -1,9 +1,11 @@
 import fs from 'fs'
 import path from 'path'
 
+import type { HarnessAgent } from '../harness/agent-registry'
 import { BOOTSTRAP_COMMAND } from '../installers/harness-provisioning'
 import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
+import { CODEX_INSTRUCTION_LIMIT, compareVersions, MIN_CLAUDE_CODE_VERSION } from './instruction-diagnostics'
 
 export type PreconditionStatus = 'ok' | 'warn' | 'fail' | 'skip'
 
@@ -249,6 +251,72 @@ function checkGhRepository(report: StatusReport): Precondition | undefined {
   }
 }
 
+/**
+ * Instruction preconditions — whether the declared coding agents read AGENTS.md whole (#939).
+ * Each is `warn`: the agent still runs, without some or all of the project's rules.
+ */
+function agentNotDeclared(name: string, description: string, report: StatusReport, agent: HarnessAgent): Precondition | undefined {
+  const agents = report.instructions?.agents
+  if (!agents) return { name, description, status: 'skip', details: 'No instruction file or agent declaration to diagnose' }
+  if (!agents.includes(agent)) return { name, description, status: 'skip', details: `${agent} is not declared (sf agents list)` }
+  return undefined
+}
+
+function checkInstructionShadowing(report: StatusReport): Precondition {
+  const name = 'instructionShadowing'
+  const description = 'No CLAUDE.md hides AGENTS.md from Claude Code'
+  const skipped = agentNotDeclared(name, description, report, 'claude-code')
+  if (skipped) return skipped
+  const files = report.instructions?.shadowing ?? []
+  if (files.length === 0) return { name, description, status: 'ok' }
+  const outside = files.filter((file) => path.relative(report.projectRoot, file).startsWith('..'))
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `Claude Code reads these instead of AGENTS.md: ${files.join(', ')}`,
+    remediation:
+      'Move what each file says into AGENTS.md, then delete it — `sf update` does this for project files left by an older harness. ' +
+      (outside.length
+        ? `Files above the project (${outside.join(', ')}) apply to every checkout below them: move or delete them yourself.`
+        : 'Keep personal notes out of CLAUDE.local.md for the same reason.')
+  }
+}
+
+function checkClaudeCodeVersion(report: StatusReport): Precondition {
+  const name = 'claudeCodeVersion'
+  const description = `Claude Code ${MIN_CLAUDE_CODE_VERSION} or newer reads AGENTS.md`
+  const skipped = agentNotDeclared(name, description, report, 'claude-code')
+  if (skipped) return skipped
+  const claude = report.instructions?.claudeCode
+  if (!claude?.version) return { name, description, status: 'skip', details: claude?.reason ?? 'Not checked' }
+  if (compareVersions(claude.version, MIN_CLAUDE_CODE_VERSION) >= 0) return { name, description, status: 'ok', details: claude.version }
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `Claude Code ${claude.version} on PATH does not read AGENTS.md`,
+    remediation: `Run \`claude update\` (or reinstall Claude Code) to reach ${MIN_CLAUDE_CODE_VERSION} or newer.`
+  }
+}
+
+function checkCodexInstructionSize(report: StatusReport): Precondition {
+  const name = 'codexInstructionSize'
+  const description = `AGENTS.md fits Codex's ${CODEX_INSTRUCTION_LIMIT / 1024} KiB limit`
+  const skipped = agentNotDeclared(name, description, report, 'codex')
+  if (skipped) return skipped
+  const sizes = report.instructions?.codexSizes ?? []
+  const over = sizes.filter((size) => size.bytes > CODEX_INSTRUCTION_LIMIT)
+  if (over.length === 0) return { name, description, status: 'ok', details: sizes.map((size) => `${size.directory}: ${size.bytes} bytes`).join(', ') || 'No AGENTS.md' }
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `Codex cuts what it loads past ${CODEX_INSTRUCTION_LIMIT} bytes: ${over.map((size) => `${size.directory} loads ${size.bytes} bytes (${size.files.join(' + ')})`).join('; ')}`,
+    remediation: 'Move detail out of AGENTS.md and its imports into docs or skills it names, or raise `project_doc_max_bytes` in `.codex/config.toml`.'
+  }
+}
+
 export function evaluatePreconditions(report: StatusReport): Precondition[] {
   const ghRepository = checkGhRepository(report)
   return [
@@ -258,6 +326,9 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkGit(report),
     ...(ghRepository ? [ghRepository] : []),
     checkGh(report),
+    checkInstructionShadowing(report),
+    checkClaudeCodeVersion(report),
+    checkCodexInstructionSize(report),
     checkDependencies(report),
     checkDatabase(report),
     checkOrmClient(report)
