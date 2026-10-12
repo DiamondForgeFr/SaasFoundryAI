@@ -58,6 +58,13 @@ describe('renderJson', () => {
     const parsed = JSON.parse(out)
     expect(parsed.manifest).toBeNull()
     expect(parsed.capabilities).toBeNull()
+    expect(parsed.instructions).toBeNull()
+  })
+
+  it('exposes the instruction-file facts behind the instruction preconditions (#939)', () => {
+    const instructions = { agents: ['claude-code' as const], shadowing: ['/tmp/demo/CLAUDE.md'], claudeCode: { version: '2.1.296' } }
+    const parsed = JSON.parse(renderJson({ report: makeReport({ instructions }), preconditions: [] }))
+    expect(parsed.instructions).toEqual(instructions)
   })
 })
 

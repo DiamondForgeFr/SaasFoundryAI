@@ -93,6 +93,8 @@ export function renderJson(payload: RenderPayload): string {
     capabilities: report.capabilities ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
+    // Additive: the facts behind the three instruction preconditions (#939)
+    instructions: report.instructions ?? null,
     preconditions: preconditions.map((p) => ({
       name: p.name,
       description: p.description,

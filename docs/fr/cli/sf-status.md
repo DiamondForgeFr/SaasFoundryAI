@@ -43,6 +43,9 @@ règles du projet, et rien ne le signale dans l'hôte. Un contrôle est ignoré 
 | `claudeCodeVersion`    | Claude Code : le `claude` du `$PATH` est en version 2.1.277 ou plus, la première qui lit `AGENTS.md`. Lu avec `claude --version`, en local et sans appel réseau, y compris avec `--no-network`. Ignoré si `claude` n'est pas dans le `$PATH`                                                                   | `claude update`                                                                                                                                                                        |
 | `codexInstructionSize` | Codex : ce que Codex charge à la racine et dans chaque dossier d'application doté d'un `AGENTS.md` tient dans 32 Kio, sa valeur par défaut de `project_doc_max_bytes`. Le calcul additionne chaque `AGENTS.md` (ou `AGENTS.override.md`) depuis la racine Git, et les fichiers qu'ils importent avec `@chemin` | Déplacer le détail dans des docs ou skills cités par `AGENTS.md`, ou relever `project_doc_max_bytes` dans `.codex/config.toml`                                                         |
 
+`--json` renvoie aussi les faits derrière ces trois contrôles sous `instructions` : les agents effectifs, les chemins qui masquent `AGENTS.md`, la version de Claude Code lue, et les octets comptés par
+dossier avec les fichiers qui les composent.
+
 ### Exécution
 
 Ces contrôles déterminent si le projet peut réellement **fonctionner**, ce qu'un manifest valide ne suffit pas à garantir. Un projet peut être parfaitement configuré sans avoir de `node_modules`, de
