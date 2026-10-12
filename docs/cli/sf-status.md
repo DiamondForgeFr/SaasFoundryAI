@@ -43,6 +43,9 @@ in the host says so. A check is skipped when its agent is not declared.
 | `claudeCodeVersion`    | Claude Code: the `claude` on `$PATH` is 2.1.277 or newer, the first release that reads `AGENTS.md`. Read with `claude --version`, locally, with no network call — also under `--no-network`. Skipped when `claude` is not on `$PATH`                                  | `claude update`                                                                                                                                   |
 | `codexInstructionSize` | Codex: what Codex loads in the root and in each app directory with an `AGENTS.md` stays within 32 KiB, its default `project_doc_max_bytes`. The count adds every `AGENTS.md` (or `AGENTS.override.md`) from the Git root down, and the files they import with `@path` | Move detail into docs or skills that `AGENTS.md` names, or raise `project_doc_max_bytes` in `.codex/config.toml`                                  |
 
+`--json` also returns the facts behind these three checks under `instructions`: the effective agents, the shadowing paths, the Claude Code version read, and the bytes counted per directory with the
+files that make them up.
+
 ### Runtime
 
 Whether the project can actually **run**, which a well-formed manifest says nothing about. A project can be perfectly configured and still have no `node_modules`, no database answering, and no ORM
