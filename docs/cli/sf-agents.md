@@ -267,8 +267,8 @@ A project overrides the grid in `.saasfoundry.json`:
 ```
 
 `kinds` replaces the tier of a task kind; `tiers` replaces a tier's candidate for one agent or declares a project tier. The manifest schema validates both. A routed override is reported with its
-source `project` and no shipped evidence; one that lands on an excluded candidate is reported with a warning, not refused. An invalid override makes the command fail rather than silently use the grid.
-`sf agents enable`, `replace` and `sf update` keep the `routing` block.
+source `project`; it keeps the shipped evidence only when it resolves to the shipped candidate for that kind; one that lands on an excluded candidate is reported with a warning, not refused. An
+invalid override makes the command fail rather than silently use the grid. `sf agents enable`, `replace` and `sf update` keep the `routing` block.
 
 The grid recommends; it does not launch anything. Your session's own model, provider and credentials stay configured in your tool.
 
