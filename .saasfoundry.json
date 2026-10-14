@@ -134,7 +134,7 @@
     ".agents/skills/sf-workflow/scripts/detect-complexity.sh": "ffc15a241693cdc74e8ea83293feee6f3f15c2979b57d768704b6363f71a75d9",
     ".agents/skills/sf-workflow/scripts/examine.sh": "41660c2beb101766f2c93528fd627d6af02582a4e26ef1b70d36e8e4eae5f320",
     ".agents/skills/sf-workflow/scripts/plan.sh": "cec9907f9800b41a22251352ef8cc2d589a6e55212f75ce743dcbc1f7a9cbac6",
-    ".agents/skills/sf-workflow/SKILL.md": "44172c63200de558aa29cd77e4e27d459926add055e7a2b716ed32c54aa0cf0b",
+    ".agents/skills/sf-workflow/SKILL.md": "a57d6cc53f505ccbde44708426a7c153842ce3fd6eefd85cf58e11d22c31abf1",
     ".agents/skills/sf-workflow/statuses/1-backlog.md": "1f1d252421fb353ec955a624cd13389b7b7fc069e41c39ae4f4538a8268079b1",
     ".agents/skills/sf-workflow/statuses/2-ready.md": "cc67916a7cdedd0c8f8bb6184848b3ad5daa8cc87c146d2a1ab4f50d9c161137",
     ".agents/skills/sf-workflow/statuses/3-in-progress.md": "4b763480f39e23382951e4061df9ec0d0353067a5034a785de2b5b8446a432a0",
@@ -145,7 +145,7 @@
     ".agents/skills/sf-workflow/statuses/5-human-testing.md": "9e40a23280d62d9a1752a03a978780b4cfa53dbde3296d4feb582df4257ddc7e",
     ".agents/skills/sf-workflow/statuses/6-in-review.md": "6ab8245b47985be8d89b3fe0635f06da18f78bc964dc82eeb2133c5ed11b2ab8",
     ".agents/skills/sf-workflow/statuses/7-done.md": "998216a270f6c80bb530c5c3d58e41bad05680b174c2477da36afdb11ce5e3fc",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "85062538972dea764785d095942021ddc983b6947a288ff6f1828e89b1408f4c",
+    ".agents/skills/sf-workflow/workflow-cli.sh": "12d3f4e934d581aae28bbb6e41432ded53a2e266315fd2ba84f8bfdefab66a40",
     ".claude/rules/claude-code.md": "346a5328d2a3648e6ecdd1b0c872f2844889745537c1fa10df5dc24c8461a092"
   },
   "manifestVersion": 4

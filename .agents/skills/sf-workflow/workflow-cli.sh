@@ -1430,6 +1430,12 @@ sync_pr_review() {
       return 0
       ;;
     human-testing|ai-testing) ;;
+    # A ready click that comes too early is not a failure (#1003): nothing moves, and the
+    # Human testing guard still requires a draft PR.
+    backlog|ready|in-progress)
+      echo "::notice::Ticket #${ticket} is ${status}, not awaiting review yet; no ticket changed. Finish testing, then mark the PR ready again."
+      return 0
+      ;;
     *) echo "Error: ticket #${ticket} is not awaiting review (${status:-unknown}); no ticket changed." >&2; return 2 ;;
   esac
   # Unlike interactive legacy guards, this privileged event path must never
@@ -1443,8 +1449,8 @@ sync_pr_review() {
   fi
   nature=$(echo "$labels" | sed -n 's/^nature://p')
   if [[ "$(status_slug "$status")" == ai-testing ]] && status_in_sequence "Human Testing" && [[ "$nature" != internal ]]; then
-    echo "Error: Human Testing approval is required before synchronizing review." >&2
-    return 2
+    echo "::notice::Ticket #${ticket} is in ${status} and needs Human testing before review; no ticket changed. Convert the PR back to draft for Human testing, then mark it ready after validation."
+    return 0
   fi
   # The normal workflow command owns mutations and all status guards.
   (
