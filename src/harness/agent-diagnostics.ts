@@ -2,7 +2,7 @@ import { constants, type Stats } from 'fs'
 import { access, lstat, open, stat } from 'fs/promises'
 import { delimiter, join, resolve } from 'path'
 
-import { AGENT_REGISTRY_VERSION, getAgentIds, getAgentProfile, type HarnessAgent } from './agent-registry'
+import { AGENT_REGISTRY_VERSION, getAgentIds, getAgentProfile, getSkillDirectory, type HarnessAgent } from './agent-registry'
 
 export type DiagnosticStatus = 'supported' | 'unavailable' | 'not-checked' | 'failed'
 
@@ -49,7 +49,6 @@ interface ManifestEvidence {
 }
 
 interface AgentArtifacts {
-  skills: string
   hooks?: string
   runtime?: string
 }
@@ -59,16 +58,17 @@ const MAX_PATH_BYTES = 64 * 1024
 const MAX_PATH_ENTRIES = 256
 
 /**
- * Paths and executable names are trusted code literals. The declarative registry
- * deliberately cannot add commands or arbitrary paths.
+ * Hook paths and executable names are trusted code literals. The declarative registry
+ * deliberately cannot add commands or arbitrary paths; the skill directory comes from
+ * `getSkillDirectory`, which only ever returns one of the two harness directories.
  */
 const ARTIFACTS: Record<HarnessAgent, AgentArtifacts> = {
-  'claude-code': { skills: '.claude/skills', hooks: '.claude/settings.json', runtime: 'claude' },
-  codex: { skills: '.agents/skills', hooks: '.codex/config.toml', runtime: 'codex' },
-  kimi: { skills: '.agents/skills', runtime: 'kimi' },
-  'gemini-cli': { skills: '.agents/skills', hooks: '.gemini/settings.json', runtime: 'gemini' },
-  'qwen-code': { skills: '.agents/skills', runtime: 'qwen' },
-  generic: { skills: '.agents/skills' }
+  'claude-code': { hooks: '.claude/settings.json', runtime: 'claude' },
+  codex: { hooks: '.codex/config.toml', runtime: 'codex' },
+  kimi: { runtime: 'kimi' },
+  'gemini-cli': { hooks: '.gemini/settings.json', runtime: 'gemini' },
+  'qwen-code': { runtime: 'qwen' },
+  generic: {}
 }
 
 const INITIALIZATION = [
@@ -382,11 +382,12 @@ async function runtimePathCheck(command: string | undefined, enabled: boolean): 
 function nativeChecks(agent: HarnessAgent): DiagnosticCheck[] {
   const profile = getAgentProfile(agent)
   const instructionSupport = profile.instructions === 'documented' ? 'Registry sources document instruction discovery' : 'The profile requires manual instruction loading'
+  const discovered = profile.skillDiscovery ? ` (documented discovery: ${profile.skillDiscovery.directories.join(', ')})` : ''
   const skillSupport =
     profile.skills === 'documented'
-      ? 'Registry sources document skill discovery'
+      ? `Registry sources document skill discovery in ${profile.skillDiscovery!.directories.join(', ')}`
       : profile.skills === 'manual'
-        ? 'The profile requires manual skill loading'
+        ? `The profile requires manual skill loading from ${getSkillDirectory(agent)}${discovered}`
         : 'Skill discovery is not declared by the profile'
   return [
     {
@@ -480,7 +481,7 @@ async function collectAgent(root: string, agent: HarnessAgent, manifest: Manifes
   const checks: DiagnosticCheck[] = [
     ...registrationChecks(agent, manifest),
     await inspectArtifact(root, 'artifacts.instructions', profile.instructionFile, 'file'),
-    await inspectArtifact(root, 'artifacts.skills', artifacts.skills, 'directory')
+    await inspectArtifact(root, 'artifacts.skills', getSkillDirectory(agent), 'directory')
   ]
   const skillsCheck = checks.find((check) => check.id === 'artifacts.skills')!
   if (skillsCheck.status === 'unavailable')

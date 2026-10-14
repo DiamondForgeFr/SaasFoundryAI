@@ -7,6 +7,10 @@
       "sharedInstructions": false,
       "instructions": "documented",
       "skills": "documented",
+      "skillDiscovery": {
+        "directories": [".claude/skills"],
+        "source": "https://code.claude.com/docs/en/skills"
+      },
       "runtime": "not-checked",
       "sources": ["https://code.claude.com/docs/en/memory", "https://code.claude.com/docs/en/skills"],
       "limitations": [
@@ -20,8 +24,12 @@
       "sharedInstructions": true,
       "instructions": "documented",
       "skills": "documented",
+      "skillDiscovery": {
+        "directories": [".agents/skills"],
+        "source": "https://learn.chatgpt.com/docs/build-skills"
+      },
       "runtime": "not-checked",
-      "sources": ["https://developers.openai.com/codex/guides/agents-md", "https://developers.openai.com/codex/skills"],
+      "sources": ["https://developers.openai.com/codex/guides/agents-md", "https://learn.chatgpt.com/docs/build-skills"],
       "limitations": ["Claude-specific hooks and permissions are not transferred.", "Run project preconditions explicitly and verify discovery in the actual host."]
     },
     "kimi": {
@@ -29,11 +37,15 @@
       "instructionFile": "AGENTS.md",
       "sharedInstructions": true,
       "instructions": "manual",
-      "skills": "manual",
+      "skills": "documented",
+      "skillDiscovery": {
+        "directories": [".kimi-code/skills", ".agents/skills"],
+        "source": "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html"
+      },
       "runtime": "not-checked",
-      "sources": [],
+      "sources": ["https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html"],
       "limitations": [
-        "Read AGENTS.md and the applicable .agents/skills procedures explicitly until host discovery is verified.",
+        "Read AGENTS.md explicitly until host instruction discovery is verified; the documented .agents/skills discovery does not prove runtime activation.",
         "This profile configures portable files; it does not install Kimi or select a model."
       ]
     },
@@ -43,6 +55,10 @@
       "sharedInstructions": true,
       "instructions": "documented",
       "skills": "documented",
+      "skillDiscovery": {
+        "directories": [".gemini/skills", ".agents/skills"],
+        "source": "https://geminicli.com/docs/cli/skills/"
+      },
       "runtime": "not-checked",
       "sources": ["https://geminicli.com/docs/cli/gemini-md/", "https://geminicli.com/docs/cli/skills/"],
       "limitations": [
@@ -57,10 +73,14 @@
       "sharedInstructions": true,
       "instructions": "documented",
       "skills": "manual",
+      "skillDiscovery": {
+        "directories": [".qwen/skills"],
+        "source": "https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/"
+      },
       "runtime": "not-checked",
       "sources": ["https://qwenlm.github.io/qwen-code-docs/en/users/features/memory/", "https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/"],
       "limitations": [
-        "Read applicable .agents/skills procedures explicitly; this profile does not claim native discovery of that shared directory.",
+        "Qwen Code discovers project skills in .qwen/skills, which this harness does not write; read applicable .agents/skills procedures explicitly.",
         "No .qwen settings, hooks, credentials or model choices are installed."
       ]
     },
@@ -70,6 +90,7 @@
       "sharedInstructions": true,
       "instructions": "manual",
       "skills": "manual",
+      "skillDiscovery": null,
       "runtime": "not-checked",
       "sources": [],
       "limitations": [

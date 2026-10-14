@@ -10,13 +10,39 @@ export interface AgentProfile {
   sharedInstructions: boolean
   instructions: 'documented' | 'manual'
   skills: 'documented' | 'manual' | 'not-checked'
+  /** Project directories the host's own documentation says it scans for skills; null when none is documented. */
+  skillDiscovery: SkillDiscovery | null
   runtime: 'not-checked'
   sources: string[]
   limitations: string[]
 }
 
+export interface SkillDiscovery {
+  directories: string[]
+  /** The documentation page that states the directories; it is also listed in `sources`. */
+  source: string
+}
+
+/** The two skill directories the harness writes: the canonical sources and their portable projection. */
+export const CLAUDE_SKILLS_DIR = '.claude/skills'
+export const SHARED_SKILLS_DIR = '.agents/skills'
+
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
-const fields = ['displayName', 'instructionFile', 'sharedInstructions', 'instructions', 'skills', 'runtime', 'sources', 'limitations']
+const fields = ['displayName', 'instructionFile', 'sharedInstructions', 'instructions', 'skills', 'skillDiscovery', 'runtime', 'sources', 'limitations']
+
+function validSkillDiscovery(value: unknown, sources: string[]): boolean {
+  if (value === null) return true
+  return (
+    object(value) &&
+    Object.keys(value).length === 2 &&
+    Array.isArray(value.directories) &&
+    value.directories.length > 0 &&
+    value.directories.every((directory) => typeof directory === 'string' && /^\.[a-z0-9-]+\/skills$/.test(directory)) &&
+    new Set(value.directories).size === value.directories.length &&
+    typeof value.source === 'string' &&
+    sources.includes(value.source)
+  )
+}
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string' && item.trim().length > 0)
 
 /** Validate bundled declarative data; no commands, loaders or arbitrary paths. */
@@ -52,10 +78,15 @@ export function validateAgentRegistry(value: unknown): void {
       !['documented', 'manual', 'not-checked'].includes(profile.skills) ||
       profile.runtime !== 'not-checked' ||
       !strings(profile.sources) ||
-      !strings(profile.limitations)
+      !strings(profile.limitations) ||
+      !validSkillDiscovery(profile.skillDiscovery, profile.sources)
     ) {
       throw new Error(`Invalid agent capability declaration: ${id}`)
     }
+    // A documented skill claim must name a directory the harness actually writes.
+    const directories = object(profile.skillDiscovery) ? (profile.skillDiscovery.directories as string[]) : []
+    if (profile.skills === 'documented' && !directories.some((directory) => directory === CLAUDE_SKILLS_DIR || directory === SHARED_SKILLS_DIR))
+      throw new Error(`Documented skill discovery requires a harness skill directory: ${id}`)
     for (const source of profile.sources) {
       let url: URL
       try {
@@ -80,12 +111,24 @@ const profiles = Object.freeze(
       Object.freeze({
         ...value,
         id,
+        skillDiscovery: value.skillDiscovery ? Object.freeze({ directories: Object.freeze([...value.skillDiscovery.directories]), source: value.skillDiscovery.source }) : null,
         sources: Object.freeze([...value.sources]),
         limitations: Object.freeze([...value.limitations])
       })
     ])
   )
-) as Readonly<Record<HarnessAgent, Readonly<Omit<AgentProfile, 'sources' | 'limitations'> & { readonly sources: readonly string[]; readonly limitations: readonly string[] }>>>
+) as Readonly<
+  Record<
+    HarnessAgent,
+    Readonly<
+      Omit<AgentProfile, 'skillDiscovery' | 'sources' | 'limitations'> & {
+        readonly skillDiscovery: Readonly<{ directories: readonly string[]; source: string }> | null
+        readonly sources: readonly string[]
+        readonly limitations: readonly string[]
+      }
+    >
+  >
+>
 
 export function getAgentIds(): HarnessAgent[] {
   return Object.keys(profiles) as HarnessAgent[]
@@ -98,7 +141,25 @@ export function isHarnessAgent(value: unknown): value is HarnessAgent {
 export function getAgentProfile(id: string): AgentProfile {
   if (!isHarnessAgent(id)) throw new Error(`Unknown coding agent '${id}'. Supported profiles: ${getAgentIds().join(', ')}. Model names and providers are separate.`)
   const profile = profiles[id]
-  return { ...profile, sources: [...profile.sources], limitations: [...profile.limitations] }
+  return {
+    ...profile,
+    skillDiscovery: profile.skillDiscovery && { directories: [...profile.skillDiscovery.directories], source: profile.skillDiscovery.source },
+    sources: [...profile.sources],
+    limitations: [...profile.limitations]
+  }
+}
+
+/** Whether the host discovers the canonical `.claude/skills` sources itself, so it needs no projected copy. */
+function discoversClaudeSkills(profile: AgentProfile): boolean {
+  return profile.skillDiscovery?.directories.includes(CLAUDE_SKILLS_DIR) ?? false
+}
+
+/**
+ * The directory where the harness provides a host's skills: the canonical sources for a host
+ * that reads them, otherwise the `.agents/skills` projection, natively discovered or read manually.
+ */
+export function getSkillDirectory(id: string): string {
+  return discoversClaudeSkills(getAgentProfile(id)) ? CLAUDE_SKILLS_DIR : SHARED_SKILLS_DIR
 }
 
 export function listAgentProfiles(): AgentProfile[] {
