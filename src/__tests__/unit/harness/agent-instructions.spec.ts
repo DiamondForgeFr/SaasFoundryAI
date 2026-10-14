@@ -49,6 +49,48 @@ describe('normalizeSkill', () => {
     const line = 'a Tauri `generate_handler!` list, a Go/Express router, `routes.go`'
     expect(body(line)).toContain(line)
   })
+
+  it('never rewrites inline code or fenced blocks (#940)', () => {
+    const code = [
+      'Pass `$ARGUMENTS` to `PARALLEL ONLY` and `the Task tool`.',
+      '```bash',
+      'echo "$ARGUMENTS"  # Task tool, PARALLEL ONLY',
+      '!`git status`',
+      '```',
+      '~~~',
+      'Use the Task tool with $ARGUMENTS',
+      '~~~',
+      '````md',
+      '```',
+      '$ARGUMENTS',
+      '````'
+    ].join('\n')
+    expect(body(code)).toContain(code)
+  })
+
+  it('translates the prose around code and the `Task` tool name', () => {
+    expect(body('Use the `Task` tool for $ARGUMENTS, `$ARGUMENTS` stays.')).toContain(
+      'Use the native delegation when available (otherwise execute the same work sequentially) for the current user request, `$ARGUMENTS` stays.'
+    )
+  })
+
+  it('translates `!` injection only where the `!` opens the span', () => {
+    expect(body('  !`git status`')).toContain('  run `git status` and read its output')
+    expect(body('wow!`git status`')).toContain('wow!`git status`')
+    expect(body('(!`git status`)')).toContain('(!`git status`)')
+    expect(body('`a`!`b`')).toContain('`a`!`b`')
+    expect(body('Uses ``!`x` `` here')).toContain('Uses ``!`x` `` here')
+  })
+
+  it('leads a ```! block in with an instruction and keeps the block unchanged', () => {
+    expect(body('```!\ngit log -1\n```\n')).toContain('Run this block and read its output:\n\n```!\ngit log -1\n```\n')
+  })
+
+  it('separates the capabilities from the skill with exactly one blank line', () => {
+    const projected = body('\n\n# Commit\n')!
+    expect(projected).not.toMatch(/\n\n\n/)
+    expect(projected).toContain('credentials implicitly.\n\n# Commit\n')
+  })
 })
 
 describe('shared agent instructions', () => {

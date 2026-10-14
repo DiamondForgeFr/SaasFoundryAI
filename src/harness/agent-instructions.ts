@@ -416,17 +416,72 @@ export function normalizeSkill(content: string, name: string, path: string, warn
       if (!['name', 'description'].includes(field[1])) warnings.push(`${path}: omitted frontmatter '${field[1]}'; native configuration is unchanged.`)
     }
   }
-  let body = match ? content.slice(match[0].length) : content
-  body = body
-    .replace(/\$ARGUMENTS\b/g, 'the current user request')
-    // Only a `!` that opens a span is context injection: `generate_handler!` closing one span must not swallow the next (#903)
-    .replace(/(^|[\s:])!`([^`\n]+)`/gm, '$1run `$2` and read its output')
-    .replace(/\bPARALLEL ONLY\b/g, 'Prefer parallel delegation when available; otherwise execute sequentially')
-    .replace(/`?Task`? tool/gi, 'native delegation when available (otherwise execute the same work sequentially)')
+  const body = translateSkillBody(match ? content.slice(match[0].length) : content)
   if (/\bTask\s*\(|\bsubagent_type\b|\b(?:haiku|sonnet|opus)\b|\bclaude\s+-[a-z]|\$\{?CLAUDE_|\/(?:task|sf-)\b|SessionStart|UserPromptSubmit/i.test(body)) {
     warnings.push(`${path}: legacy model/tool-specific examples remain; translate capabilities explicitly before executing them.`)
   }
-  return `---\n${common.join('\n')}\n---\n\n${CAPABILITIES}\n${body}`
+  // One blank line between the capabilities and the skill, whatever blank lines the source opens with.
+  return `---\n${common.join('\n')}\n---\n\n${CAPABILITIES.trimEnd()}\n\n${body.replace(/^(?:[ \t]*\r?\n)+/, '')}`
+}
+
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/
+const INLINE_CODE = /(`+)([\s\S]*?[^`])\1(?!`)/g
+
+const DELEGATION = 'native delegation when available (otherwise execute the same work sequentially)'
+
+/** Translate host-specific prose. Code never reaches this function. */
+function translateProse(text: string): string {
+  return text
+    .replace(/\$ARGUMENTS\b/g, 'the current user request')
+    .replace(/\bPARALLEL ONLY\b/g, 'Prefer parallel delegation when available; otherwise execute sequentially')
+    .replace(/\bTask tool/gi, DELEGATION)
+}
+
+/**
+ * Translate one prose line around its inline code spans, which are copied byte for byte. Two
+ * spans are prose by meaning: `` !`cmd` `` where the `!` opens the span (Claude Code's context
+ * injection, at line start or after whitespace), and the `` `Task` tool `` name.
+ */
+function translateLine(line: string): string {
+  let out = ''
+  let last = 0
+  for (const match of line.matchAll(INLINE_CODE)) {
+    const prose = line.slice(last, match.index)
+    const span = match[0]
+    const opensLine = last === 0
+    last = match.index + span.length
+    // A `!` that closes the previous span, as in `generate_handler!`, is not injection (#903).
+    if (prose === '!' ? opensLine : /\s!$/.test(prose)) out += `${translateProse(prose.slice(0, -1))}run ${span} and read its output`
+    else if (span === '`Task`' && /^ tool\b/i.test(line.slice(last))) {
+      out += translateProse(prose) + DELEGATION
+      last += ' tool'.length
+    } else out += translateProse(prose) + span
+  }
+  return out + translateProse(line.slice(last))
+}
+
+/**
+ * Translate a skill body for hosts other than Claude Code (#940). Prose is translated; fenced
+ * blocks and inline code are copied byte for byte, so commands and examples stay exact.
+ */
+export function translateSkillBody(body: string): string {
+  let fence: string | undefined
+  let out = ''
+  for (const line of body.split(/(?<=\n)/)) {
+    const marker = FENCE_LINE.exec(line.replace(/\r?\n$/, ''))
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = undefined
+      out += line
+    } else if (marker && !(marker[1][0] === '`' && marker[2].includes('`'))) {
+      fence = marker[1]
+      // Claude Code runs a ```! block and injects its output; another host has to be told.
+      if (marker[2].trim() === '!') out += 'Run this block and read its output:\n\n'
+      out += line
+    } else {
+      out += translateLine(line)
+    }
+  }
+  return out
 }
 
 /** The package inventory is the boundary; local caches and private files are never deposits. */
