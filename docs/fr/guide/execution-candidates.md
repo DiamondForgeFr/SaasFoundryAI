@@ -60,3 +60,7 @@ modifie pas `modules.harness.agents`.
 
 Ce premier contrat s’arrête volontairement avant la classification des tâches, le classement des plans, l’approbation budgétaire, la politique de reprise et le calibrage. Ces couches consomment des
 instantanés immuables du catalogue afin de pouvoir expliquer les preuves et les prix ayant motivé une décision.
+
+La grille d'allocation par type de tâche de [`sf agents route`](/fr/cli/sf-agents#routage-des-delegations-sf-agents-route) nomme ses candidats avec la même identité canonique
+`provider/runtime/model/effort` (par exemple `anthropic/claude-code/claude-opus-5-5/medium`). C'est une recommandation statique par type de tâche, appuyée sur des preuves, et non un instantané du
+catalogue : elle ne porte ni disponibilité ni prix en direct.
