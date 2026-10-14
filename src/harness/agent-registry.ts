@@ -162,6 +162,15 @@ export function getSkillDirectory(id: string): string {
   return discoversClaudeSkills(getAgentProfile(id)) ? CLAUDE_SKILLS_DIR : SHARED_SKILLS_DIR
 }
 
+/**
+ * Whether any declared host needs the `.agents/skills` projection: every host except one that
+ * discovers the canonical `.claude/skills` sources itself.
+ */
+export function needsSharedSkills(ids: readonly string[]): boolean {
+  // Validate every requested ID even if an earlier profile already needs the projection.
+  return ids.map((id) => getSkillDirectory(id)).includes(SHARED_SKILLS_DIR)
+}
+
 export function listAgentProfiles(): AgentProfile[] {
   return getAgentIds().map(getAgentProfile)
 }

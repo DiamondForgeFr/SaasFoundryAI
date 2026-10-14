@@ -11,6 +11,7 @@ import {
   isHarnessAgent,
   listAgentProfiles,
   needsSharedInstructions,
+  needsSharedSkills,
   resolveHarnessAgents,
   validateAgentRegistry
 } from '../../../harness/agent-registry'
@@ -217,6 +218,13 @@ describe('skill discovery evidence (#940)', () => {
       ['qwen-code', '.agents/skills'],
       ['generic', '.agents/skills']
     ])
+  })
+  it('needs the .agents/skills projection unless every declared host reads .claude/skills', () => {
+    expect(needsSharedSkills([])).toBe(false)
+    expect(needsSharedSkills(['claude-code'])).toBe(false)
+    expect(needsSharedSkills(['claude-code', 'qwen-code'])).toBe(true)
+    expect(needsSharedSkills(['generic'])).toBe(true)
+    expect(() => needsSharedSkills(['claude-code', 'future-agent'])).toThrow('Unknown coding agent')
   })
   it('returns a skill discovery copy that cannot modify future reads', () => {
     getAgentProfile('kimi').skillDiscovery!.directories.push('.evil/skills')

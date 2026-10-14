@@ -517,6 +517,19 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
     await expect(get(CLAUDE_CODE_RULE_PATH)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it.each<[HarnessAgent[], boolean]>([
+    [['claude-code'], false],
+    [['codex'], true],
+    [['kimi'], true],
+    [['gemini-cli'], true],
+    [['qwen-code'], true],
+    [['generic'], true],
+    [['claude-code', 'codex'], true]
+  ])('projects the skills for %j only when a declared host does not read .claude/skills (#940): %s', async (agents, projected) => {
+    const result = await installAgentInstructions({ targetPath: root, agents })
+    expect(result.written.includes('.agents/skills/sf-git-commit/SKILL.md')).toBe(projected)
+  })
+
   it('leaves an AGENTS.md without the generated region exactly as written', async () => {
     await writeFile(join(root, 'AGENTS.md'), '# User-authored rules\n')
     const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'codex'] })
