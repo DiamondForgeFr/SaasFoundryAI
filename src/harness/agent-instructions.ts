@@ -3,7 +3,7 @@ import { lstat, readFile, readdir } from 'fs/promises'
 import { join, posix, resolve } from 'path'
 
 import { safeWriteAgentFile } from './agent-file-writer'
-import { getAgentProfile } from './agent-registry'
+import { getAgentProfile, needsSharedSkills } from './agent-registry'
 import { HarnessAgent, skillsTemplatesPath } from '../types'
 import { hashFileContent } from '../utils'
 
@@ -500,7 +500,8 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
     inspected.referenceOnly ||
     manifest?.fileHashes?.['AGENTS.md'] === hashFileContent(ADOPTION_COMMON_INSTRUCTIONS) ||
     manifest?.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
-  const needsSharedSkills = profiles.some((profile) => profile.sharedInstructions)
+  // Project the skills only when a declared host does not discover the .claude/skills sources itself (#940).
+  const projectSkills = needsSharedSkills(profiles.map((profile) => profile.id))
   for (const profile of profiles) {
     report.warnings.push(...profile.limitations.map((limitation) => `${profile.displayName}: ${limitation}`))
     if (profile.instructions === 'manual') report.warnings.push(`${profile.displayName}: Manual instruction loading is required; runtime discovery is not checked.`)
@@ -525,7 +526,7 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
       plan.files.push({ path: CLAUDE_CODE_RULE_PATH, content: await readFile(join(skillsTemplatesPath, 'harness', 'claude-code.md')), mode: 0o644 })
     }
     plan.files.push(...wrapperFiles)
-    if (!needsSharedSkills) return plan
+    if (!projectSkills) return plan
   } else if (instructionSource.source === 'codex') {
     plan.files.push(...wrapperFiles)
     return plan
@@ -535,7 +536,7 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
     }
     plan.files.push({ path: 'AGENTS.md', content: Buffer.from(effectiveReferenceOnly ? ADOPTION_COMMON_INSTRUCTIONS : COMMON_INSTRUCTIONS), mode: 0o644 })
     plan.files.push(...wrapperFiles)
-    if (effectiveReferenceOnly || !needsSharedSkills) return plan
+    if (effectiveReferenceOnly || !projectSkills) return plan
   }
   const baselines = manifest?.fileHashes ?? {}
   const source = '.claude/skills'
