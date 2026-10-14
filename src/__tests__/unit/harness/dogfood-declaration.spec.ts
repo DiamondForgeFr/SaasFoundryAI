@@ -7,6 +7,7 @@ import { resolve } from 'path'
 import { planAgentInstructions } from '../../../harness/agent-instructions'
 
 const ROOT = resolve(__dirname, '../../../..')
+const CODEX_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.codex/agents/sf-${tier}.toml`)
 
 describe('SaaSFoundryAI shared harness dogfood declaration', () => {
   it('declares Claude Code and Codex with reproducible tracked adapter baselines', async () => {
@@ -25,10 +26,15 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
     expect(Object.keys(baselines)).toEqual(expect.arrayContaining(['GEMINI.md', '.claude/rules/claude-code.md', '.agents/skills/sf-workflow/workflow-cli.sh']))
     // A merged AGENTS.md (generated region) is never hash-tracked (#937)
     expect(baselines).not.toHaveProperty('AGENTS.md')
-    expect(Object.keys(baselines).some((path) => path.startsWith('.codex/'))).toBe(false)
+    // Only the generated tier agents (#929) are shared under .codex/; its config stays private
+    expect(
+      Object.keys(baselines)
+        .filter((path) => path.startsWith('.codex/'))
+        .sort()
+    ).toEqual(CODEX_TIER_AGENTS)
     const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean)
     expect(tracked).toEqual(expect.arrayContaining(['AGENTS.md', 'GEMINI.md', '.agents/skills/sf-workflow/workflow-cli.sh']))
-    expect(tracked.some((path) => path.startsWith('.codex/'))).toBe(false)
+    expect(tracked.filter((path) => path.startsWith('.codex/')).sort()).toEqual(CODEX_TIER_AGENTS)
 
     for (const [path, expected] of Object.entries(baselines)) {
       const content = await readFile(resolve(ROOT, path))

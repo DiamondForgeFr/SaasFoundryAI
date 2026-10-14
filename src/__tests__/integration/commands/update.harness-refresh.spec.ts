@@ -111,6 +111,21 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(manifest.fileHashes[stalePath]).toBe(hashFileContent(refreshed))
   })
 
+  it('gives a harness without an agents list its Claude Code tier agents, and leaves its other instruction files alone (#929)', async () => {
+    const hashes = await installTrackedHarness()
+    await rm(join(projectDir, '.claude/agents'), { recursive: true, force: true })
+    await writeFile(join(projectDir, 'AGENTS.md'), 'Team instructions, no generated region.\n')
+    await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+
+    const tier = await readFile(join(projectDir, '.claude/agents/sf-fix.md'), 'utf8')
+    expect(tier).toContain('model: claude-opus-5-5')
+    expect(existsSync(join(projectDir, '.codex/agents'))).toBe(false)
+    expect((await readManifest()).fileHashes['.claude/agents/sf-fix.md']).toBe(hashFileContent(tier))
+    expect(await readFile(join(projectDir, 'AGENTS.md'), 'utf8')).toBe('Team instructions, no generated region.\n')
+  })
+
   // #831 — the v1 harness deposited the stack's integration rules on every project
   it('migrates a v1 harness: removes the untouched integration rules, and the refresh does not bring them back', async () => {
     await installHarness({ targetPath: projectDir, projectName: 'acme', version: FRESH_VERSION, stackPresent: true })

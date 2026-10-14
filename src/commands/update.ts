@@ -1448,6 +1448,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     if (!dryRun) await reconcileSrsIntentHook('.', Boolean(manifest.tools?.srs?.enabled))
     if (!dryRun && manifest.modules?.harness?.agents?.length) {
       await installSelectedAgentInstructions(manifest, manifest.projectName, manifest.modules.harness.agents, persistManifest)
+    } else if (!dryRun && manifest.modules?.harness?.managed && manifest.structure !== 'multirepo') {
+      // A managed harness without an agents list is implicitly Claude Code: it still gets its tier
+      // agents (#929). An adopted (unmanaged) harness and multirepo apps keep their explicit flows.
+      await installSelectedAgentInstructions(manifest, manifest.projectName, undefined, persistManifest, { tierAgentsOnly: true })
     }
 
     // ─── FLOW 2: Module addition ───

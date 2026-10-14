@@ -569,17 +569,7 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
   }
   // One delegation agent per routing tier for each declared host the grid covers (#929). An adoption
   // only references the project's own setup, so it adds none.
-  if (!effectiveReferenceOnly) {
-    try {
-      for (const file of renderTierAgents(
-        profiles.map((profile) => profile.id),
-        manifest?.modules?.harness?.routing
-      ))
-        plan.files.push({ path: file.path, content: Buffer.from(file.content), mode: 0o644 })
-    } catch (error) {
-      report.warnings.push(`Tier agents not generated: ${(error as Error).message}`)
-    }
-  }
+  if (!effectiveReferenceOnly) plan.files.push(...planTierAgents(agents, manifest, report.warnings))
   // Only declared hosts get an entrypoint (#937): an existing undeclared one is left as it is.
   const wrapperContent = Buffer.from('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
   const wrapperFiles: AgentInstructionFile[] = [
@@ -675,6 +665,25 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
     await copyTree(skill.name)
   }
   return plan
+}
+
+function planTierAgents(agents: HarnessAgent[], manifest: InstallAgentInstructionsParams['manifest'], warnings: string[]): AgentInstructionFile[] {
+  try {
+    return renderTierAgents(agents, manifest?.modules?.harness?.routing).map((file) => ({ path: file.path, content: Buffer.from(file.content), mode: 0o644 }))
+  } catch (error) {
+    warnings.push(`Tier agents not generated: ${(error as Error).message}`)
+    return []
+  }
+}
+
+/**
+ * Deposit only the tier agents (#929), for a harness whose manifest declares no agents: its other
+ * instruction files predate the agent declaration and stay as they are.
+ */
+export async function installTierAgents({ targetPath, agents, manifest }: InstallAgentInstructionsParams): Promise<AgentInstructionsReport> {
+  const warnings: string[] = []
+  const files = planTierAgents(agents, manifest, warnings)
+  return installPlannedAgentInstructions(targetPath, { files, warnings }, manifest?.fileHashes)
 }
 
 export async function installAgentInstructions(params: InstallAgentInstructionsParams): Promise<AgentInstructionsReport> {
