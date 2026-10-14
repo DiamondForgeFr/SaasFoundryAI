@@ -452,16 +452,24 @@ esac
     expect((await run({ STATUS: status })).code).toBe(0)
     expect(changedTicket()).toBe(false)
   })
-  it.each(['Backlog', 'Ready', 'In progress', ''])('does not skip stages from %s', async (status) => {
-    expect((await run({ STATUS: status })).code).toBe(2)
+  it.each(['Backlog', 'Ready', 'In progress'])('does not skip stages from %s, and reports the early click as a notice, not a failure (#1003)', async (status) => {
+    const result = await run({ STATUS: status })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain(`::notice::Ticket #42 is ${status}, not awaiting review yet`)
+    expect(changedTicket()).toBe(false)
+  })
+  it('fails when the ticket status cannot be read', async () => {
+    expect((await run({ STATUS: '' })).code).toBe(2)
     expect(changedTicket()).toBe(false)
   })
   it('allows internal AI testing directly', async () => {
     expect((await run({ STATUS: 'AI testing', LABELS: 'complexity: low\nnature:internal' })).code).toBe(0)
     expect(changedTicket()).toBe(true)
   })
-  it('requires human validation for user-facing AI testing despite bypass flags', async () => {
-    expect((await run({ STATUS: 'AI testing', SF_WORKFLOW_BYPASS_NATURE_GUARD: '1' })).code).toBe(2)
+  it('requires human validation for user-facing AI testing despite bypass flags, without failing the check (#1003)', async () => {
+    const result = await run({ STATUS: 'AI testing', SF_WORKFLOW_BYPASS_NATURE_GUARD: '1' })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('::notice::Ticket #42 is in AI testing and needs Human testing before review')
     expect(changedTicket()).toBe(false)
   })
   it('supports solo workflows without Human testing', async () => {

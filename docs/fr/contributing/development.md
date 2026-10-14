@@ -232,7 +232,9 @@ Les objectifs d'acceptation sont dans [`.claude/docs/release-objectives.md`](htt
 
 ## Synchroniser « Ready for review » avec GitHub Projects
 
-Le bouton **Ready for review** déclenche `.github/workflows/pr-review-sync.yml`. Le workflow inspecte la PR et son ticket lié, puis utilise le CLI protégé pour passer le ticket en `In review`.
+Le bouton **Ready for review** déclenche `.github/workflows/pr-review-sync.yml`. Le workflow inspecte la PR et son ticket lié, puis utilise le CLI protégé pour passer le ticket en `In review`. Cliqué
+trop tôt — ticket encore en `AI testing` avec `Human testing` requis, ou pas encore en test —, le job ne déplace rien et réussit avec une notice qui indique l'étape suivante ; il n'échoue que si
+l'événement, le lien vers le ticket ou les labels du ticket sont incorrects.
 
 Configurez le secret Actions `SF_PROJECTS_TOKEN` avec l'accès au dépôt et l'écriture sur le Project de l'organisation. Le token Actions par défaut n'accède pas à Projects.
 

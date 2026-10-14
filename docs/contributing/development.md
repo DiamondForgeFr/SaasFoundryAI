@@ -234,7 +234,9 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 ### Synchronizing the review button with GitHub Projects
 
 The **Ready for review** button triggers `.github/workflows/pr-review-sync.yml`. It checks the live PR and its linked ticket, then uses the guarded workflow CLI to move the ticket to **In review**.
-Configure the `SF_PROJECTS_TOKEN` Actions secret with repository access and write access to the organization Project. GitHub's default Actions token cannot access Projects; see
+Clicked too early — the ticket still in AI testing and Human testing required, or not yet in testing — the job moves nothing and succeeds with a notice that names the next step; it fails only when the
+event, the ticket association or the ticket labels are wrong. Configure the `SF_PROJECTS_TOKEN` Actions secret with repository access and write access to the organization Project. GitHub's default
+Actions token cannot access Projects; see
 [GitHub's Projects automation documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/automating-projects-using-actions).
 
 The listener must first be merged into the repository default branch. It never runs code from the PR head. It supports same-repository PRs, requires the native closing-issue link to agree with the
