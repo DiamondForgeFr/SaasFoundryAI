@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { AGENT_REGISTRY_VERSION, getAgentIds, listAgentProfiles } from '../harness/agent-registry'
+import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../harness/agent-support'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
@@ -114,7 +114,7 @@ export async function agentsCommand(action: 'enable' | 'replace' | 'refresh' | '
       if (options.json) process.stdout.write(JSON.stringify({ registryVersion: AGENT_REGISTRY_VERSION, runtime: 'not-checked', profiles }, null, 2) + '\n')
       else {
         process.stdout.write('Agent tool profiles (runtime capabilities are not checked):\n')
-        for (const profile of profiles) process.stdout.write(`${profile.id}: ${profile.displayName} — ${profile.instructionFile}\n`)
+        for (const profile of profiles) process.stdout.write(`${profile.id}: ${profile.displayName} — ${profile.instructionFile}, skills in ${getSkillDirectory(profile.id)}\n`)
         process.stdout.write('Use --json for declared support, sources and limitations. Models and providers are configured in your agent tool.\n')
       }
       return

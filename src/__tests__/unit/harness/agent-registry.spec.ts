@@ -7,6 +7,7 @@ import {
   getAgentIds,
   getAgentProfile,
   getSharedAgentEntrypoints,
+  getSkillDirectory,
   isHarnessAgent,
   listAgentProfiles,
   needsSharedInstructions,
@@ -152,6 +153,36 @@ describe('bundled declarative agent registry (#666)', () => {
       }
     ],
     [
+      'skill directory traversal',
+      (data: RegistryFixture) => {
+        data.profiles.codex.skillDiscovery = { directories: ['../skills'], source: 'https://learn.chatgpt.com/docs/build-skills' }
+      }
+    ],
+    [
+      'skill discovery without listed evidence',
+      (data: RegistryFixture) => {
+        data.profiles.codex.skillDiscovery = { directories: ['.agents/skills'], source: 'https://example.test/skills' }
+      }
+    ],
+    [
+      'empty skill discovery',
+      (data: RegistryFixture) => {
+        data.profiles.codex.skillDiscovery = { directories: [], source: 'https://learn.chatgpt.com/docs/build-skills' }
+      }
+    ],
+    [
+      'missing skill discovery field',
+      (data: RegistryFixture) => {
+        delete data.profiles.codex.skillDiscovery
+      }
+    ],
+    [
+      'documented skills outside the harness directories',
+      (data: RegistryFixture) => {
+        data.profiles['qwen-code'].skills = 'documented'
+      }
+    ],
+    [
       'canonical overwrite',
       (data: RegistryFixture) => {
         data.profiles.codex.instructionFile = 'CLAUDE.md'
@@ -161,5 +192,34 @@ describe('bundled declarative agent registry (#666)', () => {
     const data = clone()
     ;(change as (value: RegistryFixture) => void)(data)
     expect(() => validateAgentRegistry(data)).toThrow()
+  })
+})
+
+describe('skill discovery evidence (#940)', () => {
+  it('records each host discovery directory with a documentation source from its sources', () => {
+    expect(listAgentProfiles().map((profile) => [profile.id, profile.skillDiscovery?.directories ?? null])).toEqual([
+      ['claude-code', ['.claude/skills']],
+      ['codex', ['.agents/skills']],
+      ['kimi', ['.kimi-code/skills', '.agents/skills']],
+      ['gemini-cli', ['.gemini/skills', '.agents/skills']],
+      ['qwen-code', ['.qwen/skills']],
+      ['generic', null]
+    ])
+    for (const profile of listAgentProfiles()) if (profile.skillDiscovery) expect(profile.sources).toContain(profile.skillDiscovery.source)
+    expect(getAgentProfile('kimi')).toMatchObject({ skills: 'documented' })
+  })
+  it('provides the canonical sources only to a host that reads them, and the projection to every other host', () => {
+    expect(getAgentIds().map((id) => [id, getSkillDirectory(id)])).toEqual([
+      ['claude-code', '.claude/skills'],
+      ['codex', '.agents/skills'],
+      ['kimi', '.agents/skills'],
+      ['gemini-cli', '.agents/skills'],
+      ['qwen-code', '.agents/skills'],
+      ['generic', '.agents/skills']
+    ])
+  })
+  it('returns a skill discovery copy that cannot modify future reads', () => {
+    getAgentProfile('kimi').skillDiscovery!.directories.push('.evil/skills')
+    expect(getAgentProfile('kimi').skillDiscovery!.directories).toEqual(['.kimi-code/skills', '.agents/skills'])
   })
 })
