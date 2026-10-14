@@ -283,8 +283,8 @@ Un projet surcharge la grille dans `.saasfoundry.json` :
 ```
 
 `kinds` remplace le palier d'un type de tâche ; `tiers` remplace le candidat d'un palier pour un agent ou déclare un palier propre au projet. Le schéma du manifeste valide les deux. Une surcharge est
-signalée avec l'origine `project` et sans preuve livrée ; celle qui tombe sur un candidat exclu est signalée par un avertissement, pas refusée. Une surcharge invalide fait échouer la commande au lieu
-de revenir silencieusement à la grille. `sf agents enable`, `replace` et `sf update` conservent le bloc `routing`.
+signalée avec l'origine `project` ; elle ne garde la preuve livrée que si elle aboutit au candidat livré pour ce type ; celle qui tombe sur un candidat exclu est signalée par un avertissement, pas
+refusée. Une surcharge invalide fait échouer la commande au lieu de revenir silencieusement à la grille. `sf agents enable`, `replace` et `sf update` conservent le bloc `routing`.
 
 La grille recommande ; elle ne lance rien. Le modèle, le fournisseur et les identifiants de votre session restent configurés dans votre outil.
 
