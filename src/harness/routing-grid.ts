@@ -13,6 +13,15 @@ export type RoutingProvider = (typeof ROUTING_PROVIDERS)[number]
 export const ROUTING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
 export type RoutingEffort = (typeof ROUTING_EFFORTS)[number] & NormalizedEffort
 
+/**
+ * The efforts each host can write in a subagent file (#929): Claude Code's `effort` frontmatter has no
+ * `minimal` or `ultra`, Codex's `model_reasoning_effort` has no `minimal` on current models.
+ */
+export const PROVIDER_EFFORTS: Readonly<Record<RoutingProvider, readonly RoutingEffort[]>> = {
+  'claude-code': ['low', 'medium', 'high', 'xhigh', 'max'],
+  codex: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+}
+
 export interface RoutingCandidate {
   model: string
   effort: RoutingEffort
@@ -87,10 +96,13 @@ function isProvider(value: unknown): value is RoutingProvider {
   return typeof value === 'string' && (ROUTING_PROVIDERS as readonly string[]).includes(value)
 }
 
-function candidateIssue(value: unknown, label: string): string | undefined {
+function candidateIssue(value: unknown, label: string, provider: RoutingProvider): string | undefined {
   if (!object(value) || !exactKeys(value, ['model', 'effort'])) return `${label} must be { model, effort }`
   if (typeof value.model !== 'string' || !SAFE_ID.test(value.model)) return `${label}.model must be a model identifier`
   if (typeof value.effort !== 'string' || !(ROUTING_EFFORTS as readonly string[]).includes(value.effort)) return `${label}.effort must be one of ${ROUTING_EFFORTS.join(', ')}`
+  // A tier agent must be able to carry the effort, otherwise the host would silently run another one.
+  if (!(PROVIDER_EFFORTS[provider] as readonly string[]).includes(value.effort))
+    return `${label}.effort '${value.effort}' cannot be expressed by ${provider} (${PROVIDER_EFFORTS[provider].join(', ')})`
   return undefined
 }
 
@@ -144,7 +156,7 @@ export function validateRoutingGrid(value: unknown): asserts value is RoutingGri
       continue
     }
     for (const provider of ROUTING_PROVIDERS) {
-      const issue = candidateIssue(candidates[provider], `tiers.${tier}.${provider}`)
+      const issue = candidateIssue(candidates[provider], `tiers.${tier}.${provider}`, provider)
       if (issue) issues.push(issue)
     }
   }
@@ -204,7 +216,7 @@ export function routingOverrideIssues(value: unknown, grid: RoutingGrid = shippe
       continue
     }
     for (const [provider, candidate] of Object.entries(candidates)) {
-      const issue = candidateIssue(candidate, `routing.tiers.${tier}.${provider}`)
+      const issue = candidateIssue(candidate, `routing.tiers.${tier}.${provider}`, provider as RoutingProvider)
       if (issue) issues.push(issue)
     }
   }
@@ -275,4 +287,38 @@ export function resolveRoute(kind: TaskKind, provider: RoutingProvider, override
     evidence: isShippedSeed ? { ...shipped.evidence[provider] } : null,
     excluded: excludedBy(shipped.excluded, provider, candidate)
   }
+}
+
+export interface TierAssignment {
+  tier: string
+  provider: RoutingProvider
+  candidate: ResolvedRoute['candidate']
+  /** `project` when the manifest declares this tier's candidate for the provider, or the tier itself. */
+  source: 'shipped' | 'project'
+  /** The kinds routed to this tier, in display order. */
+  kinds: TaskKind[]
+  /** Every other kind with the tier it goes to, so a tier agent can say when not to use it. */
+  elsewhere: { kind: TaskKind; tier: string }[]
+  /** The kinds whose exclusion list names this tier's candidate; reported, not enforced. */
+  excludedFor: TaskKind[]
+}
+
+/** Group the resolved routes of one provider by tier: one entry per tier that serves at least one kind. */
+export function listTierAssignments(provider: RoutingProvider, overrides?: RoutingOverrides): TierAssignment[] {
+  const routes = TASK_KINDS.map((kind) => resolveRoute(kind, provider, overrides))
+  const order = [...Object.keys(shippedGrid.tiers), ...Object.keys(overrides?.tiers ?? {})]
+  const tiers = [...new Set(order)].filter((tier) => routes.some((route) => route.tier === tier))
+  return tiers.map((tier) => {
+    const served = routes.filter((route) => route.tier === tier)
+    const shippedTier = Object.prototype.hasOwnProperty.call(shippedGrid.tiers, tier)
+    return {
+      tier,
+      provider,
+      candidate: served[0].candidate,
+      source: !shippedTier || overrides?.tiers?.[tier]?.[provider] !== undefined ? 'project' : 'shipped',
+      kinds: served.map((route) => route.kind),
+      elsewhere: routes.filter((route) => route.tier !== tier).map((route) => ({ kind: route.kind, tier: route.tier })),
+      excludedFor: served.filter((route) => route.excluded).map((route) => route.kind)
+    }
+  })
 }
