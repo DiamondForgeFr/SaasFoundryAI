@@ -1,5 +1,6 @@
 import { resolve } from 'path'
 import type { HarnessAgent } from './harness/agent-registry'
+import type { RoutingOverrides } from './harness/routing-grid'
 
 export interface DbCredentials {
   host: string
@@ -392,6 +393,8 @@ export interface SaaSFoundryManifest {
       managed?: boolean
       /** Exact shared coding-agent declaration; absence preserves legacy Claude behavior. */
       agents?: HarnessAgent[]
+      /** Project overrides of the shipped routing grid (#930); absence means the shipped grid. */
+      routing?: RoutingOverrides
     }
     // PWA module — makes the generated web app installable as a desktop
     // application through the browser's own flow. Versioned shape (not the flat
