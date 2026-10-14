@@ -25,15 +25,13 @@ A single `.claude/` at the repository root holds every skill; `apps/api` and `ap
 
 #### 3. Portable projection (`.agents/skills/`)
 
-`.claude/skills/` stays the source. When a declared coding agent does not discover it, the harness renders a copy under `.agents/skills/` (`planAgentInstructions` in
-`src/harness/agent-instructions.ts`). Which hosts need it comes from `skillDiscovery` in `src/harness/agent-profiles.json`: every profile records the directories its own documentation says it scans,
-with that page as evidence. A project whose declared agents all read `.claude/skills/` (Claude Code alone) gets no copy.
+`.claude/skills/` stays the source. When a declared coding agent does not discover it, the harness renders a copy under `.agents/skills/`. Which agents need it comes from the `skillDiscovery` of each
+profile in `sf agents catalog --json`: the directories the agent's own documentation says it scans, with that page as evidence. A project whose declared agents all read `.claude/skills/` (Claude Code
+alone) gets no copy.
 
-The copy translates Claude-only prose (`$ARGUMENTS`, the Task tool, `PARALLEL ONLY`, `` !`cmd` `` injection where the `!` opens the span) and copies fenced blocks and inline code byte for byte
-(`translateSkillBody`).
+The copy translates Claude-only prose (`$ARGUMENTS`, the Task tool, `PARALLEL ONLY`, `` !`cmd` `` injection where the `!` opens the span) and copies fenced blocks and inline code byte for byte.
 
-**In this repository**, never edit a file under `.agents/skills/` by hand (Prettier ignores that directory). Edit the `.claude/skills/` source, then run `sf agents refresh --scope shared` and commit
-the copies with their `fileHashes`. `dogfood-declaration.spec.ts` fails when the committed copies differ from what the projector renders (#984).
+Never edit a file under `.agents/skills/` by hand: edit the `.claude/skills/` source, then run `sf agents refresh --scope shared` and commit the copies with their `fileHashes`.
 
 ### Current Skills Inventory
 
