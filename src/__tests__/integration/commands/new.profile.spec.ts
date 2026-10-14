@@ -130,7 +130,7 @@ describe('newCommand (--profile integration)', () => {
     // asserted here, real hash content is covered by the installer unit spec.
     expect(manifest.fileHashes).toBeDefined()
     for (const trackedPath of Object.keys(manifest.fileHashes)) {
-      expect(trackedPath).toMatch(/^(?:\.claude\/(?:skills|docs)\/|\.claude\/rules\/claude-code\.md$)/)
+      expect(trackedPath).toMatch(/^(?:\.claude\/(?:skills|docs)\/|\.claude\/rules\/claude-code\.md$|\.claude\/agents\/sf-[a-z-]+\.md$)/)
     }
     // AGENTS.md is project-owned: only its generated region is refreshed, it carries no baseline
     expect(manifest.fileHashes['AGENTS.md']).toBeUndefined()
