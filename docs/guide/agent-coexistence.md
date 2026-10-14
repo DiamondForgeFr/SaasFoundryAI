@@ -130,6 +130,9 @@ This repository declares `claude-code` and `codex` together in `.saasfoundry.jso
 project artifacts. `AGENTS.md` holds the project rules both hosts read, with no `CLAUDE.md` since the harness v3 → v4 migration moved it (#938), and points both to the same guarded workflow. Private
 `.codex` settings, credentials, plugins, MCP configuration, model selection, and host permissions are not part of the declaration and must not be committed as acceptance evidence.
 
+The `.agents/skills` tree is generated: edit the `.claude/skills` source, run `sf agents refresh --scope shared`, and commit the copies with their `fileHashes`. A test fails when the committed copies
+differ from what the projector renders (#984).
+
 Test the declaration from a disposable clone or worktree containing only reviewed tracked files. Both hosts must resolve the same manifest, ticket, SRS root and status document, and both workflow help
 commands must expose the same guards. Record hashes and modes before and after the read-only checks. Classify file parity and direct script execution as `structural`; classify native instruction
 loading, hooks, authentication, delegation, and model behavior as `observed` only when the named host/version actually produced that evidence. Missing native observation remains `not-checked` rather

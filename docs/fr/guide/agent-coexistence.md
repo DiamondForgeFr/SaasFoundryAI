@@ -134,6 +134,9 @@ Ce dépôt déclare ensemble `claude-code` et `codex` dans `.saasfoundry.json`. 
 `AGENTS.md` porte les règles du projet que lisent les deux hôtes, sans `CLAUDE.md` depuis que la migration harness v3 → v4 l’a déplacé (#938), et les renvoie au même workflow protégé. Les réglages
 privés `.codex`, identifiants secrets, plugins, configurations MCP, choix de modèle et permissions de l’hôte ne font pas partie de la déclaration et ne doivent pas être committés comme preuves.
 
+L’arbre `.agents/skills` est généré : modifiez la source `.claude/skills`, lancez `sf agents refresh --scope shared` et committez les copies avec leurs `fileHashes`. Un test échoue lorsque les copies
+committées diffèrent de ce que produit la projection (#984).
+
 Testez la déclaration depuis un clone ou worktree jetable contenant uniquement les fichiers suivis et revus. Les deux hôtes doivent résoudre le même manifeste, ticket, SRS et document de statut ; les
 deux commandes d’aide doivent exposer les mêmes garde-fous. Les parités de fichiers et exécutions directes restent `structural`. Chargement natif, hooks, authentification, délégation et comportement
 du modèle ne deviennent `observed` que si l’hôte et la version nommés les ont produits. Une observation absente reste `not-checked`.
