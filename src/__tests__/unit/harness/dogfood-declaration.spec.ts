@@ -4,6 +4,8 @@ import { existsSync } from 'fs'
 import { readFile, stat } from 'fs/promises'
 import { resolve } from 'path'
 
+import { planAgentInstructions } from '../../../harness/agent-instructions'
+
 const ROOT = resolve(__dirname, '../../../..')
 
 describe('SaaSFoundryAI shared harness dogfood declaration', () => {
@@ -40,6 +42,17 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
       const portablePath = resolve(ROOT, '.agents/skills', relative)
       expect(await readFile(portablePath)).toEqual(await readFile(claudePath))
       expect((await stat(portablePath)).mode & 0o111).not.toBe(0)
+    }
+  })
+
+  it('commits exactly the skill copies the projector renders, so a refresh changes nothing (#984)', async () => {
+    const manifest = JSON.parse(await readFile(resolve(ROOT, '.saasfoundry.json'), 'utf8'))
+    const plan = await planAgentInstructions({ targetPath: ROOT, agents: manifest.modules.harness.agents, manifest })
+    const projected = plan.files.filter((file) => file.path.startsWith('.agents/skills/'))
+    expect(projected.map((file) => file.path)).toEqual(expect.arrayContaining(['.agents/skills/sf-srs/SKILL.md', '.agents/skills/sf-workflow/SKILL.md']))
+    for (const file of projected) {
+      // A failure here means a .claude/skills source changed: run `sf agents refresh --scope shared` and commit the result.
+      expect({ path: file.path, content: (await readFile(resolve(ROOT, file.path))).toString('utf8') }).toEqual({ path: file.path, content: file.content.toString('utf8') })
     }
   })
 })

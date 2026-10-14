@@ -44,7 +44,6 @@ the merge, then remove the completed worktree and local branch only when they ar
 longer in use. Never remove or overwrite user-owned worktrees, branches, uncommitted changes,
 stashes or credentials implicitly.
 
-
 # Workflow SaaSFoundry AI
 
 Complexity-adaptive development workflow with GitHub Projects (GitHub Projects, Jira, Notion, Linear, etc.)
@@ -57,16 +56,17 @@ workflow status, check workflow, what should i do, next step, workflow help, cur
 
 This workflow adapts its rigor based on ticket complexity:
 
-| Level       | Label      | Process                          | Use Case          |
-| ----------- | ---------- | -------------------------------- | ----------------- |
-| **bug**     | 🐛 Bug Fix | Direct fix, regression test      | Quick bug fixes   |
-| **low**     | 🟢 Low     | Oneshot-style (minimal ceremony) | Simple tasks      |
-| **medium**  | 🟡 Medium  | Structured analysis and planning | Standard features |
+| Level       | Label      | Process                            | Use Case          |
+| ----------- | ---------- | ---------------------------------- | ----------------- |
+| **bug**     | 🐛 Bug Fix | Direct fix, regression test        | Quick bug fixes   |
+| **low**     | 🟢 Low     | Oneshot-style (minimal ceremony)   | Simple tasks      |
+| **medium**  | 🟡 Medium  | Structured analysis and planning   | Standard features |
 | **complex** | 🔴 Complex | Deep analysis + adversarial review | Critical features |
 
 **Key principle:** Higher complexity = more rigor (analysis depth, planning detail, adversarial review, test coverage)
 
-Each level is a YAML profile in `complexity/`. [complexity/README.md](complexity/README.md) documents the schema (which keys the scripts read, which the agent reads) and how to change or add a profile.
+Each level is a YAML profile in `complexity/`. [complexity/README.md](complexity/README.md) documents the schema (which keys the scripts read, which the agent reads) and how to change or add a
+profile.
 
 ## 🎚️ Nature axis (user-facing / internal / bundled-pr)
 
@@ -96,7 +96,8 @@ An Epic only groups delivery parents and never owns this PR.
 - **PR-merged guard** on `→ Done` — normal delivery tickets require a matching PR verified merged into the working branch. Aggregate Epics and verified `nature:bundled-pr` children are exempt because
   they own no PR. Escape hatch: `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`.
 
-Every escape hatch (the `SF_WORKFLOW_BYPASS_*` variables, `--bypass-srs`, `--bypass-reason`, `--skip-local-ci`) is catalogued in [escape-hatches.md](escape-hatches.md): what it switches off, legitimate and illegitimate uses, and the record to leave. An agent never sets one on its own.
+Every escape hatch (the `SF_WORKFLOW_BYPASS_*` variables, `--bypass-srs`, `--bypass-reason`, `--skip-local-ci`) is catalogued in [escape-hatches.md](escape-hatches.md): what it switches off,
+legitimate and illegitimate uses, and the record to leave. An agent never sets one on its own.
 
 ## 🧩 Ticket Hierarchy (Epic / Delivery parent / Child ticket)
 
@@ -128,10 +129,10 @@ Issue with its own branch and PR; the Epic only groups that delivery parent.
 
 An Epic is an aggregate with two derived transitions:
 
-| Child event                                    | Epic transition                                           |
-| ---------------------------------------------- | --------------------------------------------------------- |
+| Child event                                    | Epic transition                                                                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | The first native child enters `In progress`    | `Backlog → Ready → In progress`, or `Ready → In progress` (`Backlog → In progress` on a board that declares no Ready, such as Solo) |
-| The last incomplete native child enters `Done` | `In progress → Done`                                      |
+| The last incomplete native child enters `Done` | `In progress → Done`                                                                                                                |
 
 The Epic stays `In progress` while its children pass through testing and review. It never owns a branch or PR and may span multiple milestones; its delivery children carry their own milestone
 assignments. The parent Done guard checks every native child's project-board Status. Backlog, Ready, In progress, AI Testing, Human Testing, In Review, or an unknown status blocks Done. Incomplete
@@ -194,8 +195,9 @@ Developer always has final say.
 
 **`/workflow retag <ticket> <new-complexity>`** Changes ticket complexity level (bug | low | medium | complex). Adjusts remaining workflow steps to match new complexity.
 
-**Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. Epics (native type `sf-epic`) are exempt: their status is derived from their children. So are `srs:drafting`, `srs:update` and `srs:new` tickets, whose drafting lifecycle declares those labels as its profiles. `detect-complexity` only suggests — you must call `retag` to
-persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare; see [escape-hatches.md](escape-hatches.md)).
+**Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. Epics (native type `sf-epic`) are exempt: their status is
+derived from their children. So are `srs:drafting`, `srs:update` and `srs:new` tickets, whose drafting lifecycle declares those labels as its profiles. `detect-complexity` only suggests — you must
+call `retag` to persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare; see [escape-hatches.md](escape-hatches.md)).
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 
@@ -230,7 +232,8 @@ The workflow skill automatically routes commands to the appropriate tool based o
 .claude/skills/sf-workflow/workflow-cli.sh bootstrap <ticket>
 ```
 
-`bootstrap` exists because a repository without a commit has no branch to start from and no pull request to merge. The Done guard accepts only the ticket that the repository's single root commit names; never reach for a bypass variable to close a first ticket.
+`bootstrap` exists because a repository without a commit has no branch to start from and no pull request to merge. The Done guard accepts only the ticket that the repository's single root commit
+names; never reach for a bypass variable to close a first ticket.
 
 See your tool-specific skill documentation for complete command reference:
 
@@ -314,18 +317,22 @@ see its `## Conversational eval hook (SUB-10)` section. This skill only referenc
 
 ## Draft PR lifecycle
 
-Every delivery ticket gets its pull request **as a draft, at the latest during AI Testing** (`workflow-cli.sh create-pr <ticket> --draft`; opening it at the first push is fine). The draft lets the quick CI checks run early and lets the developer read the diff sooner. Keep the test plan and results on it. Creation retries reuse the existing PR without changing its draft state.
+Every delivery ticket gets its pull request **as a draft, at the latest during AI Testing** (`workflow-cli.sh create-pr <ticket> --draft`; opening it at the first push is fine). The draft lets the
+quick CI checks run early and lets the developer read the diff sooner. Keep the test plan and results on it. Creation retries reuse the existing PR without changing its draft state.
 
 Who takes the PR out of draft depends on whether the ticket's route has a Human Testing step:
 
-| Route | Who leaves draft | When |
-| --- | --- | --- |
-| **With Human Testing**: the workflow declares the status and the ticket is not `nature:internal` | **The developer**, with the **Ready for review** button. The click is the approval, and the review listener moves the ticket to In Review | After Human Testing, once you have pushed the non-regression tests |
-| **Without Human Testing**: the workflow has no such status, or the ticket is `nature:internal` | **You**: `workflow-cli.sh ready-pr <ticket>`, then `update-status <ticket> "In review"` | At the end of AI Testing, once the report is posted and every check is green |
+| Route                                                                                            | Who leaves draft                                                                                                                          | When                                                                         |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **With Human Testing**: the workflow declares the status and the ticket is not `nature:internal` | **The developer**, with the **Ready for review** button. The click is the approval, and the review listener moves the ticket to In Review | After Human Testing, once you have pushed the non-regression tests           |
+| **Without Human Testing**: the workflow has no such status, or the ticket is `nature:internal`   | **You**: `workflow-cli.sh ready-pr <ticket>`, then `update-status <ticket> "In review"`                                                   | At the end of AI Testing, once the report is posted and every check is green |
 
-On the Human Testing route, never run `ready-pr` yourself, even after the developer approves: ask them to mark the PR ready. Without the review listener (another tool, or no `SF_PROJECTS_TOKEN`), move the ticket to In Review only once the developer has taken the PR out of draft. Use `draft-pr <ticket>` explicitly when returning a ready PR to human retesting. `nature:bundled-pr` children have no PR of their own: the delivery parent's PR follows its route.
+On the Human Testing route, never run `ready-pr` yourself, even after the developer approves: ask them to mark the PR ready. Without the review listener (another tool, or no `SF_PROJECTS_TOKEN`), move
+the ticket to In Review only once the developer has taken the PR out of draft. Use `draft-pr <ticket>` explicitly when returning a ready PR to human retesting. `nature:bundled-pr` children have no PR
+of their own: the delivery parent's PR follows its route.
 
-`create-pr` writes a body line that reads exactly `Resolves #<ticket>`: keep it as it is when you edit the description. A pull request to a branch other than the default one links its ticket only through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`).
+`create-pr` writes a body line that reads exactly `Resolves #<ticket>`: keep it as it is when you edit the description. A pull request to a branch other than the default one links its ticket only
+through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`).
 
 With the updated CI policy, draft PRs skip test/build CI. When adopting these skills in an existing project, inspect its checked-in workflows and hooks: refreshing instructions alone does not update
 external CI configuration or remove custom push hooks. Readiness and subsequent ready-PR pushes run full CI; returning to draft cancels obsolete runs. Quick commit checks remain enabled; heavy local
@@ -333,9 +340,10 @@ validation belongs to AI Testing instead of every push.
 
 ### GitHub Ready for review button
 
-For GitHub Projects, `.github/workflows/pr-review-sync.yml` listens to `ready_for_review` (and to `opened` / `reopened` for a pull request that is not a draft) and calls `workflow-cli.sh sync-pr-review <PR>`. The button is the developer's approval to enter review; the
-job still enforces the workflow guards. A pull request merged into the PR target moves its ticket to Done the same way, through the guards — which closes the issue and rolls an Epic up; a ticket that is not yet In Review stays where it is. The PR must close the ticket named by its configured feature/fix branch convention. Same-repository PRs are supported; fork PRs require the normal manual CLI
-transition.
+For GitHub Projects, `.github/workflows/pr-review-sync.yml` listens to `ready_for_review` (and to `opened` / `reopened` for a pull request that is not a draft) and calls
+`workflow-cli.sh sync-pr-review <PR>`. The button is the developer's approval to enter review; the job still enforces the workflow guards. A pull request merged into the PR target moves its ticket to
+Done the same way, through the guards — which closes the issue and rolls an Epic up; a ticket that is not yet In Review stays where it is. The PR must close the ticket named by its configured
+feature/fix branch convention. Same-repository PRs are supported; fork PRs require the normal manual CLI transition.
 
 Configure the Actions secret `SF_PROJECTS_TOKEN` with access to the repository and write access to the configured organization Project (a dedicated token with `repo` and `project` scopes, or an
 equivalent appropriately scoped credential). The default `GITHUB_TOKEN` cannot access Projects. Never put credentials in the manifest or PR.
