@@ -137,6 +137,12 @@ s'est arrêté pendant la transition. S'il ne peut prouver ni commit complet ni 
 Les changements de base applicative restent une opération de l'équipe. Relisez les changements Prisma ou SQL générés et utilisez les commandes du projet adaptées à l'environnement ; `sf update` ne
 promet pas de migrer les données de production.
 
+### Agents de palier
+
+Chaque mise à jour rafraîchit les [agents de palier](/fr/cli/sf-agents#agents-de-palier) des agents de développement déclarés, à partir de la grille de routage actuelle et des surcharges `routing` du
+projet : un fichier intact est réécrit, un fichier modifié reçoit un fichier `.saasfoundry.new`. Un harness géré sans liste `agents` est traité comme Claude Code et ne reçoit que les fichiers
+`.claude/agents/sf-<tier>.md` ; ses autres fichiers d'instructions restent tels quels.
+
 ## Ajouter des capacités après la création
 
 Sélection interactive :
