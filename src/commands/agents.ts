@@ -1,8 +1,13 @@
+import { readFile } from 'fs/promises'
+import { join } from 'path'
+
 import { Command } from 'commander'
 import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../harness/agent-support'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
+import { getRoutingGrid, isRoutingProvider, parseTaskKind, resolveRoute, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
+import type { SaaSFoundryManifest } from '../types'
 
 interface AgentCommandOptions {
   json?: boolean
@@ -11,6 +16,50 @@ interface AgentCommandOptions {
   plan?: string
   mode?: string
   checkRuntime?: boolean
+  task?: string
+  provider?: string
+}
+
+/**
+ * Resolve a task kind against the shipped grid and the project's overrides. Works outside a
+ * managed project (shipped grid, both routed agents); a manifest that cannot be read fails closed.
+ */
+async function routeTask(options: AgentCommandOptions): Promise<void> {
+  const kind = parseTaskKind(options.task)
+  let manifest: SaaSFoundryManifest | undefined
+  try {
+    manifest = JSON.parse(await readFile(join(process.cwd(), '.saasfoundry.json'), 'utf8'))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`.saasfoundry.json cannot be read: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  const harness = manifest?.modules?.harness
+  let providers: RoutingProvider[]
+  if (options.provider !== undefined) {
+    if (!isRoutingProvider(options.provider)) throw new Error(`No routing for '${options.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+    providers = [options.provider]
+  } else if (harness) {
+    // A harness without an agent declaration is the legacy Claude Code setup.
+    providers = (harness.agents ?? ['claude-code']).filter(isRoutingProvider)
+    if (!providers.length) throw new Error(`None of the declared coding agents (${harness.agents?.join(', ')}) has routing candidates. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+  } else {
+    providers = [...ROUTING_PROVIDERS]
+  }
+  const routes = providers.map((provider) => resolveRoute(kind, provider, harness?.routing))
+  if (options.json) {
+    const grid = getRoutingGrid()
+    process.stdout.write(JSON.stringify({ routeVersion: 1, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes }, null, 2) + '\n')
+    return
+  }
+  for (const route of routes) {
+    const evidence = route.evidence
+      ? route.evidence.status === 'measured'
+        ? `measured: ${route.evidence.source}, score ${route.evidence.score}, $${route.evidence.costPerTaskUsd} per task`
+        : `provisional: ${route.evidence.note}`
+      : 'project choice, no shipped evidence'
+    process.stdout.write(`${route.kind} → ${route.tier} (${route.source}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}\n`)
+    if (route.excluded)
+      process.stderr.write(`Warning: ${route.provider} ${route.candidate.model} (${route.candidate.effort}) is on the exclusion list for ${route.kind}: public scores collapse there.\n`)
+  }
 }
 
 function errorPayload(error: unknown): { error: string; report?: unknown; recovery?: unknown } {
@@ -99,7 +148,11 @@ async function doctorAgents(agents: string[], options: AgentCommandOptions): Pro
   if ([...report.checks, ...report.agents.flatMap((agent) => agent.checks)].some((check) => check.status === 'failed')) process.exitCode = 1
 }
 
-export async function agentsCommand(action: 'enable' | 'replace' | 'refresh' | 'list' | 'catalog' | 'adopt' | 'doctor', agents: string[] = [], options: AgentCommandOptions = {}): Promise<void> {
+export async function agentsCommand(
+  action: 'enable' | 'replace' | 'refresh' | 'list' | 'catalog' | 'adopt' | 'doctor' | 'route',
+  agents: string[] = [],
+  options: AgentCommandOptions = {}
+): Promise<void> {
   try {
     if (action === 'adopt') {
       await adoptAgents(agents, options)
@@ -109,13 +162,17 @@ export async function agentsCommand(action: 'enable' | 'replace' | 'refresh' | '
       await doctorAgents(agents, options)
       return
     }
+    if (action === 'route') {
+      await routeTask(options)
+      return
+    }
     if (action === 'catalog') {
       const profiles = listAgentProfiles()
       if (options.json) process.stdout.write(JSON.stringify({ registryVersion: AGENT_REGISTRY_VERSION, runtime: 'not-checked', profiles }, null, 2) + '\n')
       else {
         process.stdout.write('Agent tool profiles (runtime capabilities are not checked):\n')
         for (const profile of profiles) process.stdout.write(`${profile.id}: ${profile.displayName} — ${profile.instructionFile}, skills in ${getSkillDirectory(profile.id)}\n`)
-        process.stdout.write('Use --json for declared support, sources and limitations. Models and providers are configured in your agent tool.\n')
+        process.stdout.write('Use --json for declared support, sources and limitations. Delegation tiers per task kind: sf agents route --task <kind>.\n')
       }
       return
     }
@@ -175,6 +232,13 @@ export function registerAgentCommands(command: Command): void {
     .description('List registered tool profiles and declared support without probing runtimes')
     .option('--json', 'Output versioned profile metadata')
     .action((options: AgentCommandOptions) => agentsCommand('catalog', [], options))
+  command
+    .command('route')
+    .description('Resolve the model and effort a delegated task kind runs on, from the shipped grid and project overrides')
+    .requiredOption('--task <kind>', TASK_KINDS.join(', '))
+    .option('--provider <agent>', ROUTING_PROVIDERS.join(', '))
+    .option('--json', 'Output the versioned route')
+    .action((options: AgentCommandOptions) => agentsCommand('route', [], options))
   command
     .command('enable')
     .description('Add support without disabling other configured agents')
