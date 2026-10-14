@@ -26,6 +26,7 @@ coverage/
 AGENTS.md
 GEMINI.md
 .claude/rules/claude-code.md
+.claude/agents/sf-*.md
 
 # Byte-exact copies of shipped templates (#938): the migration recognises them by hash
 src/__tests__/fixtures/pre-937-claude-md/
