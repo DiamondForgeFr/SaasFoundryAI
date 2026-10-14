@@ -3,6 +3,8 @@ import { join } from 'path'
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 
+import { ROUTING_EFFORTS, ROUTING_PROVIDERS, TASK_KINDS } from '../../../harness/routing-grid'
+
 // Regression guard for #286: the JSON Schema is the single source of truth
 // for `.saasfoundry.json`. If a canonical shape from manifest-schema.md stops
 // validating, scaffolded projects break — IDEs surface red squiggles where
@@ -235,5 +237,31 @@ describe('shared harness agent inventory', () => {
     for (const agents of [[], ['codex', 'codex'], ['gpt']]) {
       expect(validate({ ...baseManifest, modules: { harness: { version: 1, agents } } })).toBe(false)
     }
+  })
+})
+
+describe('saasfoundry-manifest.schema.json — harness routing overrides (#930)', () => {
+  const harness = (routing: unknown) => ({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code', 'codex'], routing } } })
+
+  it('accepts a kind override and a tier override', () => {
+    expect(validate(harness({ kinds: { 'scoped-edit': { tier: 'build' } }, tiers: { docs: { 'claude-code': { model: 'claude-sonnet-5-5', effort: 'low' } } } }))).toBe(true)
+  })
+
+  it.each([
+    ['an unknown task kind', { kinds: { deploy: { tier: 'light' } } }],
+    ['an unknown key', { budget: 5 }],
+    ['an unknown effort', { tiers: { light: { codex: { model: 'gpt-6-luna', effort: 'turbo' } } } }],
+    ['an unrouted agent', { tiers: { light: { 'gemini-cli': { model: 'x', effort: 'low' } } } }],
+    ['an empty tier', { tiers: { light: {} } }],
+    ['a tier name the grid cannot hold', { tiers: { Light: { codex: { model: 'gpt-6-luna', effort: 'low' } } } }]
+  ])('rejects %s', (_, routing) => {
+    expect(validate(harness(routing))).toBe(false)
+  })
+
+  it('names exactly the grid task kinds, routed agents and efforts', () => {
+    const routing = schema.properties.modules.properties.harness.properties.routing
+    expect(Object.keys(routing.properties.kinds.properties)).toEqual([...TASK_KINDS])
+    expect(Object.keys(routing.properties.tiers.additionalProperties.properties)).toEqual([...ROUTING_PROVIDERS])
+    expect(schema.definitions.routingCandidate.properties.effort.enum).toEqual([...ROUTING_EFFORTS])
   })
 })

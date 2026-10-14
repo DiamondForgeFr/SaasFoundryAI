@@ -162,6 +162,43 @@
                 "enum": ["claude-code", "codex", "kimi", "gemini-cli", "qwen-code", "generic"]
               },
               "description": "Additive shared agent support. Omission preserves legacy harness behavior."
+            },
+            "routing": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Project overrides of the shipped task-kind routing grid (sf agents route). Omission means the shipped grid.",
+              "properties": {
+                "kinds": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Replace the tier of a task kind.",
+                  "properties": {
+                    "exploration": { "$ref": "#/definitions/routingKind" },
+                    "scoped-edit": { "$ref": "#/definitions/routingKind" },
+                    "bug-fix": { "$ref": "#/definitions/routingKind" },
+                    "multi-file-feature": { "$ref": "#/definitions/routingKind" },
+                    "tests": { "$ref": "#/definitions/routingKind" },
+                    "review": { "$ref": "#/definitions/routingKind" },
+                    "planning": { "$ref": "#/definitions/routingKind" },
+                    "terminal-ci": { "$ref": "#/definitions/routingKind" },
+                    "prose": { "$ref": "#/definitions/routingKind" }
+                  }
+                },
+                "tiers": {
+                  "type": "object",
+                  "description": "Replace a shipped tier's candidate for a coding agent, or declare a project tier.",
+                  "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+                  "additionalProperties": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": false,
+                    "properties": {
+                      "claude-code": { "$ref": "#/definitions/routingCandidate" },
+                      "codex": { "$ref": "#/definitions/routingCandidate" }
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -228,6 +265,23 @@
     }
   },
   "definitions": {
+    "routingKind": {
+      "type": "object",
+      "required": ["tier"],
+      "additionalProperties": false,
+      "properties": {
+        "tier": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+      }
+    },
+    "routingCandidate": {
+      "type": "object",
+      "required": ["model", "effort"],
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+        "effort": { "type": "string", "enum": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] }
+      }
+    },
     "workflowConfig": {
       "type": "object",
       "required": ["tool"],
