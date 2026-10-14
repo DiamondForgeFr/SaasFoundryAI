@@ -217,14 +217,19 @@ votre outil ; les modifier ne nécessite pas de régénérer les instructions du
 `sf agents catalog --json` fonctionne hors d'un projet géré et renvoie la version du registre, la prise en charge de découverte déclarée, les sources documentaires et les limites. Chaque profil
 rapporte ses capacités d'exécution comme `not-checked` : une déclaration ne constitue pas un test réussi de connexion ou de découverte.
 
-| Profil        | Instructions                        | Skills partagées                                                                             |
-| ------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
-| `claude-code` | `AGENTS.md`                         | `.claude/skills`                                                                             |
-| `codex`       | `AGENTS.md`                         | `.agents/skills`                                                                             |
-| `kimi`        | `AGENTS.md`                         | Voir les limites déclarées du profil                                                         |
-| `gemini-cli`  | `GEMINI.md` importe `AGENTS.md`     | Alias `.agents/skills` documenté                                                             |
-| `qwen-code`   | Chargement de `AGENTS.md` documenté | Lecture explicite de repli ; la découverte native des skills partagées n'est pas revendiquée |
-| `generic`     | Chargement manuel de `AGENTS.md`    | Lecture manuelle des skills référencées ; compatibilité non vérifiée                         |
+| Profil        | Instructions                        | Découverte des skills documentée                                                                                   | Skills fournies par le harness                         |
+| ------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `claude-code` | `AGENTS.md`                         | [`.claude/skills`](https://code.claude.com/docs/en/skills)                                                         | `.claude/skills` (les sources)                         |
+| `codex`       | `AGENTS.md`                         | [`.agents/skills`](https://learn.chatgpt.com/docs/build-skills)                                                    | Copie `.agents/skills`                                 |
+| `kimi`        | `AGENTS.md`                         | [`.kimi-code/skills`, `.agents/skills`](https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html) | Copie `.agents/skills`                                 |
+| `gemini-cli`  | `GEMINI.md` importe `AGENTS.md`     | [`.gemini/skills`, alias `.agents/skills`](https://geminicli.com/docs/cli/skills/)                                 | Copie `.agents/skills`                                 |
+| `qwen-code`   | Chargement de `AGENTS.md` documenté | [`.qwen/skills`](https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/)                                | Copie `.agents/skills`, à lire explicitement           |
+| `generic`     | Chargement manuel de `AGENTS.md`    | Aucune                                                                                                             | Copie `.agents/skills`, lecture manuelle ; non vérifié |
+
+Le champ `skillDiscovery` de chaque profil, dans `sf agents catalog --json`, enregistre ces répertoires et la page qui les documente. La copie `.agents/skills` n'est écrite que si un profil déclaré ne
+lit pas `.claude/skills` : un projet qui ne déclare que Claude Code n'en reçoit aucune. La copie traduit dans la prose les tournures propres à Claude (`$ARGUMENTS`, l'outil Task, l'injection de
+contexte `` !`commande` ``) et conserve octet pour octet chaque bloc de code et chaque code inline. Qwen Code ne documente pas la lecture de `.agents/skills`, et le harness n'écrit pas `.qwen/skills`
+: indiquez-lui la copie explicitement.
 
 Claude Code lit `AGENTS.md` nativement à partir de la version 2.1.277, mais uniquement lorsqu'aucun `CLAUDE.md` n'existe dans le projet ni dans un répertoire parent. `sf agents list` et
 `sf agents catalog` affichent le profil sous la forme `Claude Code — AGENTS.md`. Les instructions propres à Claude Code (hook `SessionStart`, invocation des skills par `/sf-<name>`, liste

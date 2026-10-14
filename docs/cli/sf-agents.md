@@ -205,14 +205,18 @@ require regenerating project instructions.
 `sf agents catalog --json` works outside a managed project and returns the registry version, declared discovery support, documentation sources and limitations. Every profile reports runtime
 capabilities as `not-checked`; declaration is not a successful connection or discovery test.
 
-| Profile       | Instructions                    | Shared skills                                                           |
-| ------------- | ------------------------------- | ----------------------------------------------------------------------- |
-| `claude-code` | `AGENTS.md`                     | `.claude/skills`                                                        |
-| `codex`       | `AGENTS.md`                     | `.agents/skills`                                                        |
-| `kimi`        | `AGENTS.md`                     | See declared profile limitations                                        |
-| `gemini-cli`  | `GEMINI.md` imports `AGENTS.md` | Documented `.agents/skills` alias                                       |
-| `qwen-code`   | Documented `AGENTS.md` loading  | Explicit reading fallback; native shared-skill discovery is not claimed |
-| `generic`     | Manually load `AGENTS.md`       | Manually read the referenced skills; compatibility unverified           |
+| Profile       | Instructions                    | Documented skill discovery                                                                                         | Skills provided by the harness                   |
+| ------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| `claude-code` | `AGENTS.md`                     | [`.claude/skills`](https://code.claude.com/docs/en/skills)                                                         | `.claude/skills` (the sources)                   |
+| `codex`       | `AGENTS.md`                     | [`.agents/skills`](https://learn.chatgpt.com/docs/build-skills)                                                    | `.agents/skills` copy                            |
+| `kimi`        | `AGENTS.md`                     | [`.kimi-code/skills`, `.agents/skills`](https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html) | `.agents/skills` copy                            |
+| `gemini-cli`  | `GEMINI.md` imports `AGENTS.md` | [`.gemini/skills`, `.agents/skills` alias](https://geminicli.com/docs/cli/skills/)                                 | `.agents/skills` copy                            |
+| `qwen-code`   | Documented `AGENTS.md` loading  | [`.qwen/skills`](https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/)                                | `.agents/skills` copy, read explicitly           |
+| `generic`     | Manually load `AGENTS.md`       | None                                                                                                               | `.agents/skills` copy, read manually; unverified |
+
+The `skillDiscovery` field of each profile in `sf agents catalog --json` records these directories and the page that documents them. The `.agents/skills` copy is written only when a declared profile
+does not read `.claude/skills`: a project that declares Claude Code alone gets none. The copy translates Claude-only wording in prose (`$ARGUMENTS`, the Task tool, `` !`command` `` context injection)
+and keeps every code block and inline code span byte for byte. Qwen Code does not document reading `.agents/skills`, and the harness does not write `.qwen/skills`: point it at the copy explicitly.
 
 Claude Code reads `AGENTS.md` natively from version 2.1.277, but only when no `CLAUDE.md` exists in the project or a parent directory. `sf agents list` and `sf agents catalog` show the profile as
 `Claude Code — AGENTS.md`. Claude-Code-only instructions (the `SessionStart` hook, `/sf-<name>` skill invocation, the `.claude/settings.json` allowlist) live in `.claude/rules/claude-code.md`.
