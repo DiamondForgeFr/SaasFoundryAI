@@ -20,6 +20,7 @@ import {
 import { inspectGitAgentScope, configureLocalAgentExcludes, removeLocalAgentExcludes, NotGitRepositoryError, GitAgentScope } from './git-agent-scope'
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentIds, isHarnessAgent, getSharedAgentEntrypoints } from './agent-registry'
+import { TIER_AGENT_PATH } from './tier-agents'
 import { harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
 
@@ -357,7 +358,7 @@ async function readLocalState(git: GitAgentScope): Promise<LocalAgentState> {
     isObject(value) &&
     !Object.entries(value).some(
       ([path, hash]) =>
-        !(['CLAUDE.md', CLAUDE_CODE_RULE_PATH, ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path)) ||
+        !(['CLAUDE.md', CLAUDE_CODE_RULE_PATH, ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path) || TIER_AGENT_PATH.test(path)) ||
         path.split('/').includes('..') ||
         typeof hash !== 'string' ||
         !/^[0-9a-f]{64}$/.test(hash)

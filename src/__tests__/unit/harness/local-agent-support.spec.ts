@@ -7,6 +7,10 @@ import { promisify } from 'util'
 
 import { planAgentInstructions } from '../../../harness/agent-instructions'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../../../harness/agent-support'
+import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
+
+// Tier agents (#929) have their own suite; these assertions are about the other deposits.
+const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path))
 
 const exec = promisify(execFile)
 const manifest = { version: '1', structure: 'cli', projectName: 'local-test' }
@@ -59,7 +63,7 @@ describe('checkout-local agent support', () => {
     const state = await privateState()
     const stamp = (await lstat(join(root, 'AGENTS.md'))).mtimeMs
     const result = await refreshAgents({ targetPath: root })
-    expect(result.report.written).toEqual([])
+    expect(own(result.report.written)).toEqual([])
     expect(result.localStateChanged).toBe(false)
     expect(await privateState()).toEqual(state)
     expect((await lstat(join(root, 'AGENTS.md'))).mtimeMs).toBe(stamp)
@@ -76,13 +80,13 @@ describe('checkout-local agent support', () => {
     await expect(privateState()).rejects.toMatchObject({ code: 'ENOENT' })
   })
   it('borrows identical tracked files without owning hashes or excluding them', async () => {
-    const plan = await planAgentInstructions({ targetPath: root, agents: ['codex'] })
+    const plan = await planAgentInstructions({ targetPath: root, agents: ['claude-code', 'codex'] })
     for (const file of plan.files) await put(file.path, file.content)
     await commit()
     const result = await enable(['codex'])
-    expect(result.report.written).toEqual([])
+    expect(own(result.report.written)).toEqual([])
     expect(result.report.conflicts).toEqual([])
-    expect((await privateState()).fileHashes).toEqual({})
+    expect(own(Object.keys((await privateState()).fileHashes))).toEqual([])
     expect(await git('status', '--porcelain')).toBe('')
     expect(await git('config', '--get', 'extensions.worktreeConfig').catch(() => '')).toBe('')
   })
@@ -122,7 +126,7 @@ describe('checkout-local agent support', () => {
     expect(await get('.git/config')).toBe(config)
   })
   it.each(['120000', 'unmerged'])('refuses unsafe index entry %s even with identical disk bytes', async (mode) => {
-    const plan = await planAgentInstructions({ targetPath: root, agents: ['codex'] })
+    const plan = await planAgentInstructions({ targetPath: root, agents: ['claude-code', 'codex'] })
     const content = plan.files.find((file) => file.path === 'AGENTS.md')!.content
     await put('AGENTS.md', content)
     const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: root, input: content, encoding: 'utf8' }).trim()
@@ -163,7 +167,7 @@ describe('checkout-local agent support', () => {
     expect(result.sharedAgents).toEqual(['claude-code', 'kimi'])
     expect(result.localAgents).toEqual(['codex'])
     expect(JSON.parse(await get('.saasfoundry.json')).modules.harness.agents).toEqual(['claude-code', 'kimi'])
-    expect((await privateState()).fileHashes).toEqual({})
+    expect(own(Object.keys((await privateState()).fileHashes))).toEqual([])
     expect(await git('status', '--porcelain')).toContain('AGENTS.md')
   })
   it.each(['codex', 'gemini-cli'])('recovers owned %s output after final private-state persistence fails', async (agent) => {
@@ -175,7 +179,7 @@ describe('checkout-local agent support', () => {
     })
     await expect(enable([agent])).rejects.toThrow('Injected final inventory failure')
     expect((await privateState()).agents).toEqual([])
-    expect((await privateState()).fileHashes).toEqual({})
+    expect(own(Object.keys((await privateState()).fileHashes))).toEqual([])
     expect((await privateState()).pendingFileHashes['AGENTS.md']).toBeTruthy()
     jest.restoreAllMocks()
     const retry = await enable([agent])
@@ -193,7 +197,7 @@ describe('checkout-local agent support', () => {
     expect(await get('GEMINI.md')).toContain('@AGENTS.md')
     expect((await privateState()).fileHashes['GEMINI.md']).toMatch(/^[0-9a-f]{64}$/)
     const repeated = await enable(['gemini-cli'])
-    expect(repeated.report.written).toEqual([])
+    expect(own(repeated.report.written)).toEqual([])
     expect((await refreshAgents({ targetPath: root })).report.written).toEqual([])
     expect(await get('.saasfoundry.json')).toBe(before)
     expect(await git('status', '--porcelain')).toBe('')

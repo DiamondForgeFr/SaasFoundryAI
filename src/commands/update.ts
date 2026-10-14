@@ -54,6 +54,7 @@ import {
 import { handleProfileTransition } from './update.profile-transition'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
+import { TIER_AGENT_PATH } from '../harness/tier-agents'
 import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
@@ -70,7 +71,7 @@ const SHARED_AGENT_ENTRYPOINTS = new Set([...getSharedAgentEntrypoints(), CLAUDE
 function isSharedAgentPath(path: string): boolean {
   const normalized = path.replaceAll('\\', '/')
   const name = normalized.split('/').pop()
-  return name === 'CLAUDE.md' || name === 'AGENTS.md' || SHARED_AGENT_ENTRYPOINTS.has(normalized) || normalized.startsWith('.agents/')
+  return name === 'CLAUDE.md' || name === 'AGENTS.md' || SHARED_AGENT_ENTRYPOINTS.has(normalized) || normalized.startsWith('.agents/') || TIER_AGENT_PATH.test(normalized)
 }
 
 function withoutSharedAgentHashes(hashes: Record<string, string>): Record<string, string> {

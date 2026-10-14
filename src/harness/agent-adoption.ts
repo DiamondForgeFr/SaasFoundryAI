@@ -38,6 +38,8 @@ const knownPaths = [
   '.codex/skills',
   '.gemini/skills',
   '.qwen/skills',
+  '.claude/agents',
+  '.codex/agents',
   '.claude/settings.json',
   '.claude/settings.local.json',
   '.codex/config.toml',

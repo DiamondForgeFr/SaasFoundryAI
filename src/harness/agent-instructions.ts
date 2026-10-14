@@ -4,6 +4,8 @@ import { join, posix, resolve } from 'path'
 
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentProfile, needsSharedSkills } from './agent-registry'
+import type { RoutingOverrides } from './routing-grid'
+import { renderTierAgents } from './tier-agents'
 import { HarnessAgent, skillsTemplatesPath } from '../types'
 import { hashFileContent } from '../utils'
 
@@ -35,7 +37,7 @@ export class AgentInstructionsError extends Error {
 export interface InstallAgentInstructionsParams {
   targetPath: string
   agents: HarnessAgent[]
-  manifest?: { fileHashes?: Record<string, string> }
+  manifest?: { fileHashes?: Record<string, string>; modules?: { harness?: { routing?: RoutingOverrides } } }
   /** Adoption references source instructions without copying or normalizing skills. */
   referenceOnly?: boolean
 }
@@ -564,6 +566,19 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
   if (instructionSource.source === 'missing') {
     report.warnings.push('CLAUDE.md and AGENTS.md are missing: deposit or author the project instructions before installing compatibility bridges.')
     return plan
+  }
+  // One delegation agent per routing tier for each declared host the grid covers (#929). An adoption
+  // only references the project's own setup, so it adds none.
+  if (!effectiveReferenceOnly) {
+    try {
+      for (const file of renderTierAgents(
+        profiles.map((profile) => profile.id),
+        manifest?.modules?.harness?.routing
+      ))
+        plan.files.push({ path: file.path, content: Buffer.from(file.content), mode: 0o644 })
+    } catch (error) {
+      report.warnings.push(`Tier agents not generated: ${(error as Error).message}`)
+    }
   }
   // Only declared hosts get an entrypoint (#937): an existing undeclared one is left as it is.
   const wrapperContent = Buffer.from('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
