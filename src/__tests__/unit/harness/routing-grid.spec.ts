@@ -1,5 +1,16 @@
 import grid from '../../../harness/routing-grid.json'
-import { ROUTING_PROVIDERS, TASK_KINDS, getRoutingGrid, parseTaskKind, resolveRoute, routingOverrideIssues, validateRoutingGrid, type RoutingOverrides } from '../../../harness/routing-grid'
+import {
+  ROUTING_PROVIDERS,
+  TASK_KINDS,
+  getRoutingGrid,
+  listTierAssignments,
+  parseTaskKind,
+  resolveRoute,
+  routingOverrideIssues,
+  validateRoutingGrid,
+  type RoutingOverrides,
+  type RoutingProvider
+} from '../../../harness/routing-grid'
 
 type Fixture = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const clone = (): Fixture => JSON.parse(JSON.stringify(grid))
@@ -99,6 +110,46 @@ describe('project routing overrides (#930 AC-3, TC-AEX-008)', () => {
   ])('reports an invalid override %j', (value, message) => {
     expect(routingOverrideIssues(value).join('\n')).toContain(message)
     expect(() => resolveRoute('prose', 'claude-code', value as RoutingOverrides)).toThrow('Invalid modules.harness.routing')
+  })
+
+  it.each<[RoutingProvider, string, boolean]>([
+    ['claude-code', 'minimal', false],
+    ['claude-code', 'ultra', false],
+    ['claude-code', 'max', true],
+    ['codex', 'minimal', false],
+    ['codex', 'ultra', true]
+  ])('accepts a %s override effort %s only when the host can express it: %s (#929)', (provider, effort, ok) => {
+    const issues = routingOverrideIssues({ tiers: { light: { [provider]: { model: 'some-model', effort } } } })
+    expect(issues.length === 0).toBe(ok)
+    if (!ok) expect(issues[0]).toContain(`cannot be expressed by ${provider}`)
+  })
+
+  it('groups the resolved kinds by tier, with the kinds each tier does not serve (#929)', () => {
+    const tiers = listTierAssignments('claude-code')
+    expect(tiers.map((entry) => [entry.tier, entry.kinds])).toEqual([
+      ['light', ['exploration', 'prose']],
+      ['edit', ['scoped-edit']],
+      ['build', ['multi-file-feature', 'tests']],
+      ['fix', ['bug-fix', 'review']],
+      ['plan', ['planning']],
+      ['terminal', ['terminal-ci']]
+    ])
+    expect(tiers[3]).toMatchObject({ provider: 'claude-code', source: 'shipped', candidate: { model: 'claude-opus-5-5', effort: 'medium' }, excludedFor: [] })
+    expect(tiers[3].elsewhere).toContainEqual({ kind: 'scoped-edit', tier: 'edit' })
+    expect(tiers[3].elsewhere.map((entry) => entry.kind)).not.toContain('bug-fix')
+  })
+
+  it('reflects overrides: an emptied tier disappears, a project tier and a replaced candidate are project (#929)', () => {
+    const overrides: RoutingOverrides = {
+      kinds: { 'terminal-ci': { tier: 'plan' }, prose: { tier: 'docs' } },
+      tiers: { light: { codex: { model: 'gpt-6-luna', effort: 'max' } }, docs: { codex: { model: 'gpt-6-luna', effort: 'low' } } }
+    }
+    const tiers = listTierAssignments('codex', overrides)
+    expect(tiers.map((entry) => entry.tier)).toEqual(['light', 'edit', 'build', 'fix', 'plan', 'docs'])
+    expect(tiers.find((entry) => entry.tier === 'light')).toMatchObject({ source: 'project', kinds: ['exploration'] })
+    expect(tiers.find((entry) => entry.tier === 'plan')).toMatchObject({ source: 'shipped', kinds: ['planning', 'terminal-ci'] })
+    expect(tiers.find((entry) => entry.tier === 'docs')).toMatchObject({ source: 'project', kinds: ['prose'] })
+    expect(() => listTierAssignments('claude-code', overrides)).toThrow("Tier 'docs' has no claude-code candidate")
   })
 
   it('names the task kinds when one is unknown', () => {
