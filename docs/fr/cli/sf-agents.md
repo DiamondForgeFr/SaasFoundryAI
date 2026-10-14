@@ -10,6 +10,7 @@ sf agents list --json
 sf agents enable codex --scope shared
 sf agents replace claude-code codex --scope shared
 sf agents catalog --json
+sf agents route --task bug-fix --json
 sf agents adopt codex claude-code --scope shared
 # Remplacer la déclaration après avoir examiné l'aperçu d'adoption du dépôt :
 sf agents adopt claude-code codex --mode replace --scope shared
@@ -53,14 +54,15 @@ des identifiants d'agent. Les commandes n'installent pas les runtimes et ne test
 
 ## Commandes
 
-| Commande                                      | Comportement                                                                                               |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `adopt <agents...> [--scope local\|shared]`   | Prépare un plan par défaut ; ne l'applique qu'avec `--apply --plan <id>`.                                  |
-| `enable <agents...> [--scope local\|shared]`  | Ajoute la prise en charge dans la portée choisie ; locale par défaut.                                      |
-| `replace <agents...> [--scope local\|shared]` | Remplace exactement la déclaration de cette portée par l'ensemble non vide fourni ; conserve les fichiers. |
-| `refresh [--scope local\|shared]`             | Actualise les instructions de cette portée ; locale par défaut.                                            |
-| `list`                                        | Présente les agents partagés, locaux et effectifs ainsi que les fichiers découverts.                       |
-| `doctor [agents...]`                          | Diagnostique les artefacts et les capacités de l'hôte non vérifiées sans modifier de fichier.              |
+| Commande                                      | Comportement                                                                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `adopt <agents...> [--scope local\|shared]`   | Prépare un plan par défaut ; ne l'applique qu'avec `--apply --plan <id>`.                                           |
+| `enable <agents...> [--scope local\|shared]`  | Ajoute la prise en charge dans la portée choisie ; locale par défaut.                                               |
+| `replace <agents...> [--scope local\|shared]` | Remplace exactement la déclaration de cette portée par l'ensemble non vide fourni ; conserve les fichiers.          |
+| `refresh [--scope local\|shared]`             | Actualise les instructions de cette portée ; locale par défaut.                                                     |
+| `list`                                        | Présente les agents partagés, locaux et effectifs ainsi que les fichiers découverts.                                |
+| `doctor [agents...]`                          | Diagnostique les artefacts et les capacités de l'hôte non vérifiées sans modifier de fichier.                       |
+| `route --task <kind> [--provider <agent>]`    | Indique le modèle et le niveau de raisonnement que la grille d'allocation recommande pour un type de tâche délégué. |
 
 Toutes les commandes acceptent `--json`. `list` est en lecture seule et indique `not-checked` pour la découverte du runtime.
 
@@ -167,7 +169,7 @@ ou encore dotée de capacité. Si elle est indisponible, signalez cette limite e
 
 Une auto-revue séquentielle ne satisfait **pas** une exigence de revue indépendante. Pour un ticket complexe, signalez l'exigence comme incomplète et restez en AI testing jusqu'à l'intervention d'un
 contexte agent distinct et autorisé ou d'un relecteur humain indépendant. Ne réduisez pas la complexité, ne contournez pas les garde-fous et ne comptez pas des auto-revues répétées comme relecteurs
-indépendants. Les choix de modèle et de niveau de raisonnement restent pilotés par l'hôte ; cette commande ne configure aucun routage.
+indépendants. L'hôte lance chaque délégation ; [`sf agents route`](#routage-des-delegations-sf-agents-route) recommande le modèle et le niveau de raisonnement de son type de tâche.
 
 ## Exclusions Git et worktrees
 
@@ -211,8 +213,9 @@ conservées pour une nouvelle tentative. Un conflit n'est jamais présenté comm
 
 Voici la matrice de prise en charge canonique. Le [guide d'installation](/fr/getting-started/installation) y renvoie chaque point de départ au lieu de recopier le tableau.
 
-Le registre de profils décrit comment un outil de code charge les instructions du projet. Il ne choisit ni modèle, ni fournisseur, ni identifiant d'API. Configurez ces éléments personnellement dans
-votre outil ; les modifier ne nécessite pas de régénérer les instructions du projet.
+Le registre de profils décrit comment un outil de code charge les instructions du projet. Il ne choisit ni le modèle de votre session, ni son fournisseur, ni son identifiant d'API. Configurez ces
+éléments personnellement dans votre outil ; les modifier ne nécessite pas de régénérer les instructions du projet. La grille d'allocation recommande seulement un modèle et un niveau de raisonnement
+par type de tâche délégué (voir plus bas).
 
 `sf agents catalog --json` fonctionne hors d'un projet géré et renvoie la version du registre, la prise en charge de découverte déclarée, les sources documentaires et les limites. Chaque profil
 rapporte ses capacités d'exécution comme `not-checked` : une déclaration ne constitue pas un test réussi de connexion ou de découverte.
@@ -243,6 +246,47 @@ noms de modèles ou fournisseurs comme `deepseek`, `gpt` ou `minimax` sont rejet
 
 Les nouvelles intégrations sont des modifications de données examinées dans `src/harness/agent-profiles.json`, avec parité entre registre et schéma ainsi que tests de dépôt. Les profils ne peuvent
 contenir ni commandes, ni identifiants, ni répertoires de sortie arbitraires. Cette release contient uniquement les profils intégrés ; elle ne charge ni n'exécute de plugins de profils distants.
+
+## Routage des délégations (`sf agents route`)
+
+Un agent de code qui délègue du travail peut demander quel modèle et quel niveau de raisonnement la tâche mérite, au lieu de lancer chaque sous-agent sur le modèle de la session :
+
+```bash
+sf agents route --task bug-fix --json
+sf agents route --task terminal-ci --provider codex
+```
+
+Le CLI livre une grille d'allocation versionnée. Chaque type de tâche (`exploration`, `scoped-edit`, `bug-fix`, `multi-file-feature`, `tests`, `review`, `planning`, `terminal-ci`, `prose`) désigne un
+palier, et chaque palier désigne un candidat (modèle et niveau de raisonnement) pour Claude Code et pour Codex. La sortie donne le palier, le candidat sous la forme d'un identifiant canonique
+`provider/runtime/model/effort`, l'origine de la décision (`shipped` ou `project`) et la preuve qui fonde une entrée livrée. La commande fonctionne hors d'un projet géré ; dans un projet, elle répond
+pour les agents de code déclarés qui disposent de candidats.
+
+Chaque entrée livrée cite sa preuve. Une entrée `measured` porte le benchmark public, sa date, son score et son coût par tâche : c'est le candidat le moins cher à moins de 5 points du meilleur score
+mesuré pour au plus la moitié de son coût, comparé au sein d'une même source. Une entrée `provisional` nomme l'indicateur le plus proche et n'a pas de score : aucun benchmark public ne mesure ce type
+avec un coût, et le banc de rejeu des mainteneurs la remplace par une mesure. Certains types excluent aussi les candidats dont les scores s'effondrent, comme Haiku pour le terminal et la CI.
+
+Un projet surcharge la grille dans `.saasfoundry.json` :
+
+```json
+{
+  "modules": {
+    "harness": {
+      "version": 4,
+      "agents": ["claude-code", "codex"],
+      "routing": {
+        "kinds": { "scoped-edit": { "tier": "build" } },
+        "tiers": { "light": { "codex": { "model": "gpt-6-luna", "effort": "max" } } }
+      }
+    }
+  }
+}
+```
+
+`kinds` remplace le palier d'un type de tâche ; `tiers` remplace le candidat d'un palier pour un agent ou déclare un palier propre au projet. Le schéma du manifeste valide les deux. Une surcharge est
+signalée avec l'origine `project` et sans preuve livrée ; celle qui tombe sur un candidat exclu est signalée par un avertissement, pas refusée. Une surcharge invalide fait échouer la commande au lieu
+de revenir silencieusement à la grille. `sf agents enable`, `replace` et `sf update` conservent le bloc `routing`.
+
+La grille recommande ; elle ne lance rien. Le modèle, le fournisseur et les identifiants de votre session restent configurés dans votre outil.
 
 ## Notes de plateforme
 

@@ -10,6 +10,7 @@ sf agents list --json
 sf agents enable codex --scope shared
 sf agents replace claude-code codex --scope shared
 sf agents catalog --json
+sf agents route --task bug-fix --json
 sf agents adopt codex claude-code --scope shared
 # Replace the declaration after reviewing a repository-adoption preview:
 sf agents adopt claude-code codex --mode replace --scope shared
@@ -49,14 +50,15 @@ runtimes or probe their native discovery behavior.
 
 ## Commands
 
-| Command                                       | Behavior                                                                             |
-| --------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `adopt <agents...> [--scope local\|shared]`   | Plans by default; applies only with `--apply --plan <id>`.                           |
-| `enable <agents...> [--scope local\|shared]`  | Adds support in the selected scope; defaults to local.                               |
-| `replace <agents...> [--scope local\|shared]` | Makes that scope's declaration exactly the named non-empty set; preserves files.     |
-| `refresh [--scope local\|shared]`             | Refreshes instructions in that scope; defaults to local.                             |
-| `list`                                        | Reports shared, local and effective agents plus discovered files.                    |
-| `doctor [agents...]`                          | Diagnoses artifact evidence and unverified host capabilities without changing files. |
+| Command                                       | Behavior                                                                                |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `adopt <agents...> [--scope local\|shared]`   | Plans by default; applies only with `--apply --plan <id>`.                              |
+| `enable <agents...> [--scope local\|shared]`  | Adds support in the selected scope; defaults to local.                                  |
+| `replace <agents...> [--scope local\|shared]` | Makes that scope's declaration exactly the named non-empty set; preserves files.        |
+| `refresh [--scope local\|shared]`             | Refreshes instructions in that scope; defaults to local.                                |
+| `list`                                        | Reports shared, local and effective agents plus discovered files.                       |
+| `doctor [agents...]`                          | Diagnoses artifact evidence and unverified host capabilities without changing files.    |
+| `route --task <kind> [--provider <agent>]`    | Resolves the model and effort the allocation grid recommends for a delegated task kind. |
 
 All commands accept `--json`. `list` is read-only and reports runtime discovery as `not-checked`.
 
@@ -155,8 +157,8 @@ Use native delegation when the current host exposes it and the user's authorizat
 is unavailable, disclose the limitation and perform eligible implementation or research steps sequentially.
 
 Sequential self-review does **not** satisfy an independent-review requirement. For a complex ticket, report that requirement as incomplete and remain in AI testing until a separate authorized agent
-context or independent human reviewer performs it. Do not downgrade complexity, bypass guards or count repeated self-reviews as independent reviewers. Model and effort choices remain host-side
-decisions; this command does not configure routing rules.
+context or independent human reviewer performs it. Do not downgrade complexity, bypass guards or count repeated self-reviews as independent reviewers. The host launches every delegation;
+[`sf agents route`](#delegation-routing-sf-agents-route) recommends the model and effort for its task kind.
 
 ## Git exclusions and worktrees
 
@@ -199,8 +201,8 @@ Commands never stage, commit, push, or change Git branches.
 
 This is the canonical support matrix. The [installation guide](/getting-started/installation) routes each project starting point here rather than copying the table.
 
-The profile registry describes how a coding tool loads project instructions. It does not select a model, provider or API credential. Configure those personally in your tool; changing them does not
-require regenerating project instructions.
+The profile registry describes how a coding tool loads project instructions. It does not select your session's model, provider or API credential. Configure those personally in your tool; changing them
+does not require regenerating project instructions. The allocation grid only recommends a model and effort per delegated task kind (see below).
 
 `sf agents catalog --json` works outside a managed project and returns the registry version, declared discovery support, documentation sources and limitations. Every profile reports runtime
 capabilities as `not-checked`; declaration is not a successful connection or discovery test.
@@ -229,6 +231,46 @@ For an unlisted tool, explicitly choose `generic` and verify that it loads the i
 
 New integrations are reviewed data changes in `src/harness/agent-profiles.json`, with registry/schema parity and deposit tests. Profiles cannot contain commands, credentials or arbitrary output
 directories. This delivery includes built-in profiles only; it does not load or execute remote profile plugins.
+
+## Delegation routing (`sf agents route`)
+
+A coding agent that delegates work can ask which model and effort the task deserves instead of running every subagent on the session's own model:
+
+```bash
+sf agents route --task bug-fix --json
+sf agents route --task terminal-ci --provider codex
+```
+
+The CLI ships a versioned allocation grid. Each task kind (`exploration`, `scoped-edit`, `bug-fix`, `multi-file-feature`, `tests`, `review`, `planning`, `terminal-ci`, `prose`) names a tier, and each
+tier names a candidate (model and effort) for Claude Code and for Codex. The output gives the tier, the candidate as a canonical `provider/runtime/model/effort` id, the source of the decision
+(`shipped` or `project`) and the evidence behind a shipped entry. The command works outside a managed project; inside one, it answers for the declared coding agents that have routing candidates.
+
+Every shipped entry cites its evidence. A `measured` entry carries the public benchmark, its date, its score and its cost per task: it is the cheapest candidate within 5 points of the best measured
+score at no more than half its cost, compared within one source. A `provisional` entry names the nearest proxy and has no score: no public benchmark measures that kind with a cost, and the
+maintainers' replay bench replaces it with a measurement. Some kinds also exclude candidates whose scores collapse there, such as Haiku for terminal and CI work.
+
+A project overrides the grid in `.saasfoundry.json`:
+
+```json
+{
+  "modules": {
+    "harness": {
+      "version": 4,
+      "agents": ["claude-code", "codex"],
+      "routing": {
+        "kinds": { "scoped-edit": { "tier": "build" } },
+        "tiers": { "light": { "codex": { "model": "gpt-6-luna", "effort": "max" } } }
+      }
+    }
+  }
+}
+```
+
+`kinds` replaces the tier of a task kind; `tiers` replaces a tier's candidate for one agent or declares a project tier. The manifest schema validates both. A routed override is reported with its
+source `project` and no shipped evidence; one that lands on an excluded candidate is reported with a warning, not refused. An invalid override makes the command fail rather than silently use the grid.
+`sf agents enable`, `replace` and `sf update` keep the `routing` block.
+
+The grid recommends; it does not launch anything. Your session's own model, provider and credentials stay configured in your tool.
 
 ## Platform notes
 
