@@ -24,8 +24,8 @@ A managed project has `.saasfoundry.json`, an `AGENTS.md` instruction file and `
 
 `AGENTS.md` is the authoritative instruction file of a new project; the CLI no longer writes `CLAUDE.md` or `CLAUDE.local.md` for a fresh install. Its presence does not declare Codex or any other
 tool: the manifest and checkout-local inventory do. Declared profiles add only what their tool needs on top of it: `.claude/rules/claude-code.md` for `claude-code`, `GEMINI.md` (importing `AGENTS.md`)
-for `gemini-cli`, and `.agents/skills` copies for every declared profile other than Claude Code. A custom entrypoint belonging to an undeclared tool, such as an existing `GEMINI.md`, is preserved and
-does not block enabling a different profile.
+for `gemini-cli`, `.agents/skills` copies for every declared profile other than Claude Code, and [tier agents](#tier-agents) for `claude-code` and `codex`. A custom entrypoint belonging to an
+undeclared tool, such as an existing `GEMINI.md`, is preserved and does not block enabling a different profile.
 
 The root `AGENTS.md` ends with a generated region between `<!-- saasfoundry:generated:start -->` and `<!-- saasfoundry:generated:end -->`. `sf update` and `sf agents enable` rewrite only that region;
 the rest of the file belongs to the project. An `AGENTS.md` without these markers was written by you and is never rewritten.
@@ -271,6 +271,25 @@ source `project`; it keeps the shipped evidence only when it resolves to the shi
 invalid override makes the command fail rather than silently use the grid. `sf agents enable`, `replace` and `sf update` keep the `routing` block.
 
 The grid recommends; it does not launch anything. Your session's own model, provider and credentials stay configured in your tool.
+
+### Tier agents
+
+The harness turns the grid into one subagent per tier for each declared coding agent the grid routes, so a delegation can pick a cheaper tier by name:
+
+| Agent         | File                           | Model and effort                     |
+| ------------- | ------------------------------ | ------------------------------------ |
+| `claude-code` | `.claude/agents/sf-<tier>.md`  | `model` and `effort` frontmatter     |
+| `codex`       | `.codex/agents/sf-<tier>.toml` | `model` and `model_reasoning_effort` |
+
+Each description lists the task kinds the tier serves and the tier to use for every other kind: `sf-fix` is for `bug-fix` and `review`, and sends `scoped-edit` to `sf-edit`. The files follow the
+effective routing. An override changes a tier agent's model or effort or adds a project tier, and a tier left without any kind gets no file. A subagent file must carry an effort its host can run, so
+an override refuses `minimal` and `ultra` for Claude Code and `minimal` for Codex.
+
+Tier agents are hash-tracked like the other agent deposits. `sf agents enable`, `replace`, `refresh` and `sf update` rewrite an untouched file, and leave an edited one in place beside a
+`.saasfoundry.new` sidecar. A managed harness without an `agents` list receives the Claude Code tier agents on `sf update`. No deposit is ever deleted: a removed agent, or a tier that no longer serves
+any kind, keeps its file until you remove it. An adopted project receives none.
+
+Claude Code chooses a subagent from its description. Codex delegates when you ask or when the instructions say so, and reads a project's `.codex/agents` only once you trust the project.
 
 ## Platform notes
 

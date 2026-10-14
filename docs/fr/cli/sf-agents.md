@@ -25,8 +25,8 @@ modèles ne sont pas des profils d'agent.
 
 `AGENTS.md` est le fichier d'instructions de référence d'un nouveau projet ; le CLI n'écrit plus `CLAUDE.md` ni `CLAUDE.local.md` lors d'une nouvelle installation. Sa présence ne déclare ni Codex ni
 aucun autre outil : le manifest et l'inventaire local au checkout font foi. Les profils déclarés n'ajoutent que ce dont leur outil a besoin : `.claude/rules/claude-code.md` pour `claude-code`,
-`GEMINI.md` (qui importe `AGENTS.md`) pour `gemini-cli`, et les copies `.agents/skills` pour chaque profil déclaré autre que Claude Code. Un point d'entrée personnalisé appartenant à un outil non
-déclaré, comme un `GEMINI.md` existant, est conservé et n'empêche pas l'activation d'un autre profil.
+`GEMINI.md` (qui importe `AGENTS.md`) pour `gemini-cli`, les copies `.agents/skills` pour chaque profil déclaré autre que Claude Code, et les [agents de palier](#agents-de-palier) pour `claude-code`
+et `codex`. Un point d'entrée personnalisé appartenant à un outil non déclaré, comme un `GEMINI.md` existant, est conservé et n'empêche pas l'activation d'un autre profil.
 
 Le `AGENTS.md` racine se termine par une région générée, délimitée par `<!-- saasfoundry:generated:start -->` et `<!-- saasfoundry:generated:end -->`. `sf update` et `sf agents enable` ne réécrivent
 que cette région ; le reste du fichier appartient au projet. Un `AGENTS.md` sans ces marqueurs a été écrit par vous et n'est jamais réécrit.
@@ -287,6 +287,26 @@ signalée avec l'origine `project` ; elle ne garde la preuve livrée que si elle
 refusée. Une surcharge invalide fait échouer la commande au lieu de revenir silencieusement à la grille. `sf agents enable`, `replace` et `sf update` conservent le bloc `routing`.
 
 La grille recommande ; elle ne lance rien. Le modèle, le fournisseur et les identifiants de votre session restent configurés dans votre outil.
+
+### Agents de palier
+
+Le harness traduit la grille en un sous-agent par palier pour chaque agent de développement déclaré que la grille route : une délégation peut ainsi choisir un palier moins cher par son nom.
+
+| Agent         | Fichier                        | Modèle et effort                    |
+| ------------- | ------------------------------ | ----------------------------------- |
+| `claude-code` | `.claude/agents/sf-<tier>.md`  | frontmatter `model` et `effort`     |
+| `codex`       | `.codex/agents/sf-<tier>.toml` | `model` et `model_reasoning_effort` |
+
+Chaque description liste les types de tâche que sert le palier et le palier à utiliser pour chacun des autres : `sf-fix` sert `bug-fix` et `review`, et renvoie `scoped-edit` vers `sf-edit`. Les
+fichiers suivent le routage effectif. Une surcharge change le modèle ou l'effort d'un agent de palier ou ajoute un palier propre au projet, et un palier qui ne sert plus aucun type n'a pas de fichier.
+Un fichier de sous-agent doit porter un effort que son hôte sait exécuter : une surcharge refuse donc `minimal` et `ultra` pour Claude Code, et `minimal` pour Codex.
+
+Les agents de palier sont suivis par hash comme les autres dépôts d'agents. `sf agents enable`, `replace`, `refresh` et `sf update` réécrivent un fichier intact, et laissent en place un fichier
+modifié à côté d'un fichier `.saasfoundry.new`. Un harness géré sans liste `agents` reçoit les agents de palier de Claude Code lors de `sf update`. Aucun dépôt n'est jamais supprimé : un agent retiré,
+ou un palier qui ne sert plus aucun type, garde son fichier jusqu'à ce que vous le supprimiez. Un projet adopté n'en reçoit aucun.
+
+Claude Code choisit un sous-agent d'après sa description. Codex délègue quand vous le demandez ou quand les instructions le prévoient, et ne lit les `.codex/agents` d'un projet qu'une fois ce projet
+approuvé (trusted).
 
 ## Notes de plateforme
 

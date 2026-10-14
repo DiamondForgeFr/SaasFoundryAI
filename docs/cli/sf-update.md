@@ -135,6 +135,12 @@ mid-transition. If it cannot prove a complete commit or safe rollback, it stops 
 Application database changes remain an operator action. Review generated Prisma or SQL changes and use the generated project commands appropriate to your environment; `sf update` does not promise to
 migrate production data.
 
+### Tier agents
+
+Every update refreshes the [tier agents](/cli/sf-agents#tier-agents) of the declared coding agents from the current routing grid and the project's `routing` overrides: an untouched file is rewritten,
+an edited one gets a `.saasfoundry.new` sidecar. A managed harness without an `agents` list is treated as Claude Code and receives the `.claude/agents/sf-<tier>.md` files only; its other instruction
+files are left as they are.
+
 ## Add capabilities after creation
 
 Interactive module selection:
