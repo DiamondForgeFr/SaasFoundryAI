@@ -35,7 +35,7 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 - [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`
 - [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`
 - [ ] **Heavy local validation** — run the project's configured build/integration suite before Human Testing (for example `npm run test:pre-push` when declared in `package.json`). Record command,
-      commit and results. Repeat after relevant fixes; ordinary pushes do not rerun this suite.
+      commit and results. Repeat after relevant fixes; ordinary pushes do not rerun this suite. A delegated run is `terminal-ci` (SKILL.md → Delegation routing).
 - [ ] **Local CI gate** — when `.saasfoundry.json` declares `workflow.localCi.requiredStatuses`, run the project's local CI on the exact pushed commit until every declared status is green. No diff is
       too small for it: a narrower check (`lint`, `check`) does not count. `create-pr` (without `--draft`) and `ready-pr` refuse a head without them; `--skip-local-ci "<reason>"` is the explicit
       escape hatch, recorded on the pull request.
@@ -43,8 +43,8 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
       follows it from the PR's checks, which link to one progress comment; open the draft PR first (`create-pr <ticket> --draft`).
 - [ ] **Execute test plan** step by step — verify each scenario, document any failure
 - [ ] **On failure** — document, fix, commit, push, restart from automated tests
-- [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel review agents (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
-      automated tests.
+- [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel `review` delegations (security / logic / perf). Fix Critical/High findings. If any fix committed, restart
+      from automated tests.
 - [ ] **Returning from review** — if human retesting is needed, use `workflow-cli.sh draft-pr <ticket>` before returning to Human Testing. `create-pr --draft` reuses a PR without changing its state.
 - [ ] **On green** — post test report summary (include examine findings if complex), then transition:
 

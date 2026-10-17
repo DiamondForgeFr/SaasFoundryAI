@@ -99,6 +99,29 @@ The Epic stays `In progress` while its children pass through testing and review.
 assignments. The parent Done guard checks every native child's project-board Status. Backlog, Ready, In progress, AI Testing, Human Testing, In Review, or an unknown status blocks Done. Incomplete
 children do not block the parent's testing or review phases.
 
+## Delegation routing
+
+Every step that delegates work to another agent names a **task kind** from the routing grid, never a model or an agent type:
+
+| Task kind            | Typical step                                           |
+| -------------------- | ------------------------------------------------------ |
+| `exploration`        | Analyze: codebase, documentation and web research      |
+| `planning`           | Plan, when it is delegated                             |
+| `scoped-edit`        | A change confined to one or two files                  |
+| `multi-file-feature` | A feature spread over several files                    |
+| `bug-fix`            | Diagnosing and fixing a defect                         |
+| `tests`              | Writing or repairing tests                             |
+| `prose`              | Documentation and other prose                          |
+| `review`             | Examine (security, logic, performance) and diff review |
+| `terminal-ci`        | Shell, build and CI work, long test runs               |
+
+1. **Resolve the tier** with `sf agents route --task <kind> --provider <current-agent>` (`claude-code` or `codex`) and hand the work to the `sf-<tier>` agent it names. That agent carries its own model
+   and effort.
+2. **Decompose before delegating.** A subtask handed to a tier below the orchestrating session states its **file set** (the files it may touch), its **expected result** and its **check** (the command
+   or observation that proves it). A subtask that cannot state all three is split until it can; if it still cannot, it stays in the orchestrating session and is never handed to a lower tier.
+3. **No routing.** When the route fails (a coding agent without routing candidates) or the agent cannot delegate, run the step in the session, sequentially, and report that a self-review is not an
+   independent review.
+
 ## How to use this skill
 
 **FIRST TIME on a ticket:**

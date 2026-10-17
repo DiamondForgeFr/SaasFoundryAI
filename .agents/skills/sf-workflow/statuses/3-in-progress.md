@@ -45,6 +45,8 @@ These stay in the `In progress` board column but flow through a **separate lifec
     and closes this first ticket
 - [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
 - [ ] **Create child tickets** — `workflow-cli.sh create-subtask <parent> "<title>" ["<body>"]` (auto-links as a native sub-issue); mark bundled children with `nature:bundled-pr`
+- [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child
+      that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
 - [ ] **Per normal child:** branch → code → PR → verify merge → `update-status <child> Done`; per bundled child: one atomic commit on the parent's branch → validate → `update-status <child> Done`
 - [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → `npm test` → push. Child tickets may continue through their own lifecycle.
 
