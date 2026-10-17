@@ -76,8 +76,13 @@ When delegation is available and authorized, assign independent work to agents; 
 execute the same steps sequentially. A sequential self-review is not an independent review:
 report that limitation and retain any required human review. Tool names in legacy examples
 describe capabilities, not required APIs. Use the user's current request as skill arguments.
-Do not assume Claude Code hooks, model selection, tool permissions or credentials transfer.
+Do not assume Claude Code hooks, tool permissions or credentials transfer.
 Run preconditions explicitly, and stop to report a missing capability when no equivalent exists.
+When a workflow step names a task kind, resolve its tier with
+\`sf agents route --task <kind> --provider <current-agent>\` and delegate the step to the
+\`sf-<tier>\` agent it names: that agent carries its own model and effort, so never name a
+model or an effort yourself. When the route fails or the agent cannot delegate, run the step
+in the session.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
 The project manifest and workflow rules take precedence over generic skill examples,
 including branch names, commit formats, staging, pushing and approval requirements.
