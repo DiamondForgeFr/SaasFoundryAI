@@ -11,9 +11,7 @@ steps:
     enabled: true
     depth: 'standard'
     agents: 3 # 2-4 parallel agents
-    agentTypes:
-      - explore-codebase
-      - explore-docs # If unfamiliar library
+    taskKind: exploration # codebase, and docs if the library is unfamiliar
   plan:
     enabled: true
     depth: 'detailed' # File-by-file plan
@@ -39,9 +37,9 @@ aiInstructions: |
   This is a medium-complexity feature. Use a structured approach:
 
   **Analyze Phase (STANDARD):**
-  - Launch 2-4 parallel exploration agents
-  - explore-codebase: Find existing patterns, files, utilities
-  - explore-docs: Research library documentation if unfamiliar
+  - Launch 2-4 parallel `exploration` delegations (SKILL.md → Delegation routing)
+  - Codebase: Find existing patterns, files, utilities
+  - Documentation: Research library documentation if unfamiliar
   - Document findings with file:line references
   - Identify dependencies
 
@@ -55,6 +53,7 @@ aiInstructions: |
 
   **Execute Phase:**
   - Create subtasks for each major file change
+  - A delegated subtask names its task kind, file set, expected result and check (SKILL.md → Delegation routing)
   - Use TodoCreate to track progress
   - Implement file-by-file following the plan
   - Mark todos complete immediately after each task

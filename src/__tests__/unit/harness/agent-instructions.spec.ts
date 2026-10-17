@@ -157,6 +157,15 @@ describe('shared agent instructions', () => {
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).toContain('@AGENTS.md')
   })
 
+  it('routes delegations through sf agents route instead of forbidding model selection (#931)', () => {
+    for (const instructions of [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).not.toContain('model selection')
+      expect(instructions).toMatch(/`sf agents route --task <kind> --provider <current-agent>`/)
+      expect(instructions).toMatch(/`sf-<tier>` agent it names/)
+      expect(instructions).toMatch(/never name a\s+model or an effort yourself/)
+    }
+  })
+
   it('teaches every shared instruction surface to preview additive full-profile transitions', () => {
     for (const instructions of [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
       expect(instructions).toContain('sf status --claude-friendly --no-network')

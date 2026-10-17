@@ -63,6 +63,9 @@ moment :
 
 Les explorateurs restent en lecture seule. Des implémentations parallèles n'utilisent des worktrees distincts que si leurs responsabilités et fichiers sont réellement indépendants.
 
+Chaque délégation nomme un type de tâche (`exploration` pour l'analyse, `review` pour la revue contradictoire) que l'agent résout avec
+[`sf agents route`](../cli/sf-agents.md#routage-des-delegations-sf-agents-route) pour choisir l'agent de palier. La section « Delegation routing » du skill workflow porte la règle.
+
 ### 🔴 Complex
 
 | Étape        | Comportement                                                        |

@@ -43,7 +43,7 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 - [ ] **Show progress on the PR** — around every heavy run, `workflow-cli.sh ai-status <ticket> "<step>" pending "<what runs>"`, then `success` or `failure` with a one-line result. The developer follows it from the PR's checks, which link to one progress comment; open the draft PR first (`create-pr <ticket> --draft`).
 - [ ] **Execute test plan** step by step — verify each scenario, document any failure
 - [ ] **On failure** — document, fix, commit, push, restart from automated tests
-- [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel review agents (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
+- [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel `review` delegations (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
       automated tests.
 - [ ] **On green** — post the test report summary (include examine findings if complex), then:
   - default: take the PR out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**
