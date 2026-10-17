@@ -123,7 +123,7 @@ Two kinds of keys exist, and the difference matters when you edit one:
 | `steps.analyze.enabled`      | boolean                     | yes      | `scripts/analyze.sh`           | `false` makes the script print "Analysis SKIPPED" and exit.                                                                                                          |
 | `steps.analyze.depth`        | string or `null`            | yes      | `scripts/analyze.sh`           | `minimal`, `standard` or `deep` (`null` when disabled). Printed as the analysis depth.                                                                               |
 | `steps.analyze.agents`       | integer                     | yes      | `scripts/analyze.sh`           | Number of parallel exploration agents to launch (`0` = direct tools only). Printed.                                                                                  |
-| `steps.analyze.agentTypes`   | list of strings             | no       | agent                          | Agent types worth launching, for example `explore-codebase`, `explore-docs`, `websearch`.                                                                            |
+| `steps.analyze.taskKind`     | task kind                   | no       | agent                          | Task kind of the analysis delegations (`exploration`). Resolved with `sf agents route`, see [SKILL.md → Delegation routing](../SKILL.md#delegation-routing).         |
 | `steps.plan.enabled`         | boolean                     | yes      | `scripts/plan.sh`              | `false` makes the script print "Planning SKIPPED" and exit.                                                                                                          |
 | `steps.plan.depth`           | string or `null`            | yes      | `scripts/plan.sh`              | `minimal`, `detailed` or `comprehensive` (`null` when disabled). Printed.                                                                                            |
 | `steps.plan.approval`        | boolean                     | yes      | `scripts/plan.sh`              | Whether the user must approve the plan before implementation. Printed as "Approval required".                                                                        |
@@ -133,6 +133,7 @@ Two kinds of keys exist, and the difference matters when you edit one:
 | `steps.subtasks.detailed`    | boolean                     | no       | agent                          | More granular subtasks (`complex` sets it).                                                                                                                          |
 | `steps.examine.enabled`      | boolean                     | yes      | agent                          | Adversarial review. The `test` command runs `scripts/examine.sh` when the level is literally `complex`, whatever this key says.                                      |
 | `steps.examine.agents`       | integer                     | no       | agent                          | Parallel review agents (`complex` sets `3`).                                                                                                                         |
+| `steps.examine.taskKind`     | task kind                   | no       | agent                          | Task kind of the review delegations (`review`).                                                                                                                      |
 | `steps.examine.checks`       | list of strings             | no       | agent                          | Review lenses: `security`, `logic`, `performance`.                                                                                                                   |
 | `steps.tests.type`           | string                      | yes      | agent                          | `regression` (bug), `optional`, `recommended` or `mandatory`.                                                                                                        |
 | `steps.tests.mandatory`      | boolean                     | yes      | agent                          | Whether the tests phase can be skipped.                                                                                                                              |
@@ -190,9 +191,7 @@ steps:
     enabled: true # analyze.sh
     depth: 'standard' # analyze.sh
     agents: 3 # analyze.sh: 2-4 parallel agents
-    agentTypes: # agent
-      - explore-codebase
-      - explore-docs # if the library is unfamiliar
+    taskKind: exploration # agent: resolved with sf agents route --task exploration
   plan:
     enabled: true # plan.sh
     depth: 'detailed' # plan.sh: file-by-file plan
