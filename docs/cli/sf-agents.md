@@ -157,8 +157,9 @@ Use native delegation when the current host exposes it and the user's authorizat
 is unavailable, disclose the limitation and perform eligible implementation or research steps sequentially.
 
 Sequential self-review does **not** satisfy an independent-review requirement. For a complex ticket, report that requirement as incomplete and remain in AI testing until a separate authorized agent
-context or independent human reviewer performs it. Do not downgrade complexity, bypass guards or count repeated self-reviews as independent reviewers. The host launches every delegation;
-[`sf agents route`](#delegation-routing-sf-agents-route) recommends the model and effort for its task kind.
+context or independent human reviewer performs it. Do not downgrade complexity, bypass guards or count repeated self-reviews as independent reviewers. The host launches every delegation. The workflow
+names a task kind for each one; the agent resolves it with [`sf agents route`](#delegation-routing-sf-agents-route) and hands the work to the `sf-<tier>` agent it names, which carries the model and
+effort.
 
 ## Git exclusions and worktrees
 
@@ -290,6 +291,10 @@ Tier agents are hash-tracked like the other agent deposits. `sf agents enable`, 
 any kind, keeps its file until you remove it. An adopted project receives none.
 
 Claude Code chooses a subagent from its description. Codex delegates when you ask or when the instructions say so, and reads a project's `.codex/agents` only once you trust the project.
+
+The generated instructions say so. When a workflow step names a task kind (`exploration` for the analysis, `review` for the adversarial review, `scoped-edit` or `multi-file-feature` for a delegated
+subtask), they tell every agent to run `sf agents route --task <kind> --provider <current-agent>` and delegate to the `sf-<tier>` agent it names, without naming a model. A subtask handed to a cheaper
+tier states its file set, expected result and check; one that cannot is split or stays in the session. An agent without routing candidates, or one that cannot delegate, runs the step itself.
 
 ## Platform notes
 
