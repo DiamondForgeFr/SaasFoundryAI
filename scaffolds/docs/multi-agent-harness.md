@@ -48,7 +48,7 @@ Run `sf status --agent-friendly --no-network` before work; `--claude-friendly` r
 
 GitHub and SRS credentials are resolved by the existing CLIs. Do not copy secrets into agent instructions, settings, or the repository. Each agent's sandbox and approval rules still apply. Installed files alone do not demonstrate that Git push, network access, or all hooks work in a particular host.
 
-Claude's session and prompt hooks are not automatically installed for another agent. Other agents must perform the initialization procedure explicitly until a tested native hook adapter exists. Delegation depends on the host's tools; a sequential review is not equivalent to an independent review required by the workflow.
+Claude's session and prompt hooks are not automatically installed for another agent. Other agents must perform the initialization procedure explicitly until a tested native hook adapter exists. Delegation depends on the host's tools; a sequential review is not equivalent to an independent review required by the workflow. When a workflow step names a task kind, the agent resolves it with `sf agents route --task <kind> --provider <current-agent>` and delegates to the `sf-<tier>` agent it names, which carries its own model and effort.
 
 ### Manual session initialization
 

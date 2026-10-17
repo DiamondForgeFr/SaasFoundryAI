@@ -84,15 +84,18 @@ Each complexity level enables or disables specific workflow steps:
 The required exploration agents are read-only and may share the active checkout. If implementation is split across independent writing streams, each writer needs a separate ticket, branch and worktree
 with explicit file ownership. Coupled or overlapping implementation remains sequential in one feature worktree. The configured base branch comes from `workflow.workingBranch` in `.saasfoundry.json`.
 
+Each delegation names a task kind (`exploration` for the analysis, `review` for the adversarial review) that the agent resolves with
+[`sf agents route`](../cli/sf-agents.md#delegation-routing-sf-agents-route) to pick the tier agent. The workflow skill's "Delegation routing" section holds the rule.
+
 ### 🔴 Complex
 
-| Step     | Behaviour                                                                   |
-| -------- | --------------------------------------------------------------------------- |
-| Analyze  | Deep — 6–10 parallel agents (explore-codebase × N, explore-docs, websearch) |
-| Plan     | Comprehensive with dependencies — **approval required**                     |
-| Subtasks | **Mandatory + granular**                                                    |
-| Examine  | **Adversarial review** — security (OWASP Top 10), logic flaws, performance  |
-| Tests    | **Mandatory** — comprehensive unit + E2E + regression, 80% coverage target  |
+| Step     | Behaviour                                                                  |
+| -------- | -------------------------------------------------------------------------- |
+| Analyze  | Deep — 6–10 parallel `exploration` delegations (codebase, docs, web)       |
+| Plan     | Comprehensive with dependencies — **approval required**                    |
+| Subtasks | **Mandatory + granular**                                                   |
+| Examine  | **Adversarial review** — security (OWASP Top 10), logic flaws, performance |
+| Tests    | **Mandatory** — comprehensive unit + E2E + regression, 80% coverage target |
 
 **Testing matrix:** unit ✓ · E2E ✓ · regression ✓ · coverage ≥ 80%.
 

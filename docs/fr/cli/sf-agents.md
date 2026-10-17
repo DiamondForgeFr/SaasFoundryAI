@@ -169,7 +169,8 @@ ou encore dotée de capacité. Si elle est indisponible, signalez cette limite e
 
 Une auto-revue séquentielle ne satisfait **pas** une exigence de revue indépendante. Pour un ticket complexe, signalez l'exigence comme incomplète et restez en AI testing jusqu'à l'intervention d'un
 contexte agent distinct et autorisé ou d'un relecteur humain indépendant. Ne réduisez pas la complexité, ne contournez pas les garde-fous et ne comptez pas des auto-revues répétées comme relecteurs
-indépendants. L'hôte lance chaque délégation ; [`sf agents route`](#routage-des-delegations-sf-agents-route) recommande le modèle et le niveau de raisonnement de son type de tâche.
+indépendants. L'hôte lance chaque délégation. Le workflow nomme un type de tâche pour chacune ; l'agent le résout avec [`sf agents route`](#routage-des-delegations-sf-agents-route) et confie le
+travail à l'agent `sf-<palier>` indiqué, qui porte le modèle et le niveau de raisonnement.
 
 ## Exclusions Git et worktrees
 
@@ -307,6 +308,11 @@ ou un palier qui ne sert plus aucun type, garde son fichier jusqu'à ce que vous
 
 Claude Code choisit un sous-agent d'après sa description. Codex délègue quand vous le demandez ou quand les instructions le prévoient, et ne lit les `.codex/agents` d'un projet qu'une fois ce projet
 approuvé (trusted).
+
+Les instructions générées le prévoient. Quand une étape du workflow nomme un type de tâche (`exploration` pour l'analyse, `review` pour la revue contradictoire, `scoped-edit` ou `multi-file-feature`
+pour une sous-tâche déléguée), elles demandent à chaque agent de lancer `sf agents route --task <kind> --provider <current-agent>` et de déléguer à l'agent `sf-<palier>` indiqué, sans nommer de
+modèle. Une sous-tâche confiée à un palier moins coûteux précise ses fichiers, son résultat attendu et sa vérification ; si elle ne le peut pas, elle est découpée ou reste dans la session. Un agent
+sans candidats de routage, ou qui ne peut pas déléguer, exécute l'étape lui-même.
 
 ## Notes de plateforme
 
