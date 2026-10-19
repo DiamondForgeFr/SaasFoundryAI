@@ -1,5 +1,6 @@
 import { resolve } from 'path'
 import type { HarnessAgent } from './harness/agent-registry'
+import type { HarnessDelegation } from './harness/delegation'
 import type { RoutingOverrides } from './harness/routing-grid'
 
 export interface DbCredentials {
@@ -395,6 +396,13 @@ export interface SaaSFoundryManifest {
       agents?: HarnessAgent[]
       /** Project overrides of the shipped routing grid (#930); absence means the shipped grid. */
       routing?: RoutingOverrides
+      /**
+       * The developer's consent to delegate ticket delivery to background worktree agents (#1026),
+       * written only by `sf agents delegation`. Optional with "not asked yet" as its absence, so
+       * manifests written before it keep validating and need no migration (see
+       * .claude/docs/migration-framework.md, "When NOT to add a migration").
+       */
+      delegation?: HarnessDelegation
     }
     // PWA module — makes the generated web app installable as a desktop
     // application through the browser's own flow. Versioned shape (not the flat

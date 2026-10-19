@@ -20,6 +20,7 @@ import {
 import { inspectGitAgentScope, configureLocalAgentExcludes, removeLocalAgentExcludes, NotGitRepositoryError, GitAgentScope } from './git-agent-scope'
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentIds, isHarnessAgent, getSharedAgentEntrypoints } from './agent-registry'
+import { DelegationState, resolveDelegation, TicketDeliveryDecision, validateDelegation } from './delegation'
 import { TIER_AGENT_PATH } from './tier-agents'
 import { harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
@@ -102,6 +103,7 @@ function validateManifest(value: unknown): asserts value is SaaSFoundryManifest 
       if (!isObject(harness) || !Number.isInteger(harness.version) || Number(harness.version) < 0) throw new Error('Invalid manifest harness version.')
       if (harness.managed !== undefined && typeof harness.managed !== 'boolean') throw new Error('Invalid manifest managed harness capability.')
       if (harness.agents !== undefined) validateAgents(harness.agents)
+      if (harness.delegation !== undefined) validateDelegation(harness.delegation)
     }
   }
   if (value.fileHashes !== undefined && (!isObject(value.fileHashes) || Object.values(value.fileHashes).some((hash) => typeof hash !== 'string'))) {
@@ -162,6 +164,33 @@ async function inspect(root: string) {
     scaffolded: await hasGeneratedRegion(root),
     discovered: { claudeInstructions: instructions.claudeInstructions, sharedInstructions: instructions.sharedInstructions, sharedSkills }
   }
+}
+
+/** The developer's recorded consent to delegate ticket delivery (#1026); read-only, `not-asked` while unrecorded. */
+export async function readDelegation(targetPath: string): Promise<DelegationState> {
+  const { manifest } = await snapshot(resolve(targetPath))
+  return resolveDelegation(manifest.modules?.harness?.delegation)
+}
+
+export interface DelegationRecord extends DelegationState {
+  /** False when the same decision was already recorded: the manifest is left byte for byte as it was. */
+  changed: boolean
+}
+
+/**
+ * Record the developer's answer in `modules.harness.delegation`. Repeating the recorded decision
+ * keeps its `decidedAt` and writes nothing; a different one replaces it. Written through the same
+ * atomic, edit-detecting manifest replacement as `sf agents enable`.
+ */
+export async function recordDelegation(params: { targetPath: string; ticketDelivery: TicketDeliveryDecision; now?: () => Date }): Promise<DelegationRecord> {
+  const root = resolve(params.targetPath)
+  const before = await snapshot(root)
+  const harness = before.manifest.modules?.harness
+  if (!harness) throw new Error('No harness in .saasfoundry.json (modules.harness is missing): the delegation decision is recorded in the harness block of a managed project.')
+  if (harness.delegation?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation), changed: false }
+  const delegation = { ticketDelivery: params.ticketDelivery, decidedAt: (params.now?.() ?? new Date()).toISOString() }
+  await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, delegation } } })
+  return { ...resolveDelegation(delegation), changed: true }
 }
 
 export async function readAgentSupport(targetPath: string): Promise<AgentSupportInventory> {

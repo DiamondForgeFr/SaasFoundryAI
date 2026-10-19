@@ -96,7 +96,11 @@
     "harness": {
       "version": 4,
       "agents": ["claude-code", "codex"],
-      "managed": true
+      "managed": true,
+      "delegation": {
+        "ticketDelivery": "allowed",
+        "decidedAt": "2026-10-19T15:34:52.506Z"
+      }
     },
     "email": {
       "provider": "none",
