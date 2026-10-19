@@ -1413,6 +1413,25 @@ cmd_inspect_srs_tickets() {
   printf '%s\n' "$result"
 }
 
+# Print the number of an issue's native parent, or nothing when it has none. A lookup that
+# fails for any reason other than "no parent" fails too: no caller mutates a relationship it
+# could not read.
+read_issue_parent() {
+  local repo=$1 child=$2 existing parent_lookup_rc=0
+  existing=$(gh api -H "Accept: application/vnd.github+json" "repos/${repo}/issues/${child}/parent" 2>&1) || parent_lookup_rc=$?
+  if [ "$parent_lookup_rc" -eq 0 ]; then
+    printf '%s' "$existing" | jq -er '.number | tostring' || {
+      echo "Error: invalid parent response for subtask #${child}." >&2
+      return 1
+    }
+  elif printf '%s' "$existing" | grep -Eq 'HTTP([/][0-9.]+)?[[:space:]]+404'; then
+    return 0
+  else
+    echo "Error: could not inspect the current parent for subtask #${child}; refusing to mutate an ambiguous relationship." >&2
+    return 1
+  fi
+}
+
 # Attach a previously-created orphan to its intended parent. Repeating the
 # command is a no-op; a different existing parent blocks rather than silently
 # moving work between delivery trees.
@@ -1421,25 +1440,14 @@ cmd_link_subtask() {
     echo "Usage: $0 link-subtask <parent-ticket-number> <child-ticket-number>" >&2
     return 1
   fi
-  local parent=$1 child=$2 repo existing existing_parent parent_lookup_rc=0 parent_id child_id result
+  local parent=$1 child=$2 repo existing_parent parent_id child_id result
   repo=$(get_repo_owner_name)
   if [[ -z "$repo" || "$repo" != */* ]]; then
     echo "Error: could not resolve the current repository." >&2
     return 1
   fi
 
-  existing=$(gh api -H "Accept: application/vnd.github+json" "repos/${repo}/issues/${child}/parent" 2>&1) || parent_lookup_rc=$?
-  if [ "$parent_lookup_rc" -eq 0 ]; then
-    existing_parent=$(printf '%s' "$existing" | jq -er '.number | tostring') || {
-      echo "Error: invalid parent response for subtask #${child}." >&2
-      return 1
-    }
-  elif printf '%s' "$existing" | grep -Eq 'HTTP([/][0-9.]+)?[[:space:]]+404'; then
-    existing_parent=""
-  else
-    echo "Error: could not inspect the current parent for subtask #${child}; refusing to mutate an ambiguous relationship." >&2
-    return 1
-  fi
+  existing_parent=$(read_issue_parent "$repo" "$child") || return 1
   if [ "$existing_parent" = "$parent" ]; then
     echo "✓ Subtask #${child} is already linked to parent #${parent}"
     return 0
@@ -1464,6 +1472,46 @@ cmd_link_subtask() {
     return 1
   fi
   echo "✓ Subtask #${child} linked to parent #${parent}"
+}
+
+# Detach a child from its parent: the reverse of link-subtask, so a duplicate spawned under an
+# Epic can be cleaned up without a raw API call. The relationship is read first. A child that
+# is not under this parent is a no-op, and a child under another parent is refused, so the
+# command can only ever remove the link it was asked to remove. The issue stays open and keeps
+# its board entry, label and milestone: closing it is a separate decision.
+cmd_unlink_subtask() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 unlink-subtask <parent-ticket-number> <child-ticket-number>" >&2
+    return 1
+  fi
+  local parent=$1 child=$2 repo existing_parent child_id
+  repo=$(get_repo_owner_name)
+  if [[ -z "$repo" || "$repo" != */* ]]; then
+    echo "Error: could not resolve the current repository." >&2
+    return 1
+  fi
+
+  existing_parent=$(read_issue_parent "$repo" "$child") || return 1
+  if [ -z "$existing_parent" ]; then
+    echo "✓ Subtask #${child} is not linked to parent #${parent}"
+    return 0
+  fi
+  if [ "$existing_parent" != "$parent" ]; then
+    echo "Error: subtask #${child} belongs to parent #${existing_parent}, not #${parent}; refusing to unlink it." >&2
+    return 1
+  fi
+
+  # The sub-issues REST endpoint takes the child's REST id, not its issue number or node id
+  child_id=$(gh api -H "Accept: application/vnd.github+json" "repos/${repo}/issues/${child}" --jq '.id' 2>/dev/null) || {
+    echo "Error: could not resolve the id of subtask #${child}." >&2
+    return 1
+  }
+  [[ "$child_id" =~ ^[0-9]+$ ]] || { echo "Error: could not resolve the id of subtask #${child}." >&2; return 1; }
+  gh api --method DELETE -H "Accept: application/vnd.github+json" "repos/${repo}/issues/${parent}/sub_issue" -F "sub_issue_id=${child_id}" >/dev/null || {
+    echo "Error: GitHub did not unlink subtask #${child} from parent #${parent}." >&2
+    return 1
+  }
+  echo "✓ Subtask #${child} unlinked from parent #${parent}"
 }
 
 cmd_get_parent() {
@@ -2492,7 +2540,8 @@ case "$COMMAND" in
   list-incomplete-children) cmd_list_incomplete_children "$@" ;;
   inspect-srs-tickets) cmd_inspect_srs_tickets "$@" ;;
   link-subtask) cmd_link_subtask "$@" ;;
-  get-parent)         cmd_get_parent "$@" ;;
+  unlink-subtask) cmd_unlink_subtask "$@" ;;
+  get-parent)        cmd_get_parent "$@" ;;
   get-issue-type)     cmd_get_issue_type "$@" ;;
   get-ticket)         cmd_get_ticket "$@" ;;
   create-pr)          cmd_create_pr "$@" ;;
@@ -2525,6 +2574,7 @@ case "$COMMAND" in
     echo "  list-incomplete-children <parent>       Print native children whose board Status is not Done"
     echo "  inspect-srs-tickets <parent> --fr ID=URL...  Inspect open/closed SRS ticket candidates as JSON"
     echo "  link-subtask <parent> <child>           Idempotently attach an existing orphan child"
+    echo "  unlink-subtask <parent> <child>         Detach a child from that parent (the issue stays open)"
     echo "  get-parent <child>                      Print the native parent issue as JSON"
     echo "  get-issue-type <ticket>                 Print the native issue type as JSON"
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
@@ -2541,7 +2591,7 @@ case "$COMMAND" in
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-ticket, create-subtask, create-epic, comment, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type, milestone"
+    echo "Available: create-ticket, create-subtask, create-epic, comment, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, unlink-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type, milestone"
     exit 1
     ;;
 esac
