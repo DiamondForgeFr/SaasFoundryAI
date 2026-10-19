@@ -32,7 +32,7 @@ Each complexity level enables/disables workflow steps:
 
 - Skip: Backlog (direct to In Progress)
 - Skip: Analyze, Plan
-- Execute: Direct fix
+- Execute: Direct fix (delegated as `scoped-edit` for two files or fewer, `bug-fix` otherwise)
 - Validate: Build + lint + regression test
 - Skip: Examine
 - Tests: Regression test only
@@ -41,7 +41,7 @@ Each complexity level enables/disables workflow steps:
 
 - Analyze: Minimal (2-3 files, no agents)
 - Plan: Mental plan only
-- Execute: Direct implementation
+- Execute: Direct implementation (delegated as `scoped-edit`)
 - Validate: Lint + typecheck
 - Skip: Examine
 - Tests: Optional
@@ -50,7 +50,7 @@ Each complexity level enables/disables workflow steps:
 
 - Analyze: Standard (2-4 agents)
 - Plan: Detailed file-by-file (requires approval)
-- Execute: Subtasks mandatory
+- Execute: Subtasks mandatory (delegated as `multi-file-feature` once decomposed)
 - Validate: Build + lint + typecheck + unit tests
 - Skip: Examine
 - Tests: Unit + E2E recommended
@@ -59,7 +59,7 @@ Each complexity level enables/disables workflow steps:
 
 - Analyze: Deep (6-10 agents)
 - Plan: Comprehensive with dependencies (requires approval)
-- Execute: Granular subtasks mandatory
+- Execute: Granular subtasks mandatory (delegated as `multi-file-feature` once decomposed)
 - Validate: Full test suite
 - **Examine: Adversarial review (security, logic, performance)**
 - Tests: Unit + E2E + regression mandatory (80% coverage)
@@ -87,6 +87,8 @@ steps:
   subtasks:
     enabled: boolean
     mandatory: boolean
+  execute:
+    taskKind: task-kind  # delivery by a delegated agent, sized to the work
   examine:
     enabled: boolean
   tests:
@@ -114,33 +116,36 @@ Two kinds of keys exist, and the difference matters when you edit one:
 - **Agent-read** keys are read by the coding agent when it opens the file (the `prepare` and `test` commands tell it to follow the profile). No script reads them. Changing one changes the guidance the
   agent works from, not the behaviour of any guard.
 
-| Key                          | Type                        | Required | Read by                        | Meaning                                                                                                                                                              |
-| ---------------------------- | --------------------------- | -------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                       | string                      | yes      | agent                          | The level identifier. Must equal the file name without `.yml` and the label suffix.                                                                                  |
-| `label`                      | string                      | yes      | agent                          | Display label with its emoji. `detect-complexity.sh` prints its own copy of these labels; it does not read this key.                                                 |
-| `description`                | string, quoted              | yes      | `scripts/detect-complexity.sh` | One line printed as "What this means" after a suggestion. Parsed with `grep` + `sed`, which strip one pair of double or single quotes.                               |
-| `skipStatuses`               | list of status names        | yes      | agent                          | Statuses the level may skip. `[]` means none. Only `bug` uses it (`Backlog`). No script enforces it: the status guards are in `workflow-cli.sh` and ignore this key. |
-| `steps.analyze.enabled`      | boolean                     | yes      | `scripts/analyze.sh`           | `false` makes the script print "Analysis SKIPPED" and exit.                                                                                                          |
-| `steps.analyze.depth`        | string or `null`            | yes      | `scripts/analyze.sh`           | `minimal`, `standard` or `deep` (`null` when disabled). Printed as the analysis depth.                                                                               |
-| `steps.analyze.agents`       | integer                     | yes      | `scripts/analyze.sh`           | Number of parallel exploration agents to launch (`0` = direct tools only). Printed.                                                                                  |
-| `steps.analyze.taskKind`     | task kind                   | no       | agent                          | Task kind of the analysis delegations (`exploration`). Resolved with `sf agents route`, see [SKILL.md → Delegation routing](../SKILL.md#delegation-routing).         |
-| `steps.plan.enabled`         | boolean                     | yes      | `scripts/plan.sh`              | `false` makes the script print "Planning SKIPPED" and exit.                                                                                                          |
-| `steps.plan.depth`           | string or `null`            | yes      | `scripts/plan.sh`              | `minimal`, `detailed` or `comprehensive` (`null` when disabled). Printed.                                                                                            |
-| `steps.plan.approval`        | boolean                     | yes      | `scripts/plan.sh`              | Whether the user must approve the plan before implementation. Printed as "Approval required".                                                                        |
-| `steps.subtasks.enabled`     | boolean                     | yes      | agent                          | Whether the work is split into subtasks (real tickets, created with `create-subtask`).                                                                               |
-| `steps.subtasks.mandatory`   | boolean                     | yes      | agent                          | Whether skipping subtasks is a violation.                                                                                                                            |
-| `steps.subtasks.threshold`   | integer                     | no       | agent                          | Number of impacted files above which subtasks are created although `enabled` is `false` (`low` uses `3`).                                                            |
-| `steps.subtasks.detailed`    | boolean                     | no       | agent                          | More granular subtasks (`complex` sets it).                                                                                                                          |
-| `steps.examine.enabled`      | boolean                     | yes      | agent                          | Adversarial review. The `test` command runs `scripts/examine.sh` when the level is literally `complex`, whatever this key says.                                      |
-| `steps.examine.agents`       | integer                     | no       | agent                          | Parallel review agents (`complex` sets `3`).                                                                                                                         |
-| `steps.examine.taskKind`     | task kind                   | no       | agent                          | Task kind of the review delegations (`review`).                                                                                                                      |
-| `steps.examine.checks`       | list of strings             | no       | agent                          | Review lenses: `security`, `logic`, `performance`.                                                                                                                   |
-| `steps.tests.type`           | string                      | yes      | agent                          | `regression` (bug), `optional`, `recommended` or `mandatory`.                                                                                                        |
-| `steps.tests.mandatory`      | boolean                     | yes      | agent                          | Whether the tests phase can be skipped.                                                                                                                              |
-| `testing.unit` `testing.e2e` | boolean                     | yes      | agent                          | Which test kinds the level expects.                                                                                                                                  |
-| `testing.regression`         | boolean                     | yes      | agent                          | Whether a regression test is expected.                                                                                                                               |
-| `testing.coverage`           | integer (percent) or `null` | yes      | agent                          | Minimum coverage target; `null` means none. Only `complex` sets one (`80`).                                                                                          |
-| `aiInstructions`             | block scalar (`\|`)         | yes      | agent                          | Phase-by-phase guidance for the agent: Analyze, Plan, Execute, Validate, Examine, Tests, and optionally Save Mode or Output.                                         |
+| Key                            | Type                        | Required | Read by                        | Meaning                                                                                                                                                                                                    |
+| ------------------------------ | --------------------------- | -------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                         | string                      | yes      | agent                          | The level identifier. Must equal the file name without `.yml` and the label suffix.                                                                                                                        |
+| `label`                        | string                      | yes      | agent                          | Display label with its emoji. `detect-complexity.sh` prints its own copy of these labels; it does not read this key.                                                                                       |
+| `description`                  | string, quoted              | yes      | `scripts/detect-complexity.sh` | One line printed as "What this means" after a suggestion. Parsed with `grep` + `sed`, which strip one pair of double or single quotes.                                                                     |
+| `skipStatuses`                 | list of status names        | yes      | agent                          | Statuses the level may skip. `[]` means none. Only `bug` uses it (`Backlog`). No script enforces it: the status guards are in `workflow-cli.sh` and ignore this key.                                       |
+| `steps.analyze.enabled`        | boolean                     | yes      | `scripts/analyze.sh`           | `false` makes the script print "Analysis SKIPPED" and exit.                                                                                                                                                |
+| `steps.analyze.depth`          | string or `null`            | yes      | `scripts/analyze.sh`           | `minimal`, `standard` or `deep` (`null` when disabled). Printed as the analysis depth.                                                                                                                     |
+| `steps.analyze.agents`         | integer                     | yes      | `scripts/analyze.sh`           | Number of parallel exploration agents to launch (`0` = direct tools only). Printed.                                                                                                                        |
+| `steps.analyze.taskKind`       | task kind                   | no       | agent                          | Task kind of the analysis delegations (`exploration`). Resolved with `sf agents route`, see [SKILL.md → Delegation routing](../SKILL.md#delegation-routing).                                               |
+| `steps.plan.enabled`           | boolean                     | yes      | `scripts/plan.sh`              | `false` makes the script print "Planning SKIPPED" and exit.                                                                                                                                                |
+| `steps.plan.depth`             | string or `null`            | yes      | `scripts/plan.sh`              | `minimal`, `detailed` or `comprehensive` (`null` when disabled). Printed.                                                                                                                                  |
+| `steps.plan.approval`          | boolean                     | yes      | `scripts/plan.sh`              | Whether the user must approve the plan before implementation. Printed as "Approval required".                                                                                                              |
+| `steps.subtasks.enabled`       | boolean                     | yes      | agent                          | Whether the work is split into subtasks (real tickets, created with `create-subtask`).                                                                                                                     |
+| `steps.subtasks.mandatory`     | boolean                     | yes      | agent                          | Whether skipping subtasks is a violation.                                                                                                                                                                  |
+| `steps.subtasks.threshold`     | integer                     | no       | agent                          | Number of impacted files above which subtasks are created although `enabled` is `false` (`low` uses `3`).                                                                                                  |
+| `steps.subtasks.detailed`      | boolean                     | no       | agent                          | More granular subtasks (`complex` sets it).                                                                                                                                                                |
+| `steps.execute.taskKind`       | task kind                   | no       | agent                          | Task kind of the delivery of the whole ticket by a delegated agent, sized to the work. Resolved with `sf agents route`, see [SKILL.md → Delegated ticket delivery](../SKILL.md#delegated-ticket-delivery). |
+| `steps.execute.scopedTaskKind` | task kind                   | no       | agent                          | `bug` only: the task kind of the delivery when the fix is confined to `scopedMaxFiles` files or fewer (`scoped-edit`).                                                                                     |
+| `steps.execute.scopedMaxFiles` | integer                     | no       | agent                          | `bug` only: the number of files at or below which `scopedTaskKind` applies (`2`).                                                                                                                          |
+| `steps.examine.enabled`        | boolean                     | yes      | agent                          | Adversarial review. The `test` command runs `scripts/examine.sh` when the level is literally `complex`, whatever this key says.                                                                            |
+| `steps.examine.agents`         | integer                     | no       | agent                          | Parallel review agents (`complex` sets `3`).                                                                                                                                                               |
+| `steps.examine.taskKind`       | task kind                   | no       | agent                          | Task kind of the review delegations (`review`).                                                                                                                                                            |
+| `steps.examine.checks`         | list of strings             | no       | agent                          | Review lenses: `security`, `logic`, `performance`.                                                                                                                                                         |
+| `steps.tests.type`             | string                      | yes      | agent                          | `regression` (bug), `optional`, `recommended` or `mandatory`.                                                                                                                                              |
+| `steps.tests.mandatory`        | boolean                     | yes      | agent                          | Whether the tests phase can be skipped.                                                                                                                                                                    |
+| `testing.unit` `testing.e2e`   | boolean                     | yes      | agent                          | Which test kinds the level expects.                                                                                                                                                                        |
+| `testing.regression`           | boolean                     | yes      | agent                          | Whether a regression test is expected.                                                                                                                                                                     |
+| `testing.coverage`             | integer (percent) or `null` | yes      | agent                          | Minimum coverage target; `null` means none. Only `complex` sets one (`80`).                                                                                                                                |
+| `aiInstructions`               | block scalar (`\|`)         | yes      | agent                          | Phase-by-phase guidance for the agent: Analyze, Plan, Execute, Validate, Examine, Tests, and optionally Save Mode or Output.                                                                               |
 
 "Required" means every shipped profile sets the key and the scripts or the agent expect it; nothing validates a profile against a schema, so a missing key fails silently (an empty value in a script,
 or a gap in the agent's guidance).
@@ -199,6 +204,8 @@ steps:
   subtasks:
     enabled: true # agent: split into real subtask tickets
     mandatory: true # agent
+  execute:
+    taskKind: multi-file-feature # agent: delivery of the whole ticket by a delegated agent, resolved with sf agents route --task multi-file-feature
   examine:
     enabled: false # agent: no adversarial review at this level
   tests:
@@ -220,7 +227,9 @@ aiInstructions: | # agent: one paragraph per phase
 ```
 
 The other three profiles follow the same shape. What sets them apart is which steps are on: `bug` turns analyze, plan, subtasks and examine off and keeps a mandatory regression test; `low` keeps a
-minimal analyze and plan without approval; `complex` adds mandatory approval, mandatory granular subtasks, the adversarial review (3 agents, three checks) and an 80% coverage target.
+minimal analyze and plan without approval; `complex` adds mandatory approval, mandatory granular subtasks, the adversarial review (3 agents, three checks) and an 80% coverage target. They also differ
+in `steps.execute.taskKind`, the task kind of a delegated delivery sized to the work: `bug-fix` (or `scoped-edit` through `scopedTaskKind` when the fix is confined to two files or fewer) for `bug`,
+`scoped-edit` for `low`, `multi-file-feature` for `medium` and `complex`.
 
 ## Adding or changing a profile
 

@@ -103,17 +103,17 @@ children do not block the parent's testing or review phases.
 
 Every step that delegates work to another agent names a **task kind** from the routing grid, never a model or an agent type:
 
-| Task kind            | Typical step                                           |
-| -------------------- | ------------------------------------------------------ |
-| `exploration`        | Analyze: codebase, documentation and web research      |
-| `planning`           | Plan, when it is delegated                             |
-| `scoped-edit`        | A change confined to one or two files                  |
-| `multi-file-feature` | A feature spread over several files                    |
-| `bug-fix`            | Diagnosing and fixing a defect                         |
-| `tests`              | Writing or repairing tests                             |
-| `prose`              | Documentation and other prose                          |
-| `review`             | Examine (security, logic, performance) and diff review |
-| `terminal-ci`        | Shell, build and CI work, long test runs               |
+| Task kind            | Typical step                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `exploration`        | Analyze: codebase, documentation and web research                                   |
+| `planning`           | Plan, when it is delegated                                                          |
+| `scoped-edit`        | A change confined to one or two files, or a scoped `bug` or `low` delivery          |
+| `multi-file-feature` | A feature spread over several files, or a decomposed `medium` or `complex` delivery |
+| `bug-fix`            | Diagnosing and fixing a defect                                                      |
+| `tests`              | Writing or repairing tests                                                          |
+| `prose`              | Documentation and other prose                                                       |
+| `review`             | Examine (security, logic, performance) and diff review                              |
+| `terminal-ci`        | Shell, build and CI work, long test runs                                            |
 
 1. **Resolve the tier** with `sf agents route --task <kind> --provider <current-agent>` (`claude-code` or `codex`) and hand the work to the `sf-<tier>` agent it names. That agent carries its own model
    and effort.
@@ -121,6 +121,31 @@ Every step that delegates work to another agent names a **task kind** from the r
    or observation that proves it). A subtask that cannot state all three is split until it can; if it still cannot, it stays in the orchestrating session and is never handed to a lower tier.
 3. **No routing.** When the route fails (a coding agent without routing candidates) or the agent cannot delegate, run the step in the session, sequentially, and report that a self-review is not an
    independent review.
+
+### Delegated ticket delivery
+
+Who builds a ticket is the project instructions' rule "Session orchestration and delegated ticket delivery". Read `sf agents delegation status`: when it prints `not-asked`, ask the developer once and
+record the answer with `sf agents delegation allow` or `sf agents delegation decline`. When it prints `allowed`, the session hands each ticket, from In progress to the end of AI Testing, to **one
+background agent in its own worktree**, and keeps planning, coordinating and talking with the developer. The delivery task kind is sized to the work. The ticket's complexity profile declares it
+(`steps.execute.taskKind`):
+
+| Ticket                                             | Delivery task kind                                                    |
+| -------------------------------------------------- | --------------------------------------------------------------------- |
+| `bug` with a change confined to two files or fewer | `scoped-edit` (`steps.execute.scopedTaskKind`)                        |
+| any other `bug`                                    | `bug-fix`                                                             |
+| `low`                                              | `scoped-edit`                                                         |
+| `medium`, `complex`                                | `multi-file-feature`, once decomposed (planning stays in the session) |
+
+1. **Brief the agent** with the ticket, its approved plan, the branch and worktree, the decomposition (file set, expected result and check per child) and the stop line below. Resolve the tier with
+   `sf agents route` as above, and never name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again.
+2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`: it delivers the children, posts the test plan, runs the automated and heavy checks, posts the report and
+   opens the draft PR, then stops with the ticket still in AI Testing. It never merges and never runs `ready-pr` on the Human Testing route. The session takes it from there: the Examine of a `complex`
+   ticket, then the transition `statuses/4-ai-testing.md` names.
+3. **One agent per ticket.** Several tickets may be in flight, each with its own agent and worktree. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own,
+   handed to its own agent.
+4. **Hand-backs.** A defect reported in Human Testing, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree, which returns
+   the ticket to AI Testing.
+5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly.
 
 ## How to use this skill
 
@@ -311,9 +336,10 @@ Who takes the PR out of draft depends on whether the ticket's route has a Human 
 | **With Human Testing**: the workflow declares the status and the ticket is not `nature:internal` | **The developer**, with the **Ready for review** button. The click is the approval, and the review listener moves the ticket to In Review | After Human Testing, once you have pushed the non-regression tests           |
 | **Without Human Testing**: the workflow has no such status, or the ticket is `nature:internal`   | **You**: `workflow-cli.sh ready-pr <ticket>`, then `update-status <ticket> "In review"`                                                   | At the end of AI Testing, once the report is posted and every check is green |
 
-On the Human Testing route, never run `ready-pr` yourself, even after the developer approves: ask them to mark the PR ready. Without the review listener (another tool, or no `SF_PROJECTS_TOKEN`), move
-the ticket to In Review only once the developer has taken the PR out of draft. Use `draft-pr <ticket>` explicitly when returning a ready PR to human retesting. `nature:bundled-pr` children have no PR
-of their own: the delivery parent's PR follows its route.
+A delegated agent stops at the green report with the PR still a draft (see "Delegated ticket delivery"): the session makes the transition for the route, and the developer's click stays theirs. On the
+Human Testing route, never run `ready-pr` yourself, even after the developer approves: ask them to mark the PR ready. Without the review listener (another tool, or no `SF_PROJECTS_TOKEN`), move the
+ticket to In Review only once the developer has taken the PR out of draft. Use `draft-pr <ticket>` explicitly when returning a ready PR to human retesting. `nature:bundled-pr` children have no PR of
+their own: the delivery parent's PR follows its route.
 
 `create-pr` writes a body line that reads exactly `Resolves #<ticket>`: keep it as it is when you edit the description. A pull request to a branch other than the default one links its ticket only
 through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`).
@@ -364,8 +390,10 @@ invalid workflow state produces an actionable failure instead of bypassing guard
 6. **PARENT DONE IS GATED BY CHILDREN** — a delivery parent or Epic cannot enter `Done` until every native child ticket's project-board Status is exactly `Done`. Run
    `github-projects-cli.sh list-incomplete-children <N>`; any returned or unverifiable child blocks the transition. An Epic moves to In progress with its first active child and to Done with its last
    completed child.
-7. **FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER** — if a ticket is `In Progress` / `AI Testing` / `Human Testing` / `In Review`, drive it to `Done` before claiming or starting another. The only
-   override is an explicit developer request to pause.
+7. **ONE AGENT PER TICKET, NEVER A SWITCH MID-DELIVERY** — a ticket in `In Progress` / `AI Testing` / `Human Testing` / `In Review` stays with its one agent until `Done`, hand-backs from Human Testing
+   included. Several tickets may be in flight at once when each has its own agent and worktree (delegation `allowed`, see "Delegated ticket delivery"); the session itself never stops delivering one
+   ticket to start delivering another. With delegation `declined` or unavailable, drive the current ticket to `Done` before claiming or starting another. The only override is an explicit developer
+   request to pause.
 8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use the
    evidence-first `transition-drafting <parent> spawning --epic <feature> [--version <version>] [--milestone <release>] --reconciliation-plan <path>` flow. It renders each body from
    `renderStoryTicketBody` and reconciles exact canonical tickets before mutation. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS

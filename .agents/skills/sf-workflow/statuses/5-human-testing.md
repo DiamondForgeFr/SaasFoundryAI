@@ -9,7 +9,7 @@ entry_conditions:
   - An open draft PR exists for the ticket, containing the test plan and AI test results
 mandatory_actions:
   - Wait for developer validation
-  - On bug report — fix, commit, push, return to AI Testing
+  - On bug report — the session collects it and hands the fix to the ticket's own agent (or fixes it itself when delegation is not allowed); commit, push, return to AI Testing
   - On approval — create non-regression tests (E2E for complex/critical, unit for edge-case bugs; none for typo/doc/CSS)
   - Run created tests locally and ensure they pass
   - Commit and push tests (`test(#<N>): <description>`)
@@ -41,11 +41,13 @@ In Review directly. See SKILL.md "Nature axis" section.
 ## Action checklist
 
 - [ ] **Draft PR** — reuse the PR opened at the end of AI Testing via `workflow-cli.sh create-pr <ticket> --draft`; keep its description, test plan and results current. Never promote it yourself.
-- [ ] **Wait for validation** — developer tests manually, you stay available to answer
+- [ ] **Wait for validation** — developer tests manually, the session stays their interlocutor and answers
 - [ ] **On bugs reported:**
   - Read the comments carefully, summarize the fix plan as a reply
-  - Fix, commit, push, then return to **AI Testing** (re-run automated tests)
-- [ ] **On approval** — create non-regression tests:
+  - With delegation `allowed`, the session does not code the fix: it hands the defect to the ticket's own agent, in the same worktree and on the same branch (SKILL.md → Delegated ticket delivery).
+    When delegation is not allowed, the session fixes it itself
+  - Fix, commit, push, then return to **AI Testing** (re-run automated tests): the agent that fixes it moves the ticket back
+- [ ] **On approval** — create non-regression tests (and any other AI work the validation leaves, such as follow-ups): the session hands them to the ticket's own agent the same way:
   - Complex/critical → E2E tests (Playwright)
   - Edge-case bug fix → unit non-regression test
   - Typo/doc/CSS refactor → none (state why in a comment)
@@ -60,4 +62,5 @@ In Review directly. See SKILL.md "Nature axis" section.
 
 - Creating tests BEFORE developer validation
 - Running `ready-pr` yourself: taking the PR out of draft is the developer's call on this route
+- Starting a new agent, branch or worktree for a defect of this ticket: it goes back to the ticket's own agent
 - Pushing failing tests

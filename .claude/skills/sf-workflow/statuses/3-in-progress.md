@@ -39,6 +39,9 @@ These stay in the `In progress` board column but flow through a **separate lifec
 
 ## Action checklist — Story / Task / Issue
 
+- [ ] **Who builds it** — read `sf agents delegation status`. `allowed`: the session hands the ticket, from here to the end of AI Testing, to one background agent in its own worktree, on the task kind
+      of the profile's `steps.execute.taskKind`, and keeps talking with the developer; the agent that receives it builds it itself and does not hand it on again. `declined`, or an agent that cannot
+      delegate: the session builds it, one ticket at a time, and says so (SKILL.md → Delegated ticket delivery)
 - [ ] **Branch** — from `jq -r '.workflow.workingBranch' .saasfoundry.json`, pattern `jq -r '.workflow.branchNaming.feature'`
   - `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`
   - **Empty repository** (no commit yet): there is no `workingBranch` to branch from. Run `workflow-cli.sh bootstrap <ticket>` instead: it commits the setup on the main branch, creates `workingBranch`
@@ -57,4 +60,6 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - Moving to AI Testing with lint/build errors
 - Forgetting to push before AI Testing
 - Leaving delivered child tickets open, or marking the parent Done before every child is Done
-- Starting another ticket while this one is still In Progress / AI Testing / Human Testing / In Review (unless the developer explicitly asks to pause)
+- Switching mid-delivery to another ticket: one agent per ticket. With delegation `allowed`, another ticket gets its own agent and worktree while this one stays with its agent; otherwise finish this
+  one first (unless the developer explicitly asks to pause)
+- The session building a ticket itself while delegation is `allowed`
