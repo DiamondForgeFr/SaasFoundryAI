@@ -21,6 +21,7 @@ import {
   resolveInstructionFile,
   withGeneratedInstructions
 } from '../../../harness/agent-instructions'
+import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
 import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
 
 // Tier agents (#929) have their own suite; these assertions are about the other deposits.
@@ -141,7 +142,8 @@ describe('shared agent instructions', () => {
     expect(await get('AGENTS.md')).toContain('Read-only exploration and review may use parallel agents')
     expect(await get('AGENTS.md')).toMatch(/use\s+`workflow\.workingBranch`; never hardcode a branch name/)
     expect(await get('AGENTS.md')).toContain('one ticket, branch and worktree path')
-    expect(await get('AGENTS.md')).toMatch(/user retains\s+control/)
+    expect(await get('AGENTS.md')).toMatch(/recorded delegation is the developer's\s+authorization/)
+    expect(await get('AGENTS.md')).not.toMatch(/user retains\s+control/)
     expect(await get('AGENTS.md')).toMatch(/only when they are merged and no\s+longer in use/)
     expect(result.warnings.some((w) => w.includes("'model'"))).toBe(true)
   })
@@ -155,6 +157,45 @@ describe('shared agent instructions', () => {
       expect(instructions).not.toMatch(/\bdevelop\b/)
     }
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).toContain('@AGENTS.md')
+  })
+
+  // The session stays the developer's interlocutor and hands ticket delivery to routed worktree
+  // agents once the developer agreed (#1026). Every surface that carries the capabilities says so.
+  it('has the session orchestrate delegated ticket delivery from the recorded consent (#1026)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toContain('## Session orchestration and delegated ticket delivery')
+      expect(instructions).toMatch(/interlocutor: it drafts the SRS, creates and\s+triages tickets, plans, coordinates/)
+      expect(instructions).toContain('`sf agents delegation status`')
+      expect(instructions).toMatch(/not-asked`: ask the developer once/)
+      expect(instructions).toContain('`sf agents delegation allow` or')
+      expect(instructions).toContain('`sf agents delegation decline`')
+      expect(instructions).toMatch(/never edit the manifest by hand/i)
+      expect(instructions).toMatch(/never ask again once an\s+answer is recorded/)
+      expect(instructions).toMatch(/in a background agent in its own worktree/)
+      expect(instructions).toMatch(/`sf agents route` names for the task kind/)
+      expect(instructions).toMatch(/never switches to coding a\s+ticket mid-delivery/)
+      expect(instructions).toMatch(/becomes a ticket of its own, handed to its own\s+agent/)
+      expect(instructions).toMatch(/deliver the tickets\s+in the session, one after the other, and say so explicitly/)
+      expect(instructions).toMatch(/never merges and, on a ticket that goes through Human Testing, never runs\s+`ready-pr`/)
+      expect(instructions).toMatch(/hands a defect, or AI work left after the validation, back to the\s+ticket's agent in the same worktree/)
+      // The decision belongs to the developer and to the manifest, never to a model name.
+      expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
+      expect(instructions).not.toMatch(/\bdevelop\b/)
+    }
+  })
+
+  it('places the orchestration rule before the worktree mechanics, in the generated region', () => {
+    const orchestration = GENERATED_INSTRUCTIONS.indexOf('## Session orchestration and delegated ticket delivery')
+    const worktrees = GENERATED_INSTRUCTIONS.indexOf('## Parallel implementation and Git worktrees')
+    expect(orchestration).toBeGreaterThan(GENERATED_INSTRUCTIONS.indexOf('## Execution capabilities'))
+    expect(worktrees).toBeGreaterThan(orchestration)
+    expect(GENERATED_INSTRUCTIONS.indexOf(GENERATED_REGION_END)).toBeGreaterThan(worktrees)
+  })
+
+  it('keeps the CLAUDE.md migration aware of every heading of the generated region (#1026)', () => {
+    const headings = [...GENERATED_INSTRUCTIONS.matchAll(/^## (.+)$/gm)].map((match) => match[1])
+    expect(headings.length).toBeGreaterThan(0)
+    for (const heading of headings) expect(REGION_HEADINGS).toContain(heading)
   })
 
   it('routes delegations through sf agents route instead of forbidding model selection (#931)', () => {

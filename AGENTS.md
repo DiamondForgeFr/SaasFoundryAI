@@ -56,6 +56,19 @@ shortcuts reintroduce exactly the cross-version drift the framework was built to
 - **Read the playbook first** — Before editing `src/types.ts`, `schemas/saasfoundry-manifest.schema.json`, any installer's deposited templates, or any file under `src/migrations/`, read
   `.claude/docs/migration-framework.md`. It covers the registry pattern, the file-naming convention, the conflict-aware writer, and worked examples for both manifest renames and module file splits.
 
+### Harness evolutions — mirrored in SaaSFoundry itself
+
+We dogfood the harness we ship, so every harness evolution reaches this repository in the **same ticket** as the generated projects: a rule only generated projects follow is a rule nobody here has
+tried. Whatever the ticket changes among these, its commits also carry the repository's own copy:
+
+- the generated instructions → the regenerated `AGENTS.md` region and `.agents/`;
+- a workflow or tool skill → the dogfood `.claude/skills/sf-*` copy next to the template under `scaffolds/skills-templates/`;
+- the tier agents or the routing → `.claude/agents/` and `.codex/agents/`;
+- a `modules.harness` field → this repository's `.saasfoundry.json` (recorded with its own CLI command, never by hand).
+
+Regenerate with `npm run build && node bin/sf.js agents refresh --scope shared && npx prettier --write .saasfoundry.json`, and commit the result with the change. A ticket that leaves this repository behind
+the harness it ships is not done.
+
 ### Reading before acting
 
 - Workflow: `.claude/skills/sf-workflow/SKILL.md` and the `statuses/` files
@@ -231,14 +244,42 @@ including branch names, commit formats, staging, pushing and approval requiremen
 Legacy /task examples name roles: use native delegation if available and authorized,
 or perform the role's work sequentially with the review limitation stated above.
 
+## Session orchestration and delegated ticket delivery
+
+The conversational session is the developer's interlocutor: it drafts the SRS, creates and
+triages tickets, plans, coordinates the work in flight, answers questions and reviews the result
+(on a complex ticket, the Examine phase). While delegation is allowed it does not build a
+ticket itself.
+
+Read `sf agents delegation status` before the first ticket of a session:
+
+- `not-asked`: ask the developer once whether tickets may be built by background agents, one
+  worktree each, then record the answer with `sf agents delegation allow` or
+  `sf agents delegation decline`. Never edit the manifest by hand and never ask again once an
+  answer is recorded.
+- `allowed`: each ticket, from In progress to the end of AI Testing (test plan, tests, report
+  and draft pull request), runs in a background agent in its own worktree, on the tier
+  `sf agents route` names for the task kind of the work (the workflow skill names the kind per
+  complexity). The session keeps talking with the developer and never switches to coding a
+  ticket mid-delivery. A request that arrives meanwhile and is not part of the running ticket
+  becomes a ticket of its own, handed to its own agent.
+- `declined`, or the current agent cannot delegate or run in the background: deliver the tickets
+  in the session, one after the other, and say so explicitly.
+
+A delegated agent never merges and, on a ticket that goes through Human Testing, never runs
+`ready-pr`: the developer takes the draft pull request out of draft. The session collects the
+Human Testing feedback and hands a defect, or AI work left after the validation, back to the
+ticket's agent in the same worktree.
+
 ## Parallel implementation and Git worktrees
 
-Propose parallel worktrees only when the user's request contains independent writing streams
-that can be delivered concurrently. Read-only exploration and review may use parallel agents
-without separate worktrees. Work with sequential dependencies, overlapping file ownership or
-unclear boundaries must use one feature worktree and sequential execution.
+Open parallel worktrees when the recorded delegation is `allowed` or the developer asks for
+them, and only for independent writing streams that can be delivered concurrently.
+Read-only exploration and review may use parallel agents without separate worktrees. Work with
+sequential dependencies, overlapping file ownership or unclear boundaries must use one feature
+worktree and sequential execution.
 
-Before proposing parallel implementation, read `.saasfoundry.json` and use
+Before opening a worktree, read `.saasfoundry.json` and use
 `workflow.workingBranch`; never hardcode a branch name. Keep the primary checkout on that
 configured working branch. Do not let feature workers write in the primary checkout while
 parallel worktrees are active.
@@ -246,10 +287,10 @@ parallel worktrees are active.
 For each independent writing stream, define one ticket, branch and worktree path, plus its owned
 files and dependency boundary. Start from a synchronized configured working branch. Each worker
 must stay inside its assigned worktree and ownership boundary, preserve other agents' changes
-and never revert unrelated work. The agent proposes this execution shape; the user retains
-control when parallel implementation was not already authorized. If authorization, clean
-separation, Git support or a synchronized base is unavailable, explain the constraint and use
-one worktree or sequential execution.
+and never revert unrelated work. The recorded delegation is the developer's authorization:
+without it, or when the current request says otherwise, propose this execution shape and wait
+for the answer. If clean separation, Git support or a synchronized base is unavailable, explain
+the constraint and use one worktree or sequential execution.
 
 After each stream is complete, commit and push through the configured workflow. After its merge,
 return to the primary checkout, check out and synchronize the configured working branch, verify
