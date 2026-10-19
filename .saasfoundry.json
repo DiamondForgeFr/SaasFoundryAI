@@ -116,7 +116,7 @@
     ".agents/skills/sf-srs/data/clustering-rules.json": "3110294b18bf3229a320ea70f5878d18c1e874b8bbc511e61ee0c948dcf0bfee",
     ".agents/skills/sf-srs/scripts/detect-eval-signals.sh": "68a1276a31747af6fca4f2ede3365936d9c16db630621dcbfd279dd7b0e7e943",
     ".agents/skills/sf-srs/scripts/srs-cli.sh": "6beef7c860b237e94bc4f8dfef85e84f2129eb368c5fb4c79524a4f9742a680e",
-    ".agents/skills/sf-srs/SKILL.md": "5ddd4aa6e25d7cc14516339d511385ed57cb720db2e453ce44b55886597e3648",
+    ".agents/skills/sf-srs/SKILL.md": "0f1c543ff196f4ca13bcefab828609d592ab4423277fcf93bd8f41b7ed675008",
     ".agents/skills/sf-srs/templates/examples/example-epic.md": "353c7ab168a78283a0051f48b91775550b218ff25bf9e87ff9b668fdefa9864f",
     ".agents/skills/sf-srs/templates/examples/example-epic.spec.json": "028ec65c05b42717ad94ef207263754625431ad3ce2b482d0439dd994acbc52d",
     ".agents/skills/sf-srs/templates/examples/example-three-levels.spec.json": "710c232072e333a0fb6918629e25d3caa73952ea2bf4d11b284703cd0fbcb41c",

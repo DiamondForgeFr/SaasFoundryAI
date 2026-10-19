@@ -193,10 +193,47 @@ the exact state #542 was filed to prevent, and the moment to raise it is while t
 Every Story needs a `complexity:` label before it leaves Backlog. An FR candidate may carry `"complexity": "bug" | "low" | "medium" | "complex"`: the FR page shows it and spawn labels the Story with
 it. `--complexity <level>` labels the Stories whose FR page states none. The summary names any Story left without one; tag it with `workflow-cli.sh retag <ticket> <level>` before moving it.
 
+### Existing tickets are reused, with or without a plan
+
+`spawn` reads the board before it writes, in every mode: a run without `--reconciliation-plan` is not a blind create. Each FR is matched on its canonical page link among the tickets that carry it,
+open or closed, native children of the target Epic or without a parent:
+
+- a match is **reused**, never created again. A closed one is reused as it is and is not reopened;
+- a ticket closed as **not planned** is ignored: that is how a duplicate is closed, and it keeps the FR page link it was spawned with;
+- an FR with no match is created;
+- two matches for one page, a ticket that names the FR id without owning its page, or a match under another parent stop the run with exit 10, before the milestone or any ticket is touched. Nothing is
+  reparented implicitly.
+
+Without `--ticket`, the open `sf-epic` named `<feature> - <version>` that a previous run created is adopted rather than created again.
+
+`--dry-run` prints one line per FR, so a re-run shows what it reuses before it writes anything:
+
+```
+  existing tickets:
+    FR-LIVE-007: reuse #929
+    FR-LIVE-008: reuse #930 (closed)
+    FR-LIVE-009: reuse #931; ignored #1028 (closed as not planned)
+    FR-LIVE-010: create
+    FR-LIVE-011: blocked — FR-LIVE-011 already belongs to parent #9 through ticket #77; it will not be reparented implicitly
+```
+
+A `blocked` line makes the run exit 10, a dry run included. With a plan, the same lines read `partial → reuse #929`, `missing → create`, and so on.
+
+A duplicate that did get created, by an older spawn or by hand, is cleaned up without a raw API call: detach it from the Epic so the Epic can reach Done, then close it as not planned so that every
+later spawn ignores it.
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh unlink-subtask <epic> <duplicate>
+gh issue close <duplicate> --reason "not planned"
+```
+
+`unlink-subtask` refuses a child that belongs to another parent and does nothing for one that has none.
+
 ### Evidence-first reconciliation
 
-When an approved SRS version may overlap existing work, `--reconciliation-plan` is required by the drafting transition. Build a versioned JSON plan that exactly covers every selected FR and records
-verified evidence from the board, SRS, and implementation (source, tests, or docs). Classify each FR as `delivered`, `partial`, `missing`, or `superseded`:
+When an approved SRS version may overlap existing work, `--reconciliation-plan` is required by the drafting transition. Reuse itself does not wait for a plan (see above); the plan adds the evidence
+that lets `spawn` skip an FR as delivered or superseded. Build a versioned JSON plan that exactly covers every selected FR and records verified evidence from the board, SRS, and implementation
+(source, tests, or docs). Classify each FR as `delivered`, `partial`, `missing`, or `superseded`:
 
 ```json
 {
