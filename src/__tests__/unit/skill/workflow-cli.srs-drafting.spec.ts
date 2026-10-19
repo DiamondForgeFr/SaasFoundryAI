@@ -74,6 +74,9 @@ case "$1" in
   link-subtask)
     echo "linked"
     ;;
+  unlink-subtask)
+    echo "unlinked"
+    ;;
   status)
     echo "Status: \${FAKE_BOARD_STATUS:-In progress}"
     ;;
@@ -241,6 +244,14 @@ describe('sf-workflow CLI — SRS drafting lifecycle', () => {
       expect(inspected.code).toBe(0)
       expect(linked.code).toBe(0)
       expect(readLog(sandbox.toolLogPath)).toEqual(expect.arrayContaining(['inspect-srs-tickets 42 --fr FR-AUTH-001=https://example.test/fr1', 'link-subtask 42 99']))
+    })
+
+    // #1037 — detaching a duplicate from its Epic goes through the workflow CLI like linking one does
+    it('routes unlink-subtask to the configured board tool', async () => {
+      const unlinked = await runCli(['unlink-subtask', '42', '99'], sandbox)
+      expect(unlinked.code).toBe(0)
+      expect(unlinked.stdout).toContain('unlinked')
+      expect(readLog(sandbox.toolLogPath)).toEqual(expect.arrayContaining(['unlink-subtask 42 99']))
     })
 
     it('rejects a ticket with no srs:* label', async () => {
