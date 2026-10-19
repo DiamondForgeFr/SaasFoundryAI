@@ -1,4 +1,12 @@
-import { canonicalSrsIdentity, ExistingSrsTicket, parseReconciliationPlan, reconcileRequirements, ReconciliationPlan, ReconciliationRequirement } from '../../../../srs/spawn/reconciliation'
+import {
+  canonicalSrsIdentity,
+  ExistingSrsTicket,
+  matchExistingTickets,
+  parseReconciliationPlan,
+  reconcileRequirements,
+  ReconciliationPlan,
+  ReconciliationRequirement
+} from '../../../../srs/spawn/reconciliation'
 
 const requirements: ReconciliationRequirement[] = [
   { frId: 'FR-MAH-009', title: 'Guide users', frPageUrl: 'https://app.notion.com/p/Guide-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?source=copy' },
@@ -161,5 +169,54 @@ describe('SRS spawn reconciliation', () => {
       ]
     })
     expect(reconcileRequirements(requirements, delivered, [], '645').map((item) => item.action)).toEqual(['skip', 'skip', 'skip'])
+  })
+})
+
+// #1037 — the reuse rules with no evidence plan: the board alone decides what already exists
+describe('matching existing tickets without a plan', () => {
+  const matchOf = (frId: string, tickets: ExistingSrsTicket[], parent: string | null = '645') => matchExistingTickets(requirements, tickets, parent).find((item) => item.requirement.frId === frId)!
+
+  it('reuses the canonical ticket, open or closed, and leaves an FR with no ticket to be created', () => {
+    const open = ticket({ number: '100', state: 'OPEN', boardStatus: 'Backlog' })
+    const closed = ticket({ number: '101', title: 'FR-MAH-010: Provision workflows', frIds: ['FR-MAH-010'], srsLinks: [requirements[1].frPageUrl] })
+
+    const matches = matchExistingTickets(requirements, [open, closed], '645')
+
+    expect(matches.map((item) => [item.requirement.frId, item.ticket?.number, item.blocked])).toEqual([
+      ['FR-MAH-009', '100', undefined],
+      ['FR-MAH-010', '101', undefined],
+      ['FR-MAH-011', undefined, undefined]
+    ])
+    expect(matches[1].ticket?.state).toBe('CLOSED')
+  })
+
+  it('reuses a ticket that has no parent, with or without a delivery parent yet', () => {
+    const orphan = ticket({ parentNumber: null })
+    expect(matchOf('FR-MAH-009', [orphan]).ticket?.number).toBe('100')
+    expect(matchOf('FR-MAH-009', [orphan], null).ticket?.number).toBe('100')
+  })
+
+  it('blocks two tickets for one canonical page, naming both', () => {
+    expect(matchOf('FR-MAH-009', [ticket(), ticket({ number: '101' })]).blocked).toMatch(/ambiguous.*#100, #101/)
+  })
+
+  it('blocks a match that belongs to another parent, and every match while there is no parent', () => {
+    expect(matchOf('FR-MAH-009', [ticket({ parentNumber: '999' })]).blocked).toMatch(/belongs to parent #999/)
+    expect(matchOf('FR-MAH-009', [ticket()], null).blocked).toMatch(/already belongs to parent #645/)
+  })
+
+  it('blocks an id-only collision with a contradictory canonical page', () => {
+    expect(matchOf('FR-MAH-009', [ticket({ srsLinks: ['https://example.test/a-different-page'] })]).blocked).toMatch(/matches the id but not the canonical SRS page/)
+  })
+
+  it('ignores an aggregate Epic that catalogues the same canonical page', () => {
+    const aggregate = ticket({ number: '645', parentNumber: null, issueType: 'sf-epic', frIds: ['FR-MAH-009'], srsLinks: [requirements[0].frPageUrl] })
+    expect(matchOf('FR-MAH-009', [aggregate, ticket()]).ticket?.number).toBe('100')
+  })
+
+  it('reports every blocked FR instead of stopping at the first', () => {
+    const second = ticket({ number: '200', title: 'FR-MAH-010: Provision workflows', frIds: ['FR-MAH-010'], srsLinks: [requirements[1].frPageUrl], parentNumber: '999' })
+    const blocked = matchExistingTickets(requirements, [ticket({ parentNumber: '998' }), second], '645').filter((item) => item.blocked)
+    expect(blocked.map((item) => item.requirement.frId)).toEqual(['FR-MAH-009', 'FR-MAH-010'])
   })
 })

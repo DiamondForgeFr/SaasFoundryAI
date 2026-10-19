@@ -174,6 +174,58 @@ function isFrDeliveryTicket(ticket: ExistingSrsTicket): boolean {
   return ticket.issueType?.toLowerCase() !== 'sf-epic'
 }
 
+function canonicalMatches(requirement: ReconciliationRequirement, tickets: ExistingSrsTicket[]): ExistingSrsTicket[] {
+  return tickets.filter(isFrDeliveryTicket).filter((ticket) => matchesCanonicalPage(ticket, requirement))
+}
+
+function ambiguousPageReason(frId: string, exact: ExistingSrsTicket[]): string | undefined {
+  if (exact.length > 1) return `${frId} is ambiguous: canonical SRS page matches tickets ${exact.map((ticket) => `#${ticket.number}`).join(', ')}`
+  return undefined
+}
+
+/**
+ * Why an FR that is going to be created or reused cannot be, safely: a ticket names its id
+ * without owning its page, or the ticket that owns the page belongs to another delivery tree.
+ */
+function unsafeReuseReason(requirement: ReconciliationRequirement, frId: string, tickets: ExistingSrsTicket[], exact: ExistingSrsTicket[], parentTicket: string | null): string | undefined {
+  const idOnly = tickets.filter(isFrDeliveryTicket).filter((ticket) => ticket.frIds.map((id) => id.toUpperCase()).includes(frId) && !matchesCanonicalPage(ticket, requirement))
+  if (exact.length === 0 && idOnly.length > 0) {
+    return `${frId} is ambiguous: ticket ${idOnly.map((ticket) => `#${ticket.number}`).join(', ')} matches the id but not the canonical SRS page`
+  }
+  const ticket = exact[0]
+  if (ticket?.parentNumber && ticket.parentNumber !== parentTicket) {
+    return `${frId} already belongs to parent #${ticket.parentNumber} through ticket #${ticket.number}; it will not be reparented implicitly`
+  }
+  return undefined
+}
+
+/** What the board already holds for one FR, found from its canonical page alone. */
+export interface ExistingTicketMatch {
+  requirement: ReconciliationRequirement
+  /** The one ticket, open or closed, that carries this FR's canonical page. */
+  ticket?: ExistingSrsTicket
+  /** Why spawn must stop instead of choosing: several candidates, or a ticket owned elsewhere. */
+  blocked?: string
+}
+
+/**
+ * The reuse rules of `reconcileRequirements` with no evidence plan: an FR whose canonical
+ * ticket exists is reused, never created again, and any doubt blocks instead of guessing.
+ * Nothing is classified delivered or superseded here: that takes evidence this path does not
+ * have, so an FR with no ticket is simply missing.
+ *
+ * It reports every FR rather than throwing at the first, so a preview can show them all.
+ */
+export function matchExistingTickets(requirements: ReconciliationRequirement[], tickets: ExistingSrsTicket[], parentTicket: string | null): ExistingTicketMatch[] {
+  return requirements.map((requirement) => {
+    const frId = requirement.frId.toUpperCase()
+    const exact = canonicalMatches(requirement, tickets)
+    const blocked = ambiguousPageReason(frId, exact) ?? unsafeReuseReason(requirement, frId, tickets, exact, parentTicket)
+    if (blocked) return { requirement, blocked }
+    return { requirement, ticket: exact[0] }
+  })
+}
+
 /**
  * `parentTicket` is the delivery parent the Stories will hang under, or null while spawn has
  * yet to create the version Epic: then any ticket that already has a parent blocks, since
@@ -194,11 +246,9 @@ export function reconcileRequirements(requirements: ReconciliationRequirement[],
   return requirements.map((requirement) => {
     const frId = requirement.frId.toUpperCase()
     const decision = plan.requirements.find((item) => item.frId === frId)!
-    const deliveryTickets = tickets.filter(isFrDeliveryTicket)
-    const exact = deliveryTickets.filter((ticket) => matchesCanonicalPage(ticket, requirement))
-    if (exact.length > 1) {
-      throw new ReconciliationError(`${frId} is ambiguous: canonical SRS page matches tickets ${exact.map((ticket) => `#${ticket.number}`).join(', ')}`)
-    }
+    const exact = canonicalMatches(requirement, tickets)
+    const ambiguous = ambiguousPageReason(frId, exact)
+    if (ambiguous) throw new ReconciliationError(ambiguous)
     const ticket = exact[0]
     if (decision.classification === 'delivered' || decision.classification === 'superseded') {
       // No issue will be created or reused for skipped scope. Historical audit
@@ -206,13 +256,8 @@ export function reconcileRequirements(requirements: ReconciliationRequirement[],
       // references are evidence, not a reparenting candidate.
       return { requirement, decision, action: 'skip', ticket }
     }
-    const idOnly = deliveryTickets.filter((ticket) => ticket.frIds.map((id) => id.toUpperCase()).includes(frId) && !matchesCanonicalPage(ticket, requirement))
-    if (exact.length === 0 && idOnly.length > 0) {
-      throw new ReconciliationError(`${frId} is ambiguous: ticket ${idOnly.map((ticket) => `#${ticket.number}`).join(', ')} matches the id but not the canonical SRS page`)
-    }
-    if (ticket?.parentNumber && ticket.parentNumber !== parentTicket) {
-      throw new ReconciliationError(`${frId} already belongs to parent #${ticket.parentNumber} through ticket #${ticket.number}; it will not be reparented implicitly`)
-    }
+    const unsafe = unsafeReuseReason(requirement, frId, tickets, exact, parentTicket)
+    if (unsafe) throw new ReconciliationError(unsafe)
     if (ticket) return { requirement, decision, action: 'reuse', ticket }
     return { requirement, decision, action: 'create' }
   })

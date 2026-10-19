@@ -7,7 +7,16 @@ import { renderStoryTicketBody } from '../../builders/srs/templates/tickets/stor
 import { COMPLEXITIES, Complexity, FrItem, isComplexity, PageRef, StoryTicketBodySpec } from '../../builders/srs/types'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { EpicPageContent, FrPageContent, parseEpicPage, parseFrPage } from '../spawn/page-content'
-import { canonicalSrsIdentity, ExistingSrsTicket, loadReconciliationPlan, reconcileRequirements, ReconciliationError, ReconciliationRequirement, ReconciliationResult } from '../spawn/reconciliation'
+import {
+  canonicalSrsIdentity,
+  ExistingSrsTicket,
+  loadReconciliationPlan,
+  matchExistingTickets,
+  reconcileRequirements,
+  ReconciliationAction,
+  ReconciliationError,
+  ReconciliationRequirement
+} from '../spawn/reconciliation'
 import { samePage } from '../page-key'
 import { parseFrPageTitle } from '../tree/fr-title'
 import { rejectUnknownOption, runFromCommandLine, SrsUsageError } from './args'
@@ -45,6 +54,9 @@ export interface SpawnOptions {
    * Evidence-backed classification for an existing SRS version. The plan is
    * deliberately external: board and SRS facts are deterministic, while
    * deciding that old code already delivers a newly-written FR is semantic.
+   *
+   * Without it spawn still reads the board and reuses every FR whose canonical
+   * ticket exists; what it cannot do is skip an FR as delivered or superseded.
    */
   reconciliationPlanPath?: string
   /**
@@ -63,6 +75,20 @@ export interface PlannedCreation {
   body: string
   /** From the FR page, else `--complexity`: the label the Story needs to leave Backlog (#901). */
   complexity?: Complexity
+}
+
+/**
+ * What spawn does with one FR, whether it learned it from an evidence plan or from the board
+ * alone. A closed ticket is reused all the same: it stays closed, and counts as delivered.
+ */
+interface FrDecision {
+  frId: string
+  action: ReconciliationAction
+  ticket?: ExistingSrsTicket
+  /** Set when spawn must stop rather than choose; the reason is the whole message. */
+  blocked?: string
+  /** The line the preview prints after the FR id. */
+  summary: string
 }
 
 export interface SpawnIO {
@@ -277,6 +303,12 @@ async function selectVersion(
   return { version: match, frPages }
 }
 
+/** ` #77`, or ` #77 (closed)`: a closed ticket is reused as it is, never reopened. */
+function describeTicket(ticket: ExistingSrsTicket | undefined): string {
+  if (!ticket) return ''
+  return ` #${ticket.number}${ticket.state === 'CLOSED' ? ' (closed)' : ''}`
+}
+
 /**
  * The open version Epic a previous spawn created for this holder: issue type sf-epic, the
  * `<feature> - <version>` title. Two of them is an ambiguity spawn will not resolve.
@@ -422,25 +454,46 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     planned.push({ frId: fr.id, title: `${fr.id}: ${fr.title}`, frPageUrl: child.url, body: renderStoryTicketBody(spec), complexity: fr.complexity ?? options.complexity })
   }
 
-  let reconciliation: ReconciliationResult[] | undefined
+  // The board is read in every mode, plan or not: an FR whose canonical ticket already exists
+  // is reused and never created a second time. Only the evidence plan was inspecting it, so a
+  // plan-less run created every FR again, and could create the version Epic again too (#1037).
+  // The read is read-only; everything below it that writes waits for a clean verdict.
+  let decisions: FrDecision[]
   let adoptedEpic: string | undefined
-  if (options.reconciliationPlanPath) {
-    try {
-      const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
-      const plan = loadReconciliationPlan(resolve(options.reconciliationPlanPath))
-      // Without --ticket the version Epic is the delivery parent, and spawn creates it below.
-      // A re-run finds the one it created before — its body lists these FR pages — and adopts
-      // it instead of a second one. The plan used to require --ticket outright (#855).
-      const tickets = io.inspectTickets(options.ticket ?? null, requirements)
-      adoptedEpic = options.ticket ? undefined : findVersionEpic(tickets, holderTitle)
-      reconciliation = reconcileRequirements(requirements, plan, tickets, options.ticket ?? adoptedEpic ?? null)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const prefix = error instanceof ReconciliationError ? 'reconciliation blocked' : 'reconciliation preflight failed'
-      io.stderr(`✗ spawn: ${prefix} — ${message}\n`)
-      io.stderr(`  Nothing was created. Restore every evidence source or resolve the ambiguity, then retry.\n`)
-      return 10
+  let decisionsHeading: string
+  try {
+    const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
+    const plan = options.reconciliationPlanPath ? loadReconciliationPlan(resolve(options.reconciliationPlanPath)) : undefined
+    // Without --ticket the version Epic is the delivery parent, and spawn creates it below.
+    // A re-run finds the one it created before — its body lists these FR pages — and adopts
+    // it instead of a second one. The plan used to require --ticket outright (#855).
+    const tickets = io.inspectTickets(options.ticket ?? null, requirements)
+    adoptedEpic = options.ticket ? undefined : findVersionEpic(tickets, holderTitle)
+    const parentTicket = options.ticket ?? adoptedEpic ?? null
+    if (plan) {
+      decisionsHeading = 'reconciliation'
+      decisions = reconcileRequirements(requirements, plan, tickets, parentTicket).map((result) => ({
+        frId: result.requirement.frId,
+        action: result.action,
+        ticket: result.ticket,
+        summary: `${result.decision.classification} → ${result.action}${describeTicket(result.ticket)}`
+      }))
+    } else {
+      decisionsHeading = 'existing tickets'
+      decisions = matchExistingTickets(requirements, tickets, parentTicket).map((match) => ({
+        frId: match.requirement.frId,
+        action: match.ticket ? 'reuse' : 'create',
+        ticket: match.ticket,
+        blocked: match.blocked,
+        summary: match.blocked ? `blocked — ${match.blocked}` : match.ticket ? `reuse${describeTicket(match.ticket)}` : 'create'
+      }))
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const prefix = error instanceof ReconciliationError ? 'reconciliation blocked' : 'reconciliation preflight failed'
+    io.stderr(`✗ spawn: ${prefix} — ${message}\n`)
+    io.stderr(`  Nothing was created. Restore every evidence source or resolve the ambiguity, then retry.\n`)
+    return 10
   }
 
   const parentLabel = options.ticket ? `#${options.ticket}` : adoptedEpic ? `the existing Epic #${adoptedEpic} « ${holderTitle} »` : `a new Epic « ${holderTitle} »`
@@ -449,12 +502,17 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl}) — ${p.complexity ? `complexity ${p.complexity}` : 'no complexity'}\n`)
   }
 
-  if (reconciliation) {
-    io.stdout(`  reconciliation:\n`)
-    for (const result of reconciliation) {
-      const ticket = result.ticket ? ` #${result.ticket.number}` : ''
-      io.stdout(`    ${result.requirement.frId}: ${result.decision.classification} → ${result.action}${ticket}\n`)
-    }
+  io.stdout(`  ${decisionsHeading}:\n`)
+  for (const decision of decisions) {
+    io.stdout(`    ${decision.frId}: ${decision.summary}\n`)
+  }
+
+  // Said after the whole table, so a preview names every FR that blocks, not only the first
+  const blocked = decisions.filter((decision) => decision.blocked)
+  if (blocked.length > 0) {
+    for (const decision of blocked) io.stderr(`✗ spawn: reconciliation blocked — ${decision.blocked}\n`)
+    io.stderr(`  Nothing was created. Resolve the ambiguity, then retry.\n`)
+    return 10
   }
 
   if (options.milestone) {
@@ -468,7 +526,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
 
   // Every FR already delivered or superseded, and no Epic yet: creating one would put a
   // promise on the board that nothing is left to keep.
-  if (reconciliation && !options.ticket && !adoptedEpic && reconciliation.every((result) => result.action === 'skip')) {
+  if (!options.ticket && !adoptedEpic && decisions.every((decision) => decision.action === 'skip')) {
     io.stdout(`\nspawn: every FR of « ${holderTitle} » is delivered or superseded — no Epic and no Story to create.\n`)
     return 0
   }
@@ -532,20 +590,20 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
 
   const created: string[] = []
   const complexityOf = new Map<string, Complexity | undefined>()
-  const reused = reconciliation?.filter((result) => result.action === 'reuse' && result.ticket).map((result) => result.ticket!.number) ?? []
+  const reused = decisions.filter((decision) => decision.action === 'reuse' && decision.ticket).map((decision) => decision.ticket!.number)
   // A reused ticket with no parent joins the delivery parent: it was counted, never linked
-  for (const result of reconciliation ?? []) {
-    if (result.action !== 'reuse' || !result.ticket || result.ticket.parentNumber) continue
+  for (const decision of decisions) {
+    if (decision.action !== 'reuse' || !decision.ticket || decision.ticket.parentNumber) continue
     try {
-      io.linkSubtask(parentTicket, result.ticket.number)
-      io.stdout(`  ↳ #${result.ticket.number} linked under #${parentTicket}\n`)
+      io.linkSubtask(parentTicket, decision.ticket.number)
+      io.stdout(`  ↳ #${decision.ticket.number} linked under #${parentTicket}\n`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      io.stderr(`  ✗ could not link #${result.ticket.number} under #${parentTicket}: ${message}\n`)
+      io.stderr(`  ✗ could not link #${decision.ticket.number} under #${parentTicket}: ${message}\n`)
       return 8
     }
   }
-  const actionable = reconciliation ? planned.filter((item) => reconciliation!.find((result) => result.requirement.frId === item.frId)?.action === 'create') : planned
+  const actionable = planned.filter((item) => decisions.find((decision) => decision.frId === item.frId)?.action === 'create')
   for (const p of actionable) {
     try {
       const { childNumber } = io.createSubtask(parentTicket, p.title, p.body, options.bypassReason)
@@ -557,22 +615,20 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       created.push(childNumber)
       complexityOf.set(childNumber, p.complexity)
     } catch (error) {
-      if (reconciliation) {
-        try {
-          const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
-          const candidates = io.inspectTickets(parentTicket, requirements)
-          const expected = canonicalSrsIdentity(p.frPageUrl)
-          const recovered = candidates.filter((ticket) => ticket.srsLinks.some((link) => canonicalSrsIdentity(link) === expected))
-          if (recovered.length === 1 && (!recovered[0].parentNumber || recovered[0].parentNumber === parentTicket)) {
-            if (!recovered[0].parentNumber) io.linkSubtask(parentTicket, recovered[0].number)
-            io.stdout(`  ↻ ${p.frId} → #${recovered[0].number} recovered after an uncertain create response\n`)
-            reused.push(recovered[0].number)
-            continue
-          }
-        } catch {
-          // The original failure remains the useful diagnostic. Recovery is a
-          // best-effort read; it never permits a second blind create.
+      try {
+        const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
+        const candidates = io.inspectTickets(parentTicket, requirements)
+        const expected = canonicalSrsIdentity(p.frPageUrl)
+        const recovered = candidates.filter((ticket) => ticket.srsLinks.some((link) => canonicalSrsIdentity(link) === expected))
+        if (recovered.length === 1 && (!recovered[0].parentNumber || recovered[0].parentNumber === parentTicket)) {
+          if (!recovered[0].parentNumber) io.linkSubtask(parentTicket, recovered[0].number)
+          io.stdout(`  ↻ ${p.frId} → #${recovered[0].number} recovered after an uncertain create response\n`)
+          reused.push(recovered[0].number)
+          continue
         }
+      } catch {
+        // The original failure remains the useful diagnostic. Recovery is a
+        // best-effort read; it never permits a second blind create.
       }
       const message = error instanceof Error ? error.message : String(error)
       io.stderr(`  ✗ failed to create ${p.frId}: ${message}\n`)
@@ -580,11 +636,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     }
   }
 
-  if (reconciliation) {
-    io.stdout(`\nspawn: created ${created.length}, reused ${reused.length}, skipped ${planned.length - created.length - reused.length} Story ticket(s) under #${parentTicket}.\n`)
-  } else {
-    io.stdout(`\nspawn: created ${created.length} Story ticket(s) under #${parentTicket}.\n`)
-  }
+  io.stdout(`\nspawn: created ${created.length}, reused ${reused.length}, skipped ${planned.length - created.length - reused.length} Story ticket(s) under #${parentTicket}.\n`)
 
   // The board is where the lifecycle reads a ticket's status: a ticket missing from it can
   // never leave Backlog through `update-status` (#836). Reused Stories keep their status.

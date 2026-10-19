@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../../builders/srs/types'
 import { parseArgs, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
+import { ExistingSrsTicket } from '../../../../srs/spawn/reconciliation'
 import { parseFrPageTitle } from '../../../../srs/tree/fr-title'
 import { renderEpicPage } from '../../../../builders/srs/templates/pages/epic.tpl'
 import { renderFrPage } from '../../../../builders/srs/templates/pages/fr.tpl'
@@ -545,6 +546,273 @@ describe('runSpawn', () => {
     expect(code).toBe(0)
     expect(io.linkSubtask).toHaveBeenCalledWith('42', '77')
     expect(io.stdoutBuffer.join('')).toMatch(/recovered after an uncertain create response/)
+  })
+
+  // #1037 — only a run with a reconciliation plan looked at the board, so every other run
+  // created the Stories that already existed: eight duplicates under one Epic on the live repo
+  describe('without a reconciliation plan', () => {
+    const children: PageRef[] = [
+      { id: 'p1', url: 'https://example.test/fr1', title: 'FR-AUTH-001 — Open flow' },
+      { id: 'p2', url: 'https://example.test/fr2', title: 'FR-AUTH-002 — Closed flow' },
+      { id: 'p3', url: 'https://example.test/fr3', title: 'FR-AUTH-003 — New flow' }
+    ]
+    const existing = (overrides: Partial<ExistingSrsTicket> = {}): ExistingSrsTicket => ({
+      number: '77',
+      title: 'FR-AUTH-001: Open flow',
+      body: '',
+      state: 'OPEN',
+      boardStatus: 'Backlog',
+      parentNumber: '42',
+      issueType: 'sf-story',
+      url: 'https://github.test/issues/77',
+      srsLinks: ['https://example.test/fr1'],
+      frIds: ['FR-AUTH-001'],
+      ...overrides
+    })
+    const openChild = existing()
+    const closedChild = existing({
+      number: '78',
+      title: 'FR-AUTH-002: Closed flow',
+      state: 'CLOSED',
+      boardStatus: 'Done',
+      url: 'https://github.test/issues/78',
+      srsLinks: ['https://example.test/fr2'],
+      frIds: ['FR-AUTH-002']
+    })
+
+    beforeEach(() => {
+      registerSrsBackend('stub', () => new StubAdapter(children))
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+    })
+
+    it('reads the board under the ticket even though no plan was given', async () => {
+      const io = makeIO()
+
+      await expect(runSpawn(baseOptions(), io)).resolves.toBe(0)
+
+      expect(io.inspectTickets).toHaveBeenCalledTimes(1)
+      expect(io.inspectTickets.mock.calls[0][0]).toBe('42')
+      expect(io.inspectTickets.mock.calls[0][1].map((requirement: { frId: string }) => requirement.frId)).toEqual(['FR-AUTH-001', 'FR-AUTH-002', 'FR-AUTH-003'])
+    })
+
+    it('creates only the FR that has no ticket, reusing an open and a closed native child', async () => {
+      const io = makeIO({ inspectTickets: jest.fn(() => [openChild, closedChild]) })
+
+      await expect(runSpawn(baseOptions(), io)).resolves.toBe(0)
+
+      expect(io.createSubtask).toHaveBeenCalledTimes(1)
+      expect(io.createSubtask.mock.calls[0][0]).toBe('42')
+      expect(io.createSubtask.mock.calls[0][1]).toBe('FR-AUTH-003: New flow')
+      expect(io.createEpic).not.toHaveBeenCalled()
+      expect(io.linkSubtask).not.toHaveBeenCalled()
+      expect(io.stdoutBuffer.join('')).toContain('created 1, reused 2, skipped 0')
+      // The reused Stories join the board and the release, and keep the status they have
+      expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual(['42', '77', '78', '100'])
+    })
+
+    it('only counts a closed ticket it reuses: it is neither recreated, relinked nor relabelled', async () => {
+      const io = makeIO({ inspectTickets: jest.fn(() => [closedChild]) })
+
+      await expect(runSpawn(baseOptions({ milestone: 'v0.1.0', complexity: 'low' }), io)).resolves.toBe(0)
+
+      expect(io.createSubtask.mock.calls.map((call) => call[1])).toEqual(['FR-AUTH-001: Open flow', 'FR-AUTH-003: New flow'])
+      expect(io.linkSubtask).not.toHaveBeenCalled()
+      expect((io.setComplexity as jest.Mock).mock.calls.map((call) => call[0])).not.toContain('78')
+      expect(io.stdoutBuffer.join('')).toContain('created 2, reused 1, skipped 0')
+    })
+
+    it('is idempotent: a second run over a complete version creates nothing', async () => {
+      const complete = [openChild, closedChild, existing({ number: '79', title: 'FR-AUTH-003: New flow', srsLinks: ['https://example.test/fr3'], frIds: ['FR-AUTH-003'] })]
+      const io = makeIO({ inspectTickets: jest.fn(() => complete) })
+
+      await expect(runSpawn(baseOptions(), io)).resolves.toBe(0)
+
+      expect(io.createSubtask).not.toHaveBeenCalled()
+      expect(io.stdoutBuffer.join('')).toContain('created 0, reused 3, skipped 0')
+    })
+
+    it('previews one line per FR on a dry run, and creates nothing', async () => {
+      const io = makeIO({ inspectTickets: jest.fn(() => [openChild, closedChild]) })
+
+      await expect(runSpawn(baseOptions({ dryRun: true, milestone: 'v0.1.0' }), io)).resolves.toBe(0)
+
+      const out = io.stdoutBuffer.join('')
+      expect(out).toContain('existing tickets:')
+      expect(out).toContain('    FR-AUTH-001: reuse #77\n')
+      expect(out).toContain('    FR-AUTH-002: reuse #78 (closed)\n')
+      expect(out).toContain('    FR-AUTH-003: create\n')
+      expect(out).toContain('[dry-run]')
+      for (const write of [io.createSubtask, io.createEpic, io.linkSubtask, io.addToProject, io.ensureMilestone, io.assignMilestone]) expect(write).not.toHaveBeenCalled()
+    })
+
+    it('previews a version nothing exists for as all create', async () => {
+      const io = makeIO()
+
+      await expect(runSpawn(baseOptions({ dryRun: true }), io)).resolves.toBe(0)
+
+      const out = io.stdoutBuffer.join('')
+      expect(out).toContain('    FR-AUTH-001: create\n')
+      expect(out).toContain('    FR-AUTH-002: create\n')
+      expect(out).toContain('    FR-AUTH-003: create\n')
+    })
+
+    it('stops before any mutation when two tickets carry one canonical page', async () => {
+      const io = makeIO({ inspectTickets: jest.fn(() => [openChild, existing({ number: '88' })]) })
+
+      await expect(runSpawn(baseOptions({ milestone: 'v1.0.0' }), io)).resolves.toBe(10)
+
+      expect(io.stderrBuffer.join('')).toMatch(/ambiguous.*#77, #88/)
+      expect(io.stderrBuffer.join('')).toContain('Nothing was created')
+      expect(io.ensureMilestone).not.toHaveBeenCalled()
+      expect(io.createSubtask).not.toHaveBeenCalled()
+      expect(io.addToProject).not.toHaveBeenCalled()
+    })
+
+    it('stops before any mutation when a match belongs to another parent', async () => {
+      const io = makeIO({ inspectTickets: jest.fn(() => [existing({ parentNumber: '9' })]) })
+
+      await expect(runSpawn(baseOptions({ milestone: 'v1.0.0' }), io)).resolves.toBe(10)
+
+      expect(io.stderrBuffer.join('')).toContain('FR-AUTH-001 already belongs to parent #9 through ticket #77')
+      expect(io.ensureMilestone).not.toHaveBeenCalled()
+      expect(io.createSubtask).not.toHaveBeenCalled()
+    })
+
+    it('names every blocking FR in the preview, and still exits non-zero on a dry run', async () => {
+      const io = makeIO({ inspectTickets: jest.fn(() => [existing({ parentNumber: '9' }), closedChild, { ...closedChild, number: '79' }]) })
+
+      await expect(runSpawn(baseOptions({ dryRun: true }), io)).resolves.toBe(10)
+
+      const out = io.stdoutBuffer.join('')
+      expect(out).toMatch(/FR-AUTH-001: blocked — FR-AUTH-001 already belongs to parent #9/)
+      expect(out).toMatch(/FR-AUTH-002: blocked — FR-AUTH-002 is ambiguous: canonical SRS page matches tickets #78, #79/)
+      expect(out).toContain('FR-AUTH-003: create')
+      expect(out).not.toContain('[dry-run]')
+      expect(io.stderrBuffer.join('')).toMatch(/blocked — FR-AUTH-001 already belongs to parent #9/)
+    })
+
+    it('stops with nothing created when the board cannot be read', async () => {
+      const io = makeIO({
+        inspectTickets: jest.fn(() => {
+          throw new Error('gh: rate limited')
+        })
+      })
+
+      await expect(runSpawn(baseOptions({ milestone: 'v1.0.0' }), io)).resolves.toBe(10)
+
+      expect(io.stderrBuffer.join('')).toContain('reconciliation preflight failed — gh: rate limited')
+      expect(io.ensureMilestone).not.toHaveBeenCalled()
+      expect(io.createSubtask).not.toHaveBeenCalled()
+    })
+
+    it('recovers an orphan created before an uncertain create response', async () => {
+      const orphan = existing({ number: '80', title: 'FR-AUTH-003: New flow', parentNumber: null, srsLinks: ['https://example.test/fr3'], frIds: ['FR-AUTH-003'] })
+      const inspectTickets = jest.fn().mockReturnValueOnce([openChild, closedChild]).mockReturnValueOnce([orphan])
+      const io = makeIO({
+        inspectTickets,
+        createSubtask: jest.fn(() => {
+          throw new Error('response lost')
+        })
+      })
+
+      await expect(runSpawn(baseOptions(), io)).resolves.toBe(0)
+
+      expect(io.linkSubtask).toHaveBeenCalledWith('42', '80')
+      expect(io.stdoutBuffer.join('')).toMatch(/recovered after an uncertain create response/)
+    })
+
+    describe('without --ticket', () => {
+      const feature: PageRef[] = [{ id: 'v2', url: 'https://example.test/v2', title: 'v2 — Prise de notes vivante' }]
+      const tree: Record<string, PageRef[]> = { v2: [{ id: 'f2', url: 'https://example.test/f2', title: 'FR-LIVE-007 — Topic-aware AI note taking' }] }
+      const holder = 'Réunion live - v2 — Prise de notes vivante'
+      const options = (overrides: Partial<SpawnOptions> = {}): SpawnOptions => ({ ...baseOptions({ version: 'v2 — Prise de notes vivante' }), ticket: undefined, ...overrides })
+      const story = (overrides: Partial<ExistingSrsTicket> = {}): ExistingSrsTicket => ({
+        number: '77',
+        title: 'FR-LIVE-007: Topic-aware AI note taking',
+        state: 'OPEN',
+        boardStatus: 'Backlog',
+        parentNumber: null,
+        issueType: 'sf-story',
+        url: 'https://github.test/issues/77',
+        srsLinks: ['https://example.test/f2'],
+        frIds: ['FR-LIVE-007'],
+        ...overrides
+      })
+      const epic: ExistingSrsTicket = { ...story({ number: '50', title: holder, issueType: 'sf-epic' }) }
+
+      beforeEach(() => {
+        registerSrsBackend(
+          'stub',
+          () =>
+            new StubAdapter(
+              [],
+              undefined,
+              () => ({ id: 'feat', name: 'Réunion live', url: 'https://example.test/feat' }),
+              (parentId) => (parentId in tree ? tree[parentId] : feature)
+            )
+        )
+      })
+
+      it('reads the board with no parent, since the Epic may not exist yet', async () => {
+        const io = makeIO()
+
+        await expect(runSpawn(options({ dryRun: true }), io)).resolves.toBe(0)
+
+        expect(io.inspectTickets.mock.calls[0][0]).toBeNull()
+        expect(io.stdoutBuffer.join('')).toContain(`under a new Epic « ${holder} »`)
+        expect(io.stdoutBuffer.join('')).toContain('    FR-LIVE-007: create\n')
+      })
+
+      it('adopts the Epic a previous run created, and reuses its Story instead of a second one', async () => {
+        const io = makeIO({ inspectTickets: jest.fn(() => [epic, story({ parentNumber: '50' })]) })
+
+        await expect(runSpawn(options(), io)).resolves.toBe(0)
+
+        expect(io.createEpic).not.toHaveBeenCalled()
+        expect(io.createSubtask).not.toHaveBeenCalled()
+        expect(io.stdoutBuffer.join('')).toContain(`the existing Epic #50 « ${holder} »`)
+        expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual(['50', '77'])
+      })
+
+      it('previews the adopted Epic and the reused Story on a dry run', async () => {
+        const io = makeIO({ inspectTickets: jest.fn(() => [epic, story({ parentNumber: '50', state: 'CLOSED' })]) })
+
+        await expect(runSpawn(options({ dryRun: true }), io)).resolves.toBe(0)
+
+        const out = io.stdoutBuffer.join('')
+        expect(out).toContain(`the existing Epic #50 « ${holder} »`)
+        expect(out).toContain('    FR-LIVE-007: reuse #77 (closed)\n')
+        expect(io.createEpic).not.toHaveBeenCalled()
+      })
+
+      it('links a Story that has no parent under the Epic it creates', async () => {
+        const io = makeIO({ inspectTickets: jest.fn(() => [story()]) })
+
+        await expect(runSpawn(options(), io)).resolves.toBe(0)
+
+        expect(io.linkSubtask).toHaveBeenCalledWith(io.createEpic.mock.results[0].value.epicNumber, '77')
+        expect(io.createSubtask).not.toHaveBeenCalled()
+      })
+
+      it('blocks before creating the Epic when a match belongs to another parent', async () => {
+        const io = makeIO({ inspectTickets: jest.fn(() => [story({ parentNumber: '9' })]) })
+
+        await expect(runSpawn(options({ milestone: 'v0.2.0' }), io)).resolves.toBe(10)
+
+        expect(io.stderrBuffer.join('')).toContain('already belongs to parent #9')
+        expect(io.createEpic).not.toHaveBeenCalled()
+        expect(io.ensureMilestone).not.toHaveBeenCalled()
+      })
+
+      it('refuses to choose between two open version Epics', async () => {
+        const io = makeIO({ inspectTickets: jest.fn(() => [epic, { ...epic, number: '51' }]) })
+
+        await expect(runSpawn(options(), io)).resolves.toBe(10)
+
+        expect(io.stderrBuffer.join('')).toContain('several open Epics (#50, #51)')
+        expect(io.createEpic).not.toHaveBeenCalled()
+      })
+    })
   })
 
   // Was: "warns and uses the raw title". Producing a ticket from a non-FR title is
