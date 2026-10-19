@@ -146,12 +146,19 @@ so either checkout can initialize independently without treating the inner repos
 Outside this acceptance exercise, sequential work may use one checkout after the first host has stopped and left a precise handoff. The next host rechecks the manifest, ticket, SRS and diff rather
 than assuming session context transferred.
 
-Before implementation, split the request into writing streams and their dependencies. Propose parallel worktrees only when streams are independent and concurrent delivery has a material benefit.
-Read-only exploration and review may run in parallel in one checkout. Work with sequential dependencies, overlapping files or unclear ownership uses one feature worktree and sequential execution.
+Before implementation, split the request into writing streams and their dependencies. Open parallel worktrees when the project's recorded delegation (`sf agents delegation status`) is `allowed` or the
+developer asks for them, and only when streams are independent and concurrent delivery has a material benefit. Read-only exploration and review may run in parallel in one checkout. Work with
+sequential dependencies, overlapping files or unclear ownership uses one feature worktree and sequential execution.
 
 Read `workflow.workingBranch` from `.saasfoundry.json`; never substitute a conventional branch name. Keep the primary checkout on that configured branch while feature work runs. Every parallel writer
 gets one real ticket, branch and worktree path, with an explicit owned-file set and dependency boundary. Start from a synchronized configured working branch, keep each writer inside its worktree and
-ownership boundary, and preserve unrelated changes. When the user did not already authorize parallel implementation, present this execution shape for their control before starting writers.
+ownership boundary, and preserve unrelated changes. The recorded delegation is the developer's authorization: without it, or when the current request says otherwise, present this execution shape for
+their control before starting writers.
+
+Once the developer allowed it, the conversational session stays their interlocutor (SRS, tickets, coordination, review) and hands each ticket, from In progress to the end of AI testing, to one
+background agent in its own worktree, instead of building it itself. The answer is asked once and recorded with `sf agents delegation allow` or `decline`; a declined project, or a host that cannot
+delegate, keeps the sequential path and says so. The delegated agent never merges and never marks a Human-testing pull request ready; a defect found in Human testing goes back to the same ticket's
+agent in the same worktree. See [Delegated ticket delivery](../cli/sf-agents.md#delegated-ticket-delivery-sf-agents-delegation).
 
 After a stream merges, return to the primary checkout, check out and synchronize the configured working branch, and verify the merge. Remove the completed worktree and local branch only after that
 verification and only when they are no longer in use. Preserve user-created worktrees, branches, stashes and uncommitted changes. If Git support, authorization, synchronization or clean separation is

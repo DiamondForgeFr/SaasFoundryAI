@@ -33,13 +33,14 @@ moment :
 
 ### 🐛 Bug
 
-| Étape        | Comportement                             |
-| ------------ | ---------------------------------------- |
-| Analyse      | Ciblée directement sur la cause          |
-| Plan         | Pas de document formel                   |
-| Sous-tickets | Inutiles pour une correction atomique    |
-| Examen       | Pas de revue contradictoire systématique |
-| Tests        | **Test de régression obligatoire**       |
+| Étape        | Comportement                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| Analyse      | Ciblée directement sur la cause                                                             |
+| Plan         | Pas de document formel                                                                      |
+| Sous-tickets | Inutiles pour une correction atomique                                                       |
+| Exécution    | Livraison déléguée en `scoped-edit` (correction dans deux fichiers au plus) ou en `bug-fix` |
+| Examen       | Pas de revue contradictoire systématique                                                    |
+| Tests        | **Test de régression obligatoire**                                                          |
 
 ### 🟢 Low
 
@@ -48,6 +49,7 @@ moment :
 | Analyse      | Minimale, 2 à 3 fichiers, sans agents spécialisés |
 | Plan         | Mental, sans approbation formelle                 |
 | Sous-tickets | Optionnels ; utiles si le périmètre s'élargit     |
+| Exécution    | Livraison déléguée en `scoped-edit`               |
 | Examen       | Non requis                                        |
 | Tests        | Adaptés au risque ; toute omission est annoncée   |
 
@@ -58,6 +60,7 @@ moment :
 | Analyse      | Exploration structurée de plusieurs zones                    |
 | Plan         | Détaillé fichier par fichier, **approbation obligatoire**    |
 | Sous-tickets | **Obligatoires** pour les unités de livraison majeures       |
+| Exécution    | Livraison déléguée en `multi-file-feature` une fois découpée |
 | Examen       | Pas de revue contradictoire complète                         |
 | Tests        | Unitaires, E2E et régression recommandés selon le changement |
 
@@ -73,8 +76,24 @@ Chaque délégation nomme un type de tâche (`exploration` pour l'analyse, `revi
 | Analyse      | Approfondie et multi-angle                                          |
 | Plan         | Complet, dépendances explicites, **approbation obligatoire**        |
 | Sous-tickets | **Obligatoires et granulaires**                                     |
+| Exécution    | Livraison déléguée en `multi-file-feature` une fois découpée        |
 | Examen       | **Revue contradictoire** sécurité, logique et performance           |
 | Tests        | **Obligatoires** : unitaires, E2E, régression et couverture adaptée |
+
+### Livraison déléguée
+
+Lorsque le développeur l'a permis (`sf agents delegation allow`, voir [Livraison déléguée des tickets](../cli/sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation)), la session ne
+construit pas le ticket : elle le confie, de In progress à la fin d'AI testing, à un agent en arrière-plan dans son propre worktree. Le type de tâche de cette livraison est dimensionné selon le
+travail, si bien qu'un petit ticket ne tourne pas sur le modèle de la session. Chaque profil le déclare dans `steps.execute.taskKind`, et l'agent le résout avec `sf agents route` :
+
+| Ticket                                            | Type de tâche de la livraison                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------------- |
+| 🐛 Bug, changement limité à deux fichiers au plus | `scoped-edit` (`steps.execute.scopedTaskKind`)                             |
+| 🐛 Tout autre bug                                 | `bug-fix`                                                                  |
+| 🟢 Low                                            | `scoped-edit`                                                              |
+| 🟡 Medium, 🔴 Complex                             | `multi-file-feature`, une fois découpé (la planification reste en session) |
+
+L'agent délégué s'arrête au rapport de tests vert avec la pull request en brouillon. Sur un ticket complexe, la session mène elle-même la revue contradictoire.
 
 ## Revue contradictoire
 

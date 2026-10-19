@@ -59,10 +59,12 @@ Tout enfant dont le statut de tableau n'est pas exactement `Done` bloque la fin 
 
 Les enfants incomplets ne bloquent pas les phases AI testing, Human testing ou In review du parent. Le contrôle devient bloquant uniquement lors du passage du parent à Done.
 
-## 8. Terminer le ticket actif avant d'en prendre un autre
+## 8. Un agent par ticket, jamais de bascule en cours de livraison
 
-Un ticket déjà en implémentation, test ou revue est mené jusqu'à sa fin. Seule une demande explicite du développeur autorise une pause. Cette règle évite de mélanger branches, plans de test et
-sous-tickets.
+Un ticket en implémentation, test ou revue reste avec son unique agent jusqu'à Done, retours de Human testing compris. Plusieurs tickets peuvent être en cours en même temps lorsque chacun a son agent
+et son worktree (délégation `allowed`, voir [`sf agents delegation`](../cli/sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation)) ; la session elle-même n'abandonne jamais la livraison
+d'un ticket pour en livrer un autre. Si la délégation est refusée ou indisponible, le ticket actif est mené jusqu'à Done avant d'en prendre un autre. Seule une demande explicite du développeur
+autorise une pause. Cette règle évite de mélanger branches, plans de test et sous-tickets.
 
 ## 9. Distinguer les deux validations humaines
 
