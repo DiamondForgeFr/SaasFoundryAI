@@ -45,6 +45,9 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 - [ ] **On failure** — document, fix, commit, push, restart from automated tests
 - [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel `review` delegations (security / logic / perf). Fix Critical/High findings. If any fix committed, restart
       from automated tests.
+- [ ] **Delegated ticket** — the agent that built it stops when the report is posted and every check is green, with the ticket still in AI Testing and the PR still a draft. It never merges, never runs
+      `ready-pr` on the Human Testing route and never moves the ticket itself past AI Testing. The session takes over: it runs the Examine of a `complex` ticket (the agent that built the work does not
+      review it) and hands the Critical/High findings back to that agent, then makes the transition below (SKILL.md → Delegated ticket delivery)
 - [ ] **Returning from review** — if human retesting is needed, use `workflow-cli.sh draft-pr <ticket>` before returning to Human Testing. `create-pr --draft` reuses a PR without changing its state.
 - [ ] **On green** — post test report summary (include examine findings if complex), then transition:
 
@@ -58,6 +61,7 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 
 - Moving to Human Testing with failing tests
 - Marking a PR ready on the Human Testing route: that click belongs to the developer
+- A delegated agent merging, or moving its ticket past AI Testing: the session makes that transition
 - Skipping test plan steps
 - Saying "it should work" — RUN the tests
 - Skipping examine for complex tickets

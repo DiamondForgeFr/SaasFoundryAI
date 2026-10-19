@@ -19,6 +19,8 @@ steps:
   subtasks:
     enabled: true
     mandatory: true # Always create subtasks
+  execute:
+    taskKind: multi-file-feature # delivery once decomposed: each subtask states its file set, expected result and check
   examine:
     enabled: false # No adversarial review
   tests:
@@ -54,6 +56,7 @@ aiInstructions: |
   **Execute Phase:**
   - Create subtasks for each major file change
   - A delegated subtask names its task kind, file set, expected result and check (SKILL.md → Delegation routing)
+  - Delegated, the delivery is a `multi-file-feature` delegation once the subtasks are decomposed; planning stays in the session (SKILL.md → Delegated ticket delivery)
   - Use TodoCreate to track progress
   - Implement file-by-file following the plan
   - Mark todos complete immediately after each task
