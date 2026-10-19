@@ -31,6 +31,7 @@ export const REGION_HEADINGS = [
   'Managed project capabilities',
   'File edits and shell calls',
   'Execution capabilities',
+  'Session orchestration and delegated ticket delivery',
   'Parallel implementation and Git worktrees'
 ]
 
