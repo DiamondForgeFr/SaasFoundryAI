@@ -1369,7 +1369,7 @@ cmd_inspect_srs_tickets() {
 
   while IFS= read -r issue; do
     [ -z "$issue" ] && continue
-    local number info status parent_url parent_number title body state url issue_type srs_links fr_ids
+    local number info status parent_url parent_number title body state state_reason url issue_type srs_links fr_ids
     number=$(printf '%s' "$issue" | jq -er '.number') || return 1
     info=$(query_project_item "$number") || {
       echo "Error: could not retrieve project status for SRS candidate #${number}." >&2
@@ -1379,6 +1379,8 @@ cmd_inspect_srs_tickets() {
     title=$(printf '%s' "$issue" | jq -er '.title') || return 1
     body=$(printf '%s' "$issue" | jq -er '.body // ""') || return 1
     state=$(printf '%s' "$issue" | jq -er '.state | ascii_upcase') || return 1
+    # "not_planned" is how a duplicate is closed: the spawner must not match it as the FR's ticket
+    state_reason=$(printf '%s' "$issue" | jq -r '(.state_reason // "") | ascii_downcase') || return 1
     url=$(printf '%s' "$issue" | jq -er '.html_url') || return 1
     issue_type=$(printf '%s' "$issue" | jq -cr '.type.name // null') || return 1
     parent_url=$(printf '%s' "$issue" | jq -r '.parent_issue_url // ""')
@@ -1394,11 +1396,12 @@ cmd_inspect_srs_tickets() {
       | unique
     ') || return 1
     result=$(jq -cn \
-      --argjson current "$result" --arg number "$number" --arg title "$title" --arg state "$state" \
+      --argjson current "$result" --arg number "$number" --arg title "$title" --arg state "$state" --arg reason "$state_reason" \
       --arg status "$status" --arg parent "$parent_number" --arg type "${issue_type:-}" --arg url "$url" \
       --argjson links "$srs_links" --argjson ids "$fr_ids" '
         $current + [{
           number:$number,title:$title,state:$state,
+          stateReason:(if $reason == "" then null else $reason end),
           boardStatus:(if $status == "" then null else $status end),
           parentNumber:(if $parent == "" then null else $parent end),
           issueType:(if $type == "" or $type == "null" then null else $type end),

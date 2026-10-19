@@ -214,6 +214,50 @@ describe('matching existing tickets without a plan', () => {
     expect(matchOf('FR-MAH-009', [aggregate, ticket()]).ticket?.number).toBe('100')
   })
 
+  // The duplicates of #1037 were closed as not planned, and kept the FR page link they were spawned with
+  describe('a ticket closed as not planned', () => {
+    const duplicate = ticket({ number: '200', state: 'CLOSED', stateReason: 'not_planned', parentNumber: null })
+    const kept = ticket({ number: '100', state: 'OPEN', stateReason: null, boardStatus: 'Backlog' })
+
+    it('is left out of the match, so it no longer makes the FR ambiguous', () => {
+      const match = matchOf('FR-MAH-009', [kept, duplicate])
+
+      expect(match.blocked).toBeUndefined()
+      expect(match.ticket?.number).toBe('100')
+      expect(match.ignored.map((item) => item.number)).toEqual(['200'])
+    })
+
+    it('leaves the FR to be created when it is the only ticket carrying the page', () => {
+      const match = matchOf('FR-MAH-009', [duplicate])
+
+      expect(match.ticket).toBeUndefined()
+      expect(match.blocked).toBeUndefined()
+      expect(match.ignored.map((item) => item.number)).toEqual(['200'])
+    })
+
+    it('is not mistaken for an id-only collision either', () => {
+      const idOnly = ticket({ number: '201', state: 'CLOSED', stateReason: 'not_planned', parentNumber: null, srsLinks: ['https://example.test/a-different-page'] })
+      expect(matchOf('FR-MAH-009', [idOnly]).blocked).toBeUndefined()
+    })
+
+    it('does not hide a ticket closed as completed, nor one that was reopened', () => {
+      expect(matchOf('FR-MAH-009', [kept, ticket({ number: '200', stateReason: 'completed' })]).blocked).toMatch(/ambiguous.*#100, #200/)
+      expect(matchOf('FR-MAH-009', [kept, ticket({ number: '200', state: 'OPEN', stateReason: 'not_planned' })]).blocked).toMatch(/ambiguous.*#100, #200/)
+    })
+
+    it('counts a ticket from a CLI that does not report the reason as it always did', () => {
+      expect(matchOf('FR-MAH-009', [kept, ticket({ number: '200' })]).blocked).toMatch(/ambiguous.*#100, #200/)
+    })
+
+    it('is left out with a reconciliation plan too', () => {
+      const result = reconcileRequirements(requirements, plan(), [kept, duplicate], '645')
+
+      expect(result[0]).toMatchObject({ action: 'reuse', ticket: { number: '100' } })
+      expect(result[0].ignored.map((item) => item.number)).toEqual(['200'])
+      expect(result[1].ignored).toEqual([])
+    })
+  })
+
   it('reports every blocked FR instead of stopping at the first', () => {
     const second = ticket({ number: '200', title: 'FR-MAH-010: Provision workflows', frIds: ['FR-MAH-010'], srsLinks: [requirements[1].frPageUrl], parentNumber: '999' })
     const blocked = matchExistingTickets(requirements, [ticket({ parentNumber: '998' }), second], '645').filter((item) => item.blocked)

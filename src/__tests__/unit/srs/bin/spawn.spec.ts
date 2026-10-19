@@ -705,6 +705,68 @@ describe('runSpawn', () => {
       expect(io.createSubtask).not.toHaveBeenCalled()
     })
 
+    // Duplicates are closed as not planned and keep the FR page link: they must not make it ambiguous
+    describe('a duplicate closed as not planned', () => {
+      const duplicate = existing({ number: '88', state: 'CLOSED', stateReason: 'not_planned', boardStatus: 'Done', parentNumber: null, url: 'https://github.test/issues/88' })
+
+      it('is ignored, and its replacement is reused', async () => {
+        const io = makeIO({ inspectTickets: jest.fn(() => [openChild, duplicate, closedChild]) })
+
+        await expect(runSpawn(baseOptions(), io)).resolves.toBe(0)
+
+        expect(io.createSubtask.mock.calls.map((call) => call[1])).toEqual(['FR-AUTH-003: New flow'])
+        // Neither linked under the parent nor put on the board: it is not part of the version
+        expect(io.linkSubtask).not.toHaveBeenCalled()
+        expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual(['42', '77', '78', '100'])
+        expect(io.stdoutBuffer.join('')).toContain('created 1, reused 2, skipped 0')
+      })
+
+      it('is named in the preview, next to the FR it duplicates', async () => {
+        const io = makeIO({ inspectTickets: jest.fn(() => [openChild, duplicate]) })
+
+        await expect(runSpawn(baseOptions({ dryRun: true }), io)).resolves.toBe(0)
+
+        const out = io.stdoutBuffer.join('')
+        expect(out).toContain('    FR-AUTH-001: reuse #77; ignored #88 (closed as not planned)\n')
+        expect(out).toContain('    FR-AUTH-002: create\n')
+      })
+
+      it('is ignored under a reconciliation plan as well', async () => {
+        const reconciliationPlanPath = writeReconciliationPlan([
+          { frId: 'FR-AUTH-001', classification: 'partial' },
+          { frId: 'FR-AUTH-002', classification: 'missing' },
+          { frId: 'FR-AUTH-003', classification: 'missing' }
+        ])
+        const io = makeIO({ inspectTickets: jest.fn(() => [openChild, duplicate]) })
+
+        await expect(runSpawn(baseOptions({ reconciliationPlanPath, dryRun: true }), io)).resolves.toBe(0)
+
+        expect(io.stdoutBuffer.join('')).toContain('    FR-AUTH-001: partial → reuse #77; ignored #88 (closed as not planned)\n')
+      })
+
+      it('is not taken for the ticket of an uncertain create when recovering', async () => {
+        const lost = existing({
+          number: '90',
+          title: 'FR-AUTH-003: New flow',
+          state: 'CLOSED',
+          stateReason: 'not_planned',
+          parentNumber: null,
+          srsLinks: ['https://example.test/fr3'],
+          frIds: ['FR-AUTH-003']
+        })
+        const io = makeIO({
+          inspectTickets: jest.fn().mockReturnValueOnce([openChild, closedChild]).mockReturnValueOnce([lost]),
+          createSubtask: jest.fn(() => {
+            throw new Error('response lost')
+          })
+        })
+
+        await expect(runSpawn(baseOptions(), io)).resolves.toBe(8)
+
+        expect(io.linkSubtask).not.toHaveBeenCalled()
+      })
+    })
+
     it('recovers an orphan created before an uncertain create response', async () => {
       const orphan = existing({ number: '80', title: 'FR-AUTH-003: New flow', parentNumber: null, srsLinks: ['https://example.test/fr3'], frIds: ['FR-AUTH-003'] })
       const inspectTickets = jest.fn().mockReturnValueOnce([openChild, closedChild]).mockReturnValueOnce([orphan])

@@ -9,7 +9,7 @@ const execFileP = promisify(execFile)
 const REPO_ROOT = path.resolve(__dirname, '../../../..')
 const CLI = path.resolve(REPO_ROOT, '.claude/skills/sf-tool-github-projects/github-projects-cli.sh')
 
-async function sandbox() {
+async function sandbox(extraIssues: object[] = []) {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-gh-srs-inspection-'))
   const bin = path.join(dir, 'bin')
   await mkdir(bin)
@@ -20,6 +20,7 @@ async function sandbox() {
       title: 'FR-MAH-001: Existing',
       body: 'FR page: https://app.notion.com/p/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       state: 'closed',
+      state_reason: 'completed',
       html_url: 'https://github.test/issues/10',
       parent_issue_url: 'https://api.github.test/issues/42',
       type: { name: 'sf-story' },
@@ -30,12 +31,14 @@ async function sandbox() {
       title: 'Renamed requirement',
       body: 'FR-MAH-002\nFR page: https://app.notion.com/p/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?source=copy',
       state: 'open',
+      state_reason: null,
       html_url: 'https://github.test/issues/11',
       parent_issue_url: null,
       type: { name: 'sf-story' },
       labels: []
     },
-    { number: 12, title: 'Unrelated', body: '', state: 'open', html_url: 'https://github.test/issues/12', parent_issue_url: null, type: null, labels: [] }
+    { number: 12, title: 'Unrelated', body: '', state: 'open', html_url: 'https://github.test/issues/12', parent_issue_url: null, type: null, labels: [] },
+    ...extraIssues
   ]
   const gh = `#!/bin/bash
 if [ "$1" = repo ]; then printf 'Fake/repo'; exit 0; fi
@@ -104,6 +107,36 @@ describe('github-projects CLI — SRS ticket inspection and recovery', () => {
         expect.objectContaining({ number: '11', state: 'OPEN', boardStatus: 'Backlog', parentNumber: null, frIds: ['FR-MAH-002'] })
       ])
       expect(JSON.parse(stdout)[0]).not.toHaveProperty('body')
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  // #1037 — a duplicate closed as not planned keeps its FR page link; the spawner has to be able to tell
+  it('reports why each candidate was closed, so a duplicate closed as not planned can be told apart', async () => {
+    const duplicate = {
+      number: 13,
+      title: 'FR-MAH-002: Renamed requirement',
+      body: 'FR page: https://app.notion.com/p/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      state: 'closed',
+      state_reason: 'not_planned',
+      html_url: 'https://github.test/issues/13',
+      parent_issue_url: null,
+      type: { name: 'sf-story' },
+      labels: []
+    }
+    const s = await sandbox([duplicate])
+    try {
+      const { stdout } = await execFileP(
+        '/bin/bash',
+        [CLI, 'inspect-srs-tickets', '42', '--fr', 'FR-MAH-001=https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '--fr', 'FR-MAH-002=https://www.notion.so/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+        { cwd: s.dir, env: s.env }
+      )
+      expect(JSON.parse(stdout).map((ticket: { number: string; state: string; stateReason: string | null }) => [ticket.number, ticket.state, ticket.stateReason])).toEqual([
+        ['10', 'CLOSED', 'completed'],
+        ['11', 'OPEN', null],
+        ['13', 'CLOSED', 'not_planned']
+      ])
     } finally {
       await s.cleanup()
     }
