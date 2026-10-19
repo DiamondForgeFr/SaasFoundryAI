@@ -34,6 +34,11 @@ export interface ExistingSrsTicket {
   title: string
   body?: string
   state: 'OPEN' | 'CLOSED'
+  /**
+   * Why GitHub closed it: `completed`, `not_planned`, or `reopened`. Absent from tickets
+   * inspected by a CLI that predates the field, which then all count as they always did.
+   */
+  stateReason?: string | null
   boardStatus: string | null
   parentNumber: string | null
   issueType: string | null
@@ -49,6 +54,8 @@ export interface ReconciliationResult {
   decision: ReconciliationDecision
   action: ReconciliationAction
   ticket?: ExistingSrsTicket
+  /** Tickets closed as not planned that carry this FR's page: seen, and left out of the match. */
+  ignored: ExistingSrsTicket[]
 }
 
 export class ReconciliationError extends Error {
@@ -166,16 +173,35 @@ function matchesCanonicalPage(ticket: ExistingSrsTicket, requirement: Reconcilia
   return ticket.srsLinks.some((link) => canonicalSrsIdentity(link) === expected)
 }
 
-function isFrDeliveryTicket(ticket: ExistingSrsTicket): boolean {
+/**
+ * Closed as not planned is how a duplicate is closed. Its body keeps the FR page link it was
+ * spawned with, so left in the match it makes the FR ambiguous with the ticket that replaced it
+ * (FR-AEX-007 matched #929 and #1028). A ticket closed as completed still counts: that FR was
+ * delivered.
+ */
+export function isClosedAsNotPlanned(ticket: ExistingSrsTicket): boolean {
+  return ticket.state === 'CLOSED' && ticket.stateReason?.toLowerCase() === 'not_planned'
+}
+
+function isAggregateEpic(ticket: ExistingSrsTicket): boolean {
   // Aggregate Epics commonly catalogue every canonical FR link in their body.
   // They are evidence containers, not alternative implementations of each FR.
   // Treating those links as canonical Story matches makes every correctly-linked
   // Epic ambiguous with its own native children.
-  return ticket.issueType?.toLowerCase() !== 'sf-epic'
+  return ticket.issueType?.toLowerCase() === 'sf-epic'
+}
+
+function isFrDeliveryTicket(ticket: ExistingSrsTicket): boolean {
+  return !isAggregateEpic(ticket) && !isClosedAsNotPlanned(ticket)
 }
 
 function canonicalMatches(requirement: ReconciliationRequirement, tickets: ExistingSrsTicket[]): ExistingSrsTicket[] {
   return tickets.filter(isFrDeliveryTicket).filter((ticket) => matchesCanonicalPage(ticket, requirement))
+}
+
+/** The tickets closed as not planned that carry this FR's page, so a preview can say it left them out. */
+function ignoredMatches(requirement: ReconciliationRequirement, tickets: ExistingSrsTicket[]): ExistingSrsTicket[] {
+  return tickets.filter((ticket) => !isAggregateEpic(ticket) && isClosedAsNotPlanned(ticket) && matchesCanonicalPage(ticket, requirement))
 }
 
 function ambiguousPageReason(frId: string, exact: ExistingSrsTicket[]): string | undefined {
@@ -206,6 +232,8 @@ export interface ExistingTicketMatch {
   ticket?: ExistingSrsTicket
   /** Why spawn must stop instead of choosing: several candidates, or a ticket owned elsewhere. */
   blocked?: string
+  /** Tickets closed as not planned that carry this FR's page: seen, and left out of the match. */
+  ignored: ExistingSrsTicket[]
 }
 
 /**
@@ -220,9 +248,10 @@ export function matchExistingTickets(requirements: ReconciliationRequirement[], 
   return requirements.map((requirement) => {
     const frId = requirement.frId.toUpperCase()
     const exact = canonicalMatches(requirement, tickets)
+    const ignored = ignoredMatches(requirement, tickets)
     const blocked = ambiguousPageReason(frId, exact) ?? unsafeReuseReason(requirement, frId, tickets, exact, parentTicket)
-    if (blocked) return { requirement, blocked }
-    return { requirement, ticket: exact[0] }
+    if (blocked) return { requirement, blocked, ignored }
+    return { requirement, ticket: exact[0], ignored }
   })
 }
 
@@ -250,15 +279,16 @@ export function reconcileRequirements(requirements: ReconciliationRequirement[],
     const ambiguous = ambiguousPageReason(frId, exact)
     if (ambiguous) throw new ReconciliationError(ambiguous)
     const ticket = exact[0]
+    const ignored = ignoredMatches(requirement, tickets)
     if (decision.classification === 'delivered' || decision.classification === 'superseded') {
       // No issue will be created or reused for skipped scope. Historical audit
       // tickets may mention the FR id without owning its canonical page; those
       // references are evidence, not a reparenting candidate.
-      return { requirement, decision, action: 'skip', ticket }
+      return { requirement, decision, action: 'skip', ticket, ignored }
     }
     const unsafe = unsafeReuseReason(requirement, frId, tickets, exact, parentTicket)
     if (unsafe) throw new ReconciliationError(unsafe)
-    if (ticket) return { requirement, decision, action: 'reuse', ticket }
-    return { requirement, decision, action: 'create' }
+    if (ticket) return { requirement, decision, action: 'reuse', ticket, ignored }
+    return { requirement, decision, action: 'create', ignored }
   })
 }

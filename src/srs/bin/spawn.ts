@@ -10,6 +10,7 @@ import { EpicPageContent, FrPageContent, parseEpicPage, parseFrPage } from '../s
 import {
   canonicalSrsIdentity,
   ExistingSrsTicket,
+  isClosedAsNotPlanned,
   loadReconciliationPlan,
   matchExistingTickets,
   reconcileRequirements,
@@ -309,6 +310,12 @@ function describeTicket(ticket: ExistingSrsTicket | undefined): string {
   return ` #${ticket.number}${ticket.state === 'CLOSED' ? ' (closed)' : ''}`
 }
 
+/** `; ignored #1028, #1029 (closed as not planned)`: duplicates the match left out, said rather than silent. */
+function describeIgnored(ignored: ExistingSrsTicket[]): string {
+  if (ignored.length === 0) return ''
+  return `; ignored ${ignored.map((ticket) => `#${ticket.number}`).join(', ')} (closed as not planned)`
+}
+
 /**
  * The open version Epic a previous spawn created for this holder: issue type sf-epic, the
  * `<feature> - <version>` title. Two of them is an ambiguity spawn will not resolve.
@@ -476,7 +483,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
         frId: result.requirement.frId,
         action: result.action,
         ticket: result.ticket,
-        summary: `${result.decision.classification} → ${result.action}${describeTicket(result.ticket)}`
+        summary: `${result.decision.classification} → ${result.action}${describeTicket(result.ticket)}${describeIgnored(result.ignored)}`
       }))
     } else {
       decisionsHeading = 'existing tickets'
@@ -485,7 +492,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
         action: match.ticket ? 'reuse' : 'create',
         ticket: match.ticket,
         blocked: match.blocked,
-        summary: match.blocked ? `blocked — ${match.blocked}` : match.ticket ? `reuse${describeTicket(match.ticket)}` : 'create'
+        summary: `${match.blocked ? `blocked — ${match.blocked}` : match.ticket ? `reuse${describeTicket(match.ticket)}` : 'create'}${describeIgnored(match.ignored)}`
       }))
     }
   } catch (error) {
@@ -619,7 +626,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
         const requirements = planned.map((item) => ({ frId: item.frId, title: item.title, frPageUrl: item.frPageUrl }))
         const candidates = io.inspectTickets(parentTicket, requirements)
         const expected = canonicalSrsIdentity(p.frPageUrl)
-        const recovered = candidates.filter((ticket) => ticket.srsLinks.some((link) => canonicalSrsIdentity(link) === expected))
+        const recovered = candidates.filter((ticket) => !isClosedAsNotPlanned(ticket) && ticket.srsLinks.some((link) => canonicalSrsIdentity(link) === expected))
         if (recovered.length === 1 && (!recovered[0].parentNumber || recovered[0].parentNumber === parentTicket)) {
           if (!recovered[0].parentNumber) io.linkSubtask(parentTicket, recovered[0].number)
           io.stdout(`  ↻ ${p.frId} → #${recovered[0].number} recovered after an uncertain create response\n`)
