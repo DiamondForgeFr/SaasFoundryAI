@@ -65,13 +65,28 @@ Native delegation must be available and authorized in the current host. Disclose
 
 ## Team usage
 
-A developer can alternate agents on one completed piece of work without changing the project's supported agents. Before implementation, the agent identifies independent writing streams and proposes
-parallel worktrees only when concurrent delivery is useful. Read-only exploration and review may run in parallel in one checkout. Sequential dependencies, overlapping files or unclear ownership use
-one feature worktree and sequential execution.
+A developer can alternate agents on one completed piece of work without changing the project's supported agents. Before implementation, the agent identifies independent writing streams and opens
+parallel worktrees when the recorded delegation (`sf agents delegation status`) is `allowed` or the developer asks for them, and only when concurrent delivery is useful. Read-only exploration and
+review may run in parallel in one checkout. Sequential dependencies, overlapping files or unclear ownership use one feature worktree and sequential execution.
 
 Read `workflow.workingBranch` from `.saasfoundry.json` and keep the primary checkout on that configured branch. Each parallel writer receives one ticket, branch and worktree path, explicit owned files
-and a dependency boundary, and starts from a synchronized configured working branch. The user retains control when parallel implementation was not already authorized. Share the board and SRS, and
-hand off the ticket, branch, completed checks and remaining work explicitly.
+and a dependency boundary, and starts from a synchronized configured working branch. The recorded delegation is the developer's authorization; without it, or when the current request says otherwise,
+the agent proposes this shape and waits for the answer. Share the board and SRS, and hand off the ticket, branch, completed checks and remaining work explicitly.
+
+## Delegated ticket delivery
+
+The conversational session stays the developer's interlocutor: it drafts the SRS, creates and triages tickets, plans, coordinates and reviews. Whether it also builds the tickets is the developer's
+decision, asked once per project and recorded in the shared manifest (`modules.harness.delegation`) by `sf agents delegation allow` or `decline`; `sf agents delegation status` reads it, and an agent
+never edits the manifest by hand.
+
+- Not asked yet: the agent asks once, then records the answer.
+- Allowed: each ticket, from In progress to the end of AI testing, runs in a background agent in its own worktree, on the tier `sf agents route` names for the task kind of the work (`scoped-edit` for a
+  scoped bug or a low ticket, `bug-fix` for another bug, `multi-file-feature` for a decomposed medium or complex ticket). The session never switches to coding a ticket mid-delivery, and a request that
+  arrives meanwhile becomes a ticket of its own, handed to its own agent.
+- Declined, or a host that cannot delegate or run in the background: the session builds the tickets one after the other and says so.
+
+A delegated agent never merges and, on a ticket that goes through Human testing, never runs `ready-pr`. A defect found in Human testing, or the AI work the validation leaves, goes back to the same
+ticket's agent in the same worktree.
 
 After a stream merges, return to the primary checkout, synchronize the configured working branch and verify the merge before removing the completed, unused worktree and local branch. Preserve
 user-created worktrees, branches, stashes and uncommitted changes. If authorization, Git support, synchronization or clean separation is unavailable, state the constraint and use one worktree or

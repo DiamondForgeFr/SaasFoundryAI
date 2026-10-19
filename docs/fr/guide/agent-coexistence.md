@@ -149,12 +149,19 @@ chaque checkout peut ainsi s’initialiser indépendamment sans confondre le dé
 Hors de cet exercice, un travail séquentiel peut partager un checkout après l’arrêt du premier hôte et un transfert précis. Le suivant revérifie manifeste, ticket, SRS et diff plutôt que de supposer
 le transfert du contexte de session.
 
-Avant l’implémentation, découpez la demande en flux d’écriture et dépendances. Ne proposez plusieurs worktrees que si les flux sont indépendants et que leur exécution concurrente apporte un bénéfice
-réel. Exploration et revue en lecture seule peuvent être parallèles dans un checkout. Des dépendances séquentielles, fichiers communs ou responsabilités floues imposent un seul worktree de feature.
+Avant l’implémentation, découpez la demande en flux d’écriture et dépendances. Ouvrez plusieurs worktrees lorsque la délégation enregistrée du projet (`sf agents delegation status`) vaut `allowed` ou
+que le développeur le demande, et seulement si les flux sont indépendants et que leur exécution concurrente apporte un bénéfice réel. Exploration et revue en lecture seule peuvent être parallèles dans
+un checkout. Des dépendances séquentielles, fichiers communs ou responsabilités floues imposent un seul worktree de feature.
 
 Lisez `workflow.workingBranch` dans `.saasfoundry.json` sans inventer de branche conventionnelle. Gardez le checkout principal sur cette branche. Chaque rédacteur parallèle reçoit un ticket réel, une
 branche, un worktree, un ensemble de fichiers possédés et une frontière de dépendance explicites. Partez d’une branche de travail synchronisée, restez dans la responsabilité attribuée et préservez les
-changements sans rapport. Si l’utilisateur n’a pas déjà autorisé l’implémentation parallèle, présentez-lui cette organisation avant de démarrer les rédacteurs.
+changements sans rapport. La délégation enregistrée vaut autorisation du développeur : sans elle, ou quand la demande en cours dit le contraire, présentez-lui cette organisation avant de démarrer les
+rédacteurs.
+
+Une fois que le développeur l’a permis, la session conversationnelle reste son interlocutrice (SRS, tickets, coordination, revue) et confie chaque ticket, de In progress à la fin d’AI testing, à un
+agent en arrière-plan dans son propre worktree, au lieu de le construire elle-même. La réponse est demandée une seule fois et enregistrée avec `sf agents delegation allow` ou `decline` ; un projet qui
+a refusé, ou un hôte qui ne sait pas déléguer, garde le chemin séquentiel et le dit. L’agent délégué ne fusionne jamais et ne rend jamais prête une pull request de Human testing ; un défaut trouvé en
+Human testing retourne au même agent du ticket, dans le même worktree. Voir [Livraison déléguée des tickets](../cli/sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation).
 
 Après fusion d’un flux, revenez au checkout principal, synchronisez la branche configurée et vérifiez la fusion. Ne supprimez le worktree et la branche locale qu’après cette vérification et lorsqu’ils
 ne sont plus utilisés. Préservez les worktrees, branches, stashes et changements non committés de l’utilisateur. Si Git, l’autorisation, la synchronisation ou la séparation propre font défaut, exposez

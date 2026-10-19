@@ -42,6 +42,9 @@ The agent reads branch and commit policy from the manifest, creates native GitHu
 - A `nature:bundled-pr` child contributes one atomic commit to its delivery parent's branch.
 - An Epic is an aggregate: it owns no branch and no pull request.
 
+Who builds the ticket depends on the project's recorded delegation (`sf agents delegation status`). When the developer allowed it, the conversational session stays their interlocutor and hands the
+ticket, from In progress to the end of AI testing, to one background agent in its own worktree; otherwise the session builds it itself, one ticket at a time, and says so.
+
 Before AI testing, the implementation must compile, lint, pass the relevant tests, be committed and be pushed. Testing unpushed code is forbidden because nobody else can reproduce or inspect it.
 
 ## 4. AI testing — build the evidence
@@ -51,6 +54,9 @@ The agent publishes a test plan, runs the configured automated and manual scenar
 The agent opens the **draft pull request** during AI testing at the latest, or reuses the one it opened at the first push. The draft contains the diff, test plan and current evidence but does not
 start ready-PR CI yet. This gives Human testing a stable artifact to validate.
 
+A delegated agent stops at the green report, with the ticket still in AI testing and the pull request still a draft. It never merges. The session takes over from there: it runs the adversarial review
+of a complex ticket, then makes the transition the route names.
+
 ## 5. Human testing — feature testing
 
 Human testing answers: **does the feature behave correctly for its users?**
@@ -59,7 +65,10 @@ The developer uses the draft PR, test instructions and a real runtime to exercis
 retest.
 
 After approval, required non-regression tests are committed and pushed. The developer then marks the same pull request ready for review: on this route, leaving draft is the developer's call, never the
-agent's. Without Human testing (`nature:internal`, or the Solo preset), the agent marks the PR ready itself at the end of AI testing.
+agent's. Without Human testing (`nature:internal`, or the Solo preset), the agent marks the PR ready itself at the end of AI testing; for a delegated ticket, that is the session.
+
+The developer reports to the session, which stays their interlocutor. When delegation is allowed, the session does not code the fix: a defect, or the AI work the validation leaves (non-regression
+tests, follow-ups), goes back to the ticket's own agent in the same worktree, which returns the ticket to AI testing.
 
 ## 6. In review — code review
 

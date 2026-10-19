@@ -58,6 +58,9 @@ L'agent attend que le développeur lui attribue explicitement le ticket. `Ready`
 6. Fermer chaque enfant dès que sa livraison est vérifiée.
 7. Committer et pousser avant de demander `AI testing`.
 
+Qui construit le ticket dépend de la délégation enregistrée du projet (`sf agents delegation status`). Lorsque le développeur l'a permis, la session conversationnelle reste son interlocutrice et
+confie le ticket, de In progress à la fin d'AI testing, à un agent en arrière-plan dans son propre worktree ; sinon la session le construit elle-même, un ticket à la fois, et le dit.
+
 **Sortie :** implémentation poussée, commits distants et code prêt à valider.
 
 ## 4. AI testing
@@ -68,6 +71,9 @@ L'agent attend que le développeur lui attribue explicitement le ticket. `Ready`
 2. Exécuter build, lint, vérification des types, tests unitaires et la voie de validation prévue par le dépôt.
 3. Exécuter manuellement chaque scénario du plan et documenter le résultat.
 4. En cas de défaut : corriger, committer, pousser et recommencer la validation.
+
+Un agent délégué s'arrête au rapport vert, avec le ticket toujours en AI testing et la pull request toujours en brouillon. Il ne fusionne jamais. La session reprend la main : elle mène la revue
+contradictoire d'un ticket complexe, puis effectue la transition que le parcours prévoit.
 
 **Sortie :** contrôles verts, scénarios validés et aucun blocage ouvert.
 
@@ -81,8 +87,12 @@ stable.
 3. Après validation, les tests de non-régression nécessaires sont ajoutés et vérifiés.
 4. Le développeur rend alors la PR prête (**Ready for review**) : sur ce parcours, sortir du brouillon lui revient, jamais à l'agent.
 
+Le développeur s'adresse à la session, qui reste son interlocutrice. Lorsque la délégation est permise, la session ne code pas la correction : un défaut, ou le travail d'IA que la validation laisse
+(tests de non-régression, suites), retourne à l'agent propre au ticket, dans le même worktree, qui remet le ticket en `AI testing`.
+
 Les tickets `nature:internal` peuvent ne pas exiger cette phase selon les règles configurées. Le preset Solo n'a pas de statut `Human testing` distinct : sa validation humaine a lieu pendant
-`In review`. Sans `Human testing`, l'agent ouvre la PR en brouillon pendant `AI testing` et la rend prête lui-même avec `ready-pr` à la fin d'`AI testing`.
+`In review`. Sans `Human testing`, l'agent ouvre la PR en brouillon pendant `AI testing` et la rend prête lui-même avec `ready-pr` à la fin d'`AI testing` ; pour un ticket délégué, c'est la session
+qui le fait.
 
 ## 6. In review — revue de code
 
