@@ -71,6 +71,13 @@ left without one, which the workflow refuses to move out of Backlog.
 Before creating anything, `spawn` searches the repository for tickets that already carry each FR, three FRs per GitHub search. GitHub allows 30 searches a minute; when a search hits that limit,
 `spawn` waits 60 seconds and retries, up to three times. Set `SF_SEARCH_RATE_LIMIT_WAIT` (seconds) to change the wait.
 
+`spawn` reuses the ticket that already carries an FR's canonical page, with or without `--reconciliation-plan`. A closed ticket is reused as it is and never reopened, a ticket closed as not planned
+(how a duplicate is closed) is ignored, and an FR with no ticket is created. Two candidates for one FR, or a candidate that belongs to another parent, stop the run with exit `10` before anything is
+written. Without `--ticket`, the open version Epic that a previous run created is adopted instead of created again.
+
+`--dry-run` prints one line per FR: `reuse #N`, `reuse #N (closed)`, `create`, or `blocked — <reason>` (a blocked FR makes the dry run exit `10` too). A duplicate that already exists is detached from
+its Epic with `workflow-cli.sh unlink-subtask <epic> <duplicate>`; close it as not planned and every later `spawn` ignores it.
+
 ## Common options
 
 | Flag                | Description           | Default             |

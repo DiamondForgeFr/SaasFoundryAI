@@ -72,6 +72,13 @@ résumé liste les Stories restées sans complexité, que le workflow refuse de 
 Avant de créer quoi que ce soit, `spawn` cherche dans le dépôt les tickets qui portent déjà chaque FR, trois FR par recherche GitHub. GitHub autorise 30 recherches par minute ; quand une recherche
 atteint cette limite, `spawn` attend 60 secondes puis réessaie, jusqu’à trois fois. La variable `SF_SEARCH_RATE_LIMIT_WAIT` (en secondes) change cette attente.
 
+`spawn` réutilise le ticket qui porte déjà la page canonique d’une FR, avec ou sans `--reconciliation-plan`. Un ticket fermé est réutilisé tel quel et jamais rouvert, un ticket fermé comme « not
+planned » (la façon de fermer un doublon) est ignoré, et une FR sans ticket est créée. Deux candidats pour une même FR, ou un candidat qui appartient à un autre parent, arrêtent l’exécution avec le
+code `10` avant que quoi que ce soit ne soit écrit. Sans `--ticket`, l’Epic de version ouvert qu’une exécution précédente a créé est adopté au lieu d’être recréé.
+
+`--dry-run` affiche une ligne par FR : `reuse #N`, `reuse #N (closed)`, `create`, ou `blocked — <raison>` (une FR bloquée fait aussi sortir le dry run avec le code `10`). Un doublon déjà créé se
+détache de son Epic avec `workflow-cli.sh unlink-subtask <epic> <doublon>` ; fermez-le comme « not planned » et chaque `spawn` suivant l’ignore.
+
 ## Options communes
 
 | Option              | Description                  | Valeur par défaut   |
