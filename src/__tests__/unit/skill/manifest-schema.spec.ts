@@ -3,6 +3,7 @@ import { join } from 'path'
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 
+import { TICKET_DELIVERY_DECISIONS } from '../../../harness/delegation'
 import { ROUTING_EFFORTS, ROUTING_PROVIDERS, TASK_KINDS } from '../../../harness/routing-grid'
 
 // Regression guard for #286: the JSON Schema is the single source of truth
@@ -263,5 +264,36 @@ describe('saasfoundry-manifest.schema.json — harness routing overrides (#930)'
     expect(Object.keys(routing.properties.kinds.properties)).toEqual([...TASK_KINDS])
     expect(Object.keys(routing.properties.tiers.additionalProperties.properties)).toEqual([...ROUTING_PROVIDERS])
     expect(schema.definitions.routingCandidate.properties.effort.enum).toEqual([...ROUTING_EFFORTS])
+  })
+})
+
+// An optional field of the harness block: a manifest written before it exists keeps validating, so
+// it ships without a manifest migration (migration-framework.md, "When NOT to add a migration").
+describe('saasfoundry-manifest.schema.json — ticket delivery delegation consent (#1026)', () => {
+  const harness = (delegation: unknown) => ({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code'], delegation } } })
+
+  it('accepts a manifest that never recorded a decision — the shape every existing project is in', () => {
+    expect(validate({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code'] } } })).toBe(true)
+  })
+
+  it.each(TICKET_DELIVERY_DECISIONS)('accepts the %s decision', (ticketDelivery) => {
+    expect(validate(harness({ ticketDelivery, decidedAt: '2026-10-19T10:00:00.000Z' }))).toBe(true)
+  })
+
+  it.each([
+    ['an unknown decision', { ticketDelivery: 'maybe', decidedAt: '2026-10-19T10:00:00.000Z' }],
+    ['the command verb instead of the decision', { ticketDelivery: 'allow', decidedAt: '2026-10-19T10:00:00.000Z' }],
+    ['a decision without its date', { ticketDelivery: 'allowed' }],
+    ['a date that is not a date-time', { ticketDelivery: 'allowed', decidedAt: 'yesterday' }],
+    ['an unknown key', { ticketDelivery: 'allowed', decidedAt: '2026-10-19T10:00:00.000Z', scope: 'local' }],
+    ['a bare string', 'allowed']
+  ])('rejects %s', (_, delegation) => {
+    expect(validate(harness(delegation))).toBe(false)
+  })
+
+  it('names exactly the decisions the command records', () => {
+    const delegation = schema.properties.modules.properties.harness.properties.delegation
+    expect(delegation.properties.ticketDelivery.enum).toEqual([...TICKET_DELIVERY_DECISIONS])
+    expect(delegation.required).toEqual(['ticketDelivery', 'decidedAt'])
   })
 })

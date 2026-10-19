@@ -3,7 +3,8 @@ import { join } from 'path'
 
 import { Command } from 'commander'
 import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
-import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../harness/agent-support'
+import { enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
+import type { DelegationState } from '../harness/delegation'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
 import { getRoutingGrid, isRoutingProvider, parseTaskKind, resolveRoute, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
@@ -60,6 +61,30 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
     if (route.excluded)
       process.stderr.write(`Warning: ${route.provider} ${route.candidate.model} (${route.candidate.effort}) is on the exclusion list for ${route.kind}: public scores collapse there.\n`)
   }
+}
+
+const DELEGATION_ACTIONS = ['allow', 'decline', 'status']
+
+function describeDelegation(state: DelegationState): string {
+  if (state.ticketDelivery === 'not-asked')
+    return 'Ticket delivery delegation: not asked yet. Ask the developer once, then record the answer with sf agents delegation allow or sf agents delegation decline.'
+  const decided = `Ticket delivery delegation: ${state.ticketDelivery} (decided ${state.decidedAt}).`
+  return state.ticketDelivery === 'allowed'
+    ? `${decided} The session hands each ticket to a background agent in its own worktree.`
+    : `${decided} The session delivers tickets itself, one after the other.`
+}
+
+/** Read or record the consent to delegate ticket delivery (#1026): `modules.harness.delegation`, shared through the manifest. */
+async function delegationConsent(action: string | undefined, options: AgentCommandOptions): Promise<void> {
+  if (action === undefined || !DELEGATION_ACTIONS.includes(action)) throw new Error(`Choose what to do with the delegation consent: sf agents delegation <${DELEGATION_ACTIONS.join('|')}>.`)
+  const result = action === 'status' ? await readDelegation(process.cwd()) : await recordDelegation({ targetPath: process.cwd(), ticketDelivery: action === 'allow' ? 'allowed' : 'declined' })
+  if (options.json) {
+    process.stdout.write(JSON.stringify({ delegationVersion: 1, ...result }, null, 2) + '\n')
+    return
+  }
+  process.stdout.write(describeDelegation(result) + '\n')
+  if ('changed' in result)
+    process.stdout.write(result.changed ? 'Recorded in .saasfoundry.json: commit it to share the decision with the repository.\n' : 'Already recorded; .saasfoundry.json is unchanged.\n')
 }
 
 function errorPayload(error: unknown): { error: string; report?: unknown; recovery?: unknown } {
@@ -149,11 +174,15 @@ async function doctorAgents(agents: string[], options: AgentCommandOptions): Pro
 }
 
 export async function agentsCommand(
-  action: 'enable' | 'replace' | 'refresh' | 'list' | 'catalog' | 'adopt' | 'doctor' | 'route',
+  action: 'enable' | 'replace' | 'refresh' | 'list' | 'catalog' | 'adopt' | 'doctor' | 'route' | 'delegation',
   agents: string[] = [],
   options: AgentCommandOptions = {}
 ): Promise<void> {
   try {
+    if (action === 'delegation') {
+      await delegationConsent(agents[0], options)
+      return
+    }
     if (action === 'adopt') {
       await adoptAgents(agents, options)
       return
@@ -239,6 +268,12 @@ export function registerAgentCommands(command: Command): void {
     .option('--provider <agent>', ROUTING_PROVIDERS.join(', '))
     .option('--json', 'Output the versioned route')
     .action((options: AgentCommandOptions) => agentsCommand('route', [], options))
+  command
+    .command('delegation')
+    .description('Read or record the developer consent to delegate ticket delivery to background worktree agents (shared in the manifest)')
+    .argument('<action>', DELEGATION_ACTIONS.join(', '))
+    .option('--json', 'Output the versioned decision')
+    .action((action: string, options: AgentCommandOptions) => agentsCommand('delegation', [action], options))
   command
     .command('enable')
     .description('Add support without disabling other configured agents')
