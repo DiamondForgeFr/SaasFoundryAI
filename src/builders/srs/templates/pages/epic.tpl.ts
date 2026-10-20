@@ -1,5 +1,5 @@
 import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, SectionAddition, SectionUpdate, TcItem, UrItem } from '../../types'
-import { changedCells } from './cell-changes'
+import { FrField, listedCells } from './fr-fields'
 
 const EMPTY_CELL = '—'
 
@@ -58,20 +58,20 @@ export function versionAmendmentAdditions(line: string): SectionAddition[] {
   return [{ kind: 'list-items', heading: VERSION_HEADINGS.changes, items: [line] }]
 }
 
-/** The cells of an FR's row in its version's FR table that go from `before` to `after`. */
-export function versionFrUpdates(before: FrItem, after: FrItem): SectionUpdate[] {
-  const cells = changedCells(VERSION_FR_HEADER, versionFrRow(before), versionFrRow(after))
-  return Object.keys(cells).length > 0 ? [{ kind: 'table-cells', heading: VERSION_HEADINGS.frs, rowKey: before.id, cells }] : []
+/** The cells of an FR's row in the FR table of its version that show the amended `fields`: its title and its priority. */
+export function versionFrUpdates(fr: FrItem, fields: readonly FrField[]): SectionUpdate[] {
+  const cells = listedCells(fr, fields)
+  return Object.keys(cells).length > 0 ? [{ kind: 'table-cells', heading: VERSION_HEADINGS.frs, rowKey: fr.id, cells }] : []
 }
 
 /**
- * The cells of an FR's row in its feature's FR table that go from `before` to `after`. The
- * columns are found by their header, so a table with or without the Version column is amended
- * the same way, and the group header rows between FRs are never touched.
+ * The same cells in the FR table of the feature. The columns are found by their header, so a
+ * table with or without the Version column is amended the same way, and the group header rows
+ * between FRs are never touched.
  */
-export function featureFrUpdates(before: FrItem, after: FrItem): SectionUpdate[] {
-  const cells = changedCells(FEATURE_FR_HEADER, frRow(before), frRow(after))
-  return Object.keys(cells).length > 0 ? [{ kind: 'table-cells', heading: FEATURE_HEADINGS.frs, rowKey: before.id, cells }] : []
+export function featureFrUpdates(fr: FrItem, fields: readonly FrField[]): SectionUpdate[] {
+  const cells = listedCells(fr, fields)
+  return Object.keys(cells).length > 0 ? [{ kind: 'table-cells', heading: FEATURE_HEADINGS.frs, rowKey: fr.id, cells }] : []
 }
 
 export const VERSIONS_INTRO = 'Each version below holds the FRs that belong to it. Doing the same thing again later means adding a version, not renaming this page.'
