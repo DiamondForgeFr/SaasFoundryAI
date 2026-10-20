@@ -9,6 +9,8 @@ import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
 import { getRoutingGrid, isRoutingProvider, parseTaskKind, resolveRoute, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
 import type { SaaSFoundryManifest } from '../types'
+import { registerOutcomeCommands } from './agents.outcome'
+import { errorPayload } from './agents.shared'
 
 interface AgentCommandOptions {
   json?: boolean
@@ -103,15 +105,6 @@ async function delegationConsent(action: string | undefined, options: AgentComma
   }
   process.stdout.write(describeDelegation(result) + '\n')
   if (record) process.stdout.write(describeRecord(record, action) + '\n')
-}
-
-function errorPayload(error: unknown): { error: string; report?: unknown; recovery?: unknown } {
-  const record = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : undefined
-  return {
-    error: error instanceof Error ? error.message : String(error),
-    ...(record?.report !== undefined ? { report: record.report } : {}),
-    ...(record?.recovery !== undefined ? { recovery: record.recovery } : {})
-  }
 }
 
 async function adoptAgents(agents: string[], options: AgentCommandOptions): Promise<void> {
@@ -318,4 +311,5 @@ export function registerAgentCommands(command: Command): void {
     .description('List configured support and discovered files without probing runtimes')
     .option('--json', 'Output a machine-readable inventory')
     .action((options: AgentCommandOptions) => agentsCommand('list', [], options))
+  registerOutcomeCommands(command)
 }

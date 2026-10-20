@@ -197,7 +197,8 @@
                       "codex": { "$ref": "#/definitions/routingCandidate" }
                     }
                   }
-                }
+                },
+                "adjust": { "$ref": "#/definitions/routingAdjust" }
               }
             },
             "delegation": {
@@ -289,6 +290,60 @@
       "additionalProperties": false,
       "properties": {
         "tier": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+      }
+    },
+    "routingAdjust": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the routing moves a task kind from the project's own delegation outcomes (sf agents routing). Every setting is optional and the shipped defaults apply to omission.",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "false switches the automatic adjustment off; outcomes are still recorded. Default true." },
+        "window": { "type": "integer", "minimum": 5, "maximum": 500, "description": "How many of the latest rated runs of a candidate count. Default 20." },
+        "escalate": {
+          "type": "object",
+          "required": ["failures", "of"],
+          "additionalProperties": false,
+          "description": "Move a kind up one tier after this many failures among its last runs. Default 3 of 10.",
+          "properties": {
+            "failures": { "type": "integer", "minimum": 1, "maximum": 500 },
+            "of": { "type": "integer", "minimum": 2, "maximum": 500 }
+          }
+        },
+        "deescalate": {
+          "type": "object",
+          "required": ["successes", "failures"],
+          "additionalProperties": false,
+          "description": "Move a kind down one tier once the cheaper tier, tried on a bounded sample, has this many successes and at most this many failures. Default 8 and 0.",
+          "properties": {
+            "successes": { "type": "integer", "minimum": 1, "maximum": 500 },
+            "failures": { "type": "integer", "minimum": 0, "maximum": 500 }
+          }
+        },
+        "trialShare": { "type": "number", "minimum": 0.01, "maximum": 0.5, "description": "The share of a kind's runs that may try the cheaper tier. Default 0.1." },
+        "trialCooldownDays": { "type": "integer", "minimum": 0, "maximum": 365, "description": "Days the cheaper tier is left alone after a trial failed. Default 14." },
+        "costBand": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5,
+          "description": "Two tiers whose expected feature cost differs by less than this fraction tie, and duration decides. Default 0.1."
+        },
+        "maxDurationMs": { "type": "integer", "minimum": 1000, "maximum": 604800000, "description": "A tier whose p95 duration exceeds this many milliseconds is not chosen. No ceiling by default." },
+        "prices": {
+          "type": "object",
+          "description": "USD per million tokens for a model the shipped price catalogue does not list. A model without a price has no cost: its runs count for reliability but not for the expected cost.",
+          "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["input", "output"],
+            "additionalProperties": false,
+            "properties": {
+              "input": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+              "output": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+              "cacheRead": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+              "cacheWrite": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" }
+            }
+          }
+        }
       }
     },
     "routingCandidate": {

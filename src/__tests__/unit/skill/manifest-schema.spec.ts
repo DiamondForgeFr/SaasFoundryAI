@@ -4,7 +4,7 @@ import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 
 import { TICKET_DELIVERY_DECISIONS } from '../../../harness/delegation'
-import { ROUTING_EFFORTS, ROUTING_PROVIDERS, TASK_KINDS } from '../../../harness/routing-grid'
+import { ROUTING_EFFORTS, ROUTING_PROVIDERS, TASK_KINDS, routingOverrideIssues } from '../../../harness/routing-grid'
 
 // Regression guard for #286: the JSON Schema is the single source of truth
 // for `.saasfoundry.json`. If a canonical shape from manifest-schema.md stops
@@ -264,6 +264,57 @@ describe('saasfoundry-manifest.schema.json — harness routing overrides (#930)'
     expect(Object.keys(routing.properties.kinds.properties)).toEqual([...TASK_KINDS])
     expect(Object.keys(routing.properties.tiers.additionalProperties.properties)).toEqual([...ROUTING_PROVIDERS])
     expect(schema.definitions.routingCandidate.properties.effort.enum).toEqual([...ROUTING_EFFORTS])
+  })
+})
+
+// An optional block of the routing overrides (#1035): every setting has a shipped default, so a manifest
+// written before it exists keeps validating and ships without a manifest migration.
+describe('saasfoundry-manifest.schema.json — routing adjustment settings (#1035)', () => {
+  const harness = (adjust: unknown) => ({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code'], routing: { adjust } } } })
+  const PRICE = { input: '0.30', output: '1.20' }
+
+  it.each([
+    ['an empty block, the defaults', {}],
+    [
+      'every setting',
+      {
+        enabled: true,
+        window: 30,
+        escalate: { failures: 4, of: 12 },
+        deescalate: { successes: 10, failures: 0 },
+        trialShare: 0.2,
+        trialCooldownDays: 7,
+        costBand: 0.05,
+        maxDurationMs: 600000,
+        prices: { 'gpt-6.1-sol': PRICE }
+      }
+    ],
+    ['a price with its cache rates', { prices: { 'gpt-6.1-sol': { ...PRICE, cacheRead: '0.03', cacheWrite: '0.375' } } }],
+    ['the adjustment switched off', { enabled: false }]
+  ])('accepts %s', (_, adjust) => {
+    expect(validate(harness(adjust))).toBe(true)
+    expect(routingOverrideIssues({ adjust })).toEqual([])
+  })
+
+  it.each([
+    ['an unknown setting', { budget: 5 }],
+    ['a window that is not a count', { window: 'many' }],
+    ['a window below the minimum', { window: 2 }],
+    ['an escalation without its window', { escalate: { failures: 3 } }],
+    ['a trial share above half the runs', { trialShare: 0.9 }],
+    ['a cost band below zero', { costBand: -0.1 }],
+    ['a duration ceiling under a second', { maxDurationMs: 10 }],
+    ['a price without its output rate', { prices: { 'gpt-6.1-sol': { input: '0.30' } } }],
+    ['a price that is not a decimal string', { prices: { 'gpt-6.1-sol': { input: 0.3, output: '1.20' } } }],
+    ['a price with an unknown rate', { prices: { 'gpt-6.1-sol': { ...PRICE, discount: '0.5' } } }]
+  ])('rejects %s, in the schema and in the validation the commands run', (_, adjust) => {
+    expect(validate(harness(adjust))).toBe(false)
+    expect(routingOverrideIssues({ adjust }).length).toBeGreaterThan(0)
+  })
+
+  it('rejects an escalation that asks for more failures than runs, which only the validation can see', () => {
+    expect(routingOverrideIssues({ adjust: { escalate: { failures: 6, of: 5 } } }).join('\n')).toContain('cannot exceed escalate.of')
+    expect(routingOverrideIssues({ adjust: { window: 5, escalate: { failures: 3, of: 10 } } }).join('\n')).toContain('cannot exceed the window')
   })
 })
 

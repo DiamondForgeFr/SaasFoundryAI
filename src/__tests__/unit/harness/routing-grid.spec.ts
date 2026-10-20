@@ -106,7 +106,7 @@ describe('project routing overrides (#930 AC-3, TC-AEX-008)', () => {
     [{ tiers: { light: { gemini: { model: 'x', effort: 'low' } } } }, 'must name candidates'],
     [{ tiers: { light: { codex: { model: 'gpt-6-luna', effort: 'turbo' } } } }, 'effort must be one of'],
     [{ tiers: { Light: { codex: { model: 'gpt-6-luna', effort: 'low' } } } }, 'lowercase identifier'],
-    [{ budget: 5 }, 'optional kinds and tiers']
+    [{ budget: 5 }, 'optional kinds, tiers and adjust']
   ])('reports an invalid override %j', (value, message) => {
     expect(routingOverrideIssues(value).join('\n')).toContain(message)
     expect(() => resolveRoute('prose', 'claude-code', value as RoutingOverrides)).toThrow('Invalid modules.harness.routing')

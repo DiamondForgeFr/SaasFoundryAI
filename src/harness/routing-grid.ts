@@ -1,3 +1,4 @@
+import { adjustConfigIssues, type RoutingAdjustConfig } from './routing-adjust-config'
 import gridData from './routing-grid.json'
 import { createExecutionCandidateId } from '../execution/catalogue'
 import type { NormalizedEffort } from '../execution/types'
@@ -61,10 +62,14 @@ export interface RoutingGrid {
   kinds: Record<TaskKind, RoutingKindEntry>
 }
 
-/** `.saasfoundry.json` → `modules.harness.routing`: a project replaces a kind's tier or a tier's candidate. */
+/**
+ * `.saasfoundry.json` → `modules.harness.routing`: a project replaces a kind's tier or a tier's
+ * candidate, and tunes the automatic adjustment (`adjust`, #1035).
+ */
 export interface RoutingOverrides {
   kinds?: Partial<Record<TaskKind, { tier: string }>>
   tiers?: Record<string, Partial<Record<RoutingProvider, RoutingCandidate>>>
+  adjust?: RoutingAdjustConfig
 }
 
 export interface ResolvedRoute {
@@ -205,8 +210,8 @@ export function validateRoutingGrid(value: unknown): asserts value is RoutingGri
 /** Validate `modules.harness.routing`; returns the issues instead of throwing so callers can name the manifest. */
 export function routingOverrideIssues(value: unknown, grid: RoutingGrid = shippedGrid): string[] {
   if (value === undefined) return []
-  if (!object(value) || !exactKeys(value, [], ['kinds', 'tiers'])) return ['routing must be an object with optional kinds and tiers']
-  const issues: string[] = []
+  if (!object(value) || !exactKeys(value, [], ['kinds', 'tiers', 'adjust'])) return ['routing must be an object with optional kinds, tiers and adjust']
+  const issues: string[] = [...adjustConfigIssues(value.adjust)]
   const projectTiers = object(value.tiers) ? value.tiers : {}
   if (value.tiers !== undefined && !object(value.tiers)) issues.push('routing.tiers must be an object')
   for (const [tier, candidates] of Object.entries(projectTiers)) {
@@ -250,6 +255,17 @@ const deepFreeze = <T>(value: T): T => {
 deepFreeze(shippedGrid)
 
 export const ROUTING_GRID_VERSION = shippedGrid.gridVersion
+
+/**
+ * The shipped tiers from the lightest to the strongest: the order the grid declares them in is the
+ * ladder an automatic adjustment climbs or descends (#1035). A tier a project declares is not on it.
+ */
+export const TIER_LADDER: readonly string[] = Object.freeze(Object.keys(shippedGrid.tiers))
+
+/** Position of a shipped tier on the ladder; -1 for a tier the project introduced. */
+export function tierRank(tier: string): number {
+  return TIER_LADDER.indexOf(tier)
+}
 
 /** A deep copy of the shipped grid, for display. */
 export function getRoutingGrid(): RoutingGrid {
