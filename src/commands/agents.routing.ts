@@ -2,7 +2,9 @@ import { Command } from 'commander'
 
 import { runAgentsSubcommand } from './agents.shared'
 import { promoteLocalRouting } from '../harness/agent-support'
-import { runAdjustment, type AdjustmentReport } from '../harness/routing-runtime'
+import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
+import { buildRoutingReport, renderRoutingReport } from '../harness/routing-report'
+import { loadRoutingState, resetLocalRouting, runAdjustment, type AdjustmentReport } from '../harness/routing-runtime'
 
 export interface RoutingAdjustOptions {
   dryRun?: boolean
@@ -85,7 +87,40 @@ export async function routingPromote(kind: string | undefined, options: RoutingP
   })
 }
 
-/** Register `sf agents routing adjust|promote` (and, from the report slice, `report|reset`). */
+export interface RoutingReportOptions {
+  json?: boolean
+}
+
+export interface RoutingResetOptions {
+  provider?: string
+  json?: boolean
+}
+
+/** `sf agents routing report [--json]`: what the delegations cost and whether they did the job. Read-only. */
+export async function routingReport(options: RoutingReportOptions): Promise<void> {
+  await runAgentsSubcommand(options, async () => {
+    const report = await buildRoutingReport(await loadRoutingState(process.cwd()))
+    process.stdout.write(options.json ? JSON.stringify(report, null, 2) + '\n' : renderRoutingReport(report))
+  })
+}
+
+/** `sf agents routing reset <kind>`: undo the automatic moves of a kind. The developer's shared override is never touched. */
+export async function routingReset(kind: string | undefined, options: RoutingResetOptions): Promise<void> {
+  await runAgentsSubcommand(options, async () => {
+    if (!kind) throw new Error(`Name the task kind to reset: sf agents routing reset <${TASK_KINDS.join('|')}>.`)
+    if (options.provider !== undefined && !isRoutingProvider(options.provider)) throw new Error(`No routing for '${options.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+    const result = await resetLocalRouting(process.cwd(), parseTaskKind(kind), { provider: options.provider as RoutingProvider | undefined })
+    if (options.json) {
+      process.stdout.write(JSON.stringify({ resetVersion: 1, ...result }, null, 2) + '\n')
+      return
+    }
+    for (const entry of result.reset) process.stdout.write(`Reset ${result.kind} (${entry.provider}): ${entry.from} → ${entry.restoredTo}. The evidence starts over from now.\n`)
+    if (!result.reset.length) process.stdout.write(`There is no automatic move of ${result.kind} to undo.\n`)
+    if (result.sharedOverride) process.stdout.write(`modules.harness.routing pins ${result.kind} to ${result.sharedOverride}: that is the developer's choice, a reset never changes it.\n`)
+  })
+}
+
+/** Register `sf agents routing adjust|promote|report|reset`. */
 export function registerRoutingCommands(agents: Command): Command {
   const routing = agents.command('routing').description('Adjust the routing from the measured outcomes of the delegations: bounded, visible, reversible')
   routing
@@ -102,5 +137,17 @@ export function registerRoutingCommands(agents: Command): Command {
     .option('--provider <agent>', 'Promote the move of one coding agent when the agents moved the kind differently')
     .option('--json', 'Output the versioned result')
     .action((kind: string | undefined, options: RoutingPromoteOptions) => routingPromote(kind, options))
+  routing
+    .command('report')
+    .description('Show, per task kind and tier, the runs, the success rate and the p95 cost and duration, and the cost and duration per ticket by complexity')
+    .option('--json', 'Output the versioned report')
+    .action((options: RoutingReportOptions) => routingReport(options))
+  routing
+    .command('reset')
+    .description('Undo the automatic moves of a task kind: it returns to the shared routing, or to the shipped grid; the shared overrides are never changed')
+    .argument('<kind>', TASK_KINDS.join(', '))
+    .option('--provider <agent>', 'Only the moves of one coding agent')
+    .option('--json', 'Output the versioned result')
+    .action((kind: string | undefined, options: RoutingResetOptions) => routingReset(kind, options))
   return routing
 }

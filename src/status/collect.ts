@@ -3,6 +3,9 @@ import fs from 'fs'
 import path from 'path'
 
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
+import { captureState, type CaptureState } from '../harness/delegation-hooks'
+import { resolveLedgerDir } from '../harness/delegation-ledger'
+import { emptyLocalRouting, listLocalAdjustments, readLocalRouting } from '../harness/routing-local'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { SaaSFoundryManifest } from '../types'
@@ -49,10 +52,23 @@ export interface StatusReport {
   instructions?: InstructionDiagnostics
   /** The developer's consent to delegate ticket delivery (#1026); absent on a project without a harness block. */
   delegation?: StatusDelegation
+  /** The automatic routing of this clone (#1035); absent on a project without a harness block. */
+  routing?: StatusRouting
 }
 
 /** The effective consent with both layers, or why it could not be read: status never fails on it. */
 export type StatusDelegation = DelegationState | { error: string }
+
+/**
+ * Where the automatic routing stands in this clone (#1035): the moves it made that nobody promoted yet,
+ * and whether the hooks that record every delegation are in place. Status never fails on it.
+ */
+export interface StatusRoutingState {
+  adjustment: 'on' | 'off'
+  adjustments: { kind: string; provider: string; tier: string; from: string; action: string; at: string }[]
+  capture: { agent: string; state: CaptureState }[]
+}
+export type StatusRouting = StatusRoutingState | { error: string }
 
 export interface StatusCapabilities extends ProjectCapabilities {
   reason: string
@@ -242,6 +258,29 @@ async function collectDelegation(projectRoot: string, manifest: SaaSFoundryManif
   }
 }
 
+async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null): Promise<StatusRouting | undefined> {
+  const harness = manifest?.modules?.harness
+  if (!harness) return undefined
+  try {
+    const dir = await resolveLedgerDir(projectRoot)
+    const local = dir ? await readLocalRouting(dir) : emptyLocalRouting()
+    return {
+      adjustment: harness.routing?.adjust?.enabled === false ? 'off' : 'on',
+      adjustments: listLocalAdjustments(local).map(({ kind, provider, adjustment }) => ({
+        kind,
+        provider,
+        tier: adjustment.tier,
+        from: adjustment.from,
+        action: adjustment.action,
+        at: adjustment.at
+      })),
+      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent) })))
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
@@ -256,6 +295,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
 
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
   const delegation = await collectDelegation(projectRoot, manifest)
+  const routing = await collectRouting(projectRoot, manifest)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.
@@ -277,6 +317,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     capabilities,
     instructions,
     ...(delegation ? { delegation } : {}),
+    ...(routing ? { routing } : {}),
     ...(database ? { database } : {})
   }
 }

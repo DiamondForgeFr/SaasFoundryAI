@@ -2,67 +2,12 @@ import { buildRunRecord, foldLedger, type LedgerRun, type RunInput } from '../..
 import { resolveAdjustPolicy, type RoutingAdjustConfig } from '../../../harness/routing-adjust-config'
 import { adjustRouting, candidateId, evaluateKind, expectedFeatureCost, nearestRank, nextRung, selectTrial, windowStats, type AdjustContext } from '../../../harness/routing-adjust'
 import { emptyLocalRouting, listLocalAdjustments, autoKindsFor, type LocalRouting } from '../../../harness/routing-local'
-import { resolveRoute, type RoutingOverrides, type TaskKind } from '../../../harness/routing-grid'
+import { resolveRoute, type RoutingOverrides } from '../../../harness/routing-grid'
 import { ExactRational } from '../../../execution/exact-cost'
 
-const T0 = Date.parse('2026-10-01T08:00:00.000Z')
+import { history, one, runs, sequence, T0, TIERS, type RunSpec as Spec } from '../../helpers/ledger-runs'
+
 const NOW = new Date('2026-10-20T08:00:00.000Z')
-
-/** The tiers of the shipped grid for Claude Code, as (model, effort). */
-const TIERS = {
-  light: { tier: 'light', model: 'claude-haiku-5-5', effort: 'medium' },
-  edit: { tier: 'edit', model: 'claude-haiku-5-5', effort: 'high' },
-  build: { tier: 'build', model: 'claude-sonnet-5-5', effort: 'xhigh' },
-  fix: { tier: 'fix', model: 'claude-opus-5-5', effort: 'medium' },
-  plan: { tier: 'plan', model: 'claude-opus-5-5', effort: 'high' },
-  terminal: { tier: 'terminal', model: 'claude-opus-5-5', effort: 'xhigh' }
-} as const
-
-type Spec = {
-  tier?: keyof typeof TIERS
-  kind?: TaskKind
-  provider?: 'claude-code' | 'codex'
-  outcome?: 'success' | 'fail' | 'cancelled' | 'candidate-unavailable' | 'outcome-unknown'
-  /** USD; null: an unpriced run. */
-  cost?: string | null
-  durationMs?: number
-  trial?: boolean
-  ticket?: number
-  at?: string
-  model?: string
-}
-
-let clock = 0
-/** Runs in the order they were recorded, one minute apart. */
-function runs(count: number, spec: Spec = {}): LedgerRun[] {
-  return Array.from({ length: count }, () => one(spec))
-}
-function one(spec: Spec = {}): LedgerRun {
-  const tier = TIERS[spec.tier ?? 'build']
-  const outcome = spec.outcome ?? 'success'
-  const record = buildRunRecord({
-    host: 'claude-code',
-    provider: spec.provider ?? 'claude-code',
-    tier: tier.tier,
-    taskKind: spec.kind ?? 'multi-file-feature',
-    ticket: spec.ticket ?? null,
-    model: spec.model ?? tier.model,
-    effort: tier.effort,
-    trial: spec.trial ?? false,
-    at: spec.at ?? new Date(T0 + clock++ * 60_000).toISOString(),
-    durationMs: spec.durationMs ?? 60_000,
-    tokens: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
-    outcome: outcome === 'outcome-unknown' ? undefined : outcome === 'fail' ? 'fail' : outcome === 'success' ? 'pass' : outcome,
-    checks: ['type-check']
-  })
-  // The cost is set by the spec, not by the catalogue, so a scenario states the figure it reasons about.
-  const priced = { ...record, cost: spec.cost === null ? null : { amount: spec.cost ?? '1.00000000', currency: 'USD' as const } }
-  return foldLedger([priced]).runs[0]
-}
-/** Interleave outcomes in order: 's' success, 'f' failure. */
-const sequence = (pattern: string, spec: Spec = {}): LedgerRun[] => [...pattern].map((symbol) => one({ ...spec, outcome: symbol === 'f' ? 'fail' : 'success' }))
-/** foldLedger sorts by time, so the order of the argument is the order of the history. */
-const history = (...groups: LedgerRun[][]): LedgerRun[] => groups.flat().sort((left, right) => (left.at < right.at ? -1 : left.at > right.at ? 1 : 0))
 
 function context(all: LedgerRun[], overrides: { shared?: RoutingOverrides; local?: LocalRouting; policy?: RoutingAdjustConfig } = {}): AdjustContext {
   return { shared: overrides.shared, local: overrides.local ?? emptyLocalRouting(), policy: resolveAdjustPolicy(overrides.policy), runs: all, now: NOW }

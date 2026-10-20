@@ -1,8 +1,8 @@
 import { readLedger, resolveLedgerDir, type LedgerState } from './delegation-ledger'
 import { readProjectRouting, type ProjectRouting } from './project-routing'
 import { adjustRouting, selectTrial, type AdjustContext, type AdjustOutcome, type TrialOffer } from './routing-adjust'
-import { autoKindsFor, emptyLocalRouting, readLocalRouting, staleTierAgentPaths, updateLocalRouting, type LocalAdjustment, type LocalRouting } from './routing-local'
-import { resolveRoute, type ResolvedRoute, type RoutingProvider, type TaskKind } from './routing-grid'
+import { autoKindsFor, emptyLocalRouting, readLocalRouting, staleTierAgentPaths, updateLocalRouting, withLogEntry, type LocalAdjustment, type LocalRouting } from './routing-local'
+import { resolveRoute, ROUTING_PROVIDERS, type ResolvedRoute, type RoutingProvider, type TaskKind } from './routing-grid'
 
 /**
  * Everything one routing question needs, read once: the project's shared routing and policy, the clone's
@@ -69,6 +69,46 @@ export function routeKind(state: RoutingState, kind: TaskKind, provider: Routing
   if (!offer) return { ...route, trial: false, effectiveTier: null, adjustment }
   const sample = resolveRoute(kind, provider, { ...shared, kinds: { ...shared?.kinds, [kind]: { tier: offer.tier } } })
   return { ...sample, source: route.source, trial: true, effectiveTier: offer.effectiveTier, adjustment }
+}
+
+export interface ResetResult {
+  kind: TaskKind
+  /** The automatic moves that were undone, with the tier the kind is routed to again. */
+  reset: { provider: RoutingProvider; from: string; restoredTo: string }[]
+  /** The tier the developer's shared override pins the kind to; it is never changed by a reset. */
+  sharedOverride: string | null
+}
+
+/**
+ * Undo the automatic moves of a kind (#1035, AC-6): the kind returns to the shared routing, or to the
+ * shipped grid. The evidence restarts from now, so the same runs do not move it again at the next
+ * capture. What the developer wrote in the manifest is not an automatic move and stays as it is.
+ */
+export async function resetLocalRouting(root: string, kind: TaskKind, options: { provider?: RoutingProvider; now?: Date } = {}): Promise<ResetResult> {
+  const project = await readProjectRouting(root)
+  const dir = await resolveLedgerDir(root)
+  if (!dir) throw new Error('The local routing is kept in the Git directory of the clone: run this from a Git checkout.')
+  const at = (options.now ?? new Date()).toISOString()
+  const sharedOverride = project.routing?.kinds?.[kind]?.tier ?? null
+  return updateLocalRouting(dir, (local) => {
+    const entries = ROUTING_PROVIDERS.flatMap((provider) =>
+      local.kinds[kind]?.[provider] && (!options.provider || options.provider === provider) ? [{ provider, entry: local.kinds[kind]![provider]! }] : []
+    )
+    if (!entries.length) return { result: { kind, reset: [], sharedOverride } }
+    const remaining = { ...local.kinds[kind] }
+    let next: LocalRouting = local
+    const reset: ResetResult['reset'] = []
+    for (const { provider, entry } of entries) {
+      delete remaining[provider]
+      const restoredTo = resolveRoute(kind, provider, project.routing).tier
+      reset.push({ provider, from: entry.tier, restoredTo })
+      next = withLogEntry(next, { at, action: 'reset', kind, provider, from: entry.tier, to: restoredTo, evidence: entry.evidence, note: 'automatic move undone by sf agents routing reset' })
+    }
+    const kinds = { ...local.kinds, [kind]: remaining }
+    if (!Object.keys(remaining).length) delete kinds[kind]
+    const boundaries = { ...local.boundaries, [kind]: { ...(local.boundaries[kind] ?? {}), ...Object.fromEntries(entries.map(({ provider }) => [provider, at])) } }
+    return { next: { ...next, kinds, boundaries }, result: { kind, reset, sharedOverride } }
+  })
 }
 
 export interface AdjustmentReport extends AdjustOutcome {
