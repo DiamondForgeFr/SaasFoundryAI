@@ -5,7 +5,7 @@ import { join } from 'path'
 
 import { ADOPTION_COMMON_INSTRUCTIONS, GENERATED_REGION_END, GENERATED_REGION_START, installAgentInstructions } from '../../../harness/agent-instructions'
 import { listTierAssignments, type RoutingOverrides } from '../../../harness/routing-grid'
-import { TIER_AGENT_PATH, renderTierAgents } from '../../../harness/tier-agents'
+import { TIER_AGENT_PATH, WHOLE_TICKET_LINE, renderTierAgents } from '../../../harness/tier-agents'
 import { hashFileContent } from '../../../utils'
 
 const TIERS = ['light', 'edit', 'build', 'fix', 'plan', 'terminal']
@@ -45,6 +45,28 @@ describe('tier agent rendering (#929)', () => {
       developer_instructions: expect.stringContaining('terminal tier delegate')
     })
     for (const file of files) expect(file.path).toMatch(TIER_AGENT_PATH)
+  })
+
+  // A tier agent that forbids every status change cannot deliver a ticket, and delivering a whole
+  // ticket is what the workflow hands it once the developer allowed delegation (#1026, finding 1).
+  it.each(['claude-code', 'codex'] as const)('lets a %s tier agent deliver a whole ticket, within the limits the workflow sets', (host) => {
+    for (const file of renderTierAgents([host])) {
+      const body = host === 'codex' ? toml(file.content).developer_instructions : file.content
+      expect(body).toContain('Do not change ticket, board or pull-request state unless the brief hands you a whole ticket')
+      expect(body).not.toContain('Do not change ticket, board or pull-request state: the coordinating agent')
+      expect(body).toContain(WHOLE_TICKET_LINE)
+    }
+    expect(WHOLE_TICKET_LINE).toContain('from In progress to the end of AI Testing')
+    expect(WHOLE_TICKET_LINE).toContain('stop there with the ticket still in AI Testing')
+    expect(WHOLE_TICKET_LINE).toContain('Never merge')
+    expect(WHOLE_TICKET_LINE).toContain('never run `ready-pr` on a ticket that goes through Human Testing')
+    expect(WHOLE_TICKET_LINE).toContain('never record the delegation consent')
+    expect(WHOLE_TICKET_LINE).toContain('never hand it on again')
+  })
+
+  it('keeps the whole-ticket line valid inside a TOML multi-line string', () => {
+    expect(WHOLE_TICKET_LINE).not.toContain('"""')
+    expect(WHOLE_TICKET_LINE).not.toContain('\\')
   })
 
   it('says which kinds a tier serves and which tier to use instead (AC-3)', () => {
