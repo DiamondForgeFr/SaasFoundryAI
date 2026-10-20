@@ -249,6 +249,28 @@ describe('capturing a host event (#1035)', () => {
     })
   })
 
+  describe('evidence that must not be lost', () => {
+    it('keeps the run, against the shipped grid and marked, when the manifest routing cannot be read', async () => {
+      await manifest({ version: 4, agents: ['claude-code'], routing: { kinds: { tests: { tier: 'nowhere' } } } })
+      const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', await claudeTranscript()), { now: NOW })
+      expect(result.status).toBe('appended')
+      const [run] = (await ledger()).runs
+      expect(run).toMatchObject({ tier: 'build', taskKind: 'multi-file-feature', outcome: 'success', cost: { amount: '0.01196000' } })
+      expect(run.evidenceRefs).toContain('routing-unreadable')
+      await writeFile(join(root, '.saasfoundry.json'), '{ nope')
+      expect((await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', undefined, { agent_id: 'second' }), { now: NOW })).status).toBe('appended')
+    })
+
+    it('hashes an agent id that is not a plain token instead of recording it', async () => {
+      const odd = '/Users/me/.claude/projects/p/api_key=abcdefabcdef\nnext'
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', undefined, { agent_id: odd }), { now: NOW })
+      const [run] = (await ledger()).runs
+      expect(run.eventKey).toMatch(/^claude-code:[0-9a-f]{16}$/)
+      expect(run.evidenceRefs[0]).toMatch(/^agent:[0-9a-f]{16}$/)
+      expect(JSON.stringify(run)).not.toContain('api_key')
+    })
+  })
+
   describe('Codex', () => {
     const rollout = async () => {
       const path = join(transcripts, 'rollout.jsonl')
