@@ -279,6 +279,17 @@ A delegated agent never merges and, on a ticket that goes through Human Testing,
 Human Testing feedback and hands a defect, or AI work left after the validation, back to the
 ticket's agent in the same worktree.
 
+Every delegation is measured, and the routing learns from it. The brief names the task kind, the
+ticket and its complexity, and the tier agent ends its final message with
+`SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<n> checks=<codes>`: a hook records the
+cost, the duration and that verdict in the clone's ledger (`sf agents outcome record` does it
+by hand where a host has no hook). When the session reworks what an agent delivered, or a defect
+comes back from Human Testing or review, it runs `sf agents outcome mark <ticket>
+<rework|human-defect>`. `sf agents route` may answer a cheaper tier with `trial: true`, a
+bounded sample: delegate to that tier and say it is a trial. The routing moves a task kind by
+itself within declared bounds and never changes an override of `modules.harness.routing`:
+`sf agents routing report` shows what it did.
+
 ## Parallel implementation and Git worktrees
 
 Open a worktree per ticket when the recorded delegation is `allowed`, or when the developer

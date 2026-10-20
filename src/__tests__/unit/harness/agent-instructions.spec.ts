@@ -185,6 +185,21 @@ describe('shared agent instructions', () => {
     }
   })
 
+  // The routing learns from the delegations it routes (#1035): the session briefs the line, marks what it had to rework,
+  // and delegates a trial to the tier it names.
+  it('measures every delegation and has the session mark what it reworked (#1035)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/Every delegation is measured, and the routing learns from it/)
+      expect(instructions).toContain('`SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<n> checks=<codes>`')
+      expect(instructions).toMatch(/records the\s+cost, the duration and that verdict in the clone's ledger/)
+      expect(instructions).toContain('`sf agents outcome record`')
+      expect(instructions).toMatch(/`sf agents outcome mark <ticket>\s+<rework\|human-defect>`/)
+      expect(instructions).toMatch(/`trial: true`, a\s+bounded sample: delegate to that tier and say it is a trial/)
+      expect(instructions).toMatch(/never changes an override of `modules.harness.routing`/)
+      expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
+    }
+  })
+
   // The adversarial review of #1026 found six places where the first wording was too loose. Each
   // finding is pinned where the text lives, so a rewording cannot quietly drop it.
   it('has the receiving agent build the ticket itself (Examine 3), in the always-loaded instructions', () => {

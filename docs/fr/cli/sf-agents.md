@@ -65,6 +65,8 @@ des identifiants d'agent. Les commandes n'installent pas les runtimes et ne test
 | `doctor [agents...]`                                                 | Diagnostique les artefacts et les capacités de l'hôte non vérifiées sans modifier de fichier.                          |
 | `route --task <kind> [--provider <agent>]`                           | Indique le modèle et le niveau de raisonnement que la grille d'allocation recommande pour un type de tâche délégué.    |
 | `delegation <allow\|decline\|status\|clear> [--scope shared\|local]` | Enregistre, lit ou retire l'accord du développeur pour déléguer la livraison des tickets à des agents en arrière-plan. |
+| `outcome <record\|mark\|capture>`                                    | Enregistre ce qu'une délégation routée a coûté et si elle a fait le travail, et lui rattache un signal ultérieur.      |
+| `routing <adjust\|promote\|report\|reset>`                           | Ajuste le routage d'après ces résultats, partage un déplacement, les rapporte, annule un déplacement.                  |
 
 Toutes les commandes acceptent `--json`. `list` est en lecture seule et indique `not-checked` pour la découverte du runtime.
 
@@ -293,6 +295,11 @@ refusée. Une surcharge invalide fait échouer la commande au lieu de revenir si
 
 La grille recommande ; elle ne lance rien. Le modèle, le fournisseur et les identifiants de votre session restent configurés dans votre outil.
 
+La réponse reflète aussi les exécutions propres au projet (voir [Délégations mesurées](#delegations-mesurees-et-routage-ajuste)). L'ordre est : la surcharge partagée du développeur dans
+`modules.harness.routing`, puis les déplacements que l'ajustement automatique a faits dans ce clone (source `auto`, avec le déplacement et sa règle dans `adjustment`), puis la grille livrée. Dans la
+limite de la part déclarée des exécutions d'un type, la réponse est le palier moins cher situé sous le palier routé et le dit avec `trial: true` et `effectiveTier` ; déléguez à ce palier et indiquez
+dans le brief que l'exécution est un essai. `--no-trial` répond le palier routé, pour l'affichage. Un registre ou une couche locale endommagés sont signalés sur stderr et le routage partagé répond.
+
 ### Agents de palier
 
 Le harness traduit la grille en un sous-agent par palier pour chaque agent de développement déclaré que la grille route : une délégation peut ainsi choisir un palier moins cher par son nom.
@@ -303,8 +310,10 @@ Le harness traduit la grille en un sous-agent par palier pour chaque agent de d�
 | `codex`       | `.codex/agents/sf-<tier>.toml` | `model` et `model_reasoning_effort` |
 
 Chaque description liste les types de tâche que sert le palier et le palier à utiliser pour chacun des autres : `sf-fix` sert `bug-fix` et `review`, et renvoie `scoped-edit` vers `sf-edit`. Les
-fichiers suivent le routage effectif. Une surcharge change le modèle ou l'effort d'un agent de palier ou ajoute un palier propre au projet, et un palier qui ne sert plus aucun type n'a pas de fichier.
-Un fichier de sous-agent doit porter un effort que son hôte sait exécuter : une surcharge refuse donc `minimal` et `ultra` pour Claude Code, et `minimal` pour Codex.
+fichiers suivent le routage du manifeste ; un déplacement que l'ajustement automatique a fait dans ce clone reste local tant qu'il n'est pas promu. Chaque agent demande aussi à son délégué de terminer
+par la ligne `SF-DELEGATION` (voir [Délégations mesurées](#delegations-mesurees-et-routage-ajuste)). Une surcharge change le modèle ou l'effort d'un agent de palier ou ajoute un palier propre au
+projet, et un palier qui ne sert plus aucun type n'a pas de fichier. Un fichier de sous-agent doit porter un effort que son hôte sait exécuter : une surcharge refuse donc `minimal` et `ultra` pour
+Claude Code, et `minimal` pour Codex.
 
 Les agents de palier sont suivis par hash comme les autres dépôts d'agents. `sf agents enable`, `replace`, `refresh` et `sf update` réécrivent un fichier intact, et laissent en place un fichier
 modifié à côté d'un fichier `.saasfoundry.new`. Un harness géré sans liste `agents` reçoit les agents de palier de Claude Code lors de `sf update`. Aucun dépôt n'est jamais supprimé : un agent retiré,
@@ -383,6 +392,158 @@ nommant un modèle :
 
 Une tâche bien délimitée atteint donc le palier économique `edit` plutôt que le modèle de la session, un bug à diagnostiquer le palier `fix`, et une fonctionnalité répartie sur plusieurs fichiers le
 palier `build`. Les mêmes instructions de projet s'appliquent à tout agent de code qui lit `AGENTS.md`.
+
+## Délégations mesurées et routage ajusté
+
+La grille est un a priori construit à partir de benchmarks publics. Les délégations du projet la corrigent : chaque délégation routée enregistre ce qu'elle a coûté et si elle a fait le travail, et le
+routage déplace de lui-même un type de tâche, dans des bornes déclarées, chaque déplacement étant journalisé avec ses preuves, visible et réversible. Un type de tâche monte d'un palier après des
+échecs répétés. Il ne descend qu'après qu'un palier moins cher, essayé sur une part bornée de ses exécutions, continue de réussir. Ce qui décide est le coût de livraison du travail, échecs compris,
+jamais le prix d'un appel.
+
+### Le registre
+
+Chaque délégation enregistrée est une ligne d'un fichier en ajout seul situé dans le **répertoire Git commun** du clone, `<git-common-dir>/saasfoundry/delegations.jsonl`. Tous les worktrees du clone
+(un par ticket délégué) y écrivent et en lisent le même historique. Git ne le suit jamais, le fichier a le mode 0600 et les ajouts sont verrouillés. Un enregistrement porte le type de tâche, l'agent
+de code, le palier et le candidat (modèle et effort) qui ont tourné, le ticket et sa complexité, la durée réelle, les jetons (entrée, sortie, lecture et écriture du cache), le **coût**, le résultat et
+les contrôles exécutés, et si l'exécution était un essai. Les codes de résultat et de contrôle sont ceux de la [bibliothèque de calibrage d'exécution](/fr/guide/execution-calibration).
+
+Le coût est les jetons multipliés par un prix, conservé en décimal exact et arrondi une seule fois vers le haut à 1e-8 USD. Le CLI livre une liste de prix datée pour les modèles Claude de la grille
+(`src/harness/model-prices.json`, avec sa source et sa date). Un modèle sans prix publié, comme les modèles Codex, est **sans prix** : ses exécutions comptent pour la fiabilité mais n'ont pas de coût
+tant que le projet n'en déclare pas un dans `modules.harness.routing.adjust.prices` (USD par million de jetons). Un coût n'est jamais deviné.
+
+Une mesure absente est enregistrée comme **inconnue**. Une délégation sans verdict est `outcome-unknown`, une exécution sans type de tâche n'en a pas, et une exécution annulée ou un candidat
+indisponible ne disent rien du palier. Toutes sont conservées et affichées mais **censurées** : elles ne comptent jamais comme un succès ni comme un échec.
+
+### Ce que rapporte le délégué
+
+L'hôte sait ce qu'une délégation a coûté ; seul le délégué sait s'il a fait le travail. Le brief nomme le type de tâche, le ticket et sa complexité, et chaque agent de palier termine son dernier
+message par une ligne :
+
+```text
+SF-DELEGATION: pass kind=multi-file-feature ticket=1035 complexity=complex checks=type-check,automated-tests
+```
+
+`pass` signifie que le contrôle nommé par le brief a été exécuté et satisfait ; `fail` qu'il a échoué ou que le résultat est incomplet. Les contrôles sont les codes de la bibliothèque de calibrage :
+`self-review`, `type-check`, `automated-tests`, `integration-tests`, `independent-review`, `security-tests`. Un `pass` qui ne nomme aucun contrôle est enregistré comme inconnu.
+`nature=user-facing|internal|bundled-pr` et `trial=yes` sont facultatifs. La dernière ligne de ce type du message l'emporte : un exemple cité plus haut ne peut pas décider du verdict. Un message sans
+cette ligne est un résultat inconnu.
+
+### Capture et signaux
+
+`sf agents outcome capture --host <claude-code|codex>` lit la charge d'un hook sur l'entrée standard, ajoute un enregistrement, puis lance l'ajustement. Il ne fait jamais échouer l'hôte : ce qui se
+passe mal une fois les arguments compris est signalé sur stderr avec le code de sortie 0. Ne le lancez à la main que pour tester un hook.
+
+- **Claude Code.** `SubagentStop` est l'événement principal : le palier vient de l'agent `sf-<tier>`, les jetons sont additionnés sur les appels d'API distincts de la transcription du sous-agent, le
+  résultat vient du dernier message. `PostToolUse` sur l'outil `Agent` ajoute la durée, le modèle résolu et un statut en échec de la même exécution. Les deux vont dans `.claude/settings.json`.
+- **Codex.** `SubagentStop` dans le `.codex/hooks.json` suivi par Git, qui conserve les hooks que le projet y a déjà. Les jetons viennent du rollout quand il peut être lu, et restent inconnus sinon.
+  Codex ne lit les hooks de projet qu'une fois la couche `.codex/` approuvée.
+- **Autres hôtes.** Pas de hook. La session enregistre à la main avec `sf agents outcome record`, et `sf status` indique que la capture n'est pas appliquée.
+
+`sf update` et `sf agents refresh --scope shared` déposent les hooks, fusionnés dans ce que les fichiers contiennent déjà. Activer un agent ne touche jamais à `.claude/settings.json`. Une seconde
+observation du même agent (l'arrêt et le résultat de l'outil) complète une exécution au lieu d'en ajouter une.
+
+```bash
+# Un hôte sans hooks, ou une exécution que les hooks n'ont pas vue
+sf agents outcome record --provider claude-code --tier build --kind multi-file-feature --ticket 1035 --outcome pass \
+  --model claude-sonnet-5-5 --input-tokens 120000 --output-tokens 9000 --duration-ms 240000 --checks type-check,automated-tests
+
+# Un signal ultérieur rattaché à la même étape ; la ligne d'origine n'est jamais modifiée
+sf agents outcome mark 1035 rework                  # la session a dû reprendre ce que l'agent a livré
+sf agents outcome mark 1035 human-defect --kind tests --note "wrong default"
+```
+
+Un succès qui porte un signal compte comme un échec, tout comme celui qu'une exécution ultérieure du même ticket et du même type de tâche a refait sur un palier supérieur. La session marque `rework`
+quand elle refait un travail délégué et `human-defect` quand un défaut revient du test humain ou de la revue.
+
+### L'ajustement
+
+`sf agents routing adjust` évalue chaque type de tâche et chaque agent de code pour lesquels le registre contient des exécutions. Les hooks de capture le lancent après chaque délégation enregistrée ;
+`--dry-run` décide sans écrire, `--json` affiche les décisions. Les valeurs par défaut livrées :
+
+- **Fenêtre.** Les 20 dernières exécutions notées d'un candidat. Les statistiques suivent le candidat (modèle et effort), pas le nom du palier.
+- **Monter.** D'un palier après 3 échecs parmi les 10 dernières exécutions notées du candidat sur lequel le type est routé.
+- **Descendre.** D'un palier une fois que le palier moins cher a 8 succès et aucun échec dans sa fenêtre, et coûte moins cher pour livrer le travail.
+- **Essai.** Le palier moins cher est essayé sur au plus 10 % des exécutions du type depuis le début des preuves : `sf agents route` le répond tant que `(essais + 1) / (exécutions + 1)` reste dans
+  cette part. Un essai en échec laisse ce palier tranquille pendant 14 jours.
+- **Planchers.** Un candidat que la grille exclut pour le type (Haiku pour le terminal et la CI) n'est jamais choisi ; la descente s'arrête là.
+- **Échelle.** Les paliers dans l'ordre de la grille : `light`, `edit`, `build`, `fix`, `plan`, `terminal`. Les paliers qui partagent un candidat (c'est le cas de la plupart des paliers Codex) ne
+  forment qu'un barreau. Un palier propre au projet n'y figure pas.
+
+La règle compare le **coût attendu de livraison** d'un candidat, échecs compris :
+
+```text
+coût attendu = coût par exécution / taux de succès + (1 - taux de succès) x coût de ce que déclenche un échec
+```
+
+Un échec déclenche une exécution sur le palier supérieur quand elle a été mesurée, sinon une exécution de plus du même palier. Un palier bon marché qui échoue souvent est donc cher. Une montée est
+suspendue tant qu'un palier supérieur mesuré coûterait au moins autant en espérance. Une descente exige que le palier moins cher coûte moins cher d'au moins la bande de coût (10 %) ; dans la bande, la
+durée p95 la plus basse départage, et un palier dont la durée p95 dépasse `maxDurationMs` (facultatif) n'est pas choisi. Un candidat sans exécution chiffrée n'a pas de coût attendu : un type peut s'en
+éloigner pour cause de fiabilité, jamais s'y rendre sur le coût. Chaque déplacement consigne le chiffre qui l'a justifié, la fenêtre comptée, la règle et les exécutions concernées.
+
+Un nouveau candidat (un nouveau modèle ou effort dans la grille ou dans un palier du projet) n'a pas d'historique. Il entre comme candidat d'essai pour les types de tâche auxquels il peut servir, dans
+la même part bornée, et il est gardé ou écarté par la même règle. Une mise à jour de la grille conserve l'historique mesuré de tout candidat inchangé et ne rouvre une fenêtre que pour un candidat
+modifié.
+
+### La couche locale, promouvoir et réinitialiser
+
+Les déplacements vivent dans `<git-common-dir>/saasfoundry/routing.json`, à côté du registre : une couche locale avec le déplacement, sa provenance et ses preuves, et un journal des 50 derniers
+déplacements. Elle s'applique aussitôt à tous les worktrees du clone et n'est jamais commitée. La résolution donne d'abord les surcharges partagées du développeur (un type fixé dans
+`modules.harness.routing` n'est **jamais** changé ni masqué par un déplacement automatique), puis cette couche, puis la grille livrée.
+
+Les fichiers des agents de palier sont suivis par Git et rendus depuis le routage partagé : un déplacement local ne les réécrit donc pas ; `adjust` et `report` disent combien diffèrent, et
+`sf agents route` fait foi.
+
+```bash
+sf agents routing promote multi-file-feature      # copie le déplacement dans modules.harness.routing, en changement relisible
+sf agents routing promote --provider codex        # quand les deux agents ont déplacé le type différemment
+sf agents routing reset multi-file-feature        # annule les déplacements automatiques du type
+```
+
+`promote` écrit le palier dans `modules.harness.routing.kinds` par le même remplacement atomique, qui détecte les modifications, que `sf agents enable`, retire l'entrée locale et la journalise. Une
+surcharge partagée couvre tous les agents : deux déplacements qui diffèrent demandent `--provider`. Un type que le manifeste surcharge déjà est ignoré : le choix du développeur l'emporte. Relisez le
+changement, lancez `sf agents refresh --scope shared` pour régénérer les agents de palier et commitez les deux. `reset` remet le type sur le routage partagé ou sur la grille et rouvre ses preuves,
+pour que les mêmes exécutions ne le déplacent pas de nouveau à la prochaine capture ; une surcharge partagée n'est pas modifiée.
+
+### Le rapport
+
+`sf agents routing report [--json]` est en lecture seule. Il montre, par type de tâche et palier, les exécutions, le nombre censuré, le taux de succès, le coût et la durée p95 et le coût attendu de
+livraison, et, par ticket selon la complexité (et la nature), le coût et le temps délégué médians et p95. Il nomme aussi les modèles sans prix, les hooks de capture absents et les déplacements locaux
+que personne n'a promus. `--json` est versionné (`reportVersion: 1`). `sf status` porte une ligne `routing:` avec les déplacements non promus et l'état de la capture.
+
+Le rapport dit ce qu'il ne voit pas : les jetons que la session dépense à planifier, discuter et relire ne sont mesurés par aucun hook d'hôte, donc le coût d'un ticket est le coût de ses délégations.
+Un ticket est compté dès qu'il a une délégation enregistrée ; le rapport ne sait pas s'il est arrivé à Done.
+
+### Réglages
+
+Tous facultatifs ; les valeurs par défaut s'appliquent à l'omission, donc les anciens manifestes restent valides et `sf update` n'exige aucune migration.
+
+```json
+{
+  "modules": {
+    "harness": {
+      "routing": {
+        "adjust": {
+          "enabled": true,
+          "window": 20,
+          "escalate": { "failures": 3, "of": 10 },
+          "deescalate": { "successes": 8, "failures": 0 },
+          "trialShare": 0.1,
+          "trialCooldownDays": 14,
+          "costBand": 0.1,
+          "maxDurationMs": 900000,
+          "prices": { "gpt-6.1-sol": { "input": "0.30", "output": "1.20", "cacheRead": "0.03" } }
+        }
+      }
+    }
+  }
+}
+```
+
+`enabled: false` arrête les déplacements et les essais ; les résultats restent enregistrés. Les `prices` sont en USD par million de jetons, en chaînes décimales ; un `cacheRead` absent vaut un dixième
+de `input` et un `cacheWrite` absent 1,25 fois sa valeur.
+
+Deux limites : les essais sont décidés d'après les exécutions enregistrées, donc deux appels à `route` faits avant l'enregistrement d'une exécution peuvent recevoir tous deux l'essai ; et les champs
+des charges de hooks suivent la documentation de chaque hôte et sont exercés par des fixtures.
 
 ## Notes de plateforme
 

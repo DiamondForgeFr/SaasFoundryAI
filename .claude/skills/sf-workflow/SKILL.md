@@ -153,6 +153,11 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
 4. **Hand-backs.** A defect reported in Human Testing or in review, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree,
    which returns the ticket to AI Testing when the change calls for retesting.
 5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly.
+6. **Measured delegations.** Every routed delegation is recorded in the clone's ledger, and the routing adjusts itself from it (`sf agents routing report` shows what it did). The brief names the task
+   kind, the ticket and its complexity, and the tier agent closes its final message with `SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<n> checks=<codes>`; a hook records the cost, the duration
+   and that verdict (`sf agents outcome record` does it by hand for a host without hooks). Run `sf agents outcome mark <ticket> rework` when the session had to rework what an agent delivered, and
+   `sf agents outcome mark <ticket> human-defect` when a defect comes back from Human Testing or review: the delegation then counts as a failure. When `sf agents route` answers `trial: true`, delegate
+   to the tier it names, state in the brief that the run is a trial, and expect the same line. A developer override in `modules.harness.routing` is never changed by the routing.
 
 ## How to use this skill
 

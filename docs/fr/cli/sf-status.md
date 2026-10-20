@@ -54,6 +54,15 @@ ligne indique la réponse effective, la couche dont elle vient et sa date, par e
 devient `delegation: declined (local, <date>; shared team default: allowed)`, et `not-asked` tant que personne n'a répondu. Une réponse locale corrompue s'affiche `unreadable (…)` et ne fait jamais
 échouer le statut.
 
+### Routage automatique
+
+Sur les mêmes projets, une ligne `routing:` (et un objet `routing` dans `--json`) indique où en est le routage automatique dans ce clone (voir
+[`sf agents routing`](./sf-agents.md#delegations-mesurees-et-routage-ajuste)). Elle nomme les déplacements que l'ajustement a faits et que personne n'a encore promus, pour qu'une session sache que la
+route qu'elle obtient n'est pas celle livrée, par exemple
+`routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. Elle dit aussi, pour chaque agent
+de code déclaré, si les hooks qui enregistrent chaque délégation sont en place (`claude-code capture enforced`), absents (`codex capture hook missing (run sf agents refresh --scope shared)`) ou
+indisponibles pour cet hôte (`not enforced` : ses délégations s'enregistrent à la main). Une couche locale endommagée s'affiche `unreadable (…)` et ne fait jamais échouer le statut.
+
 ### Exécution
 
 Ces contrôles déterminent si le projet peut réellement **fonctionner**, ce qu'un manifest valide ne suffit pas à garantir. Un projet peut être parfaitement configuré sans avoir de `node_modules`, de

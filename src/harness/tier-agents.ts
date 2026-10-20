@@ -46,6 +46,19 @@ export const WHOLE_TICKET_LINE =
   'and stop there with the ticket still in AI Testing. Build it yourself and never hand it on again. ' +
   "Never merge, never run `ready-pr` on a ticket that goes through Human Testing, and never record the delegation consent (`sf agents delegation allow|decline`): only the developer's own reply does."
 
+/**
+ * What every tier agent ends its final message with (#1035). The host hooks know what a delegation cost;
+ * only the delegate knows whether it did the job, so it says so in one line the harness parses. Exported
+ * so a spec can hold it against the parser and the workflow skill.
+ */
+export const DELEGATION_REPORT_LINE =
+  'End your final message with one machine-readable line that the harness reads to record what this delegation cost and whether it did the job: ' +
+  '`SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<number> complexity=<bug|low|medium|complex> checks=<codes>`. ' +
+  '`pass` means the check the brief named was run and met, `fail` that it failed or the result is incomplete; `checks` lists the checks you really ran among ' +
+  'self-review, type-check, automated-tests, integration-tests, independent-review and security-tests (`checks=none` if none). ' +
+  'Copy `kind`, `ticket` and `complexity` from the brief, and add `trial=yes` when the brief says the run is a trial of a cheaper tier. ' +
+  'A message without the line is recorded as an unknown outcome and never counts as a success.'
+
 function instructions(assignment: TierAssignment): string {
   const lines = [
     `You are the ${assignment.tier} tier delegate of this project. The coordinating agent hands you one task of kind ${assignment.kinds.join(', ')}.`,
@@ -55,7 +68,8 @@ function instructions(assignment: TierAssignment): string {
     // A whole ticket is the one task that moves statuses and opens the draft PR (#1026): the line
     // below and the workflow skill's "Delegated ticket delivery" say the same thing.
     `- ${WHOLE_TICKET_LINE}`,
-    '- Report back what you changed or found, with file:line references, and anything you could not finish.'
+    '- Report back what you changed or found, with file:line references, and anything you could not finish.',
+    `- ${DELEGATION_REPORT_LINE}`
   ]
   if (assignment.excludedFor.length) {
     lines.push('', `The project routes ${assignment.excludedFor.join(', ')} here although the grid excludes this candidate for it: say so if the result looks weak.`)

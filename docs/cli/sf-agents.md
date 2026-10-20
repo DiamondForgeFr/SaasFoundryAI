@@ -61,6 +61,8 @@ runtimes or probe their native discovery behavior.
 | `doctor [agents...]`                                                 | Diagnoses artifact evidence and unverified host capabilities without changing files.               |
 | `route --task <kind> [--provider <agent>]`                           | Resolves the model and effort the allocation grid recommends for a delegated task kind.            |
 | `delegation <allow\|decline\|status\|clear> [--scope shared\|local]` | Records, reads or clears the developer's consent to delegate ticket delivery to background agents. |
+| `outcome <record\|mark\|capture>`                                    | Records what a routed delegation cost and whether it did the job, and ties a later signal to it.   |
+| `routing <adjust\|promote\|report\|reset>`                           | Adjusts the routing from those outcomes, shares a move, reports the outcomes, undoes a move.       |
 
 All commands accept `--json`. `list` is read-only and reports runtime discovery as `not-checked`.
 
@@ -276,6 +278,11 @@ invalid override makes the command fail rather than silently use the grid. `sf a
 
 The grid recommends; it does not launch anything. Your session's own model, provider and credentials stay configured in your tool.
 
+The answer also reflects the project's own runs (see [Measured delegations](#measured-delegations-and-the-adjusted-routing)). The order is the developer's shared override in `modules.harness.routing`,
+then the moves the automatic adjustment made in this clone (source `auto`, with the move and its rule in `adjustment`), then the shipped grid. Within the declared share of a kind's runs, the answer is
+the cheaper tier below the routed one and says so with `trial: true` and `effectiveTier`; delegate to that tier and state in the brief that the run is a trial. `--no-trial` answers the routed tier,
+for display. A damaged ledger or local layer is reported on stderr and the shared routing answers.
+
 ### Tier agents
 
 The harness turns the grid into one subagent per tier for each declared coding agent the grid routes, so a delegation can pick a cheaper tier by name:
@@ -286,8 +293,9 @@ The harness turns the grid into one subagent per tier for each declared coding a
 | `codex`       | `.codex/agents/sf-<tier>.toml` | `model` and `model_reasoning_effort` |
 
 Each description lists the task kinds the tier serves and the tier to use for every other kind: `sf-fix` is for `bug-fix` and `review`, and sends `scoped-edit` to `sf-edit`. The files follow the
-effective routing. An override changes a tier agent's model or effort or adds a project tier, and a tier left without any kind gets no file. A subagent file must carry an effort its host can run, so
-an override refuses `minimal` and `ultra` for Claude Code and `minimal` for Codex.
+routing of the manifest; a move the automatic adjustment made in this clone stays local until it is promoted. Each agent also asks its delegate to close with the `SF-DELEGATION` line (see
+[Measured delegations](#measured-delegations-and-the-adjusted-routing)). An override changes a tier agent's model or effort or adds a project tier, and a tier left without any kind gets no file. A
+subagent file must carry an effort its host can run, so an override refuses `minimal` and `ultra` for Claude Code and `minimal` for Codex.
 
 Tier agents are hash-tracked like the other agent deposits. `sf agents enable`, `replace`, `refresh` and `sf update` rewrite an untouched file, and leave an edited one in place beside a
 `.saasfoundry.new` sidecar. A managed harness without an `agents` list receives the Claude Code tier agents on `sf update`. No deposit is ever deleted: a removed agent, or a tier that no longer serves
@@ -361,6 +369,154 @@ model:
 
 A scoped task therefore reaches the cheap `edit` tier rather than the session's own model, a bug that needs diagnosis the `fix` tier, and a feature spread over several files the `build` tier. The same
 project instructions apply to every coding agent that reads `AGENTS.md`.
+
+## Measured delegations and the adjusted routing
+
+The grid is a prior built from public benchmarks. The project's own delegations correct it: every routed delegation records what it cost and whether it did the job, and the routing moves a task kind
+by itself, within declared bounds, with every move logged with its evidence, visible and reversible. A task kind moves up a tier after repeated failures. It moves down only after a cheaper tier, tried
+on a bounded sample of its runs, keeps succeeding. What decides is the cost of delivering the work, failures included, never the price of a call.
+
+### The ledger
+
+Each recorded delegation is one line of an append-only file in the **Git common directory** of the clone, `<git-common-dir>/saasfoundry/delegations.jsonl`. Every worktree of the clone (one per
+delegated ticket) writes to and reads the same history. Git never tracks it, the file has mode 0600 and appends are locked. A record holds the task kind, the coding agent, the tier and the candidate
+(model and effort) that ran, the ticket and its complexity, the wall-clock duration, the tokens (input, output, cache read, cache write), the **cost**, the outcome and the checks run, and whether the
+run was a trial. The outcome and check codes are those of the [execution calibration library](../guide/execution-calibration.md).
+
+The cost is tokens times a price, kept as an exact decimal and rounded up once at 1e-8 USD. The CLI ships a dated price list for the Claude models of the grid (`src/harness/model-prices.json`, with
+its source and date). A model without a published price, such as the Codex models, is **unpriced**: its runs count for reliability but have no cost until the project declares one in
+`modules.harness.routing.adjust.prices` (USD per million tokens). A cost is never guessed.
+
+A measurement that is missing is recorded as **unknown**. A delegation without a verdict is `outcome-unknown`, a run without a task kind has none, and a cancelled run or an unavailable candidate says
+nothing about the tier. All of them are kept and shown but **censored**: they never count as a success or as a failure.
+
+### What the delegate reports
+
+The host knows what a delegation cost; only the delegate knows whether it did the job. The brief names the task kind, the ticket and its complexity, and every tier agent ends its final message with
+one line:
+
+```text
+SF-DELEGATION: pass kind=multi-file-feature ticket=1035 complexity=complex checks=type-check,automated-tests
+```
+
+`pass` means the check the brief named was run and met; `fail` that it failed or the result is incomplete. The checks are the codes of the calibration library: `self-review`, `type-check`,
+`automated-tests`, `integration-tests`, `independent-review`, `security-tests`. A `pass` that names no check is recorded as unknown. `nature=user-facing|internal|bundled-pr` and `trial=yes` are
+optional. The last such line of the message wins, so an example quoted earlier cannot decide the verdict. A message without the line is an unknown outcome.
+
+### Capture and signals
+
+`sf agents outcome capture --host <claude-code|codex>` reads a hook payload on stdin, appends one record, then runs the adjustment. It never fails the host: what goes wrong after the arguments were
+understood is reported on stderr with exit 0. Run it by hand only to test a hook.
+
+- **Claude Code.** `SubagentStop` is the primary event: the tier comes from the `sf-<tier>` agent, the tokens are summed over the distinct API calls of the subagent transcript, the outcome comes from
+  the last message. `PostToolUse` on the `Agent` tool adds the duration, the resolved model and a failed status of the same run. Both go into `.claude/settings.json`.
+- **Codex.** `SubagentStop` in the tracked `.codex/hooks.json`, which keeps the hooks a project already has there. Tokens come from the rollout when it can be parsed, and stay unknown otherwise. Codex
+  reads project hooks once the `.codex/` layer is trusted.
+- **Other hosts.** No hook. The session records by hand with `sf agents outcome record`, and `sf status` says capture is not enforced.
+
+`sf update` and `sf agents refresh --scope shared` deposit the hooks, merged into what the files already hold. Enabling an agent never touches `.claude/settings.json`. A second sighting of the same
+agent (the stop and the tool result) completes one run instead of adding another.
+
+```bash
+# A host without hooks, or a run the hooks could not see
+sf agents outcome record --provider claude-code --tier build --kind multi-file-feature --ticket 1035 --outcome pass \
+  --model claude-sonnet-5-5 --input-tokens 120000 --output-tokens 9000 --duration-ms 240000 --checks type-check,automated-tests
+
+# A later signal tied to the same step; the original line is never edited
+sf agents outcome mark 1035 rework                  # the session had to rework what the agent delivered
+sf agents outcome mark 1035 human-defect --kind tests --note "wrong default"
+```
+
+A success that carries a signal counts as a failure, as does one that a later run of the same ticket and task kind redid on a higher tier. The session marks `rework` when it redoes delegated work and
+`human-defect` when a defect comes back from Human Testing or review.
+
+### The adjustment
+
+`sf agents routing adjust` evaluates every task kind and coding agent the ledger has runs for. The capture hooks run it after each recorded delegation; `--dry-run` decides without writing, `--json`
+prints the decisions. The shipped defaults:
+
+- **Window.** The last 20 rated runs of a candidate. Statistics follow the candidate (model and effort), not the tier name.
+- **Escalate.** One tier up after 3 failures among the last 10 rated runs of the candidate the kind is routed to.
+- **De-escalate.** One tier down once the cheaper tier has 8 successes and no failure in its window, and costs less to deliver the work.
+- **Trial.** The cheaper tier is tried on at most 10 % of the kind's runs since the evidence started: `sf agents route` answers it while `(trials + 1) / (runs + 1)` stays within that share. A failed
+  trial leaves that tier alone for 14 days.
+- **Floors.** A candidate the grid excludes for the kind (Haiku for terminal and CI work) is never chosen; the descent stops there.
+- **Ladder.** The tiers in grid order, `light`, `edit`, `build`, `fix`, `plan`, `terminal`. Tiers that share a candidate (the Codex ones mostly do) are one rung. A tier the project introduced is not
+  on it.
+
+The rule compares the **expected feature cost** of a candidate, failures included:
+
+```text
+expected feature cost = cost per run / success rate + (1 - success rate) x cost of what a failure triggers
+```
+
+A failure triggers a run on the next tier up when it was measured, otherwise one more run of the same tier. A cheap tier that fails often is therefore expensive. A move up is held while a measured
+higher tier would cost at least as much in expectation. A move down needs the cheaper tier to cost less by more than the cost band (10 %); within the band, the lower p95 duration breaks the tie, and a
+tier whose p95 duration is over `maxDurationMs` (optional) is not chosen. A candidate with no priced run has no expected cost: a kind can move away from it on reliability, never move to it on cost.
+Every move records the figure that justified it, the window it counted, the rule and the runs behind it.
+
+A new candidate (a new model or effort in the grid or in a project tier) has no history. It enters as a trial candidate for the task kinds it qualifies for, within the same bounded share, and is kept
+or dropped by the same rule. A grid update keeps the measured history of every unchanged candidate and starts a fresh window only for a changed one.
+
+### The local layer, promote and reset
+
+The moves live in `<git-common-dir>/saasfoundry/routing.json`, next to the ledger: a local layer with the move, its provenance and its evidence, and a log of the last 50 moves. It applies at once to
+every worktree of the clone and is never committed. Resolution is the developer's shared overrides first (a kind pinned in `modules.harness.routing` is **never** changed or hidden by an automatic
+move), then this layer, then the shipped grid.
+
+The tier agent files are tracked and rendered from the shared routing, so a local move does not rewrite them; `adjust` and `report` say how many differ, and `sf agents route` is the authority.
+
+```bash
+sf agents routing promote multi-file-feature      # copy the move into modules.harness.routing, as a reviewable change
+sf agents routing promote --provider codex        # when the two agents moved the kind differently
+sf agents routing reset multi-file-feature        # undo the automatic moves of the kind
+```
+
+`promote` writes the tier to `modules.harness.routing.kinds` through the same atomic, edit-detecting replacement as `sf agents enable`, drops the local entry and logs it. A shared override covers
+every agent, so two moves that differ need `--provider`. A kind the manifest already overrides is skipped: the developer's choice wins. Review the change, run `sf agents refresh --scope shared` to
+regenerate the tier agents and commit both. `reset` returns the kind to the shared routing or the grid and restarts its evidence, so the same runs do not move it again at the next capture; a shared
+override is not changed.
+
+### The report
+
+`sf agents routing report [--json]` is read-only. It shows, per task kind and tier, the runs, the censored count, the success rate, the p95 cost and duration and the expected feature cost, and, per
+ticket by complexity (and nature), the median and p95 cost and delegated time. It also names the models without a price, the capture hooks that are missing and the local moves nobody promoted.
+`--json` is versioned (`reportVersion: 1`). `sf status` carries one `routing:` line with the unpromoted moves and the capture state.
+
+The report says what it cannot see: the tokens the session spends planning, talking and reviewing are metered by no host hook, so the cost of a ticket is the cost of its delegations. A ticket is
+counted once it has a recorded delegation; the report does not know whether it reached Done.
+
+### Settings
+
+All optional; the defaults apply to omission, so older manifests keep validating and `sf update` needs no migration.
+
+```json
+{
+  "modules": {
+    "harness": {
+      "routing": {
+        "adjust": {
+          "enabled": true,
+          "window": 20,
+          "escalate": { "failures": 3, "of": 10 },
+          "deescalate": { "successes": 8, "failures": 0 },
+          "trialShare": 0.1,
+          "trialCooldownDays": 14,
+          "costBand": 0.1,
+          "maxDurationMs": 900000,
+          "prices": { "gpt-6.1-sol": { "input": "0.30", "output": "1.20", "cacheRead": "0.03" } }
+        }
+      }
+    }
+  }
+}
+```
+
+`enabled: false` stops the moves and the trials; outcomes are still recorded. `prices` are USD per million tokens as decimal strings; a missing `cacheRead` is a tenth of `input` and a missing
+`cacheWrite` 1.25 times it.
+
+Two limits: trials are decided from the recorded runs, so two `route` calls made before either run is recorded can both get the trial; and the hook payload fields follow each host's documentation and
+are exercised through fixtures.
 
 ## Platform notes
 

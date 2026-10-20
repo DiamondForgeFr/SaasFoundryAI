@@ -44,6 +44,8 @@ In Review directly. See SKILL.md "Nature axis" section.
 - [ ] **Wait for validation** — developer tests manually, the session stays their interlocutor and answers
 - [ ] **On bugs reported:**
   - Read the comments carefully, summarize the fix plan as a reply
+  - A defect means the delegation that delivered the work did not do the job: run `sf agents outcome mark <ticket> human-defect` so the routing counts it as a failure (the original record stays as it
+    was)
   - With delegation `allowed`, the session does not code the fix: it hands the defect to the ticket's own agent, in the same worktree and on the same branch (SKILL.md → Delegated ticket delivery).
     When delegation is not allowed, the session fixes it itself
   - Fix, commit, push, then return to **AI Testing** (re-run automated tests): the agent that fixes it moves the ticket back
