@@ -1,0 +1,34 @@
+{
+  "catalogueVersion": 1,
+  "updated": "2026-10-20",
+  "currency": "USD",
+  "per": 1000000,
+  "models": {
+    "claude-haiku-5-5": {
+      "input": "0.10",
+      "output": "0.50",
+      "source": "Anthropic first-party API price list, as cached by the claude-api skill on 2026-10-06",
+      "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "date": "2026-10-06",
+      "note": "Rates for prompts up to 100K tokens (0.50 input and 2.50 output beyond), so a lower bound for long prompts. Cache rates derived from the input rate."
+    },
+    "claude-sonnet-5-5": {
+      "input": "2.00",
+      "output": "10.00",
+      "cacheRead": "0.20",
+      "source": "Anthropic first-party API price list, as cached by the claude-api skill on 2026-10-06",
+      "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "date": "2026-10-06",
+      "note": "Cache write derived from the input rate."
+    },
+    "claude-opus-5-5": {
+      "input": "4.00",
+      "output": "20.00",
+      "cacheRead": "0.20",
+      "source": "Anthropic first-party API price list, as cached by the claude-api skill on 2026-10-06",
+      "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "date": "2026-10-06",
+      "note": "Standard speed. Cache write derived from the input rate."
+    }
+  }
+}
