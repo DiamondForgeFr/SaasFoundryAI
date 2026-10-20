@@ -3,7 +3,7 @@ import { join } from 'path'
 
 import { Command } from 'commander'
 import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
-import { enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
+import { clearDelegation, type DelegationRecord, enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
 import type { DelegationState } from '../harness/delegation'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
@@ -63,28 +63,46 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
   }
 }
 
-const DELEGATION_ACTIONS = ['allow', 'decline', 'status']
+const DELEGATION_ACTIONS = ['allow', 'decline', 'status', 'clear']
 
 function describeDelegation(state: DelegationState): string {
+  if (state.ticketDelivery === 'unavailable') return `Ticket delivery delegation: unavailable (${state.reason}).`
   if (state.ticketDelivery === 'not-asked')
     return 'Ticket delivery delegation: not asked yet. Ask the developer once, then record the answer with sf agents delegation allow or sf agents delegation decline.'
-  const decided = `Ticket delivery delegation: ${state.ticketDelivery} (decided ${state.decidedAt}).`
-  return state.ticketDelivery === 'allowed'
-    ? `${decided} The session hands each ticket to a background agent in its own worktree.`
-    : `${decided} The session delivers tickets itself, one after the other.`
+  const origin = state.source === 'local' ? 'local override' : 'shared'
+  const decided = `Ticket delivery delegation: ${state.ticketDelivery} (${origin}, decided ${state.decidedAt}).`
+  const meaning = state.ticketDelivery === 'allowed' ? 'The session hands each ticket to a background agent in its own worktree.' : 'The session delivers tickets itself, one after the other.'
+  const team = state.source === 'local' ? ` The shared team default is ${state.shared.ticketDelivery}${state.shared.decidedAt ? ` (decided ${state.shared.decidedAt})` : ''}.` : ''
+  return `${decided} ${meaning}${team}`
 }
 
-/** Read or record the consent to delegate ticket delivery (#1026): `modules.harness.delegation`, shared through the manifest. */
+/** What a repeated or clearing command tells the developer, per scope. */
+function describeRecord(result: DelegationRecord, action: string): string {
+  if (action === 'clear') return result.changed ? 'Removed the local override: the shared answer applies again.' : 'There was no local override to remove.'
+  if (!result.changed) return result.scope === 'local' ? 'Already recorded in this clone; nothing changed.' : 'Already recorded; .saasfoundry.json is unchanged.'
+  if (result.scope === 'local') return 'Recorded for this clone only, in its Git directory (never tracked): it overrides the shared team default here.'
+  const hidden = result.source === 'local' ? ' A local override on this clone still wins here: remove it with sf agents delegation clear.' : ''
+  return `Recorded in .saasfoundry.json as the shared team default: commit it with the current ticket's branch, or in a chore commit on the working branch.${hidden}`
+}
+
+/**
+ * Read or record the consent to delegate ticket delivery (#1026). The shared answer
+ * (`modules.harness.delegation`) is the team's default; `--scope local` records a clone's own
+ * override in its Git directory.
+ */
 async function delegationConsent(action: string | undefined, options: AgentCommandOptions): Promise<void> {
   if (action === undefined || !DELEGATION_ACTIONS.includes(action)) throw new Error(`Choose what to do with the delegation consent: sf agents delegation <${DELEGATION_ACTIONS.join('|')}>.`)
-  const result = action === 'status' ? await readDelegation(process.cwd()) : await recordDelegation({ targetPath: process.cwd(), ticketDelivery: action === 'allow' ? 'allowed' : 'declined' })
+  const targetPath = process.cwd()
+  let record: DelegationRecord | undefined
+  if (action === 'clear') record = await clearDelegation({ targetPath, scope: options.scope })
+  else if (action !== 'status') record = await recordDelegation({ targetPath, ticketDelivery: action === 'allow' ? 'allowed' : 'declined', scope: options.scope })
+  const result: DelegationState = record ?? (await readDelegation(targetPath))
   if (options.json) {
-    process.stdout.write(JSON.stringify({ delegationVersion: 1, ...result }, null, 2) + '\n')
+    process.stdout.write(JSON.stringify({ delegationVersion: 1, ...result, ...(record ? { scope: record.scope, changed: record.changed } : {}) }, null, 2) + '\n')
     return
   }
   process.stdout.write(describeDelegation(result) + '\n')
-  if ('changed' in result)
-    process.stdout.write(result.changed ? 'Recorded in .saasfoundry.json: commit it to share the decision with the repository.\n' : 'Already recorded; .saasfoundry.json is unchanged.\n')
+  if (record) process.stdout.write(describeRecord(record, action) + '\n')
 }
 
 function errorPayload(error: unknown): { error: string; report?: unknown; recovery?: unknown } {
@@ -270,8 +288,9 @@ export function registerAgentCommands(command: Command): void {
     .action((options: AgentCommandOptions) => agentsCommand('route', [], options))
   command
     .command('delegation')
-    .description('Read or record the developer consent to delegate ticket delivery to background worktree agents (shared in the manifest)')
-    .argument('<action>', DELEGATION_ACTIONS.join(', '))
+    .description('Read or record the developer consent to delegate ticket delivery to background worktree agents: shared team default, optional local override')
+    .argument('<action>', 'allow, decline, status; clear removes the local override')
+    .option('--scope <scope>', 'allow/decline: shared (default, the team default in the manifest) or local (this clone only); clear: local')
     .option('--json', 'Output the versioned decision')
     .action((action: string, options: AgentCommandOptions) => agentsCommand('delegation', [action], options))
   command

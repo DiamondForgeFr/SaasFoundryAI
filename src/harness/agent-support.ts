@@ -20,7 +20,20 @@ import {
 import { inspectGitAgentScope, configureLocalAgentExcludes, removeLocalAgentExcludes, NotGitRepositoryError, GitAgentScope } from './git-agent-scope'
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentIds, isHarnessAgent, getSharedAgentEntrypoints } from './agent-registry'
-import { DelegationState, resolveDelegation, TicketDeliveryDecision, validateDelegation } from './delegation'
+import {
+  clearLocalDelegation,
+  DELEGATION_SCOPES,
+  DelegationScope,
+  DelegationState,
+  isDelegationScope,
+  loadDelegationState,
+  NO_HARNESS_REASON,
+  readLocalDelegation,
+  resolveDelegation,
+  TicketDeliveryDecision,
+  validateDelegation,
+  writeLocalDelegation
+} from './delegation'
 import { TIER_AGENT_PATH } from './tier-agents'
 import { harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
@@ -166,31 +179,68 @@ async function inspect(root: string) {
   }
 }
 
-/** The developer's recorded consent to delegate ticket delivery (#1026); read-only, `not-asked` while unrecorded. */
+/**
+ * The developer's recorded consent to delegate ticket delivery (#1026), read-only: the shared team
+ * default, the clone's own override and the effective value. `not-asked` while neither exists,
+ * `unavailable` on a project without a harness block.
+ */
 export async function readDelegation(targetPath: string): Promise<DelegationState> {
-  const { manifest } = await snapshot(resolve(targetPath))
-  return resolveDelegation(manifest.modules?.harness?.delegation)
+  const root = resolve(targetPath)
+  const { manifest } = await snapshot(root)
+  return loadDelegationState(root, manifest)
 }
 
 export interface DelegationRecord extends DelegationState {
-  /** False when the same decision was already recorded: the manifest is left byte for byte as it was. */
+  scope: DelegationScope
+  /** False when the same decision was already recorded in that scope: nothing was written. */
   changed: boolean
 }
 
+function requireHarness(manifest: SaaSFoundryManifest): NonNullable<NonNullable<SaaSFoundryManifest['modules']>['harness']> {
+  const harness = manifest.modules?.harness
+  if (!harness) throw new Error(`Cannot record a delegation answer: ${NO_HARNESS_REASON}.`)
+  return harness
+}
+
+function requireScope(scope: string | undefined, allowed: readonly DelegationScope[] = DELEGATION_SCOPES): DelegationScope {
+  const resolved = scope ?? allowed[0]
+  if (!isDelegationScope(resolved) || !allowed.includes(resolved)) throw new Error(`Delegation scope must be ${allowed.join(' or ')}${allowed[0] === 'shared' ? ' (default shared)' : ''}.`)
+  return resolved
+}
+
 /**
- * Record the developer's answer in `modules.harness.delegation`. Repeating the recorded decision
- * keeps its `decidedAt` and writes nothing; a different one replaces it. Written through the same
- * atomic, edit-detecting manifest replacement as `sf agents enable`.
+ * Record the developer's answer. The **shared** scope (default) writes `modules.harness.delegation`
+ * through the same atomic, edit-detecting manifest replacement as `sf agents enable`: it is the
+ * team's default and travels with the repository. The **local** scope keeps an override in the Git
+ * directory of this clone, never tracked, that wins over the shared answer for this clone only.
+ * Repeating the answer already recorded in that scope keeps its `decidedAt` and writes nothing; the
+ * opposite answer replaces it.
  */
-export async function recordDelegation(params: { targetPath: string; ticketDelivery: TicketDeliveryDecision; now?: () => Date }): Promise<DelegationRecord> {
+export async function recordDelegation(params: { targetPath: string; ticketDelivery: TicketDeliveryDecision; scope?: string; now?: () => Date }): Promise<DelegationRecord> {
+  const scope = requireScope(params.scope)
   const root = resolve(params.targetPath)
   const before = await snapshot(root)
-  const harness = before.manifest.modules?.harness
-  if (!harness) throw new Error('No harness in .saasfoundry.json (modules.harness is missing): the delegation decision is recorded in the harness block of a managed project.')
-  if (harness.delegation?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation), changed: false }
-  const delegation = { ticketDelivery: params.ticketDelivery, decidedAt: (params.now?.() ?? new Date()).toISOString() }
-  await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, delegation } } })
-  return { ...resolveDelegation(delegation), changed: true }
+  const harness = requireHarness(before.manifest)
+  const recorded = { ticketDelivery: params.ticketDelivery, decidedAt: (params.now?.() ?? new Date()).toISOString() }
+  const local = await readLocalDelegation(root)
+  if (scope === 'local') {
+    if (local?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation, local), scope, changed: false }
+    await writeLocalDelegation(root, recorded)
+    return { ...resolveDelegation(harness.delegation, recorded), scope, changed: true }
+  }
+  if (harness.delegation?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation, local), scope, changed: false }
+  await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, delegation: recorded } } })
+  return { ...resolveDelegation(recorded, local), scope, changed: true }
+}
+
+/** Remove this clone's override so the shared answer applies again. */
+export async function clearDelegation(params: { targetPath: string; scope?: string }): Promise<DelegationRecord> {
+  const scope = requireScope(params.scope, ['local'])
+  const root = resolve(params.targetPath)
+  const { manifest } = await snapshot(root)
+  const harness = requireHarness(manifest)
+  const changed = await clearLocalDelegation(root)
+  return { ...resolveDelegation(harness.delegation), scope, changed }
 }
 
 export async function readAgentSupport(targetPath: string): Promise<AgentSupportInventory> {

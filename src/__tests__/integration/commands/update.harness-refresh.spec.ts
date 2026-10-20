@@ -165,6 +165,27 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(await readFile(join(projectDir, 'AGENTS.md'), 'utf8')).toBe('custom agent entry point\n')
   })
 
+  // The developer's answer is the team's default (#1026): a refresh rewrites the harness block, and
+  // must neither drop it nor flip it (finding 12 of the adversarial review).
+  it('keeps the recorded delegation consent and the routing overrides when it rewrites the harness block (#1026)', async () => {
+    const hashes = await installTrackedHarness()
+    const harness = {
+      version: 1,
+      managed: true,
+      agents: ['claude-code', 'codex'] as ('claude-code' | 'codex')[],
+      routing: { kinds: { prose: { tier: 'edit' } } },
+      delegation: { ticketDelivery: 'declined' as const, decidedAt: '2026-10-19T10:00:00.000Z' }
+    }
+    await writeManifest({ modules: { harness }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+    expect((await readManifest()).modules.harness).toEqual({ ...harness, version: harnessInstallerMeta.currentVersion })
+
+    // A second run has nothing left to refresh and still leaves the answer alone.
+    await updateCommand({ nonInteractive: true })
+    expect((await readManifest()).modules.harness.delegation).toEqual(harness.delegation)
+  })
+
   it('writes a sidecar for a user-edited deposit, never overwriting it', async () => {
     const hashes = await installTrackedHarness()
 
