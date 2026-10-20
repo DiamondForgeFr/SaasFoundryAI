@@ -1,15 +1,14 @@
-import { readFile } from 'fs/promises'
-import { join } from 'path'
-
 import { Command } from 'commander'
 import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
 import { clearDelegation, type DelegationRecord, enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
 import type { DelegationState } from '../harness/delegation'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
-import { getRoutingGrid, isRoutingProvider, parseTaskKind, resolveRoute, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
-import type { SaaSFoundryManifest } from '../types'
+import { readProjectRouting } from '../harness/project-routing'
+import { getRoutingGrid, isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
+import { loadRoutingState, routeKind } from '../harness/routing-runtime'
 import { registerOutcomeCommands } from './agents.outcome'
+import { registerRoutingCommands } from './agents.routing'
 import { errorPayload } from './agents.shared'
 
 interface AgentCommandOptions {
@@ -21,6 +20,8 @@ interface AgentCommandOptions {
   checkRuntime?: boolean
   task?: string
   provider?: string
+  /** `--no-trial` makes it false: answer the routed tier even when a bounded trial of the cheaper one is due. */
+  trial?: boolean
 }
 
 /**
@@ -29,13 +30,9 @@ interface AgentCommandOptions {
  */
 async function routeTask(options: AgentCommandOptions): Promise<void> {
   const kind = parseTaskKind(options.task)
-  let manifest: SaaSFoundryManifest | undefined
-  try {
-    manifest = JSON.parse(await readFile(join(process.cwd(), '.saasfoundry.json'), 'utf8'))
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`.saasfoundry.json cannot be read: ${error instanceof Error ? error.message : String(error)}`)
-  }
-  const harness = manifest?.modules?.harness
+  const root = process.cwd()
+  const project = await readProjectRouting(root, { validate: false })
+  const harness = project.manifest?.modules?.harness
   let providers: RoutingProvider[]
   if (options.provider !== undefined) {
     if (!isRoutingProvider(options.provider)) throw new Error(`No routing for '${options.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
@@ -47,19 +44,29 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
   } else {
     providers = [...ROUTING_PROVIDERS]
   }
-  const routes = providers.map((provider) => resolveRoute(kind, provider, harness?.routing))
+  // The clone's own automatic moves and its trials come from the ledger: a damaged one is reported, not fatal.
+  const state = await loadRoutingState(root, {
+    project,
+    onDamaged: (message) => process.stderr.write(`Warning: the delegation history could not be read, so the route is the shared one (${message})\n`)
+  })
+  const routes = providers.map((provider) => routeKind(state, kind, provider, { trial: options.trial !== false }))
   if (options.json) {
     const grid = getRoutingGrid()
     process.stdout.write(JSON.stringify({ routeVersion: 1, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes }, null, 2) + '\n')
     return
   }
   for (const route of routes) {
-    const evidence = route.evidence
-      ? route.evidence.status === 'measured'
-        ? `measured: ${route.evidence.source}, score ${route.evidence.score}, $${route.evidence.costPerTaskUsd} per task`
-        : `provisional: ${route.evidence.note}`
-      : 'project choice, no shipped evidence'
-    process.stdout.write(`${route.kind} → ${route.tier} (${route.source}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}\n`)
+    const evidence = route.trial
+      ? `trial of the tier below ${route.effectiveTier}, a bounded sample of the kind's runs: record its outcome`
+      : route.adjustment
+        ? `${route.adjustment.action} from ${route.adjustment.from} on ${route.adjustment.at.slice(0, 10)} — ${route.adjustment.rule}`
+        : route.evidence
+          ? route.evidence.status === 'measured'
+            ? `measured: ${route.evidence.source}, score ${route.evidence.score}, $${route.evidence.costPerTaskUsd} per task`
+            : `provisional: ${route.evidence.note}`
+          : 'project choice, no shipped evidence'
+    const label = route.trial ? `${route.source}, trial` : route.source
+    process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}\n`)
     if (route.excluded)
       process.stderr.write(`Warning: ${route.provider} ${route.candidate.model} (${route.candidate.effort}) is on the exclusion list for ${route.kind}: public scores collapse there.\n`)
   }
@@ -277,6 +284,7 @@ export function registerAgentCommands(command: Command): void {
     .description('Resolve the model and effort a delegated task kind runs on, from the shipped grid and project overrides')
     .requiredOption('--task <kind>', TASK_KINDS.join(', '))
     .option('--provider <agent>', ROUTING_PROVIDERS.join(', '))
+    .option('--no-trial', 'Answer the routed tier even when a bounded trial of the cheaper tier is due (reading the route for display)')
     .option('--json', 'Output the versioned route')
     .action((options: AgentCommandOptions) => agentsCommand('route', [], options))
   command
@@ -312,4 +320,5 @@ export function registerAgentCommands(command: Command): void {
     .option('--json', 'Output a machine-readable inventory')
     .action((options: AgentCommandOptions) => agentsCommand('list', [], options))
   registerOutcomeCommands(command)
+  registerRoutingCommands(command)
 }

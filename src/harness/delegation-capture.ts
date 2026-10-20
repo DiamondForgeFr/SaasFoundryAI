@@ -7,6 +7,7 @@ import { appendRun, buildRunRecord, COMPLEXITIES, NATURES, resolveLedgerDir, typ
 import { resolveGitRoot } from './git-agent-scope'
 import type { TokenUsage } from './model-prices'
 import { readProjectRouting } from './project-routing'
+import { autoKindsFor, emptyLocalRouting, readLocalRouting } from './routing-local'
 import { resolveRoute, resolveTierCandidate, tierRank, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { CHECKS } from '../execution/calibration'
 
@@ -200,11 +201,12 @@ export interface CaptureOptions {
   /** Where the project is; defaults to the `cwd` of the payload, then the process directory. */
   root?: string
   now?: () => Date
-  /** The tier a kind is routed to right now, for flagging a run that tried a cheaper one. Defaults to the project's shared routing. */
+  /** The tier a kind is routed to right now, for flagging a run that tried a cheaper one. Defaults to the shared routing and the clone's automatic moves. */
   effectiveTier?: (kind: TaskKind, provider: RoutingProvider) => string | undefined
 }
 
-export type CaptureResult = (AppendResult & { record: DelegationRunRecord }) | { status: 'ignored'; reason: string }
+/** `root` is the working tree the project was found in: the adjustment that follows a capture reads the same project. */
+export type CaptureResult = (AppendResult & { record: DelegationRunRecord; root: string }) | { status: 'ignored'; reason: string }
 
 const FAILED_TOOL_STATUS = new Set(['failed', 'error', 'killed', 'cancelled', 'canceled', 'timeout', 'timed_out'])
 const BACKGROUND_TOOL_STATUS = new Set(['async_launched', 'launched', 'running', 'in_progress', 'background'])
@@ -238,6 +240,8 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   const ledgerDir = await resolveLedgerDir(root)
   if (!ledgerDir) return { status: 'ignored', reason: 'not a Git checkout: the ledger is kept in the Git directory of the clone' }
   const project = await readProjectRouting(root)
+  // A damaged local layer must not lose the record: the run is kept, only its trial flag is judged without the layer.
+  const local = await readLocalRouting(ledgerDir).catch(() => emptyLocalRouting())
   const candidate = resolveTierCandidate(tier, host, project.routing)
   if (!candidate) return { status: 'ignored', reason: `tier ${tier} is not declared for ${host}` }
 
@@ -253,7 +257,9 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
       report ? undefined : 'no-sf-delegation-line',
       report?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined
     ]
-    const effectiveTier = report?.kind ? (options.effectiveTier ?? ((kind, provider) => resolveRoute(kind, provider, project.routing).tier))(report.kind, host) : undefined
+    // The tier the kind is routed to by now, the clone's own automatic moves included: a run below it is a trial.
+    const routedTier = options.effectiveTier ?? ((kind: TaskKind, provider: RoutingProvider) => resolveRoute(kind, provider, project.routing, autoKindsFor(local, provider)).tier)
+    const effectiveTier = report?.kind ? routedTier(report.kind, host) : undefined
     const cheaper = effectiveTier !== undefined && effectiveTier !== tier && tierRank(tier) >= 0 && tierRank(tier) < tierRank(effectiveTier)
     input = {
       eventKey: `${host}:${typeof agentId === 'string' && agentId ? agentId : hash(String(payload.agent_transcript_path ?? payload.session_id ?? '') + String(payload.last_assistant_message ?? ''))}`,
@@ -297,5 +303,5 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   }
   const record = buildRunRecord(input, { prices: project.policy.prices })
   const appended = await appendRun(ledgerDir, record)
-  return { ...appended, record }
+  return { ...appended, record, root }
 }

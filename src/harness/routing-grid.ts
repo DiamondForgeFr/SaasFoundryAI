@@ -77,8 +77,11 @@ export interface ResolvedRoute {
   provider: RoutingProvider
   tier: string
   candidate: RoutingCandidate & { id: string }
-  /** `project` as soon as the manifest changed the kind's tier or the tier's candidate for this provider. */
-  source: 'shipped' | 'project'
+  /**
+   * `project` as soon as the manifest changed the kind's tier or the tier's candidate for this provider;
+   * `auto` when only the clone's own automatic adjustment (#1035) moved the kind.
+   */
+  source: 'shipped' | 'project' | 'auto'
   /** The shipped evidence when the resolved candidate is the shipped one; null for a project choice. */
   evidence: RoutingEvidence | null
   /** True when the candidate is on the kind's exclusion list (scores collapse there); reported, not enforced. */
@@ -289,19 +292,32 @@ export function resolveTierCandidate(tier: string, provider: RoutingProvider, ov
   return candidate ? { model: candidate.model, effort: candidate.effort } : undefined
 }
 
-/** Resolve one kind for one provider: the project's choice when it made one, otherwise the shipped grid. */
-export function resolveRoute(kind: TaskKind, provider: RoutingProvider, overrides?: RoutingOverrides): ResolvedRoute {
+/** Whether the grid keeps this candidate off a kind (scores collapse there); the automatic adjustment treats it as a floor it never crosses. */
+export function isCandidateExcluded(kind: TaskKind, provider: RoutingProvider, candidate: RoutingCandidate): boolean {
+  return excludedBy(shippedGrid.kinds[kind].excluded, provider, candidate)
+}
+
+/** The tier the automatic adjustment moved a kind to, for one provider (#1035). */
+export type AutoKinds = Partial<Record<TaskKind, { tier: string }>>
+
+/**
+ * Resolve one kind for one provider. The order is the developer's shared override, then the local
+ * automatic move (`auto`, from the clone's own delegation outcomes), then the shipped grid. An automatic
+ * move to a tier that no longer exists is ignored, not an error: the grid may have moved on since.
+ */
+export function resolveRoute(kind: TaskKind, provider: RoutingProvider, overrides?: RoutingOverrides, auto?: AutoKinds): ResolvedRoute {
   const issues = routingOverrideIssues(overrides)
   if (issues.length) throw new Error(`Invalid modules.harness.routing:\n- ${issues.join('\n- ')}`)
   const shipped = shippedGrid.kinds[kind]
-  const tier = overrides?.kinds?.[kind]?.tier ?? shipped.tier
+  const autoTier = !overrides?.kinds?.[kind] && auto?.[kind] && resolveTierCandidate(auto[kind]!.tier, provider, overrides) ? auto[kind]!.tier : undefined
+  const tier = overrides?.kinds?.[kind]?.tier ?? autoTier ?? shipped.tier
   const projectCandidate = overrides?.tiers?.[tier]?.[provider]
   const shippedCandidate = shippedGrid.tiers[tier]?.[provider]
   const candidate = projectCandidate ?? shippedCandidate
   if (!candidate) throw new Error(`Tier '${tier}' has no ${provider} candidate: declare routing.tiers.${tier}.${provider} in .saasfoundry.json.`)
   const shippedSeed = shippedGrid.tiers[shipped.tier][provider]
   const isShippedSeed = candidate.model === shippedSeed.model && candidate.effort === shippedSeed.effort
-  const source = tier !== shipped.tier || projectCandidate !== undefined ? 'project' : 'shipped'
+  const source = projectCandidate !== undefined || (tier !== shipped.tier && autoTier === undefined) ? 'project' : tier !== shipped.tier ? 'auto' : 'shipped'
   return {
     kind,
     provider,
@@ -328,8 +344,8 @@ export interface TierAssignment {
 }
 
 /** Group the resolved routes of one provider by tier: one entry per tier that serves at least one kind. */
-export function listTierAssignments(provider: RoutingProvider, overrides?: RoutingOverrides): TierAssignment[] {
-  const routes = TASK_KINDS.map((kind) => resolveRoute(kind, provider, overrides))
+export function listTierAssignments(provider: RoutingProvider, overrides?: RoutingOverrides, auto?: AutoKinds): TierAssignment[] {
+  const routes = TASK_KINDS.map((kind) => resolveRoute(kind, provider, overrides, auto))
   const order = [...Object.keys(shippedGrid.tiers), ...Object.keys(overrides?.tiers ?? {})]
   const tiers = [...new Set(order)].filter((tier) => routes.some((route) => route.tier === tier))
   return tiers.map((tier) => {

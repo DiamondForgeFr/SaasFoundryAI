@@ -5,6 +5,8 @@ import { CAPTURE_HOSTS, captureHostEvent, type CaptureResult } from '../harness/
 import { appendRun, appendSignal, buildRunRecord, buildSignalRecord, requireLedgerDir, type RunInput } from '../harness/delegation-ledger'
 import { readProjectRouting } from '../harness/project-routing'
 import { ROUTING_PROVIDERS, TASK_KINDS, parseTaskKind } from '../harness/routing-grid'
+import { runAdjustment } from '../harness/routing-runtime'
+import { adjustmentPayload, describeAdjustment } from './agents.routing'
 
 export interface OutcomeRecordOptions {
   kind?: string
@@ -148,7 +150,20 @@ export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<vo
     result = { status: 'ignored', reason: `capture failed: ${error instanceof Error ? error.message : String(error)}` }
     process.stderr.write(`sf agents outcome capture: ${result.reason}\n`)
   }
-  if (options.json) process.stdout.write(JSON.stringify({ outcomeVersion: 1, host, ...result }, null, 2) + '\n')
+  // After each recorded run the routing looks at the evidence again: a move is applied without asking,
+  // and logged where `sf agents routing report` and `sf status` show it.
+  let adjustment: Record<string, unknown> | undefined
+  if ((result.status === 'appended' || result.status === 'merged') && result.record.taskKind !== null) {
+    try {
+      const adjusted = await runAdjustment(result.root)
+      adjustment = adjustmentPayload(adjusted)
+      const lines = describeAdjustment(adjusted)
+      if (lines.length) process.stderr.write(`${lines.map((line) => `sf routing: ${line}`).join('\n')}\n`)
+    } catch (error) {
+      process.stderr.write(`sf agents outcome capture: the routing adjustment was skipped (${error instanceof Error ? error.message : String(error)})\n`)
+    }
+  }
+  if (options.json) process.stdout.write(JSON.stringify({ outcomeVersion: 1, host, ...result, ...(adjustment ? { adjustment } : {}) }, null, 2) + '\n')
 }
 
 const collect = (value: string, previous: string[]): string[] => [...previous, value]

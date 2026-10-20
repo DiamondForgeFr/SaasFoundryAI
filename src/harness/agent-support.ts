@@ -35,6 +35,9 @@ import {
   writeLocalDelegation
 } from './delegation'
 import { CLAUDE_CAPTURE_HOOKS, CODEX_HOOKS_PATH } from './delegation-hooks'
+import { requireLedgerDir } from './delegation-ledger'
+import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
+import { updateLocalRouting, withLogEntry } from './routing-local'
 import { TIER_AGENT_PATH } from './tier-agents'
 import { HARNESS_ALLOWED_COMMANDS, harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
@@ -238,6 +241,93 @@ export async function recordDelegation(params: { targetPath: string; ticketDeliv
   if (harness.delegation?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation, local), scope, changed: false }
   await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, delegation: recorded } } })
   return { ...resolveDelegation(recorded, local), scope, changed: true }
+}
+
+export interface RoutingPromotion {
+  kind: TaskKind
+  tier: string
+  /** The providers whose automatic move was shared. */
+  providers: RoutingProvider[]
+  /** Providers whose own move for the kind was dropped because the shared override now decides for all of them. */
+  dropped: RoutingProvider[]
+}
+
+export interface PromoteRoutingResult {
+  promoted: RoutingPromotion[]
+  skipped: { kind: TaskKind; reason: string }[]
+  manifestChanged: boolean
+}
+
+/**
+ * Share the automatic moves of this clone (#1035): copy a kind's tier from the local routing layer into
+ * `modules.harness.routing.kinds` of the manifest through the same atomic, edit-detecting replacement as
+ * `sf agents enable`, as a change the team reviews in Git. The local entry is dropped, since the shared
+ * override now carries the choice for every provider. A kind the manifest already overrides is left
+ * alone: the developer's choice wins, and promoting must not replace it silently.
+ */
+export async function promoteLocalRouting(params: { targetPath: string; kind?: string; provider?: string; now?: () => Date }): Promise<PromoteRoutingResult> {
+  const root = resolve(params.targetPath)
+  const dir = await requireLedgerDir(root)
+  const kindFilter = params.kind === undefined ? undefined : parseTaskKind(params.kind)
+  if (params.provider !== undefined && !isRoutingProvider(params.provider)) throw new Error(`No routing for '${params.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+  const providerFilter = params.provider as RoutingProvider | undefined
+  const at = (params.now?.() ?? new Date()).toISOString()
+  return updateLocalRouting<PromoteRoutingResult>(dir, async (local) => {
+    const before = await snapshot(root)
+    const harness = before.manifest.modules?.harness
+    if (!harness) throw new Error(`Cannot promote a routing move: ${NO_HARNESS_REASON}.`)
+    const routing = harness.routing ?? {}
+    const promoted: RoutingPromotion[] = []
+    const skipped: PromoteRoutingResult['skipped'] = []
+    const kinds: Partial<Record<TaskKind, { tier: string }>> = { ...routing.kinds }
+    let next = local
+    for (const kind of kindFilter ? [kindFilter] : TASK_KINDS.filter((candidate) => local.kinds[candidate])) {
+      const entries = ROUTING_PROVIDERS.flatMap((provider) => (local.kinds[kind]?.[provider] ? [{ provider, entry: local.kinds[kind]![provider]! }] : []))
+      if (!entries.length) {
+        skipped.push({ kind, reason: 'there is no automatic move to promote' })
+        continue
+      }
+      if (routing.kinds?.[kind]) {
+        skipped.push({ kind, reason: `modules.harness.routing already overrides ${kind}: the shared choice wins, remove it first to promote the move` })
+        continue
+      }
+      const chosen = providerFilter ? entries.filter((entry) => entry.provider === providerFilter) : entries
+      if (!chosen.length) {
+        skipped.push({ kind, reason: `there is no automatic move of ${providerFilter} to promote` })
+        continue
+      }
+      const tiers = [...new Set(chosen.map((entry) => entry.entry.tier))]
+      if (tiers.length > 1)
+        throw new Error(
+          `The automatic moves of ${kind} differ (${chosen.map((entry) => `${entry.provider}: ${entry.entry.tier}`).join(', ')}) and a shared override covers every provider: promote one with --provider <agent>.`
+        )
+      kinds[kind] = { tier: tiers[0] }
+      const dropped = entries.filter((entry) => !chosen.includes(entry)).map((entry) => entry.provider)
+      promoted.push({ kind, tier: tiers[0], providers: chosen.map((entry) => entry.provider), dropped })
+      const remaining = { ...next.kinds }
+      delete remaining[kind]
+      const boundaries = { ...next.boundaries, [kind]: Object.fromEntries(entries.map((entry) => [entry.provider, at])) }
+      next = { ...next, kinds: remaining, boundaries }
+      for (const entry of chosen) {
+        next = withLogEntry(next, {
+          at,
+          action: 'promote',
+          kind,
+          provider: entry.provider,
+          from: entry.entry.from,
+          to: entry.entry.tier,
+          evidence: entry.entry.evidence,
+          note: 'copied to modules.harness.routing'
+        })
+      }
+    }
+    if (!promoted.length) return { result: { promoted, skipped, manifestChanged: false } }
+    const nextRouting = { ...routing, kinds }
+    const issues = routingOverrideIssues(nextRouting)
+    if (issues.length) throw new Error(`Invalid modules.harness.routing after the promotion:\n- ${issues.join('\n- ')}`)
+    const manifestChanged = await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, routing: nextRouting } } })
+    return { next, result: { promoted, skipped, manifestChanged } }
+  })
 }
 
 /** Remove this clone's override so the shared answer applies again. */
