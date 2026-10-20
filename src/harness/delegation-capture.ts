@@ -6,7 +6,8 @@ import { isAbsolute, join } from 'path'
 import { appendRun, buildRunRecord, COMPLEXITIES, NATURES, resolveLedgerDir, type AppendResult, type Complexity, type DelegationRunRecord, type Nature, type RunInput } from './delegation-ledger'
 import { resolveGitRoot } from './git-agent-scope'
 import type { TokenUsage } from './model-prices'
-import { readProjectRouting } from './project-routing'
+import { readProjectRouting, type ProjectRouting } from './project-routing'
+import { resolveAdjustPolicy } from './routing-adjust-config'
 import { autoKindsFor, emptyLocalRouting, readLocalRouting } from './routing-local'
 import { resolveRoute, resolveTierCandidate, tierRank, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { CHECKS } from '../execution/calibration'
@@ -220,6 +221,8 @@ function routedTier(agentType: unknown): string | undefined {
   return match ? match[1] : undefined
 }
 
+const SAFE_AGENT_ID = /^[A-Za-z0-9._:-]{1,80}$/
+
 const hash = (value: string): string => createHash('sha256').update(value).digest('hex').slice(0, 16)
 
 /** Capture one hook payload. Never throws for a payload that is not ours: it is ignored with the reason. */
@@ -239,30 +242,37 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   const root = (await resolveGitRoot(cwd)) ?? cwd
   const ledgerDir = await resolveLedgerDir(root)
   if (!ledgerDir) return { status: 'ignored', reason: 'not a Git checkout: the ledger is kept in the Git directory of the clone' }
-  const project = await readProjectRouting(root)
-  // A damaged local layer must not lose the record: the run is kept, only its trial flag is judged without the layer.
+  // The ledger is evidence: an unreadable manifest or a damaged local layer must not lose the record. The run is kept
+  // against the shipped grid and marked, and only the trial flag and the price are judged without what could not be read.
+  let project: ProjectRouting
+  let degraded = false
+  try {
+    project = await readProjectRouting(root)
+  } catch {
+    degraded = true
+    project = { agents: [], policy: resolveAdjustPolicy() }
+  }
   const local = await readLocalRouting(ledgerDir).catch(() => emptyLocalRouting())
   const candidate = resolveTierCandidate(tier, host, project.routing)
   if (!candidate) return { status: 'ignored', reason: `tier ${tier} is not declared for ${host}` }
 
-  const agentId = isStop ? payload.agent_id : (toolResponse.agentId ?? toolResponse.agent_id ?? payload.agent_id)
+  const rawAgentId = isStop ? payload.agent_id : (toolResponse.agentId ?? toolResponse.agent_id ?? payload.agent_id)
+  // An agent id is the host's own; one that is not a plain token (a path, a secret-looking string) is hashed, never recorded.
+  const agentId = typeof rawAgentId === 'string' && rawAgentId ? (SAFE_AGENT_ID.test(rawAgentId) ? rawAgentId : hash(rawAgentId)) : undefined
+  const unreadable = degraded ? ['routing-unreadable'] : []
   let input: RunInput
   if (isStop) {
     const transcript = await readTranscriptText(payload.agent_transcript_path ?? payload.transcript_path)
     const summary = transcript === undefined ? undefined : host === 'claude-code' ? summarizeClaudeTranscript(transcript) : summarizeCodexTranscript(transcript)
     const report = parseDelegationLine(payload.last_assistant_message)
     const passed = report?.verdict === 'pass' && report.checks.length > 0
-    const evidence = [
-      typeof agentId === 'string' ? `agent:${agentId}` : undefined,
-      report ? undefined : 'no-sf-delegation-line',
-      report?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined
-    ]
+    const evidence = [agentId ? `agent:${agentId}` : undefined, report ? undefined : 'no-sf-delegation-line', report?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined, ...unreadable]
     // The tier the kind is routed to by now, the clone's own automatic moves included: a run below it is a trial.
     const routedTier = options.effectiveTier ?? ((kind: TaskKind, provider: RoutingProvider) => resolveRoute(kind, provider, project.routing, autoKindsFor(local, provider)).tier)
     const effectiveTier = report?.kind ? routedTier(report.kind, host) : undefined
     const cheaper = effectiveTier !== undefined && effectiveTier !== tier && tierRank(tier) >= 0 && tierRank(tier) < tierRank(effectiveTier)
     input = {
-      eventKey: `${host}:${typeof agentId === 'string' && agentId ? agentId : hash(String(payload.agent_transcript_path ?? payload.session_id ?? '') + String(payload.last_assistant_message ?? ''))}`,
+      eventKey: `${host}:${agentId ?? hash(String(payload.agent_transcript_path ?? payload.session_id ?? '') + String(payload.last_assistant_message ?? ''))}`,
       at: (options.now?.() ?? new Date()).toISOString(),
       host,
       provider: host,
@@ -282,7 +292,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
     }
   } else {
     const status = String(toolResponse.status ?? '').toLowerCase()
-    if (typeof agentId !== 'string' || !agentId) return { status: 'ignored', reason: 'the tool result names no agent id, so it cannot be joined to the agent stop' }
+    if (!agentId) return { status: 'ignored', reason: 'the tool result names no agent id, so it cannot be joined to the agent stop' }
     if (BACKGROUND_TOOL_STATUS.has(status)) return { status: 'ignored', reason: 'a background launch: the agent stop carries the result' }
     const duration = whole(toolResponse.totalDurationMs)
     const resolved = toolResponse.resolvedModel ?? toolResponse.model
@@ -298,7 +308,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
       // The result reports the last request's usage only, not the run's: tokens come from the transcript.
       tokens: null,
       outcome: FAILED_TOOL_STATUS.has(status) ? 'execution-failed' : null,
-      evidenceRefs: [`agent:${agentId}`, ...(status ? [`tool-status:${status}`] : [])]
+      evidenceRefs: [`agent:${agentId}`, ...(status ? [`tool-status:${status.replace(/[^a-z_-]/g, '').slice(0, 40)}`] : []), ...unreadable]
     }
   }
   const record = buildRunRecord(input, { prices: project.policy.prices })
