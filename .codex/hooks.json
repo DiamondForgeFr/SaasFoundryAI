@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sf agents outcome capture --host codex",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

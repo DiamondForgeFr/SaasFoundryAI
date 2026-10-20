@@ -22,10 +22,11 @@ import {
   withGeneratedInstructions
 } from '../../../harness/agent-instructions'
 import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
+import { CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
 import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
 
-// Tier agents (#929) have their own suite; these assertions are about the other deposits.
-const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path))
+// Tier agents (#929) and the Codex capture hook (#1035) have their own suites; these assertions are about the other deposits.
+const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path) && path !== CODEX_HOOKS_PATH)
 
 const SKILL = `---
 name: commit

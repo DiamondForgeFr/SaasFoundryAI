@@ -47,6 +47,34 @@ describe('compiled sf agents commands', () => {
     expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe(instructions)
     await expect(readFile(join(project, 'CLAUDE.md'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
+  // Every routed delegation is captured by a host hook (#1035): installing the harness and refreshing it
+  // wire them into what the project already has, and a second refresh changes nothing.
+  it('wires the delegation capture hooks of the declared hosts on a refresh, without touching the rest of the project settings', async () => {
+    const settingsPath = join(project, '.claude/settings.json')
+    const mine = JSON.stringify({ model: 'opus', hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'echo mine' }] }] } }, null, 2) + '\n'
+    await writeFile(settingsPath, mine)
+    for (const agent of ['claude-code', 'codex']) expect(run('enable', agent, '--scope', 'shared').status).toBe(0)
+    // Enabling an agent never touches the host settings of the project; the Codex hooks file travels with its tier agents.
+    expect(await readFile(settingsPath, 'utf8')).toBe(mine)
+    expect(JSON.parse(await readFile(join(project, '.codex/hooks.json'), 'utf8')).hooks.SubagentStop).toHaveLength(1)
+    expect(run('refresh', '--scope', 'shared').status).toBe(0)
+    const settings = JSON.parse(await readFile(settingsPath, 'utf8'))
+    expect(settings.model).toBe('opus')
+    expect(settings.hooks.SessionStart[0].hooks[0].command).toBe('echo mine')
+    expect(settings.hooks.SubagentStop.flatMap((group: { hooks: { command: string }[] }) => group.hooks.map((hook) => hook.command))).toEqual(['sf agents outcome capture --host claude-code'])
+    expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
+    expect(settings.permissions.allow).toEqual(expect.arrayContaining(['Bash(sf agents outcome mark *)', 'Bash(sf agents route *)']))
+    const codex = JSON.parse(await readFile(join(project, '.codex/hooks.json'), 'utf8'))
+    expect(codex.hooks.SubagentStop[0].hooks[0].command).toBe('sf agents outcome capture --host codex')
+    const settingsText = await readFile(settingsPath, 'utf8')
+    const codexText = await readFile(join(project, '.codex/hooks.json'), 'utf8')
+    const refreshed = run('refresh', '--scope', 'shared', '--json')
+    expect(refreshed.status).toBe(0)
+    expect(JSON.parse(refreshed.stdout).report.written).not.toEqual(expect.arrayContaining(['.claude/settings.json', '.codex/hooks.json']))
+    expect(await readFile(settingsPath, 'utf8')).toBe(settingsText)
+    expect(await readFile(join(project, '.codex/hooks.json'), 'utf8')).toBe(codexText)
+  })
+
   it.each([
     ['enable', 'codex'],
     ['enable', 'gpt', '--scope', 'shared'],

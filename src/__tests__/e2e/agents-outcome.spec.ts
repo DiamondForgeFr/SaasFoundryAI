@@ -144,6 +144,47 @@ describe('compiled sf agents outcome record | mark (#1035)', () => {
     expect(JSON.parse(result.stdout).record.cost).toEqual({ amount: '0.05400000', currency: 'USD' })
   })
 
+  describe('capture, run by the host hooks with the payload on stdin', () => {
+    const FIXTURES = join(ROOT, 'src/__tests__/fixtures/delegation-capture')
+    const capture = (host: string, input: string, ...extra: string[]) =>
+      spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', 'outcome', 'capture', '--host', host, ...extra], { cwd: project, encoding: 'utf8', env: cleanEnv, input })
+    const payload = async (name: string, transcript: string) => (await readFile(join(FIXTURES, name), 'utf8')).replaceAll('__CWD__', project).replaceAll('__TRANSCRIPT__', transcript)
+
+    it('records a Claude Code SubagentStop silently, so the hook adds nothing to the agent output', async () => {
+      const result = capture('claude-code', await payload('claude-subagent-stop.json', join(FIXTURES, 'claude-subagent.jsonl')))
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toBe('')
+      expect(await lines()).toHaveLength(1)
+      expect((await lines())[0]).toMatchObject({ type: 'run', host: 'claude-code', tier: 'build', taskKind: 'multi-file-feature', outcome: 'success', cost: { amount: '0.01196000' } })
+    })
+
+    it('records a Codex SubagentStop and prints the versioned result on request', async () => {
+      const result = capture('codex', await payload('codex-subagent-stop.json', join(FIXTURES, 'codex-rollout.jsonl')), '--json')
+      expect(result.status).toBe(0)
+      expect(JSON.parse(result.stdout)).toMatchObject({ outcomeVersion: 1, host: 'codex', status: 'appended', record: { provider: 'codex', taskKind: 'tests', metering: 'complete' } })
+    })
+
+    it('answers an event that is not a delegation with nothing and exit 0', async () => {
+      const result = capture('claude-code', JSON.stringify({ hook_event_name: 'SessionStart', cwd: project }), '--json')
+      expect(result.status).toBe(0)
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: 'ignored', reason: expect.stringContaining('not a delegation event') })
+      await expect(stat(ledger())).rejects.toThrow()
+    })
+
+    it('never fails the host on a payload it cannot read: it says so on stderr and exits 0', () => {
+      const result = capture('claude-code', 'not json at all')
+      expect(result.status).toBe(0)
+      expect(result.stderr).toContain('sf agents outcome capture: capture failed')
+    })
+
+    it('fails only on a host it does not know', () => {
+      const result = capture('gemini-cli', '{}')
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('--host must be claude-code or codex')
+    })
+  })
+
   it('fails closed on an invalid adjust block instead of recording over it', async () => {
     await writeFile(
       join(project, '.saasfoundry.json'),

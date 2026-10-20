@@ -281,6 +281,14 @@ export function parseTaskKind(value: unknown): TaskKind {
   return value
 }
 
+/** The candidate a tier runs for a provider: the project's declaration when it made one, otherwise the shipped grid. Undefined for a tier nobody declared. */
+export function resolveTierCandidate(tier: string, provider: RoutingProvider, overrides?: RoutingOverrides): RoutingCandidate | undefined {
+  const declared = overrides?.tiers && Object.prototype.hasOwnProperty.call(overrides.tiers, tier) ? overrides.tiers[tier]?.[provider] : undefined
+  const shipped = Object.prototype.hasOwnProperty.call(shippedGrid.tiers, tier) ? shippedGrid.tiers[tier][provider] : undefined
+  const candidate = declared ?? shipped
+  return candidate ? { model: candidate.model, effort: candidate.effort } : undefined
+}
+
 /** Resolve one kind for one provider: the project's choice when it made one, otherwise the shipped grid. */
 export function resolveRoute(kind: TaskKind, provider: RoutingProvider, overrides?: RoutingOverrides): ResolvedRoute {
   const issues = routingOverrideIssues(overrides)

@@ -6,6 +6,8 @@ import { fileExists } from '../utils'
 export interface ClaudeHook {
   type: string
   command: string
+  /** Seconds the host waits for the command; omitted keeps the host default. */
+  timeout?: number
 }
 
 export interface ClaudeHookGroup {
@@ -24,13 +26,15 @@ export const SRS_INTENT_HOOK_COMMAND = '.claude/skills/sf-srs/scripts/srs-intent
  * already registered for an event is never duplicated, and every unrelated
  * settings key is preserved as-is.
  */
-export async function mergeClaudeSettingsHooks(targetPath: string, hooks: ClaudeHooksConfig): Promise<void> {
+export async function mergeClaudeSettingsHooks(targetPath: string, hooks: ClaudeHooksConfig): Promise<boolean> {
   const settingsPath = join(targetPath, '.claude', 'settings.json')
 
   let settings: Record<string, unknown> = {}
-  if (await fileExists(settingsPath)) {
+  const existed = await fileExists(settingsPath)
+  if (existed) {
     settings = JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>
   }
+  const before = JSON.stringify(settings)
 
   const existingHooks = (settings.hooks ?? {}) as Record<string, ClaudeHookGroup[]>
 
@@ -50,8 +54,11 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
 
   settings.hooks = existingHooks
 
+  // Nothing to add: leave the file (and its formatting) exactly as the project has it.
+  if (existed && JSON.stringify(settings) === before) return false
   await mkdir(dirname(settingsPath), { recursive: true })
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+  return true
 }
 
 /**
@@ -59,16 +66,17 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
  * contract as the hooks: idempotent, a rule already present is never duplicated, and every
  * rule or key the user configured is kept.
  */
-export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[]): Promise<void> {
+export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[]): Promise<boolean> {
   const settingsPath = join(targetPath, '.claude', 'settings.json')
   const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? (JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>) : {}
   const permissions = (settings.permissions ?? {}) as Record<string, unknown>
   const existing = Array.isArray(permissions.allow) ? (permissions.allow as string[]) : []
   const missing = allow.filter((rule) => !existing.includes(rule))
-  if (missing.length === 0 && settings.permissions) return
+  if (missing.length === 0 && settings.permissions) return false
   settings.permissions = { ...permissions, allow: [...existing, ...missing] }
   await mkdir(dirname(settingsPath), { recursive: true })
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+  return true
 }
 
 /** Keep only the SaaSFoundry SRS hook in sync with the installed SRS skill. */
