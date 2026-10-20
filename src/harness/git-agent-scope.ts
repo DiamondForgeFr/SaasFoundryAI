@@ -91,6 +91,25 @@ async function validateExtensionEnable(root: string, gitDir: string, commonDir: 
 }
 
 /**
+ * The Git directory every worktree of this clone shares, or undefined outside a Git checkout. Cheap
+ * (one `rev-parse`), so a per-session read such as `sf status` can use it. Anything kept there is
+ * private to the clone: Git never tracks its own directory.
+ */
+export async function resolveGitCommonDir(targetPath: string): Promise<string | undefined> {
+  const root = resolve(targetPath)
+  let output: string
+  try {
+    output = (await git(root, ['rev-parse', '--git-common-dir']))!.trim()
+  } catch (error) {
+    if (/not a git repository/i.test(String((error as { stderr?: string }).stderr))) return undefined
+    throw error
+  }
+  const commonDir = resolve(root, output)
+  if ((await lstat(commonDir)).isSymbolicLink()) throw new Error(`Cannot keep clone-private state through a linked metadata directory: ${commonDir}`)
+  return commonDir
+}
+
+/**
  * Read-only preflight. info/exclude belongs to GIT_COMMON_DIR and is deliberately
  * not used: its patterns would affect every linked checkout.
  */
