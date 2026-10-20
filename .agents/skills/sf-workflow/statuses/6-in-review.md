@@ -46,7 +46,8 @@ Code review with mandatory green CI.
 - [ ] **Monitor reviews** — answer questions, implement requested changes
 - [ ] **Reviewer asks for extra tests** — create them, run locally, commit, push, wait for green CI, resolve conversation
 - [ ] **Delegated ticket** — a defect found in review, a red CI or a requested change goes back to the ticket's own agent, in the same worktree and on the same branch (the hand-back of Human Testing);
-      the session answers the reviewer and does not code it. The agent returns the ticket to AI Testing when the change calls for retesting (SKILL.md → Delegated ticket delivery)
+      the session answers the reviewer and does not code it. The agent returns the ticket to AI Testing when the change calls for retesting (SKILL.md → Delegated ticket delivery). A defect or a
+      requested change in the delegated work is a rework of that delegation: `sf agents outcome mark <ticket> rework` records it for the routing
 - [ ] **Wait for approval + green CI** — do nothing until the developer merges
 
 ## Errors to avoid

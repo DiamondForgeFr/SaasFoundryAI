@@ -53,6 +53,15 @@ On a project with a harness block, the agent-friendly output carries a `delegati
 the layer it comes from and its date, for example `delegation: allowed (shared, 2026-10-19T15:34:52.506Z)`. When a clone overrides the team's default it reads
 `delegation: declined (local, <date>; shared team default: allowed)`, and `not-asked` while nobody answered. A corrupt local answer shows as `unreadable (…)` and never fails the status.
 
+### Automatic routing
+
+On the same projects, a `routing:` line (and a `routing` object in `--json`) says where the automatic routing stands in this clone (see
+[`sf agents routing`](./sf-agents.md#measured-delegations-and-the-adjusted-routing)). It names the moves the adjustment made that nobody promoted yet, so a session knows the route it gets is not the
+shipped one, for example `routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. It also
+says, for each declared coding agent, whether the hooks that record every delegation are in place (`claude-code capture enforced`), missing
+(`codex capture hook missing (run sf agents refresh --scope shared)`) or unavailable for that host (`not enforced`: its delegations are recorded by hand). A damaged local layer shows as
+`unreadable (…)` and never fails the status.
+
 ### Runtime
 
 Whether the project can actually **run**, which a well-formed manifest says nothing about. A project can be perfectly configured and still have no `node_modules`, no database answering, and no ORM

@@ -5,7 +5,8 @@ import { join } from 'path'
 
 import { ADOPTION_COMMON_INSTRUCTIONS, GENERATED_REGION_END, GENERATED_REGION_START, installAgentInstructions } from '../../../harness/agent-instructions'
 import { listTierAssignments, type RoutingOverrides } from '../../../harness/routing-grid'
-import { TIER_AGENT_PATH, WHOLE_TICKET_LINE, renderTierAgents } from '../../../harness/tier-agents'
+import { parseDelegationLine } from '../../../harness/delegation-capture'
+import { DELEGATION_REPORT_LINE, TIER_AGENT_PATH, WHOLE_TICKET_LINE, renderTierAgents } from '../../../harness/tier-agents'
 import { hashFileContent } from '../../../utils'
 
 const TIERS = ['light', 'edit', 'build', 'fix', 'plan', 'terminal']
@@ -62,6 +63,37 @@ describe('tier agent rendering (#929)', () => {
     expect(WHOLE_TICKET_LINE).toContain('never run `ready-pr` on a ticket that goes through Human Testing')
     expect(WHOLE_TICKET_LINE).toContain('never record the delegation consent')
     expect(WHOLE_TICKET_LINE).toContain('never hand it on again')
+  })
+
+  // The delegate is the only one who knows whether it did the job (#1035): every tier agent must say how to tell the harness
+  it.each(['claude-code', 'codex'] as const)('asks every %s tier agent to close with the line the capture parses', (host) => {
+    for (const file of renderTierAgents([host])) {
+      const body = host === 'codex' ? toml(file.content).developer_instructions : file.content
+      expect(body).toContain(DELEGATION_REPORT_LINE)
+    }
+  })
+
+  it('gives an example line that the capture parses to the verdict and the fields it asks for', () => {
+    const example = /`(SF-DELEGATION: [^`]+)`/.exec(DELEGATION_REPORT_LINE)![1]
+    expect(example).toBe('SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<number> complexity=<bug|low|medium|complex> checks=<codes>')
+    const filled = example
+      .replace('<pass|fail>', 'pass')
+      .replace('<task kind>', 'tests')
+      .replace('<number>', '1035')
+      .replace('<bug|low|medium|complex>', 'medium')
+      .replace('<codes>', 'type-check,automated-tests')
+    expect(parseDelegationLine(`Done.\n${filled}`)).toEqual({
+      verdict: 'pass',
+      kind: 'tests',
+      ticket: 1035,
+      complexity: 'medium',
+      nature: null,
+      trial: false,
+      checks: ['type-check', 'automated-tests'],
+      ignored: []
+    })
+    // every check the line offers is a code the ledger knows
+    for (const code of ['self-review', 'type-check', 'automated-tests', 'integration-tests', 'independent-review', 'security-tests']) expect(DELEGATION_REPORT_LINE).toContain(code)
   })
 
   it('keeps the whole-ticket line valid inside a TOML multi-line string', () => {
