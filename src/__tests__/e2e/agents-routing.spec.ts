@@ -80,6 +80,45 @@ describe('compiled sf agents routing and the adjusted route (#1035)', () => {
     expect(route('--no-trial')).toMatchObject({ tier: 'fix', source: 'project', adjustment: null })
   })
 
+  it('reports per kind and tier and per ticket, undoes a move with reset, and shows it all in sf status', async () => {
+    for (const outcome of ['pass', 'pass', 'pass', 'pass', 'pass', 'pass', 'pass', 'fail', 'fail', 'fail']) expect(record(outcome, ['--ticket', '1035', '--complexity', 'complex']).status).toBe(0)
+    sf(['routing', 'adjust'])
+    const json = sf(['routing', 'report', '--json'])
+    expect(json.status).toBe(0)
+    const report = JSON.parse(json.stdout)
+    expect(report).toMatchObject({
+      reportVersion: 1,
+      ledger: { runs: 10, rated: 10, censored: 0 },
+      kinds: [
+        {
+          kind: 'multi-file-feature',
+          provider: 'claude-code',
+          routedTier: 'fix',
+          source: 'auto',
+          tiers: [{ tier: 'build', runs: 10, successes: 7, failures: 3, successRate: 0.7, cost: { priced: 10, p95: '0.300000' }, durationMs: { p95: 60000 } }]
+        }
+      ],
+      tickets: { byComplexity: [{ complexity: 'complex', tickets: 1, cost: { median: '3.000000' } }] },
+      localAdjustments: [{ kind: 'multi-file-feature', provider: 'claude-code', tier: 'fix', from: 'build', action: 'escalate' }]
+    })
+    const text = sf(['routing', 'report']).stdout
+    expect(text).toContain('Runs recorded: 10 (10 rated, 0 censored)')
+    expect(text).toMatch(/multi-file-feature\s+claude-code\s+build\s+10\s+70% of 10/)
+    expect(text).toContain('Local adjustments, not promoted')
+
+    const statusText = spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'status', '--agent-friendly', '--no-network'], { cwd: project, encoding: 'utf8', env: cleanEnv }).stdout
+    expect(statusText).toContain('- routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on')
+
+    const reset = sf(['routing', 'reset', 'multi-file-feature'])
+    expect(reset.status).toBe(0)
+    expect(reset.stdout).toContain('Reset multi-file-feature (claude-code): fix → build. The evidence starts over from now.')
+    expect(route('--no-trial')).toMatchObject({ tier: 'build', source: 'shipped' })
+    expect(JSON.parse(sf(['routing', 'reset', 'multi-file-feature', '--json']).stdout)).toMatchObject({ resetVersion: 1, kind: 'multi-file-feature', reset: [] })
+    const unknown = sf(['routing', 'reset', 'deploy', '--json'])
+    expect(unknown.status).toBe(1)
+    expect(JSON.parse(unknown.stdout).error).toContain('Unknown task kind')
+  })
+
   it('runs the adjustment after each captured delegation and says so, without ever failing the host', async () => {
     for (const outcome of ['pass', 'pass', 'pass', 'pass', 'pass', 'pass', 'pass', 'fail', 'fail']) expect(record(outcome).status).toBe(0)
     const payload = JSON.stringify({

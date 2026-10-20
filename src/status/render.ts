@@ -1,7 +1,7 @@
 import chalk from 'chalk'
 
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
-import type { StatusDelegation, StatusReport } from './collect'
+import type { StatusDelegation, StatusReport, StatusRouting } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
 export interface RenderPayload {
@@ -20,6 +20,30 @@ export function delegationSummary(delegation: StatusDelegation): string {
   if (delegation.ticketDelivery === 'not-asked') return 'not-asked (ask the developer once, then record it with sf agents delegation allow or decline)'
   const team = delegation.source === 'local' ? `; shared team default: ${delegation.shared.ticketDelivery}` : ''
   return `${delegation.ticketDelivery} (${delegation.source}, ${delegation.decidedAt}${team})`
+}
+
+/**
+ * The automatic routing of this clone on one line (#1035): the moves nobody promoted yet, so a
+ * session knows the route it gets is not the shipped one, and whether the hooks that record every
+ * delegation are in place for each declared coding agent.
+ */
+export function routingSummary(routing: StatusRouting): string {
+  if ('error' in routing) return `unreadable (${routing.error})`
+  const moves = routing.adjustments.length
+    ? `${routing.adjustments.length} local automatic adjustment${routing.adjustments.length === 1 ? '' : 's'} not promoted (${routing.adjustments
+        .map((entry) => `${entry.kind} → ${entry.tier} for ${entry.provider}, ${entry.action} on ${entry.at.slice(0, 10)}`)
+        .join('; ')}; sf agents routing report, promote or reset)`
+    : 'shipped grid and shared overrides, no local adjustment'
+  const capture = routing.capture
+    .map((entry) =>
+      entry.state === 'enforced'
+        ? `${entry.agent} capture enforced`
+        : entry.state === 'missing'
+          ? `${entry.agent} capture hook missing (run sf agents refresh --scope shared)`
+          : `${entry.agent} capture not enforced (record its delegations with sf agents outcome record)`
+    )
+    .join('; ')
+  return `${moves}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
 }
 
 const STATUS_ICON: Record<PreconditionStatus, string> = { ok: '✓', warn: '⚠', fail: '✗', skip: '·' }
@@ -52,6 +76,7 @@ export function renderHuman(payload: RenderPayload): string {
       if (report.capabilities.previewCommand) lines.push(`${chalk.gray('Preview full profile:')} ${report.capabilities.previewCommand}`)
     }
     if (report.delegation) lines.push(`${chalk.gray('Delegation:')} ${delegationSummary(report.delegation)}`)
+    if (report.routing) lines.push(`${chalk.gray('Routing:')} ${routingSummary(report.routing)}`)
   } else {
     lines.push(chalk.red('Not a SaaSFoundryAI project (no .saasfoundry.json)'))
   }
@@ -107,6 +132,8 @@ export function renderJson(payload: RenderPayload): string {
     capabilities: report.capabilities ?? null,
     // Additive (#1026): the effective consent with its shared and local layers, null without a harness
     delegation: report.delegation ?? null,
+    // Additive (#1035): the automatic routing of this clone, null without a harness
+    routing: report.routing ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
     // Additive: the facts behind the three instruction preconditions (#939)
@@ -138,6 +165,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
     }
     lines.push(`- workflow: ${report.manifest.workflow?.tool ?? 'none'}`)
     if (report.delegation) lines.push(`- delegation: ${delegationSummary(report.delegation)}`)
+    if (report.routing) lines.push(`- routing: ${routingSummary(report.routing)}`)
     const srs = report.manifest.tools?.srs
     lines.push(`- srs: ${srs?.enabled ? `${srs.backend} — ${srs.rootPage?.name ?? 'no root page'}` : 'not installed'}`)
   } else {

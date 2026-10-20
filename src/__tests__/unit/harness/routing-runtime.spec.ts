@@ -7,7 +7,7 @@ import { promisify } from 'util'
 import { promoteLocalRouting } from '../../../harness/agent-support'
 import { appendRun, buildRunRecord, type RunInput } from '../../../harness/delegation-ledger'
 import { emptyLocalRouting, localRoutingPath, readLocalRouting, updateLocalRouting, type LocalAdjustment } from '../../../harness/routing-local'
-import { loadRoutingState, routeKind, runAdjustment } from '../../../harness/routing-runtime'
+import { loadRoutingState, resetLocalRouting, routeKind, runAdjustment } from '../../../harness/routing-runtime'
 
 const exec = promisify(execFile)
 // A commit hook exports GIT_* variables: a fixture repository must never inherit them.
@@ -140,6 +140,50 @@ describe('the routing at work in a clone (#1035)', () => {
       const state = await loadRoutingState(root, { onDamaged: (message) => warnings.push(message) })
       expect(warnings[0]).toContain('delete the file to start over')
       expect(routeKind(state, 'tests', 'claude-code', { trial: false })).toMatchObject({ tier: 'build', source: 'shipped' })
+    })
+  })
+
+  describe('undoing a move (AC-6)', () => {
+    it('returns the kind to the shipped grid, restarts the evidence, and logs the reset', async () => {
+      await record('sssssssfff')
+      await runAdjustment(root, { now: NOW })
+      const reset = await resetLocalRouting(root, 'multi-file-feature', { now: new Date(NOW.getTime() + 60_000) })
+      expect(reset).toEqual({ kind: 'multi-file-feature', reset: [{ provider: 'claude-code', from: 'fix', restoredTo: 'build' }], sharedOverride: null })
+      const local = await readLocalRouting(ledger)
+      expect(local.kinds).toEqual({})
+      expect(local.log.map((line) => line.action)).toEqual(['escalate', 'reset'])
+      expect(routeKind(await loadRoutingState(root), 'multi-file-feature', 'claude-code', { trial: false })).toMatchObject({ tier: 'build', source: 'shipped' })
+      // The failures that caused the move are not counted again: the next capture does not undo the reset
+      expect((await runAdjustment(root, { now: new Date(NOW.getTime() + 120_000) })).moved).toBe(false)
+    })
+
+    it('never changes what the developer wrote in the manifest, and says it', async () => {
+      await manifest({ version: 4, agents: ['claude-code'], routing: { kinds: { tests: { tier: 'plan' } } } })
+      const before = await readFile(join(root, '.saasfoundry.json'), 'utf8')
+      await updateLocalRouting(ledger, () => ({
+        next: { ...emptyLocalRouting(), kinds: { tests: { 'claude-code': { tier: 'fix', from: 'build', action: 'escalate', at: NOW.toISOString(), evidence: {} as never } } } },
+        result: null
+      }))
+      expect(await resetLocalRouting(root, 'tests')).toEqual({ kind: 'tests', reset: [{ provider: 'claude-code', from: 'fix', restoredTo: 'plan' }], sharedOverride: 'plan' })
+      expect(await readFile(join(root, '.saasfoundry.json'), 'utf8')).toBe(before)
+    })
+
+    it('only resets the provider it is asked to', async () => {
+      const entry = (tier: string): LocalAdjustment => ({ tier, from: 'build', action: 'escalate', at: NOW.toISOString(), evidence: {} as never })
+      await updateLocalRouting(ledger, () => ({ next: { ...emptyLocalRouting(), kinds: { tests: { 'claude-code': entry('fix'), codex: entry('terminal') } } }, result: null }))
+      const reset = await resetLocalRouting(root, 'tests', { provider: 'codex' })
+      expect(reset.reset).toEqual([{ provider: 'codex', from: 'terminal', restoredTo: 'build' }])
+      expect(Object.keys((await readLocalRouting(ledger)).kinds.tests ?? {})).toEqual(['claude-code'])
+    })
+
+    it('says there is nothing to undo, and refuses outside a clone', async () => {
+      expect(await resetLocalRouting(root, 'tests')).toEqual({ kind: 'tests', reset: [], sharedOverride: null })
+      const elsewhere = await realpath(await mkdtemp(join(tmpdir(), 'sf-runtime-reset-')))
+      try {
+        await expect(resetLocalRouting(elsewhere, 'tests')).rejects.toThrow('Git directory of the clone')
+      } finally {
+        await rm(elsewhere, { recursive: true, force: true })
+      }
     })
   })
 
