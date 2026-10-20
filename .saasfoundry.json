@@ -150,7 +150,7 @@
     ".agents/skills/sf-workflow/statuses/6-in-review.md": "75223cc55cd9ff5fafcc7328232427a9775157b35d282039c26c2a2b4fcc9307",
     ".agents/skills/sf-workflow/statuses/7-done.md": "998216a270f6c80bb530c5c3d58e41bad05680b174c2477da36afdb11ce5e3fc",
     ".agents/skills/sf-workflow/workflow-cli.sh": "c46edf0ce607325acd48dbd366489c603a620a3832a7e735423f82bafa7f6378",
-    ".claude/rules/claude-code.md": "346a5328d2a3648e6ecdd1b0c872f2844889745537c1fa10df5dc24c8461a092",
+    ".claude/rules/claude-code.md": "7d278f68f2cf5b5e2a119ec7e3962075b4ad02b4fbd91dd70abbe42aaca53ba2",
     ".claude/agents/sf-light.md": "e20253007c79e61d0442a46c11494c42119c7138b40df0b0c97e0170cee317ec",
     ".claude/agents/sf-edit.md": "718deaf788efdd9c825b777c12d1685a01c56d95b0d55622d6b99edb968ed50f",
     ".claude/agents/sf-build.md": "aed218233d2bf9346ea4dab7495a549d4e32faf044137b01f65b4501cc22e5e6",
