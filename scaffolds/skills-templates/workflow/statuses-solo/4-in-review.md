@@ -38,6 +38,7 @@ next_status: Done
 - [ ] **Monitor CI** — on red: analyze logs, fix, commit, push, wait for green
 - [ ] **Monitor the review** — answer questions, implement requested changes
 - [ ] **Reviewer asks for extra tests** — create them, run locally, commit, push, wait for green CI, resolve conversation
+- [ ] **Delegated ticket** — a defect found in review, a red CI or a requested change goes back to the ticket's own agent, in the same worktree and on the same branch; the session answers the reviewer and does not code it. The agent returns the ticket to AI Testing when the change calls for retesting (SKILL.md → Delegated ticket delivery)
 - [ ] **Wait for approval + green CI** — do nothing until the developer merges
 
 ## Errors to avoid
@@ -45,6 +46,7 @@ next_status: Done
 - Asking the developer to merge with red CI
 - Ignoring test failures in CI
 - Merging yourself (unless explicitly instructed)
+- The session coding a review fix itself while delegation is `allowed`: it goes back to the ticket's own agent
 - Treating the review as a formality — in solo it replaces Human Testing; surface anything the reviewer should look at manually
 
 ## Guard
