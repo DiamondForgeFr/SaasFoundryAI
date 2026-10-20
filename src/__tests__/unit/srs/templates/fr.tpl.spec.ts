@@ -1,6 +1,6 @@
 import { FR_TITLE_SEPARATOR } from '../../../../builders/srs/constants'
-import { renderFrPage } from '../../../../builders/srs/templates/pages/fr.tpl'
-import { FrSpec, PageBlock, TableBlock } from '../../../../builders/srs/types'
+import { frPageUpdates, readFrDetail, renderFrPage } from '../../../../builders/srs/templates/pages/fr.tpl'
+import { FrItem, FrSpec, PageBlock, TableBlock } from '../../../../builders/srs/types'
 
 function findTableAfterHeading(blocks: PageBlock[], headingText: string): TableBlock {
   for (let i = 0; i < blocks.length - 1; i++) {
@@ -134,5 +134,91 @@ describe('renderFrPage — five-category structure', () => {
     const cellFor = (label: string) => detail.rows.find((row) => row[0] === label)?.[1]
     expect(cellFor('Acceptance Criteria')).toBe('• a\n• b\n• c')
     expect(cellFor('Validation Rules')).toBe('• r1')
+  })
+})
+
+// #945 — an FR amended in place is read back from, and written to, the page the renderer wrote
+describe('readFrDetail', () => {
+  const fr: FrItem = {
+    id: 'FR-AUTH-01-01',
+    title: 'Sign in',
+    description: 'Authenticate user via email + password',
+    endpoint: 'POST /auth/signin',
+    priority: 'P1',
+    complexity: 'medium',
+    urRefs: ['UR-AUTH-01-01'],
+    dsRefs: ['DS-AUTH-01-01', 'DS-AUTH-01-02'],
+    tcRefs: ['TC-AUTH-01-01'],
+    requestBody: '{ email, password }',
+    acceptanceCriteria: ['returns 200 on success', 'returns 401 on invalid credentials'],
+    validationRules: ['email required'],
+    securityRationale: 'Prevents user enumeration'
+  }
+  const detailRows = (item: FrItem) => findTableAfterHeading(renderFrPage({ parentEpicPageId: 'epic', fr: item }).blocks, `${item.id} — ${item.title}`).rows
+  const withHeader = (rows: string[][]) => [['Field', 'Value'], ...rows]
+
+  it('is the inverse of what the renderer writes in the Field/Value table', () => {
+    expect(readFrDetail(withHeader(detailRows(fr)), { id: fr.id, title: 'ignored' })).toEqual(fr)
+  })
+
+  it('reads the em-dash placeholder as no value', () => {
+    const read = readFrDetail(withHeader(detailRows({ id: 'FR-1', title: 'Bare' })), { id: 'FR-1', title: 'Bare' })
+
+    expect(read).toEqual({
+      id: 'FR-1',
+      title: 'Bare',
+      endpoint: undefined,
+      priority: undefined,
+      complexity: undefined,
+      urRefs: [],
+      dsRefs: [],
+      tcRefs: [],
+      description: undefined,
+      requestBody: undefined,
+      acceptanceCriteria: [],
+      validationRules: [],
+      securityRationale: undefined
+    })
+  })
+
+  it('takes the id and the title from the fallback when the table lacks them, and ignores a value it does not know', () => {
+    const rows = withHeader([
+      ['Priority', 'High'],
+      ['Complexity', 'huge']
+    ])
+
+    expect(readFrDetail(rows, { id: 'FR-9', title: 'From the page title' })).toMatchObject({ id: 'FR-9', title: 'From the page title', priority: undefined, complexity: undefined })
+  })
+})
+
+describe('frPageUpdates', () => {
+  const fr: FrItem = { id: 'FR-AUTH-01-01', title: 'Sign in with SSO', priority: 'P2', description: 'New text', acceptanceCriteria: ['a', 'b'] }
+  const headings = { summary: 'Summary', detail: 'FR-AUTH-01-01 — Sign in' }
+
+  it('addresses the detail rows by their label, for the fields amended only', () => {
+    expect(frPageUpdates(fr, ['description', 'acceptanceCriteria'], headings)).toEqual([
+      { kind: 'table-cells', heading: 'FR-AUTH-01-01 — Sign in', rowKey: 'Description', cells: { Value: 'New text' } },
+      { kind: 'table-cells', heading: 'FR-AUTH-01-01 — Sign in', rowKey: 'Acceptance Criteria', cells: { Value: '• a\n• b' } }
+    ])
+  })
+
+  it('amends the Summary row by the FR id for a title or a priority, and the heading and page title for a title', () => {
+    expect(frPageUpdates(fr, ['title', 'priority'], headings)).toEqual([
+      { kind: 'table-cells', heading: 'Summary', rowKey: 'FR-AUTH-01-01', cells: { Requirement: 'Sign in with SSO', Priority: 'P2' } },
+      { kind: 'table-cells', heading: 'FR-AUTH-01-01 — Sign in', rowKey: 'Title', cells: { Value: 'Sign in with SSO' } },
+      { kind: 'table-cells', heading: 'FR-AUTH-01-01 — Sign in', rowKey: 'Priority', cells: { Value: 'P2' } },
+      { kind: 'heading', heading: 'FR-AUTH-01-01 — Sign in', text: 'FR-AUTH-01-01 — Sign in with SSO' },
+      { kind: 'title', text: 'FR-AUTH-01-01 — Sign in with SSO' }
+    ])
+  })
+
+  it('writes the em-dash placeholder for a list emptied', () => {
+    expect(frPageUpdates({ ...fr, acceptanceCriteria: [] }, ['acceptanceCriteria'], headings)).toEqual([
+      { kind: 'table-cells', heading: 'FR-AUTH-01-01 — Sign in', rowKey: 'Acceptance Criteria', cells: { Value: '—' } }
+    ])
+  })
+
+  it('updates nothing for no field', () => {
+    expect(frPageUpdates(fr, [], headings)).toEqual([])
   })
 })
