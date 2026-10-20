@@ -45,7 +45,7 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 - [ ] **On failure** — document, fix, commit, push, restart from automated tests
 - [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel `review` delegations (security / logic / perf). Fix Critical/High findings. If any fix committed, restart from
       automated tests.
-- [ ] **Delegated ticket** — the agent that built it stops when the report is posted and every check is green, with the ticket still in AI Testing and the PR still a draft. It never merges and never moves the ticket itself past AI Testing. The session takes over: it runs the Examine of a `complex` ticket (the agent that built the work does not review it) and hands the Critical/High findings back to that agent, then does what "On green" below says, `ready-pr` included (SKILL.md → Delegated ticket delivery)
+- [ ] **Delegated ticket** — the agent that built it stops when the report is posted and every check is green, with the ticket still in AI Testing and the PR still a draft. It never merges, never records the delegation consent and never moves the ticket itself past AI Testing. The session takes over: it runs the Examine of a `complex` ticket (the agent that built the work does not review it) and hands the Critical/High findings back to that agent, then does what "On green" below says, `ready-pr` included (SKILL.md → Delegated ticket delivery)
 - [ ] **On green** — post the test report summary (include examine findings if complex), then:
   - default: take the PR out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**
   - `nature:bundled-pr` children: move to **Done** directly (no individual PR — the delivery parent owns the branch and PR)

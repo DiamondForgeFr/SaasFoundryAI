@@ -45,6 +45,8 @@ Code review with mandatory green CI.
       to Human Testing.
 - [ ] **Monitor reviews** — answer questions, implement requested changes
 - [ ] **Reviewer asks for extra tests** — create them, run locally, commit, push, wait for green CI, resolve conversation
+- [ ] **Delegated ticket** — a defect found in review, a red CI or a requested change goes back to the ticket's own agent, in the same worktree and on the same branch (the hand-back of Human Testing);
+      the session answers the reviewer and does not code it. The agent returns the ticket to AI Testing when the change calls for retesting (SKILL.md → Delegated ticket delivery)
 - [ ] **Wait for approval + green CI** — do nothing until the developer merges
 
 ## Errors to avoid
@@ -52,6 +54,7 @@ Code review with mandatory green CI.
 - Asking the developer to merge with red CI
 - Ignoring test failures in CI
 - Merging yourself (unless explicitly instructed)
+- The session coding a review fix itself while delegation is `allowed`: it goes back to the ticket's own agent
 
 ## Guard
 

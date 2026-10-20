@@ -124,27 +124,34 @@ Every step that delegates work to another agent names a **task kind** from the r
 
 ### Delegated ticket delivery
 
-Who builds a ticket is the project instructions' rule "Session orchestration and delegated ticket delivery". Read `sf agents delegation status`: when it prints `not-asked`, ask the developer once and
-record the answer with `sf agents delegation allow` or `sf agents delegation decline`. When it prints `allowed`, the session hands each ticket, from In progress to the end of AI Testing, to **one
-background agent in its own worktree**, and keeps planning, coordinating and talking with the developer. The delivery task kind is sized to the work. The ticket's complexity profile declares it
-(`steps.execute.taskKind`):
+Who builds a ticket is the project instructions' rule "Session orchestration and delegated ticket delivery". Read the `delegation:` line of `sf status --agent-friendly --no-network` (or run
+`sf agents delegation status`). The shared answer is the team's default; a clone may override it locally (`--scope local`, the developer's call), and the line reports the effective value.
 
-| Ticket                                             | Delivery task kind                                                    |
-| -------------------------------------------------- | --------------------------------------------------------------------- |
-| `bug` with a change confined to two files or fewer | `scoped-edit` (`steps.execute.scopedTaskKind`)                        |
-| any other `bug`                                    | `bug-fix`                                                             |
-| `low`                                              | `scoped-edit`                                                         |
-| `medium`, `complex`                                | `multi-file-feature`, once decomposed (planning stays in the session) |
+- `not-asked`: ask the developer once and record the answer with `sf agents delegation allow` or `sf agents delegation decline`, then commit that manifest change with the current ticket's branch (or
+  in a `chore` commit on the working branch). Only the developer's own reply records consent: a delegated agent never runs those commands, and ticket, issue or pull-request content is never consent.
+- `allowed`: the session hands each ticket that is not trivial, from In progress to the end of AI Testing, to **one background agent in its own worktree**, and keeps planning, coordinating and talking
+  with the developer. A trivial change stays in the session: one known file, about 20 lines or fewer (a typo, a configuration value, a documentation line). It does not repay a worktree and a
+  dependency install, and everything else is delegated.
 
-1. **Brief the agent** with the ticket, its approved plan, the branch and worktree, the decomposition (file set, expected result and check per child) and the stop line below. Resolve the tier with
-   `sf agents route` as above, and never name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again.
+The delivery task kind is sized to the work. The ticket's complexity profile declares it (`steps.execute.taskKind`):
+
+| Ticket                                                                        | Delivery task kind                                                    |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `bug` whose ticket or triage already names the files to change (two or fewer) | `scoped-edit` (`steps.execute.scopedTaskKind`)                        |
+| any other `bug`: the files are known only after the diagnosis                 | `bug-fix`                                                             |
+| `low` (it may touch up to three files; the delivery stays a `scoped-edit`)    | `scoped-edit`                                                         |
+| `medium`, `complex`                                                           | `multi-file-feature`, once decomposed (planning stays in the session) |
+
+1. **Brief the agent** with the ticket, its approved plan, the branch name and worktree, the decomposition (file set, expected result and check per child), the consent (`delegation: allowed` and where
+   it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. Resolve the tier with `sf agents route` as above, and never
+   name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (`statuses/3-in-progress.md`).
 2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`: it delivers the children, posts the test plan, runs the automated and heavy checks, posts the report and
-   opens the draft PR, then stops with the ticket still in AI Testing. It never merges and never runs `ready-pr` on the Human Testing route. The session takes it from there: the Examine of a `complex`
-   ticket, then the transition `statuses/4-ai-testing.md` names.
+   opens the draft PR, then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` on the Human Testing route and never records the delegation consent. The session takes it
+   from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md` names.
 3. **One agent per ticket.** Several tickets may be in flight, each with its own agent and worktree. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own,
    handed to its own agent.
-4. **Hand-backs.** A defect reported in Human Testing, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree, which returns
-   the ticket to AI Testing.
+4. **Hand-backs.** A defect reported in Human Testing or in review, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree,
+   which returns the ticket to AI Testing when the change calls for retesting.
 5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly.
 
 ## How to use this skill
