@@ -414,9 +414,14 @@ export async function requireLedgerDir(root: string): Promise<string> {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-async function withLock<T>(dir: string, action: () => Promise<T>): Promise<T> {
+/**
+ * Run `action` holding an exclusive lock file in the clone-private directory. The ledger and the local
+ * routing layer each take their own lock (`name`), so appending a run never waits for an adjustment to
+ * be written. A lock a dead writer left behind is broken after 30 seconds.
+ */
+export async function withLock<T>(dir: string, action: () => Promise<T>, name = LOCK_FILE): Promise<T> {
   await mkdir(dir, { recursive: true, mode: 0o700 })
-  const path = join(dir, LOCK_FILE)
+  const path = join(dir, name)
   const deadline = Date.now() + LOCK_WAIT_MS
   let handle
   for (;;) {

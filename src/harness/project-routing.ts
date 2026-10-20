@@ -19,7 +19,7 @@ export interface ProjectRouting {
  * agents and the adjustment policy. A manifest that cannot be read, or whose routing block is
  * invalid, fails closed: an automatic move must never be applied over a configuration nobody checked.
  */
-export async function readProjectRouting(root: string): Promise<ProjectRouting> {
+export async function readProjectRouting(root: string, options: { validate?: boolean } = {}): Promise<ProjectRouting> {
   let manifest: SaaSFoundryManifest | undefined
   try {
     manifest = JSON.parse(await readFile(join(root, '.saasfoundry.json'), 'utf8')) as SaaSFoundryManifest
@@ -27,7 +27,8 @@ export async function readProjectRouting(root: string): Promise<ProjectRouting> 
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`.saasfoundry.json cannot be read: ${error instanceof Error ? error.message : String(error)}`)
   }
   const harness = manifest?.modules?.harness
-  const issues = routingOverrideIssues(harness?.routing)
+  // A caller that answers other questions first (which agent, which kind) validates when it resolves a route.
+  const issues = options.validate === false ? [] : routingOverrideIssues(harness?.routing)
   if (issues.length) throw new Error(`Invalid modules.harness.routing:\n- ${issues.join('\n- ')}`)
   return {
     ...(manifest ? { manifest } : {}),

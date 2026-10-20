@@ -1,4 +1,4 @@
-import { ROUTING_GRID_VERSION, isRoutingProvider, listTierAssignments, type RoutingOverrides, type RoutingProvider, type TaskKind, type TierAssignment } from './routing-grid'
+import { ROUTING_GRID_VERSION, isRoutingProvider, listTierAssignments, type AutoKinds, type RoutingOverrides, type RoutingProvider, type TaskKind, type TierAssignment } from './routing-grid'
 import type { HarnessAgent } from '../types'
 
 /** One line per task kind, so a description says what the kind covers without the docs. */
@@ -100,11 +100,15 @@ export function renderCodexTierAgent(assignment: TierAssignment): string {
   ].join('\n')
 }
 
-/** One file per tier that serves at least one kind, for every declared coding agent the grid routes. */
-export function renderTierAgents(agents: readonly HarnessAgent[], overrides?: RoutingOverrides): TierAgentFile[] {
+/**
+ * One file per tier that serves at least one kind, for every declared coding agent the grid routes.
+ * `auto` is the clone's automatic moves (#1035): the files that are committed are rendered without
+ * them; it exists to tell which of those files a move would change.
+ */
+export function renderTierAgents(agents: readonly HarnessAgent[], overrides?: RoutingOverrides, auto?: Partial<Record<RoutingProvider, AutoKinds>>): TierAgentFile[] {
   const files: TierAgentFile[] = []
   for (const provider of [...new Set(agents)].filter(isRoutingProvider)) {
-    for (const assignment of listTierAssignments(provider, overrides)) {
+    for (const assignment of listTierAssignments(provider, overrides, auto?.[provider])) {
       files.push({ path: tierAgentPath(provider, assignment.tier), content: provider === 'claude-code' ? renderClaudeTierAgent(assignment) : renderCodexTierAgent(assignment) })
     }
   }
