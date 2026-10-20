@@ -1,6 +1,6 @@
 import { composeFrTitle } from '../../fr-title-format'
 import { FrItem, FrSpec, isComplexity, PageBlock, PageContent, Priority, SectionUpdate } from '../../types'
-import { changedCells } from './cell-changes'
+import { FrField, listedCells } from './fr-fields'
 
 const EMPTY_CELL = '—'
 
@@ -143,24 +143,38 @@ export interface FrPageHeadings {
   detail: string
 }
 
+/** The label of each amendable field in the Field/Value table. */
+const FIELD_LABELS: Record<FrField, string> = {
+  title: LABELS.title,
+  description: LABELS.description,
+  priority: LABELS.priority,
+  complexity: LABELS.complexity,
+  endpoint: LABELS.endpoint,
+  requestBody: LABELS.requestBody,
+  securityRationale: LABELS.securityRationale,
+  acceptanceCriteria: LABELS.acceptanceCriteria,
+  validationRules: LABELS.validationRules
+}
+
 /**
- * What an FR page needs to go from `before` to `after`, in place (#945): the cells of its
- * Summary and Field/Value tables that differ, then — when the title changed — its heading and
- * its page title. The cells are written under the headings the page has now, so the detail
- * table is amended before its heading is renamed.
+ * What an FR page needs to hold the amended `fields` of `fr`, in place (#945): the cells of its
+ * Summary table and of its Field/Value table, then — for a new title — its heading and its page
+ * title. The cells are addressed under the headings the page has now, so the detail table is
+ * amended before its heading is renamed. The values are asserted, not diffed: the page tells
+ * which of them it already holds.
  */
-export function frPageUpdates(before: FrItem, after: FrItem, headings: FrPageHeadings): SectionUpdate[] {
+export function frPageUpdates(fr: FrItem, fields: readonly FrField[], headings: FrPageHeadings): SectionUpdate[] {
   const updates: SectionUpdate[] = []
 
-  const summary = changedCells(SUMMARY_HEADER, summaryRow(before), summaryRow(after))
-  if (Object.keys(summary).length > 0) updates.push({ kind: 'table-cells', heading: headings.summary, rowKey: before.id, cells: summary })
+  const summary = listedCells(fr, fields)
+  if (Object.keys(summary).length > 0) updates.push({ kind: 'table-cells', heading: headings.summary, rowKey: fr.id, cells: summary })
 
-  const was = detailRows(before)
-  detailRows(after).forEach(([label, value], index) => {
-    if (was[index][1] !== value) updates.push({ kind: 'table-cells', heading: headings.detail, rowKey: label, cells: { Value: value } })
-  })
+  const rows = new Map(detailRows(fr).map(([label, value]) => [label, value]))
+  for (const field of fields) updates.push({ kind: 'table-cells', heading: headings.detail, rowKey: FIELD_LABELS[field], cells: { Value: rows.get(FIELD_LABELS[field]) ?? EMPTY_CELL } })
 
-  const title = composeFrTitle(after.id, after.title)
-  if (composeFrTitle(before.id, before.title) !== title) updates.push({ kind: 'heading', heading: headings.detail, text: title }, { kind: 'title', text: title })
+  if (fields.includes('title')) {
+    const title = composeFrTitle(fr.id, fr.title)
+    updates.push({ kind: 'heading', heading: headings.detail, text: title }, { kind: 'title', text: title })
+  }
   return updates
 }

@@ -1,5 +1,6 @@
 import { stripOwnIdPrefix } from '../builders/srs/fr-title-format'
 import { featureFrUpdates, VERSION_HEADINGS, versionAmendmentAdditions, versionAmendmentLine, versionFrUpdates } from '../builders/srs/templates/pages/epic.tpl'
+import { FR_FIELDS, FrField } from '../builders/srs/templates/pages/fr-fields'
 import { FrPageHeadings, frPageUpdates, readFrDetail } from '../builders/srs/templates/pages/fr.tpl'
 import { COMPLEXITIES, FrItem, isComplexity, Priority, RawContent, SectionUpdate, SectionUpdateOptions, SectionUpdateOutcome, SrsAdapter } from '../builders/srs/types'
 import { parseEpicPage } from './spawn/page-content'
@@ -16,8 +17,8 @@ import { locateFr, locatePage, readSrsTree } from './version-extension'
 const REFERENCES_FOLLOW_UP = '#1056'
 const STORY_FOLLOW_UP = '#1057'
 
-export const FR_CHANGE_FIELDS = ['title', 'description', 'priority', 'complexity', 'endpoint', 'requestBody', 'securityRationale', 'acceptanceCriteria', 'validationRules'] as const
-export type FrChangeField = (typeof FR_CHANGE_FIELDS)[number]
+export const FR_CHANGE_FIELDS = FR_FIELDS
+export type FrChangeField = FrField
 
 const TEXT_FIELDS = ['description', 'endpoint', 'requestBody', 'securityRationale'] as const
 const LIST_FIELDS = ['acceptanceCriteria', 'validationRules'] as const
@@ -299,7 +300,8 @@ function refuse(code: 2 | 5, message: string): UpdateFrOutcome {
   return { code, message: `✗ apply-srs-update: update-fr — ${message}\n` }
 }
 
-function buildSteps(fr: SrsTreeFr, before: FrItem, after: FrItem, headings: FrPageHeadings): Step[] {
+/** The updates that put the amended `fields` of `item` on the FR page and in the tables that list it. */
+function buildSteps(fr: SrsTreeFr, item: FrItem, fields: readonly FrChangeField[], headings: FrPageHeadings): Step[] {
   const frPage = (update: SectionUpdate): Step => ({
     page: 'fr',
     pageId: fr.pageId,
@@ -312,11 +314,11 @@ function buildSteps(fr: SrsTreeFr, before: FrItem, after: FrItem, headings: FrPa
       return update.heading === headings.summary ? `FR page › summary › ${cell}` : `FR page › ${update.rowKey}`
     }
   })
-  const steps = frPageUpdates(before, after, headings).map(frPage)
+  const steps = frPageUpdates(item, fields, headings).map(frPage)
   if (fr.versionPageId) {
     const pageLabel = `version "${fr.version}"`
     steps.push(
-      ...versionFrUpdates(before, after).map((update) => ({
+      ...versionFrUpdates(item, fields).map((update) => ({
         page: 'version' as const,
         pageId: fr.versionPageId!,
         pageLabel,
@@ -328,7 +330,7 @@ function buildSteps(fr: SrsTreeFr, before: FrItem, after: FrItem, headings: FrPa
   }
   const featureLabel = `feature "${fr.featureTitle}"`
   steps.push(
-    ...featureFrUpdates(before, after).map((update) => ({
+    ...featureFrUpdates(item, fields).map((update) => ({
       page: 'feature' as const,
       pageId: fr.featurePageId,
       pageLabel: featureLabel,
@@ -428,7 +430,8 @@ export async function applyUpdateFr(input: UpdateFrPatch, ctx: UpdateFrContext):
   const { after, warnings } = applyChanges(layout.item, patch.changes)
   const before = revertChanges(layout.item, patch.changes)
 
-  const steps = buildSteps(fr, layout.item, after, layout.headings)
+  const fields = FR_CHANGE_FIELDS.filter((field) => patch.changes[field] !== undefined)
+  const steps = buildSteps(fr, after, fields, layout.headings)
   const planned = await planSteps(updateSections, steps)
   const blocking = planned.filter(({ step, outcome }) => step.required && outcome.status === 'unplaced')
   if (blocking.length > 0) {
@@ -439,7 +442,6 @@ export async function applyUpdateFr(input: UpdateFrPatch, ctx: UpdateFrContext):
     .filter(({ step, outcome }) => !step.required && outcome.status === 'unplaced')
     .map(({ step, outcome }) => `${fr.id} on ${step.pageLabel}: ${outcome.reason} — change it by hand there.`)
 
-  const fields = FR_CHANGE_FIELDS.filter((field) => patch.changes[field] !== undefined)
   const line = recording
     ? versionAmendmentLine(
         { id: fr.id, title: after.title },
