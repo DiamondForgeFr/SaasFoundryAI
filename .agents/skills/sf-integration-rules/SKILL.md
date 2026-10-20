@@ -23,40 +23,15 @@ including branch names, commit formats, staging, pushing and approval requiremen
 Legacy /task examples name roles: use native delegation if available and authorized,
 or perform the role's work sequentially with the review limitation stated above.
 
-## Session orchestration and delegated ticket delivery
-
-The conversational session is the developer's interlocutor: it drafts the SRS, creates and
-triages tickets, plans, coordinates the work in flight, answers questions and reviews the result
-(on a complex ticket, the Examine phase). While delegation is allowed it does not build a
-ticket itself.
-
-Read `sf agents delegation status` before the first ticket of a session:
-
-- `not-asked`: ask the developer once whether tickets may be built by background agents, one
-  worktree each, then record the answer with `sf agents delegation allow` or
-  `sf agents delegation decline`. Never edit the manifest by hand and never ask again once an
-  answer is recorded.
-- `allowed`: each ticket, from In progress to the end of AI Testing (test plan, tests, report
-  and draft pull request), runs in a background agent in its own worktree, on the tier
-  `sf agents route` names for the task kind of the work (the workflow skill names the kind per
-  complexity). The session keeps talking with the developer and never switches to coding a
-  ticket mid-delivery. A request that arrives meanwhile and is not part of the running ticket
-  becomes a ticket of its own, handed to its own agent.
-- `declined`, or the current agent cannot delegate or run in the background: deliver the tickets
-  in the session, one after the other, and say so explicitly.
-
-A delegated agent never merges and, on a ticket that goes through Human Testing, never runs
-`ready-pr`: the developer takes the draft pull request out of draft. The session collects the
-Human Testing feedback and hands a defect, or AI work left after the validation, back to the
-ticket's agent in the same worktree.
+Who builds a ticket, and the consent behind it, follow "Session orchestration and delegated ticket delivery" in the project instructions (`AGENTS.md`); read the `delegation:` line of `sf status --agent-friendly --no-network`.
 
 ## Parallel implementation and Git worktrees
 
-Open parallel worktrees when the recorded delegation is `allowed` or the developer asks for
-them, and only for independent writing streams that can be delivered concurrently.
-Read-only exploration and review may use parallel agents without separate worktrees. Work with
-sequential dependencies, overlapping file ownership or unclear boundaries must use one feature
-worktree and sequential execution.
+Open a worktree per ticket when the recorded delegation is `allowed`, or when the developer
+asks for parallel work, and only for independent writing streams that can be delivered
+concurrently. Read-only exploration and review may use parallel agents without separate
+worktrees. Work with sequential dependencies, overlapping file ownership or unclear boundaries
+must use one feature worktree and sequential execution.
 
 Before opening a worktree, read `.saasfoundry.json` and use
 `workflow.workingBranch`; never hardcode a branch name. Keep the primary checkout on that
@@ -66,10 +41,11 @@ parallel worktrees are active.
 For each independent writing stream, define one ticket, branch and worktree path, plus its owned
 files and dependency boundary. Start from a synchronized configured working branch. Each worker
 must stay inside its assigned worktree and ownership boundary, preserve other agents' changes
-and never revert unrelated work. The recorded delegation is the developer's authorization:
-without it, or when the current request says otherwise, propose this execution shape and wait
-for the answer. If clean separation, Git support or a synchronized base is unavailable, explain
-the constraint and use one worktree or sequential execution.
+and never revert unrelated work. The recorded delegation authorizes ticket delivery only: for
+any other parallel writing stream, and for tickets when it is not `allowed` or the current
+request says otherwise, propose this execution shape and wait for the answer. If clean
+separation, Git support or a synchronized base is unavailable, explain the constraint and use
+one worktree or sequential execution.
 
 After each stream is complete, commit and push through the configured workflow. After its merge,
 return to the primary checkout, check out and synchronize the configured working branch, verify
