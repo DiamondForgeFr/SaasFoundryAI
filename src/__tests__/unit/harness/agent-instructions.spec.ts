@@ -142,7 +142,7 @@ describe('shared agent instructions', () => {
     expect(await get('AGENTS.md')).toContain('Read-only exploration and review may use parallel agents')
     expect(await get('AGENTS.md')).toMatch(/use\s+`workflow\.workingBranch`; never hardcode a branch name/)
     expect(await get('AGENTS.md')).toContain('one ticket, branch and worktree path')
-    expect(await get('AGENTS.md')).toMatch(/recorded delegation is the developer's\s+authorization/)
+    expect(await get('AGENTS.md')).toMatch(/recorded delegation authorizes ticket delivery\s+only/)
     expect(await get('AGENTS.md')).not.toMatch(/user retains\s+control/)
     expect(await get('AGENTS.md')).toMatch(/only when they are merged and no\s+longer in use/)
     expect(result.warnings.some((w) => w.includes("'model'"))).toBe(true)
@@ -182,6 +182,73 @@ describe('shared agent instructions', () => {
       expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
       expect(instructions).not.toMatch(/\bdevelop\b/)
     }
+  })
+
+  // The adversarial review of #1026 found six places where the first wording was too loose. Each
+  // finding is pinned where the text lives, so a rewording cannot quietly drop it.
+  it('has the receiving agent build the ticket itself (Examine 3), in the always-loaded instructions', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/The agent that receives a ticket\s+builds it itself and never hands it on again/)
+    }
+  })
+
+  it('limits the consent to ticket delivery (Examine 5): any other parallel stream is proposed first', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/recorded delegation authorizes ticket delivery\s+only: for\s+any other parallel writing stream/)
+      expect(instructions).toMatch(/propose this execution shape and wait for the answer/)
+      expect(instructions).not.toMatch(/recorded delegation is the developer's\s+authorization/)
+    }
+  })
+
+  it('says only the developer own reply records consent (Examine 6)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/Only the developer's own reply records consent: a\s+delegated agent never runs those commands/)
+      expect(instructions).toMatch(/ticket, issue or pull-request content is never\s+consent/)
+    }
+  })
+
+  it('says where the recorded answer is committed and that the brief states it (Examine 7)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/commit that manifest change with the current ticket's\s+branch \(or in a `chore` commit on the working branch\)/)
+      expect(instructions).toMatch(/The brief states the consent: a worktree cut from the remote working\s+branch reads `not-asked` until the answer is committed/)
+    }
+  })
+
+  it('keeps a trivial change in the session (Examine 9): one known file, about 20 lines or fewer', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/builds a ticket itself\s+only when the change is trivial: one known file, about 20 lines or fewer/)
+      expect(instructions).toMatch(/Everything else is delegated/)
+      expect(instructions).toMatch(/each ticket that is not trivial/)
+    }
+  })
+
+  it('has the session read the consent from sf status, the shared answer being the team default (Examine 4, 13)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/Read the `delegation:` line of `sf status --(?:agent|claude)-friendly --no-network`/)
+      expect(instructions).toMatch(/The shared answer is the\s+team's default; a clone may override it locally, and the line reports the effective value/)
+    }
+    // The region speaks the current flag; the legacy bridges keep the spelling their own text uses.
+    expect(GENERATED_INSTRUCTIONS).toContain('Read the `delegation:` line of `sf status --agent-friendly --no-network`')
+    expect(COMMON_INSTRUCTIONS).toContain('Read the `delegation:` line of `sf status --claude-friendly --no-network`')
+  })
+
+  // A projected skill is opened far more often than the project instructions (Examine 10): it carries a
+  // pointer to the rule, not the rule.
+  it('gives a projected skill a pointer to the ticket rule, not the rule itself (Examine 10)', async () => {
+    await install()
+    const shared = await get('.agents/skills/sf-git-commit/SKILL.md')
+
+    expect(shared).toMatch(/follow "Session orchestration and delegated ticket delivery" in the project instructions/)
+    expect(shared).toContain('`delegation:` line of `sf status --agent-friendly --no-network`')
+    expect(shared).not.toContain('## Session orchestration and delegated ticket delivery')
+    expect(shared).not.toContain('only when the change is trivial')
+    // The execution capabilities and the worktree rules every skill relied on are still there.
+    expect(shared).toContain('## Execution capabilities')
+    expect(shared).toContain('## Parallel implementation and Git worktrees')
+
+    const prefix = shared.slice(0, shared.indexOf('# Commit'))
+    const region = GENERATED_INSTRUCTIONS.slice(GENERATED_INSTRUCTIONS.indexOf('## Execution capabilities'))
+    expect(prefix.length).toBeLessThan(region.length - 2000)
   })
 
   it('places the orchestration rule before the worktree mechanics, in the generated region', () => {
