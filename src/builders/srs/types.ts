@@ -325,6 +325,53 @@ export type SectionAddition =
 /** `extended`: added in place. `unchanged`: every entry was already there. `unplaced`: no section, or no table of a known shape, to add to. */
 export type SectionAdditionOutcome = 'extended' | 'unchanged' | 'unplaced'
 
+/**
+ * A change to content a page already holds, made in place: nothing is appended. An FR amended
+ * after it was written changes the cells of its tables, its heading and its page title this way,
+ * where `updatePage` and `extendSections` could only add (#945).
+ */
+export type SectionUpdate =
+  | {
+      kind: 'table-cells'
+      /** The section holding the table: the content under this heading, up to the next heading. */
+      heading: string
+      /** The first cell of the row to change, as the table lists it (an FR id, or a field name). */
+      rowKey: string
+      /** The new text of each cell to change, by the text of its column header. The other cells keep what they hold. */
+      cells: Record<string, string>
+    }
+  | {
+      kind: 'heading'
+      /** The text of the heading to rewrite; it keeps its level. */
+      heading: string
+      text: string
+    }
+  | {
+      kind: 'title'
+      /** The new title of the page itself. */
+      text: string
+    }
+
+/**
+ * What one update did, or would do with `dryRun`. `updated`: the page held other content.
+ * `unchanged`: it already held this. `unplaced`: no such section, table, column, row or heading.
+ */
+export interface SectionUpdateOutcome {
+  status: 'updated' | 'unchanged' | 'unplaced'
+  /**
+   * What the page held before: the requested cells by column header, the text of the heading, or
+   * the page title. Absent when unplaced. It is enough to build the update that reverts this one.
+   */
+  before?: Record<string, string> | string
+  /** Why the update could not be placed. */
+  reason?: string
+}
+
+export interface SectionUpdateOptions {
+  /** Plan every update and report its outcome without writing anything. */
+  dryRun?: boolean
+}
+
 export interface SrsAdapter {
   init(): Promise<void>
 
@@ -356,4 +403,11 @@ export interface SrsAdapter {
    * backend without it leaves the caller to report what could not be placed.
    */
   extendSections?(pageId: string, additions: SectionAddition[]): Promise<SectionAdditionOutcome[]>
+
+  /**
+   * Changes content of an existing page in place, one outcome per update, in order. Optional: a
+   * backend without it cannot amend what is already written, and the caller refuses to start
+   * rather than append a second version of it (#945).
+   */
+  updateSections?(pageId: string, updates: SectionUpdate[], options?: SectionUpdateOptions): Promise<SectionUpdateOutcome[]>
 }

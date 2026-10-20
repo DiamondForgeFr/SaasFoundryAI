@@ -34,7 +34,10 @@ export type {
   DsRef,
   ResolvedParent,
   SectionAddition,
-  SectionAdditionOutcome
+  SectionAdditionOutcome,
+  SectionUpdate,
+  SectionUpdateOptions,
+  SectionUpdateOutcome
 } from '../builders/srs/types'
 export type {
   ScannerFinding,
