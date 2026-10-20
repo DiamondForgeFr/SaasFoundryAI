@@ -66,21 +66,23 @@
     },
     "patch_shape": {
       "type": "object",
-      "required": ["kind", "pageId", "item", "note"],
+      "required": ["kind", "pageId", "item", "note", "update_fr"],
       "additionalProperties": false,
       "properties": {
         "kind": { "type": "string", "minLength": 1 },
         "pageId": { "type": "string", "minLength": 1 },
         "item": { "type": "string", "minLength": 1 },
-        "note": { "type": "string", "minLength": 1 }
+        "note": { "type": "string", "minLength": 1 },
+        "update_fr": { "type": "string", "minLength": 1, "description": "The shape of an update-fr patch, which names its FR by id instead of a page and an item (#945)." }
       }
     },
     "scope_limits_v1": {
       "type": "object",
-      "required": ["add_only", "append_placement", "add_fr"],
+      "required": ["add_only", "update_fr", "append_placement", "add_fr"],
       "additionalProperties": false,
       "properties": {
         "add_only": { "type": "string", "minLength": 1 },
+        "update_fr": { "type": "string", "minLength": 1 },
         "append_placement": { "type": "string", "minLength": 1 },
         "add_fr": { "type": "string", "minLength": 1 }
       }
@@ -101,7 +103,7 @@
         "target": { "type": "string", "minLength": 1 },
         "patch_kind": {
           "type": "string",
-          "enum": ["add-ur", "add-fr", "add-ds", "add-tc"]
+          "enum": ["add-ur", "add-fr", "add-ds", "add-tc", "update-fr"]
         },
         "example": { "type": "string", "minLength": 1 },
         "regex_hints": {

@@ -112,6 +112,24 @@ describe('detect-eval-signals-rules.schema.json — rejection cases', () => {
     expect(validate(broken)).toBe(false)
   })
 
+  it('accepts update-fr as the patch_kind of a signal, and no other new kind', () => {
+    const accepted = structuredClone(minimal)
+    accepted.signals[0].patch_kind = 'update-fr'
+    const refused = structuredClone(minimal)
+    refused.signals[0].patch_kind = 'update-ur'
+    expect(validate(accepted)).toBe(true)
+    expect(validate(refused)).toBe(false)
+  })
+
+  it('rejects rules that no longer document the update-fr patch or its limits', () => {
+    const noShape = structuredClone(minimal)
+    delete noShape.patch_shape.update_fr
+    const noLimit = structuredClone(minimal)
+    delete noLimit.scope_limits_v1.update_fr
+    expect(validate(noShape)).toBe(false)
+    expect(validate(noLimit)).toBe(false)
+  })
+
   it('rejects a missing throttle.max_proposals_per_turn', () => {
     const broken = structuredClone(minimal)
     delete broken.throttle.max_proposals_per_turn
