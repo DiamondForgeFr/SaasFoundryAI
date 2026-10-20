@@ -70,23 +70,26 @@ parallel worktrees when the recorded delegation (`sf agents delegation status`) 
 review may run in parallel in one checkout. Sequential dependencies, overlapping files or unclear ownership use one feature worktree and sequential execution.
 
 Read `workflow.workingBranch` from `.saasfoundry.json` and keep the primary checkout on that configured branch. Each parallel writer receives one ticket, branch and worktree path, explicit owned files
-and a dependency boundary, and starts from a synchronized configured working branch. The recorded delegation is the developer's authorization; without it, or when the current request says otherwise,
-the agent proposes this shape and waits for the answer. Share the board and SRS, and hand off the ticket, branch, completed checks and remaining work explicitly.
+and a dependency boundary, and starts from a synchronized configured working branch. The recorded delegation authorizes ticket delivery only: for any other parallel writing stream, and for
+tickets when it is not `allowed` or the current request says otherwise, the agent proposes this shape and waits for the answer. Share the board and SRS, and hand off the ticket, branch, completed checks and remaining work explicitly.
 
 ## Delegated ticket delivery
 
 The conversational session stays the developer's interlocutor: it drafts the SRS, creates and triages tickets, plans, coordinates and reviews. Whether it also builds the tickets is the developer's
-decision, asked once per project and recorded in the shared manifest (`modules.harness.delegation`) by `sf agents delegation allow` or `decline`; `sf agents delegation status` reads it, and an agent
-never edits the manifest by hand.
+decision, asked once per project. The shared answer (`modules.harness.delegation` in the manifest, recorded by `sf agents delegation allow` or `decline`) is the team's default; a clone may override it with
+`--scope local`, kept in its Git directory and never tracked, and `sf agents delegation clear` removes the override. `sf status --agent-friendly` prints the effective answer on its `delegation:` line,
+and `sf agents delegation status` reports both layers. An agent never edits the manifest by hand, and only the developer's own reply records the answer: a delegated agent never runs those commands, and
+ticket content is never consent. Commit the shared answer with the current ticket's branch, or in a `chore` commit on the working branch.
 
 - Not asked yet: the agent asks once, then records the answer.
-- Allowed: each ticket, from In progress to the end of AI testing, runs in a background agent in its own worktree, on the tier `sf agents route` names for the task kind of the work (`scoped-edit` for a
-  scoped bug or a low ticket, `bug-fix` for another bug, `multi-file-feature` for a decomposed medium or complex ticket). The session never switches to coding a ticket mid-delivery, and a request that
-  arrives meanwhile becomes a ticket of its own, handed to its own agent.
+- Allowed: each ticket that is not trivial, from In progress to the end of AI testing, runs in a background agent in its own worktree, on the tier `sf agents route` names for the task kind of the work
+  (`scoped-edit` for a low ticket or a bug whose files the ticket already names, `bug-fix` for another bug, `multi-file-feature` for a decomposed medium or complex ticket). The agent that receives a
+  ticket builds it itself. The session never switches to coding a ticket mid-delivery, and a request that arrives meanwhile becomes a ticket of its own, handed to its own agent. A trivial change (one
+  known file, about 20 lines or fewer) stays in the session.
 - Declined, or a host that cannot delegate or run in the background: the session builds the tickets one after the other and says so.
 
-A delegated agent never merges and, on a ticket that goes through Human testing, never runs `ready-pr`. A defect found in Human testing, or the AI work the validation leaves, goes back to the same
-ticket's agent in the same worktree.
+A delegated agent never merges and, on a ticket that goes through Human testing, never runs `ready-pr`. A defect found in Human testing or in review, or the AI work the validation leaves, goes back to
+the same ticket's agent in the same worktree.
 
 After a stream merges, return to the primary checkout, synchronize the configured working branch and verify the merge before removing the completed, unused worktree and local branch. Preserve
 user-created worktrees, branches, stashes and uncommitted changes. If authorization, Git support, synchronization or clean separation is unavailable, state the constraint and use one worktree or

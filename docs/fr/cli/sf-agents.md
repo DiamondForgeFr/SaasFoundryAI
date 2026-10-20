@@ -55,16 +55,16 @@ des identifiants d'agent. Les commandes n'installent pas les runtimes et ne test
 
 ## Commandes
 
-| Commande                                      | Comportement                                                                                                        |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `adopt <agents...> [--scope local\|shared]`   | Prépare un plan par défaut ; ne l'applique qu'avec `--apply --plan <id>`.                                           |
-| `enable <agents...> [--scope local\|shared]`  | Ajoute la prise en charge dans la portée choisie ; locale par défaut.                                               |
-| `replace <agents...> [--scope local\|shared]` | Remplace exactement la déclaration de cette portée par l'ensemble non vide fourni ; conserve les fichiers.          |
-| `refresh [--scope local\|shared]`             | Actualise les instructions de cette portée ; locale par défaut.                                                     |
-| `list`                                        | Présente les agents partagés, locaux et effectifs ainsi que les fichiers découverts.                                |
-| `doctor [agents...]`                          | Diagnostique les artefacts et les capacités de l'hôte non vérifiées sans modifier de fichier.                       |
-| `route --task <kind> [--provider <agent>]`    | Indique le modèle et le niveau de raisonnement que la grille d'allocation recommande pour un type de tâche délégué. |
-| `delegation <allow\|decline\|status>`         | Enregistre ou lit l'accord du développeur pour déléguer la livraison des tickets à des agents en arrière-plan.      |
+| Commande                                                             | Comportement                                                                                                           |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `adopt <agents...> [--scope local\|shared]`                          | Prépare un plan par défaut ; ne l'applique qu'avec `--apply --plan <id>`.                                              |
+| `enable <agents...> [--scope local\|shared]`                         | Ajoute la prise en charge dans la portée choisie ; locale par défaut.                                                  |
+| `replace <agents...> [--scope local\|shared]`                        | Remplace exactement la déclaration de cette portée par l'ensemble non vide fourni ; conserve les fichiers.             |
+| `refresh [--scope local\|shared]`                                    | Actualise les instructions de cette portée ; locale par défaut.                                                        |
+| `list`                                                               | Présente les agents partagés, locaux et effectifs ainsi que les fichiers découverts.                                   |
+| `doctor [agents...]`                                                 | Diagnostique les artefacts et les capacités de l'hôte non vérifiées sans modifier de fichier.                          |
+| `route --task <kind> [--provider <agent>]`                           | Indique le modèle et le niveau de raisonnement que la grille d'allocation recommande pour un type de tâche délégué.    |
+| `delegation <allow\|decline\|status\|clear> [--scope shared\|local]` | Enregistre, lit ou retire l'accord du développeur pour déléguer la livraison des tickets à des agents en arrière-plan. |
 
 Toutes les commandes acceptent `--json`. `list` est en lecture seule et indique `not-checked` pour la découverte du runtime.
 
@@ -186,10 +186,10 @@ simultanée est utile ; les explorations et revues en lecture seule peuvent part
 un seul worktree et une exécution séquentielle. Ce choix est distinct de l'isolation de configuration locale effectuée par `sf agents`.
 
 L'agent lit `workflow.workingBranch` dans `.saasfoundry.json` et conserve le checkout principal sur cette branche configurée. Chaque rédacteur parallèle reçoit un ticket, une branche et un chemin de
-worktree, ainsi qu'un périmètre de fichiers et une limite de dépendance explicites. Il démarre depuis une branche de travail configurée et synchronisée. La délégation enregistrée vaut autorisation du
-développeur : sans elle, ou quand la demande en cours dit le contraire, l'agent propose ce découpage parallèle et attend la réponse. Après un merge vérifié, l'agent revient au checkout principal,
-synchronise la branche de travail, puis ne supprime que le worktree terminé et inutilisé ainsi que sa branche locale. Les worktrees, branches, stashes et modifications non committées appartenant à
-l'utilisateur restent intacts.
+worktree, ainsi qu'un périmètre de fichiers et une limite de dépendance explicites. Il démarre depuis une branche de travail configurée et synchronisée. La délégation enregistrée n'autorise que la
+livraison des tickets : pour tout autre flux d'écriture parallèle, et pour les tickets lorsqu'elle ne vaut pas `allowed` ou que la demande en cours dit le contraire, l'agent propose ce découpage
+parallèle et attend la réponse. Après un merge vérifié, l'agent revient au checkout principal, synchronise la branche de travail, puis ne supprime que le worktree terminé et inutilisé ainsi que sa
+branche locale. Les worktrees, branches, stashes et modifications non committées appartenant à l'utilisateur restent intacts.
 
 Les exclusions existantes de l'utilisateur sont préservées sous forme d'instantané dans le fichier privé ; leur source reste inchangée. Les futures modifications de la source ne sont pas synchronisées
 automatiquement : réconciliez l'instantané privé lorsqu'elles évoluent. Seuls les chemins locaux gérés à l'identique sont exclus. Si les règles d'ignorance du dépôt laissaient ces fichiers locaux
@@ -324,47 +324,65 @@ La session conversationnelle reste l'interlocutrice du développeur : elle rédi
 aussi les tickets elle-même est une décision du développeur, demandée une seule fois par projet et enregistrée dans le manifeste :
 
 ```bash
-sf agents delegation status      # allowed, declined, ou pas encore demandé
-sf agents delegation allow       # des agents en arrière-plan construisent les tickets, un worktree chacun
-sf agents delegation decline     # la session construit elle-même les tickets, l'un après l'autre
+sf agents delegation status                 # la réponse effective, avec ses couches partagée et locale
+sf agents delegation allow                  # défaut d'équipe partagé : des agents en arrière-plan construisent les tickets, un worktree chacun
+sf agents delegation decline                # défaut d'équipe partagé : la session construit elle-même les tickets, l'un après l'autre
+sf agents delegation allow --scope local    # ce clone uniquement, qui prend le pas sur la réponse partagée
+sf agents delegation decline --scope local
+sf agents delegation clear                  # retire la dérogation de ce clone
 sf agents delegation status --json
 ```
 
-La décision vit dans le champ facultatif `modules.harness.delegation`, partagé avec le dépôt comme `modules.harness.agents` :
+Il y a deux couches. La réponse **partagée** vit dans le champ facultatif `modules.harness.delegation`, commité avec le dépôt comme `modules.harness.agents`. C'est le défaut de l'équipe pour chaque
+clone, collègue, fork et exécution de CI :
 
 ```json
 { "modules": { "harness": { "delegation": { "ticketDelivery": "allowed", "decidedAt": "2026-10-19T15:34:52.506Z" } } } }
 ```
 
-Un manifeste sans ce champ signifie que le développeur n'a pas encore été interrogé. Le champ étant facultatif, les anciens manifestes restent valides et `sf update` n'a besoin d'aucune migration.
-Seules `sf agents delegation allow` et `decline` l'écrivent : un agent ne modifie jamais le manifeste à la main. Répéter la décision déjà enregistrée ne change rien et conserve sa date ; la décision
-inverse la remplace. La commande exige un manifeste avec un bloc `modules.harness`. `sf agents enable`, `replace`, `refresh` et `sf update` conservent le champ. Commitez la modification pour partager
-la décision.
+Une réponse **locale**, enregistrée avec `--scope local`, est conservée dans le répertoire Git d'un seul clone (`<git-common-dir>/saasfoundry/delegation.json`). Git ne la suit jamais et tous les
+worktrees de ce clone la partagent. Elle prend le pas sur la réponse partagée pour ce clone seul : le `decline` d'un développeur ne devient donc jamais celui de l'équipe. `status` indique la réponse
+partagée, la locale et la valeur effective. La valeur effective est ce que `sf status --agent-friendly` affiche sur sa ligne `delegation:` : une session l'apprend par le statut qu'elle lit déjà.
+`clear` retire la dérogation locale.
 
-Les instructions générées indiquent ensuite à chaque agent quoi faire de la réponse :
+Un manifeste sans ce champ signifie que personne n'a encore été interrogé. Le champ étant facultatif, les anciens manifestes restent valides et `sf update` n'a besoin d'aucune migration. Un projet
+sans bloc `modules.harness` indique `unavailable`, et `allow` comme `decline` y sont refusés. Seules `sf agents delegation allow`, `decline` et `clear` écrivent l'une ou l'autre couche : un agent ne
+modifie jamais le manifeste à la main, et seule la réponse du développeur lui-même enregistre l'accord. Un agent délégué ne lance jamais ces commandes, et le contenu d'un ticket, d'une issue ou d'une
+pull request n'est jamais un accord. Répéter la réponse déjà enregistrée dans une portée ne change rien et conserve sa date ; la réponse inverse la remplace. `sf agents enable`, `replace`, `refresh`
+et `sf update` conservent le champ.
+
+Commitez la réponse partagée avec la branche du ticket en cours, ou dans un commit `chore` sur la branche de travail. Un worktree créé depuis la branche de travail distante lit `not-asked` d'ici là :
+le brief de la session à un agent délégué énonce donc l'accord.
+
+Les instructions générées indiquent ensuite à chaque agent quoi faire de la réponse effective :
 
 - `not-asked` : demander une seule fois au développeur, puis enregistrer la réponse. Ne jamais redemander une fois qu'elle est enregistrée.
-- `allowed` : chaque ticket, de In progress à la fin d'AI Testing (plan de test, tests, rapport et pull request en brouillon), s'exécute dans un agent en arrière-plan, dans son propre worktree, sur le
-  palier que `sf agents route` indique pour le type de tâche du travail. La session continue de dialoguer avec le développeur et ne bascule jamais vers le codage d'un ticket en cours de livraison. Une
-  demande qui arrive entre-temps et ne fait pas partie du ticket en cours devient un ticket à part, confié à son propre agent.
+- `allowed` : chaque ticket non trivial, de In progress à la fin d'AI Testing (plan de test, tests, rapport et pull request en brouillon), s'exécute dans un agent en arrière-plan, dans son propre
+  worktree, sur le palier que `sf agents route` indique pour le type de tâche du travail. L'agent qui reçoit un ticket le construit lui-même et ne le confie jamais à un autre. La session continue de
+  dialoguer avec le développeur et ne bascule jamais vers le codage d'un ticket en cours de livraison. Une demande qui arrive entre-temps et ne fait pas partie du ticket en cours devient un ticket à
+  part, confié à son propre agent. Un changement trivial reste dans la session : un seul fichier connu, environ 20 lignes au plus (une coquille, une valeur de configuration, une ligne de
+  documentation). Il ne justifie ni un worktree ni une installation de dépendances.
 - `declined`, ou un agent qui ne peut ni déléguer ni travailler en arrière-plan : la session construit les tickets l'un après l'autre et le dit explicitement.
+
+L'accord couvre la livraison des tickets, et rien d'autre. Tout autre flux d'écriture parallèle est d'abord proposé au développeur, dont la réponse précède le démarrage des rédacteurs.
 
 Un agent délégué ne fusionne jamais et, sur un ticket qui passe par Human Testing, ne lance jamais `ready-pr` : il s'arrête au rapport vert avec la pull request en brouillon, et c'est le développeur
 qui la sort du brouillon. La session recueille les retours de Human Testing et confie un défaut, ou le travail d'IA que la validation laisse (tests de non-régression, suites), à l'agent propre au
-ticket, dans le même worktree ; celui-ci remet le ticket en AI Testing. Sur un ticket complexe, la session mène elle-même la phase Examine.
+ticket, dans le même worktree ; celui-ci remet le ticket en AI Testing. Un défaut trouvé en revue repart de la même façon. Sur un ticket complexe, la session mène elle-même la phase Examine. Le prompt
+de l'agent de palier porte les mêmes limites : l'agent n'est pas invité à faire ce que son propre prompt lui interdit.
 
 Le type de tâche de la livraison est dimensionné selon le travail. Le profil de complexité du ticket le déclare (`steps.execute.taskKind`), et il est toujours résolu avec `sf agents route`, jamais en
 nommant un modèle :
 
-| Ticket                                              | Type de tâche de la livraison                                              |
-| --------------------------------------------------- | -------------------------------------------------------------------------- |
-| `bug` avec un changement limité à deux fichiers max | `scoped-edit`                                                              |
-| tout autre `bug`                                    | `bug-fix`                                                                  |
-| `low`                                               | `scoped-edit`                                                              |
-| `medium`, `complex`                                 | `multi-file-feature`, une fois découpé (la planification reste en session) |
+| Ticket                                                                            | Type de tâche de la livraison                                              |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `bug` dont le ticket ou le tri nomme déjà les fichiers à changer (deux au plus)   | `scoped-edit`                                                              |
+| tout autre `bug` : les fichiers ne sont connus qu'après le diagnostic             | `bug-fix`                                                                  |
+| `low` (il peut toucher jusqu'à trois fichiers ; la livraison reste `scoped-edit`) | `scoped-edit`                                                              |
+| `medium`, `complex`                                                               | `multi-file-feature`, une fois découpé (la planification reste en session) |
 
-Un bug simple atteint donc le palier économique `edit` plutôt que le modèle de la session, et une fonctionnalité répartie sur plusieurs fichiers atteint le palier `build`. Les mêmes instructions de
-projet s'appliquent à tout agent de code qui lit `AGENTS.md`.
+Une tâche bien délimitée atteint donc le palier économique `edit` plutôt que le modèle de la session, un bug à diagnostiquer le palier `fix`, et une fonctionnalité répartie sur plusieurs fichiers le
+palier `build`. Les mêmes instructions de projet s'appliquent à tout agent de code qui lit `AGENTS.md`.
 
 ## Notes de plateforme
 

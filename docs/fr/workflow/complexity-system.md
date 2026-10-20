@@ -33,14 +33,14 @@ moment :
 
 ### 🐛 Bug
 
-| Étape        | Comportement                                                                                |
-| ------------ | ------------------------------------------------------------------------------------------- |
-| Analyse      | Ciblée directement sur la cause                                                             |
-| Plan         | Pas de document formel                                                                      |
-| Sous-tickets | Inutiles pour une correction atomique                                                       |
-| Exécution    | Livraison déléguée en `scoped-edit` (correction dans deux fichiers au plus) ou en `bug-fix` |
-| Examen       | Pas de revue contradictoire systématique                                                    |
-| Tests        | **Test de régression obligatoire**                                                          |
+| Étape        | Comportement                                                                                          |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| Analyse      | Ciblée directement sur la cause                                                                       |
+| Plan         | Pas de document formel                                                                                |
+| Sous-tickets | Inutiles pour une correction atomique                                                                 |
+| Exécution    | Livraison déléguée en `bug-fix`, ou en `scoped-edit` quand le ticket nomme déjà deux fichiers au plus |
+| Examen       | Pas de revue contradictoire systématique                                                              |
+| Tests        | **Test de régression obligatoire**                                                                    |
 
 ### 🟢 Low
 
@@ -86,12 +86,15 @@ Lorsque le développeur l'a permis (`sf agents delegation allow`, voir [Livraiso
 construit pas le ticket : elle le confie, de In progress à la fin d'AI testing, à un agent en arrière-plan dans son propre worktree. Le type de tâche de cette livraison est dimensionné selon le
 travail, si bien qu'un petit ticket ne tourne pas sur le modèle de la session. Chaque profil le déclare dans `steps.execute.taskKind`, et l'agent le résout avec `sf agents route` :
 
-| Ticket                                            | Type de tâche de la livraison                                              |
-| ------------------------------------------------- | -------------------------------------------------------------------------- |
-| 🐛 Bug, changement limité à deux fichiers au plus | `scoped-edit` (`steps.execute.scopedTaskKind`)                             |
-| 🐛 Tout autre bug                                 | `bug-fix`                                                                  |
-| 🟢 Low                                            | `scoped-edit`                                                              |
-| 🟡 Medium, 🔴 Complex                             | `multi-file-feature`, une fois découpé (la planification reste en session) |
+| Ticket                                                                             | Type de tâche de la livraison                                              |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 🐛 Bug dont le ticket ou le tri nomme déjà les fichiers à changer (deux au plus)   | `scoped-edit` (`steps.execute.scopedTaskKind`)                             |
+| 🐛 Tout autre bug : les fichiers ne sont connus qu'après le diagnostic             | `bug-fix`                                                                  |
+| 🟢 Low (il peut toucher jusqu'à trois fichiers ; la livraison reste `scoped-edit`) | `scoped-edit`                                                              |
+| 🟡 Medium, 🔴 Complex                                                              | `multi-file-feature`, une fois découpé (la planification reste en session) |
+
+Un bug ne peut pas nommer ses fichiers avant d'être diagnostiqué : il prend `bug-fix` par défaut. Un changement trivial reste dans la session : un seul fichier connu, environ 20 lignes au plus (une
+coquille, une valeur de configuration, une ligne de documentation), qui ne justifie ni un worktree ni une installation de dépendances.
 
 L'agent délégué s'arrête au rapport de tests vert avec la pull request en brouillon. Sur un ticket complexe, la session mène elle-même la revue contradictoire.
 
