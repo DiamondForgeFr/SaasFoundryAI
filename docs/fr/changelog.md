@@ -6,26 +6,6 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
-### Ajouts
-
-#### SRS
-
-- `sf srs apply-update` modifie sur place une exigence fonctionnelle existante avec un correctif `update-fr`. Le correctif désigne l'identifiant de la FR et les champs qui changent (`title`,
-  `description`, `priority`, `complexity`, `endpoint`, `requestBody`, `securityRationale`, `acceptanceCriteria`, `validationRules` ; une liste prend le tableau entier ou `{ add, remove }`). La page de
-  la FR, le tableau des FR de sa version et celui de sa fonctionnalité affichent les nouvelles valeurs, une ligne est ajoutée à « What changed in this version » de la version, et rien n'est ajouté
-  comme élément séparé. `--dry-run` affiche l'ancienne et la nouvelle valeur de chaque cellule sans rien écrire, une seconde exécution n'écrit rien, une écriture qui s'arrête en cours de route sort
-  avec le code `6` et affiche `applied`, `pending` et `before`, et une FR inexistante, une page de FR qui ne peut pas recevoir le changement ou une référence (`urRefs`, `dsRefs`, `tcRefs`) est refusée
-  avant toute écriture. Le `followUps` du résultat nomme la Story générée depuis la FR, qui garde son ancien texte ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945) ; références :
-  [#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056), Story générée : [#1057](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1057)).
-- Le contrat `SrsAdapter` gagne un `updateSections` optionnel, implémenté pour Notion : une ligne de tableau est modifiée cellule par cellule là où sa première cellule correspond, un titre est réécrit
-  à son niveau et une page est renommée. Un backend qui ne l'a pas est refusé avec le code `5` et rien n'est écrit ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945)).
-
-### Modifié
-
-#### SRS
-
-- Le signal conversationnel de « révision » propose un correctif `update-fr` au lieu d'un élément de conception ajouté ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945)).
-
 ## [1.0.1] - 2026-10-09
 
 Version de maintenance. Elle corrige ce que des projets réels ont rencontré après la 1.0.0 : `sf update` sur des projets personnalisés, l'installation non interactive du harness, l'écriture et le
