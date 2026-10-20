@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 
 import { parseList, parseNonNegativeInteger, parsePositiveInteger, runAgentsSubcommand } from './agents.shared'
+import { CAPTURE_HOSTS, captureHostEvent, type CaptureResult } from '../harness/delegation-capture'
 import { appendRun, appendSignal, buildRunRecord, buildSignalRecord, requireLedgerDir, type RunInput } from '../harness/delegation-ledger'
 import { readProjectRouting } from '../harness/project-routing'
 import { ROUTING_PROVIDERS, TASK_KINDS, parseTaskKind } from '../harness/routing-grid'
@@ -108,6 +109,48 @@ export async function outcomeMark(target: string | undefined, signal: string | u
   })
 }
 
+export interface OutcomeCaptureOptions {
+  host?: string
+  json?: boolean
+}
+
+async function readStdin(limit = 8 * 1024 * 1024): Promise<string> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of process.stdin) {
+    const buffer = Buffer.from(chunk as Uint8Array)
+    size += buffer.length
+    if (size > limit) throw new Error('The hook payload is larger than 8 MiB.')
+    chunks.push(buffer)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+/**
+ * `sf agents outcome capture --host <claude-code|codex>`: the command the host hooks run, with the hook
+ * payload on stdin. A hook must never break the agent it observes, so everything that goes wrong after
+ * the arguments were understood (an unreadable payload, a project without a ledger) is reported on
+ * stderr with exit 0; only a wrong `--host` fails.
+ */
+export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<void> {
+  const host = options.host
+  if (host !== 'claude-code' && host !== 'codex') {
+    process.stderr.write(`Error: --host must be ${CAPTURE_HOSTS.join(' or ')}.\n`)
+    process.exitCode = 1
+    return
+  }
+  let result: CaptureResult
+  try {
+    if (process.stdin.isTTY) throw new Error('capture reads a hook payload on stdin: it is run by the host hooks, not by hand (use sf agents outcome record).')
+    const text = await readStdin()
+    result = await captureHostEvent(host, JSON.parse(text))
+  } catch (error) {
+    result = { status: 'ignored', reason: `capture failed: ${error instanceof Error ? error.message : String(error)}` }
+    process.stderr.write(`sf agents outcome capture: ${result.reason}\n`)
+  }
+  if (options.json) process.stdout.write(JSON.stringify({ outcomeVersion: 1, host, ...result }, null, 2) + '\n')
+}
+
 const collect = (value: string, previous: string[]): string[] => [...previous, value]
 
 /** Register `sf agents outcome record|mark` (and `capture`, added by the host-capture slice). */
@@ -144,5 +187,11 @@ export function registerOutcomeCommands(agents: Command): Command {
     .option('--note <text>', 'A short note')
     .option('--json', 'Output the versioned result')
     .action((target: string, signal: string, options: OutcomeMarkOptions) => outcomeMark(target, signal, options))
+  outcome
+    .command('capture')
+    .description('Record the delegation a host hook reports (hook payload on stdin); run by the SubagentStop and PostToolUse hooks, never fails the host')
+    .requiredOption('--host <agent>', CAPTURE_HOSTS.join(' or '))
+    .option('--json', 'Print the versioned result (silent otherwise)')
+    .action((options: OutcomeCaptureOptions) => outcomeCapture(options))
   return outcome
 }

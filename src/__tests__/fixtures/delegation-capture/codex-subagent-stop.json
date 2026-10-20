@@ -1,0 +1,9 @@
+{
+  "session_id": "c-1",
+  "cwd": "__CWD__",
+  "hook_event_name": "SubagentStop",
+  "agent_id": "c-agent-1",
+  "agent_type": "sf-build",
+  "agent_transcript_path": "__TRANSCRIPT__",
+  "last_assistant_message": "Tests written.\nSF-DELEGATION: pass kind=tests ticket=1035 checks=automated-tests"
+}

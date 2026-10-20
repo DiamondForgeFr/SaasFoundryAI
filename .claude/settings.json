@@ -19,6 +19,29 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sf agents outcome capture --host claude-code",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sf agents outcome capture --host claude-code",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   },
   "permissions": {
@@ -40,7 +63,12 @@
       "Bash(sf agents delegation status *)",
       "Bash(gh project item-list *)",
       "Bash(gh project view *)",
-      "Bash(gh project field-list *)"
+      "Bash(gh project field-list *)",
+      "Bash(sf agents route *)",
+      "Bash(sf agents routing report)",
+      "Bash(sf agents routing report *)",
+      "Bash(sf agents outcome mark *)",
+      "Bash(sf agents outcome record *)"
     ]
   }
 }

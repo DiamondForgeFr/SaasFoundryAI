@@ -4,6 +4,7 @@ import { join, posix, resolve } from 'path'
 
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentProfile, needsSharedSkills } from './agent-registry'
+import { CODEX_HOOKS_PATH, renderCodexHooks } from './delegation-hooks'
 import type { RoutingOverrides } from './routing-grid'
 import { renderTierAgents } from './tier-agents'
 import { HarnessAgent, skillsTemplatesPath } from '../types'
@@ -634,7 +635,10 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
   }
   // One delegation agent per routing tier for each declared host the grid covers (#929). An adoption
   // only references the project's own setup, so it adds none.
-  if (!effectiveReferenceOnly) plan.files.push(...planTierAgents(agents, manifest, report.warnings))
+  if (!effectiveReferenceOnly) {
+    plan.files.push(...planTierAgents(agents, manifest, report.warnings))
+    plan.files.push(...(await planCaptureHooks(targetPath, agents, report.warnings)))
+  }
   // Only declared hosts get an entrypoint (#937): an existing undeclared one is left as it is.
   const wrapperContent = Buffer.from('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
   const wrapperFiles: AgentInstructionFile[] = [
@@ -739,6 +743,33 @@ function planTierAgents(agents: HarnessAgent[], manifest: InstallAgentInstructio
     warnings.push(`Tier agents not generated: ${(error as Error).message}`)
     return []
   }
+}
+
+/**
+ * The Codex hook that captures every routed delegation (#1035). `.codex/hooks.json` is project-owned
+ * like `AGENTS.md`: the plan adds the hook to what the file already holds, so an existing file keeps its
+ * own hooks and a file that is not JSON is left alone. The Claude Code hooks live in
+ * `.claude/settings.json`, which the harness merges the same way.
+ */
+async function planCaptureHooks(targetPath: string, agents: HarnessAgent[], warnings: string[]): Promise<AgentInstructionFile[]> {
+  if (!agents.includes('codex')) return []
+  if (await hasLinkedAncestor(targetPath, CODEX_HOOKS_PATH)) {
+    warnings.push(`${CODEX_HOOKS_PATH}: symbolic link destination left untouched; the delegation capture hook was not added.`)
+    return []
+  }
+  let existing: string | undefined
+  try {
+    existing = await readFile(join(targetPath, CODEX_HOOKS_PATH), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') warnings.push(`${CODEX_HOOKS_PATH}: ${(error as Error).message}; the delegation capture hook was not added.`)
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return []
+  }
+  const rendered = renderCodexHooks(existing)
+  if ('error' in rendered) {
+    warnings.push(`${rendered.error}; the delegation capture hook was not added.`)
+    return []
+  }
+  return [{ path: CODEX_HOOKS_PATH, content: Buffer.from(rendered.content), mode: 0o644, merge: true }]
 }
 
 /**

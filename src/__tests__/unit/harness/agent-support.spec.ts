@@ -5,10 +5,12 @@ import { dirname, join } from 'path'
 import * as adapter from '../../../harness/agent-instructions'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../../../harness/agent-support'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
+import { CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
 import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
 
 // Tier agents (#929) have their own suite; these assertions are about the other deposits.
-const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path))
+// Tier agents (#929) and the Codex capture hook (#1035) have their own suites.
+const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path) && path !== CODEX_HOOKS_PATH)
 
 const SKILL = '---\nname: commit\ndescription: Commit changes\n---\n# Commit\nFollow the project workflow.\n'
 const MANIFEST = {
@@ -89,13 +91,28 @@ describe('additive managed agent support (#660)', () => {
     const before = await get('.saasfoundry.json')
     const stamp = (await lstat(join(root, '.saasfoundry.json'))).mtimeMs
     const repeated = await enable(['kimi', 'codex'])
+    // The first refresh wires the delegation capture hooks into the project settings (#1035): a repeat changes nothing.
+    await refreshAgents({ targetPath: root, scope: 'shared' })
+    const settings = await get('.claude/settings.json')
     const refreshed = await refreshAgents({ targetPath: root, scope: 'shared' })
     expect(own(repeated.report.written)).toEqual([])
     expect(own(refreshed.report.written)).toEqual([])
     expect(repeated.manifestChanged).toBe(false)
     expect(refreshed.manifestChanged).toBe(false)
     expect(await get('.saasfoundry.json')).toBe(before)
+    expect(await get('.claude/settings.json')).toBe(settings)
     expect((await lstat(join(root, '.saasfoundry.json'))).mtimeMs).toBe(stamp)
+  })
+  it('wires the delegation capture hooks into the project settings on a shared refresh, and only then', async () => {
+    await enable(['claude-code'])
+    expect(await get('.claude/settings.json')).toBe('{"hooks":{"custom":["preserve"]}}')
+    const refreshed = await refreshAgents({ targetPath: root, scope: 'shared' })
+    expect(refreshed.report.written).toContain('.claude/settings.json')
+    const settings = JSON.parse(await get('.claude/settings.json'))
+    expect(settings.hooks.custom).toEqual(['preserve'])
+    expect(settings.hooks.SubagentStop[0].hooks[0].command).toBe('sf agents outcome capture --host claude-code')
+    expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
+    expect(settings.permissions.allow).toContain('Bash(sf agents outcome mark *)')
   })
   it('refreshes generated copies using their successful baselines', async () => {
     await enable(['codex'])

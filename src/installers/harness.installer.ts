@@ -9,6 +9,7 @@ import { installToolSkill } from './tool-skill.installer'
 import { injectWorkflowSection, installWorkflowSkill } from './workflow-skill.installer'
 import { AgentInstructionsReport, HarnessAgent, installAgentInstructions } from '../harness/agent-instructions'
 import { needsSharedInstructions, resolveHarnessAgents } from '../harness/agent-registry'
+import { CLAUDE_CAPTURE_HOOKS } from '../harness/delegation-hooks'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { SaaSFoundryManifest, WorkflowConfig, skillsTemplatesPath } from '../types'
 import { ClaudeHooksConfig, mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
@@ -165,8 +166,10 @@ export interface InstallHarnessParams {
   stackPresent?: boolean
 }
 
-const HARNESS_HOOKS: ClaudeHooksConfig = {
-  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }]
+export const HARNESS_HOOKS: ClaudeHooksConfig = {
+  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }],
+  // Every routed delegation appends its outcome to the clone ledger the routing adjusts itself from (#1035).
+  ...CLAUDE_CAPTURE_HOOKS
 }
 
 const WORKFLOW_CLI = '.claude/skills/sf-workflow/workflow-cli.sh'
@@ -187,6 +190,12 @@ export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
   // The consent to delegate ticket delivery is read at the start of a session (#1026); `allow`, `decline` and `clear` still ask.
   'Bash(sf agents delegation status)',
   'Bash(sf agents delegation status *)',
+  // Routing a delegation, reading its measured outcomes and marking a later signal change nothing but the clone's own ledger (#1035).
+  'Bash(sf agents route *)',
+  'Bash(sf agents routing report)',
+  'Bash(sf agents routing report *)',
+  'Bash(sf agents outcome mark *)',
+  'Bash(sf agents outcome record *)',
   'Bash(gh project item-list *)',
   'Bash(gh project view *)',
   'Bash(gh project field-list *)'

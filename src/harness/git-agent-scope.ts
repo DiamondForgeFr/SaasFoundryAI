@@ -110,6 +110,20 @@ export async function resolveGitCommonDir(targetPath: string): Promise<string | 
 }
 
 /**
+ * The top level of the working tree `targetPath` is in (a hook runs from wherever the agent stood,
+ * possibly a subdirectory), or undefined outside a Git checkout. One `rev-parse`, no side effect.
+ */
+export async function resolveGitRoot(targetPath: string): Promise<string | undefined> {
+  const root = resolve(targetPath)
+  try {
+    return resolve((await git(root, ['rev-parse', '--show-toplevel']))!.trim())
+  } catch (error) {
+    if (/not a git repository/i.test(String((error as { stderr?: string }).stderr))) return undefined
+    throw error
+  }
+}
+
+/**
  * Read-only preflight. info/exclude belongs to GIT_COMMON_DIR and is deliberately
  * not used: its patterns would affect every linked checkout.
  */

@@ -34,9 +34,11 @@ import {
   validateDelegation,
   writeLocalDelegation
 } from './delegation'
+import { CLAUDE_CAPTURE_HOOKS, CODEX_HOOKS_PATH } from './delegation-hooks'
 import { TIER_AGENT_PATH } from './tier-agents'
-import { harnessInstallerMeta } from '../installers/harness.installer'
+import { HARNESS_ALLOWED_COMMANDS, harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
+import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
 
 const AGENTS = getAgentIds()
 
@@ -72,6 +74,11 @@ interface SupportParams {
   /** Revalidate an approved adoption snapshot under the coordinator lock. */
   verify?: () => Promise<AgentInstructionPlan>
   adoption?: boolean
+  /**
+   * A shared refresh also reconciles `.claude/settings.json` (the delegation capture hooks, #1035).
+   * Enabling or replacing an agent never touches the host settings of the project (#660).
+   */
+  refreshSettings?: boolean
 }
 interface ManifestSnapshot {
   manifest: SaaSFoundryManifest
@@ -362,6 +369,7 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
     }
     if (Object.keys(report.fileHashes).length) next.fileHashes = { ...before.manifest.fileHashes, ...report.fileHashes }
     const manifestChanged = await persist(root, before, next)
+    if (params.refreshSettings && !report.conflicts.length && !params.adoption && configuredAgents.includes('claude-code')) await mergeCaptureSettings(root, report)
     let localStateChanged = false
     if (git) {
       const promoted = new Set(Object.keys(report.fileHashes))
@@ -387,6 +395,23 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
   }
 }
 
+/**
+ * A shared refresh also wires the Claude Code hooks that capture every routed delegation (#1035) and
+ * the permission to read and mark them. `.claude/settings.json` is project-owned: the hooks are merged
+ * into what it holds, never written over it, and a link or an unreadable file is a warning, not a failure.
+ */
+async function mergeCaptureSettings(root: string, report: AgentInstructionsReport): Promise<void> {
+  try {
+    await regularPath(root, '.claude', 'directory', false)
+    await regularPath(root, '.claude/settings.json', 'file', false)
+    const hooks = await mergeClaudeSettingsHooks(root, CLAUDE_CAPTURE_HOOKS)
+    const permissions = await mergeClaudeSettingsPermissions(root, HARNESS_ALLOWED_COMMANDS)
+    if (hooks || permissions) report.written.push('.claude/settings.json')
+  } catch (error) {
+    report.warnings.push(`.claude/settings.json: ${error instanceof Error ? error.message : String(error)}; the delegation capture hooks were not added.`)
+  }
+}
+
 export async function enableAgents(params: SupportParams & { agents: string[] }): Promise<AgentSupportResult> {
   resolveScope(params.scope)
   validateAgents(params.agents)
@@ -401,7 +426,7 @@ export async function replaceAgents(params: SupportParams & { agents: string[] }
 }
 
 export async function refreshAgents(params: SupportParams): Promise<AgentSupportResult> {
-  return apply(params)
+  return apply({ ...params, refreshSettings: true })
 }
 
 interface LocalAgentState {
@@ -437,7 +462,7 @@ async function readLocalState(git: GitAgentScope): Promise<LocalAgentState> {
     isObject(value) &&
     !Object.entries(value).some(
       ([path, hash]) =>
-        !(['CLAUDE.md', CLAUDE_CODE_RULE_PATH, ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path) || TIER_AGENT_PATH.test(path)) ||
+        !(['CLAUDE.md', CLAUDE_CODE_RULE_PATH, CODEX_HOOKS_PATH, ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path) || TIER_AGENT_PATH.test(path)) ||
         path.split('/').includes('..') ||
         typeof hash !== 'string' ||
         !/^[0-9a-f]{64}$/.test(hash)

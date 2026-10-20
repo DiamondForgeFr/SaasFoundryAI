@@ -1,0 +1,12 @@
+{
+  "session_id": "s-1",
+  "transcript_path": "/home/dev/.claude/projects/p/s-1.jsonl",
+  "cwd": "__CWD__",
+  "permission_mode": "bypassPermissions",
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_id": "a1b2c3",
+  "agent_transcript_path": "__TRANSCRIPT__",
+  "agent_type": "sf-build",
+  "last_assistant_message": "I delivered the ledger.\n\nChanged src/harness/delegation-ledger.ts.\n\nSF-DELEGATION: pass kind=multi-file-feature ticket=1035 complexity=complex nature=user-facing checks=type-check,automated-tests"
+}

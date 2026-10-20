@@ -117,11 +117,19 @@ export function getModelPriceCatalogue(): ModelPriceCatalogue {
   return JSON.parse(JSON.stringify(catalogue))
 }
 
-/** The project's declared price wins over the shipped one; undefined when the model is unpriced. */
+const has = (table: object, key: string): boolean => Object.prototype.hasOwnProperty.call(table, key)
+
+/**
+ * The project's declared price wins over the shipped one; undefined when the model is unpriced. A host
+ * may report a dated snapshot of a priced model (`claude-opus-5-5-20261001`): the date does not change the price.
+ */
 export function resolveModelPrice(model: string | null | undefined, overrides?: Record<string, ModelPrice>): ModelPrice | undefined {
   if (!model) return undefined
-  if (overrides && Object.prototype.hasOwnProperty.call(overrides, model)) return overrides[model]
-  return Object.prototype.hasOwnProperty.call(catalogue.models, model) ? catalogue.models[model] : undefined
+  for (const key of [model, model.replace(/[-@]\d{8}$/, '')]) {
+    if (overrides && has(overrides, key)) return overrides[key]
+    if (has(catalogue.models, key)) return catalogue.models[key]
+  }
+  return undefined
 }
 
 /** Exact cost of one run, or null when the model is unpriced or the usage is unknown. */
