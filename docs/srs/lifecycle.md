@@ -136,7 +136,7 @@ All commands are driven from two wrappers :
 | `srs-cli.sh draft --from notion-pages --ids <ids>`                       | Fetch pages as `RawContent` for conversational drafting                         |
 | `srs-cli.sh write --spec <path>`                                         | Apply `DraftCandidate[]` to the backend (creates Epic + FR pages)               |
 | `transition-drafting <ticket> spawning --epic … --reconciliation-plan …` | Reconcile evidence, then reuse or create the required Story sub-issues          |
-| `srs-cli.sh apply-update < patch.json`                                   | Conversational eval hook — append new UR / FR / DS / TC (ADD-only v1)           |
+| `srs-cli.sh apply-update < patch.json`                                   | Conversational eval hook — add a UR / FR / DS / TC, or change an FR in place    |
 | `srs-cli.sh eval [--review-packet <path>]`                               | Batch freshness score SRS vs. codebase (L1 script + L2 hints + L3 AI packet)    |
 
 ::: warning `update-status` is gated on SRS tickets
@@ -149,7 +149,7 @@ All commands are driven from two wrappers :
 ## Continuous evaluation (conversational)
 
 Outside of the drafter lifecycle, `tools.srs.enabled = true` turns on a conversational hook : when a chat turn reads like a new **User Requirement**, **Functional Requirement**, **Design decision**,
-or **Test Case**, Claude **interjects**, proposes a diff, and — on accept — applies it through `srs-cli.sh apply-update`.
+or **Test Case**, or like a change to an existing **Functional Requirement**, Claude **interjects**, proposes a diff, and — on accept — applies it through `srs-cli.sh apply-update`.
 
 Detection heuristics (summarised here ; canonical list lives in
 [`sf-srs/SKILL.md § Conversational eval hook`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md)) :
@@ -160,7 +160,7 @@ Detection heuristics (summarised here ; canonical list lives in
 | Defines a new feature / rule         | new **FR** page under the Epic     | "we need a feature that lets admins export audit logs as CSV"   |
 | Clarifies an implementation decision | new **DS** on the relevant FR page | "let's use BCrypt with cost factor 12 for password hashing"     |
 | Adds an acceptance / test condition  | new **TC** on the relevant FR page | "and a test that proves unicode passwords are accepted"         |
-| Reopens a previously closed decision | likely FR or DS revision           | "on reconsidère la règle : finalement on autorise les chiffres" |
+| Reopens a previously closed decision | the FR is changed in place         | "on reconsidère la règle : finalement on autorise les chiffres" |
 
 Trivial turns (`ok`, `thanks`, pure tool results, formatting tweaks) are skipped. The confirmation flow is :
 
@@ -176,14 +176,26 @@ J'applique via `srs-cli.sh apply-update` ? [accept / edit / reject]
 - **edit** → rework the wording with the owner, then re-confirm
 - **reject** → drop the proposal ; Claude does not re-propose the same item in the same conversation
 
-### Scope limits (v1, intentional)
+### Changing an existing FR
 
-- **ADD-only** — tightening an existing UR / FR / DS / TC is out of scope. The current `SrsAdapter.updatePage` is append-only on Notion, so surgical section replacement isn't in the contract. A future
-  SUB will extend the adapter with replace / delete semantics.
-- **Append placement** — `add-ur` / `add-ds` / `add-tc` append under an "Added …" heading2 at the end of the target page. The canonical sections (User Requirements / Design / Test Cases) aren't
-  updated in-place. Reviewers fold the appended block back into the right section during the next SRS review.
-- **`add-fr`** creates a brand-new FR child page under the Epic via `adapter.createFrPage`. The Epic's "Traceability" table is **not** refreshed by the hook (same append-only limitation) — the new FR
-  is still discoverable as a child page.
+A revision of an FR is not appended as a design item: it is applied to the FR where it is listed, with an `update-fr` patch that names the FR id and the fields that change (`title`, `description`,
+`priority`, `complexity`, `endpoint`, `requestBody`, `securityRationale`, `acceptanceCriteria`, `validationRules`). The FR page (its Summary and Field/Value tables, its heading and page title for a
+new title), the FR table of its version and the FR table of its feature show the new values, and one line is added to the version's "What changed in this version". The adapter contract has an in-place
+update (`SrsAdapter.updateSections`) for this, implemented for Notion; a backend without it is refused with exit 5 and nothing is written.
+
+- **Preview first** — `srs-cli.sh apply-update --dry-run < patch.json` prints the old → new value of every cell and the change line, and writes nothing. Claude shows it before it asks to apply.
+- **Refused before any write** — an unknown or duplicated FR id, an FR page that cannot take the change, an empty patch, an unknown field, and the references (`urRefs`, `dsRefs`, `tcRefs`), which are
+  also listed in the UR, DS and TC tables ([#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056)).
+- **Safe to repeat** — a cell already at its value is left alone and the change line is not written twice. A write that stops midway exits 6 with `applied`, `pending` and `before`; applying the same
+  patch again finishes it.
+- **The Story keeps its old text** — a Story already spawned from the FR is not rewritten ([#1057](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1057)); the result's `followUps` names it.
+
+### Scope limits (intentional)
+
+- **A UR / DS / TC / NFR can only be added** — changing one in place is out of scope. A revision of one is proposed as an appended item that documents the reversal.
+- **Where an addition lands** — `add-ur` / `add-ds` / `add-tc` / `add-nfr` go to their table on the feature page, with the version of the page they were added from. Only when the page is not part of
+  the SRS, or the table is missing, do they fall back to an "Added …" heading2 at the end of the target page, and the result says so.
+- **`add-fr`** creates a brand-new FR child page under the version, then adds its row to the version's FR table and change list and to the feature's tables.
 - **Throttling** — one proposal maximum per conversation turn. No persistent dedup cache — the turn boundary is sufficient.
 
 ## How the SRS lane meets the code-path lane

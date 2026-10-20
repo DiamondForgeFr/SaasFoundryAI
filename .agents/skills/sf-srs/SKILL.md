@@ -322,16 +322,16 @@ A feature holding its FRs directly still spawns from `--epic` alone — 25 real 
 
 **A page that is neither an FR nor a version aborts the run and creates nothing.** Producing a ticket from a raw title is worse than failing: it looks planned and is empty.
 
-| Action         | Purpose                                                                     | Populated by |
-| -------------- | --------------------------------------------------------------------------- | ------------ |
-| `help`         | Print available actions                                                     | SUB-14.3     |
-| `validate`     | Smoke-test the configured backend via `createSrsAdapter().init()`           | SUB-14.3     |
-| `browse`       | List direct children of a backend page (tree navigation helper)             | SUB-6        |
-| `draft`        | Run the drafter matching `--from <source>` (notion-pages \| codebase)       | SUB-6, 13    |
-| `write`        | Apply a `DraftCandidate[]` spec to the backend + clear pending flag         | SUB-6        |
-| `spawn`        | Spawn GitHub tickets from a published SRS                                   | SUB-9        |
-| `apply-update` | Apply a conversational eval-hook patch (ADD-only : UR / FR / DS / TC / NFR) | SUB-10       |
-| `eval`         | Compute freshness score comparing the SRS to the codebase (batch)           | SUB-16       |
+| Action         | Purpose                                                                 | Populated by |
+| -------------- | ----------------------------------------------------------------------- | ------------ |
+| `help`         | Print available actions                                                 | SUB-14.3     |
+| `validate`     | Smoke-test the configured backend via `createSrsAdapter().init()`       | SUB-14.3     |
+| `browse`       | List direct children of a backend page (tree navigation helper)         | SUB-6        |
+| `draft`        | Run the drafter matching `--from <source>` (notion-pages \| codebase)   | SUB-6, 13    |
+| `write`        | Apply a `DraftCandidate[]` spec to the backend + clear pending flag     | SUB-6        |
+| `spawn`        | Spawn GitHub tickets from a published SRS                               | SUB-9        |
+| `apply-update` | Apply an eval-hook patch: add a UR / FR / DS / TC / NFR, or `update-fr` | SUB-10, #945 |
+| `eval`         | Compute freshness score comparing the SRS to the codebase (batch)       | SUB-16       |
 
 ## Freshness eval (SUB-16)
 
@@ -523,15 +523,15 @@ known so far: typos and missing Epics are easy to spot. An FR must hang under a 
 
 Every TS entrypoint under `src/srs/bin/` honours the same contract. The skill must branch on these codes rather than parsing stderr :
 
-| Code | Meaning                                                                              |
-| ---- | ------------------------------------------------------------------------------------ |
-| 0    | Success                                                                              |
-| 2    | Bad input — missing / malformed flag, zero candidates, empty `--ids`, bad spec shape |
-| 3    | SRS backend missing from the manifest (`tools.srs` absent)                           |
-| 4    | Unknown / invalid backend name declared in the manifest                              |
-| 5    | Backend runtime error (network, adapter `init()` failure, fetch failure)             |
-| 6    | `write` only — partial failure, JSON payload carries `rollbackHint`                  |
-| 7    | `write` only — pages created successfully but clearing `pendingIngestion` failed     |
+| Code | Meaning                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                           |
+| 2    | Bad input — missing / malformed flag, zero candidates, empty `--ids`, bad spec shape              |
+| 3    | SRS backend missing from the manifest (`tools.srs` absent)                                        |
+| 4    | Unknown / invalid backend name declared in the manifest                                           |
+| 5    | Backend runtime error (network, adapter `init()` failure, fetch failure)                          |
+| 6    | Partial write: `write` carries `rollbackHint`, `update-fr` carries `applied`, `pending`, `before` |
+| 7    | `write` only — pages created successfully but clearing `pendingIngestion` failed                  |
 
 ## Drafting from codebase (SUB-13)
 
@@ -645,10 +645,42 @@ Detection heuristics, confirmation prompt, patch shape, and v1 scope limits live
 - `detect-eval-signals.sh --classify "<text>"` (or stdin) — crude regex prefilter over a turn, returns `{signal, confidence, target}`. Use it to cheap-skip trivial turns; the agent still has the final
   say on whether to fire.
 
-Fire at most **once per conversation turn**. On a signal hit, propose a diff in plain text, wait for `accept / edit / reject`, and — on accept — pipe the patch through `sf srs apply-update`. It is
-ADD-only (changing an existing FR is #945). What it adds goes where `write` puts it: a UR / DS / TC / NFR to its table on the feature page, with the version of the target page; an FR to the target
-version's FR table and change list, and to the feature's tables. Only when the page is not part of the SRS or the table is missing does it fall back to an "Added …" heading at the end of the page; the
-result's `placed` and `notPlaced` say so.
+Fire at most **once per conversation turn**. On a signal hit, propose a diff in plain text, wait for `accept / edit / reject`, and — on accept — pipe the patch through `sf srs apply-update`. A UR / DS
+/ TC / NFR can only be added, and an FR can be added or changed in place (`update-fr`, below). What an `add-*` patch adds goes where `write` puts it: a UR / DS / TC / NFR to its table on the feature
+page, with the version of the target page; an FR to the target version's FR table and change list, and to the feature's tables. Only when the page is not part of the SRS or the table is missing does
+it fall back to an "Added …" heading at the end of the page; the result's `placed` and `notPlaced` say so.
+
+### Changing an existing FR (`update-fr`)
+
+A "revision" of an FR — its description reworded, a criterion added or dropped, its priority moved — is applied to the FR where it is listed, never appended as a design item. The patch names the FR by
+its id and the fields that change:
+
+```json
+{
+  "kind": "update-fr",
+  "frId": "FR-AEX-014",
+  "changes": {
+    "description": "Routes by the cost of delivering a ticket, duration included.",
+    "acceptanceCriteria": { "add": ["Durations break ties between tiers"], "remove": ["Exact text of a criterion to drop"] }
+  },
+  "change": "Amends FR-AEX-014 — cost per delivered ticket",
+  "versionPageId": "optional: the version that records the change"
+}
+```
+
+- **Fields.** `title`, `description`, `priority` (`P1` / `P2` / `P3`), `complexity`, `endpoint`, `requestBody`, `securityRationale`, `acceptanceCriteria` and `validationRules`. A list takes the whole
+  array, which replaces it and keeps its order, or `{ add, remove }`, which edits it by exact text (an entry already listed is not repeated; one that is not listed only warns). `id`, `group` and the
+  references `urRefs`, `dsRefs`, `tcRefs` are refused with exit 2 (the references are also listed in the tables of the UR, DS and TC: follow-up #1056); an empty patch and an unknown field are refused
+  too. `pageId` names the FR page when two pages carry the same id.
+- **Where it lands.** The FR page (its Summary and Field/Value tables, and — for a new title — its heading and page title), the FR table of its version and the FR table of its feature (the title and
+  the priority are the fields they show), then one line in the "What changed in this version" of the version that holds the FR. `versionPageId` records the line on another version of the same feature,
+  for an FR of an earlier version amended during later work; `change` words the line, `Amends <id> — <title> (<fields>)` otherwise. Nothing is appended as a separate item.
+- **Dry run first.** `sf srs apply-update --dry-run` prints the old → new plan (`changes`, the `changeLine`, `warnings`) and writes nothing: show it to the user, and apply only on accept.
+- **Refused before any write** (exit 2): an unknown or duplicated FR id, a `pageId` or `versionPageId` that does not fit, and an FR page that cannot take the change (a page written before the
+  Complexity row existed, or edited by hand). A backend whose adapter cannot amend a page exits 5 and writes nothing.
+- **Safe to repeat.** A cell already at its value is left alone and the change line is not written twice, so a second run makes no write. A write that stops midway exits 6 with `applied`, `pending`
+  and `before`: apply the same patch again to finish it, or apply a patch whose `changes` is that `before` to go back.
+- **The spawned Story keeps its old text.** Its body is not rewritten (re-syncing is follow-up #1057): the result's `followUps` names the Story spawned from the FR, and the user edits it by hand.
 
 After any change to the rules or classifier, run a short dogfood session: 5 utterances (one per signal row + one trivial control), confirm the hook fires exactly on the four signals and skips the
 trivial one.

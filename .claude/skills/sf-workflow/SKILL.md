@@ -332,9 +332,10 @@ answer is always "go draft it first, then spawn." See [escape-hatches.md](escape
 
 ### Conversational eval hook (SRS-enabled projects)
 
-When `tools.srs.enabled = true`, Claude must interject during conversation turns whose content looks like a new User Requirement / Functional Requirement / Design decision / Test Case, propose a diff,
-and on user accept apply it via `.claude/skills/sf-srs/scripts/srs-cli.sh apply-update`. The detection heuristics, confirmation flow, and scope limits (ADD-only in v1) live in the sf-srs SKILL.md —
-see its `## Conversational eval hook (SUB-10)` section. This skill only references it ; never duplicate the heuristics here.
+When `tools.srs.enabled = true`, Claude must interject during conversation turns whose content looks like a new User Requirement / Functional Requirement / Design decision / Test Case, or like a
+change to an existing Functional Requirement, propose a diff, and on user accept apply it via `.claude/skills/sf-srs/scripts/srs-cli.sh apply-update`. The detection heuristics, confirmation flow, and
+scope limits (a UR / DS / TC / NFR is added; an FR is added or changed in place with `update-fr`) live in the sf-srs SKILL.md — see its `## Conversational eval hook (SUB-10)` section. This skill only
+references it ; never duplicate the heuristics here.
 
 ## Draft PR lifecycle
 

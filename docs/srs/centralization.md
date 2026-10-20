@@ -31,14 +31,14 @@ is planned for teams that deliberately want specifications reviewed and versione
 
 ## What ships in v1
 
-| Capability                            | Status  | Meaning                                                                                                   |
-| ------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
-| Backend-neutral `SrsAdapter` contract | Shipped | Drafting, browsing, writing, updating, and ticket spawning do not import a provider directly.             |
-| Notion SRS adapter                    | Shipped | Page creation, child-page traversal, append-only updates, and SRS-driven ticket creation work end to end. |
-| Confluence SRS adapter                | Roadmap | The adapter contract anticipates it; the implementation does not ship yet.                                |
-| Local-Markdown SRS adapter            | Roadmap | Planned for Git-native specifications; not available in v1.                                               |
-| Conversational requirement capture    | Shipped | The agent proposes an ADD-only change and waits for approval before writing.                              |
-| Evidence-first ticket reconciliation  | Shipped | Spawning compares the SRS, board, and implementation before creating or reusing a ticket.                 |
+| Capability                            | Status  | Meaning                                                                                                |
+| ------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| Backend-neutral `SrsAdapter` contract | Shipped | Drafting, browsing, writing, updating, and ticket spawning do not import a provider directly.          |
+| Notion SRS adapter                    | Shipped | Page creation, child-page traversal, in-place updates, and SRS-driven ticket creation work end to end. |
+| Confluence SRS adapter                | Roadmap | The adapter contract anticipates it; the implementation does not ship yet.                             |
+| Local-Markdown SRS adapter            | Roadmap | Planned for Git-native specifications; not available in v1.                                            |
+| Conversational requirement capture    | Shipped | The agent proposes an addition or a change to an FR and waits for approval before writing.             |
+| Evidence-first ticket reconciliation  | Shipped | Spawning compares the SRS, board, and implementation before creating or reusing a ticket.              |
 
 ::: warning Backend-neutral does not mean every backend is available
 
@@ -188,7 +188,8 @@ Disabling the detector is not a data migration. Existing Notion pages remain whe
 
 ## Intentional v1 limits
 
-- Conversational updates are **ADD-only**. The Notion adapter appends a clearly labeled item; a reviewer folds it into the canonical section during the next SRS review.
+- Conversational updates add a UR, DS, TC or NFR to its table and add or change an FR. An FR is changed in place, on its page and in the tables that list it; its references, and a UR, DS, TC or NFR
+  that exists, are not changed in place yet.
 - An AI proposal is not approval. No requirement update is written until the user accepts it.
 - Code scanners provide evidence, not exhaustive understanding. Sparse findings require human-guided inspection.
 - Confluence and local Markdown are architectural destinations, not shipped adapters.

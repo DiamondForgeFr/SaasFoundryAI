@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+#### SRS
+
+- `sf srs apply-update` changes an existing functional requirement in place with an `update-fr` patch. The patch names the FR id and the fields that change (`title`, `description`, `priority`,
+  `complexity`, `endpoint`, `requestBody`, `securityRationale`, `acceptanceCriteria`, `validationRules`; a list takes the whole array or `{ add, remove }`). The FR page, the FR table of its version
+  and the FR table of its feature show the new values, one line is added to the version's "What changed in this version", and nothing is appended as a separate item. `--dry-run` prints the old and new
+  value of every cell and writes nothing, a second run writes nothing, a write that stops midway exits `6` with `applied`, `pending` and `before`, and an FR that does not exist, an FR page that cannot
+  take the change or a reference (`urRefs`, `dsRefs`, `tcRefs`) is refused before any write. The result's `followUps` names the Story spawned from the FR, which keeps its old text
+  ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945); references: [#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056), spawned Story:
+  [#1057](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1057)).
+- The `SrsAdapter` contract gains an optional `updateSections`, implemented for Notion: a table row is changed cell by cell where its first cell matches, a heading is rewritten at its level and a page
+  is renamed. A backend without it is refused with exit `5` and nothing is written ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945)).
+
+### Changed
+
+#### SRS
+
+- The conversational "revision" signal proposes an `update-fr` patch instead of an appended design item ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945)).
+
 ## [1.0.1] - 2026-10-09
 
 A maintenance release. It fixes what real projects hit after 1.0.0: `sf update` on customized projects, non-interactive harness setup, the SRS writer and spawner, workflow guards, and generated

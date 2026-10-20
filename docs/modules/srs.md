@@ -15,8 +15,9 @@ The SRS module wires a living requirements surface into the generator:
   column, so SRS and code tickets share a single board.
 - ✅ **Ticket hand-off** — once an Epic page tree is drafted, `srs spawn` enumerates the FR pages and creates one GitHub sub-issue per FR, each rendered from `renderStoryTicketBody` and linked to the
   canonical page.
-- ✅ **Continuous evaluation** — when a conversation turn looks like a new UR / FR / DS / TC, Claude proposes a diff and (on accept) appends the item through the configured backend. V1 is
-  **ADD-only**; modifications are a future-iteration item documented under the skill.
+- ✅ **Continuous evaluation** — when a conversation turn looks like a new UR / FR / DS / TC, or like a change to an existing FR, Claude proposes a diff and (on accept) applies it through the
+  configured backend: a new item is added where `write` would have put it, and an existing FR is changed in place, on its page and in the tables that list it. A UR, DS, TC or NFR can only be added for
+  now.
 
 ## What the module actually ships
 
@@ -116,23 +117,24 @@ The installer will:
 Every SRS operation is available as a deterministic `sf srs` command and through the installed agent skill. The agent path is useful when the task needs repository context or an explanation; the CLI
 path is useful for automation and inspection. Both resolve the same configured adapter and preserve the same preview and human-approval boundaries.
 
-| Goal                                       | CLI path                                    | Agent path                                                                                          |
-| ------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Check the configured specification backend | `sf srs validate`                           | “Check whether this project's SRS backend is ready, without changing it.”                           |
-| Draft requirements from the codebase       | `sf srs draft --from codebase --path .`     | “Draft the missing requirements from this codebase, then show me the proposal without applying it.” |
-| Preview tickets for an Epic                | `sf srs spawn --epic <url-or-id> --dry-run` | “Preview the tickets this SRS Epic would create. Do not create them yet.”                           |
-| Apply an approved additive update          | `sf srs apply-update --patch <path>`        | “Apply this approved additive SRS patch and report exactly what changed.”                           |
+| Goal                                       | CLI path                                       | Agent path                                                                                          |
+| ------------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Check the configured specification backend | `sf srs validate`                              | “Check whether this project's SRS backend is ready, without changing it.”                           |
+| Draft requirements from the codebase       | `sf srs draft --from codebase --path .`        | “Draft the missing requirements from this codebase, then show me the proposal without applying it.” |
+| Preview tickets for an Epic                | `sf srs spawn --epic <url-or-id> --dry-run`    | “Preview the tickets this SRS Epic would create. Do not create them yet.”                           |
+| Apply an approved update                   | `sf srs apply-update --patch <path>`           | “Apply this approved SRS patch and report exactly what changed.”                                    |
+| Preview a change to an existing FR         | `sf srs apply-update --patch <path> --dry-run` | “Show me what this FR amendment would change in the SRS. Do not apply it yet.”                      |
 
 Natural-language requests do not waive confirmation. Drafting, previewing and applying remain distinct actions, and the agent must wait at the same approval gates documented by the SRS lifecycle.
 
 ### The four primary flows
 
-| Flow                    | Trigger                                                                    | Entry point                                                  |
-| ----------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Draft from notes**    | `pendingIngestion` is set (one-shot) or you explicitly ask for a draft     | `srs-cli.sh browse` → `srs-cli.sh draft --from notion-pages` |
-| **Draft from codebase** | The code already exists and you want to bootstrap SRS from the source tree | `srs-cli.sh draft --from codebase [--path <repo>]`           |
-| **Spawn tickets**       | An Epic page tree (Main spec + FR-001…FR-N) is ready for ticket creation   | `srs-cli.sh spawn --ticket <parent> --epic <url-or-id>`      |
-| **Evolve the spec**     | A conversation turn looks like a new UR / FR / DS / TC → Claude interjects | `srs-cli.sh apply-update` (ADD-only v1)                      |
+| Flow                    | Trigger                                                                                          | Entry point                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| **Draft from notes**    | `pendingIngestion` is set (one-shot) or you explicitly ask for a draft                           | `srs-cli.sh browse` → `srs-cli.sh draft --from notion-pages` |
+| **Draft from codebase** | The code already exists and you want to bootstrap SRS from the source tree                       | `srs-cli.sh draft --from codebase [--path <repo>]`           |
+| **Spawn tickets**       | An Epic page tree (Main spec + FR-001…FR-N) is ready for ticket creation                         | `srs-cli.sh spawn --ticket <parent> --epic <url-or-id>`      |
+| **Evolve the spec**     | A conversation turn looks like a new UR / FR / DS / TC, or a change to an FR → Claude interjects | `srs-cli.sh apply-update` (`add-*`, `update-fr`)             |
 
 All three go through the `SrsAdapter` interface — the Notion vs. Confluence vs. local-markdown choice never leaks into the skill or the CLI.
 
@@ -159,8 +161,11 @@ srs-cli.sh write --spec /tmp/candidates.json
 # Spawn GitHub Stories from a drafted Epic
 srs-cli.sh spawn --ticket 57 --epic <epic-page-url>
 
-# Apply a conversational ADD-only patch (new UR / FR / DS / TC)
+# Apply a conversational patch: add a UR / FR / DS / TC / NFR, or change an existing FR in place
 srs-cli.sh apply-update < patch.json
+
+# Preview an update-fr patch first: the old → new value of every cell, nothing written
+srs-cli.sh apply-update --dry-run < patch.json
 
 # (Coming soon, SUB-16) compute a freshness score across the SRS
 srs-cli.sh eval
@@ -209,7 +214,11 @@ The token is created at https://www.notion.so/my-integrations ; the integration 
 - **Local-markdown backend** — file-system backend for teams that want SRS in git instead of a SaaS
 - **Migration command** — `sf srs migrate` to port an existing SRS across backends (#187)
 - **Freshness scoring** — `srs-cli.sh eval` returns a drift report comparing the SRS to the codebase (#202)
-- **ADD + MODIFY eval hook** — current v1 is ADD-only ; replace / delete semantics are pending an adapter extension
+- **Editing a UR / DS / TC / NFR, and the references of an FR, in place** — an existing FR is changed in place by `update-fr` (its page, the version and feature FR tables, one change line); the other
+  requirement types, deletion, and an FR's `urRefs` / `dsRefs` / `tcRefs` (which are also listed in the UR, DS and TC tables, [#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056)) are
+  not supported yet
+- **Re-syncing a spawned Story after its FR is amended** — the Story keeps the text the FR had when it was spawned, and `update-fr` names it in its `followUps`
+  ([#1057](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1057))
 
 ## Troubleshooting
 

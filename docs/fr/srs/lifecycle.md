@@ -113,29 +113,48 @@ Le ticket de rédaction est terminé et garde son label `srs:*` comme provenance
 | `srs-cli.sh draft --from notion-pages --ids <ids>`               | Lit des pages en `RawContent`                           |
 | `srs-cli.sh draft --from codebase [--path <repo>]`               | Produit les constats des scanners                       |
 | `srs-cli.sh write --spec <path>`                                 | Écrit un `DraftCandidate[]` approuvé                    |
-| `srs-cli.sh apply-update < patch.json`                           | Ajoute un UR, FR, DS ou TC approuvé                     |
+| `srs-cli.sh apply-update < patch.json`                           | Ajoute un UR, FR, DS ou TC approuvé, ou modifie une FR  |
 | `srs-cli.sh eval [--review-packet <path>]`                       | Mesure la fraîcheur de la SRS face au code              |
 
 `update-status` refuse les phases de test/revue du code pour un ticket `srs:*` : il faut utiliser `transition-drafting`.
 
 ## Évaluation continue en conversation
 
-Lorsque `tools.srs.enabled = true`, l'agent détecte les formulations qui ressemblent à une nouvelle exigence :
+Lorsque `tools.srs.enabled = true`, l'agent détecte les formulations qui ressemblent à une nouvelle exigence, ou à un changement d'une FR existante :
 
-| Signal                          | Proposition                |
-| ------------------------------- | -------------------------- |
-| Besoin ou résultat utilisateur  | **UR** sur l'Epic          |
-| Fonctionnalité ou règle         | nouvelle page **FR**       |
-| Décision d'implémentation       | **DS** sur la FR concernée |
-| Condition d'acceptation ou test | **TC** sur la FR concernée |
+| Signal                          | Proposition                      |
+| ------------------------------- | -------------------------------- |
+| Besoin ou résultat utilisateur  | **UR** sur l'Epic                |
+| Fonctionnalité ou règle         | nouvelle page **FR**             |
+| Décision d'implémentation       | **DS** sur la FR concernée       |
+| Condition d'acceptation ou test | **TC** sur la FR concernée       |
+| Décision rouverte               | la **FR** est modifiée sur place |
 
 Il présente un diff et attend `accept`, `edit` ou `reject`. L'acceptation appelle `srs-cli.sh apply-update`, puis la tâche en cours continue.
 
-### Limites volontaires de la v1
+### Modifier une FR existante
 
-- Le hook est **ADD-only** : il ajoute mais ne remplace ni ne supprime.
-- Les UR, DS et TC sont ajoutés sous une section dédiée en fin de page.
-- `add-fr` crée une page enfant, sans reconstruire automatiquement la table de traçabilité de l'Epic.
+Une révision de FR n'est pas ajoutée comme élément de conception : elle est appliquée à la FR là où elle est listée, avec un correctif `update-fr` qui désigne l'identifiant de la FR et les champs qui
+changent (`title`, `description`, `priority`, `complexity`, `endpoint`, `requestBody`, `securityRationale`, `acceptanceCriteria`, `validationRules`). La page de la FR (ses tableaux Summary et
+Field/Value, et pour un nouveau titre sa section et le titre de la page), le tableau des FR de sa version et celui de sa fonctionnalité affichent les nouvelles valeurs, et une ligne est ajoutée à «
+What changed in this version » de la version. Le contrat d'adaptateur a une mise à jour sur place (`SrsAdapter.updateSections`) pour cela, implémentée pour Notion ; un backend qui ne l'a pas est
+refusé avec le code 5 et rien n'est écrit.
+
+- **Prévisualiser d'abord** : `srs-cli.sh apply-update --dry-run < patch.json` affiche l'ancienne et la nouvelle valeur de chaque cellule et la ligne de changement, sans rien écrire. L'agent le montre
+  avant de demander l'application.
+- **Refusé avant toute écriture** : un identifiant de FR inconnu ou en double, une page de FR qui ne peut pas recevoir le changement, un correctif vide, un champ inconnu, et les références (`urRefs`,
+  `dsRefs`, `tcRefs`), qui sont aussi listées dans les tableaux des UR, DS et TC ([#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056)).
+- **Rejouable** : une cellule déjà à sa valeur est laissée telle quelle et la ligne de changement n'est pas écrite deux fois. Une écriture qui s'arrête en cours de route sort avec le code 6 et affiche
+  `applied`, `pending` et `before` ; appliquer de nouveau le même correctif la termine.
+- **La Story garde son ancien texte** : une Story déjà générée depuis la FR n'est pas réécrite ([#1057](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1057)) ; le `followUps` du résultat la
+  nomme.
+
+### Limites volontaires
+
+- Un UR, DS, TC ou NFR ne peut qu'être **ajouté** : le modifier sur place est hors périmètre. Une révision de l'un d'eux se propose comme un élément ajouté qui documente le revirement.
+- `add-ur`, `add-ds`, `add-tc` et `add-nfr` vont dans leur tableau sur la page de la fonctionnalité, avec la version de la page d'où ils sont ajoutés ; seulement si la page n'appartient pas au SRS ou
+  si le tableau manque, ils tombent sous un titre « Added … » en fin de page, et le résultat le dit.
+- `add-fr` crée une page enfant sous la version, puis ajoute sa ligne au tableau des FR et à la liste des changements de la version, et aux tableaux de la fonctionnalité.
 - Une seule proposition est émise par tour de conversation.
 
 ## Jonction avec la livraison de code
