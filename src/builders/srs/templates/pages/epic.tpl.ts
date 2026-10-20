@@ -1,4 +1,5 @@
-import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, SectionAddition, TcItem, UrItem } from '../../types'
+import { DsItem, EpicSpec, FrItem, NfrItem, PageBlock, PageContent, Priority, SectionAddition, SectionUpdate, TcItem, UrItem } from '../../types'
+import { changedCells } from './cell-changes'
 
 const EMPTY_CELL = '—'
 
@@ -24,6 +25,13 @@ export const VERSION_HEADINGS = {
 
 export const VERSION_FR_HEADER = ['ID', 'Requirement', 'Priority']
 
+/** The columns of the feature's FR table before its Version column, which a feature may or may not have. */
+const FEATURE_FR_HEADER = ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS']
+
+function versionFrRow(fr: FrItem): string[] {
+  return [fr.id, fr.title, priorityCell(fr.priority)]
+}
+
 /** The line "What changed" gains when an FR joins an existing version, unless the spec words it. */
 export function versionChangeLine(fr: Pick<FrItem, 'id' | 'title'>, change?: string): string {
   return change?.trim() || `Adds ${fr.id} — ${fr.title}`
@@ -33,8 +41,37 @@ export function versionChangeLine(fr: Pick<FrItem, 'id' | 'title'>, change?: str
 export function versionFrAdditions(fr: FrItem, change?: string): SectionAddition[] {
   return [
     { kind: 'list-items', heading: VERSION_HEADINGS.changes, items: [versionChangeLine(fr, change)] },
-    { kind: 'table-rows', heading: VERSION_HEADINGS.frs, layouts: [{ header: VERSION_FR_HEADER, rows: [[fr.id, fr.title, priorityCell(fr.priority)]] }] }
+    { kind: 'table-rows', heading: VERSION_HEADINGS.frs, layouts: [{ header: VERSION_FR_HEADER, rows: [versionFrRow(fr)] }] }
   ]
+}
+
+/**
+ * The line "What changed" gains when an FR is amended in place (#945), unless the patch words it:
+ * it names the fields the patch changes, so applying the same patch again states the same line.
+ */
+export function versionAmendmentLine(fr: Pick<FrItem, 'id' | 'title'>, fields: string[], change?: string): string {
+  return change?.trim() || `Amends ${fr.id} — ${fr.title}${fields.length > 0 ? ` (${fields.join(', ')})` : ''}`
+}
+
+/** The change line alone: an amended FR keeps its row in the version's FR table. */
+export function versionAmendmentAdditions(line: string): SectionAddition[] {
+  return [{ kind: 'list-items', heading: VERSION_HEADINGS.changes, items: [line] }]
+}
+
+/** The cells of an FR's row in its version's FR table that go from `before` to `after`. */
+export function versionFrUpdates(before: FrItem, after: FrItem): SectionUpdate[] {
+  const cells = changedCells(VERSION_FR_HEADER, versionFrRow(before), versionFrRow(after))
+  return Object.keys(cells).length > 0 ? [{ kind: 'table-cells', heading: VERSION_HEADINGS.frs, rowKey: before.id, cells }] : []
+}
+
+/**
+ * The cells of an FR's row in its feature's FR table that go from `before` to `after`. The
+ * columns are found by their header, so a table with or without the Version column is amended
+ * the same way, and the group header rows between FRs are never touched.
+ */
+export function featureFrUpdates(before: FrItem, after: FrItem): SectionUpdate[] {
+  const cells = changedCells(FEATURE_FR_HEADER, frRow(before), frRow(after))
+  return Object.keys(cells).length > 0 ? [{ kind: 'table-cells', heading: FEATURE_HEADINGS.frs, rowKey: before.id, cells }] : []
 }
 
 export const VERSIONS_INTRO = 'Each version below holds the FRs that belong to it. Doing the same thing again later means adding a version, not renaming this page.'
@@ -188,7 +225,7 @@ function featureTables(spec: EpicSpec, allFrs: FrItem[]): RenderedTable[] {
     }),
     renderTable<FrItem>({
       heading: FEATURE_HEADINGS.frs,
-      header: ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS'],
+      header: FEATURE_FR_HEADER,
       empty: 'No functional requirements yet.',
       own: spec.frs,
       fromVersions: spec.versionFrs ?? [],
@@ -272,7 +309,7 @@ function renderVersionPage(spec: EpicSpec): PageContent {
     blocks.push({
       kind: 'table',
       header: VERSION_FR_HEADER,
-      rows: spec.frs.map((fr) => [fr.id, fr.title, priorityCell(fr.priority)])
+      rows: spec.frs.map(versionFrRow)
     })
   }
 
