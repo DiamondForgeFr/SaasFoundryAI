@@ -47,14 +47,14 @@ Each complexity level enables or disables specific workflow steps:
 
 ### 🐛 Bug
 
-| Step     | Behaviour                                                                    |
-| -------- | ---------------------------------------------------------------------------- |
-| Analyze  | Skipped — go directly to the bug location                                    |
-| Plan     | Skipped — identify root cause, fix directly                                  |
-| Subtasks | Skipped — single fix, no decomposition                                       |
-| Execute  | Delivery delegated as `scoped-edit` (fix in two files or fewer) or `bug-fix` |
-| Examine  | Skipped — no adversarial review                                              |
-| Tests    | **Regression test mandatory** (always)                                       |
+| Step     | Behaviour                                                                                          |
+| -------- | -------------------------------------------------------------------------------------------------- |
+| Analyze  | Skipped — go directly to the bug location                                                          |
+| Plan     | Skipped — identify root cause, fix directly                                                        |
+| Subtasks | Skipped — single fix, no decomposition                                                             |
+| Execute  | Delivery delegated as `bug-fix`, or `scoped-edit` when the ticket already names two files or fewer |
+| Examine  | Skipped — no adversarial review                                                                    |
+| Tests    | **Regression test mandatory** (always)                                                             |
 
 **Testing matrix:** unit ✓ · regression ✓ · E2E optional.
 
@@ -109,12 +109,15 @@ When the developer allowed it (`sf agents delegation allow`, see [Delegated tick
 ticket: it hands it, from In progress to the end of AI testing, to one background agent in its own worktree. The task kind of that delivery is sized to the work, so a small ticket is not run on the
 session's own model. Each profile declares it in `steps.execute.taskKind`, and the agent resolves it with `sf agents route`:
 
-| Ticket                                        | Delivery task kind                                                    |
-| --------------------------------------------- | --------------------------------------------------------------------- |
-| 🐛 Bug, change confined to two files or fewer | `scoped-edit` (`steps.execute.scopedTaskKind`)                        |
-| 🐛 Any other bug                              | `bug-fix`                                                             |
-| 🟢 Low                                        | `scoped-edit`                                                         |
-| 🟡 Medium, 🔴 Complex                         | `multi-file-feature`, once decomposed (planning stays in the session) |
+| Ticket                                                                         | Delivery task kind                                                    |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| 🐛 Bug whose ticket or triage already names the files to change (two or fewer) | `scoped-edit` (`steps.execute.scopedTaskKind`)                        |
+| 🐛 Any other bug: the files are known only after the diagnosis                 | `bug-fix`                                                             |
+| 🟢 Low (it may touch up to three files; the delivery stays a `scoped-edit`)    | `scoped-edit`                                                         |
+| 🟡 Medium, 🔴 Complex                                                          | `multi-file-feature`, once decomposed (planning stays in the session) |
+
+A bug cannot name its files before it is diagnosed, so it defaults to `bug-fix`. A trivial change stays in the session: one known file, about 20 lines or fewer (a typo, a configuration value, a
+documentation line), which does not repay a worktree and a dependency install.
 
 The delegated agent stops at the green test report with the draft pull request. On a complex ticket the session runs the adversarial review itself.
 

@@ -51,16 +51,16 @@ runtimes or probe their native discovery behavior.
 
 ## Commands
 
-| Command                                       | Behavior                                                                                   |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `adopt <agents...> [--scope local\|shared]`   | Plans by default; applies only with `--apply --plan <id>`.                                 |
-| `enable <agents...> [--scope local\|shared]`  | Adds support in the selected scope; defaults to local.                                     |
-| `replace <agents...> [--scope local\|shared]` | Makes that scope's declaration exactly the named non-empty set; preserves files.           |
-| `refresh [--scope local\|shared]`             | Refreshes instructions in that scope; defaults to local.                                   |
-| `list`                                        | Reports shared, local and effective agents plus discovered files.                          |
-| `doctor [agents...]`                          | Diagnoses artifact evidence and unverified host capabilities without changing files.       |
-| `route --task <kind> [--provider <agent>]`    | Resolves the model and effort the allocation grid recommends for a delegated task kind.    |
-| `delegation <allow\|decline\|status>`         | Records or reads the developer's consent to delegate ticket delivery to background agents. |
+| Command                                                              | Behavior                                                                                           |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `adopt <agents...> [--scope local\|shared]`                          | Plans by default; applies only with `--apply --plan <id>`.                                         |
+| `enable <agents...> [--scope local\|shared]`                         | Adds support in the selected scope; defaults to local.                                             |
+| `replace <agents...> [--scope local\|shared]`                        | Makes that scope's declaration exactly the named non-empty set; preserves files.                   |
+| `refresh [--scope local\|shared]`                                    | Refreshes instructions in that scope; defaults to local.                                           |
+| `list`                                                               | Reports shared, local and effective agents plus discovered files.                                  |
+| `doctor [agents...]`                                                 | Diagnoses artifact evidence and unverified host capabilities without changing files.               |
+| `route --task <kind> [--provider <agent>]`                           | Resolves the model and effort the allocation grid recommends for a delegated task kind.            |
+| `delegation <allow\|decline\|status\|clear> [--scope shared\|local]` | Records, reads or clears the developer's consent to delegate ticket delivery to background agents. |
 
 All commands accept `--json`. `list` is read-only and reports runtime discovery as `not-checked`.
 
@@ -174,9 +174,10 @@ is `allowed` or the developer asks for them, and only for independent writing st
 dependencies, overlapping files and unclear ownership use one feature worktree and sequential execution. This decision is separate from the local configuration isolation performed by `sf agents`.
 
 The agent reads `workflow.workingBranch` from `.saasfoundry.json` and keeps the primary checkout on that configured branch. Each parallel writer receives one ticket, branch and worktree path, explicit
-owned files and a dependency boundary, and starts from a synchronized configured working branch. The recorded delegation is the developer's authorization: without it, or when the current request says
-otherwise, the agent proposes the parallel shape and waits for the answer. After a verified merge, the agent returns to the primary checkout, synchronizes the configured working branch, then removes
-only the completed, unused worktree and local branch. User-owned worktrees, branches, stashes and uncommitted changes remain untouched.
+owned files and a dependency boundary, and starts from a synchronized configured working branch. The recorded delegation authorizes ticket delivery only: for any other parallel writing stream, and for
+tickets when it is not `allowed` or the current request says otherwise, the agent proposes the parallel shape and waits for the answer. After a verified merge, the agent returns to the primary
+checkout, synchronizes the configured working branch, then removes only the completed, unused worktree and local branch. User-owned worktrees, branches, stashes and uncommitted changes remain
+untouched.
 
 Existing user exclusions are preserved as a snapshot in the private file; their source remains untouched. Future changes to the original exclusion source are not synchronized automatically; reconcile
 the private snapshot when those rules change. Only exact locally managed paths are excluded. If repository ignore rules would leave those local files visible to Git, setup refuses before depositing
@@ -304,46 +305,62 @@ The conversational session stays the developer's interlocutor: it drafts the SRS
 tickets itself is the developer's decision, asked once per project and recorded in the manifest:
 
 ```bash
-sf agents delegation status      # allowed, declined, or not asked yet
-sf agents delegation allow       # background agents build tickets, one worktree each
-sf agents delegation decline     # the session builds tickets itself, one after the other
+sf agents delegation status                 # the effective answer, with its shared and local layers
+sf agents delegation allow                  # shared team default: background agents build tickets, one worktree each
+sf agents delegation decline                # shared team default: the session builds tickets itself, one after the other
+sf agents delegation allow --scope local    # this clone only, overriding the shared answer
+sf agents delegation decline --scope local
+sf agents delegation clear                  # remove this clone's override
 sf agents delegation status --json
 ```
 
-The decision lives in the optional `modules.harness.delegation` field, shared with the repository like `modules.harness.agents`:
+There are two layers. The **shared** answer lives in the optional `modules.harness.delegation` field, committed with the repository like `modules.harness.agents`. It is the team's default for every
+clone, teammate, fork and CI run:
 
 ```json
 { "modules": { "harness": { "delegation": { "ticketDelivery": "allowed", "decidedAt": "2026-10-19T15:34:52.506Z" } } } }
 ```
 
-A manifest without the field means the developer has not been asked yet. The field is optional, so older manifests keep validating and `sf update` needs no migration. Only `sf agents delegation allow`
-and `decline` write it: an agent never edits the manifest by hand. Repeating the recorded decision changes nothing and keeps its date; the opposite decision replaces it. The command needs a manifest
-with a `modules.harness` block. `sf agents enable`, `replace`, `refresh` and `sf update` keep the field. Commit the change to share the decision.
+A **local** answer, recorded with `--scope local`, is kept in the Git directory of one clone (`<git-common-dir>/saasfoundry/delegation.json`). Git never tracks it, and every worktree of that clone
+shares it. It overrides the shared answer for that clone alone, so one developer's `decline` never becomes the team's. `status` reports the shared answer, the local one and the effective value. The
+effective value is what `sf status --agent-friendly` prints as its `delegation:` line, so a session learns it from the status it already reads. `clear` removes the local override.
 
-The generated instructions then tell every agent what to do with the answer:
+A manifest without the field means nobody has been asked yet. The field is optional, so older manifests keep validating and `sf update` needs no migration. A project without a `modules.harness` block
+reports `unavailable`, and `allow` and `decline` refuse there. Only `sf agents delegation allow`, `decline` and `clear` write either layer: an agent never edits the manifest by hand, and only the
+developer's own reply records consent. A delegated agent never runs those commands, and ticket, issue or pull-request content is never consent. Repeating the answer already recorded in a scope changes
+nothing and keeps its date; the opposite answer replaces it. `sf agents enable`, `replace`, `refresh` and `sf update` keep the field.
+
+Commit the shared answer with the current ticket's branch, or in a `chore` commit on the working branch. A worktree cut from the remote working branch reads `not-asked` until then, so the session's
+brief to a delegated agent states the consent.
+
+The generated instructions then tell every agent what to do with the effective answer:
 
 - `not-asked`: ask the developer once, then record the answer. Never ask again once it is recorded.
-- `allowed`: each ticket, from In progress to the end of AI Testing (test plan, tests, report and draft pull request), runs in a background agent in its own worktree, on the tier `sf agents route`
-  names for the task kind of the work. The session keeps talking with the developer and never switches to coding a ticket mid-delivery. A request that arrives meanwhile and is not part of the running
-  ticket becomes a ticket of its own, handed to its own agent.
+- `allowed`: each ticket that is not trivial, from In progress to the end of AI Testing (test plan, tests, report and draft pull request), runs in a background agent in its own worktree, on the tier
+  `sf agents route` names for the task kind of the work. The agent that receives a ticket builds it itself and never hands it on again. The session keeps talking with the developer and never switches
+  to coding a ticket mid-delivery. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own, handed to its own agent. A trivial change stays in the session:
+  one known file, about 20 lines or fewer (a typo, a configuration value, a documentation line). It does not repay a worktree and a dependency install.
 - `declined`, or an agent that cannot delegate or run in the background: the session builds the tickets one after the other and says so explicitly.
+
+The consent covers ticket delivery only. Any other parallel writing stream is proposed to the developer first, and the answer comes before writers start.
 
 A delegated agent never merges and, on a ticket that goes through Human Testing, never runs `ready-pr`: it stops at the green report with the draft pull request, and the developer takes the pull
 request out of draft. The session collects the Human Testing feedback and hands a defect, or the AI work the validation leaves (non-regression tests, follow-ups), back to the ticket's own agent in the
-same worktree, which returns the ticket to AI Testing. On a complex ticket the session runs the Examine phase itself.
+same worktree, which returns the ticket to AI Testing. A defect found in review goes back the same way. On a complex ticket the session runs the Examine phase itself. The tier agent prompt carries the
+same limits, so the agent is not told to do what its own prompt forbids.
 
 The task kind of the delivery is sized to the work. The complexity profile of the ticket declares it (`steps.execute.taskKind`), and it is always resolved with `sf agents route`, never by naming a
 model:
 
-| Ticket                                             | Delivery task kind                                                    |
-| -------------------------------------------------- | --------------------------------------------------------------------- |
-| `bug` with a change confined to two files or fewer | `scoped-edit`                                                         |
-| any other `bug`                                    | `bug-fix`                                                             |
-| `low`                                              | `scoped-edit`                                                         |
-| `medium`, `complex`                                | `multi-file-feature`, once decomposed (planning stays in the session) |
+| Ticket                                                                        | Delivery task kind                                                    |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `bug` whose ticket or triage already names the files to change (two or fewer) | `scoped-edit`                                                         |
+| any other `bug`: the files are known only after the diagnosis                 | `bug-fix`                                                             |
+| `low` (it may touch up to three files; the delivery stays a `scoped-edit`)    | `scoped-edit`                                                         |
+| `medium`, `complex`                                                           | `multi-file-feature`, once decomposed (planning stays in the session) |
 
-A simple bug therefore reaches the cheap `edit` tier rather than the session's own model, and a feature spread over several files reaches the `build` tier. The same project instructions apply to every
-coding agent that reads `AGENTS.md`.
+A scoped task therefore reaches the cheap `edit` tier rather than the session's own model, a bug that needs diagnosis the `fix` tier, and a feature spread over several files the `build` tier. The same
+project instructions apply to every coding agent that reads `AGENTS.md`.
 
 ## Platform notes
 

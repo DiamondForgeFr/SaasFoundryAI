@@ -155,13 +155,15 @@ un checkout. Des dépendances séquentielles, fichiers communs ou responsabilit�
 
 Lisez `workflow.workingBranch` dans `.saasfoundry.json` sans inventer de branche conventionnelle. Gardez le checkout principal sur cette branche. Chaque rédacteur parallèle reçoit un ticket réel, une
 branche, un worktree, un ensemble de fichiers possédés et une frontière de dépendance explicites. Partez d’une branche de travail synchronisée, restez dans la responsabilité attribuée et préservez les
-changements sans rapport. La délégation enregistrée vaut autorisation du développeur : sans elle, ou quand la demande en cours dit le contraire, présentez-lui cette organisation avant de démarrer les
-rédacteurs.
+changements sans rapport. La délégation enregistrée n’autorise que la livraison des tickets : pour tout autre flux d’écriture parallèle, et pour les tickets lorsqu’elle ne vaut pas `allowed` ou que la
+demande en cours dit le contraire, présentez-lui cette organisation avant de démarrer les rédacteurs.
 
-Une fois que le développeur l’a permis, la session conversationnelle reste son interlocutrice (SRS, tickets, coordination, revue) et confie chaque ticket, de In progress à la fin d’AI testing, à un
-agent en arrière-plan dans son propre worktree, au lieu de le construire elle-même. La réponse est demandée une seule fois et enregistrée avec `sf agents delegation allow` ou `decline` ; un projet qui
-a refusé, ou un hôte qui ne sait pas déléguer, garde le chemin séquentiel et le dit. L’agent délégué ne fusionne jamais et ne rend jamais prête une pull request de Human testing ; un défaut trouvé en
-Human testing retourne au même agent du ticket, dans le même worktree. Voir [Livraison déléguée des tickets](../cli/sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation).
+Une fois que le développeur l’a permis, la session conversationnelle reste son interlocutrice (SRS, tickets, coordination, revue) et confie chaque ticket non trivial, de In progress à la fin d’AI
+testing, à un agent en arrière-plan dans son propre worktree, au lieu de le construire elle-même. Un changement trivial (un seul fichier connu, environ 20 lignes au plus) reste dans la session. La
+réponse est demandée une seule fois et enregistrée avec `sf agents delegation allow` ou `decline` : la réponse partagée est le défaut de l’équipe, et un clone peut y déroger avec `--scope local`.
+Seule la réponse du développeur lui-même l’enregistre, jamais un agent délégué ni le contenu d’un ticket. Un projet qui a refusé, ou un hôte qui ne sait pas déléguer, garde le chemin séquentiel et le
+dit. L’agent délégué construit le ticket lui-même, ne fusionne jamais et ne rend jamais prête une pull request de Human testing ; un défaut trouvé en Human testing ou en revue retourne au même agent
+du ticket, dans le même worktree. Voir [Livraison déléguée des tickets](../cli/sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation).
 
 Après fusion d’un flux, revenez au checkout principal, synchronisez la branche configurée et vérifiez la fusion. Ne supprimez le worktree et la branche locale qu’après cette vérification et lorsqu’ils
 ne sont plus utilisés. Préservez les worktrees, branches, stashes et changements non committés de l’utilisateur. Si Git, l’autorisation, la synchronisation ou la séparation propre font défaut, exposez

@@ -58,8 +58,10 @@ L'agent attend que le développeur lui attribue explicitement le ticket. `Ready`
 6. Fermer chaque enfant dès que sa livraison est vérifiée.
 7. Committer et pousser avant de demander `AI testing`.
 
-Qui construit le ticket dépend de la délégation enregistrée du projet (`sf agents delegation status`). Lorsque le développeur l'a permis, la session conversationnelle reste son interlocutrice et
-confie le ticket, de In progress à la fin d'AI testing, à un agent en arrière-plan dans son propre worktree ; sinon la session le construit elle-même, un ticket à la fois, et le dit.
+Qui construit le ticket dépend de la délégation enregistrée du projet, que la ligne `delegation:` de `sf status` indique (la réponse partagée est le défaut de l'équipe, et un clone peut y déroger).
+Lorsque le développeur l'a permis, la session conversationnelle reste son interlocutrice et confie le ticket, de In progress à la fin d'AI testing, à un agent en arrière-plan dans son propre worktree.
+Un changement trivial (un seul fichier connu, environ 20 lignes au plus) reste dans la session. Sinon la session construit elle-même le ticket, un à la fois, et le dit. L'agent délégué crée sa propre
+branche dans son worktree et n'enregistre jamais l'accord : seule la réponse du développeur lui-même le fait.
 
 **Sortie :** implémentation poussée, commits distants et code prêt à valider.
 
@@ -103,6 +105,9 @@ Cette phase est la **revue du code et de la qualité d'intégration**. La pull r
 3. Surveiller la CI complète et corriger toute régression.
 4. Répondre aux commentaires de revue, modifier le code et compléter les tests si nécessaire.
 5. Attendre les approbations et une CI verte.
+
+Lorsque la délégation est permise, un défaut trouvé en revue, une CI rouge ou une modification demandée retournent à l'agent propre au ticket, dans le même worktree, comme un défaut trouvé en Human
+testing. La session répond au relecteur et ne code pas la correction.
 
 **Sortie :** revue approuvée et CI entièrement verte.
 

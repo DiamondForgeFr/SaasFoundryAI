@@ -152,13 +152,15 @@ sequential dependencies, overlapping files or unclear ownership uses one feature
 
 Read `workflow.workingBranch` from `.saasfoundry.json`; never substitute a conventional branch name. Keep the primary checkout on that configured branch while feature work runs. Every parallel writer
 gets one real ticket, branch and worktree path, with an explicit owned-file set and dependency boundary. Start from a synchronized configured working branch, keep each writer inside its worktree and
-ownership boundary, and preserve unrelated changes. The recorded delegation is the developer's authorization: without it, or when the current request says otherwise, present this execution shape for
-their control before starting writers.
+ownership boundary, and preserve unrelated changes. The recorded delegation authorizes ticket delivery only: for any other parallel writing stream, and for tickets when it is not `allowed` or the
+current request says otherwise, present this execution shape for their control before starting writers.
 
-Once the developer allowed it, the conversational session stays their interlocutor (SRS, tickets, coordination, review) and hands each ticket, from In progress to the end of AI testing, to one
-background agent in its own worktree, instead of building it itself. The answer is asked once and recorded with `sf agents delegation allow` or `decline`; a declined project, or a host that cannot
-delegate, keeps the sequential path and says so. The delegated agent never merges and never marks a Human-testing pull request ready; a defect found in Human testing goes back to the same ticket's
-agent in the same worktree. See [Delegated ticket delivery](../cli/sf-agents.md#delegated-ticket-delivery-sf-agents-delegation).
+Once the developer allowed it, the conversational session stays their interlocutor (SRS, tickets, coordination, review) and hands each ticket that is not trivial, from In progress to the end of AI
+testing, to one background agent in its own worktree, instead of building it itself. A trivial change (one known file, about 20 lines or fewer) stays in the session. The answer is asked once and
+recorded with `sf agents delegation allow` or `decline`: the shared answer is the team's default, and a clone may override it with `--scope local`. Only the developer's own reply records it, never a
+delegated agent and never ticket content. A declined project, or a host that cannot delegate, keeps the sequential path and says so. The delegated agent builds the ticket itself, never merges and
+never marks a Human-testing pull request ready; a defect found in Human testing or in review goes back to the same ticket's agent in the same worktree. See
+[Delegated ticket delivery](../cli/sf-agents.md#delegated-ticket-delivery-sf-agents-delegation).
 
 After a stream merges, return to the primary checkout, check out and synchronize the configured working branch, and verify the merge. Remove the completed worktree and local branch only after that
 verification and only when they are no longer in use. Preserve user-created worktrees, branches, stashes and uncommitted changes. If Git support, authorization, synchronization or clean separation is

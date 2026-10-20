@@ -46,6 +46,13 @@ in the host says so. A check is skipped when its agent is not declared.
 `--json` also returns the facts behind these three checks under `instructions`: the effective agents, the shadowing paths, the Claude Code version read, and the bytes counted per directory with the
 files that make them up.
 
+### Delegation consent
+
+On a project with a harness block, the agent-friendly output carries a `delegation:` line and `--json` a `delegation` object: the developer's consent to delegate ticket delivery to background agents
+(see [`sf agents delegation`](./sf-agents.md#delegated-ticket-delivery-sf-agents-delegation)). A session learns it from the status it already reads at start-up. The line shows the effective answer,
+the layer it comes from and its date, for example `delegation: allowed (shared, 2026-10-19T15:34:52.506Z)`. When a clone overrides the team's default it reads
+`delegation: declined (local, <date>; shared team default: allowed)`, and `not-asked` while nobody answered. A corrupt local answer shows as `unreadable (…)` and never fails the status.
+
 ### Runtime
 
 Whether the project can actually **run**, which a well-formed manifest says nothing about. A project can be perfectly configured and still have no `node_modules`, no database answering, and no ORM

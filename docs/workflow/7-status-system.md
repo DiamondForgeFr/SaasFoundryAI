@@ -42,8 +42,10 @@ The agent reads branch and commit policy from the manifest, creates native GitHu
 - A `nature:bundled-pr` child contributes one atomic commit to its delivery parent's branch.
 - An Epic is an aggregate: it owns no branch and no pull request.
 
-Who builds the ticket depends on the project's recorded delegation (`sf agents delegation status`). When the developer allowed it, the conversational session stays their interlocutor and hands the
-ticket, from In progress to the end of AI testing, to one background agent in its own worktree; otherwise the session builds it itself, one ticket at a time, and says so.
+Who builds the ticket depends on the project's recorded delegation, which the `delegation:` line of `sf status` reports (the shared answer is the team's default, and a clone may override it). When the
+developer allowed it, the conversational session stays their interlocutor and hands the ticket, from In progress to the end of AI testing, to one background agent in its own worktree. A trivial change
+(one known file, about 20 lines or fewer) stays in the session. Otherwise the session builds the ticket itself, one at a time, and says so. The delegated agent creates its own branch inside its
+worktree and never records the consent: only the developer's own reply does.
 
 Before AI testing, the implementation must compile, lint, pass the relevant tests, be committed and be pushed. Testing unpushed code is forbidden because nobody else can reproduce or inspect it.
 
@@ -76,6 +78,9 @@ In review answers: **is this implementation safe, maintainable and ready to merg
 
 The pull request is no longer a draft. Full CI runs; reviewers inspect the code and architecture; the agent addresses comments and reruns validation after changes. The ticket stays In review until
 approvals are present, CI is green, and the developer merges the PR.
+
+When delegation is allowed, a defect found in review, a red CI or a requested change goes back to the ticket's own agent in the same worktree, like a defect found in Human testing. The session answers
+the reviewer and does not code the fix.
 
 ## 7. Done — verified merge, then cleanup
 

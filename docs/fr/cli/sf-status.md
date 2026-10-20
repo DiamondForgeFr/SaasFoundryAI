@@ -46,6 +46,14 @@ règles du projet, et rien ne le signale dans l'hôte. Un contrôle est ignoré 
 `--json` renvoie aussi les faits derrière ces trois contrôles sous `instructions` : les agents effectifs, les chemins qui masquent `AGENTS.md`, la version de Claude Code lue, et les octets comptés par
 dossier avec les fichiers qui les composent.
 
+### Accord de délégation
+
+Sur un projet doté d'un bloc harness, la sortie destinée aux agents porte une ligne `delegation:` et `--json` un objet `delegation` : l'accord du développeur pour déléguer la livraison des tickets à
+des agents en arrière-plan (voir [`sf agents delegation`](./sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation)). Une session l'apprend par le statut qu'elle lit déjà au démarrage. La
+ligne indique la réponse effective, la couche dont elle vient et sa date, par exemple `delegation: allowed (shared, 2026-10-19T15:34:52.506Z)`. Quand un clone déroge au défaut de l'équipe, elle
+devient `delegation: declined (local, <date>; shared team default: allowed)`, et `not-asked` tant que personne n'a répondu. Une réponse locale corrompue s'affiche `unreadable (…)` et ne fait jamais
+échouer le statut.
+
 ### Exécution
 
 Ces contrôles déterminent si le projet peut réellement **fonctionner**, ce qu'un manifest valide ne suffit pas à garantir. Un projet peut être parfaitement configuré sans avoir de `node_modules`, de
