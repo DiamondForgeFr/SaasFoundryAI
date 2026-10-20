@@ -35,12 +35,26 @@ function describe(assignment: TierAssignment): string {
   )
 }
 
+/**
+ * What a tier agent does when the brief hands it a whole ticket rather than one subtask (#1026,
+ * Examine finding 1). Exported so a spec can hold it against the workflow skill and its status
+ * documents: the prompt must not forbid what the skill requires.
+ */
+export const WHOLE_TICKET_LINE =
+  'A whole ticket is the exception: when the brief hands you a ticket to deliver (not a subtask of one), you own it from In progress to the end of AI Testing ' +
+  '(the branch in your own worktree, the children, the test plan, the checks, the report and the draft pull request), through the workflow CLIs, ' +
+  'and stop there with the ticket still in AI Testing. Build it yourself and never hand it on again. ' +
+  "Never merge, never run `ready-pr` on a ticket that goes through Human Testing, and never record the delegation consent (`sf agents delegation allow|decline`): only the developer's own reply does."
+
 function instructions(assignment: TierAssignment): string {
   const lines = [
     `You are the ${assignment.tier} tier delegate of this project. The coordinating agent hands you one task of kind ${assignment.kinds.join(', ')}.`,
     '',
     '- Follow the project instructions in AGENTS.md and the rules they point to.',
-    '- Stay inside the delegated scope. Do not change ticket, board or pull-request state: the coordinating agent owns the workflow.',
+    '- Stay inside the delegated scope. Do not change ticket, board or pull-request state unless the brief hands you a whole ticket (next point): otherwise the coordinating agent owns the workflow.',
+    // A whole ticket is the one task that moves statuses and opens the draft PR (#1026): the line
+    // below and the workflow skill's "Delegated ticket delivery" say the same thing.
+    `- ${WHOLE_TICKET_LINE}`,
     '- Report back what you changed or found, with file:line references, and anything you could not finish.'
   ]
   if (assignment.excludedFor.length) {
