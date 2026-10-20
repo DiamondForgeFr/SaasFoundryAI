@@ -1,12 +1,25 @@
 import chalk from 'chalk'
 
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
-import type { StatusReport } from './collect'
+import type { StatusDelegation, StatusReport } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
 export interface RenderPayload {
   report: StatusReport
   preconditions: Precondition[]
+}
+
+/**
+ * The consent to delegate ticket delivery (#1026), on one line a session reads at start-up: the
+ * effective answer, which layer it comes from, and when it was given. A clone's own override says
+ * what the team's default is, so nobody mistakes one for the other.
+ */
+export function delegationSummary(delegation: StatusDelegation): string {
+  if ('error' in delegation) return `unreadable (${delegation.error})`
+  if (delegation.ticketDelivery === 'unavailable') return `unavailable (${delegation.reason})`
+  if (delegation.ticketDelivery === 'not-asked') return 'not-asked (ask the developer once, then record it with sf agents delegation allow or decline)'
+  const team = delegation.source === 'local' ? `; shared team default: ${delegation.shared.ticketDelivery}` : ''
+  return `${delegation.ticketDelivery} (${delegation.source}, ${delegation.decidedAt}${team})`
 }
 
 const STATUS_ICON: Record<PreconditionStatus, string> = { ok: '✓', warn: '⚠', fail: '✗', skip: '·' }
@@ -38,6 +51,7 @@ export function renderHuman(payload: RenderPayload): string {
       lines.push(`${chalk.gray('Profile reason:')} ${report.capabilities.reason}`)
       if (report.capabilities.previewCommand) lines.push(`${chalk.gray('Preview full profile:')} ${report.capabilities.previewCommand}`)
     }
+    if (report.delegation) lines.push(`${chalk.gray('Delegation:')} ${delegationSummary(report.delegation)}`)
   } else {
     lines.push(chalk.red('Not a SaaSFoundryAI project (no .saasfoundry.json)'))
   }
@@ -91,6 +105,8 @@ export function renderJson(payload: RenderPayload): string {
         }
       : null,
     capabilities: report.capabilities ?? null,
+    // Additive (#1026): the effective consent with its shared and local layers, null without a harness
+    delegation: report.delegation ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
     // Additive: the facts behind the three instruction preconditions (#939)
@@ -121,6 +137,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
       if (report.capabilities.previewCommand) lines.push(`- full-profile preview: ${report.capabilities.previewCommand}`)
     }
     lines.push(`- workflow: ${report.manifest.workflow?.tool ?? 'none'}`)
+    if (report.delegation) lines.push(`- delegation: ${delegationSummary(report.delegation)}`)
     const srs = report.manifest.tools?.srs
     lines.push(`- srs: ${srs?.enabled ? `${srs.backend} — ${srs.rootPage?.name ?? 'no root page'}` : 'not installed'}`)
   } else {

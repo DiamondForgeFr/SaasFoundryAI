@@ -36,6 +36,8 @@
       "Bash(.claude/skills/sf-tool-github-projects/github-projects-cli.sh list-incomplete-children *)",
       "Bash(sf status *)",
       "Bash(sf agents list *)",
+      "Bash(sf agents delegation status)",
+      "Bash(sf agents delegation status *)",
       "Bash(gh project item-list *)",
       "Bash(gh project view *)",
       "Bash(gh project field-list *)"
