@@ -184,6 +184,9 @@ export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
   ...['status', 'get-ticket', 'get-labels', 'get-complexity', 'get-parent', 'get-issue-type', 'list', 'list-incomplete-children'].map((command) => `Bash(${BOARD_CLI} ${command} *)`),
   'Bash(sf status *)',
   'Bash(sf agents list *)',
+  // The consent to delegate ticket delivery is read at the start of a session (#1026); `allow`, `decline` and `clear` still ask.
+  'Bash(sf agents delegation status)',
+  'Bash(sf agents delegation status *)',
   'Bash(gh project item-list *)',
   'Bash(gh project view *)',
   'Bash(gh project field-list *)'

@@ -2,6 +2,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
+import { type DelegationState, loadDelegationState } from '../harness/delegation'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { SaaSFoundryManifest } from '../types'
@@ -46,7 +47,12 @@ export interface StatusReport {
   database?: DatabaseReachability
   /** Instruction files the declared coding agents would miss or cut (#939). Optional for legacy reports. */
   instructions?: InstructionDiagnostics
+  /** The developer's consent to delegate ticket delivery (#1026); absent on a project without a harness block. */
+  delegation?: StatusDelegation
 }
+
+/** The effective consent with both layers, or why it could not be read: status never fails on it. */
+export type StatusDelegation = DelegationState | { error: string }
 
 export interface StatusCapabilities extends ProjectCapabilities {
   reason: string
@@ -227,6 +233,15 @@ function checkTool(name: string, cmd: string, cwd: string): ToolAvailability {
   return { name, available: true, version: out.split('\n')[0].trim() }
 }
 
+async function collectDelegation(projectRoot: string, manifest: SaaSFoundryManifest | null): Promise<StatusDelegation | undefined> {
+  if (!manifest?.modules?.harness) return undefined
+  try {
+    return await loadDelegationState(projectRoot, manifest)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
@@ -240,6 +255,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   if (options.checkGh) tools.push(checkTool('gh', 'gh --version', projectRoot))
 
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
+  const delegation = await collectDelegation(projectRoot, manifest)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.
@@ -260,6 +276,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     installedSkills,
     capabilities,
     instructions,
+    ...(delegation ? { delegation } : {}),
     ...(database ? { database } : {})
   }
 }

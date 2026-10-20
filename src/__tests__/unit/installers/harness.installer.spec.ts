@@ -118,6 +118,12 @@ describe('harness installer', () => {
         expect(HARNESS_ALLOWED_COMMANDS.some((rule) => rule.includes(` ${mutating} `) || rule.includes(` ${mutating})`))).toBe(false)
     })
 
+    // The session reads the delegation consent without a prompt (#1026); recording or clearing it is the developer's call.
+    it('allows reading the delegation consent, never recording or clearing it', () => {
+      expect(HARNESS_ALLOWED_COMMANDS).toEqual(expect.arrayContaining(['Bash(sf agents delegation status)', 'Bash(sf agents delegation status *)']))
+      for (const recording of ['allow', 'decline', 'clear']) expect(HARNESS_ALLOWED_COMMANDS.some((rule) => rule.includes(`delegation ${recording}`))).toBe(false)
+    })
+
     it('installs optional skills when requested', async () => {
       await installHarness({ targetPath: dir, ...params, advancedSkills: ['context7'] })
 

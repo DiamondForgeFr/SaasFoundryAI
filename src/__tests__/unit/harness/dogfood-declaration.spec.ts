@@ -5,6 +5,7 @@ import { readFile, stat } from 'fs/promises'
 import { resolve } from 'path'
 
 import { planAgentInstructions } from '../../../harness/agent-instructions'
+import { HARNESS_ALLOWED_COMMANDS } from '../../../installers/harness.installer'
 
 const ROOT = resolve(__dirname, '../../../..')
 const CODEX_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.codex/agents/sf-${tier}.toml`)
@@ -40,6 +41,13 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
       const content = await readFile(resolve(ROOT, path))
       expect(createHash('sha256').update(content).digest('hex')).toBe(expected)
     }
+  })
+
+  // The dogfood allowlist is what generated projects get (#947, #1026): a read-only command added to
+  // the harness must be allowed here too, or this repository is the one that gets prompted.
+  it('allows in its own .claude/settings.json every read-only command the harness allows elsewhere', async () => {
+    const settings = JSON.parse(await readFile(resolve(ROOT, '.claude/settings.json'), 'utf8'))
+    expect(settings.permissions.allow).toEqual(expect.arrayContaining([...HARNESS_ALLOWED_COMMANDS]))
   })
 
   it('keeps the portable guarded CLIs byte-identical and executable', async () => {
