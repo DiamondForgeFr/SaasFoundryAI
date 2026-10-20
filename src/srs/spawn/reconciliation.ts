@@ -199,6 +199,14 @@ function canonicalMatches(requirement: ReconciliationRequirement, tickets: Exist
   return tickets.filter(isFrDeliveryTicket).filter((ticket) => matchesCanonicalPage(ticket, requirement))
 }
 
+/**
+ * The tickets, open or closed, that carry this FR's canonical page: where its text was copied
+ * when it was spawned, and so what an amendment of the FR leaves behind (#945).
+ */
+export function findTicketsForFr(requirement: ReconciliationRequirement, tickets: ExistingSrsTicket[]): ExistingSrsTicket[] {
+  return canonicalMatches(requirement, tickets)
+}
+
 /** The tickets closed as not planned that carry this FR's page, so a preview can say it left them out. */
 function ignoredMatches(requirement: ReconciliationRequirement, tickets: ExistingSrsTicket[]): ExistingSrsTicket[] {
   return tickets.filter((ticket) => !isAggregateEpic(ticket) && isClosedAsNotPlanned(ticket) && matchesCanonicalPage(ticket, requirement))
