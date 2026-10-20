@@ -213,7 +213,51 @@ echo '{
 }' | .claude/skills/sf-srs/scripts/srs-cli.sh apply-update
 ```
 
-The FR-001 page now has a new "Added Test Case — TC-007" block appended at the end. Reviewers fold it back into the canonical "Test Cases" section during the next SRS review.
+TC-007 now appears in the "Test Cases (TC)" table of the feature page, with the version of the page it was added from; nothing is appended at the end of a page unless the table is missing.
+
+## 9. Change an FR that already exists
+
+Later still, the review of #43 shows that the password login should also lock the account after five failed attempts, and that it is a P2 rather than a P1:
+
+> The password login should lock the account after 5 failed attempts. And it's a P2, not a P1.
+
+This is a change to an FR that exists, so Claude proposes an `update-fr` patch rather than an appended item. It names the FR by its id and the fields that change, and it previews the result first:
+
+```bash
+echo '{
+  "kind": "update-fr",
+  "frId": "FR-AUTH-001",
+  "changes": {
+    "priority": "P2",
+    "acceptanceCriteria": { "add": ["the account is locked after 5 failed attempts"] }
+  }
+}' | .claude/skills/sf-srs/scripts/srs-cli.sh apply-update --dry-run
+```
+
+The preview is a JSON document: `changes` lists every cell that would change, old value and new, and `changeLine` the line the version would gain. Nothing is written.
+
+```jsonc
+{
+  "kind": "update-fr",
+  "frId": "FR-AUTH-001",
+  "dryRun": true,
+  "changes": [
+    { "where": "FR page › summary › Priority", "before": "P1", "after": "P2" },
+    { "where": "FR page › Priority", "before": "P1", "after": "P2" },
+    { "where": "FR page › Acceptance Criteria", "before": "• …", "after": "• …\n• the account is locked after 5 failed attempts" },
+    { "where": "version \"v1 — MVP\" › FR table › Priority", "before": "P1", "after": "P2" },
+    { "where": "feature \"Authentication\" › FR table › Priority", "before": "P1", "after": "P2" }
+  ],
+  "changeLine": { "status": "would-add", "text": "Amends FR-AUTH-001 — Password login (priority, acceptance criteria)" }
+  /* … */
+}
+```
+
+On **accept**, Claude runs the same patch without `--dry-run`. The FR page, the FR table of its version and the FR table of its feature show the new values, the version's "What changed" gains one
+line, and nothing is appended. Applying the patch a second time writes nothing. If the write stops midway the command exits 6 and prints what is applied and what is pending; running it again finishes
+the job.
+
+The Story already spawned for the FR (#43) keeps the text the FR had when it was spawned. The result's `followUps` names it, and you update its body by hand.
 
 ## Drafting from an existing codebase
 
@@ -302,10 +346,11 @@ This is the guard — you're trying to create a Story that doesn't come from the
 - Run `srs-cli.sh spawn --ticket <parent> --epic <url>` (the spawner passes `--bypass-srs spawned-from-srs` automatically)
 - Or, for genuinely meta tickets (SRS tooling, drafter refactors), pass `--bypass-srs <your-reason>` to `create-subtask` yourself
 
-### The Traceability table on the Epic page is out of date
+### The references of an FR, or a UR / DS / TC, were not changed
 
-Known limitation in v1 — `adapter.updatePage` is append-only on Notion, so the conversational eval hook can't refresh the table in place. When you add an FR through `apply-update`, the new FR page is
-created but the Epic's Traceability table isn't edited. Refresh it manually during the next human review, or wait for the replace / delete adapter extension on the roadmap.
+`apply-update` adds a UR, FR, DS, TC or NFR and changes an FR that exists in place (section 9). It does not change the references of an FR (`urRefs`, `dsRefs`, `tcRefs`, which are also listed in the
+UR, DS and TC tables — [#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056)), and it does not edit a UR, DS, TC or NFR that already exists. A patch that asks for the first is refused
+with exit 2 and nothing is written; make these changes by hand during the next human review.
 
 ## What's next
 
