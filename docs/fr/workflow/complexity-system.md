@@ -96,7 +96,7 @@ travail, si bien qu'un petit ticket ne tourne pas sur le modèle de la session. 
 Un bug ne peut pas nommer ses fichiers avant d'être diagnostiqué : il prend `bug-fix` par défaut. Un changement trivial reste dans la session : un seul fichier connu, environ 20 lignes au plus (une
 coquille, une valeur de configuration, une ligne de documentation), qui ne justifie ni un worktree ni une installation de dépendances.
 
-L'agent délégué s'arrête au rapport de tests vert avec la pull request en brouillon. Sur un ticket complexe, la session mène elle-même la revue contradictoire.
+L'agent délégué s'arrête au commentaire `## Test report` vert, avec la pull request en brouillon. Sur un ticket complexe, la session mène elle-même la revue contradictoire.
 
 ## Revue contradictoire
 

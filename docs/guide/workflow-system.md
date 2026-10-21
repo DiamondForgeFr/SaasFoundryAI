@@ -92,7 +92,7 @@ Nature adds guarded exceptions. A bundled child has no PR because its atomic com
 For the team preset:
 
 1. commit and push before AI testing;
-2. publish the test plan and report;
+2. publish the test plan and the report as ticket comments, starting with the headings `## Test plan` and `## Test report`;
 3. create or reuse a **draft PR** before Human testing;
 4. let the developer perform functional feature testing;
 5. after approval and non-regression tests, the developer marks the same PR ready (the agent never does on this route);

@@ -36,7 +36,7 @@ Code review with mandatory green CI.
 ## Action checklist
 
 - [ ] **Ready PR** — after Human Testing the developer marks the draft ready; without Human Testing (`nature:internal`) you ran `ready-pr <ticket>` at the end of AI Testing. Keep the ticket link,
-      change summary, test plan/results and created tests in its description; assign configured reviewers.
+      change summary, test plan/results (the `## Test plan` and `## Test report` comments) and created tests in its description; assign configured reviewers.
 - [ ] **Confirm ticket** is `In Review`: the configured GitHub Ready for review listener performs the guarded transition automatically. If it is not installed, use `workflow-cli.sh update-status`.
       Investigate listener errors instead of bypassing guards.
 - [ ] **Monitor CI** — readiness starts the complete applicable suite, and later non-draft pushes rerun it. Draft-skipped checks are not successful validation.

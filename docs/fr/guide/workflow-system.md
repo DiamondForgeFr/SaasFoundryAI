@@ -94,7 +94,7 @@ La nature ajoute des exceptions protégées. Un enfant `nature:bundled-pr` n’a
 Pour le preset équipe :
 
 1. committer et pousser avant `AI testing` ;
-2. publier le plan et le rapport de test ;
+2. publier le plan et le rapport de test en commentaires du ticket, commençant par les titres `## Test plan` et `## Test report` ;
 3. créer ou réutiliser une **pull request en brouillon** avant `Human testing` ;
 4. laisser le développeur effectuer la validation fonctionnelle de la feature ;
 5. après approbation et tests de non-régression, le développeur rend la même PR prête (jamais l'agent sur ce parcours) ;

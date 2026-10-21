@@ -155,7 +155,7 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
    does not hand the whole ticket on again, and it creates its own branch inside its worktree (In progress status
    document).
 2. **The agent's line.** It follows the In progress and AI Testing status documents: it delivers the children, posts the
-   test plan, runs the automated and heavy checks, posts the report and opens the draft PR, then stops with the ticket
+   test plan, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR, then stops with the ticket
    still in AI Testing. It never merges, never runs `ready-pr` on the Human Testing route and never records the
    delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition the AI
    Testing status document names.
