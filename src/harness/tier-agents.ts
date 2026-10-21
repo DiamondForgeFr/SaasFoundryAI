@@ -48,16 +48,14 @@ export const WHOLE_TICKET_LINE =
 
 /**
  * What every tier agent ends its final message with (#1035). The host hooks know what a delegation cost;
- * only the delegate knows whether it did the job, so it says so in one line the harness parses. Exported
- * so a spec can hold it against the parser and the workflow skill.
+ * only the delegate knows whether it did the job, so it says so in one line the harness parses. The kind,
+ * ticket and trial come from the route record the id points to, not from the delegate. Kept short: it is
+ * paid on every delegation. Exported so a spec can hold it against the parser and the workflow skill.
  */
 export const DELEGATION_REPORT_LINE =
-  'End your final message with one machine-readable line that the harness reads to record what this delegation cost and whether it did the job: ' +
-  '`SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<number> complexity=<bug|low|medium|complex> checks=<codes>`. ' +
-  '`pass` means the check the brief named was run and met, `fail` that it failed or the result is incomplete; `checks` lists the checks you really ran among ' +
-  'self-review, type-check, automated-tests, integration-tests, independent-review and security-tests (`checks=none` if none). ' +
-  'Copy `kind`, `ticket` and `complexity` from the brief, and add `trial=yes` when the brief says the run is a trial of a cheaper tier. ' +
-  'A message without the line is recorded as an unknown outcome and never counts as a success.'
+  'End your final message with one line, `SF-DELEGATION: <pass|fail> route=<id from the brief> checks=<codes>`, ' +
+  'the codes being what you really ran among type-check, automated-tests, integration-tests, independent-review, security-tests, self-review (`none` if nothing): ' +
+  '`pass` only if the check the brief named was run and met. Without the line the outcome is recorded as unknown.'
 
 function instructions(assignment: TierAssignment): string {
   const lines = [

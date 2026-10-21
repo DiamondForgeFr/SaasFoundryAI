@@ -1,16 +1,17 @@
 {
   "catalogueVersion": 1,
-  "updated": "2026-10-20",
+  "updated": "2026-10-21",
   "currency": "USD",
   "per": 1000000,
   "models": {
     "claude-haiku-5-5": {
       "input": "0.10",
       "output": "0.50",
+      "longPrompt": { "abovePromptTokens": 100000, "input": "0.50", "output": "2.50" },
       "source": "Anthropic first-party API price list, as cached by the claude-api skill on 2026-10-06",
       "url": "https://platform.claude.com/docs/en/about-claude/pricing",
       "date": "2026-10-06",
-      "note": "Rates for prompts up to 100K tokens (0.50 input and 2.50 output beyond), so a lower bound for long prompts. Cache rates derived from the input rate."
+      "note": "A call whose prompt is over 100K tokens is charged at the long-prompt rates. Cache rates are derived from the input rate of the tier the call falls in."
     },
     "claude-sonnet-5-5": {
       "input": "2.00",

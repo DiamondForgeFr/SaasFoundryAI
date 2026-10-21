@@ -2,9 +2,9 @@ import { Command } from 'commander'
 
 import { parseList, parseNonNegativeInteger, parsePositiveInteger, runAgentsSubcommand } from './agents.shared'
 import { CAPTURE_HOSTS, captureHostEvent, type CaptureResult } from '../harness/delegation-capture'
-import { appendRun, appendSignal, buildRunRecord, buildSignalRecord, requireLedgerDir, type RunInput } from '../harness/delegation-ledger'
+import { appendEntry, appendRun, appendSignal, buildRunRecord, buildSignalRecord, buildStatusRecord, readLedger, requireLedgerDir, type RunInput } from '../harness/delegation-ledger'
 import { readProjectRouting } from '../harness/project-routing'
-import { ROUTING_PROVIDERS, TASK_KINDS, parseTaskKind } from '../harness/routing-grid'
+import { ROUTING_PROVIDERS, TASK_KINDS, parseTaskKind, type TaskKind } from '../harness/routing-grid'
 import { runAdjustment } from '../harness/routing-runtime'
 import { adjustmentPayload, describeAdjustment } from './agents.routing'
 
@@ -88,9 +88,16 @@ export async function outcomeRecord(options: OutcomeRecordOptions): Promise<void
 }
 
 /**
+ * The kinds that deliver a ticket's work, strongest claim first. A later signal of a ticket (rework, a defect
+ * found in Human Testing) is about the work that was delivered, not about the review that found the defect.
+ */
+export const DELIVERY_KINDS: readonly TaskKind[] = ['multi-file-feature', 'scoped-edit', 'bug-fix', 'tests', 'terminal-ci']
+
+/**
  * `sf agents outcome mark <ticket|run> <rework|human-defect>`: a later signal tied to the same step.
  * The session runs it when it had to rework a delegated result and when a ticket comes back from
  * Human Testing or review with a defect; the ledger is append-only, so the original run stays as it was.
+ * A ticket without `--kind` is marked on the kind that delivered it, never on a review or an exploration.
  */
 export async function outcomeMark(target: string | undefined, signal: string | undefined, options: OutcomeMarkOptions): Promise<void> {
   await runAgentsSubcommand(options, async () => {
@@ -100,14 +107,36 @@ export async function outcomeMark(target: string | undefined, signal: string | u
     const byRun = /^[0-9a-f]{20}$/.test(target)
     if (byRun && options.kind !== undefined) throw new Error('--kind narrows a ticket; a run id already names one run.')
     const ticket = byRun ? undefined : parsePositiveInteger(target, 'The target')
-    const record = buildSignalRecord({ target: byRun ? { run: target } : { ticket: ticket!, taskKind: options.kind ? parseTaskKind(options.kind) : null }, signal, note: options.note ?? null })
+    let kind: TaskKind | null = options.kind ? parseTaskKind(options.kind) : null
+    if (!byRun && kind === null) {
+      const state = await readLedger(dir)
+      const recorded = new Set(state.runs.filter((run) => run.ticket === ticket && !run.superseded).map((run) => run.taskKind))
+      kind = DELIVERY_KINDS.find((candidate) => recorded.has(candidate)) ?? null
+      if (kind === null) throw new Error(`No delivery run (${DELIVERY_KINDS.join(', ')}) is recorded for ticket #${ticket}. Name the kind with --kind <kind>, or mark one run by its id.`)
+    }
+    const record = buildSignalRecord({ target: byRun ? { run: target } : { ticket: ticket!, taskKind: kind }, signal, note: options.note ?? null })
     const result = await appendSignal(dir, record)
     if (options.json) {
-      process.stdout.write(JSON.stringify({ outcomeVersion: 1, status: 'appended', id: result.id, matched: result.matched, signal }, null, 2) + '\n')
+      process.stdout.write(JSON.stringify({ outcomeVersion: 1, status: 'appended', id: result.id, matched: result.matched, signal, kind }, null, 2) + '\n')
       return
     }
-    const subject = byRun ? `run ${target}` : `ticket #${ticket}`
+    const subject = byRun ? `run ${target}` : `ticket #${ticket} (${kind})`
     process.stdout.write(`Marked ${result.matched} delegation run${result.matched === 1 ? '' : 's'} of ${subject} as ${signal}: a success now counts as a failure.\n`)
+  })
+}
+
+/**
+ * `sf agents outcome status-event <ticket> <status>`: a ticket changed status. `workflow-cli.sh update-status`
+ * runs it, best effort, so the ledger knows when a ticket went In progress and reached Human testing and the
+ * report can show how long a ticket took. Nothing in the routing depends on it.
+ */
+export async function outcomeStatusEvent(ticket: string | undefined, status: string | undefined, options: { json?: boolean }): Promise<void> {
+  await runAgentsSubcommand(options, async () => {
+    if (!ticket || !status) throw new Error('Name the ticket and its new status: sf agents outcome status-event <ticket> <status>.')
+    const dir = await requireLedgerDir(process.cwd())
+    const record = buildStatusRecord({ ticket: parsePositiveInteger(ticket, 'The ticket')!, status })
+    const written = await appendEntry(dir, record)
+    if (options.json) process.stdout.write(JSON.stringify({ outcomeVersion: 1, status: written.status, id: record.id, ticket: record.ticket, ticketStatus: record.status }, null, 2) + '\n')
   })
 }
 
@@ -151,11 +180,12 @@ export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<vo
     process.stderr.write(`sf agents outcome capture: ${result.reason}\n`)
   }
   // After each recorded run the routing looks at the evidence again: a move is applied without asking,
-  // and logged where `sf agents routing report` and `sf status` show it.
+  // and logged where `sf agents routing report` and `sf status` show it. It reads the state the append
+  // just returned, the project and the directory the capture already resolved: nothing is read twice.
   let adjustment: Record<string, unknown> | undefined
-  if ((result.status === 'appended' || result.status === 'merged') && result.record.taskKind !== null) {
+  if ('state' in result && (result.status === 'detail' || result.record?.taskKind !== null)) {
     try {
-      const adjusted = await runAdjustment(result.root)
+      const adjusted = await runAdjustment(result.root, { ledger: result.state, dir: result.dir, project: result.project })
       adjustment = adjustmentPayload(adjusted)
       const lines = describeAdjustment(adjusted)
       if (lines.length) process.stderr.write(`${lines.map((line) => `sf routing: ${line}`).join('\n')}\n`)
@@ -163,7 +193,11 @@ export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<vo
       process.stderr.write(`sf agents outcome capture: the routing adjustment was skipped (${error instanceof Error ? error.message : String(error)})\n`)
     }
   }
-  if (options.json) process.stdout.write(JSON.stringify({ outcomeVersion: 1, host, ...result, ...(adjustment ? { adjustment } : {}) }, null, 2) + '\n')
+  if (options.json) {
+    // The project and the folded ledger are what the adjustment read, not part of the answer
+    const printable = Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'project' && key !== 'state'))
+    process.stdout.write(JSON.stringify({ outcomeVersion: 1, host, ...printable, ...(adjustment ? { adjustment } : {}) }, null, 2) + '\n')
+  }
 }
 
 const collect = (value: string, previous: string[]): string[] => [...previous, value]
@@ -198,10 +232,17 @@ export function registerOutcomeCommands(agents: Command): Command {
     .description('Tie a later signal to a delegated step: the session reworked it, or a Human Testing defect came back')
     .argument('<target>', 'A ticket number or a run id')
     .argument('<signal>', 'rework or human-defect')
-    .option('--kind <kind>', 'Only the runs of this task kind (with a ticket)')
+    .option('--kind <kind>', 'The task kind to mark, with a ticket (default: the kind that delivered the ticket: multi-file-feature, scoped-edit, bug-fix, tests, terminal-ci; never a review)')
     .option('--note <text>', 'A short note')
     .option('--json', 'Output the versioned result')
     .action((target: string, signal: string, options: OutcomeMarkOptions) => outcomeMark(target, signal, options))
+  outcome
+    .command('status-event')
+    .description('Record that a ticket changed status (run by workflow-cli.sh update-status, best effort): the report shows how long a ticket took')
+    .argument('<ticket>', 'The ticket number')
+    .argument('<status>', 'Its new status, e.g. "In progress"')
+    .option('--json', 'Output the versioned result')
+    .action((ticket: string, status: string, options: { json?: boolean }) => outcomeStatusEvent(ticket, status, options))
   outcome
     .command('capture')
     .description('Record the delegation a host hook reports (hook payload on stdin); run by the SubagentStop and PostToolUse hooks, never fails the host')

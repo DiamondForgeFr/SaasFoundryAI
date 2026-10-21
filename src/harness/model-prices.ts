@@ -8,16 +8,25 @@ import { ExactRational, exactCostEvidence } from '../execution/exact-cost'
  * a guess) until the project declares a price in `modules.harness.routing.adjust.prices`.
  *
  * Money is exact: prices are decimal strings and the amount goes through `ExactRational`, so a float
- * never touches a cost.
+ * never touches a cost. A price is always above zero: a model that costs nothing is not a price.
  */
-export interface ModelPrice {
-  /** USD per `per` tokens, decimal strings. */
+export interface PriceRates {
+  /** USD per million tokens, decimal strings above zero. */
   input: string
   output: string
   /** Defaults to a tenth of the input price (the documented read multiplier of the prompt cache). */
   cacheRead?: string
   /** Defaults to 1.25 times the input price (the documented 5-minute write multiplier). */
   cacheWrite?: string
+}
+
+export interface ModelPrice extends PriceRates {
+  /**
+   * A model that charges more for a long prompt (Haiku 5.5 above 100K tokens). It is applied per API call,
+   * by the size of that call's own prompt (input, cache read and cache write tokens): a run's tokens summed
+   * together would hide which calls were long, so a run without its calls cannot be priced and is partial.
+   */
+  longPrompt?: PriceRates & { abovePromptTokens: number }
 }
 
 export interface CataloguedModelPrice extends ModelPrice {
@@ -48,26 +57,46 @@ export interface PricedCost {
   currency: string
 }
 
-const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d+)?$/
-const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
+export interface CostResult {
+  cost: PricedCost | null
+  /** The model is priced but this run cannot be (its long-prompt rate needs the usage of each call). */
+  partial: boolean
+}
+
+const POSITIVE_DECIMAL = /^(?:[1-9]\d*(?:\.\d+)?|0\.\d*[1-9]\d*)$/
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const READ_MULTIPLIER = new ExactRational(1n, 10n)
 const WRITE_MULTIPLIER = new ExactRational(5n, 4n)
 const COST_SCALE = 8
+const RATE_KEYS = ['input', 'output', 'cacheRead', 'cacheWrite']
 
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+function rateIssues(value: Record<string, unknown>, label: string, extra: string[] = []): string[] {
+  const issues: string[] = []
+  for (const key of Object.keys(value)) if (![...RATE_KEYS, ...extra].includes(key)) issues.push(`${label}.${key} is not a price field`)
+  for (const key of ['input', 'output'] as const) {
+    if (typeof value[key] !== 'string' || !POSITIVE_DECIMAL.test(value[key])) issues.push(`${label}.${key} must be a decimal string above zero (USD per million tokens)`)
+  }
+  for (const key of ['cacheRead', 'cacheWrite'] as const) {
+    if (value[key] !== undefined && (typeof value[key] !== 'string' || !POSITIVE_DECIMAL.test(value[key]))) issues.push(`${label}.${key} must be a decimal string above zero when present`)
+  }
+  return issues
+}
 
 /** Issues of a price block, whether shipped or declared by the project; empty when valid. */
 export function modelPriceIssues(value: unknown, label: string, catalogued = false): string[] {
   if (!isObject(value)) return [`${label} must be an object`]
-  const issues: string[] = []
-  const allowed = ['input', 'output', 'cacheRead', 'cacheWrite', ...(catalogued ? ['source', 'url', 'date', 'note'] : [])]
-  for (const key of Object.keys(value)) if (!allowed.includes(key)) issues.push(`${label}.${key} is not a price field`)
-  for (const key of ['input', 'output'] as const) {
-    if (typeof value[key] !== 'string' || !DECIMAL.test(value[key])) issues.push(`${label}.${key} must be a non-negative decimal string (USD per million tokens)`)
-  }
-  for (const key of ['cacheRead', 'cacheWrite'] as const) {
-    if (value[key] !== undefined && (typeof value[key] !== 'string' || !DECIMAL.test(value[key]))) issues.push(`${label}.${key} must be a non-negative decimal string when present`)
+  const { longPrompt, ...rates } = value
+  const issues = rateIssues(rates, label, ['longPrompt', ...(catalogued ? ['source', 'url', 'date', 'note'] : [])])
+  if (longPrompt !== undefined) {
+    if (!isObject(longPrompt)) issues.push(`${label}.longPrompt must be an object`)
+    else {
+      issues.push(...rateIssues(longPrompt, `${label}.longPrompt`, ['abovePromptTokens']))
+      if (typeof longPrompt.abovePromptTokens !== 'number' || !Number.isSafeInteger(longPrompt.abovePromptTokens) || longPrompt.abovePromptTokens < 1)
+        issues.push(`${label}.longPrompt.abovePromptTokens must be a positive integer`)
+    }
   }
   if (catalogued) {
     for (const key of ['source', 'note'] as const) if (typeof value[key] !== 'string' || !value[key].trim()) issues.push(`${label}.${key} must say where the price comes from`)
@@ -132,18 +161,38 @@ export function resolveModelPrice(model: string | null | undefined, overrides?: 
   return undefined
 }
 
-/** Exact cost of one run, or null when the model is unpriced or the usage is unknown. */
-export function costOfTokens(model: string | null | undefined, tokens: TokenUsage | null, overrides?: Record<string, ModelPrice>): PricedCost | null {
-  const price = resolveModelPrice(model, overrides)
-  if (!price || !tokens) return null
-  const input = ExactRational.decimal(price.input)
-  const rates = [
+function usageCost(tokens: TokenUsage, rates: PriceRates): ExactRational {
+  const input = ExactRational.decimal(rates.input)
+  const lines = [
     [tokens.input, input],
-    [tokens.output, ExactRational.decimal(price.output)],
-    [tokens.cacheRead, price.cacheRead !== undefined ? ExactRational.decimal(price.cacheRead) : input.multiply(READ_MULTIPLIER)],
-    [tokens.cacheWrite, price.cacheWrite !== undefined ? ExactRational.decimal(price.cacheWrite) : input.multiply(WRITE_MULTIPLIER)]
+    [tokens.output, ExactRational.decimal(rates.output)],
+    [tokens.cacheRead, rates.cacheRead !== undefined ? ExactRational.decimal(rates.cacheRead) : input.multiply(READ_MULTIPLIER)],
+    [tokens.cacheWrite, rates.cacheWrite !== undefined ? ExactRational.decimal(rates.cacheWrite) : input.multiply(WRITE_MULTIPLIER)]
   ] as const
   let total = new ExactRational(0n)
-  for (const [count, rate] of rates) total = total.add(rate.multiply(new ExactRational(BigInt(count))).divide(BigInt(catalogue.per)))
-  return { amount: exactCostEvidence(total, catalogue.currency, COST_SCALE).amount, currency: catalogue.currency }
+  for (const [count, rate] of lines) total = total.add(rate.multiply(new ExactRational(BigInt(count))).divide(BigInt(catalogue.per)))
+  return total
+}
+
+const promptTokens = (call: TokenUsage): number => call.input + call.cacheRead + call.cacheWrite
+const money = (total: ExactRational): PricedCost => ({ amount: exactCostEvidence(total, catalogue.currency, COST_SCALE).amount, currency: catalogue.currency })
+
+/**
+ * Exact cost of one run. A model with one rate is priced from the run's token totals. A model with a
+ * long-prompt rate is priced call by call, each by the size of its own prompt; without the calls it is
+ * `partial`: the run keeps its tokens and has no cost, so no comparison rests on a price that could be low.
+ */
+export function costOfUsage(model: string | null | undefined, usage: { tokens: TokenUsage | null; calls?: readonly TokenUsage[] | null }, overrides?: Record<string, ModelPrice>): CostResult {
+  const price = resolveModelPrice(model, overrides)
+  if (!price || !usage.tokens) return { cost: null, partial: false }
+  if (!price.longPrompt) return { cost: money(usageCost(usage.tokens, price)), partial: false }
+  if (!usage.calls?.length) return { cost: null, partial: true }
+  let total = new ExactRational(0n)
+  for (const call of usage.calls) total = total.add(usageCost(call, promptTokens(call) > price.longPrompt.abovePromptTokens ? price.longPrompt : price))
+  return { cost: money(total), partial: false }
+}
+
+/** Exact cost of a run priced from its totals: the models with one rate. Null for an unpriced model or one that needs its calls. */
+export function costOfTokens(model: string | null | undefined, tokens: TokenUsage | null, overrides?: Record<string, ModelPrice>): PricedCost | null {
+  return costOfUsage(model, { tokens }, overrides).cost
 }

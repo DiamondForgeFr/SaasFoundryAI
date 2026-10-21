@@ -172,10 +172,16 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
   it('has the brief ask for the SF-DELEGATION line and the session mark what it had to rework (#1035)', () => {
     const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
     expect(skill).toContain('**Measured delegations.**')
-    expect(skill).toContain('`SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<n> checks=<codes>`')
+    // The route record decides what a delegation was; the delegate only echoes its id
+    expect(skill).toContain('`sf agents route --task <kind> --provider <current-agent> --ticket <n> --complexity <level> --record`')
+    expect(skill).toContain('`SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`')
+    expect(skill).toContain('`--retry-of <route id>`')
+    expect(skill).toContain('`self-review` alone is not one')
     expect(skill).toContain('`sf agents outcome mark <ticket> rework`')
     expect(skill).toContain('`sf agents outcome mark <ticket> human-defect`')
+    expect(skill).toContain('never a `review`')
     expect(skill).toContain('`trial: true`')
+    expect(skill).toContain('never moves the routing')
     expect(skill).toContain('A developer override in `modules.harness.routing` is never changed by the routing')
     const status = (name: string) => flat(all.find(({ file }) => file === `statuses/${name}`)!.content)
     expect(status('4-ai-testing.md')).toContain('`sf agents outcome mark <ticket> rework` records it for the routing')

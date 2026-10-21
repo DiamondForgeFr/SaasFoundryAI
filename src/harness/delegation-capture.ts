@@ -1,83 +1,108 @@
-import { createHash } from 'crypto'
 import { lstat, open } from 'fs/promises'
 import { homedir } from 'os'
 import { isAbsolute, join } from 'path'
 
-import { appendRun, buildRunRecord, COMPLEXITIES, NATURES, resolveLedgerDir, type AppendResult, type Complexity, type DelegationRunRecord, type Nature, type RunInput } from './delegation-ledger'
-import { resolveGitRoot } from './git-agent-scope'
+import {
+  agentToken,
+  appendEntry,
+  appendRun,
+  buildDetailRecord,
+  buildRunRecord,
+  findAgentSegments,
+  findRoute,
+  LEDGER_DIR,
+  type AppendResult,
+  type DelegationRunRecord,
+  type LedgerState,
+  type RunInput
+} from './delegation-ledger'
+import { resolveGitLayout } from './git-agent-scope'
 import type { TokenUsage } from './model-prices'
 import { readProjectRouting, type ProjectRouting } from './project-routing'
 import { resolveAdjustPolicy } from './routing-adjust-config'
-import { autoKindsFor, emptyLocalRouting, readLocalRouting } from './routing-local'
-import { resolveRoute, resolveTierCandidate, tierRank, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
+import { resolveTierCandidate } from './routing-grid'
 import { CHECKS } from '../execution/calibration'
 
 /**
- * Host capture (#1035): turn what a coding agent's hooks hand us into one ledger record, with no help
+ * Host capture (#1035): turn what a coding agent's hooks hand us into ledger records, with no help
  * from the session. Two facts decide how much can be known:
  *
  * - the host knows the **cost side** (the subagent transcript lists every API call with its usage, the
  *   `PostToolUse` result has the wall-clock duration and the resolved model);
  * - only the **delegate** knows the **outcome side**, so it ends with one machine line,
- *   `SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<n> checks=<codes>`, read from the last message.
+ *   `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`, read from the last message.
  *
- * A fact the host did not give is left unknown, never estimated: a record without a verdict is
- * `outcome-unknown` and a record without a kind is censored.
+ * What the delegate says about itself is only believed for the verdict and the checks. Which task kind,
+ * tier, ticket and trial a delegation was comes from the **route record** `sf agents route --record`
+ * issued and the delegate echoed: a missing or unknown id leaves the run without a kind, and a run
+ * without a kind is censored. A fact the host did not give is left unknown, never estimated.
+ *
+ * An agent can be resumed (the session hands a result back to it): each stop is its own run, which
+ * continues the agent's earlier one and counts only the transcript bytes written since that stop.
  */
 export const CAPTURE_HOSTS = ['claude-code', 'codex'] as const
 export type CaptureHost = (typeof CAPTURE_HOSTS)[number]
 
-const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024
+/** The most a single stop reads: a transcript beyond it is picked up by the next stop of the agent. */
+const MAX_SEGMENT_BYTES = 64 * 1024 * 1024
+/** A gap between two events of a transcript longer than this is the host waiting (or the agent idle), not work. */
+const GAP_CAP_MS = 5 * 60_000
+/** The delegate's closing line is read from the tail of its message. */
+const MESSAGE_TAIL_BYTES = 8 * 1024
 
 // --- the delegate's own line --------------------------------------------------------------------------
 
 export interface DelegationReport {
   verdict: 'pass' | 'fail'
-  kind: TaskKind | null
-  ticket: number | null
-  complexity: Complexity | null
-  nature: Nature | null
-  trial: boolean
+  /** The route id the delegate echoed: where the task kind, the tier, the ticket and the trial come from. */
+  route: string | null
   checks: string[]
-  /** Keys the line carried that mean nothing to the ledger. */
+  /** Keys the line carried that the ledger does not read (a delegate's own claim of kind, ticket or trial is among them). */
   ignored: string[]
 }
 
-const DELEGATION_LINE = /^[\s>*_`-]*SF-DELEGATION:[ \t]*(pass|fail)\b([^\n]*)$/gim
+const DELEGATION_LINE = /^[\s*_`-]*SF-DELEGATION:[ \t]*(pass|fail)(?![A-Za-z0-9_])(.*)$/i
+const FENCE = /^\s*(```|~~~)/
+const ROUTE_ID = /^[0-9a-f]{20}$/
 
 /**
- * The delegate's closing line, the last one when it wrote several (a quoted example earlier in its
- * message must not win over its real verdict). Values it got wrong become null: the run is kept and
- * censored rather than refused.
+ * The delegate's closing line: the last non-empty line of the message outside a code fence, read from its
+ * tail. A line quoted earlier, an example in a fence or one followed by more text is not the verdict.
+ * Linear in the message: no pattern backtracks over blank lines. Values it got wrong become null or are
+ * dropped: the run is kept and censored rather than refused.
  */
 export function parseDelegationLine(message: unknown): DelegationReport | undefined {
   if (typeof message !== 'string') return undefined
-  let last: RegExpExecArray | undefined
-  for (const match of message.matchAll(DELEGATION_LINE)) last = match
-  if (!last) return undefined
+  const tail = message.length > MESSAGE_TAIL_BYTES ? message.slice(-MESSAGE_TAIL_BYTES) : message
+  let last: string | undefined
+  let fenced = false
+  for (const line of tail.split('\n')) {
+    if (FENCE.test(line)) {
+      fenced = !fenced
+      continue
+    }
+    if (!fenced && line.trim()) last = line
+  }
+  const match = last === undefined ? null : DELEGATION_LINE.exec(last)
+  if (!match) return undefined
   const fields = new Map<string, string>()
-  for (const token of last[2]
+  for (const token of match[2]
     .replace(/[*_`]+$/g, '')
     .trim()
     .split(/\s+/)) {
     const separator = token.indexOf('=')
     if (separator > 0) fields.set(token.slice(0, separator).toLowerCase(), token.slice(separator + 1).replace(/^["'`]|["'`,.;]+$/g, ''))
   }
-  const known = ['kind', 'ticket', 'complexity', 'nature', 'trial', 'checks']
-  const ticket = Number((fields.get('ticket') ?? '').replace(/^#/, ''))
+  const route = (fields.get('route') ?? '').toLowerCase()
   const checks = (fields.get('checks') ?? '')
     .split(',')
     .map((entry) => entry.trim())
     .filter((entry) => (CHECKS as readonly string[]).includes(entry))
   return {
-    verdict: last[1].toLowerCase() as 'pass' | 'fail',
-    kind: (TASK_KINDS as readonly string[]).includes(fields.get('kind') ?? '') ? (fields.get('kind') as TaskKind) : null,
-    ticket: Number.isSafeInteger(ticket) && ticket > 0 ? ticket : null,
-    complexity: (COMPLEXITIES as readonly string[]).includes(fields.get('complexity') ?? '') ? (fields.get('complexity') as Complexity) : null,
-    nature: (NATURES as readonly string[]).includes(fields.get('nature') ?? '') ? (fields.get('nature') as Nature) : null,
-    trial: ['yes', 'true', '1'].includes((fields.get('trial') ?? '').toLowerCase()),
+    verdict: match[1].toLowerCase() as 'pass' | 'fail',
+    route: ROUTE_ID.test(route) ? route : null,
     checks: [...new Set(checks)],
-    ignored: [...fields.keys()].filter((key) => !known.includes(key))
+    ignored: [...fields.keys()].filter((key) => key !== 'route' && key !== 'checks')
   }
 }
 
@@ -85,50 +110,65 @@ export function parseDelegationLine(message: unknown): DelegationReport | undefi
 
 export interface TranscriptSummary {
   tokens?: TokenUsage
+  /** The usage of each API call, when the transcript lists them: a model with a long-prompt rate is priced call by call. */
+  calls?: TokenUsage[]
   model?: string
-  durationMs?: number
+  /** The time the agent worked: the gaps between its events, each capped, summed. */
+  activeMs?: number
   /** API calls (Claude Code) or token reports (Codex) the summary is made of. */
-  calls: number
+  count: number
 }
 
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 const whole = (value: unknown): number | undefined => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined)
+const TIMESTAMP = /"timestamp"\s*:\s*"([0-9T:.+\-Z]{20,32})"/
 
-function jsonLines(text: string): Record<string, unknown>[] {
-  const lines: Record<string, unknown>[] = []
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue
-    try {
-      const value: unknown = JSON.parse(line)
-      if (object(value)) lines.push(value)
-    } catch {
-      // A torn last line (the host was still writing) is not a reason to lose the others.
-    }
+function parseObject(line: string): Record<string, unknown> | undefined {
+  try {
+    const value: unknown = JSON.parse(line)
+    return object(value) ? value : undefined
+  } catch {
+    // A torn line (the host was still writing) is not a reason to lose the others.
+    return undefined
   }
-  return lines
 }
 
-function spanMs(lines: readonly Record<string, unknown>[]): number | undefined {
-  const times = lines.map((line) => (typeof line.timestamp === 'string' ? Date.parse(line.timestamp) : NaN)).filter((time) => Number.isFinite(time))
-  if (times.length < 2) return undefined
-  const span = Math.max(...times) - Math.min(...times)
-  return span > 0 ? span : undefined
+/** The active time of an agent: gaps between consecutive events, each capped. Needs two timestamps. */
+function activeTime(lines: readonly string[]): number | undefined {
+  let previous: number | undefined
+  let total = 0
+  let seen = 0
+  for (const line of lines) {
+    const match = TIMESTAMP.exec(line)
+    const time = match ? Date.parse(match[1]) : NaN
+    if (!Number.isFinite(time)) continue
+    seen++
+    if (previous !== undefined) total += Math.min(Math.max(time - previous, 0), GAP_CAP_MS)
+    previous = time
+  }
+  return seen >= 2 && total > 0 ? total : undefined
 }
+
+const sum = (calls: readonly TokenUsage[]): TokenUsage =>
+  calls.reduce(
+    (total, call) => ({ input: total.input + call.input, output: total.output + call.output, cacheRead: total.cacheRead + call.cacheRead, cacheWrite: total.cacheWrite + call.cacheWrite }),
+    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+  )
 
 /**
  * Claude Code: a subagent transcript lists each API call as one or several `assistant` lines of the same
- * `message.id` while it streams, the last carrying the final output count. The run's usage is the sum
- * over the distinct calls.
+ * `message.id` while it streams, the last carrying the final output count. The usage of a stop is the sum
+ * over the distinct calls; only lines that carry a usage are parsed.
  */
-export function summarizeClaudeTranscript(text: string): TranscriptSummary {
-  const lines = jsonLines(text)
+export function summarizeClaudeLines(lines: readonly string[]): TranscriptSummary {
   const byCall = new Map<string, TokenUsage>()
   const models = new Map<string, number>()
   for (const [index, line] of lines.entries()) {
-    if (line.type !== 'assistant' || !object(line.message)) continue
-    const usage = line.message.usage
-    if (!object(usage)) continue
-    const id = typeof line.message.id === 'string' ? line.message.id : `line-${index}`
+    if (!line.includes('"usage"') || !line.includes('"assistant"')) continue
+    const entry = parseObject(line)
+    if (!entry || entry.type !== 'assistant' || !object(entry.message) || !object(entry.message.usage)) continue
+    const usage = entry.message.usage
+    const id = typeof entry.message.id === 'string' ? entry.message.id : `line-${index}`
     const seen = byCall.get(id) ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
     byCall.set(id, {
       input: Math.max(seen.input, whole(usage.input_tokens) ?? 0),
@@ -136,58 +176,100 @@ export function summarizeClaudeTranscript(text: string): TranscriptSummary {
       cacheRead: Math.max(seen.cacheRead, whole(usage.cache_read_input_tokens) ?? 0),
       cacheWrite: Math.max(seen.cacheWrite, whole(usage.cache_creation_input_tokens) ?? 0)
     })
-    if (typeof line.message.model === 'string' && !line.message.model.startsWith('<')) models.set(line.message.model, (models.get(line.message.model) ?? 0) + 1)
+    if (typeof entry.message.model === 'string' && !entry.message.model.startsWith('<')) models.set(entry.message.model, (models.get(entry.message.model) ?? 0) + 1)
   }
-  const durationMs = spanMs(lines)
-  if (!byCall.size) return { calls: 0, ...(durationMs !== undefined ? { durationMs } : {}) }
-  const tokens = [...byCall.values()].reduce((sum, call) => ({
-    input: sum.input + call.input,
-    output: sum.output + call.output,
-    cacheRead: sum.cacheRead + call.cacheRead,
-    cacheWrite: sum.cacheWrite + call.cacheWrite
-  }))
+  const activeMs = activeTime(lines)
+  if (!byCall.size) return { count: 0, ...(activeMs !== undefined ? { activeMs } : {}) }
+  const calls = [...byCall.values()]
   const model = [...models.entries()].sort((left, right) => right[1] - left[1])[0]?.[0]
-  return { tokens, calls: byCall.size, ...(model ? { model } : {}), ...(durationMs !== undefined ? { durationMs } : {}) }
+  return { tokens: sum(calls), calls, count: calls.length, ...(model ? { model } : {}), ...(activeMs !== undefined ? { activeMs } : {}) }
 }
 
 /**
- * Codex: the rollout reports a cumulative `token_count` after each turn; the last one is the run. Its
- * `input_tokens` includes the cached ones, which the ledger prices apart.
+ * Codex: the rollout reports a cumulative `token_count` after each turn; the last one is the run so far. Its
+ * `input_tokens` includes the cached ones, which the ledger prices apart. A resumed agent starts from what
+ * its earlier stops already counted (`before`), so a stop is billed for its own turns only.
  */
-export function summarizeCodexTranscript(text: string): TranscriptSummary {
-  const lines = jsonLines(text)
+export function summarizeCodexLines(lines: readonly string[], before?: TokenUsage | null): TranscriptSummary {
   let usage: Record<string, unknown> | undefined
   let model: string | undefined
-  let calls = 0
+  let count = 0
   for (const line of lines) {
-    const payload = line.payload
-    if (!object(payload)) continue
-    if (line.type === 'turn_context' && typeof payload.model === 'string') model = payload.model
-    if (line.type === 'event_msg' && payload.type === 'token_count' && object(payload.info) && object(payload.info.total_token_usage)) {
+    const isContext = line.includes('"turn_context"')
+    if (!isContext && !line.includes('"token_count"')) continue
+    const entry = parseObject(line)
+    const payload = entry?.payload
+    if (!entry || !object(payload)) continue
+    if (entry.type === 'turn_context' && typeof payload.model === 'string') model = payload.model
+    if (entry.type === 'event_msg' && payload.type === 'token_count' && object(payload.info) && object(payload.info.total_token_usage)) {
       usage = payload.info.total_token_usage
-      calls++
+      count++
     }
   }
-  const durationMs = spanMs(lines)
+  const activeMs = activeTime(lines)
+  const base = { count, ...(model ? { model } : {}), ...(activeMs !== undefined ? { activeMs } : {}) }
   const input = whole(usage?.input_tokens)
   const output = whole(usage?.output_tokens)
-  const base = { calls, ...(model ? { model } : {}), ...(durationMs !== undefined ? { durationMs } : {}) }
   if (!usage || input === undefined || output === undefined) return base
   const cached = Math.min(whole(usage.cached_input_tokens) ?? 0, input)
-  return { ...base, tokens: { input: input - cached, output, cacheRead: cached, cacheWrite: whole(usage.cache_write_input_tokens) ?? 0 } }
+  const total: TokenUsage = { input: input - cached, output, cacheRead: cached, cacheWrite: whole(usage.cache_write_input_tokens) ?? 0 }
+  const prior = before ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+  const own: TokenUsage = {
+    input: Math.max(total.input - prior.input, 0),
+    output: Math.max(total.output - prior.output, 0),
+    cacheRead: Math.max(total.cacheRead - prior.cacheRead, 0),
+    cacheWrite: Math.max(total.cacheWrite - prior.cacheWrite, 0)
+  }
+  return { ...base, tokens: own }
 }
 
-/** A transcript the host named, read with the care a path from a payload deserves: a regular file, bounded, never a link. */
-export async function readTranscriptText(path: unknown): Promise<string | undefined> {
+/** Whole-text conveniences for fixtures and tests. */
+export const summarizeClaudeTranscript = (text: string): TranscriptSummary => summarizeClaudeLines(text.split('\n'))
+export const summarizeCodexTranscript = (text: string, before?: TokenUsage | null): TranscriptSummary => summarizeCodexLines(text.split('\n'), before)
+
+export interface TranscriptSlice {
+  lines: string[]
+  /** Where this slice starts: the offset asked for, or 0 when the file is shorter than that (it started over). */
+  from: number
+  /** The byte after the last complete line read: where the next stop of the agent continues. */
+  to: number
+  /** More was written than one stop reads: the rest belongs to the next stop. */
+  truncated: boolean
+}
+
+/**
+ * The part of a transcript the host named that was written since `from`, read with the care a path from a
+ * payload deserves: a regular file, bounded, never a link. Only complete lines are returned (a last line the
+ * host is still writing is left for the next stop), and the bytes are cut on newlines, never inside a character.
+ */
+export async function readTranscriptSlice(path: unknown, from = 0): Promise<TranscriptSlice | undefined> {
   if (typeof path !== 'string' || !path || path.includes('\0')) return undefined
   const resolved = path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
   if (!isAbsolute(resolved)) return undefined
   try {
     const info = await lstat(resolved)
-    if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_TRANSCRIPT_BYTES) return undefined
+    if (!info.isFile() || info.isSymbolicLink()) return undefined
+    const start = from <= info.size ? from : 0
+    const length = Math.min(info.size - start, MAX_SEGMENT_BYTES)
+    if (length <= 0) return { lines: [], from: start, to: start, truncated: false }
     const handle = await open(resolved, 'r')
     try {
-      return await handle.readFile('utf8')
+      const buffer = Buffer.alloc(length)
+      let read = 0
+      while (read < length) {
+        const { bytesRead } = await handle.read(buffer, read, length - read, start + read)
+        if (bytesRead === 0) break
+        read += bytesRead
+      }
+      const data = buffer.subarray(0, read)
+      let end = data.lastIndexOf(0x0a) + 1
+      // A final line without its newline counts when it is a whole JSON value: the host does not always end the file with one.
+      if (end < data.length && start + read >= info.size && parseObject(data.toString('utf8', end)) !== undefined) end = data.length
+      const lines = data
+        .toString('utf8', 0, end)
+        .split('\n')
+        .filter((line) => line.trim())
+      return { lines, from: start, to: start + end, truncated: start + length < info.size }
     } finally {
       await handle.close()
     }
@@ -202,14 +284,22 @@ export interface CaptureOptions {
   /** Where the project is; defaults to the `cwd` of the payload, then the process directory. */
   root?: string
   now?: () => Date
-  /** The tier a kind is routed to right now, for flagging a run that tried a cheaper one. Defaults to the shared routing and the clone's automatic moves. */
-  effectiveTier?: (kind: TaskKind, provider: RoutingProvider) => string | undefined
 }
 
-/** `root` is the working tree the project was found in: the adjustment that follows a capture reads the same project. */
-export type CaptureResult = (AppendResult & { record: DelegationRunRecord; root: string }) | { status: 'ignored'; reason: string }
+/**
+ * What a capture did. A run is `appended`, `merged` (a repeated stop that added a fact), `replayed` (the same
+ * stop again) or `spooled` (the lock stayed taken; the line waits for the next writer). A tool result is a
+ * `detail` of its agent. `root`, `dir` and `project` are what the adjustment that follows reads again.
+ */
+export type CaptureResult =
+  | (AppendResult & { record: DelegationRunRecord; root: string; dir: string; project: ProjectRouting })
+  /** The stop was recorded before and the transcript has nothing new: no state was read. */
+  | { status: 'replayed'; id: string; record: DelegationRunRecord; root: string; dir: string; project: ProjectRouting }
+  | { status: 'detail'; id: string; state: LedgerState; root: string; dir: string; project: ProjectRouting }
+  | { status: 'ignored'; reason: string }
 
-const FAILED_TOOL_STATUS = new Set(['failed', 'error', 'killed', 'cancelled', 'canceled', 'timeout', 'timed_out'])
+const FAILED_TOOL_STATUS = new Set(['failed', 'error', 'timeout', 'timed_out'])
+const CANCELLED_TOOL_STATUS = new Set(['killed', 'cancelled', 'canceled'])
 const BACKGROUND_TOOL_STATUS = new Set(['async_launched', 'launched', 'running', 'in_progress', 'background'])
 const squash = (value: unknown): string =>
   String(value ?? '')
@@ -221,9 +311,10 @@ function routedTier(agentType: unknown): string | undefined {
   return match ? match[1] : undefined
 }
 
-const SAFE_AGENT_ID = /^[A-Za-z0-9._:-]{1,80}$/
-
-const hash = (value: string): string => createHash('sha256').update(value).digest('hex').slice(0, 16)
+const FALLBACK_PROJECT: ProjectRouting = (() => {
+  const policy = resolveAdjustPolicy()
+  return { agents: [], policy, decision: { policy, source: 'worktree', branch: null, invalid: null, differs: false } }
+})()
 
 /** Capture one hook payload. Never throws for a payload that is not ours: it is ignored with the reason. */
 export async function captureHostEvent(host: CaptureHost, payload: unknown, options: CaptureOptions = {}): Promise<CaptureResult> {
@@ -239,79 +330,106 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   if (!tier) return { status: 'ignored', reason: 'the agent is not a routed sf-<tier> agent' }
 
   const cwd = typeof options.root === 'string' ? options.root : typeof payload.cwd === 'string' && isAbsolute(payload.cwd) ? payload.cwd : process.cwd()
-  const root = (await resolveGitRoot(cwd)) ?? cwd
-  const ledgerDir = await resolveLedgerDir(root)
-  if (!ledgerDir) return { status: 'ignored', reason: 'not a Git checkout: the ledger is kept in the Git directory of the clone' }
-  // The ledger is evidence: an unreadable manifest or a damaged local layer must not lose the record. The run is kept
-  // against the shipped grid and marked, and only the trial flag and the price are judged without what could not be read.
+  const layout = await resolveGitLayout(cwd)
+  if (!layout) return { status: 'ignored', reason: 'not a Git checkout: the ledger is kept in the Git directory of the clone' }
+  const { root } = layout
+  const dir = join(layout.commonDir, LEDGER_DIR)
+  // The ledger is evidence: an unreadable manifest must not lose the record. The run is kept against the shipped
+  // grid and marked, and only the trial flag and the price are judged without what could not be read.
   let project: ProjectRouting
   let degraded = false
   try {
     project = await readProjectRouting(root)
   } catch {
     degraded = true
-    project = { agents: [], policy: resolveAdjustPolicy() }
+    project = FALLBACK_PROJECT
   }
-  const local = await readLocalRouting(ledgerDir).catch(() => emptyLocalRouting())
-  const candidate = resolveTierCandidate(tier, host, project.routing)
+  const candidate = resolveTierCandidate(tier, host, project.decision.routing)
   if (!candidate) return { status: 'ignored', reason: `tier ${tier} is not declared for ${host}` }
 
+  // An agent id is the host's own: it is never recorded as it came, only a hash of it.
   const rawAgentId = isStop ? payload.agent_id : (toolResponse.agentId ?? toolResponse.agent_id ?? payload.agent_id)
-  // An agent id is the host's own; one that is not a plain token (a path, a secret-looking string) is hashed, never recorded.
-  const agentId = typeof rawAgentId === 'string' && rawAgentId ? (SAFE_AGENT_ID.test(rawAgentId) ? rawAgentId : hash(rawAgentId)) : undefined
+  const agentId = typeof rawAgentId === 'string' && rawAgentId ? agentToken(rawAgentId) : undefined
+  const now = (options.now?.() ?? new Date()).toISOString()
   const unreadable = degraded ? ['routing-unreadable'] : []
-  let input: RunInput
-  if (isStop) {
-    const transcript = await readTranscriptText(payload.agent_transcript_path ?? payload.transcript_path)
-    const summary = transcript === undefined ? undefined : host === 'claude-code' ? summarizeClaudeTranscript(transcript) : summarizeCodexTranscript(transcript)
-    const report = parseDelegationLine(payload.last_assistant_message)
-    const passed = report?.verdict === 'pass' && report.checks.length > 0
-    const evidence = [agentId ? `agent:${agentId}` : undefined, report ? undefined : 'no-sf-delegation-line', report?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined, ...unreadable]
-    // The tier the kind is routed to by now, the clone's own automatic moves included: a run below it is a trial.
-    const routedTier = options.effectiveTier ?? ((kind: TaskKind, provider: RoutingProvider) => resolveRoute(kind, provider, project.routing, autoKindsFor(local, provider)).tier)
-    const effectiveTier = report?.kind ? routedTier(report.kind, host) : undefined
-    const cheaper = effectiveTier !== undefined && effectiveTier !== tier && tierRank(tier) >= 0 && tierRank(tier) < tierRank(effectiveTier)
-    input = {
-      eventKey: `${host}:${agentId ?? hash(String(payload.agent_transcript_path ?? payload.session_id ?? '') + String(payload.last_assistant_message ?? ''))}`,
-      at: (options.now?.() ?? new Date()).toISOString(),
-      host,
-      provider: host,
-      tier,
-      ticket: report?.ticket ?? null,
-      taskKind: report?.kind ?? null,
-      complexity: report?.complexity ?? null,
-      nature: report?.nature ?? null,
-      model: summary?.model ?? candidate.model,
-      effort: candidate.effort,
-      trial: Boolean(report?.trial) || cheaper,
-      durationMs: summary?.durationMs ?? null,
-      tokens: summary?.tokens ?? null,
-      outcome: report ? (report.verdict === 'fail' ? 'fail' : passed ? 'pass' : null) : null,
-      checks: report?.checks ?? [],
-      evidenceRefs: evidence.filter((entry): entry is string => entry !== undefined)
-    }
-  } else {
+
+  if (!isStop) {
     const status = String(toolResponse.status ?? '').toLowerCase()
     if (!agentId) return { status: 'ignored', reason: 'the tool result names no agent id, so it cannot be joined to the agent stop' }
     if (BACKGROUND_TOOL_STATUS.has(status)) return { status: 'ignored', reason: 'a background launch: the agent stop carries the result' }
-    const duration = whole(toolResponse.totalDurationMs)
     const resolved = toolResponse.resolvedModel ?? toolResponse.model
-    input = {
-      eventKey: `${host}:${agentId}`,
-      at: (options.now?.() ?? new Date()).toISOString(),
+    const detail = buildDetailRecord({
       host,
-      provider: host,
-      tier,
-      model: typeof resolved === 'string' ? resolved : null,
-      effort: candidate.effort,
-      durationMs: duration ?? null,
-      // The result reports the last request's usage only, not the run's: tokens come from the transcript.
-      tokens: null,
-      outcome: FAILED_TOOL_STATUS.has(status) ? 'execution-failed' : null,
-      evidenceRefs: [`agent:${agentId}`, ...(status ? [`tool-status:${status.replace(/[^a-z_-]/g, '').slice(0, 40)}`] : []), ...unreadable]
-    }
+      agentId,
+      durationMs: whole(toolResponse.totalDurationMs) ?? null,
+      model: typeof resolved === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(resolved) ? resolved : null,
+      status: FAILED_TOOL_STATUS.has(status) ? 'failed' : CANCELLED_TOOL_STATUS.has(status) ? 'cancelled' : null,
+      at: now
+    })
+    const written = await appendEntry(dir, detail)
+    return { status: 'detail', id: detail.id, state: written.state, root, dir, project }
   }
-  const record = buildRunRecord(input, { prices: project.policy.prices })
-  const appended = await appendRun(ledgerDir, record)
-  return { ...appended, record, root }
+
+  const segments = agentId ? await findAgentSegments(dir, host, agentId) : []
+  const previous = segments[segments.length - 1]
+  const slice = await readTranscriptSlice(payload.agent_transcript_path ?? payload.transcript_path, previous?.segment?.to ?? 0)
+  // The same stop seen again: the transcript has nothing the agent's last segment did not already count.
+  if (previous && slice && slice.to === previous.segment?.to) return { status: 'replayed', id: previous.id, record: previous, root, dir, project }
+  const summary = slice === undefined ? undefined : host === 'claude-code' ? summarizeClaudeLines(slice.lines) : summarizeCodexLines(slice.lines, sumTokens(segments))
+  const report = parseDelegationLine(payload.last_assistant_message)
+  const passed = report?.verdict === 'pass' && report.checks.some((check) => check !== 'self-review')
+
+  // The route record, not the delegate's word, says which kind, tier, ticket and trial this was.
+  const routeId = report?.route ?? previous?.route ?? null
+  const route = routeId ? await findRoute(dir, routeId) : undefined
+  const reasons: string[] = []
+  if (!routeId) reasons.push('no-route')
+  else if (!route) reasons.push('unknown-route')
+  else if (route.provider !== host) reasons.push('route-provider-mismatch')
+  else if (route.tier !== tier) reasons.push('route-tier-mismatch')
+  else if (route.users.some((user) => user !== (agentId ?? null))) reasons.push('route-used-by-another-agent')
+  const attributed = route !== undefined && reasons.length === 0
+
+  const segment = slice ? { from: slice.from, to: slice.to } : null
+  const messageKey = `${agentId ?? slice?.to ?? 'none'}:${String(payload.last_assistant_message ?? '').length}`
+  const input: RunInput = {
+    eventKey: agentId && segment ? `${host}:${agentId}:${segment.to}` : `${host}:${messageKey}:${String(payload.session_id ?? '').slice(0, 40)}`,
+    at: now,
+    host,
+    agentId: agentId ?? null,
+    segment,
+    continues: previous?.id ?? null,
+    retryOf: attributed ? route!.retryOf : null,
+    route: routeId && route ? routeId : null,
+    provider: host,
+    tier,
+    ticket: attributed ? route!.ticket : null,
+    taskKind: attributed ? route!.taskKind : null,
+    complexity: attributed ? route!.complexity : null,
+    nature: attributed ? route!.nature : null,
+    model: summary?.model ?? candidate.model,
+    effort: candidate.effort,
+    trial: attributed && route!.trial,
+    durationMs: summary?.activeMs ?? null,
+    tokens: summary?.tokens ?? null,
+    calls: summary?.calls ?? null,
+    outcome: report ? (report.verdict === 'fail' ? 'fail' : passed ? 'pass' : null) : null,
+    checks: report?.checks ?? [],
+    evidenceRefs: [
+      agentId ? `agent:${agentId}` : undefined,
+      report ? undefined : 'no-sf-delegation-line',
+      report?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined,
+      slice?.truncated ? 'transcript-truncated' : undefined,
+      ...reasons,
+      ...unreadable
+    ].filter((entry): entry is string => entry !== undefined)
+  }
+  const record = buildRunRecord(input, { prices: project.decision.policy.prices })
+  const appended = await appendRun(dir, record)
+  return { ...appended, record, root, dir, project }
+}
+
+function sumTokens(segments: readonly DelegationRunRecord[]): TokenUsage | null {
+  const counted = segments.flatMap((segment) => (segment.tokens ? [segment.tokens] : []))
+  return counted.length ? sum(counted) : null
 }

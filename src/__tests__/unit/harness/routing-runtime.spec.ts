@@ -5,9 +5,9 @@ import { join } from 'path'
 import { promisify } from 'util'
 
 import { promoteLocalRouting } from '../../../harness/agent-support'
-import { appendRun, buildRunRecord, type RunInput } from '../../../harness/delegation-ledger'
+import { appendRun, buildRunRecord, readLedger, type RunInput } from '../../../harness/delegation-ledger'
 import { emptyLocalRouting, localRoutingPath, readLocalRouting, updateLocalRouting, type LocalAdjustment } from '../../../harness/routing-local'
-import { loadRoutingState, resetLocalRouting, routeKind, runAdjustment } from '../../../harness/routing-runtime'
+import { issueRoutes, loadRoutingState, resetLocalRouting, routeKind, runAdjustment } from '../../../harness/routing-runtime'
 
 const exec = promisify(execFile)
 // A commit hook exports GIT_* variables: a fixture repository must never inherit them.
@@ -104,14 +104,153 @@ describe('the routing at work in a clone (#1035)', () => {
     it('moves nothing while the adjustment is switched off', async () => {
       await manifest({ version: 4, agents: ['claude-code'], routing: { adjust: { enabled: false } } })
       await record('sssssssfff')
-      expect(await runAdjustment(root, { now: NOW })).toMatchObject({ moved: false, decisions: [expect.objectContaining({ action: 'hold', reason: 'disabled' })] })
+      expect(await runAdjustment(root, { now: NOW })).toMatchObject({ moved: false, decisions: [expect.objectContaining({ action: 'hold', hold: 'disabled' })] })
     })
 
-    it('does not move the kind a second time on the same evidence', async () => {
+    it('does not move the kind a second time on the same evidence, and logs what it holds once', async () => {
       await record('sssssssfff')
       await runAdjustment(root, { now: NOW })
       expect((await runAdjustment(root, { now: new Date(NOW.getTime() + 60_000) })).moved).toBe(false)
-      expect((await readLocalRouting(ledger)).log).toHaveLength(1)
+      expect((await runAdjustment(root, { now: new Date(NOW.getTime() + 120_000) })).changed).toBe(false)
+      expect((await readLocalRouting(ledger)).log.map((entry) => entry.action)).toEqual(['escalate', 'hold'])
+    })
+
+    it('reuses the state a capture just wrote instead of reading the ledger again', async () => {
+      await record('sssssssfff')
+      const state = await loadRoutingState(root)
+      // The ledger on disk is emptied: only the state handed over can have produced the move
+      await rm(join(ledger, 'delegations.jsonl'))
+      const report = await runAdjustment(root, { now: NOW, state })
+      expect(report.moved).toBe(true)
+    })
+  })
+
+  describe('decisions rest on what the team committed (Examine finding 6)', () => {
+    const commit = async (message: string) => {
+      await git('add', '.saasfoundry.json')
+      await git('-c', 'user.email=t@example.com', '-c', 'user.name=T', 'commit', '-q', '-m', message)
+    }
+    const withBranch = (routing?: Record<string, unknown>) =>
+      manifest({ version: 4, agents: ['claude-code'], ...(routing ? { routing } : {}) }).then(async () => {
+        const text = JSON.parse(await readFile(join(root, '.saasfoundry.json'), 'utf8'))
+        await writeFile(join(root, '.saasfoundry.json'), JSON.stringify({ ...text, workflow: { workingBranch: 'main' } }, null, 2) + '\n')
+      })
+
+    it('reads the thresholds from the committed working branch, not from the worktree a delegated agent may have edited', async () => {
+      await withBranch({ adjust: { escalate: { failures: 3, of: 10 } } })
+      await commit('committed policy')
+      await record('ssssssssff')
+      // A worktree edit that lowers the threshold would move the whole clone on two failures
+      await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } })
+      const refused = await runAdjustment(root, { now: NOW })
+      expect(refused.refused).toContain('differs from the one committed on main')
+      expect(refused).toMatchObject({ moved: false, decisions: [] })
+      await expect(stat(localRoutingPath(ledger))).rejects.toThrow()
+    })
+
+    it('decides on the committed block once the worktree matches it', async () => {
+      await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } })
+      await commit('committed policy')
+      await record('ssssssssff')
+      const report = await runAdjustment(root, { now: NOW })
+      expect(report.refused).toBeNull()
+      expect(report.decisions[0]).toMatchObject({ action: 'escalate', from: 'build', to: 'fix' })
+    })
+
+    it('applies nothing while the committed block and the worktree one differ, but still routes by the worktree for display, with no trial', async () => {
+      await withBranch()
+      await commit('committed')
+      await record('s'.repeat(9))
+      await withBranch({ tiers: { build: { 'claude-code': { model: 'claude-sonnet-5-6', effort: 'xhigh' } } } })
+      const state = await loadRoutingState(root)
+      expect(state.project.decision).toMatchObject({ source: 'working-branch', branch: 'main', differs: true })
+      expect(routeKind(state, 'multi-file-feature', 'claude-code', { now: NOW })).toMatchObject({ tier: 'build', trial: false, candidate: { model: 'claude-sonnet-5-6' } })
+    })
+
+    it('still answers a route from the worktree block, and decides nothing, while the committed block is invalid', async () => {
+      await withBranch({ kinds: { tests: { tier: 'nowhere' } } })
+      await commit('committed with a mistake')
+      await withBranch({ kinds: { tests: { tier: 'fix' } } })
+      await record('ssssssssff')
+      const state = await loadRoutingState(root)
+      expect(state.project.decision).toMatchObject({ source: 'working-branch', differs: true, invalid: expect.stringContaining('modules.harness.routing on main is invalid') })
+      expect(routeKind(state, 'tests', 'claude-code', { trial: false })).toMatchObject({ tier: 'fix', source: 'project' })
+      const report = await runAdjustment(root, { now: NOW })
+      expect(report).toMatchObject({ moved: false, decisions: [] })
+      expect(report.refused).toContain('is invalid')
+      expect(report.refused).toContain('until it is fixed')
+    })
+
+    it('falls back to the worktree manifest when no commit holds one yet', async () => {
+      await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } })
+      await record('ssssssssff')
+      expect((await loadRoutingState(root)).project.decision).toMatchObject({ source: 'worktree', differs: false })
+      expect((await runAdjustment(root, { now: NOW })).decisions[0]).toMatchObject({ action: 'escalate' })
+    })
+  })
+
+  describe('route records and the share of trials (Examine findings 4 and 12)', () => {
+    it('records a route the delegate echoes, with its kind, tier, ticket and trial flag, and hands out an id', async () => {
+      const state = await loadRoutingState(root)
+      const [route] = await issueRoutes(state, 'multi-file-feature', ['claude-code'], { record: true, trial: true, ticket: 1035, complexity: 'complex', nature: 'user-facing', now: NOW })
+      expect(route).toMatchObject({ tier: 'build', trial: false, routeId: expect.stringMatching(/^[0-9a-f]{20}$/), expiresAt: new Date(NOW.getTime() + 6 * 3_600_000).toISOString() })
+      const { routes } = await readLedger(ledger)
+      expect(routes).toEqual([
+        expect.objectContaining({
+          id: route.routeId,
+          taskKind: 'multi-file-feature',
+          provider: 'claude-code',
+          tier: 'build',
+          trial: false,
+          ticket: 1035,
+          complexity: 'complex',
+          nature: 'user-facing',
+          retryOf: null
+        })
+      ])
+    })
+
+    it('does not record anything when a route is only read', async () => {
+      const state = await loadRoutingState(root)
+      const [route] = await issueRoutes(state, 'tests', ['claude-code'], { record: false, trial: true })
+      expect(route.routeId).toBeNull()
+      expect((await readLedger(ledger)).routes).toEqual([])
+    })
+
+    it('reserves a trial as it hands it out: routes asked for together cannot all be trials', async () => {
+      await record('s'.repeat(9))
+      const first = await issueRoutes(await loadRoutingState(root), 'multi-file-feature', ['claude-code'], { record: true, trial: true, now: NOW })
+      expect(first[0]).toMatchObject({ trial: true, tier: 'edit', effectiveTier: 'build' })
+      const second = await issueRoutes(await loadRoutingState(root), 'multi-file-feature', ['claude-code'], { record: true, trial: true, now: new Date(NOW.getTime() + 1000) })
+      expect(second[0]).toMatchObject({ trial: false, tier: 'build' })
+      const { routes } = await readLedger(ledger)
+      expect(routes.map((route) => [route.tier, route.trial])).toEqual([
+        ['edit', true],
+        ['build', false]
+      ])
+      // Asked at once, from several processes, the share still holds
+      await rm(join(ledger, 'delegations.jsonl'))
+      await record('s'.repeat(9))
+      const together = await Promise.all(
+        Array.from({ length: 5 }, async () => (await issueRoutes(await loadRoutingState(root), 'multi-file-feature', ['claude-code'], { record: true, trial: true, now: NOW }))[0])
+      )
+      expect(together.filter((route) => route.trial)).toHaveLength(1)
+    })
+
+    it('links a retry to the delegation it follows, and refuses a link to nothing', async () => {
+      const first = (await issueRoutes(await loadRoutingState(root), 'tests', ['claude-code'], { record: true, trial: false, now: NOW }))[0]
+      const retry = await issueRoutes(await loadRoutingState(root), 'tests', ['claude-code'], { record: true, trial: false, retryOf: first.routeId, now: NOW })
+      expect((await readLedger(ledger)).routes.find((route) => route.id === retry[0].routeId)?.retryOf).toBe(first.routeId)
+      await expect(issueRoutes(await loadRoutingState(root), 'tests', ['claude-code'], { record: true, trial: false, retryOf: 'f'.repeat(20) })).rejects.toThrow('names no route or run')
+    })
+
+    it('needs a clone to keep the route in', async () => {
+      const elsewhere = await realpath(await mkdtemp(join(tmpdir(), 'sf-runtime-nogit-')))
+      try {
+        await expect(issueRoutes(await loadRoutingState(elsewhere), 'tests', ['claude-code'], { record: true, trial: false })).rejects.toThrow('Git checkout')
+      } finally {
+        await rm(elsewhere, { recursive: true, force: true })
+      }
     })
   })
 

@@ -337,14 +337,32 @@
             "required": ["input", "output"],
             "additionalProperties": false,
             "properties": {
-              "input": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
-              "output": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
-              "cacheRead": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
-              "cacheWrite": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" }
+              "input": { "$ref": "#/definitions/positiveDecimal" },
+              "output": { "$ref": "#/definitions/positiveDecimal" },
+              "cacheRead": { "$ref": "#/definitions/positiveDecimal" },
+              "cacheWrite": { "$ref": "#/definitions/positiveDecimal" },
+              "longPrompt": {
+                "type": "object",
+                "required": ["abovePromptTokens", "input", "output"],
+                "additionalProperties": false,
+                "description": "Rates for an API call whose own prompt (input, cache read and cache write tokens) is over this many tokens.",
+                "properties": {
+                  "abovePromptTokens": { "type": "integer", "minimum": 1 },
+                  "input": { "$ref": "#/definitions/positiveDecimal" },
+                  "output": { "$ref": "#/definitions/positiveDecimal" },
+                  "cacheRead": { "$ref": "#/definitions/positiveDecimal" },
+                  "cacheWrite": { "$ref": "#/definitions/positiveDecimal" }
+                }
+              }
             }
           }
         }
       }
+    },
+    "positiveDecimal": {
+      "type": "string",
+      "pattern": "^([1-9][0-9]*(\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)$",
+      "description": "A decimal string above zero: a price of zero is not a price."
     },
     "routingCandidate": {
       "type": "object",

@@ -1,7 +1,7 @@
 import chalk from 'chalk'
 
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
-import type { StatusDelegation, StatusReport, StatusRouting } from './collect'
+import type { StatusDelegation, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
 export interface RenderPayload {
@@ -34,16 +34,29 @@ export function routingSummary(routing: StatusRouting): string {
         .map((entry) => `${entry.kind} → ${entry.tier} for ${entry.provider}, ${entry.action} on ${entry.at.slice(0, 10)}`)
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
-  const capture = routing.capture
-    .map((entry) =>
-      entry.state === 'enforced'
-        ? `${entry.agent} capture enforced`
-        : entry.state === 'missing'
-          ? `${entry.agent} capture hook missing (run sf agents refresh --scope shared)`
-          : `${entry.agent} capture not enforced (record its delegations with sf agents outcome record)`
-    )
-    .join('; ')
-  return `${moves}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+  const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
+  return `${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+}
+
+const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (agent: string) => string> = {
+  enforced: () => 'capture enforced',
+  declared: (agent) => `capture declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  'declared-not-runnable': () => 'capture hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): delegations are not recorded',
+  outdated: () => 'capture hook outdated (run sf agents refresh --scope shared)',
+  missing: () => 'capture hook missing (run sf agents refresh --scope shared)',
+  'not-enforced': () => 'capture not enforced (record its delegations with sf agents outcome record)'
+}
+
+/** Holds that say something (a kind stuck on a failing tier, a tier that costs more) are named; the ordinary waits are counted. */
+const NOTABLE_HOLDS = new Set(['top-of-ladder', 'cheaper-tier-costs-more', 'tie-not-faster', 'unpriced', 'over-duration-ceiling'])
+
+function holdsSummary(holds: StatusRoutingState['holds']): string {
+  if (!holds.length) return ''
+  const notable = holds.filter((hold) => NOTABLE_HOLDS.has(hold.reason))
+  const waiting = holds.length - notable.length
+  const named = notable.map((hold) => `${hold.kind} (${hold.provider}) held: ${hold.reason} since ${hold.since.slice(0, 10)}`)
+  if (waiting) named.push(`${waiting} other kind${waiting === 1 ? '' : 's'} left where ${waiting === 1 ? 'it is' : 'they are'} for now`)
+  return `; ${named.join('; ')} (sf agents routing report)`
 }
 
 const STATUS_ICON: Record<PreconditionStatus, string> = { ok: '✓', warn: '⚠', fail: '✗', skip: '·' }

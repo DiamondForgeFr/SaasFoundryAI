@@ -1,0 +1,57 @@
+{
+  "session_id": "01a2c33d-5195-4e12-a4cc-37377e8940f3",
+  "transcript_path": "/home/dev/.claude/projects/project/session.jsonl",
+  "cwd": "__CWD__",
+  "prompt_id": "41cbea8b-4cb3-4570-a982-f96258a5bb70",
+  "permission_mode": "bypassPermissions",
+  "effort": { "level": "xhigh" },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Agent",
+  "tool_input": { "description": "Create hello.txt with hi", "prompt": "create hello.txt with the word hi, route=aaaaaaaaaaaaaaaaaaaa", "subagent_type": "sf-edit", "run_in_background": false },
+  "tool_response": {
+    "status": "completed",
+    "prompt": "create hello.txt with the word hi, route=aaaaaaaaaaaaaaaaaaaa",
+    "agentId": "a71a1dfc68c3db3d7",
+    "agentType": "sf-edit",
+    "harnessNoteCount": 0,
+    "harnessTailCount": 0,
+    "harnessSectionHash": "e526a2d50fe4c28d",
+    "content": [
+      {
+        "type": "text",
+        "text": "Created `/work/project/hello.txt` containing `hi` (plus a trailing newline).\nThe brief named no specific check, so I verified by reading the file back, which returned `hi`.\n\nSF-DELEGATION: pass route=aaaaaaaaaaaaaaaaaaaa checks=cat read-back of hello.txt returned \"hi\""
+      }
+    ],
+    "resolvedModel": "claude-haiku-5-5",
+    "totalDurationMs": 7806,
+    "totalTokens": 28495,
+    "totalToolUseCount": 2,
+    "usage": {
+      "output_tokens_details": { "thinking_tokens": 157 },
+      "input_tokens": 2,
+      "cache_creation_input_tokens": 5080,
+      "cache_read_input_tokens": 23054,
+      "output_tokens": 359,
+      "server_tool_use": { "web_search_requests": 0, "web_fetch_requests": 0 },
+      "service_tier": "standard",
+      "cache_creation": { "ephemeral_1h_input_tokens": 0, "ephemeral_5m_input_tokens": 5080 },
+      "inference_geo": "global",
+      "iterations": [
+        {
+          "input_tokens": 2,
+          "output_tokens": 359,
+          "cache_read_input_tokens": 23054,
+          "cache_creation_input_tokens": 5080,
+          "cache_creation": { "ephemeral_5m_input_tokens": 5080, "ephemeral_1h_input_tokens": 0 },
+          "type": "message"
+        }
+      ],
+      "speed": "standard",
+      "fallback_credit": null
+    },
+    "toolStats": { "readCount": 0, "searchCount": 0, "bashCount": 1, "editFileCount": 1, "linesAdded": 2, "linesRemoved": 0, "otherToolCount": 0 },
+    "canContinueAgent": true
+  },
+  "tool_use_id": "toolu_016eBYj9LEhPHmHDwbuxXTRY",
+  "duration_ms": 7807
+}

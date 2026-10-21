@@ -196,6 +196,35 @@ print_status_banner() {
   return 0
 }
 
+# Tell the delegation ledger of this clone that a ticket changed status (#1067), so
+# `sf agents routing report` can say how long a ticket took: first In progress to
+# first Human testing. The ledger lives in the Git directory of the clone and is
+# private to it; nothing here is shared or committed.
+#
+# Best effort, and never in the way of the transition that already succeeded: the
+# CLI the project resolves (the same order as the capture hook: its own
+# node_modules, this repository's build, then saasfoundryai on the PATH; never a
+# bare `sf`, which may be another CLI) runs in the background with its output
+# discarded, and a project without one records nothing.
+record_status_event() {
+  local ticket=$1 status=$2
+  [[ "$ticket" =~ ^[0-9]+$ && -n "$status" ]] || return 0
+  local cli=()
+  if [[ -x "./node_modules/.bin/saasfoundryai" ]]; then
+    cli=("./node_modules/.bin/saasfoundryai")
+  elif [[ -x "./node_modules/.bin/sf" ]]; then
+    cli=("./node_modules/.bin/sf")
+  elif [[ -f "./bin/sf.js" ]] && grep -q '"name": "saasfoundryai-cli"' ./package.json 2>/dev/null; then
+    cli=(node "./bin/sf.js")
+  elif command -v saasfoundryai >/dev/null 2>&1; then
+    cli=(saasfoundryai)
+  else
+    return 0
+  fi
+  ("${cli[@]}" agents outcome status-event "$ticket" "$status" >/dev/null 2>&1 &) 2>/dev/null || true
+  return 0
+}
+
 show_status_description() {
   local status=$1
   local file_path
@@ -1704,6 +1733,7 @@ case "$COMMAND" in
     route_to_tool "$WORKFLOW_TOOL" update-status "$@" || exit $?
     rollup_parent_status "$TICKET" "$TARGET"
     print_status_banner "$TARGET"
+    record_status_event "$TICKET" "$TARGET"
 
     # Where the release now stands.
     #

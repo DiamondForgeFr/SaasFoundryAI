@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { randomUUID } from 'crypto'
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 
 import { fileExists } from '../utils'
@@ -21,12 +22,37 @@ export type ClaudeHooksConfig = Record<string, ClaudeHookGroup[]>
 export const SRS_INTENT_HOOK_COMMAND = '.claude/skills/sf-srs/scripts/srs-intent-hook.sh'
 
 /**
+ * Replace a settings file the way the host reads it: whole or not at all. A write that is cut short
+ * (a killed process, a full disk) would leave the project's permissions and hooks half-written, and the
+ * agent that reads the file next would run without them.
+ */
+async function writeSettings(settingsPath: string, settings: Record<string, unknown>): Promise<void> {
+  await mkdir(dirname(settingsPath), { recursive: true })
+  const mode = await stat(settingsPath).then(
+    (info) => info.mode & 0o777,
+    () => 0o644
+  )
+  const temporary = `${settingsPath}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode })
+    await rename(temporary, settingsPath)
+  } finally {
+    await unlink(temporary).catch(() => undefined)
+  }
+}
+
+export interface MergeHooksOptions {
+  /** A command an earlier release wrote that this merge replaces: it is removed from the events the merge touches. */
+  supersedes?: (command: string) => boolean
+}
+
+/**
  * Merge hook groups into `<targetPath>/.claude/settings.json` without
  * clobbering anything the user already configured. Idempotent: a hook command
  * already registered for an event is never duplicated, and every unrelated
  * settings key is preserved as-is.
  */
-export async function mergeClaudeSettingsHooks(targetPath: string, hooks: ClaudeHooksConfig): Promise<boolean> {
+export async function mergeClaudeSettingsHooks(targetPath: string, hooks: ClaudeHooksConfig, options: MergeHooksOptions = {}): Promise<boolean> {
   const settingsPath = join(targetPath, '.claude', 'settings.json')
 
   let settings: Record<string, unknown> = {}
@@ -39,7 +65,11 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
   const existingHooks = (settings.hooks ?? {}) as Record<string, ClaudeHookGroup[]>
 
   for (const [event, groups] of Object.entries(hooks)) {
-    const eventGroups = existingHooks[event] ?? []
+    let eventGroups = existingHooks[event] ?? []
+    if (options.supersedes) {
+      const supersedes = options.supersedes
+      eventGroups = eventGroups.map((group) => ({ ...group, hooks: group.hooks.filter((hook) => !supersedes(hook.command)) })).filter((group) => group.hooks.length > 0)
+    }
     const registered = new Set(eventGroups.flatMap((group) => group.hooks.map((hook) => hook.command)))
 
     for (const group of groups) {
@@ -56,26 +86,26 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
 
   // Nothing to add: leave the file (and its formatting) exactly as the project has it.
   if (existed && JSON.stringify(settings) === before) return false
-  await mkdir(dirname(settingsPath), { recursive: true })
-  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+  await writeSettings(settingsPath, settings)
   return true
 }
 
 /**
  * Add permission rules to `permissions.allow` of `<targetPath>/.claude/settings.json`. Same
  * contract as the hooks: idempotent, a rule already present is never duplicated, and every
- * rule or key the user configured is kept.
+ * rule or key the user configured is kept. `revoke` lists rules an earlier release pre-approved and
+ * this one does not: they are removed, so the command asks again.
  */
-export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[]): Promise<boolean> {
+export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[], revoke: readonly string[] = []): Promise<boolean> {
   const settingsPath = join(targetPath, '.claude', 'settings.json')
   const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? (JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>) : {}
   const permissions = (settings.permissions ?? {}) as Record<string, unknown>
   const existing = Array.isArray(permissions.allow) ? (permissions.allow as string[]) : []
-  const missing = allow.filter((rule) => !existing.includes(rule))
-  if (missing.length === 0 && settings.permissions) return false
-  settings.permissions = { ...permissions, allow: [...existing, ...missing] }
-  await mkdir(dirname(settingsPath), { recursive: true })
-  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+  const kept = existing.filter((rule) => !revoke.includes(rule) || allow.includes(rule))
+  const missing = allow.filter((rule) => !kept.includes(rule))
+  if (missing.length === 0 && kept.length === existing.length && settings.permissions) return false
+  settings.permissions = { ...permissions, allow: [...kept, ...missing] }
+  await writeSettings(settingsPath, settings)
   return true
 }
 
@@ -96,6 +126,5 @@ export async function reconcileSrsIntentHook(targetPath: string, srsEnabled: boo
   if (withoutManagedHook.length > 0) hooks.UserPromptSubmit = withoutManagedHook
   else delete hooks.UserPromptSubmit
   settings.hooks = hooks
-  await mkdir(dirname(settingsPath), { recursive: true })
-  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+  await writeSettings(settingsPath, settings)
 }

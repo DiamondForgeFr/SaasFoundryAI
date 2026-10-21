@@ -9,7 +9,7 @@ import { installToolSkill } from './tool-skill.installer'
 import { injectWorkflowSection, installWorkflowSkill } from './workflow-skill.installer'
 import { AgentInstructionsReport, HarnessAgent, installAgentInstructions } from '../harness/agent-instructions'
 import { needsSharedInstructions, resolveHarnessAgents } from '../harness/agent-registry'
-import { CLAUDE_CAPTURE_HOOKS } from '../harness/delegation-hooks'
+import { CLAUDE_CAPTURE_HOOKS, isLegacyCaptureCommand } from '../harness/delegation-hooks'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { SaaSFoundryManifest, WorkflowConfig, skillsTemplatesPath } from '../types'
 import { ClaudeHooksConfig, mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
@@ -190,20 +190,25 @@ export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
   // The consent to delegate ticket delivery is read at the start of a session (#1026); `allow`, `decline` and `clear` still ask.
   'Bash(sf agents delegation status)',
   'Bash(sf agents delegation status *)',
-  // Routing a delegation, reading its measured outcomes and marking a later signal change nothing but the clone's own ledger (#1035).
+  // Routing a delegation (which issues a route record) and reading the measured outcomes change nothing the routing acts on by themselves (#1035).
+  // `sf agents outcome record` and `mark` write evidence the routing acts on, so they ask.
   'Bash(sf agents route *)',
   'Bash(sf agents routing report)',
   'Bash(sf agents routing report *)',
-  'Bash(sf agents outcome mark *)',
-  'Bash(sf agents outcome record *)',
   'Bash(gh project item-list *)',
   'Bash(gh project view *)',
   'Bash(gh project field-list *)'
 ]
 
+/** Rules an earlier build of this branch pre-approved and a refresh takes away again: the commands ask. */
+export const HARNESS_REVOKED_COMMANDS: readonly string[] = ['Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)']
+
+/** What a merge of the harness hooks replaces: the bare-`sf` capture command the first build wrote. */
+export const HARNESS_SUPERSEDED_HOOKS = { supersedes: isLegacyCaptureCommand }
+
 async function mergeHarnessSettings(targetPath: string): Promise<void> {
-  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
-  await mergeClaudeSettingsPermissions(targetPath, HARNESS_ALLOWED_COMMANDS)
+  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS, HARNESS_SUPERSEDED_HOOKS)
+  await mergeClaudeSettingsPermissions(targetPath, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS)
 }
 
 export interface MergeHarnessUserFilesParams {

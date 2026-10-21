@@ -1,4 +1,4 @@
-import { buildRunRecord, foldLedger, type Complexity, type LedgerRun, type Nature } from '../../harness/delegation-ledger'
+import { buildRouteRecord, buildRunRecord, foldLedger, type Complexity, type LedgerRoute, type LedgerRun, type Nature } from '../../harness/delegation-ledger'
 import type { TaskKind } from '../../harness/routing-grid'
 
 /**
@@ -21,6 +21,10 @@ export type RunSpec = {
   tier?: keyof typeof TIERS
   kind?: TaskKind | null
   provider?: 'claude-code' | 'codex'
+  /** `manual`: recorded by hand, rated for the report and never decisive. */
+  host?: 'claude-code' | 'codex' | 'manual'
+  retryOf?: string
+  eventKey?: string
   outcome?: 'success' | 'fail' | 'cancelled' | 'candidate-unavailable' | 'outcome-unknown'
   /** USD; null: an unpriced run. */
   cost?: string | null
@@ -31,6 +35,7 @@ export type RunSpec = {
   nature?: Nature
   at?: string
   model?: string
+  effort?: string
 }
 
 let clock = 0
@@ -40,7 +45,9 @@ export function one(spec: RunSpec = {}): LedgerRun {
   const tier = TIERS[spec.tier ?? 'build']
   const outcome = spec.outcome ?? 'success'
   const record = buildRunRecord({
-    host: 'claude-code',
+    host: spec.host ?? 'claude-code',
+    eventKey: spec.eventKey ?? null,
+    retryOf: spec.retryOf ?? null,
     provider: spec.provider ?? 'claude-code',
     tier: tier.tier,
     taskKind: spec.kind === null ? null : (spec.kind ?? 'multi-file-feature'),
@@ -48,7 +55,7 @@ export function one(spec: RunSpec = {}): LedgerRun {
     complexity: spec.complexity ?? null,
     nature: spec.nature ?? null,
     model: spec.model ?? tier.model,
-    effort: tier.effort,
+    effort: spec.effort ?? tier.effort,
     trial: spec.trial ?? false,
     at: spec.at ?? new Date(T0 + clock++ * 60_000).toISOString(),
     durationMs: spec.durationMs === undefined ? 60_000 : spec.durationMs,
@@ -68,3 +75,15 @@ export const sequence = (pattern: string, spec: RunSpec = {}): LedgerRun[] => [.
 
 /** The history in the order it was recorded. */
 export const history = (...groups: LedgerRun[][]): LedgerRun[] => groups.flat().sort((left, right) => (left.at < right.at ? -1 : left.at > right.at ? 1 : 0))
+
+/** A route `sf agents route --record` issued and no run has echoed yet: it reserves its place in the trial share. */
+export function pending(spec: { kind?: TaskKind; provider?: 'claude-code' | 'codex'; tier?: keyof typeof TIERS; trial?: boolean; now: Date }): LedgerRoute {
+  const route = buildRouteRecord({
+    taskKind: spec.kind ?? 'multi-file-feature',
+    provider: spec.provider ?? 'claude-code',
+    tier: TIERS[spec.tier ?? 'build'].tier,
+    trial: spec.trial ?? false,
+    now: spec.now
+  })
+  return { ...route, consumedBy: null }
+}
