@@ -59,9 +59,13 @@ devient `delegation: declined (local, <date>; shared team default: allowed)`, et
 Sur les mêmes projets, une ligne `routing:` (et un objet `routing` dans `--json`) indique où en est le routage automatique dans ce clone (voir
 [`sf agents routing`](./sf-agents.md#delegations-mesurees-et-routage-ajuste)). Elle nomme les déplacements que l'ajustement a faits et que personne n'a encore promus, pour qu'une session sache que la
 route qu'elle obtient n'est pas celle livrée, par exemple
-`routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. Elle dit aussi, pour chaque agent
-de code déclaré, si les hooks qui enregistrent chaque délégation sont en place (`claude-code capture enforced`), absents (`codex capture hook missing (run sf agents refresh --scope shared)`) ou
-indisponibles pour cet hôte (`not enforced` : ses délégations s'enregistrent à la main). Une couche locale endommagée s'affiche `unreadable (…)` et ne fait jamais échouer le statut.
+`routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. Elle nomme un type que l'ajustement
+a examiné et ne peut pas déplacer (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) et compte ceux qui attendent seulement des preuves. Elle dit aussi, pour chaque agent de code
+déclaré, si les hooks qui enregistrent chaque délégation sont en place **et peuvent s'exécuter** : `claude-code capture enforced` seulement quand le hook est déclaré et que le CLI du projet répond à
+`agents outcome capture` ; `capture hook declared but no CLI can run it` sinon (installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH : d'ici là les délégations ne sont
+pas enregistrées) ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le hook `sf` nu d'un build précédent ; `capture hook missing`
+(`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale endommagée s'affiche `unreadable (…)` et ne fait
+jamais échouer le statut.
 
 ### Exécution
 
