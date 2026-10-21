@@ -119,7 +119,7 @@ session's own model. Each profile declares it in `steps.execute.taskKind`, and t
 A bug cannot name its files before it is diagnosed, so it defaults to `bug-fix`. A trivial change stays in the session: one known file, about 20 lines or fewer (a typo, a configuration value, a
 documentation line), which does not repay a worktree and a dependency install.
 
-The delegated agent stops at the green test report with the draft pull request. On a complex ticket the session runs the adversarial review itself.
+The delegated agent stops at the green `## Test report` comment, with the draft pull request. On a complex ticket the session runs the adversarial review itself.
 
 ## Adversarial review (complex only)
 

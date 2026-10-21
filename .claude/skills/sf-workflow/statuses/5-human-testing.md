@@ -6,7 +6,7 @@ complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - All AI Testing steps passed
   - Test plan ready for human validation
-  - An open draft PR exists for the ticket, containing the test plan and AI test results
+  - An open draft PR exists for the ticket, containing the test plan and AI test results (the `## Test plan` and `## Test report` comments)
 mandatory_actions:
   - Wait for developer validation
   - On bug report — the session collects it and hands the fix to the ticket's own agent (or fixes it itself when delegation is not allowed); commit, push, return to AI Testing
@@ -40,7 +40,8 @@ In Review directly. See SKILL.md "Nature axis" section.
 
 ## Action checklist
 
-- [ ] **Draft PR** — reuse the PR opened at the end of AI Testing via `workflow-cli.sh create-pr <ticket> --draft`; keep its description, test plan and results current. Never promote it yourself.
+- [ ] **Draft PR** — reuse the PR opened at the end of AI Testing via `workflow-cli.sh create-pr <ticket> --draft`; keep its description, test plan and results current (the `## Test plan` and
+      `## Test report` comments). Never promote it yourself.
 - [ ] **Wait for validation** — developer tests manually, the session stays their interlocutor and answers
 - [ ] **On bugs reported:**
   - Read the comments carefully, summarize the fix plan as a reply
