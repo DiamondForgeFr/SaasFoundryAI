@@ -57,10 +57,13 @@ the layer it comes from and its date, for example `delegation: allowed (shared, 
 
 On the same projects, a `routing:` line (and a `routing` object in `--json`) says where the automatic routing stands in this clone (see
 [`sf agents routing`](./sf-agents.md#measured-delegations-and-the-adjusted-routing)). It names the moves the adjustment made that nobody promoted yet, so a session knows the route it gets is not the
-shipped one, for example `routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. It also
-says, for each declared coding agent, whether the hooks that record every delegation are in place (`claude-code capture enforced`), missing
-(`codex capture hook missing (run sf agents refresh --scope shared)`) or unavailable for that host (`not enforced`: its delegations are recorded by hand). A damaged local layer shows as
-`unreadable (…)` and never fails the status.
+shipped one, for example `routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. It names a
+kind the adjustment looked at and cannot move (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) and counts the ones that only wait for evidence. It also says, for each declared coding
+agent, whether the hooks that record every delegation are in place **and can run**: `claude-code capture enforced` only when the hook is declared and the project's own CLI answers
+`agents outcome capture`; `capture hook declared but no CLI can run it` when it does not (install `saasfoundryai-cli` in the project, or put `saasfoundryai` on the PATH: until then delegations are not
+recorded); `codex capture declared` when the hook is there but Codex has to trust it first; `capture hook outdated` for the bare-`sf` hook of an earlier build; `capture hook missing`
+(`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local layer shows as `unreadable (…)` and never fails the
+status.
 
 ### Runtime
 
