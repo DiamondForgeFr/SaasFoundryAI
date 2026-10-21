@@ -167,15 +167,30 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
 5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session
    delivers the tickets itself, one after the other, and says so explicitly.
 6. **Measured delegations.** Every routed delegation is recorded in the clone's ledger, and the routing adjusts itself
-   from it (`sf agents routing report` shows what it did). The brief names the task kind, the ticket and its
-   complexity, and the tier agent closes its final message with
-   `SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<n> checks=<codes>`; a hook records the cost, the duration and
-   that verdict (`sf agents outcome record` does it by hand for a host without hooks). Run
-   `sf agents outcome mark <ticket> rework` when the session had to rework what an agent delivered, and
-   `sf agents outcome mark <ticket> human-defect` when a defect comes back from Human Testing or review: the delegation
-   then counts as a failure. When `sf agents route` answers `trial: true`, delegate to the tier it names, state in the
-   brief that the run is a trial, and expect the same line. A developer override in `modules.harness.routing` is never
-   changed by the routing.
+   from it (`sf agents routing report` shows what it did). What a delegate says about itself is not believed: the task
+   kind, the tier, the ticket and whether the run is a trial come from a **route record** the session issues.
+   - Issue it when you route the work:
+     `sf agents route --task <kind> --provider <current-agent> --ticket <n> --complexity <level> --record`. It prints
+     `route=<id>` (`--json` gives `routeId`): put that id in the brief. Reading a route without `--record`, to display
+     it, records nothing. An id is valid for one agent and for six hours of reservation, and a trial it hands out holds
+     its place in the share until the delegation is recorded.
+   - The tier agent closes its final message with `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`; a hook
+     records the cost, the active time and that verdict. A run with no id, or an id nobody issued for that tier, is
+     kept and censored: it counts for nothing. A `pass` needs a real check among the codes; `self-review` alone is not
+     one.
+   - When a delegation fails and you retry it on a stronger tier, route the retry with `--retry-of <route id>`: that
+     link, and nothing else, says the earlier run did not do the job.
+   - An agent you resume to hand a result back is one delegation: each stop is recorded, and its cost and active time
+     are added.
+   - Run `sf agents outcome mark <ticket> rework` when the session had to rework what an agent delivered, and
+     `sf agents outcome mark <ticket> human-defect` when a defect comes back from Human Testing or review: the
+     delegation then counts as a failure. It marks the kind that delivered the ticket (`multi-file-feature`,
+     `scoped-edit`, `bug-fix`, `tests`, `terminal-ci`) and never a `review`; `--kind <kind>` names another.
+   - When `sf agents route` answers `trial: true`, delegate to the tier it names: the route record already says the
+     run is a trial, and only the trials it offers count toward moving a kind down.
+   - `sf agents outcome record` records a run by hand, for a host without hooks. It asks permission, is shown in the
+     report and never moves the routing. A developer override in `modules.harness.routing` is never changed by the
+     routing.
 
 ## How to use this skill
 

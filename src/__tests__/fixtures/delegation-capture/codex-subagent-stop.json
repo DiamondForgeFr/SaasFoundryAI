@@ -5,5 +5,5 @@
   "agent_id": "c-agent-1",
   "agent_type": "sf-build",
   "agent_transcript_path": "__TRANSCRIPT__",
-  "last_assistant_message": "Tests written.\nSF-DELEGATION: pass kind=tests ticket=1035 checks=automated-tests"
+  "last_assistant_message": "Tests written.\nSF-DELEGATION: pass route=__ROUTE__ checks=automated-tests"
 }

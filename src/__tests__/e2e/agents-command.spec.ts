@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
 import { GENERATED_INSTRUCTIONS } from '../../harness/agent-instructions'
+import { CLAUDE_CAPTURE_COMMAND, CODEX_CAPTURE_COMMAND } from '../../harness/delegation-hooks'
 
 const ROOT = resolve(__dirname, '../../..')
 
@@ -61,11 +62,14 @@ describe('compiled sf agents commands', () => {
     const settings = JSON.parse(await readFile(settingsPath, 'utf8'))
     expect(settings.model).toBe('opus')
     expect(settings.hooks.SessionStart[0].hooks[0].command).toBe('echo mine')
-    expect(settings.hooks.SubagentStop.flatMap((group: { hooks: { command: string }[] }) => group.hooks.map((hook) => hook.command))).toEqual(['sf agents outcome capture --host claude-code'])
+    expect(settings.hooks.SubagentStop.flatMap((group: { hooks: { command: string }[] }) => group.hooks.map((hook) => hook.command))).toEqual([CLAUDE_CAPTURE_COMMAND])
+    expect(settings.hooks.SubagentStop[0].matcher).toBe('sf-.*')
     expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
-    expect(settings.permissions.allow).toEqual(expect.arrayContaining(['Bash(sf agents outcome mark *)', 'Bash(sf agents route *)']))
+    expect(settings.permissions.allow).toContain('Bash(sf agents route *)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome record *)')
     const codex = JSON.parse(await readFile(join(project, '.codex/hooks.json'), 'utf8'))
-    expect(codex.hooks.SubagentStop[0].hooks[0].command).toBe('sf agents outcome capture --host codex')
+    expect(codex.hooks.SubagentStop[0].hooks[0].command).toBe(CODEX_CAPTURE_COMMAND)
     const settingsText = await readFile(settingsPath, 'utf8')
     const codexText = await readFile(join(project, '.codex/hooks.json'), 'utf8')
     const refreshed = run('refresh', '--scope', 'shared', '--json')

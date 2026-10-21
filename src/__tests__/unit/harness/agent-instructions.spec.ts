@@ -185,18 +185,22 @@ describe('shared agent instructions', () => {
     }
   })
 
-  // The routing learns from the delegations it routes (#1035): the session briefs the line, marks what it had to rework,
-  // and delegates a trial to the tier it names.
-  it('measures every delegation and has the session mark what it reworked (#1035)', () => {
+  // The routing learns from the delegations it routes (#1035): the session issues a route record, puts its id in the
+  // brief, and follows the workflow skill for the rest. The always-loaded text stays short (Examine finding 27): two
+  // lines and a pointer, the whole rule lives in the skill.
+  it('measures every delegation with a route record, in two lines and a pointer to the skill (#1035)', () => {
     for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
       expect(instructions).toMatch(/Every delegation is measured, and the routing learns from it/)
-      expect(instructions).toContain('`SF-DELEGATION: <pass|fail> kind=<task kind> ticket=<n> checks=<codes>`')
-      expect(instructions).toMatch(/records the\s+cost, the duration and that verdict in the clone's ledger/)
-      expect(instructions).toContain('`sf agents outcome record`')
-      expect(instructions).toMatch(/`sf agents outcome mark <ticket>\s+<rework\|human-defect>`/)
-      expect(instructions).toMatch(/`trial: true`, a\s+bounded sample: delegate to that tier and say it is a trial/)
-      expect(instructions).toMatch(/never changes an override of `modules.harness.routing`/)
+      expect(instructions).toMatch(/`sf agents route\s+--task <kind> --provider <agent> --ticket <n> --record`/)
+      expect(instructions).toContain('`route=<id>`')
+      expect(instructions).toContain('"Measured delegations" in the workflow skill')
+      expect(instructions).toContain('`sf agents routing report`')
       expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
+      // The detail is not paid on every session
+      expect(instructions).not.toContain('SF-DELEGATION')
+      expect(instructions).not.toContain('sf agents outcome mark')
+      const measured = instructions.slice(instructions.indexOf('Every delegation is measured'))
+      expect(measured.split('\n\n')[0].split('\n').length).toBeLessThanOrEqual(4)
     }
   })
 

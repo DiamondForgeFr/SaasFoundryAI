@@ -5,7 +5,7 @@ import { dirname, join } from 'path'
 import * as adapter from '../../../harness/agent-instructions'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../../../harness/agent-support'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
-import { CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
+import { CLAUDE_CAPTURE_COMMAND, CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
 import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
 
 // Tier agents (#929) have their own suite; these assertions are about the other deposits.
@@ -110,9 +110,39 @@ describe('additive managed agent support (#660)', () => {
     expect(refreshed.report.written).toContain('.claude/settings.json')
     const settings = JSON.parse(await get('.claude/settings.json'))
     expect(settings.hooks.custom).toEqual(['preserve'])
-    expect(settings.hooks.SubagentStop[0].hooks[0].command).toBe('sf agents outcome capture --host claude-code')
+    // The hook runs the CLI the project resolves, never a bare `sf`, and only for the routed sf-<tier> agents
+    expect(settings.hooks.SubagentStop[0]).toMatchObject({ matcher: 'sf-.*', hooks: [{ type: 'command', command: CLAUDE_CAPTURE_COMMAND, timeout: 30 }] })
+    expect(CLAUDE_CAPTURE_COMMAND).not.toMatch(/(^|[;&|]\s*)sf agents/)
     expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
-    expect(settings.permissions.allow).toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.allow).toContain('Bash(sf agents route *)')
+    // What writes evidence the routing acts on asks first
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome record *)')
+  })
+  it('replaces the bare-sf capture hooks and the pre-approved evidence commands an earlier build wrote, and keeps the project own', async () => {
+    await put(
+      '.claude/settings.json',
+      JSON.stringify({
+        hooks: {
+          SubagentStop: [
+            {
+              hooks: [
+                { type: 'command', command: 'sf agents outcome capture --host claude-code', timeout: 30 },
+                { type: 'command', command: 'echo mine' }
+              ]
+            }
+          ]
+        },
+        permissions: { allow: ['Bash(npm test)', 'Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)'] }
+      })
+    )
+    await enable(['claude-code'])
+    await refreshAgents({ targetPath: root, scope: 'shared' })
+    const settings = JSON.parse(await get('.claude/settings.json'))
+    expect(settings.hooks.SubagentStop.flatMap((group: { hooks: { command: string }[] }) => group.hooks.map((hook) => hook.command))).toEqual(['echo mine', CLAUDE_CAPTURE_COMMAND])
+    expect(settings.permissions.allow).toContain('Bash(npm test)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome record *)')
   })
   it('refreshes generated copies using their successful baselines', async () => {
     await enable(['codex'])

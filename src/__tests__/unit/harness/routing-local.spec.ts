@@ -6,6 +6,7 @@ import {
   autoKindsFor,
   emptyLocalRouting,
   listLocalAdjustments,
+  listLocalHolds,
   localRoutingPath,
   readLocalRouting,
   ROUTING_LOG_LIMIT,
@@ -125,5 +126,42 @@ describe('the local routing layer (#1035)', () => {
   it('reads the file as the CLI wrote it', async () => {
     await updateLocalRouting(dir, () => ({ next: layerWith({ tests: { codex: move('terminal', 'build') } }), result: null }))
     expect(JSON.parse(await readFile(localRoutingPath(dir), 'utf8'))).toMatchObject({ version: 1, kinds: { tests: { codex: { tier: 'terminal', from: 'build', action: 'escalate' } } } })
+  })
+
+  describe('what the adjustment last said, and the candidates it has seen (Examine findings 10 and 11)', () => {
+    const withState = (): LocalRouting => ({
+      ...emptyLocalRouting(),
+      holds: { 'terminal-ci': { 'claude-code': { reason: 'top-of-ladder', since: AT } } },
+      ladders: { 'claude-code': { fix: { candidate: 'claude-opus-5-5/medium', since: AT, status: 'new' }, build: { candidate: 'claude-sonnet-5-5/xhigh', since: AT, status: 'accepted' } } },
+      log: [{ at: AT, action: 'hold', kind: 'terminal-ci', provider: 'claude-code', from: 'terminal', to: 'terminal', evidence: null, note: 'top-of-ladder: nothing above' }]
+    })
+
+    it('keeps the holds, the candidates and a hold entry of the log, and lists the holds in kind order', async () => {
+      await updateLocalRouting(dir, () => ({ next: withState(), result: null }))
+      const read = await readLocalRouting(dir)
+      expect(read).toEqual(withState())
+      expect(listLocalHolds(read)).toEqual([{ kind: 'terminal-ci', provider: 'claude-code', hold: { reason: 'top-of-ladder', since: AT } }])
+    })
+
+    it('reads a layer written before holds and candidates existed as one without any', async () => {
+      const older = Object.fromEntries(Object.entries(emptyLocalRouting()).filter(([key]) => key !== 'holds' && key !== 'ladders'))
+      await writeFile(localRoutingPath(dir), JSON.stringify(older))
+      expect(await readLocalRouting(dir)).toEqual(emptyLocalRouting())
+    })
+
+    it('keeps the log for the last hundred entries', () => {
+      expect(ROUTING_LOG_LIMIT).toBe(100)
+    })
+
+    it.each([
+      ['a hold that is not a reason', { holds: { tests: { codex: { reason: 3, since: AT } } } }, 'holds.tests.codex'],
+      ['a hold for a kind that does not exist', { holds: { deploy: {} } }, 'holds.deploy'],
+      ['a candidate with a status nobody wrote', { ladders: { codex: { build: { candidate: 'a/b', since: AT, status: 'maybe' } } } }, 'ladders.codex.build'],
+      ['a candidate for a provider that is not routed', { ladders: { 'gemini-cli': {} } }, 'ladders.gemini-cli'],
+      ['a log entry with an action nobody writes', { log: [{ at: AT, kind: 'tests', action: 'bless' }] }, 'log entry']
+    ])('refuses %s', async (_, patch, detail) => {
+      await writeFile(localRoutingPath(dir), JSON.stringify({ ...emptyLocalRouting(), ...patch }))
+      await expect(readLocalRouting(dir)).rejects.toThrow(detail)
+    })
   })
 })

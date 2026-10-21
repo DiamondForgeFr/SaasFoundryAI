@@ -5,11 +5,12 @@ import type { DelegationState } from '../harness/delegation'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
 import { readProjectRouting } from '../harness/project-routing'
-import { getRoutingGrid, isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
-import { loadRoutingState, routeKind } from '../harness/routing-runtime'
+import { COMPLEXITIES, NATURES, type Complexity, type Nature } from '../harness/delegation-ledger'
+import { getRoutingGrid, isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider } from '../harness/routing-grid'
+import { issueRoutes, loadRoutingState } from '../harness/routing-runtime'
 import { registerOutcomeCommands } from './agents.outcome'
 import { registerRoutingCommands } from './agents.routing'
-import { errorPayload } from './agents.shared'
+import { errorPayload, parsePositiveInteger } from './agents.shared'
 
 interface AgentCommandOptions {
   json?: boolean
@@ -22,6 +23,12 @@ interface AgentCommandOptions {
   provider?: string
   /** `--no-trial` makes it false: answer the routed tier even when a bounded trial of the cheaper one is due. */
   trial?: boolean
+  /** Issue a route record: an id the delegate echoes, which also reserves a trial. */
+  record?: boolean
+  ticket?: string
+  complexity?: string
+  nature?: string
+  retryOf?: string
 }
 
 /**
@@ -49,15 +56,31 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
     project,
     onDamaged: (message) => process.stderr.write(`Warning: the delegation history could not be read, so the route is the shared one (${message})\n`)
   })
-  const routes = providers.map((provider) => routeKind(state, kind, provider, { trial: options.trial !== false }))
+  if (!options.record && (options.ticket !== undefined || options.complexity !== undefined || options.nature !== undefined || options.retryOf !== undefined)) {
+    throw new Error('--ticket, --complexity, --nature and --retry-of describe the route record: add --record.')
+  }
+  if (options.complexity !== undefined && !(COMPLEXITIES as readonly string[]).includes(options.complexity)) throw new Error(`--complexity must be one of ${COMPLEXITIES.join(', ')}.`)
+  if (options.nature !== undefined && !(NATURES as readonly string[]).includes(options.nature)) throw new Error(`--nature must be one of ${NATURES.join(', ')}.`)
+  if (options.retryOf !== undefined && !/^[0-9a-f]{20}$/.test(options.retryOf)) throw new Error('--retry-of must be a route or run id (20 hex characters).')
+  if (options.record && providers.length > 1) {
+    throw new Error(`A route record is for one coding agent: pass --provider ${providers.join(' or ')} (the agent that will run the delegation).`)
+  }
+  const routes = await issueRoutes(state, kind, providers, {
+    record: options.record === true,
+    trial: options.trial !== false,
+    ticket: parsePositiveInteger(options.ticket, '--ticket') ?? null,
+    complexity: (options.complexity as Complexity | undefined) ?? null,
+    nature: (options.nature as Nature | undefined) ?? null,
+    retryOf: options.retryOf ?? null
+  })
   if (options.json) {
     const grid = getRoutingGrid()
-    process.stdout.write(JSON.stringify({ routeVersion: 1, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes }, null, 2) + '\n')
+    process.stdout.write(JSON.stringify({ routeVersion: 2, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes }, null, 2) + '\n')
     return
   }
   for (const route of routes) {
     const evidence = route.trial
-      ? `trial of the tier below ${route.effectiveTier}, a bounded sample of the kind's runs: record its outcome`
+      ? `${route.effectiveTier && tierRank(route.tier) > tierRank(route.effectiveTier) ? 'trial of a new stronger candidate above' : 'trial of the tier below'} ${route.effectiveTier}, a bounded sample of the kind's runs: record its outcome`
       : route.adjustment
         ? `${route.adjustment.action} from ${route.adjustment.from} on ${route.adjustment.at.slice(0, 10)} — ${route.adjustment.rule}`
         : route.evidence
@@ -66,7 +89,8 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
             : `provisional: ${route.evidence.note}`
           : 'project choice, no shipped evidence'
     const label = route.trial ? `${route.source}, trial` : route.source
-    process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}\n`)
+    const id = route.routeId ? ` route=${route.routeId}` : ''
+    process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}${id}\n`)
     if (route.excluded)
       process.stderr.write(`Warning: ${route.provider} ${route.candidate.model} (${route.candidate.effort}) is on the exclusion list for ${route.kind}: public scores collapse there.\n`)
   }
@@ -285,6 +309,11 @@ export function registerAgentCommands(command: Command): void {
     .requiredOption('--task <kind>', TASK_KINDS.join(', '))
     .option('--provider <agent>', ROUTING_PROVIDERS.join(', '))
     .option('--no-trial', 'Answer the routed tier even when a bounded trial of the cheaper tier is due (reading the route for display)')
+    .option('--record', 'Issue a route record for a delegation: prints a route id the delegate echoes in its SF-DELEGATION line, and reserves a trial (needs --provider)')
+    .option('--ticket <number>', 'With --record: the ticket the delegation serves')
+    .option('--complexity <level>', 'With --record: bug, low, medium, complex')
+    .option('--nature <nature>', 'With --record: user-facing, internal, bundled-pr')
+    .option('--retry-of <id>', 'With --record: the route or run id of the delegation this one retries on a stronger tier after it failed')
     .option('--json', 'Output the versioned route')
     .action((options: AgentCommandOptions) => agentsCommand('route', [], options))
   command

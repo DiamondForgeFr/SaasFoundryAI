@@ -1,0 +1,16 @@
+{
+  "session_id": "01a2c33d-5195-4e12-a4cc-37377e8940f3",
+  "transcript_path": "/home/dev/.claude/projects/project/session.jsonl",
+  "cwd": "__CWD__",
+  "prompt_id": "41cbea8b-4cb3-4570-a982-f96258a5bb70",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "a71a1dfc68c3db3d7",
+  "agent_type": "sf-edit",
+  "effort": { "level": "high" },
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_transcript_path": "__TRANSCRIPT__",
+  "last_assistant_message": "`hello.txt` now has `hi` on its first line and a second `hi` on line two. Reading the file back returned exactly those two lines.\n\nSF-DELEGATION: pass route=aaaaaaaaaaaaaaaaaaaa checks=cat read-back of hello.txt after append returned \"hi\" then \"hi\"",
+  "background_tasks": [{ "id": "a71a1dfc68c3db3d7", "type": "subagent", "status": "running", "description": "Create hello.txt with hi", "agent_type": "sf-edit" }],
+  "session_crons": []
+}

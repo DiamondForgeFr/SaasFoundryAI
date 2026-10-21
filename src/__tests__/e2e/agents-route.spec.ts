@@ -21,7 +21,8 @@ describe('compiled sf agents route (#930)', () => {
     const result = run('--task', 'bug-fix', '--json')
     expect(result.status).toBe(0)
     const output = JSON.parse(result.stdout)
-    expect(output).toMatchObject({ routeVersion: 1, gridVersion: 1, kind: 'bug-fix' })
+    expect(output).toMatchObject({ routeVersion: 2, gridVersion: 1, kind: 'bug-fix' })
+    expect(output.routes.map((route: { routeId: unknown }) => route.routeId)).toEqual([null, null])
     expect(output.routes.map((route: { provider: string; source: string }) => [route.provider, route.source])).toEqual([
       ['claude-code', 'shipped'],
       ['codex', 'shipped']

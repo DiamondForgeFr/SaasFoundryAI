@@ -3,9 +3,9 @@ import fs from 'fs'
 import path from 'path'
 
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
-import { captureState, type CaptureState } from '../harness/delegation-hooks'
+import { captureState, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
-import { emptyLocalRouting, listLocalAdjustments, readLocalRouting } from '../harness/routing-local'
+import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { SaaSFoundryManifest } from '../types'
@@ -66,6 +66,8 @@ export type StatusDelegation = DelegationState | { error: string }
 export interface StatusRoutingState {
   adjustment: 'on' | 'off'
   adjustments: { kind: string; provider: string; tier: string; from: string; action: string; at: string }[]
+  /** Kinds the adjustment looked at and left where they are, with the reason (also in the log of the local layer). */
+  holds: { kind: string; provider: string; reason: string; since: string }[]
   capture: { agent: string; state: CaptureState }[]
 }
 export type StatusRouting = StatusRoutingState | { error: string }
@@ -141,6 +143,8 @@ export function appPaths(manifest: SaaSFoundryManifest | null): { api: string; w
 export interface CollectOptions {
   checkNetwork?: boolean
   checkGh?: boolean
+  /** Whether the project's CLI can run the capture hook; defaults to asking the CLI it resolves. Injectable for a spec that spawns nothing. */
+  captureProbe?: CaptureProbe
 }
 
 function runSafe(cmd: string, cwd: string): string | null {
@@ -258,7 +262,7 @@ async function collectDelegation(projectRoot: string, manifest: SaaSFoundryManif
   }
 }
 
-async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null): Promise<StatusRouting | undefined> {
+async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null, probe?: CaptureProbe): Promise<StatusRouting | undefined> {
   const harness = manifest?.modules?.harness
   if (!harness) return undefined
   try {
@@ -274,7 +278,8 @@ async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest
         action: adjustment.action,
         at: adjustment.at
       })),
-      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent) })))
+      holds: listLocalHolds(local).map(({ kind, provider, hold }) => ({ kind, provider, reason: hold.reason, since: hold.since })),
+      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) })))
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
@@ -295,7 +300,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
 
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
   const delegation = await collectDelegation(projectRoot, manifest)
-  const routing = await collectRouting(projectRoot, manifest)
+  const routing = await collectRouting(projectRoot, manifest, options.captureProbe)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.

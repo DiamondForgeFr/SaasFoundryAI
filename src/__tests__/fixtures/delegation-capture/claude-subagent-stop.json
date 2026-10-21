@@ -8,5 +8,5 @@
   "agent_id": "a1b2c3",
   "agent_transcript_path": "__TRANSCRIPT__",
   "agent_type": "sf-build",
-  "last_assistant_message": "I delivered the ledger.\n\nChanged src/harness/delegation-ledger.ts.\n\nSF-DELEGATION: pass kind=multi-file-feature ticket=1035 complexity=complex nature=user-facing checks=type-check,automated-tests"
+  "last_assistant_message": "I delivered the ledger.\n\nChanged src/harness/delegation-ledger.ts.\n\nSF-DELEGATION: pass route=__ROUTE__ checks=type-check,automated-tests"
 }

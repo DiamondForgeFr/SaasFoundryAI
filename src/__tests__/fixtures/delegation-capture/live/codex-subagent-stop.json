@@ -1,0 +1,14 @@
+{
+  "session_id": "01a15f3c-760a-75f3-8146-d0c1d145da16",
+  "turn_id": "01a15f3c-953c-7170-81e8-835c33bfe279",
+  "transcript_path": "/home/dev/.codex/sessions/session.jsonl",
+  "agent_transcript_path": "__TRANSCRIPT__",
+  "cwd": "__CWD__",
+  "hook_event_name": "SubagentStop",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "stop_hook_active": false,
+  "agent_id": "01a15f3c-94fb-7981-94c0-8583d7bca7f6",
+  "agent_type": "sf-edit",
+  "last_assistant_message": "Created hello.txt containing hi; verified its content and size.\nSF-DELEGATION: pass route=aaaaaaaaaaaaaaaaaaaa checks=content,size"
+}

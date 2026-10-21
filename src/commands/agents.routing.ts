@@ -20,10 +20,11 @@ export interface RoutingPromoteOptions {
 /** The versioned JSON of an adjustment: what moved, and what was held back and why. */
 export function adjustmentPayload(report: AdjustmentReport): Record<string, unknown> {
   return {
-    adjustVersion: 1,
+    adjustVersion: 2,
     dryRun: report.dryRun,
     applied: report.decisions.filter((decision) => decision.action !== 'hold'),
     held: report.decisions.filter((decision) => decision.action === 'hold'),
+    refused: report.refused,
     staleTierAgents: report.staleTierAgents
   }
 }
@@ -33,6 +34,7 @@ const money = (amount: string | null): string => (amount === null ? 'unknown' : 
 /** Print the moves of an adjustment, one line each with the figure that justified it. */
 export function describeAdjustment(report: AdjustmentReport, verbose = false): string[] {
   const lines: string[] = []
+  if (report.refused) lines.push(`No automatic move was decided: ${report.refused}`)
   for (const decision of report.decisions) {
     const evidence = decision.evidence
     if (decision.action === 'hold') {

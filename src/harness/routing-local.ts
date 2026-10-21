@@ -20,8 +20,10 @@ import type { HarnessAgent } from '../types'
 export const LOCAL_ROUTING_FILE = 'routing.json'
 const LOCK_NAME = 'routing.lock'
 const LOCAL_VERSION = 1
-/** How many moves the log keeps; older ones fall off, the current moves do not. */
-export const ROUTING_LOG_LIMIT = 50
+/** How many entries the log keeps (moves, holds that changed, adoptions); older ones fall off, the current moves do not. */
+export const ROUTING_LOG_LIMIT = 100
+/** A candidate that appeared on the ladder stays "new" (tried by itself, within the trial share) for at most this long. */
+export const NEW_CANDIDATE_DAYS = 60
 
 const TIER = /^[a-z][a-z0-9-]*$/
 const ISO_MILLIS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
@@ -49,9 +51,13 @@ export interface LocalAdjustment {
   evidence: AdjustmentEvidence
 }
 
+/** `hold`: the adjustment looked at a kind and left it where it is, for this reason (logged when the reason changes). `adopt`: a new candidate proved itself. */
+export type LogAction = AdjustmentAction | 'reset' | 'promote' | 'hold' | 'adopt'
+const LOG_ACTIONS: readonly string[] = ['escalate', 'deescalate', 'reset', 'promote', 'hold', 'adopt']
+
 export interface LocalLogEntry {
   at: string
-  action: AdjustmentAction | 'reset' | 'promote'
+  action: LogAction
   kind: TaskKind
   provider: RoutingProvider | null
   from: string
@@ -60,15 +66,36 @@ export interface LocalLogEntry {
   note: string | null
 }
 
+/** Why the adjustment last left a kind where it is, and since when. */
+export interface LocalHold {
+  reason: string
+  since: string
+}
+
+/**
+ * A tier's candidate as the adjustment last saw it. `new`: it appeared after the first evaluation (a grid
+ * bump, a project declaration), so a cheaper or a stronger neighbour of the routed tier is tried by itself,
+ * within the trial share, until the expected-cost rule adopts it.
+ */
+export interface LocalLadderEntry {
+  candidate: string
+  since: string
+  status: 'new' | 'accepted'
+}
+
 export interface LocalRouting {
   version: 1
   kinds: Partial<Record<TaskKind, Partial<Record<RoutingProvider, LocalAdjustment>>>>
   /** Per kind and provider, when the evidence started over: a move, a reset or a promotion. Runs before it are not counted again. */
   boundaries: Partial<Record<TaskKind, Partial<Record<RoutingProvider, string>>>>
+  /** Per kind and provider, the reason it was last held; a hold that did not change is not logged again. */
+  holds: Partial<Record<TaskKind, Partial<Record<RoutingProvider, LocalHold>>>>
+  /** Per provider and tier, the candidate last seen: what tells a new candidate from a known one. */
+  ladders: Partial<Record<RoutingProvider, Record<string, LocalLadderEntry>>>
   log: LocalLogEntry[]
 }
 
-export const emptyLocalRouting = (): LocalRouting => ({ version: LOCAL_VERSION, kinds: {}, boundaries: {}, log: [] })
+export const emptyLocalRouting = (): LocalRouting => ({ version: LOCAL_VERSION, kinds: {}, boundaries: {}, holds: {}, ladders: {}, log: [] })
 
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 const isKind = (value: unknown): value is TaskKind => typeof value === 'string' && (TASK_KINDS as readonly string[]).includes(value)
@@ -88,8 +115,32 @@ function parseLocalRouting(text: string, path: string): LocalRouting {
     return fail('not JSON')
   }
   if (!object(value) || value.version !== LOCAL_VERSION) return fail(`expected version ${LOCAL_VERSION}`)
-  if (Object.keys(value).some((key) => !['version', 'kinds', 'boundaries', 'log'].includes(key))) return fail('unknown key')
+  if (Object.keys(value).some((key) => !['version', 'kinds', 'boundaries', 'holds', 'ladders', 'log'].includes(key))) return fail('unknown key')
   if (!object(value.kinds) || !object(value.boundaries) || !Array.isArray(value.log)) return fail('kinds, boundaries and log are required')
+  // A layer written before holds and ladders existed has neither: both start empty.
+  if (value.holds === undefined) value.holds = {}
+  if (value.ladders === undefined) value.ladders = {}
+  if (!object(value.holds) || !object(value.ladders)) return fail('holds and ladders must be objects')
+  for (const [kind, providers] of Object.entries(value.holds)) {
+    if (!isKind(kind) || !object(providers)) return fail(`holds.${kind}`)
+    for (const [provider, hold] of Object.entries(providers)) {
+      if (!isRoutingProvider(provider) || !object(hold) || typeof hold.reason !== 'string' || typeof hold.since !== 'string' || !ISO_MILLIS.test(hold.since)) return fail(`holds.${kind}.${provider}`)
+    }
+  }
+  for (const [provider, tiers] of Object.entries(value.ladders)) {
+    if (!isRoutingProvider(provider) || !object(tiers)) return fail(`ladders.${provider}`)
+    for (const [tier, entry] of Object.entries(tiers)) {
+      if (
+        !TIER.test(tier) ||
+        !object(entry) ||
+        typeof entry.candidate !== 'string' ||
+        typeof entry.since !== 'string' ||
+        !ISO_MILLIS.test(entry.since) ||
+        !['new', 'accepted'].includes(String(entry.status))
+      )
+        return fail(`ladders.${provider}.${tier}`)
+    }
+  }
   for (const [kind, providers] of Object.entries(value.kinds)) {
     if (!isKind(kind) || !object(providers)) return fail(`kinds.${kind}`)
     for (const [provider, entry] of Object.entries(providers)) {
@@ -103,7 +154,7 @@ function parseLocalRouting(text: string, path: string): LocalRouting {
     for (const [provider, at] of Object.entries(providers)) if (!isRoutingProvider(provider) || typeof at !== 'string' || !ISO_MILLIS.test(at)) return fail(`boundaries.${kind}.${provider}`)
   }
   for (const entry of value.log) {
-    if (!object(entry) || !isKind(entry.kind) || typeof entry.at !== 'string' || !['escalate', 'deescalate', 'reset', 'promote'].includes(String(entry.action))) return fail('log entry')
+    if (!object(entry) || !isKind(entry.kind) || typeof entry.at !== 'string' || !LOG_ACTIONS.includes(String(entry.action))) return fail('log entry')
   }
   return value as unknown as LocalRouting
 }
@@ -170,6 +221,11 @@ export function autoKindsFor(local: LocalRouting, provider: RoutingProvider): Au
 /** The moves of the layer as a flat list, in task-kind order. */
 export function listLocalAdjustments(local: LocalRouting): { kind: TaskKind; provider: RoutingProvider; adjustment: LocalAdjustment }[] {
   return TASK_KINDS.flatMap((kind) => ROUTING_PROVIDERS.flatMap((provider) => (local.kinds[kind]?.[provider] ? [{ kind, provider, adjustment: local.kinds[kind]![provider]! }] : [])))
+}
+
+/** The holds of the layer as a flat list, in task-kind order. */
+export function listLocalHolds(local: LocalRouting): { kind: TaskKind; provider: RoutingProvider; hold: LocalHold }[] {
+  return TASK_KINDS.flatMap((kind) => ROUTING_PROVIDERS.flatMap((provider) => (local.holds[kind]?.[provider] ? [{ kind, provider, hold: local.holds[kind]![provider]! }] : [])))
 }
 
 /** Append to the bounded log, newest last. */
