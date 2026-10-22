@@ -15,8 +15,12 @@ describe('compiled sf agents routing and the adjusted route (#1035)', () => {
   let clock = 0
   const ledgerDir = () => join(project, '.git', 'saasfoundry')
   const layer = () => join(ledgerDir(), 'routing.json')
-  const manifest = (harness: Record<string, unknown> = { version: 4, agents: ['claude-code'] }) =>
-    writeFile(join(project, '.saasfoundry.json'), JSON.stringify({ version: 'test', projectName: 'routing-demo', structure: 'cli', modules: { harness } }, null, 2) + '\n')
+  /** The manifest, committed: a decision rests on what is committed. */
+  const manifest = async (harness: Record<string, unknown> = { version: 4, agents: ['claude-code'] }) => {
+    await writeFile(join(project, '.saasfoundry.json'), JSON.stringify({ version: 'test', projectName: 'routing-demo', structure: 'cli', modules: { harness } }, null, 2) + '\n')
+    execFileSync('git', ['add', '.saasfoundry.json'], { cwd: project, env: cleanEnv })
+    execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=T', 'commit', '-q', '--allow-empty', '-m', 'manifest'], { cwd: project, env: cleanEnv })
+  }
   const sf = (args: string[], options: { input?: string } = {}) =>
     spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', ...args], { cwd: project, encoding: 'utf8', env: cleanEnv, ...options })
   /**

@@ -25,6 +25,9 @@ describe('compiled sf agents outcome record | mark (#1035)', () => {
       join(project, '.saasfoundry.json'),
       JSON.stringify({ version: 'test', projectName: 'outcome-demo', structure: 'cli', modules: { harness: { version: 4, agents: ['claude-code'] } } })
     )
+    // A decision rests on what is committed
+    git('add', '.saasfoundry.json')
+    git('-c', 'user.email=t@example.com', '-c', 'user.name=T', 'commit', '-q', '-m', 'manifest')
   })
   afterEach(async () => rm(project, { recursive: true, force: true }))
 

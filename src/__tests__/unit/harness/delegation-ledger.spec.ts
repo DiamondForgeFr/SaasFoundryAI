@@ -484,7 +484,7 @@ describe('the delegation ledger (#1035)', () => {
       const claimed = buildRunRecord(run({ route: route.id }))
       const state = foldLedger([route, claimed])
       expect(state.routes).toEqual([{ ...route, consumedBy: claimed.id }])
-      expect(route.expiresAt).toBe(new Date(Date.parse(T0) + 6 * 3_600_000).toISOString())
+      expect(route.expiresAt).toBe(new Date(Date.parse(T0) + 7 * 24 * 3_600_000).toISOString())
     })
 
     it('finds a route and the agents that echoed it without folding the ledger', async () => {

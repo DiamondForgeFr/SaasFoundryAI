@@ -79,15 +79,17 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
     return
   }
   for (const route of routes) {
-    const evidence = route.trial
-      ? `${route.effectiveTier && tierRank(route.tier) > tierRank(route.effectiveTier) ? 'trial of a new stronger candidate above' : 'trial of the tier below'} ${route.effectiveTier}, a bounded sample of the kind's runs: record its outcome`
-      : route.adjustment
-        ? `${route.adjustment.action} from ${route.adjustment.from} on ${route.adjustment.at.slice(0, 10)} — ${route.adjustment.rule}`
-        : route.evidence
-          ? route.evidence.status === 'measured'
-            ? `measured: ${route.evidence.source}, score ${route.evidence.score}, $${route.evidence.costPerTaskUsd} per task`
-            : `provisional: ${route.evidence.note}`
-          : 'project choice, no shipped evidence'
+    const evidence = route.retry
+      ? `retry of ${route.retry.of} on the tier above ${route.retry.from}, never a trial`
+      : route.trial
+        ? `${route.effectiveTier && tierRank(route.tier) > tierRank(route.effectiveTier) ? 'trial of a new stronger candidate above' : 'trial of the tier below'} ${route.effectiveTier}, a bounded sample of the kind's runs: record its outcome`
+        : route.adjustment
+          ? `${route.adjustment.action} from ${route.adjustment.from} on ${route.adjustment.at.slice(0, 10)} — ${route.adjustment.rule}`
+          : route.evidence
+            ? route.evidence.status === 'measured'
+              ? `measured: ${route.evidence.source}, score ${route.evidence.score}, $${route.evidence.costPerTaskUsd} per task`
+              : `provisional: ${route.evidence.note}`
+            : 'project choice, no shipped evidence'
     const label = route.trial ? `${route.source}, trial` : route.source
     const id = route.routeId ? ` route=${route.routeId}` : ''
     process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}${id}\n`)

@@ -190,8 +190,9 @@ export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
   // The consent to delegate ticket delivery is read at the start of a session (#1026); `allow`, `decline` and `clear` still ask.
   'Bash(sf agents delegation status)',
   'Bash(sf agents delegation status *)',
-  // Routing a delegation (which issues a route record) and reading the measured outcomes change nothing the routing acts on by themselves (#1035).
-  // `sf agents outcome record` and `mark` write evidence the routing acts on, so they ask.
+  // Reading a route and the measured outcomes changes nothing (#1035). `sf agents outcome record` and `mark`, and the forms of
+  // `sf agents route` that write a route record (`--record`, `--retry-of`), write evidence the routing acts on, so they ask:
+  // the read form is allowed here, the writing forms are in HARNESS_ASK_COMMANDS, which the host evaluates first.
   'Bash(sf agents route *)',
   'Bash(sf agents routing report)',
   'Bash(sf agents routing report *)',
@@ -203,12 +204,19 @@ export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
 /** Rules an earlier build of this branch pre-approved and a refresh takes away again: the commands ask. */
 export const HARNESS_REVOKED_COMMANDS: readonly string[] = ['Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)']
 
+/**
+ * The forms of an allowed command that write evidence the routing acts on. A permission pattern cannot say "not this
+ * flag", so `sf agents route *` stays allowed for reading and these ask: Claude Code evaluates `ask` before `allow`.
+ * The flag comes right after `route` or after other options, hence two patterns each.
+ */
+export const HARNESS_ASK_COMMANDS: readonly string[] = ['--record', '--retry-of'].flatMap((flag) => [`Bash(sf agents route ${flag}*)`, `Bash(sf agents route * ${flag}*)`])
+
 /** What a merge of the harness hooks replaces: the bare-`sf` capture command the first build wrote. */
 export const HARNESS_SUPERSEDED_HOOKS = { supersedes: isLegacyCaptureCommand }
 
 async function mergeHarnessSettings(targetPath: string): Promise<void> {
   await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS, HARNESS_SUPERSEDED_HOOKS)
-  await mergeClaudeSettingsPermissions(targetPath, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS)
+  await mergeClaudeSettingsPermissions(targetPath, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_ASK_COMMANDS)
 }
 
 export interface MergeHarnessUserFilesParams {

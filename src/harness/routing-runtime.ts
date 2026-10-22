@@ -1,6 +1,6 @@
 import { buildRouteRecord, readLedger, resolveLedgerDir, transact, type Complexity, type LedgerState, type Nature } from './delegation-ledger'
 import { readProjectRouting, type ProjectRouting } from './project-routing'
-import { adjustRouting, selectTrial, type AdjustContext, type AdjustOutcome, type TrialOffer } from './routing-adjust'
+import { adjustRouting, nextRung, selectTrial, type AdjustContext, type AdjustOutcome, type TrialOffer } from './routing-adjust'
 import { autoKindsFor, emptyLocalRouting, readLocalRouting, staleTierAgentPaths, updateLocalRouting, withLogEntry, type LocalAdjustment, type LocalRouting } from './routing-local'
 import { resolveRoute, ROUTING_PROVIDERS, type ResolvedRoute, type RoutingProvider, type TaskKind } from './routing-grid'
 
@@ -65,6 +65,8 @@ export interface RoutedKind extends ResolvedRoute {
   effectiveTier: string | null
   /** The automatic move behind an `auto` route. */
   adjustment: (Pick<LocalAdjustment, 'action' | 'from' | 'at'> & { rule: string }) | null
+  /** The route is the retry of an earlier delegation, one tier above it: the id it retries and the tier it left. */
+  retry: { of: string; from: string } | null
 }
 
 /**
@@ -82,9 +84,45 @@ export function routeKind(state: RoutingState, kind: TaskKind, provider: Routing
   const entry = state.local.kinds[kind]?.[provider]
   const adjustment = route.source === 'auto' && entry ? { action: entry.action, from: entry.from, at: entry.at, rule: entry.evidence.rule } : null
   const offer: TrialOffer | undefined = options.trial === false || state.project.decision.differs ? undefined : selectTrial(kind, provider, contextOf(state, options.now))
-  if (!offer) return { ...route, trial: false, effectiveTier: null, adjustment }
+  if (!offer) return { ...route, trial: false, effectiveTier: null, adjustment, retry: null }
   const sample = resolveRoute(kind, provider, { ...shared, kinds: { ...shared?.kinds, [kind]: { tier: offer.tier } } })
-  return { ...sample, source: route.source, trial: true, effectiveTier: offer.effectiveTier, adjustment }
+  return { ...sample, source: route.source, trial: true, effectiveTier: offer.effectiveTier, adjustment, retry: null }
+}
+
+/** What a retry needs to know about the delegation it follows. */
+interface Retried {
+  id: string
+  tier: string
+  provider: RoutingProvider
+  kind: TaskKind | null
+}
+
+function findRetried(ledger: LedgerState, id: string): Retried | undefined {
+  const run = ledger.runs.find((entry) => entry.id === id)
+  if (run) return { id, tier: run.tier, provider: run.provider, kind: run.taskKind }
+  const route = ledger.routes.find((entry) => entry.id === id)
+  return route ? { id, tier: route.tier, provider: route.provider, kind: route.taskKind } : undefined
+}
+
+/**
+ * The route of a retry: **one rung above the tier of the delegation it retries**, never a trial. A delegation
+ * that failed on a tier is retried on a stronger one (that link is what marks the first run as not having done
+ * the job), whatever the tier the kind is routed to by now; answering the kind's usual tier would hand the retry
+ * to the tier that just failed, or to a cheaper one as a trial.
+ */
+export function routeRetry(state: RoutingState, kind: TaskKind, provider: RoutingProvider, retried: Retried): RoutedKind {
+  if (retried.provider !== provider) throw new Error(`--retry-of ${retried.id} is a delegation to ${retried.provider}, and this route is for ${provider}: a retry stays with the same coding agent.`)
+  if (retried.kind !== null && retried.kind !== kind) throw new Error(`--retry-of ${retried.id} is a ${retried.kind} delegation, and this route is for ${kind}: a retry has the same task kind.`)
+  const shared = state.project.routing
+  const base = resolveRoute(kind, provider, shared, autoKindsFor(state.local, provider))
+  const up = nextRung('up', retried.tier, kind, provider, shared)
+  if (!up) {
+    throw new Error(
+      `--retry-of ${retried.id} ran on ${retried.tier}, and no stronger tier of ${provider} is left for ${kind} (or ${retried.tier} is not on the shipped ladder): there is nothing to retry it on, hand the work back to the session.`
+    )
+  }
+  const stronger = resolveRoute(kind, provider, { ...shared, kinds: { ...shared?.kinds, [kind]: { tier: up.tier } } })
+  return { ...stronger, source: base.source, trial: false, effectiveTier: null, adjustment: null, retry: { of: retried.id, from: retried.tier } }
 }
 
 export interface RouteRequest {
@@ -117,11 +155,10 @@ export async function issueRoutes(state: RoutingState, kind: TaskKind, providers
   if (!state.dir) throw new Error('A route id is kept in the ledger of the clone: run this from a Git checkout, or read the route without --record.')
   const { result } = await transact(state.dir, ({ state: ledger, append }) => {
     const current: RoutingState = { ...state, ledger }
-    if (request.retryOf && !ledger.runs.some((run) => run.id === request.retryOf) && !ledger.routes.some((route) => route.id === request.retryOf)) {
-      throw new Error(`--retry-of ${request.retryOf} names no route or run of this clone's ledger.`)
-    }
+    const retried = request.retryOf ? findRetried(ledger, request.retryOf) : undefined
+    if (request.retryOf && !retried) throw new Error(`--retry-of ${request.retryOf} names no route or run of this clone's ledger.`)
     return providers.map((provider): IssuedRoute => {
-      const routed = routeKind(current, kind, provider, { trial: request.trial, now })
+      const routed = retried ? routeRetry(current, kind, provider, retried) : routeKind(current, kind, provider, { trial: request.trial, now })
       const record = buildRouteRecord({
         taskKind: kind,
         provider,
@@ -206,11 +243,11 @@ export async function runAdjustment(
   const now = options.now ?? new Date()
   const none = { decisions: [], local: state.local, moved: false, changed: false, dryRun: options.dryRun === true, staleTierAgents: [] }
   if (!state.dir) return { ...none, refused: null }
-  if (state.project.decision.invalid) return { ...none, refused: `${state.project.decision.invalid}: no automatic move is decided until it is fixed.` }
+  if (state.project.decision.invalid) return { ...none, refused: state.project.decision.invalid }
   if (state.project.decision.differs) {
     return {
       ...none,
-      refused: `modules.harness.routing of this worktree differs from the one committed on ${state.project.decision.branch}: no automatic move is decided until they match (commit it, or run from a tree that matches).`
+      refused: `modules.harness.routing of this worktree differs from the one committed on ${state.project.decision.branch}: commit it, or run from a tree that matches`
     }
   }
   const stale = (local: LocalRouting) => staleTierAgentPaths(state.project.agents, state.project.routing, local)

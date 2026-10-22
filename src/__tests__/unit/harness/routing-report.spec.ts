@@ -37,7 +37,7 @@ describe('sf agents routing report (#1035, AC-3)', () => {
     return {
       root,
       dir: undefined,
-      project: { agents: extra.agents ?? ['claude-code'], routing: extra.shared, policy, decision: { routing: extra.shared, policy, source: 'worktree', branch: null, invalid: null, differs: false } },
+      project: { agents: extra.agents ?? ['claude-code'], routing: extra.shared, policy, decision: { routing: extra.shared, policy, source: 'shipped', branch: null, invalid: null, differs: false } },
       ledger: { runs: all, routes: [], statuses: extra.statuses ?? [], skipped: 0, unmatchedSignals: 0 },
       local: extra.local ?? emptyLocalRouting()
     }

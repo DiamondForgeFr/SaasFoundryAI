@@ -34,7 +34,7 @@ const money = (amount: string | null): string => (amount === null ? 'unknown' : 
 /** Print the moves of an adjustment, one line each with the figure that justified it. */
 export function describeAdjustment(report: AdjustmentReport, verbose = false): string[] {
   const lines: string[] = []
-  if (report.refused) lines.push(`No automatic move was decided: ${report.refused}`)
+  if (report.refused) lines.push(`No automatic move was decided: ${report.refused}.`)
   for (const decision of report.decisions) {
     const evidence = decision.evidence
     if (decision.action === 'hold') {
