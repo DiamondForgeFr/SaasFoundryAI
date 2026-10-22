@@ -4,7 +4,7 @@ import { dirname, join } from 'path'
 
 import * as adapter from '../../../harness/agent-instructions'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../../../harness/agent-support'
-import { harnessInstallerMeta } from '../../../installers/harness.installer'
+import { HARNESS_ASK_COMMANDS, harnessInstallerMeta } from '../../../installers/harness.installer'
 import { CLAUDE_CAPTURE_COMMAND, CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
 import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
 
@@ -117,6 +117,7 @@ describe('additive managed agent support (#660)', () => {
     expect(settings.permissions.allow).toContain('Bash(sf agents route *)')
     // What writes evidence the routing acts on asks first
     expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.ask).toEqual(expect.arrayContaining([...HARNESS_ASK_COMMANDS]))
     expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome record *)')
   })
   it('replaces the bare-sf capture hooks and the pre-approved evidence commands an earlier build wrote, and keeps the project own', async () => {

@@ -68,6 +68,7 @@
       "Bash(sf agents route *)",
       "Bash(sf agents routing report)",
       "Bash(sf agents routing report *)"
-    ]
+    ],
+    "ask": ["Bash(sf agents route --record*)", "Bash(sf agents route * --record*)", "Bash(sf agents route --retry-of*)", "Bash(sf agents route * --retry-of*)"]
   }
 }

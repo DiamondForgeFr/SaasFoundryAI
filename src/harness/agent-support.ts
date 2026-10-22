@@ -39,7 +39,7 @@ import { requireLedgerDir } from './delegation-ledger'
 import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { updateLocalRouting, withLogEntry } from './routing-local'
 import { TIER_AGENT_PATH } from './tier-agents'
-import { HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_SUPERSEDED_HOOKS, harnessInstallerMeta } from '../installers/harness.installer'
+import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_SUPERSEDED_HOOKS, harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
 import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
 
@@ -498,7 +498,7 @@ async function mergeCaptureSettings(root: string, report: AgentInstructionsRepor
     await regularPath(root, '.claude', 'directory', false)
     await regularPath(root, '.claude/settings.json', 'file', false)
     const hooks = await mergeClaudeSettingsHooks(root, CLAUDE_CAPTURE_HOOKS, HARNESS_SUPERSEDED_HOOKS)
-    const permissions = await mergeClaudeSettingsPermissions(root, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS)
+    const permissions = await mergeClaudeSettingsPermissions(root, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_ASK_COMMANDS)
     if (hooks || permissions) report.written.push('.claude/settings.json')
   } catch (error) {
     report.warnings.push(`.claude/settings.json: ${error instanceof Error ? error.message : String(error)}; the delegation capture hooks were not added.`)

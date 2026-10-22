@@ -52,8 +52,12 @@ export type OutcomeSignal = (typeof OUTCOME_SIGNALS)[number]
 export const METERING_STATES = ['complete', 'partial', 'unknown'] as const
 export type Metering = (typeof METERING_STATES)[number]
 
-/** How long a route stays reserved for a run that has not been recorded yet: a delegated ticket runs for hours. */
-export const ROUTE_RESERVATION_MS = 6 * 60 * 60_000
+/**
+ * How long a route stays reserved for a run that has not been recorded yet. A delegated ticket runs for hours,
+ * perhaps across sessions, and its first stop must not find its reservation gone: seven days. A route nobody used
+ * by then was abandoned, and a first stop that lands after it is censored (`route-expired`).
+ */
+export const ROUTE_RESERVATION_MS = 7 * 24 * 60 * 60_000
 
 const OUTCOME_ALIASES: Record<string, ExecutionActualOutcomeCode> = { pass: 'success', fail: 'validation-failed' }
 const ISO_MILLIS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/

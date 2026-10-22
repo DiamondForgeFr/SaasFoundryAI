@@ -47,8 +47,6 @@ export type CaptureHost = (typeof CAPTURE_HOSTS)[number]
 const MAX_SEGMENT_BYTES = 64 * 1024 * 1024
 /** A gap between two events of a transcript longer than this is the host waiting (or the agent idle), not work. */
 const GAP_CAP_MS = 5 * 60_000
-/** The delegate's closing line is read from the tail of its message. */
-const MESSAGE_TAIL_BYTES = 8 * 1024
 
 // --- the delegate's own line --------------------------------------------------------------------------
 
@@ -62,26 +60,36 @@ export interface DelegationReport {
 }
 
 const DELEGATION_LINE = /^[\s*_`-]*SF-DELEGATION:[ \t]*(pass|fail)(?![A-Za-z0-9_])(.*)$/i
-const FENCE = /^\s*(```|~~~)/
+const FENCE = /^\s*(`{3,}|~{3,})(.*)$/
 const ROUTE_ID = /^[0-9a-f]{20}$/
 
 /**
- * The delegate's closing line: the last non-empty line of the message outside a code fence, read from its
- * tail. A line quoted earlier, an example in a fence or one followed by more text is not the verdict.
- * Linear in the message: no pattern backtracks over blank lines. Values it got wrong become null or are
- * dropped: the run is kept and censored rather than refused.
+ * The delegate's closing line: the last non-empty line of the message outside a code fence. A line quoted
+ * earlier, an example in a fence or one followed by more text is not the verdict. The fences are followed
+ * from the start of the message, in one pass: a window cut inside a code block (a long diff, then the line)
+ * would read open as closed and closed as open. Linear in the message, which the host bounds: no pattern
+ * backtracks over blank lines. Values it got wrong become null or are dropped: the run is kept and censored
+ * rather than refused.
  */
 export function parseDelegationLine(message: unknown): DelegationReport | undefined {
   if (typeof message !== 'string') return undefined
-  const tail = message.length > MESSAGE_TAIL_BYTES ? message.slice(-MESSAGE_TAIL_BYTES) : message
   let last: string | undefined
-  let fenced = false
-  for (const line of tail.split('\n')) {
-    if (FENCE.test(line)) {
-      fenced = !fenced
+  // A fence closes with the same mark, at least as long, and nothing after it; a backtick fence's info string has no backtick.
+  let open: { mark: string; length: number } | undefined
+  for (let start = 0; start <= message.length; ) {
+    const end = message.indexOf('\n', start)
+    const line = message.slice(start, end < 0 ? message.length : end).replace(/\r$/, '')
+    start = end < 0 ? message.length + 1 : end + 1
+    const fence = FENCE.exec(line)
+    if (open) {
+      if (fence && fence[1][0] === open.mark && fence[1].length >= open.length && fence[2].trim() === '') open = undefined
       continue
     }
-    if (!fenced && line.trim()) last = line
+    if (fence && !(fence[1][0] === '`' && fence[2].includes('`'))) {
+      open = { mark: fence[1][0], length: fence[1].length }
+      continue
+    }
+    if (line.trim()) last = line
   }
   const match = last === undefined ? null : DELEGATION_LINE.exec(last)
   if (!match) return undefined
@@ -313,7 +321,7 @@ function routedTier(agentType: unknown): string | undefined {
 
 const FALLBACK_PROJECT: ProjectRouting = (() => {
   const policy = resolveAdjustPolicy()
-  return { agents: [], policy, decision: { policy, source: 'worktree', branch: null, invalid: null, differs: false } }
+  return { agents: [], policy, decision: { policy, source: 'shipped', branch: null, invalid: null, differs: false } }
 })()
 
 /** Capture one hook payload. Never throws for a payload that is not ours: it is ignored with the reason. */
@@ -351,7 +359,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   const rawAgentId = isStop ? payload.agent_id : (toolResponse.agentId ?? toolResponse.agent_id ?? payload.agent_id)
   const agentId = typeof rawAgentId === 'string' && rawAgentId ? agentToken(rawAgentId) : undefined
   const now = (options.now?.() ?? new Date()).toISOString()
-  const unreadable = degraded ? ['routing-unreadable'] : []
+  const unreadable = degraded || project.decision.invalid ? ['routing-unreadable'] : []
 
   if (!isStop) {
     const status = String(toolResponse.status ?? '').toLowerCase()
@@ -388,6 +396,9 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   else if (route.provider !== host) reasons.push('route-provider-mismatch')
   else if (route.tier !== tier) reasons.push('route-tier-mismatch')
   else if (route.users.some((user) => user !== (agentId ?? null))) reasons.push('route-used-by-another-agent')
+  // A route nobody has used and whose reservation lapsed is not a delegation anyone is waiting for: its trial would
+  // land outside the share that was counted. An agent that already used the route (a resumed one) is never expired.
+  else if (route.users.length === 0 && route.expiresAt < now) reasons.push('route-expired')
   const attributed = route !== undefined && reasons.length === 0
 
   const segment = slice ? { from: slice.from, to: slice.to } : null

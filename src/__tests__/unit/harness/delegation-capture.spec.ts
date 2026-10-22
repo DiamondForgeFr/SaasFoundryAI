@@ -14,6 +14,7 @@ import {
   summarizeCodexTranscript
 } from '../../../harness/delegation-capture'
 import { agentToken, buildRouteRecord, readLedger, transact } from '../../../harness/delegation-ledger'
+import { issueRoutes, loadRoutingState } from '../../../harness/routing-runtime'
 
 const exec = promisify(execFile)
 // A commit hook exports GIT_* variables: a fixture repository must never inherit them.
@@ -73,7 +74,42 @@ describe('the delegate line (#1035)', () => {
     expect(parseDelegationLine('```\nSF-DELEGATION: fail\n```\n\nSF-DELEGATION: pass checks=type-check\n\n')).toMatchObject({ verdict: 'pass' })
   })
 
-  it('reads a long message from its tail in linear time, whatever the blank lines before the line', () => {
+  // R3: a window cut inside a code block reads open as closed and closed as open.
+  describe('follows the code fences from the start of the message, however long a block is (R3)', () => {
+    const diff = Array.from({ length: 600 }, (_, index) => `+  line ${index} of a long diff, long enough to push the closing line well out of any fixed window`).join('\n')
+    const line = 'SF-DELEGATION: pass route=0123456789abcdef0123 checks=type-check'
+
+    it('finds the line after a code block of more than 8 KB', () => {
+      const message = `Done.\n\n\`\`\`diff\n${diff}\n\`\`\`\n\n${line}`
+      expect(message.length).toBeGreaterThan(4 * 8 * 1024)
+      expect(parseDelegationLine(message)).toMatchObject({ verdict: 'pass', route: '0123456789abcdef0123', checks: ['type-check'] })
+    })
+
+    it('still takes a line written inside a block that long as an example, not as the verdict', () => {
+      expect(parseDelegationLine(`\`\`\`diff\n${diff}\n${line}\n\`\`\``)).toBeUndefined()
+      expect(parseDelegationLine(`\`\`\`diff\n${diff}\n${line}`)).toBeUndefined()
+    })
+
+    it('closes a block only with the same mark at least as long: a shorter fence or the other mark is part of the block', () => {
+      expect(parseDelegationLine(`~~~\n\`\`\`\n${line}\n~~~\n${line}`)).toMatchObject({ verdict: 'pass' })
+      expect(parseDelegationLine(`~~~\n\`\`\`\n${line}`)).toBeUndefined()
+      expect(parseDelegationLine(`\`\`\`\`md\n\`\`\`\n${line}\n\`\`\`\`\n${line}`)).toMatchObject({ verdict: 'pass' })
+      expect(parseDelegationLine(`\`\`\`\`md\n\`\`\`\n${line}`)).toBeUndefined()
+    })
+
+    it('does not take a line of inline code with three backticks for a fence, and reads a message with Windows line endings', () => {
+      expect(parseDelegationLine(`Run \`\`\`sf\`\`\` now.\r\n${line}\r\n`)).toMatchObject({ verdict: 'pass' })
+    })
+
+    it('reads a message of several megabytes in one linear pass', () => {
+      const started = Date.now()
+      const big = `\`\`\`\n${'x'.repeat(40)}\n`.repeat(50_000)
+      expect(parseDelegationLine(`${big}\`\`\`\n${line}`)).toBeUndefined()
+      expect(Date.now() - started).toBeLessThan(2_000)
+    })
+  })
+
+  it('reads a long message in linear time, whatever the blank lines before the line', () => {
     const message = `${'\n'.repeat(400_000)}SF-DELEGATION: pass checks=type-check${'\n'.repeat(1_000)}`
     const started = Date.now()
     expect(parseDelegationLine(message)).toMatchObject({ verdict: 'pass' })
@@ -201,8 +237,12 @@ describe('capturing a host event (#1035)', () => {
   let transcripts: string
   const ledgerDir = () => join(root, '.git', 'saasfoundry')
   const git = async (...args: string[]) => (await exec('git', args, { cwd: root, env: cleanEnv })).stdout.trim()
-  const manifest = (harness: Record<string, unknown> = { version: 4, agents: ['claude-code', 'codex'] }) =>
-    writeFile(join(root, '.saasfoundry.json'), JSON.stringify({ version: 'test', projectName: 'capture-demo', structure: 'cli', modules: { harness } }))
+  /** The manifest of the project, committed: the prices and the overrides a capture applies are the committed ones. */
+  const manifest = async (harness: Record<string, unknown> = { version: 4, agents: ['claude-code', 'codex'] }) => {
+    await writeFile(join(root, '.saasfoundry.json'), JSON.stringify({ version: 'test', projectName: 'capture-demo', structure: 'cli', modules: { harness } }))
+    await git('add', '.saasfoundry.json')
+    await git('-c', 'user.email=t@example.com', '-c', 'user.name=T', 'commit', '-q', '--allow-empty', '-m', 'manifest')
+  }
   /** A route as `sf agents route --record` issues it; the delegate echoes its id. */
   const issue = async (overrides: Partial<Parameters<typeof buildRouteRecord>[0]> & { id?: string } = {}) => {
     const { id, ...input } = overrides
@@ -312,6 +352,59 @@ describe('capturing a host event (#1035)', () => {
       expect(byAgent.get(agentToken('third'))).toMatchObject({ taskKind: 'multi-file-feature', censored: false })
       expect(byAgent.get(agentToken('fourth'))).toMatchObject({ taskKind: null, censored: true })
       expect(byAgent.get(agentToken('fourth'))?.evidenceRefs).toContain('route-used-by-another-agent')
+    })
+
+    // R5: a first stop on a route nobody used, after its reservation lapsed, would land as a trial outside the share that was counted.
+    it('censors a first stop that lands after the reservation of its route lapsed, and accepts one inside it (R5)', async () => {
+      const day = 86_400_000
+      const lapsed = await issue({ now: new Date(NOW().getTime() - 8 * day) })
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', undefined, { agent_id: 'late' }, lapsed.id), { now: NOW })
+      const inside = await issue({ now: new Date(NOW().getTime() - 6 * day), trial: true })
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', undefined, { agent_id: 'inside' }, inside.id), { now: NOW })
+      const byAgent = new Map((await ledger()).runs.map((run) => [run.agentId, run]))
+      expect(byAgent.get(agentToken('late'))).toMatchObject({ taskKind: null, trial: false, censored: true, route: lapsed.id })
+      expect(byAgent.get(agentToken('late'))?.evidenceRefs).toContain('route-expired')
+      expect(byAgent.get(agentToken('inside'))).toMatchObject({ taskKind: 'multi-file-feature', trial: true, censored: false })
+    })
+
+    it('never expires the route of an agent that already used it: a hand-back days later is still its delegation (R5)', async () => {
+      const route = await issue()
+      const path = join(transcripts, 'claude.jsonl')
+      const lines = (await fixture('claude-subagent.jsonl')).trim().split('\n')
+      await writeFile(path, `${lines.slice(0, 6).join('\n')}\n`)
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', path, {}, route.id), { now: NOW })
+      await appendFile(path, `${lines.slice(6).join('\n')}\n`)
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', path, {}, route.id), { now: () => new Date(NOW().getTime() + 9 * 86_400_000) })
+      const { runs } = await ledger()
+      expect(runs).toHaveLength(2)
+      expect(runs[1]).toMatchObject({ taskKind: 'multi-file-feature', ticket: 1035, continues: runs[0].id, censored: false })
+      expect(runs[1].evidenceRefs).not.toContain('route-expired')
+    })
+
+    // R4, from the other side: the route a retry gets is the one the capture accepts for the stronger tier.
+    it('attributes the retry of a failed delegation to the stronger tier its route was issued for, and marks the first run as not having done the job (R4)', async () => {
+      const first = await issue({ tier: 'edit', taskKind: 'scoped-edit' })
+      await captureHostEvent(
+        'claude-code',
+        await payload(
+          'claude-subagent-stop.json',
+          undefined,
+          { agent_type: 'sf-edit', agent_id: 'cheap', last_assistant_message: `SF-DELEGATION: fail route=${first.id} checks=type-check` },
+          first.id
+        ),
+        { now: NOW }
+      )
+      const failed = (await ledger()).runs.find((run) => run.tier === 'edit')!
+      const [retry] = await issueRoutes(await loadRoutingState(root), 'scoped-edit', ['claude-code'], { record: true, trial: false, retryOf: failed.id, now: NOW() })
+      expect(retry.tier).toBe('build')
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', undefined, { agent_type: 'sf-build', agent_id: 'strong' }, retry.routeId!), {
+        now: () => new Date(NOW().getTime() + 60_000)
+      })
+      const { runs } = await ledger()
+      const stronger = runs.find((run) => run.tier === 'build')!
+      expect(stronger).toMatchObject({ taskKind: 'scoped-edit', trial: false, retryOf: failed.id, censored: false })
+      expect(stronger.evidenceRefs).not.toContain('route-tier-mismatch')
+      expect(runs.find((run) => run.tier === 'edit')).toMatchObject({ escalated: true, effectiveOutcome: 'validation-failed' })
     })
 
     it('records the duration the host measured for the call and the model it resolved, whichever event arrives first', async () => {

@@ -5,7 +5,7 @@ import { readFile, stat } from 'fs/promises'
 import { resolve } from 'path'
 
 import { planAgentInstructions } from '../../../harness/agent-instructions'
-import { HARNESS_ALLOWED_COMMANDS } from '../../../installers/harness.installer'
+import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS } from '../../../installers/harness.installer'
 
 const ROOT = resolve(__dirname, '../../../..')
 const CODEX_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.codex/agents/sf-${tier}.toml`)
@@ -49,6 +49,8 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
   it('allows in its own .claude/settings.json every read-only command the harness allows elsewhere', async () => {
     const settings = JSON.parse(await readFile(resolve(ROOT, '.claude/settings.json'), 'utf8'))
     expect(settings.permissions.allow).toEqual(expect.arrayContaining([...HARNESS_ALLOWED_COMMANDS]))
+    // The forms of an allowed command that write a route record ask first (Examine R6)
+    expect(settings.permissions.ask).toEqual(expect.arrayContaining([...HARNESS_ASK_COMMANDS]))
   })
 
   it('keeps the portable guarded CLIs byte-identical and executable', async () => {

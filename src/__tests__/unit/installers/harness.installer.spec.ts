@@ -3,7 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { COMMON_INSTRUCTIONS, GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
-import { HARNESS_ALLOWED_COMMANDS, installHarness, installWorkflowArtifacts } from '../../../installers/harness.installer'
+import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS, installHarness, installWorkflowArtifacts } from '../../../installers/harness.installer'
 import { HarnessAgent, WorkflowConfig } from '../../../types'
 import { fileExists } from '../../../utils'
 
@@ -104,7 +104,7 @@ describe('harness installer', () => {
 
       const settings = JSON.parse(await readFile(join(dir, '.claude', 'settings.json'), 'utf8'))
       // #947 — the user's rule stays first; the harness adds its read-only commands, once
-      expect(settings.permissions).toEqual({ allow: ['Bash(make test)', ...HARNESS_ALLOWED_COMMANDS] })
+      expect(settings.permissions).toEqual({ allow: ['Bash(make test)', ...HARNESS_ALLOWED_COMMANDS], ask: [...HARNESS_ASK_COMMANDS] })
       expect(settings.hooks.SessionStart).toBeDefined()
 
       await installHarness({ targetPath: dir, ...params })
@@ -122,6 +122,50 @@ describe('harness installer', () => {
     it('allows reading the delegation consent, never recording or clearing it', () => {
       expect(HARNESS_ALLOWED_COMMANDS).toEqual(expect.arrayContaining(['Bash(sf agents delegation status)', 'Bash(sf agents delegation status *)']))
       for (const recording of ['allow', 'decline', 'clear']) expect(HARNESS_ALLOWED_COMMANDS.some((rule) => rule.includes(`delegation ${recording}`))).toBe(false)
+    })
+
+    // Examine R6: a pattern cannot say "not this flag", so the wide rule stays and the forms that write a route record ask first.
+    describe('reading a route is allowed, writing a route record asks', () => {
+      /** The matching Claude Code applies to a Bash rule: `*` is any run of characters, the rest is literal. */
+      const matches = (rule: string, command: string): boolean => {
+        const body = /^Bash\((.*)\)$/.exec(rule)![1]
+        return new RegExp(
+          `^${body
+            .split('*')
+            .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+            .join('.*')}$`
+        ).test(command)
+      }
+      /** Claude Code evaluates `ask` before `allow`: a command that matches both asks. */
+      const verdict = (command: string): 'allowed' | 'asks' | 'asks (no rule)' => {
+        if (HARNESS_ASK_COMMANDS.some((rule) => matches(rule, command))) return 'asks'
+        return HARNESS_ALLOWED_COMMANDS.some((rule) => matches(rule, command)) ? 'allowed' : 'asks (no rule)'
+      }
+
+      it.each([
+        ['sf agents route --task tests --provider claude-code', 'allowed'],
+        ['sf agents route --task tests --provider claude-code --json --no-trial', 'allowed'],
+        ['sf agents route --task tests --provider claude-code --record', 'asks'],
+        ['sf agents route --record --task tests --provider claude-code', 'asks'],
+        ['sf agents route --task tests --provider claude-code --ticket 5 --record --json', 'asks'],
+        ['sf agents route --task tests --provider claude-code --record --retry-of 0123456789abcdef0123', 'asks'],
+        ['sf agents route --retry-of 0123456789abcdef0123 --task tests --provider claude-code --record', 'asks'],
+        ['sf agents route --task tests --provider claude-code --retry-of 0123456789abcdef0123', 'asks'],
+        ['sf agents routing report', 'allowed'],
+        ['sf agents outcome record --provider claude-code --tier build', 'asks (no rule)'],
+        ['sf agents outcome mark 5 rework', 'asks (no rule)']
+      ])('%s: %s', (command, expected) => {
+        expect(verdict(command)).toBe(expected)
+      })
+
+      it('merges the ask rules into the settings once, next to what the project already asks for', async () => {
+        await mkdir(join(dir, '.claude'), { recursive: true })
+        await writeFile(join(dir, '.claude', 'settings.json'), JSON.stringify({ permissions: { ask: ['Bash(git push *)'] } }))
+        await installHarness({ targetPath: dir, ...params })
+        await installHarness({ targetPath: dir, ...params })
+        const settings = JSON.parse(await readFile(join(dir, '.claude', 'settings.json'), 'utf8'))
+        expect(settings.permissions.ask).toEqual(['Bash(git push *)', ...HARNESS_ASK_COMMANDS])
+      })
     })
 
     it('installs optional skills when requested', async () => {

@@ -94,17 +94,22 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
  * Add permission rules to `permissions.allow` of `<targetPath>/.claude/settings.json`. Same
  * contract as the hooks: idempotent, a rule already present is never duplicated, and every
  * rule or key the user configured is kept. `revoke` lists rules an earlier release pre-approved and
- * this one does not: they are removed, so the command asks again.
+ * this one does not: they are removed, so the command asks again. `ask` lists rules added to
+ * `permissions.ask`, which the host evaluates before `allow`: a command that matches both asks. That is
+ * how a wide rule (`sf agents route *`) stays pre-approved for reading while the forms of the same
+ * command that write evidence (`--record`, `--retry-of`) still ask: a pattern cannot say "not this flag".
  */
-export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[], revoke: readonly string[] = []): Promise<boolean> {
+export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[], revoke: readonly string[] = [], ask: readonly string[] = []): Promise<boolean> {
   const settingsPath = join(targetPath, '.claude', 'settings.json')
   const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? (JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>) : {}
   const permissions = (settings.permissions ?? {}) as Record<string, unknown>
   const existing = Array.isArray(permissions.allow) ? (permissions.allow as string[]) : []
   const kept = existing.filter((rule) => !revoke.includes(rule) || allow.includes(rule))
   const missing = allow.filter((rule) => !kept.includes(rule))
-  if (missing.length === 0 && kept.length === existing.length && settings.permissions) return false
-  settings.permissions = { ...permissions, allow: [...kept, ...missing] }
+  const existingAsk = Array.isArray(permissions.ask) ? (permissions.ask as string[]) : []
+  const missingAsk = ask.filter((rule) => !existingAsk.includes(rule))
+  if (missing.length === 0 && kept.length === existing.length && missingAsk.length === 0 && settings.permissions) return false
+  settings.permissions = { ...permissions, allow: [...kept, ...missing], ...(ask.length || existingAsk.length ? { ask: [...existingAsk, ...missingAsk] } : {}) }
   await writeSettings(settingsPath, settings)
   return true
 }

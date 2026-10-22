@@ -522,7 +522,7 @@ describe('the bounded trial of the cheaper tier (#1035, AC-5)', () => {
     expect(selectTrial('multi-file-feature', 'claude-code', context(runs(8), { routes: [pending({ now: NOW })] }))).toMatchObject({ tier: 'edit' })
     // One that was recorded since, or one that expired, no longer holds anything
     expect(selectTrial('multi-file-feature', 'claude-code', context(all, { routes: [{ ...trial, consumedBy: 'abc' }] }))).toMatchObject({ tier: 'edit' })
-    expect(selectTrial('multi-file-feature', 'claude-code', context(all, { routes: [trial], now: new Date(NOW.getTime() + 7 * 3_600_000) }))).toMatchObject({ tier: 'edit' })
+    expect(selectTrial('multi-file-feature', 'claude-code', context(all, { routes: [trial], now: new Date(NOW.getTime() + 8 * 24 * 3_600_000) }))).toMatchObject({ tier: 'edit' })
     // Another kind or another agent does not take the place
     expect(
       selectTrial('multi-file-feature', 'claude-code', context(all, { routes: [pending({ kind: 'tests', trial: true, now: NOW }), pending({ provider: 'codex', trial: true, now: NOW })] }))

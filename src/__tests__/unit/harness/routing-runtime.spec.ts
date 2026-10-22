@@ -26,11 +26,21 @@ describe('the routing at work in a clone (#1035)', () => {
   let ledger: string
   let clock = 0
   const git = async (...args: string[]) => (await exec('git', args, { cwd: root, env: cleanEnv })).stdout.trim()
-  const manifest = (harness: Record<string, unknown> = { version: 4, agents: ['claude-code'] }) =>
+  /** The manifest on disk, committed or not. */
+  const writeManifest = (harness: Record<string, unknown> = { version: 4, agents: ['claude-code'] }, workflow?: Record<string, unknown>, where = root) =>
     writeFile(
-      join(root, '.saasfoundry.json'),
-      JSON.stringify({ version: 'test', projectName: 'runtime-demo', structure: 'cli', modules: { harness }, fileHashes: { 'keep.txt': 'abc' } }, null, 2) + '\n'
+      join(where, '.saasfoundry.json'),
+      JSON.stringify({ version: 'test', projectName: 'runtime-demo', structure: 'cli', ...(workflow ? { workflow } : {}), modules: { harness }, fileHashes: { 'keep.txt': 'abc' } }, null, 2) + '\n'
     )
+  const commitManifest = async (message = 'manifest', where = root) => {
+    await exec('git', ['add', '.saasfoundry.json'], { cwd: where, env: cleanEnv })
+    await exec('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=T', 'commit', '-q', '--allow-empty', '-m', message], { cwd: where, env: cleanEnv })
+  }
+  /** What the team committed: a decision rests on it, so the manifests of these scenarios are committed unless a scenario says otherwise. */
+  const manifest = async (harness?: Record<string, unknown>) => {
+    await writeManifest(harness)
+    await commitManifest()
+  }
   const record = async (pattern: string, spec: Partial<RunInput> & { tier?: string } = {}) => {
     for (const symbol of pattern) {
       const tier = spec.tier ?? 'build'
@@ -125,16 +135,10 @@ describe('the routing at work in a clone (#1035)', () => {
     })
   })
 
-  describe('decisions rest on what the team committed (Examine finding 6)', () => {
-    const commit = async (message: string) => {
-      await git('add', '.saasfoundry.json')
-      await git('-c', 'user.email=t@example.com', '-c', 'user.name=T', 'commit', '-q', '-m', message)
-    }
-    const withBranch = (routing?: Record<string, unknown>) =>
-      manifest({ version: 4, agents: ['claude-code'], ...(routing ? { routing } : {}) }).then(async () => {
-        const text = JSON.parse(await readFile(join(root, '.saasfoundry.json'), 'utf8'))
-        await writeFile(join(root, '.saasfoundry.json'), JSON.stringify({ ...text, workflow: { workingBranch: 'main' } }, null, 2) + '\n')
-      })
+  describe('decisions rest on what the team committed (Examine finding 6, R1, R2)', () => {
+    /** The manifest on disk, naming `main` as the working branch, not committed. */
+    const withBranch = (routing?: Record<string, unknown>, workingBranch = 'main') => writeManifest({ version: 4, agents: ['claude-code'], ...(routing ? { routing } : {}) }, { workingBranch })
+    const commit = (message: string) => commitManifest(message)
 
     it('reads the thresholds from the committed working branch, not from the worktree a delegated agent may have edited', async () => {
       await withBranch({ adjust: { escalate: { failures: 3, of: 10 } } })
@@ -178,14 +182,124 @@ describe('the routing at work in a clone (#1035)', () => {
       const report = await runAdjustment(root, { now: NOW })
       expect(report).toMatchObject({ moved: false, decisions: [] })
       expect(report.refused).toContain('is invalid')
-      expect(report.refused).toContain('until it is fixed')
+      expect(report.refused).toContain('modules.harness.routing on main is invalid')
     })
 
-    it('falls back to the worktree manifest when no commit holds one yet', async () => {
-      await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } })
-      await record('ssssssssff')
-      expect((await loadRoutingState(root)).project.decision).toMatchObject({ source: 'worktree', differs: false })
-      expect((await runAdjustment(root, { now: NOW })).decisions[0]).toMatchObject({ action: 'escalate' })
+    // R1: the name of the working branch comes from a committed manifest, never from the one the worktree may have edited.
+    describe('the working branch is named by a committed manifest (R1)', () => {
+      it('is not fooled by a worktree that names a branch that does not exist: its own thresholds do not come into effect', async () => {
+        await withBranch({ adjust: { escalate: { failures: 3, of: 10 } } })
+        await commit('committed policy')
+        await record('ssssssssff')
+        await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } }, 'nope')
+        const state = await loadRoutingState(root)
+        expect(state.project.decision).toMatchObject({ source: 'working-branch', branch: 'main', differs: true })
+        expect(state.project.decision.policy.escalateFailures).toBe(3)
+        const report = await runAdjustment(root, { now: NOW })
+        expect(report).toMatchObject({ moved: false, decisions: [] })
+        expect(report.refused).toContain('differs from the one committed on main')
+      })
+
+      it('keeps deciding on the committed block when only the branch name was edited in the worktree', async () => {
+        await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } })
+        await commit('committed policy')
+        await record('ssssssssff')
+        await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } }, 'nope')
+        const report = await runAdjustment(root, { now: NOW })
+        expect(report.refused).toBeNull()
+        expect(report.decisions[0]).toMatchObject({ action: 'escalate' })
+      })
+
+      it('refuses to decide when the committed manifest names a branch that cannot be read', async () => {
+        await withBranch({ adjust: { escalate: { failures: 2, of: 10 } } }, 'develop')
+        await commit('names a branch that is not there')
+        await record('ssssssssff')
+        const state = await loadRoutingState(root)
+        expect(state.project.decision).toMatchObject({ branch: 'develop', differs: true, invalid: expect.stringContaining('on the working branch develop') })
+        expect(state.project.decision.policy.escalateFailures).toBe(3)
+        const report = await runAdjustment(root, { now: NOW })
+        expect(report).toMatchObject({ moved: false, decisions: [] })
+        expect(report.refused).toContain('no committed .saasfoundry.json can be read on the working branch develop')
+      })
+
+      it('refuses to decide in a repository where no commit holds the manifest, instead of falling back to the worktree policy', async () => {
+        const fresh = await realpath(await mkdtemp(join(tmpdir(), 'sf-runtime-fresh-')))
+        try {
+          await exec('git', ['init', '-q', '-b', 'main'], { cwd: fresh, env: cleanEnv })
+          await writeManifest({ version: 4, agents: ['claude-code'], routing: { adjust: { escalate: { failures: 1, of: 2 } } } }, { workingBranch: 'main' }, fresh)
+          const state = await loadRoutingState(fresh)
+          expect(state.project.decision).toMatchObject({ source: 'head', differs: true, invalid: expect.stringContaining('no commit holds .saasfoundry.json yet') })
+          expect(state.project.decision.policy.escalateFailures).toBe(3)
+          expect((await runAdjustment(fresh, { now: NOW })).refused).toContain('no commit holds .saasfoundry.json yet')
+        } finally {
+          await rm(fresh, { recursive: true, force: true })
+        }
+      })
+
+      it('names no working branch in a manifest that has no workflow block: the commit the worktree is on is the committed copy', async () => {
+        await manifest({ version: 4, agents: ['claude-code'], routing: { adjust: { escalate: { failures: 2, of: 10 } } } })
+        await record('ssssssssff')
+        expect((await loadRoutingState(root)).project.decision).toMatchObject({ source: 'head', branch: 'HEAD', differs: false, invalid: null })
+        expect((await runAdjustment(root, { now: NOW })).decisions[0]).toMatchObject({ action: 'escalate' })
+      })
+
+      it('has nothing to decide on in a project without a harness block', async () => {
+        await writeFile(join(root, '.saasfoundry.json'), JSON.stringify({ version: 'test', projectName: 'bare', structure: 'cli' }))
+        expect((await loadRoutingState(root)).project.decision).toMatchObject({ source: 'shipped', differs: false, invalid: null })
+      })
+    })
+
+    // R1 and R2 against a remote: origin/HEAD names the default branch, and the remote branch is the committed copy of the team.
+    describe('with a remote', () => {
+      let remote: string
+      const V1 = { adjust: { escalate: { failures: 3, of: 10 } } }
+      const V2 = { adjust: { escalate: { failures: 2, of: 10 } } }
+
+      beforeEach(async () => {
+        remote = await realpath(await mkdtemp(join(tmpdir(), 'sf-runtime-remote-')))
+        await exec('git', ['init', '-q', '--bare', '-b', 'main'], { cwd: remote, env: cleanEnv })
+        await git('remote', 'add', 'origin', remote)
+      })
+      afterEach(async () => rm(remote, { recursive: true, force: true }))
+
+      it('compares the worktree with origin/<branch> first: a local branch nobody pulled does not make every worktree look different (R2)', async () => {
+        await withBranch(V1)
+        await commit('v1')
+        const v1 = await git('rev-parse', 'HEAD')
+        await withBranch(V2)
+        await commit('v2')
+        await git('push', '-q', 'origin', 'main')
+        // The local main is behind the remote one; the worktree, cut from the remote, carries v2.
+        await git('reset', '-q', '--soft', v1)
+        await withBranch(V2)
+        await record('ssssssssff')
+        const state = await loadRoutingState(root)
+        expect(state.project.decision).toMatchObject({ source: 'working-branch', branch: 'main', differs: false, invalid: null })
+        expect(state.project.decision.policy.escalateFailures).toBe(2)
+        expect((await runAdjustment(root, { now: NOW })).decisions[0]).toMatchObject({ action: 'escalate' })
+      })
+
+      it('falls back to the local branch when the remote does not have it', async () => {
+        await withBranch(V1)
+        await commit('v1')
+        const state = await loadRoutingState(root)
+        expect(state.project.decision).toMatchObject({ source: 'working-branch', branch: 'main', differs: false })
+      })
+
+      it('takes the name of the working branch from the remote default branch before the commit the worktree is on (R1)', async () => {
+        await withBranch(V1, 'main')
+        await commit('team policy')
+        await git('push', '-q', 'origin', 'main')
+        await git('remote', 'set-head', 'origin', 'main')
+        // A branch of the delegated agent commits a manifest that names another working branch and lower thresholds
+        await git('checkout', '-q', '-b', 'feature/agent')
+        await withBranch(V2, 'feature/agent')
+        await commit('the agent edits the policy')
+        const state = await loadRoutingState(root)
+        expect(state.project.decision).toMatchObject({ source: 'working-branch', branch: 'main', differs: true })
+        expect(state.project.decision.policy.escalateFailures).toBe(3)
+        expect((await runAdjustment(root, { now: NOW })).refused).toContain('differs from the one committed on main')
+      })
     })
   })
 
@@ -193,7 +307,7 @@ describe('the routing at work in a clone (#1035)', () => {
     it('records a route the delegate echoes, with its kind, tier, ticket and trial flag, and hands out an id', async () => {
       const state = await loadRoutingState(root)
       const [route] = await issueRoutes(state, 'multi-file-feature', ['claude-code'], { record: true, trial: true, ticket: 1035, complexity: 'complex', nature: 'user-facing', now: NOW })
-      expect(route).toMatchObject({ tier: 'build', trial: false, routeId: expect.stringMatching(/^[0-9a-f]{20}$/), expiresAt: new Date(NOW.getTime() + 6 * 3_600_000).toISOString() })
+      expect(route).toMatchObject({ tier: 'build', trial: false, routeId: expect.stringMatching(/^[0-9a-f]{20}$/), expiresAt: new Date(NOW.getTime() + 7 * 24 * 3_600_000).toISOString() })
       const { routes } = await readLedger(ledger)
       expect(routes).toEqual([
         expect.objectContaining({
@@ -242,6 +356,48 @@ describe('the routing at work in a clone (#1035)', () => {
       const retry = await issueRoutes(await loadRoutingState(root), 'tests', ['claude-code'], { record: true, trial: false, retryOf: first.routeId, now: NOW })
       expect((await readLedger(ledger)).routes.find((route) => route.id === retry[0].routeId)?.retryOf).toBe(first.routeId)
       await expect(issueRoutes(await loadRoutingState(root), 'tests', ['claude-code'], { record: true, trial: false, retryOf: 'f'.repeat(20) })).rejects.toThrow('names no route or run')
+    })
+
+    // R4: a retry that came back on the tier that failed, or on a cheaper tier as a trial, would defeat its own purpose.
+    describe('a retry goes one tier above the delegation it retries, and is never a trial (R4)', () => {
+      const failedRun = async () => (await readLedger(ledger)).runs.find((run) => run.outcome === 'validation-failed')!
+
+      it('answers the tier above the retried run, although the kind is routed lower and a trial of a cheaper tier is due', async () => {
+        await record('s'.repeat(9), { taskKind: 'scoped-edit', tier: 'edit' })
+        await record('f', { taskKind: 'scoped-edit', tier: 'edit' })
+        const failed = await failedRun()
+        // Without the link, the kind is routed to edit and a trial of the tier below it is due
+        expect((await issueRoutes(await loadRoutingState(root), 'scoped-edit', ['claude-code'], { record: false, trial: true, now: NOW }))[0]).toMatchObject({ trial: true, tier: 'light' })
+        const [retry] = await issueRoutes(await loadRoutingState(root), 'scoped-edit', ['claude-code'], { record: true, trial: true, retryOf: failed.id, now: NOW })
+        expect(retry).toMatchObject({ tier: 'build', trial: false, effectiveTier: null, retry: { of: failed.id, from: 'edit' }, candidate: { model: 'claude-sonnet-5-5' } })
+        expect((await readLedger(ledger)).routes.find((route) => route.id === retry.routeId)).toMatchObject({ tier: 'build', trial: false, retryOf: failed.id })
+      })
+
+      it('climbs one more rung for the retry of a retry, whose route (not yet run) is what it follows', async () => {
+        await record('f', { taskKind: 'scoped-edit', tier: 'edit' })
+        const failed = await failedRun()
+        const [first] = await issueRoutes(await loadRoutingState(root), 'scoped-edit', ['claude-code'], { record: true, trial: false, retryOf: failed.id, now: NOW })
+        const [second] = await issueRoutes(await loadRoutingState(root), 'scoped-edit', ['claude-code'], { record: true, trial: false, retryOf: first.routeId, now: new Date(NOW.getTime() + 1000) })
+        expect([first.tier, second.tier]).toEqual(['build', 'fix'])
+        expect(second.retry).toEqual({ of: first.routeId, from: 'build' })
+      })
+
+      it('refuses a retry when nothing stronger is left, and says what to do', async () => {
+        await record('f', { taskKind: 'terminal-ci', tier: 'terminal' })
+        await expect(issueRoutes(await loadRoutingState(root), 'terminal-ci', ['claude-code'], { record: true, trial: false, retryOf: (await failedRun()).id })).rejects.toThrow(
+          'no stronger tier of claude-code is left for terminal-ci'
+        )
+      })
+
+      it('refuses a retry of another task kind or of another coding agent', async () => {
+        await record('f', { taskKind: 'scoped-edit', tier: 'edit' })
+        const failed = await failedRun()
+        await expect(issueRoutes(await loadRoutingState(root), 'tests', ['claude-code'], { record: true, trial: false, retryOf: failed.id })).rejects.toThrow('a retry has the same task kind')
+        await expect(issueRoutes(await loadRoutingState(root), 'scoped-edit', ['codex'], { record: true, trial: false, retryOf: failed.id })).rejects.toThrow(
+          'a retry stays with the same coding agent'
+        )
+        expect((await readLedger(ledger)).routes).toEqual([])
+      })
     })
 
     it('needs a clone to keep the route in', async () => {

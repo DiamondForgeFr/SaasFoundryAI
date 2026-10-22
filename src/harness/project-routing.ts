@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 
-import { readCommittedFile } from './git-agent-scope'
+import { defaultRemoteBranch, readCommittedFile, readHeadFile } from './git-agent-scope'
 import { resolveAdjustPolicy, type AdjustPolicy } from './routing-adjust-config'
 import { routingOverrideIssues, type RoutingOverrides } from './routing-grid'
 import type { HarnessAgent, SaaSFoundryManifest } from '../types'
@@ -10,13 +10,17 @@ import type { HarnessAgent, SaaSFoundryManifest } from '../types'
  * What the routing decisions rest on. The worktree a hook runs in may hold an uncommitted manifest (a
  * delegated agent can edit its own), and a move applies to every worktree of the clone: so thresholds,
  * prices and overrides for a decision are read from the **committed working branch**, and a move is
- * refused while the worktree's own block differs from it.
+ * refused while the worktree's own block differs from it, or while no committed manifest can be read.
  */
 export interface RoutingDecisionSource {
   routing?: RoutingOverrides
   policy: AdjustPolicy
-  /** `working-branch`: read from the committed branch. `worktree`: no committed manifest could be read (no commit yet, no such branch). */
-  source: 'working-branch' | 'worktree'
+  /**
+   * `working-branch`: read from the committed working branch. `head`: no committed manifest names one, so the
+   * commit the worktree is on is the committed copy. `shipped`: the project has no harness block, so there is
+   * nothing to decide on.
+   */
+  source: 'working-branch' | 'head' | 'shipped'
   branch: string | null
   /** The committed block cannot be read or does not validate: nothing is decided until it is fixed. */
   invalid: string | null
@@ -49,34 +53,73 @@ function canonical(value: unknown): string {
 
 interface CommittedRouting {
   routing?: RoutingOverrides
+  source: 'working-branch' | 'head'
   branch: string
   /** Why the committed block cannot be used; no decision rests on a block nobody can read. */
   invalid: string | null
 }
 
-async function committedRouting(root: string, manifest: SaaSFoundryManifest | undefined): Promise<CommittedRouting | undefined> {
-  const branch = manifest?.workflow?.workingBranch
-  if (typeof branch !== 'string' || !branch) return undefined
-  const text = await readCommittedFile(root, branch, '.saasfoundry.json')
-  if (text === undefined) return undefined
+const NAMED_BRANCH = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,100}$/
+
+/**
+ * The working branch, named by a **committed** manifest: the one on the remote's default branch, then the one
+ * on the commit the worktree is on. The manifest on disk is never asked, since the worktree is exactly where
+ * the name could be changed to a branch that does not exist. When no committed manifest names it, the
+ * remote's default branch is the best guess there is.
+ */
+async function committedWorkingBranch(root: string): Promise<string | undefined> {
+  const remote = await defaultRemoteBranch(root)
+  const sources = [remote ? await readCommittedFile(root, remote, '.saasfoundry.json') : undefined, await readHeadFile(root, '.saasfoundry.json')]
+  for (const text of sources) {
+    if (text === undefined) continue
+    try {
+      const name = (JSON.parse(text) as SaaSFoundryManifest).workflow?.workingBranch
+      if (typeof name === 'string' && NAMED_BRANCH.test(name) && !name.includes('..')) return name
+    } catch {
+      // A committed manifest that is not JSON names nothing.
+    }
+  }
+  return remote
+}
+
+function parseCommitted(text: string, source: CommittedRouting['source'], branch: string): CommittedRouting {
   let committed: SaaSFoundryManifest
   try {
     committed = JSON.parse(text) as SaaSFoundryManifest
   } catch {
-    return { branch, invalid: `.saasfoundry.json on ${branch} is not valid JSON` }
+    return { source, branch, invalid: `.saasfoundry.json on ${branch} is not valid JSON` }
   }
   const routing = committed.modules?.harness?.routing
   const issues = routingOverrideIssues(routing)
-  if (issues.length) return { branch, invalid: `modules.harness.routing on ${branch} is invalid (${issues[0]})` }
-  return { ...(routing ? { routing } : {}), branch, invalid: null }
+  if (issues.length) return { source, branch, invalid: `modules.harness.routing on ${branch} is invalid (${issues[0]})` }
+  return { ...(routing ? { routing } : {}), source, branch, invalid: null }
+}
+
+/**
+ * The committed copy of the routing block a decision rests on. With a harness there is always one answer:
+ * the block, or the reason there is none (`invalid`), so a worktree cannot get its own thresholds applied by
+ * hiding the committed manifest.
+ */
+async function committedRouting(root: string): Promise<CommittedRouting> {
+  const named = await committedWorkingBranch(root)
+  if (named) {
+    const text = await readCommittedFile(root, named, '.saasfoundry.json')
+    return text === undefined
+      ? { source: 'working-branch', branch: named, invalid: `no committed .saasfoundry.json can be read on the working branch ${named} (is it fetched?)` }
+      : parseCommitted(text, 'working-branch', named)
+  }
+  const head = await readHeadFile(root, '.saasfoundry.json')
+  return head === undefined
+    ? { source: 'head', branch: 'HEAD', invalid: 'no commit holds .saasfoundry.json yet: commit it, so that a decision rests on what is committed' }
+    : parseCommitted(head, 'head', 'HEAD')
 }
 
 /**
  * The routing a project declares, read once and validated: the shared overrides, the declared coding
  * agents and the adjustment policy. A manifest that cannot be read, or whose routing block is
  * invalid, fails closed: an automatic move must never be applied over a configuration nobody checked.
- * A committed block that is invalid does not stop a route from being answered from the worktree's own
- * block, but no decision is taken on it (`decision.invalid`).
+ * A committed block that is invalid or missing does not stop a route from being answered from the
+ * worktree's own block, but no decision is taken (`decision.invalid`).
  */
 export async function readProjectRouting(root: string, options: { validate?: boolean } = {}): Promise<ProjectRouting> {
   let manifest: SaaSFoundryManifest | undefined
@@ -90,17 +133,17 @@ export async function readProjectRouting(root: string, options: { validate?: boo
   const issues = options.validate === false ? [] : routingOverrideIssues(harness?.routing)
   if (issues.length) throw new Error(`Invalid modules.harness.routing:\n- ${issues.join('\n- ')}`)
   const policy = resolveAdjustPolicy(harness?.routing?.adjust)
-  const committed = harness ? await committedRouting(root, manifest) : undefined
+  const committed = harness ? await committedRouting(root) : undefined
   const decision: RoutingDecisionSource = committed
     ? {
         ...(committed.routing ? { routing: committed.routing } : {}),
         policy: resolveAdjustPolicy(committed.routing?.adjust),
-        source: 'working-branch',
+        source: committed.source,
         branch: committed.branch,
         invalid: committed.invalid,
         differs: committed.invalid !== null || canonical(committed.routing ?? null) !== canonical(harness?.routing ?? null)
       }
-    : { ...(harness?.routing ? { routing: harness.routing } : {}), policy, source: 'worktree', branch: null, invalid: null, differs: false }
+    : { policy, source: 'shipped', branch: null, invalid: null, differs: false }
   return {
     ...(manifest ? { manifest } : {}),
     ...(harness?.routing ? { routing: harness.routing } : {}),
