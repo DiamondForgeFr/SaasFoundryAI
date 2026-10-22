@@ -46,6 +46,33 @@ Toutes les interactions passent par `.claude/skills/sf-tool-github-projects/gith
 
 Les noms de statut sont résolus à partir du tableau et du manifeste ; ils ne doivent pas être codés en dur dans l'orchestration.
 
+### Commandes PR sur une branche nommée par l'hôte
+
+`create-pr`, `ready-pr` et `draft-pr` travaillent sur la branche du ticket : celle que `workflow.branchNaming` donne pour ce ticket (`feature/{N}-…` ou `fix/{N}-…`, ou la convention de release pour un
+ticket de release). C'est la branche courante dès qu'elle respecte la convention, et rien ne change alors.
+
+Un agent délégué lancé avec `isolation: "worktree"` de Claude Code est sur une branche que l'hôte a nommée, `worktree-agent-<id>`, et y pousse son travail vers la branche du ticket :
+
+```bash
+git push origin HEAD:feature/42-add-export
+.claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft
+```
+
+Les commandes acceptent ce checkout quand **origin porte la branche du ticket sur le commit du `HEAD` local** : le travail est poussé en entier, et la pull request contient exactement ce qui est
+extrait.
+
+- **Sans `--head`**, la CLI cherche sur origin les branches feature ou fix du ticket qui pointent sur `HEAD`. Une seule est utilisée, et la commande affiche une ligne qui dit laquelle. Aucune, ou
+  plusieurs, est refusée par une erreur qui nomme `--head`. Les branches de release ne sont jamais cherchées : elles ne portent pas de numéro de ticket.
+- **Avec `--head <branche>`**, la branche est celle qui est nommée. Elle doit respecter le `branchNaming` du ticket (une branche de release est permise là où la commande permet une pull request de
+  release), et origin doit la porter sur `HEAD`. C'est la sortie quand plusieurs branches sont sur `HEAD`.
+
+Tout le reste est refusé, et le message dit pourquoi : une branche absente d'origin, une branche poussée mais en retard sur `HEAD` (pousser de nouveau : `git push origin HEAD:<branche>`), et la
+branche d'un autre ticket, même sur `HEAD`. Une pull request n'est jamais promue depuis une branche qui n'est pas prouvée être le travail extrait, donc la branche d'un autre développeur ne peut pas
+être prise par erreur.
+
+À partir de là, la branche est celle du ticket. `create-pr` ne pousse rien, puisqu'origin la porte déjà, et ouvre la pull request depuis cette branche (`gh pr create --head`). Le rattachement au
+tableau, la ligne `Resolves #<ticket>`, la branche de base et les garde-fous sont ceux de n'importe quelle branche de ticket.
+
 ## Routage depuis `sf-workflow`
 
 `workflow-cli.sh` est le point d'entrée indépendant de l'outil :
