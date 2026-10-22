@@ -201,7 +201,8 @@ place, `.saasfoundry.new` sidecars provide reconciliation content where possible
 enabled.
 
 `sf update` preserves shared inventory and shared-file baselines. After updating the common harness, run `sf agents refresh` for local support or `sf agents refresh --scope shared` for shared support.
-Commands never stage, commit, push, or change Git branches.
+`sf update` itself keeps `.claude/settings.json` current (the delegation capture hooks and the permission rules), so a refresh is no longer required after an update for that file; see
+[Delegation capture and permissions](/cli/sf-update#delegation-capture-and-permissions-harness-v5). Commands never stage, commit, push, or change Git branches.
 
 ## Tool profiles and model providers
 

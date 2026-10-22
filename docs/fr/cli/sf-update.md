@@ -129,6 +129,10 @@ Claude Code ignore `AGENTS.md` tant qu'un `CLAUDE.md` existe. La migration harne
 proposition va dans `AGENTS.md.saasfoundry.new` et les deux fichiers restent jusqu'à ce que vous les fusionniez. Un `CLAUDE.local.md` n'est jamais supprimé ; la mise à jour le signale, car tant qu'il
 existe Claude Code ignore toujours `AGENTS.md`.
 
+Les ponts générés sont reconnus à leurs octets, quelle que soit la version qui les a écrits : les v1.0.0 et v1.0.1 publiées comme le CLI actuel. Un `CLAUDE.md` qui n'est que le pont généré vers un
+`AGENTS.md` est supprimé, car il cache `AGENTS.md` à Claude Code ; il n'est pas pris pour un `CLAUDE.md` que vous avez écrit, ce qui laissait votre `AGENTS.md` à côté d'un sidecar. Un `AGENTS.md` qui
+n'est que le pont généré vers votre `CLAUDE.md` est remplacé, pas conservé comme un fichier à vous.
+
 Prévisualisez d'abord : `sf update --dry-run --json` liste chaque section sous `moduleMigrations`, avec son action (`move`, `refresh`, `drop`, `keep-for-review`), sa source et sa cible.
 
 Lorsqu'un projet `harness` reçoit le stack technique, SaaSFoundry utilise une transaction journalisée. Un prochain `sf update --target-profile full` tente d'abord une récupération sûre si un processus
@@ -142,6 +146,37 @@ promet pas de migrer les données de production.
 Chaque mise à jour rafraîchit les [agents de palier](/fr/cli/sf-agents#agents-de-palier) des agents de développement déclarés, à partir de la grille de routage actuelle et des surcharges `routing` du
 projet : un fichier intact est réécrit, un fichier modifié reçoit un fichier `.saasfoundry.new`. Un harness géré sans liste `agents` est traité comme Claude Code et ne reçoit que les fichiers
 `.claude/agents/sf-<tier>.md` ; ses autres fichiers d'instructions restent tels quels.
+
+### Capture des délégations et permissions (harness v5)
+
+`.claude/settings.json` est votre fichier, et `sf update` y maintient deux choses à jour à **chaque exécution**, sans question ni option (`--non-interactive` compris) :
+
+- les **hooks** qui enregistrent chaque délégation routée dans le registre du clone (`SubagentStop` pour les agents `sf-<tier>`, `PostToolUse` sur l'outil de délégation), voir
+  [capture et signaux](/fr/cli/sf-agents#capture-et-signaux) ;
+- les **règles de permission** qui laissent l'agent lire une route, le consentement à déléguer et le rapport de routage sans demander, tandis que les formes qui écrivent une preuve (`--record`,
+  `--retry-of`) demandent toujours.
+
+C'est la même fusion que `sf agents refresh --scope shared` : `sf agents refresh` n'est donc plus nécessaire après une mise à jour pour cela. La migration du harness v4 → v5
+(`wire-delegation-capture`) est aussi cette fusion : un harness installé par une version antérieure, v1.0.1 comprise, la reçoit à la mise à jour qui le passe en v5, avec les agents de palier et le
+déplacement vers `AGENTS.md` que chaque mise à jour faisait déjà. La migration ne dépose rien d'autre, et n'écrit jamais le consentement à déléguer : seule votre propre réponse l'enregistre
+(`sf agents delegation`).
+
+| Situation                                                                                     | Résultat                                                                                                                 |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Le fichier n'a pas les hooks ou les règles.                                                   | Ils sont fusionnés. Vos clés, hooks et règles restent, dans leur ordre ; le résumé nomme le fichier.                     |
+| Le fichier a tout.                                                                            | Rien n'est écrit : mêmes octets, même date de modification, rien d'affiché.                                              |
+| Il n'y a pas de fichier.                                                                      | Il est créé avec les hooks et les règles du harness.                                                                     |
+| Le fichier est un lien symbolique, un lien physique, ou un texte qui n'est pas un objet JSON. | Il reste tel quel et la proposition fusionnée va dans `.claude/settings.json.saasfoundry.new` ; la mise à jour continue. |
+| Le hook est la commande `sf agents outcome capture` nue qu'écrivait une première version.     | Elle est remplacée par la commande qui résout le CLI propre au projet.                                                   |
+
+Elle s'applique à la racine du projet, et à chaque dépôt d'application d'un projet multirepo qui a un `.claude/`. Elle ignore un harness `managed: false`, un harness dont les agents déclarés excluent
+Claude Code, et une adoption en référence seule, dont les instructions demandent à l'agent de ne pas modifier réglages, hooks ni permissions.
+
+Un projet généré part des mêmes hooks et règles : les trois templates `.claude/settings.json` du scaffold les portent. Comme la fusion possède le fichier, il ne fait plus partie de la comparaison des
+templates : un changement de template ne transforme jamais un fichier déjà mis à jour par la fusion en conflit.
+
+Prévisualisez : `sf update --dry-run` liste le fichier sous `harnessSettings` du rapport (`merged`, `created`, `sidecar`), ou dans l'aperçu de la migration `wire-delegation-capture` en attente quand
+le harness est encore sous la v5.
 
 ## Ajouter des capacités après la création
 
