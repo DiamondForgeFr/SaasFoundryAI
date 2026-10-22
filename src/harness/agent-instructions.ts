@@ -5,6 +5,7 @@ import { join, posix, resolve } from 'path'
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentProfile, needsSharedSkills } from './agent-registry'
 import { CODEX_HOOKS_PATH, renderCodexHooks } from './delegation-hooks'
+import { BridgeKind, isReleasedBridge, isReleasedBridgeHash } from './released-bridges'
 import type { RoutingOverrides } from './routing-grid'
 import { renderTierAgents } from './tier-agents'
 import { HarnessAgent, skillsTemplatesPath } from '../types'
@@ -331,6 +332,34 @@ ${CAPABILITIES.trimEnd()}
 Do not copy or change agent settings, hooks, permissions, credentials, secrets or models.
 `
 
+const CURRENT_BRIDGES: Record<BridgeKind, string> = {
+  common: COMMON_INSTRUCTIONS,
+  adoption: ADOPTION_COMMON_INSTRUCTIONS,
+  claudeBridge: CODEX_SOURCE_CLAUDE_BRIDGE
+}
+
+/**
+ * Whether these bytes are a generated bridge of this kind: the text this CLI renders, or the text a
+ * published release rendered (#935) — the project installed by that release still holds it.
+ */
+export function isGeneratedBridge(kind: BridgeKind, content: Buffer | string): boolean {
+  const bytes = typeof content === 'string' ? Buffer.from(content) : content
+  return bytes.equals(Buffer.from(CURRENT_BRIDGES[kind])) || isReleasedBridge(kind, bytes)
+}
+
+/** The same check against the hash a manifest or the private inventory recorded when it wrote the file. */
+export function isGeneratedBridgeHash(kind: BridgeKind, hash: string | undefined): boolean {
+  return hash !== undefined && (hash === hashFileContent(CURRENT_BRIDGES[kind]) || isReleasedBridgeHash(kind, hash))
+}
+
+/**
+ * Whether recorded baselines say the project only references its own instructions: an adoption
+ * bridge in AGENTS.md, or a Claude bridge in CLAUDE.md, written by this CLI or by a published release.
+ */
+export function recordsReferenceOnlyBridge(hashes: Readonly<Record<string, string>> | undefined): boolean {
+  return isGeneratedBridgeHash('adoption', hashes?.['AGENTS.md']) || isGeneratedBridgeHash('claudeBridge', hashes?.['CLAUDE.md'])
+}
+
 export interface InstructionSourceReport {
   source: 'claude' | 'codex' | 'mixed' | 'missing'
   claudeInstructions: boolean
@@ -374,9 +403,9 @@ async function inspectInstructionFiles(targetPath: string): Promise<InspectedIns
   const [claude, shared] = await Promise.all([readInstructionFile(targetPath, 'CLAUDE.md'), readInstructionFile(targetPath, 'AGENTS.md')])
   const claudeInstructions = claude !== undefined
   const sharedInstructions = shared !== undefined
-  const generatedClaudeBridge = claude?.equals(Buffer.from(CODEX_SOURCE_CLAUDE_BRIDGE)) ?? false
-  const generatedAdoptionBridge = shared?.equals(Buffer.from(ADOPTION_COMMON_INSTRUCTIONS)) ?? false
-  const generatedSharedBridge = generatedAdoptionBridge || (shared?.equals(Buffer.from(COMMON_INSTRUCTIONS)) ?? false)
+  const generatedClaudeBridge = claude !== undefined && isGeneratedBridge('claudeBridge', claude)
+  const generatedAdoptionBridge = shared !== undefined && isGeneratedBridge('adoption', shared)
+  const generatedSharedBridge = generatedAdoptionBridge || (shared !== undefined && isGeneratedBridge('common', shared))
 
   if (generatedClaudeBridge && generatedSharedBridge) {
     throw new Error('CLAUDE.md and AGENTS.md form a generated instruction cycle; reconcile the authoritative instructions before retrying.')
@@ -401,13 +430,29 @@ export async function inspectInstructionSource(targetPath: string): Promise<Inst
   return (await inspectInstructionFiles(targetPath)).report
 }
 
+/**
+ * Whether this directory only references instructions the project owns (an adoption, or a Codex-first
+ * project with a bridge): its instructions are a generated reference-only bridge of this CLI or of a
+ * published release, or the baseline the manifest recorded is one. Such a project asks its agents not to
+ * change hooks, permissions or settings, so the harness leaves them alone.
+ */
+export async function isReferenceOnlyAdoption(targetPath: string, recordedHashes?: Readonly<Record<string, string>>): Promise<boolean> {
+  if (recordsReferenceOnlyBridge(recordedHashes)) return true
+  try {
+    return (await inspectInstructionFiles(targetPath)).referenceOnly
+  } catch {
+    // Inconsistent instructions are reported where they are read; they do not decide anything here.
+    return false
+  }
+}
+
 /** A SaaSFoundry-scaffolded AGENTS.md: it carries the generated region (#937). */
 export async function hasGeneratedRegion(targetPath: string): Promise<boolean> {
   const content = await readInstructionFile(targetPath, 'AGENTS.md').catch(() => undefined)
   return content?.includes(GENERATED_REGION_START) ?? false
 }
 
-const isLegacyBridge = (content: Buffer): boolean => [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE].some((bridge) => content.equals(Buffer.from(bridge)))
+const isLegacyBridge = (content: Buffer): boolean => (Object.keys(CURRENT_BRIDGES) as BridgeKind[]).some((kind) => isGeneratedBridge(kind, content))
 
 /**
  * The file that holds this directory's project instructions, for the code that edits them
@@ -642,11 +687,7 @@ export async function planAgentInstructions({ targetPath, agents, manifest, refe
   const profiles = [...new Set(agents)].map((agent) => getAgentProfile(agent))
   const inspected = await inspectInstructionFiles(targetPath)
   const instructionSource = inspected.report
-  const effectiveReferenceOnly =
-    referenceOnly ||
-    inspected.referenceOnly ||
-    manifest?.fileHashes?.['AGENTS.md'] === hashFileContent(ADOPTION_COMMON_INSTRUCTIONS) ||
-    manifest?.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
+  const effectiveReferenceOnly = referenceOnly || inspected.referenceOnly || recordsReferenceOnlyBridge(manifest?.fileHashes)
   // Project the skills only when a declared host does not discover the .claude/skills sources itself (#940).
   const projectSkills = needsSharedSkills(profiles.map((profile) => profile.id))
   for (const profile of profiles) {

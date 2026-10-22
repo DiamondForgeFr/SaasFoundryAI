@@ -33,3 +33,5 @@ GEMINI.md
 
 # Byte-exact copies of shipped templates (#938): the migration recognises them by hash
 src/__tests__/fixtures/pre-937-claude-md/
+# Byte-exact bridges and settings captured from the published packages (#935): recognised by hash
+src/__tests__/fixtures/released-bridges/
