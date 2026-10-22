@@ -89,6 +89,13 @@ Tout état autre que `ok` est un `warn` de la précondition `tierAgents`, qui li
 palier ne peuvent pas être comparés du tout : des surcharges de `modules.harness.routing` qui ne se rendent pas, ou un inventaire privé illisible (`routing.tierAgentsIssue` dans `--json`). Elle est
 ignorée sur un projet sans harness et quand aucun agent de développement déclaré n'a d'agent de palier.
 
+### Pipeline CI local
+
+Quand le projet déclare un pipeline local dans `.molten/project.json` (MoltenTerm), une ligne `local-ci:` (et un objet `localCi` dans `--json`) le nomme avec son nombre de jobs :
+`local-ci: MoltenTerm pipeline (11 jobs)`. L'étape AI testing lance ce pipeline (`molten ci run <branche>`) quand `molten ci status` répond, et la suite npm sinon. `sf status` se contente de lire le
+fichier : il n'exécute jamais `molten` ni aucun code du projet, et un fichier endommagé s'affiche `unreadable`, sans faire échouer le statut. La ligne est absente d'un projet qui ne déclare aucun
+pipeline.
+
 ### Exécution
 
 Ces contrôles déterminent si le projet peut réellement **fonctionner**, ce qu'un manifest valide ne suffit pas à garantir. Un projet peut être parfaitement configuré sans avoir de `node_modules`, de

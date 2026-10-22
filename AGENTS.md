@@ -35,7 +35,7 @@ all three surfaces (`srs`, `tickets`, `codeComments`).
 - **Nature axis (Human Testing optionality)** — `nature:internal` tickets (refactor / scaffolding / non-terminal stories of an Epic) may transition AI Testing → In Review directly. Default (no label
   or `nature:user-facing`) requires Human Testing. The `update-status` guard enforces this — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
 - **Never bypass the CLI**: use `.claude/skills/sf-workflow/workflow-cli.sh` and `.claude/skills/sf-tool-github-projects/github-projects-cli.sh` — not raw `gh api graphql` mutations
-- **Heavy validation before Human Testing:** run `npm test` and `npm run test:pre-push` explicitly during AI Testing and record the results. Commits only check what they touch, and iterative pushes do
+- **Heavy validation before Human Testing:** run the project's declared local pipeline explicitly during AI Testing and record the results: `molten ci run <branch>` when `.molten/project.json` exists and `molten ci status` answers (exit 0, 1 or 2), otherwise `npm test` and `npm run test:pre-push`. Commits only check what they touch, and iterative pushes do
   not run Docker.
 - **Commit + push BEFORE moving to AI Testing.** Code must be on remote before any testing phase.
 - **Escape hatches** (`SF_WORKFLOW_BYPASS_*`, `--bypass-srs`, `--skip-local-ci`) are used only when the developer says so, for the cases and with the record listed in

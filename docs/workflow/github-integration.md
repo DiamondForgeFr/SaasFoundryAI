@@ -110,7 +110,7 @@ $CLI update-status <SUB-1> "Done"
 
 # Automated validation
 $CLI update-status 42 "AI testing"
-npm run test:pre-push
+npm run test:pre-push # or: molten ci run <branch>, when .molten/project.json declares a MoltenTerm pipeline
 
 # Functional feature testing on a draft PR
 $CLI create-pr 42 --draft
