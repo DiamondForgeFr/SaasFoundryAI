@@ -379,6 +379,25 @@ describe('templateBaselines', () => {
     expect(templateBaselines({ fileHashes: legacy } as never, target)).toEqual({ ...legacy, 'README.md': target['README.md'] })
   })
 
+  // #935 — a settings.json the scaffold deposited is the project's: `sf update` merges the capture hooks and the
+  // permissions into it on every run. Swept as a template too, a file the merge already brought up to date read
+  // as edited by the project and came back as a `.saasfoundry.new` proposal of its own content.
+  it('leaves .claude/settings.json to its merge: never added, updated, removed or conflicted by the template sweep', () => {
+    const old = { '.claude/settings.json': hashFileContent('old template\n'), 'apps/acme-api/.claude/settings.json': hashFileContent('old template\n'), 'README.md': hashFileContent('readme\n') }
+    const merged = { ...old, '.claude/settings.json': hashFileContent('merged by sf update\n'), 'apps/acme-api/.claude/settings.json': hashFileContent('merged by sf update\n') }
+    const target = {
+      '.claude/settings.json': hashFileContent('new template\n'),
+      'apps/acme-api/.claude/settings.json': hashFileContent('new template\n'),
+      'README.md': hashFileContent('new readme\n')
+    }
+
+    const comparable = comparableTemplateHashes(old, merged, target)
+
+    expect(computeFileUpdates(comparable.baseHashes, comparable.currentHashes, comparable.targetHashes)).toEqual([{ path: 'README.md', action: 'update' }])
+    // The baseline the manifest recorded stays: the sweep does not rewrite what it does not own.
+    expect(templateBaselines({ fileHashes: old } as never, target)).toEqual({ ...old, 'README.md': target['README.md'] })
+  })
+
   it('keeps the shared agent adapter baselines the previous manifest recorded', () => {
     const manifest = { fileHashes: { 'AGENTS.md': hashFileContent('adopted adapter\n') } } as never
 

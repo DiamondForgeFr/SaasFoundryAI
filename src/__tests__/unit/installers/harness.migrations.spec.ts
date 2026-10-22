@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
-import { dropPerAppClaudeInMonorepo, dropStackSkillsWithoutStack, harnessMigrations } from '../../../installers/harness.migrations'
+import { ADOPTION_COMMON_INSTRUCTIONS } from '../../../harness/agent-instructions'
+import { dropPerAppClaudeInMonorepo, dropStackSkillsWithoutStack, harnessMigrations, wireDelegationCapture } from '../../../installers/harness.migrations'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import type { SaaSFoundryManifest } from '../../../types'
 import { hashFileContent } from '../../../utils'
@@ -52,7 +53,7 @@ describe('harness migration v1 → v2: drop-stack-skills-without-stack', () => {
   it('is the start of the harness chain', () => {
     expect(harnessMigrations.slice(0, 2)).toEqual([dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo])
     expect(dropStackSkillsWithoutStack).toMatchObject({ from: 1, to: 2 })
-    expect(harnessInstallerMeta).toMatchObject({ currentVersion: 4, migrations: harnessMigrations })
+    expect(harnessInstallerMeta).toMatchObject({ currentVersion: 5, migrations: harnessMigrations })
   })
 
   it('removes the untouched deposit and its mirror, and their fileHashes entries', async () => {
@@ -192,5 +193,169 @@ describe('harness migration v2 → v3: drop-per-app-claude-in-monorepo', () => {
     await shipped(['apps/web'])
     await dropPerAppClaudeInMonorepo.up(dir, manifest('monorepo'))
     await expect(dropPerAppClaudeInMonorepo.up(dir, manifest('monorepo'))).resolves.toBeUndefined()
+  })
+})
+
+// #935 — a harness installed before the delegation routing never had its capture hooks in .claude/settings.json
+describe('harness migration v4 → v5: wire-delegation-capture', () => {
+  let dir: string
+  let logSpy: jest.SpyInstance
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'sf-harness-wire-capture-'))
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(async () => {
+    logSpy.mockRestore()
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  const SETTINGS = '.claude/settings.json'
+  const put = async (path: string, content: string): Promise<void> => {
+    await mkdir(dirname(join(dir, path)), { recursive: true })
+    await writeFile(join(dir, path), content)
+  }
+  const read = (path: string): Promise<string> => readFile(join(dir, path), 'utf8')
+  const output = (): string => logSpy.mock.calls.flat().join('\n')
+  const v101 = (): Promise<string> => readFile(join(__dirname, '../../fixtures/released-bridges/1.0.1/settings.json'), 'utf8')
+
+  const manifest = (overrides: Partial<SaaSFoundryManifest> = {}): SaaSFoundryManifest => ({
+    version: '1.0.1',
+    generatedAt: '2026-10-12T00:00:00Z',
+    structure: 'cli',
+    projectName: 'acme',
+    modules: { harness: { version: 4, managed: true } },
+    fileHashes: {},
+    ...overrides
+  })
+
+  it('follows the CLAUDE.md move and ends the chain at the installer version', () => {
+    expect(harnessMigrations.at(-1)).toBe(wireDelegationCapture)
+    expect(wireDelegationCapture).toMatchObject({ from: 4, to: 5, name: 'wire-delegation-capture' })
+    expect(harnessInstallerMeta.currentVersion).toBe(wireDelegationCapture.to)
+  })
+
+  it('merges the capture hooks and the delegation permissions into the settings a 1.0.1 harness left', async () => {
+    await put(SETTINGS, await v101())
+
+    await wireDelegationCapture.up(dir, manifest())
+
+    const settings = JSON.parse(await read(SETTINGS))
+    expect(settings.hooks.SessionStart).toEqual(JSON.parse(await v101()).hooks.SessionStart)
+    expect(settings.hooks.SubagentStop[0].matcher).toBe('sf-.*')
+    expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
+    expect(settings.permissions.allow).toEqual(expect.arrayContaining([...JSON.parse(await v101()).permissions.allow, 'Bash(sf agents route *)', 'Bash(sf agents routing report)']))
+    expect(settings.permissions.ask).toEqual(expect.arrayContaining(['Bash(sf agents route --record*)', 'Bash(sf agents route * --retry-of*)']))
+    expect(output()).toContain('.claude/settings.json: delegation capture hooks and harness permissions merged in')
+  })
+
+  it('keeps the keys, hooks and rules the project added', async () => {
+    const own = { model: 'opus', hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: './check.sh' }] }] }, permissions: { allow: ['Bash(make test)'], deny: ['Bash(rm *)'] } }
+    await put(SETTINGS, JSON.stringify(own))
+
+    await wireDelegationCapture.up(dir, manifest())
+
+    const settings = JSON.parse(await read(SETTINGS))
+    expect(settings.model).toBe('opus')
+    expect(settings.hooks.PreToolUse).toEqual(own.hooks.PreToolUse)
+    expect(settings.permissions.deny).toEqual(['Bash(rm *)'])
+    expect(settings.permissions.allow[0]).toBe('Bash(make test)')
+  })
+
+  it('leaves a settings file that is not JSON as it is and writes the proposal beside it', async () => {
+    await put(SETTINGS, '{ "hooks": ')
+
+    await wireDelegationCapture.up(dir, manifest())
+
+    expect(await read(SETTINGS)).toBe('{ "hooks": ')
+    expect(JSON.parse(await read(`${SETTINGS}.saasfoundry.new`)).hooks.SubagentStop).toBeDefined()
+    expect(output()).toContain('.claude/settings.json is not valid JSON')
+    expect(output()).toContain('.claude/settings.json.saasfoundry.new')
+  })
+
+  it('is idempotent: the second run writes nothing and says nothing', async () => {
+    await put(SETTINGS, await v101())
+    await wireDelegationCapture.up(dir, manifest())
+    const once = await read(SETTINGS)
+    logSpy.mockClear()
+
+    await wireDelegationCapture.up(dir, manifest())
+
+    expect(await read(SETTINGS)).toBe(once)
+    expect(output()).toBe('')
+  })
+
+  it('creates the settings of a harness that has none', async () => {
+    await wireDelegationCapture.up(dir, manifest())
+    expect(JSON.parse(await read(SETTINGS)).hooks.SubagentStop).toBeDefined()
+  })
+
+  it('leaves alone a harness that declares no Claude Code, one that is not managed, and a reference-only adoption', async () => {
+    await put(SETTINGS, await v101())
+    const untouched = await v101()
+
+    await wireDelegationCapture.up(dir, manifest({ modules: { harness: { version: 4, managed: true, agents: ['codex'] } } }))
+    await wireDelegationCapture.up(dir, manifest({ modules: { harness: { version: 4, managed: false } } }))
+    await put('CLAUDE.md', '# Mine\n')
+    await put('AGENTS.md', ADOPTION_COMMON_INSTRUCTIONS)
+    await wireDelegationCapture.up(dir, manifest())
+
+    expect(await read(SETTINGS)).toBe(untouched)
+  })
+
+  it('covers each repository of a multirepo project, and the root of a monorepo only', async () => {
+    await put('.claude/settings.json', await v101())
+    await put('apps/acme-api/.claude/settings.json', await v101())
+    await put('apps/acme-web/.claude/settings.json', await v101())
+    await put('apps/api/.claude/settings.json', await v101())
+
+    await wireDelegationCapture.up(dir, manifest({ structure: 'multirepo' }))
+    for (const path of ['.claude', 'apps/acme-api/.claude', 'apps/acme-web/.claude']) expect(JSON.parse(await read(`${path}/settings.json`)).hooks.SubagentStop).toBeDefined()
+    expect(await read('apps/api/.claude/settings.json')).toBe(await v101())
+
+    await put('.claude/settings.json', await v101())
+    await wireDelegationCapture.up(dir, manifest({ structure: 'monorepo' }))
+    expect(JSON.parse(await read('.claude/settings.json')).hooks.SubagentStop).toBeDefined()
+    expect(await read('apps/api/.claude/settings.json')).toBe(await v101())
+  })
+
+  it('never writes the delegation consent: only the developer’s own answer records it', async () => {
+    const m = manifest()
+    await wireDelegationCapture.up(dir, m)
+    expect(m.modules?.harness).toEqual({ version: 4, managed: true })
+  })
+
+  it('points to the refresh for a Codex setup the manifest does not know', async () => {
+    await mkdir(join(dir, '.codex'), { recursive: true })
+    await wireDelegationCapture.up(dir, manifest())
+    expect(output()).toContain('sf agents refresh')
+    logSpy.mockClear()
+
+    await wireDelegationCapture.up(dir, manifest({ modules: { harness: { version: 4, managed: true, agents: ['claude-code', 'codex'] } } }))
+    expect(output()).not.toContain('sf agents refresh')
+  })
+
+  it('previews the file it would merge and writes nothing', async () => {
+    await put(SETTINGS, await v101())
+
+    const preview = await wireDelegationCapture.preview!(dir, manifest())
+
+    expect(preview).toEqual([{ action: 'merge', source: SETTINGS, reason: expect.stringContaining('delegation capture hooks') }])
+    expect(await read(SETTINGS)).toBe(await v101())
+  })
+
+  it('previews a file it would leave as it is, and the proposal it would write', async () => {
+    await put(SETTINGS, '{')
+
+    const preview = await wireDelegationCapture.preview!(dir, manifest())
+
+    expect(preview).toEqual([{ action: 'propose', source: SETTINGS, target: `${SETTINGS}.saasfoundry.new`, reason: expect.stringContaining('is not valid JSON') }])
+    expect(existsSync(join(dir, `${SETTINGS}.saasfoundry.new`))).toBe(false)
+  })
+
+  it('previews nothing for a project that is up to date', async () => {
+    await wireDelegationCapture.up(dir, manifest())
+    expect(await wireDelegationCapture.preview!(dir, manifest())).toEqual([])
   })
 })

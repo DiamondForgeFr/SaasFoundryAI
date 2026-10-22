@@ -94,7 +94,7 @@
   },
   "modules": {
     "harness": {
-      "version": 4,
+      "version": 5,
       "agents": ["claude-code", "codex"],
       "managed": true,
       "delegation": {

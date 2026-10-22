@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { ClaudeHooksConfig, SRS_INTENT_HOOK_COMMAND, mergeClaudeSettingsHooks, reconcileSrsIntentHook } from '../../../utils/claude-settings'
+import { ClaudeHooksConfig, SRS_INTENT_HOOK_COMMAND, mergeClaudeSettingsHooks, mergePermissionsInto, reconcileSrsIntentHook } from '../../../utils/claude-settings'
 
 const HARNESS_HOOKS: ClaudeHooksConfig = {
   SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }],
@@ -141,5 +141,36 @@ describe('scaffold Claude settings', () => {
     const settings = JSON.parse(await readFile(path, 'utf8'))
     expect(settings.hooks.SessionStart).toBeDefined()
     expect(settings.hooks.UserPromptSubmit).toBeUndefined()
+  })
+
+  // #935 — the templates carry the harness hooks, the same ones an installed project is brought to
+  it.each(['blueprints/api', 'blueprints/web', 'overlays/monorepo/root'])('registers the delegation capture hooks in %s', async (scaffold) => {
+    const path = join(process.cwd(), 'scaffolds', scaffold, '.claude', 'settings.json')
+    const settings = JSON.parse(await readFile(path, 'utf8'))
+    expect(settings.hooks.SubagentStop[0].matcher).toBe('sf-.*')
+    expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
+  })
+})
+
+describe('reconcileSrsIntentHook on a file that is not JSON (#935)', () => {
+  it('leaves it alone instead of stopping the update: the harness settings merge reports it', async () => {
+    const dir = join(tmpdir(), `sf-settings-broken-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    await mkdir(join(dir, '.claude'), { recursive: true })
+    await writeFile(join(dir, '.claude', 'settings.json'), '{ "hooks": // mine\n')
+
+    await expect(reconcileSrsIntentHook(dir, true)).resolves.toBeUndefined()
+
+    expect(await readFile(join(dir, '.claude', 'settings.json'), 'utf8')).toBe('{ "hooks": // mine\n')
+    await rm(dir, { recursive: true, force: true })
+  })
+})
+
+describe('mergePermissionsInto', () => {
+  it('adds the rules to an in-memory object, keeps the project’s own, and reports whether anything changed', () => {
+    const settings: Record<string, unknown> = { permissions: { allow: ['Bash(make test)'], deny: ['Bash(rm *)'] } }
+
+    expect(mergePermissionsInto(settings, ['Bash(sf status *)'], [], ['Bash(sf agents route --record*)'])).toBe(true)
+    expect(settings.permissions).toEqual({ allow: ['Bash(make test)', 'Bash(sf status *)'], deny: ['Bash(rm *)'], ask: ['Bash(sf agents route --record*)'] })
+    expect(mergePermissionsInto(settings, ['Bash(sf status *)'], [], ['Bash(sf agents route --record*)'])).toBe(false)
   })
 })

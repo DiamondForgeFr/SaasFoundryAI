@@ -54,6 +54,7 @@ import {
 import { handleProfileTransition } from './update.profile-transition'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
+import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
 import { TIER_AGENT_PATH } from '../harness/tier-agents'
 import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
@@ -67,11 +68,23 @@ import { describeCliVersion, resolveCliChannel } from '../cli-channel'
 // #937) are project-owned at every depth: a template refresh would delete a
 // CLAUDE.md the CLI no longer generates. Moving them is the harness v3 → v4
 // migration (#938, harness.migrations.ts).
+// A `.claude/settings.json` is the same kind of file (#935): the scaffold deposits a template, but the
+// project owns it and `sf update` keeps it current with a targeted merge on every run (harness-settings.ts).
+// Swept as a template, a file the merge already brought up to date would read as edited by the project
+// and come back as a `.saasfoundry.new` proposal of its own content.
 const SHARED_AGENT_ENTRYPOINTS = new Set([...getSharedAgentEntrypoints(), CLAUDE_CODE_RULE_PATH])
 function isSharedAgentPath(path: string): boolean {
   const normalized = path.replaceAll('\\', '/')
   const name = normalized.split('/').pop()
-  return name === 'CLAUDE.md' || name === 'AGENTS.md' || SHARED_AGENT_ENTRYPOINTS.has(normalized) || normalized.startsWith('.agents/') || TIER_AGENT_PATH.test(normalized)
+  return (
+    name === 'CLAUDE.md' ||
+    name === 'AGENTS.md' ||
+    SHARED_AGENT_ENTRYPOINTS.has(normalized) ||
+    normalized.startsWith('.agents/') ||
+    TIER_AGENT_PATH.test(normalized) ||
+    normalized === '.claude/settings.json' ||
+    normalized.endsWith('/.claude/settings.json')
+  )
 }
 
 function withoutSharedAgentHashes(hashes: Record<string, string>): Record<string, string> {
@@ -1452,6 +1465,18 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       // A managed harness without an agents list is implicitly Claude Code: it still gets its tier
       // agents (#929). An adopted (unmanaged) harness and multirepo apps keep their explicit flows.
       await installSelectedAgentInstructions(manifest, manifest.projectName, undefined, persistManifest, { tierAgentsOnly: true })
+    }
+
+    // `.claude/settings.json` is the one file `sf agents refresh` kept for itself (#935): the delegation capture hooks
+    // and the permission rules. It follows the CLI on every update now, with the merge the refresh and the harness
+    // v4 → v5 migration use, so a rule the CLI adds reaches an installed project without a second command. Nothing
+    // the project wrote is taken away, a file with nothing to add is not rewritten, and one that cannot be merged
+    // in place gets a `.saasfoundry.new` proposal. A pending migration already did it, and lists it in the preview.
+    const settingsMigrationPending = pendingModuleMigrations.some((pending) => pending.migrations.some((migration) => migration.name === 'wire-delegation-capture'))
+    if (!settingsMigrationPending) {
+      const settingsResults = await syncHarnessSettingsForProject('.', manifest, { dryRun })
+      if (dryRunReport && settingsResults.some((result) => result.status !== 'unchanged')) dryRunReport.harnessSettings = settingsResults.filter((result) => result.status !== 'unchanged')
+      logHarnessSettings(settingsResults, { dryRun })
     }
 
     // ─── FLOW 2: Module addition ───

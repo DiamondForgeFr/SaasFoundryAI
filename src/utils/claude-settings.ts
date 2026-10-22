@@ -27,6 +27,11 @@ export const SRS_INTENT_HOOK_COMMAND = '.claude/skills/sf-srs/scripts/srs-intent
  * agent that reads the file next would run without them.
  */
 async function writeSettings(settingsPath: string, settings: Record<string, unknown>): Promise<void> {
+  await writeSettingsText(settingsPath, `${JSON.stringify(settings, null, 2)}\n`)
+}
+
+/** The same whole-or-nothing replacement for text a caller already rendered (#935). */
+export async function writeSettingsText(settingsPath: string, content: string): Promise<void> {
   await mkdir(dirname(settingsPath), { recursive: true })
   const mode = await stat(settingsPath).then(
     (info) => info.mode & 0o777,
@@ -34,7 +39,7 @@ async function writeSettings(settingsPath: string, settings: Record<string, unkn
   )
   const temporary = `${settingsPath}.${randomUUID()}.tmp`
   try {
-    await writeFile(temporary, `${JSON.stringify(settings, null, 2)}\n`, { mode })
+    await writeFile(temporary, content, { mode })
     await rename(temporary, settingsPath)
   } finally {
     await unlink(temporary).catch(() => undefined)
@@ -47,21 +52,11 @@ export interface MergeHooksOptions {
 }
 
 /**
- * Merge hook groups into `<targetPath>/.claude/settings.json` without
- * clobbering anything the user already configured. Idempotent: a hook command
- * already registered for an event is never duplicated, and every unrelated
- * settings key is preserved as-is.
+ * Merge hook groups into an in-memory settings object without clobbering anything the user already
+ * configured. Idempotent: a hook command already registered for an event is never duplicated, and
+ * every unrelated settings key is preserved as-is.
  */
-export async function mergeClaudeSettingsHooks(targetPath: string, hooks: ClaudeHooksConfig, options: MergeHooksOptions = {}): Promise<boolean> {
-  const settingsPath = join(targetPath, '.claude', 'settings.json')
-
-  let settings: Record<string, unknown> = {}
-  const existed = await fileExists(settingsPath)
-  if (existed) {
-    settings = JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>
-  }
-  const before = JSON.stringify(settings)
-
+export function mergeHooksInto(settings: Record<string, unknown>, hooks: ClaudeHooksConfig, options: MergeHooksOptions = {}): void {
   const existingHooks = (settings.hooks ?? {}) as Record<string, ClaudeHookGroup[]>
 
   for (const [event, groups] of Object.entries(hooks)) {
@@ -83,6 +78,25 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
   }
 
   settings.hooks = existingHooks
+}
+
+/**
+ * Merge hook groups into `<targetPath>/.claude/settings.json` without
+ * clobbering anything the user already configured. Idempotent: a hook command
+ * already registered for an event is never duplicated, and every unrelated
+ * settings key is preserved as-is.
+ */
+export async function mergeClaudeSettingsHooks(targetPath: string, hooks: ClaudeHooksConfig, options: MergeHooksOptions = {}): Promise<boolean> {
+  const settingsPath = join(targetPath, '.claude', 'settings.json')
+
+  let settings: Record<string, unknown> = {}
+  const existed = await fileExists(settingsPath)
+  if (existed) {
+    settings = JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>
+  }
+  const before = JSON.stringify(settings)
+
+  mergeHooksInto(settings, hooks, options)
 
   // Nothing to add: leave the file (and its formatting) exactly as the project has it.
   if (existed && JSON.stringify(settings) === before) return false
@@ -91,17 +105,16 @@ export async function mergeClaudeSettingsHooks(targetPath: string, hooks: Claude
 }
 
 /**
- * Add permission rules to `permissions.allow` of `<targetPath>/.claude/settings.json`. Same
- * contract as the hooks: idempotent, a rule already present is never duplicated, and every
- * rule or key the user configured is kept. `revoke` lists rules an earlier release pre-approved and
- * this one does not: they are removed, so the command asks again. `ask` lists rules added to
- * `permissions.ask`, which the host evaluates before `allow`: a command that matches both asks. That is
- * how a wide rule (`sf agents route *`) stays pre-approved for reading while the forms of the same
- * command that write evidence (`--record`, `--retry-of`) still ask: a pattern cannot say "not this flag".
+ * Add permission rules to the `permissions` of an in-memory settings object. Same contract as the
+ * hooks: idempotent, a rule already present is never duplicated, and every rule or key the user
+ * configured is kept. `revoke` lists rules an earlier release pre-approved and this one does not: they
+ * are removed, so the command asks again. `ask` lists rules added to `permissions.ask`, which the host
+ * evaluates before `allow`: a command that matches both asks. That is how a wide rule
+ * (`sf agents route *`) stays pre-approved for reading while the forms of the same command that write
+ * evidence (`--record`, `--retry-of`) still ask: a pattern cannot say "not this flag". Returns whether
+ * the settings changed.
  */
-export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[], revoke: readonly string[] = [], ask: readonly string[] = []): Promise<boolean> {
-  const settingsPath = join(targetPath, '.claude', 'settings.json')
-  const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? (JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>) : {}
+export function mergePermissionsInto(settings: Record<string, unknown>, allow: readonly string[], revoke: readonly string[] = [], ask: readonly string[] = []): boolean {
   const permissions = (settings.permissions ?? {}) as Record<string, unknown>
   const existing = Array.isArray(permissions.allow) ? (permissions.allow as string[]) : []
   const kept = existing.filter((rule) => !revoke.includes(rule) || allow.includes(rule))
@@ -110,6 +123,14 @@ export async function mergeClaudeSettingsPermissions(targetPath: string, allow: 
   const missingAsk = ask.filter((rule) => !existingAsk.includes(rule))
   if (missing.length === 0 && kept.length === existing.length && missingAsk.length === 0 && settings.permissions) return false
   settings.permissions = { ...permissions, allow: [...kept, ...missing], ...(ask.length || existingAsk.length ? { ask: [...existingAsk, ...missingAsk] } : {}) }
+  return true
+}
+
+/** Add permission rules to `permissions.allow` of `<targetPath>/.claude/settings.json` (see `mergePermissionsInto`). */
+export async function mergeClaudeSettingsPermissions(targetPath: string, allow: readonly string[], revoke: readonly string[] = [], ask: readonly string[] = []): Promise<boolean> {
+  const settingsPath = join(targetPath, '.claude', 'settings.json')
+  const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? (JSON.parse(await readFile(settingsPath, 'utf8')) as Record<string, unknown>) : {}
+  if (!mergePermissionsInto(settings, allow, revoke, ask)) return false
   await writeSettings(settingsPath, settings)
   return true
 }
@@ -119,7 +140,14 @@ export async function reconcileSrsIntentHook(targetPath: string, srsEnabled: boo
   const settingsPath = join(targetPath, '.claude', 'settings.json')
   if (!(await fileExists(settingsPath)) && !srsEnabled) return
 
-  const settings: Record<string, unknown> = (await fileExists(settingsPath)) ? JSON.parse(await readFile(settingsPath, 'utf8')) : {}
+  let settings: Record<string, unknown>
+  try {
+    settings = (await fileExists(settingsPath)) ? JSON.parse(await readFile(settingsPath, 'utf8')) : {}
+  } catch {
+    // Text that is not JSON cannot be reconciled: the harness settings merge reports it and proposes a file beside it (#935),
+    // and the update goes on instead of stopping here.
+    return
+  }
   const hooks = (settings.hooks ?? {}) as ClaudeHooksConfig
   const groups = hooks.UserPromptSubmit ?? []
   const withoutManagedHook = groups.map((group) => ({ ...group, hooks: group.hooks.filter((hook) => hook.command !== SRS_INTENT_HOOK_COMMAND) })).filter((group) => group.hooks.length > 0)

@@ -55,10 +55,10 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
     ...overrides
   })
 
-  it('ends the harness chain and bumps currentVersion to 4', () => {
-    expect(harnessMigrations.at(-1)).toBe(moveClaudeMdToAgentsMd)
+  it('is the 3 → 4 step of the harness chain, which #935 extends to 5', () => {
+    expect(harnessMigrations[2]).toBe(moveClaudeMdToAgentsMd)
     expect(moveClaudeMdToAgentsMd).toMatchObject({ from: 3, to: 4 })
-    expect(harnessInstallerMeta.currentVersion).toBe(4)
+    expect(harnessInstallerMeta.currentVersion).toBe(5)
   })
 
   it('moves a harness CLAUDE.md into AGENTS.md, removes CLAUDE.md and adds the generated region and the Claude rule', async () => {

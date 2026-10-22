@@ -1,4 +1,5 @@
 import type { CliChannel } from '../cli-channel'
+import type { HarnessSettingsResult } from '../harness/harness-settings'
 import type { PendingModuleMigrations } from '../migrations/module/registry'
 import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
 import type { ProjectCapabilities } from '../project-capabilities'
@@ -118,6 +119,12 @@ export interface UpdateDryRunReport {
       }
   /** Module migrations the real update would run, with what each would change (#938). */
   moduleMigrations?: PendingModuleMigrations[]
+  /**
+   * What the real update would merge into `.claude/settings.json` (#935): the delegation capture hooks and
+   * the harness permissions, kept current on every update. Absent when nothing would change, and when a
+   * pending harness migration already lists it.
+   */
+  harnessSettings?: HarnessSettingsResult[]
   harnessRefresh?:
     | { status: 'adoption-needed' }
     | {
