@@ -192,7 +192,10 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
 
 1. **Brief the agent** with the ticket, its approved plan, the branch name and worktree, the decomposition (file set, expected result and check per child), the consent (`delegation: allowed` and where
    it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. Resolve the tier with `sf agents route` as above, and never
-   name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (`statuses/3-in-progress.md`).
+   name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (`statuses/3-in-progress.md`). When
+   the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it
+   (`git push origin HEAD:<ticket branch>`): `create-pr`, `ready-pr` and `draft-pr` accept that branch when `origin` holds it at the local `HEAD`, found on their own or passed as
+   `--head <ticket branch>`.
 2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`: it delivers the children, posts the `## Test plan` comment, runs the automated and heavy checks, posts
    the `## Test report` comment and opens the draft PR, then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` on the Human Testing route and never records the
    delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md` names.
