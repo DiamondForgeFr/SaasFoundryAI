@@ -548,4 +548,38 @@ esac
     expect(calls()).toContain('tool update-status 42 In review')
     expect(calls()).not.toContain('99')
   })
+
+  // #1016 — a head that names no ticket under workflow.branchNaming has nothing to sync: a green no-op.
+  describe('ticketless heads (#1016)', () => {
+    async function pullRequest(ref: string, base: string, body: string) {
+      await writeFile(
+        path.join(dir, 'event.json'),
+        JSON.stringify({ ...event, pull_request: { ...event.pull_request, body, head: { ...event.pull_request.head, ref }, base: { ...event.pull_request.base, ref: base } } })
+      )
+      return { LIVE: JSON.stringify({ ...live, headRefName: ref, baseRefName: base, body, closingIssuesReferences: [] }) }
+    }
+
+    it('turns a sync-back branch into a green no-op with a notice and no ticket change', async () => {
+      const result = await run(await pullRequest('chore/sync-back-v1.1.0', 'develop', 'Technical sync-back.'))
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('::notice::chore/sync-back-v1.1.0 names no ticket under workflow.branchNaming: nothing to sync.')
+      expect(changedTicket()).toBe(false)
+    })
+    it('keeps resolving the Closes #N of a release branch targeting master', async () => {
+      const result = await run(await pullRequest('rc-1.1.0', 'master', 'Delivery\n\nCloses #42'))
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 In review')
+    })
+    it('keeps failing a release branch that does not target master', async () => {
+      const result = await run(await pullRequest('rc-1.1.0', 'develop', 'Delivery\n\nCloses #42'))
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('does not identify exactly one verified ticket')
+      expect(changedTicket()).toBe(false)
+    })
+    it('keeps failing a ticket branch without its Resolves line', async () => {
+      const result = await run(await pullRequest('feature/12-x', 'develop', 'Delivery'))
+      expect(result.code).toBe(2)
+      expect(changedTicket()).toBe(false)
+    })
+  })
 })
