@@ -317,6 +317,42 @@ function checkCodexInstructionSize(report: StatusReport): Precondition {
   }
 }
 
+/**
+ * Tier agents — whether the delegation agents on disk are the ones the routing renders (#933). Each
+ * problem is a `warn`: a delegation still starts, on a model or an effort the routing no longer says.
+ * `missing` and `outdated` (nobody edited the file, the grid or the overrides moved on) are fixed by a
+ * refresh; an `edited` file is kept by the refresh, so the edit has to be undone or moved first.
+ */
+function checkTierAgents(report: StatusReport): Precondition {
+  const name = 'tierAgents'
+  const description = 'Tier agents match the routing grid'
+  const routing = report.routing
+  if (!routing) return { name, description, status: 'skip', details: 'No managed harness' }
+  if ('error' in routing) return { name, description, status: 'skip', details: 'The routing could not be read' }
+  if (routing.tierAgentsIssue) {
+    return {
+      name,
+      description,
+      status: 'warn',
+      details: `Tier agents could not be compared with routing grid v${routing.gridVersion}: ${routing.tierAgentsIssue}`,
+      remediation: 'Fix modules.harness.routing in .saasfoundry.json (or the private agent inventory in the Git directory), then run `sf agents refresh --scope shared`.'
+    }
+  }
+  if (routing.tierAgents.length === 0) return { name, description, status: 'skip', details: 'No declared coding agent has a tier agent (sf agents list)' }
+  const off = routing.tierAgents.filter((agent) => agent.state !== 'ok')
+  if (off.length === 0) return { name, description, status: 'ok', details: `${routing.tierAgents.length} match routing grid v${routing.gridVersion}` }
+  const edited = off.filter((agent) => agent.state === 'edited').map((agent) => agent.path)
+  const remediation = [
+    ...(off.length > edited.length ? ['Run `sf agents refresh --scope shared` to regenerate the missing and outdated ones.'] : []),
+    ...(edited.length
+      ? [
+          `Restore ${edited.join(', ')}, or move the change to modules.harness.routing in .saasfoundry.json, then run \`sf agents refresh --scope shared\`. A refresh never overwrites an edited tier agent: it writes a .saasfoundry.new sidecar, so delete the file to have it regenerated.`
+        ]
+      : [])
+  ]
+  return { name, description, status: 'warn', details: off.map((agent) => `${agent.path} ${agent.state}`).join('; '), remediation: remediation.join(' ') }
+}
+
 export function evaluatePreconditions(report: StatusReport): Precondition[] {
   const ghRepository = checkGhRepository(report)
   return [
@@ -329,6 +365,7 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkInstructionShadowing(report),
     checkClaudeCodeVersion(report),
     checkCodexInstructionSize(report),
+    checkTierAgents(report),
     checkDependencies(report),
     checkDatabase(report),
     checkOrmClient(report)

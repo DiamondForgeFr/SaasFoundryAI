@@ -1,6 +1,7 @@
 # sf status
 
-Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, fichiers d'instructions des agents et, facultativement, CLI GitHub.
+Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, fichiers d'instructions des agents, routage et agents de palier et,
+facultativement, CLI GitHub.
 
 ## Utilisation
 
@@ -56,16 +57,37 @@ devient `delegation: declined (local, <date>; shared team default: allowed)`, et
 
 ### Routage automatique
 
-Sur les mêmes projets, une ligne `routing:` (et un objet `routing` dans `--json`) indique où en est le routage automatique dans ce clone (voir
-[`sf agents routing`](./sf-agents.md#delegations-mesurees-et-routage-ajuste)). Elle nomme les déplacements que l'ajustement a faits et que personne n'a encore promus, pour qu'une session sache que la
-route qu'elle obtient n'est pas celle livrée, par exemple
-`routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. Elle nomme un type que l'ajustement
-a examiné et ne peut pas déplacer (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) et compte ceux qui attendent seulement des preuves. Elle dit aussi, pour chaque agent de code
-déclaré, si les hooks qui enregistrent chaque délégation sont en place **et peuvent s'exécuter** : `claude-code capture enforced` seulement quand le hook est déclaré et que le CLI du projet répond à
-`agents outcome capture` ; `capture hook declared but no CLI can run it` sinon (installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH : d'ici là les délégations ne sont
-pas enregistrées) ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le hook `sf` nu d'un build précédent ; `capture hook missing`
-(`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale endommagée s'affiche `unreadable (…)` et ne fait
-jamais échouer le statut.
+Sur les mêmes projets, une ligne `routing:` (et un objet `routing` dans `--json`) indique où en est le routage dans ce clone (voir
+[`sf agents routing`](./sf-agents.md#delegations-mesurees-et-routage-ajuste)). Elle commence par la grille et ce que le projet y remplace :
+`grid v1, 2 overrides (multi-file-feature → plan; tier build for claude-code)` donne la version de la grille que ce CLI livre, puis une entrée par type que `modules.harness.routing` envoie vers un
+autre palier et une par palier auquel il donne d'autres candidats (`grid v1, 0 overrides` quand le projet garde le routage livré). `--json` les porte dans l'objet `routing` sous `gridVersion` et
+`overrides` (`{ kinds: [{ kind, tier }], tiers: [{ tier, providers }] }`), à côté de `tierAgents` ([plus bas](#agents-de-palier)). La ligne continue avec les déplacements que l'ajustement a faits et
+que personne n'a encore promus, pour qu'une session sache que la route qu'elle obtient n'est pas celle livrée, par exemple
+`routing: grid v1, 0 overrides; 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. Elle nomme un
+type que l'ajustement a examiné et ne peut pas déplacer (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) et compte ceux qui attendent seulement des preuves. Elle dit aussi, pour
+chaque agent de code déclaré, si les hooks qui enregistrent chaque délégation sont en place **et peuvent s'exécuter** : `claude-code capture enforced` seulement quand le hook est déclaré et que le CLI
+du projet répond à `agents outcome capture` ; `capture hook declared but no CLI can run it` sinon (installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH : d'ici là les
+délégations ne sont pas enregistrées) ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le hook `sf` nu d'un build précédent ;
+`capture hook missing` (`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale endommagée s'affiche
+`unreadable (…)` et ne fait jamais échouer le statut.
+
+### Agents de palier
+
+Les agents de délégation que [`sf agents refresh`](./sf-agents.md#agents-de-palier) écrit sous `.claude/agents/` et `.codex/agents/` portent chacun un modèle et un effort. Modifiez-en un, supprimez-en
+un, ou passez à un CLI dont la grille est plus récente : une délégation s'exécute alors sur une route que le routage ne dit plus, sans que rien ne le signale dans l'hôte. `tierAgents` compare chaque
+agent de palier des agents de développement déclarés que la grille route à ce qu'un refresh écrirait maintenant, d'après la grille que ce CLI livre et `modules.harness.routing`. Il se contente de lire
+les fichiers : il n'exécute aucun code du projet et n'écrit rien. `--json` les liste sous `routing.tierAgents` sous la forme `{ path, state }`.
+
+| État       | Signification                                                                                                                                                                                                                                                                                                          | Remédiation                                                                                                                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`       | Le fichier est exactement ce qu'un refresh écrirait                                                                                                                                                                                                                                                                    | Aucune                                                                                                                                                                                                                                                            |
+| `missing`  | Le fichier n'existe pas                                                                                                                                                                                                                                                                                                | `sf agents refresh --scope shared`                                                                                                                                                                                                                                |
+| `outdated` | Personne ne l'a modifié : le fichier est ce qu'un refresh précédent a écrit, et la grille ou les surcharges ont changé depuis                                                                                                                                                                                          | `sf agents refresh --scope shared`                                                                                                                                                                                                                                |
+| `edited`   | Le fichier n'est ni le rendu ni une référence enregistrée (`fileHashes` dans `.saasfoundry.json`, ou l'inventaire privé de ce clone pour un agent de palier écrit par une configuration locale), ou aucune référence n'est enregistrée. Un lien, ou tout fichier qu'un refresh refuse de toucher, compte comme modifié | Le restaurer, ou reporter la modification dans `modules.harness.routing`, puis `sf agents refresh --scope shared`. Un refresh n'écrase jamais un agent de palier modifié : il écrit un fichier `.saasfoundry.new` ; supprimez le fichier pour qu'il soit régénéré |
+
+Tout état autre que `ok` est un `warn` de la précondition `tierAgents`, qui liste les fichiers et donne la remédiation de chaque état. Elle avertit aussi, en disant quoi corriger, quand les agents de
+palier ne peuvent pas être comparés du tout : des surcharges de `modules.harness.routing` qui ne se rendent pas, ou un inventaire privé illisible (`routing.tierAgentsIssue` dans `--json`). Elle est
+ignorée sur un projet sans harness et quand aucun agent de développement déclaré n'a d'agent de palier.
 
 ### Exécution
 

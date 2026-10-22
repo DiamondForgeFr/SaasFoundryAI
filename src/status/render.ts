@@ -23,9 +23,21 @@ export function delegationSummary(delegation: StatusDelegation): string {
 }
 
 /**
- * The automatic routing of this clone on one line (#1035): the moves nobody promoted yet, so a
- * session knows the route it gets is not the shipped one, and whether the hooks that record every
- * delegation are in place for each declared coding agent.
+ * The grid the routes come from and what the project replaces in it (#933), so a session knows whether
+ * the route it gets is the shipped one: `grid v1, 2 overrides (multi-file-feature → plan; tier build for claude-code)`.
+ */
+function gridSummary(routing: StatusRoutingState): string {
+  const { kinds, tiers } = routing.overrides
+  const count = kinds.length + tiers.length
+  const named = [...kinds.map((entry) => `${entry.kind} → ${entry.tier}`), ...tiers.map((entry) => `tier ${entry.tier}${entry.providers.length ? ` for ${entry.providers.join(', ')}` : ''}`)]
+  return `grid v${routing.gridVersion}, ${count} override${count === 1 ? '' : 's'}${named.length ? ` (${named.join('; ')})` : ''}`
+}
+
+/**
+ * The routing of this clone on one line: the grid and the project's overrides (#933), the automatic moves
+ * nobody promoted yet, so a session knows the route it gets is not the shipped one, and whether the hooks
+ * that record every delegation are in place for each declared coding agent (#1035). The state of the tier
+ * agents is a precondition (`tierAgents`), not a part of this line.
  */
 export function routingSummary(routing: StatusRouting): string {
   if ('error' in routing) return `unreadable (${routing.error})`
@@ -35,7 +47,7 @@ export function routingSummary(routing: StatusRouting): string {
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
   const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
-  return `${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
 }
 
 const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (agent: string) => string> = {
@@ -145,7 +157,8 @@ export function renderJson(payload: RenderPayload): string {
     capabilities: report.capabilities ?? null,
     // Additive (#1026): the effective consent with its shared and local layers, null without a harness
     delegation: report.delegation ?? null,
-    // Additive (#1035): the automatic routing of this clone, null without a harness
+    // Additive (#1035): the automatic routing of this clone, null without a harness. #933 adds the grid
+    // version, the project overrides and the state of every tier agent to the same object.
     routing: report.routing ?? null,
     git: report.git,
     installedSkills: report.installedSkills,

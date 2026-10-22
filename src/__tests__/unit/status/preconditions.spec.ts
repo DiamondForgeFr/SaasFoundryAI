@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { evaluatePreconditions } from '../../../status/preconditions'
-import type { StatusReport } from '../../../status/collect'
+import type { StatusReport, StatusRoutingState, StatusTierAgent } from '../../../status/collect'
 
 function makeReport(overrides: Partial<StatusReport> = {}): StatusReport {
   return {
@@ -402,5 +402,65 @@ describe('instruction preconditions (#939)', () => {
     expect(size?.details).toContain('apps/api loads 40000 bytes (AGENTS.md + apps/api/AGENTS.md)')
     expect(size?.details).not.toContain('20000')
     expect(size?.remediation).toContain('project_doc_max_bytes')
+  })
+})
+
+describe('tier agent precondition (#933)', () => {
+  const routing = (state: Partial<StatusRoutingState> = {}): StatusRoutingState => ({
+    gridVersion: 1,
+    overrides: { kinds: [], tiers: [] },
+    tierAgents: [],
+    adjustment: 'on',
+    adjustments: [],
+    holds: [],
+    capture: [],
+    ...state
+  })
+  const find = (report: StatusReport) => evaluatePreconditions(report).find((p) => p.name === 'tierAgents')
+  const agent = (state: StatusTierAgent['state'], name = 'build'): StatusTierAgent => ({ path: `.claude/agents/sf-${name}.md`, state })
+
+  it('is skipped on a project without a harness, and when the routing could not be read', () => {
+    expect(find(makeReport())).toMatchObject({ status: 'skip', details: 'No managed harness' })
+    expect(find(makeReport({ routing: { error: 'Invalid local routing' } }))).toMatchObject({ status: 'skip' })
+  })
+
+  it('is skipped when no declared coding agent has a tier agent', () => {
+    expect(find(makeReport({ routing: routing() }))).toMatchObject({ status: 'skip', details: expect.stringContaining('sf agents list') })
+  })
+
+  it('is ok when every tier agent is what the grid renders, and says which grid', () => {
+    expect(find(makeReport({ routing: routing({ gridVersion: 3, tierAgents: [agent('ok'), agent('ok', 'fix')] }) }))).toEqual({
+      name: 'tierAgents',
+      description: 'Tier agents match the routing grid',
+      status: 'ok',
+      details: '2 match routing grid v3'
+    })
+  })
+
+  it('warns about a missing or an outdated tier agent and sends both to a refresh', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgents: [agent('missing'), agent('outdated', 'fix'), agent('ok', 'plan')] }) }))
+    expect(precondition).toMatchObject({ status: 'warn', details: '.claude/agents/sf-build.md missing; .claude/agents/sf-fix.md outdated' })
+    expect(precondition?.remediation).toBe('Run `sf agents refresh --scope shared` to regenerate the missing and outdated ones.')
+  })
+
+  it('warns about an edited tier agent: restore it or move the change to modules.harness.routing, then refresh', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgents: [agent('edited'), agent('ok', 'fix')] }) }))
+    expect(precondition).toMatchObject({ status: 'warn', details: '.claude/agents/sf-build.md edited' })
+    expect(precondition?.remediation).toContain('Restore .claude/agents/sf-build.md, or move the change to modules.harness.routing in .saasfoundry.json, then run `sf agents refresh --scope shared`')
+    expect(precondition?.remediation).toContain('A refresh never overwrites an edited tier agent')
+    expect(precondition?.remediation).not.toContain('to regenerate the missing and outdated ones')
+  })
+
+  it('gives both remediations when edited and missing tier agents are mixed', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgents: [agent('edited'), agent('missing', 'fix')] }) }))
+    expect(precondition?.remediation).toContain('to regenerate the missing and outdated ones')
+    expect(precondition?.remediation).toContain('Restore .claude/agents/sf-build.md')
+  })
+
+  it('warns, with what to fix, when the tier agents could not be compared with the grid', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgentsIssue: "Invalid modules.harness.routing: routing.kinds.prose.tier 'x' is neither shipped nor declared" }) }))
+    expect(precondition).toMatchObject({ status: 'warn', details: expect.stringContaining('could not be compared with routing grid v1') })
+    expect(precondition?.remediation).toContain('Fix modules.harness.routing')
+    expect(precondition?.remediation).toContain('sf agents refresh --scope shared')
   })
 })

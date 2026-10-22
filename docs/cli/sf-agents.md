@@ -300,7 +300,8 @@ subagent file must carry an effort its host can run, so an override refuses `min
 
 Tier agents are hash-tracked like the other agent deposits. `sf agents enable`, `replace`, `refresh` and `sf update` rewrite an untouched file, and leave an edited one in place beside a
 `.saasfoundry.new` sidecar. A managed harness without an `agents` list receives the Claude Code tier agents on `sf update`. No deposit is ever deleted: a removed agent, or a tier that no longer serves
-any kind, keeps its file until you remove it. An adopted project receives none.
+any kind, keeps its file until you remove it. An adopted project receives none. [`sf status`](./sf-status.md#tier-agents) compares every tier agent with what a refresh would write and warns about a
+missing, an edited or an outdated one, with the command that fixes it.
 
 Claude Code chooses a subagent from its description. Codex delegates when you ask or when the instructions say so, and reads a project's `.codex/agents` only once you trust the project.
 
@@ -559,7 +560,8 @@ override is not changed.
 per ticket by complexity (and nature), the median and p95 of the cost, of the **active time** of the delegations, and of the time **from the first In progress to the first Human testing** (to In
 review for a ticket that skips it), taken from the status transitions `workflow-cli.sh` recorded. A ticket with a delegation that has no cost is a lower bound: it is counted apart from the medians and
 the p95. A resumed agent is one delegation, and the report says how many further stops it counted. It also names the models without a price, the capture state of each agent, the holds and the local
-moves nobody promoted. `--json` is versioned (`reportVersion: 2`). `sf status` carries one `routing:` line with the unpromoted moves, the notable holds and the capture state.
+moves nobody promoted. `--json` is versioned (`reportVersion: 2`). `sf status` carries one `routing:` line with the grid version and the project overrides, the unpromoted moves, the notable holds and
+the capture state, and a `tierAgents` precondition for the tier agents on disk (see [`sf status`](./sf-status.md#tier-agents)).
 
 The report says what it cannot see: the tokens the session spends planning, talking and reviewing are metered by no host hook, so the cost of a ticket is the cost of its delegations. A ticket is
 counted once it has a recorded delegation; the report does not know whether it reached Done, and the time of a ticket needs the transitions to have been recorded in this clone.
