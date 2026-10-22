@@ -443,11 +443,15 @@ sf agents route --task multi-file-feature --provider claude-code --ticket 1035 -
 `--json`, `routeVersion: 2`). La session met `route=<id>` dans le brief et le délégué le reprend. La capture prend le type de tâche, le palier, le ticket et l'indicateur d'essai **dans
 l'enregistrement** : un délégué ne peut ni nommer son propre type ni se déclarer essai. Une exécution sans identifiant, avec un identifiant que personne n'a émis, émis pour un autre palier ou un autre
 agent, ou déjà utilisé par un autre agent, est conservée et censurée, et dit pourquoi dans ses références de preuve. Lire une route sans `--record` n'enregistre rien.
-`--retry-of <id de route ou d'exécution>` relie une reprise sur un palier plus fort à la délégation qu'elle suit : ce lien, et rien d'autre, dit que l'exécution précédente n'a pas fait le travail.
+`--retry-of <id de route ou d'exécution>` route la reprise **un palier au-dessus** de celui qu'a utilisé la délégation précédente, jamais en essai, et relie les deux : ce lien, et rien d'autre, dit
+que l'exécution précédente n'a pas fait le travail. Une reprise garde l'agent de code et le type de tâche de la délégation qu'elle suit, et tout en haut de l'échelle la commande dit qu'il ne reste
+aucun palier plus fort au lieu de répondre à nouveau le même.
 
-L'enregistrement est aussi une **réservation**. Un essai qu'il accorde garde sa place dans la part d'essais jusqu'à ce qu'une exécution reprenne l'identifiant ou que six heures passent, et le contrôle
-et la réservation ne forment qu'une étape sous le verrou du registre : des routes demandées au même instant ne peuvent donc pas être toutes des essais. Un enregistrement vaut pour un seul agent de
-code : passez `--provider` quand plusieurs sont déclarés.
+L'enregistrement est aussi une **réservation**. Un essai qu'il accorde garde sa place dans la part d'essais jusqu'à ce qu'une exécution reprenne l'identifiant ou que sept jours passent, et le contrôle
+et la réservation ne forment qu'une étape sous le verrou du registre : des routes demandées au même instant ne peuvent donc pas être toutes des essais. Une route que personne n'a reprise dans ces sept
+jours est **expirée** : une exécution qui la reprend ensuite est conservée et censurée (`route-expired`), car son type et son indicateur d'essai ne sont plus fiables. Un agent qui a déjà utilisé la
+route n'expire jamais, si bien qu'un agent repris qui rend la main plusieurs jours plus tard garde son verdict. Un enregistrement vaut pour un seul agent de code : passez `--provider` quand plusieurs
+sont déclarés.
 
 ### Ce que rapporte le délégué
 
@@ -459,8 +463,9 @@ SF-DELEGATION: pass route=0a1b2c3d4e5f60718293 checks=type-check,automated-tests
 
 `pass` signifie que le contrôle nommé par le brief a été exécuté et satisfait ; `fail` qu'il a échoué ou que le résultat est incomplet. Les contrôles sont les codes de la bibliothèque de calibrage :
 `self-review`, `type-check`, `automated-tests`, `integration-tests`, `independent-review`, `security-tests` ; le prompt les liste, car un délégué à qui on ne les donne pas écrit du texte libre. Un
-`pass` qui ne nomme aucun contrôle, ou seulement `self-review`, est enregistré comme inconnu. La ligne est la **dernière ligne non vide du message hors d'un bloc de code**, lue depuis sa fin : un
-exemple cité plus haut ou un bloc de code ne peut pas décider du verdict. Toute autre clé de la ligne (`kind=`, `ticket=`, `trial=`) est ignorée. Un message sans cette ligne est un résultat inconnu.
+`pass` qui ne nomme aucun contrôle, ou seulement `self-review`, est enregistré comme inconnu. La ligne est la **dernière ligne non vide du message hors d'un bloc de code**. Les blocs de code sont
+suivis sur **tout le message** depuis sa première ligne (un bloc ne se ferme qu'avec la même marque, au moins aussi longue, et rien après), quelle que soit la longueur du message : un exemple cité
+plus haut ou un long bloc de code ne peut pas décider du verdict. Toute autre clé de la ligne (`kind=`, `ticket=`, `trial=`) est ignorée. Un message sans cette ligne est un résultat inconnu.
 
 ### Capture et signaux
 
@@ -501,9 +506,10 @@ sf agents outcome mark 1035 human-defect --kind tests --note "wrong default"
 sf agents outcome status-event 1035 "In progress"
 ```
 
-`record` et `mark` écrivent des preuves sur lesquelles le routage agit : le harness ne les pré-approuve donc pas dans `.claude/settings.json`, elles demandent la permission. Une exécution enregistrée
-à la main a l'hôte `manual` ; elle est notée pour le rapport et **ne déplace jamais le routage**. Un ticket sans `--kind` est marqué sur le type qui l'a livré (`multi-file-feature`, `scoped-edit`,
-`bug-fix`, `tests`, `terminal-ci`, le premier dont il a une exécution), jamais sur une `review` ni une exploration ; `--kind` en nomme un autre.
+`record` et `mark` écrivent des preuves sur lesquelles le routage agit : le harness ne les pré-approuve donc pas dans `.claude/settings.json`, elles demandent la permission. Il en va de même pour les
+formes de `sf agents route` qui écrivent un enregistrement de route : la forme de lecture est pré-approuvée, tandis que `--record` et `--retry-of` figurent sous `permissions.ask`, que l'hôte évalue
+avant `permissions.allow`. Une exécution enregistrée à la main a l'hôte `manual` ; elle est notée pour le rapport et **ne déplace jamais le routage**. Un ticket sans `--kind` est marqué sur le type
+qui l'a livré (`multi-file-feature`, `scoped-edit`, `bug-fix`, `tests`, `terminal-ci`, le premier dont il a une exécution), jamais sur une `review` ni une exploration ; `--kind` en nomme un autre.
 
 Un succès qui porte un signal compte comme un échec, tout comme celui qu'une exécution ultérieure reliée par `--retry-of` a refait sur un palier supérieur. La session marque `rework` quand elle refait
 un travail délégué et `human-defect` quand un défaut revient du test humain ou de la revue.
@@ -551,9 +557,12 @@ fait tourner qu'un candidat, donc le précédent ne peut pas rester routé. Une 
 candidat modifié.
 
 **Sur quoi reposent les décisions.** Un déplacement s'applique à tous les worktrees du clone, et un agent délégué peut modifier le manifeste de son propre worktree. Les seuils, les prix et les
-surcharges qu'une décision utilise sont donc lus dans la **branche de travail commitée** (`workflow.workingBranch`, la branche locale d'abord, puis `origin/<branche>`). Tant que le bloc de routage
-d'un worktree diffère de celui qui est commité, `adjust` ne décide ni ne déplace rien et le dit, et `sf agents route` répond d'après le bloc du worktree, pour l'affichage, sans essai. Sans commit à
-lire (un dépôt neuf), le manifeste du worktree est utilisé.
+surcharges qu'une décision utilise sont donc lus dans la **branche de travail commitée**, jamais dans le manifeste présent sur le disque. La branche est nommée par le `.saasfoundry.json` commité sur
+la branche par défaut du dépôt distant, puis par celui du commit sur lequel se trouve le worktree (`workflow.workingBranch`) ; si aucun ne la nomme, la branche par défaut du dépôt distant fait foi.
+`origin/<branche>` est lue d'abord, puis la branche locale : une branche locale jamais mise à jour ne peut donc pas tenir lieu de celle de l'équipe. Tant que le bloc de routage d'un worktree diffère
+de celui qui est commité, `adjust` ne décide ni ne déplace rien et le dit, et `sf agents route` répond d'après le bloc du worktree, pour l'affichage, sans essai. Quand aucun manifeste commité ne peut
+être lu (la branche nommée n'est pas récupérée, ou aucun commit du dépôt ne contient encore `.saasfoundry.json`), rien n'est décidé non plus et le refus dit quoi corriger : le manifeste présent sur le
+disque ne s'y substitue jamais. Sans branche nommée nulle part, le manifeste commité à `HEAD` est la copie commitée.
 
 ### La couche locale, promouvoir et réinitialiser
 

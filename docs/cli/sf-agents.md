@@ -415,11 +415,14 @@ sf agents route --task multi-file-feature --provider claude-code --ticket 1035 -
 `--record` writes a **route record** in the ledger (the kind, the tier, whether it is a trial, the ticket, the complexity and the nature) and prints its id (`routeId` in `--json`, `routeVersion: 2`).
 The session puts `route=<id>` in the brief and the delegate echoes it. The capture takes the task kind, the tier, the ticket and the trial flag **from the record**, so a delegate cannot name its own
 kind or call itself a trial. A run with no id, an id nobody issued, an id issued for another tier or another agent, or one that another agent already used is kept and censored, and says why in its
-evidence references. Reading a route without `--record` records nothing. `--retry-of <route or run id>` links a retry on a stronger tier to the delegation it follows: that link, and nothing else, says
-the earlier run did not do the job.
+evidence references. Reading a route without `--record` records nothing. `--retry-of <route or run id>` routes the retry **one tier above** the one the earlier delegation used, never a trial, and
+links the two: that link, and nothing else, says the earlier run did not do the job. A retry keeps the coding agent and the task kind of the delegation it follows, and at the top of the ladder the
+command says that no stronger tier is left instead of answering the same tier again.
 
-The record is also a **reservation**. A trial it hands out holds its place in the trial share until a run echoes the id or six hours pass, and the check and the reservation are one step under the
-ledger lock, so routes asked for at the same moment cannot all be trials. A record is written for one coding agent: pass `--provider` when several are declared.
+The record is also a **reservation**. A trial it hands out holds its place in the trial share until a run echoes the id or seven days pass, and the check and the reservation are one step under the
+ledger lock, so routes asked for at the same moment cannot all be trials. A route nobody echoed within those seven days is **expired**: a run that echoes it later is kept and censored
+(`route-expired`), because its kind and its trial flag can no longer be trusted. An agent that already used the route is never expired, so a resumed agent that hands back days later keeps its verdict.
+A record is written for one coding agent: pass `--provider` when several are declared.
 
 ### What the delegate reports
 
@@ -431,8 +434,9 @@ SF-DELEGATION: pass route=0a1b2c3d4e5f60718293 checks=type-check,automated-tests
 
 `pass` means the check the brief named was run and met; `fail` that it failed or the result is incomplete. The checks are the codes of the calibration library: `self-review`, `type-check`,
 `automated-tests`, `integration-tests`, `independent-review`, `security-tests`; the prompt lists them, because a delegate that is not told the codes writes free text. A `pass` that names no check, or
-only `self-review`, is recorded as unknown. The line is the **last non-empty line of the message outside a code fence**, read from its tail, so an example quoted earlier or a fenced block cannot
-decide the verdict. Any other key on the line (`kind=`, `ticket=`, `trial=`) is ignored. A message without the line is an unknown outcome.
+only `self-review`, is recorded as unknown. The line is the **last non-empty line of the message outside a code fence**. The fences are tracked over the **whole message** from its first line (a fence
+closes only with the same mark, at least as long, and nothing after it), however long the message is, so an example quoted earlier or a long fenced block cannot decide the verdict. Any other key on
+the line (`kind=`, `ticket=`, `trial=`) is ignored. A message without the line is an unknown outcome.
 
 ### Capture and signals
 
@@ -472,9 +476,10 @@ sf agents outcome mark 1035 human-defect --kind tests --note "wrong default"
 sf agents outcome status-event 1035 "In progress"
 ```
 
-`record` and `mark` write evidence the routing acts on, so the harness does not pre-approve them in `.claude/settings.json`: they ask. A run recorded by hand has the host `manual`; it is rated for the
-report and **never moves the routing**. A ticket without `--kind` is marked on the kind that delivered it (`multi-file-feature`, `scoped-edit`, `bug-fix`, `tests`, `terminal-ci`, the first one it has
-a run of), never on a `review` or an exploration; `--kind` names another.
+`record` and `mark` write evidence the routing acts on, so the harness does not pre-approve them in `.claude/settings.json`: they ask. The same goes for the forms of `sf agents route` that write a
+route record: the read form is pre-approved, while `--record` and `--retry-of` are listed under `permissions.ask`, which the host evaluates before `permissions.allow`. A run recorded by hand has the
+host `manual`; it is rated for the report and **never moves the routing**. A ticket without `--kind` is marked on the kind that delivered it (`multi-file-feature`, `scoped-edit`, `bug-fix`, `tests`,
+`terminal-ci`, the first one it has a run of), never on a `review` or an exploration; `--kind` names another.
 
 A success that carries a signal counts as a failure, as does one that a later run linked to it with `--retry-of` redid on a higher tier. The session marks `rework` when it redoes delegated work and
 `human-defect` when a defect comes back from Human Testing or review.
@@ -517,9 +522,11 @@ expected-cost rule, which then accepts it. A candidate that replaces another **u
 routed. A grid update keeps the measured history of every unchanged candidate and starts a fresh window only for a changed one.
 
 **What the decisions rest on.** A move applies to every worktree of the clone, and a delegated agent can edit the manifest of its own worktree. The thresholds, the prices and the overrides a decision
-uses are therefore read from the **committed working branch** (`workflow.workingBranch`, the local branch first, then `origin/<branch>`). While the routing block of a worktree differs from the
-committed one, `adjust` decides and moves nothing and says so, and `sf agents route` answers by the worktree's own block for display, with no trial. Without a commit to read (a new repository), the
-manifest of the worktree is used.
+uses are therefore read from the **committed working branch**, never from the manifest on disk. The branch is named by the `.saasfoundry.json` committed on the remote's default branch, then by the one
+on the commit the worktree is on (`workflow.workingBranch`); when none names it, the remote's default branch stands. `origin/<branch>` is read first, then the local branch, so a local branch that was
+never updated cannot stand for the team's. While the routing block of a worktree differs from the committed one, `adjust` decides and moves nothing and says so, and `sf agents route` answers by the
+worktree's own block for display, with no trial. When no committed manifest can be read (the named branch is not fetched, or the repository has no commit holding `.saasfoundry.json` yet), nothing is
+decided either, and the refusal says what to fix: the manifest on disk is never a substitute. With no branch named anywhere, the manifest committed at `HEAD` is the committed copy.
 
 ### The local layer, promote and reset
 
