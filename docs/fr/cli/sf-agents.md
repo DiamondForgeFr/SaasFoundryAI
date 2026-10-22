@@ -214,7 +214,9 @@ conscient des conflits : les fichiers personnalisés restent en place, des fichi
 conservées pour une nouvelle tentative. Un conflit n'est jamais présenté comme une activation réussie.
 
 `sf update` conserve l'inventaire partagé et les références des fichiers partagés. Après une mise à jour du harness commun, exécutez `sf agents refresh` pour la prise en charge locale ou
-`sf agents refresh --scope shared` pour la prise en charge partagée. Les commandes n'ajoutent jamais à l'index, ne commitent, ne poussent ni ne changent de branche Git.
+`sf agents refresh --scope shared` pour la prise en charge partagée. `sf update` maintient lui-même `.claude/settings.json` à jour (les hooks de capture des délégations et les règles de permission) :
+un refresh n'est plus nécessaire après une mise à jour pour ce fichier, voir [Capture des délégations et permissions](/fr/cli/sf-update#capture-des-delegations-et-permissions-harness-v5). Les
+commandes n'ajoutent jamais à l'index, ne commitent, ne poussent ni ne changent de branche Git.
 
 ## Profils d'outils et fournisseurs de modèles
 

@@ -18,6 +18,11 @@ Tous les flux partent du manifeste et de la classification canonique des capacit
 `saasfoundry-cli@1.0.0-beta` peut d’abord créer ce manifeste par le flux explicite d’adoption ci-dessous. La bêta publiée désactivait le monorepo : il n’existe donc aucune disposition monorepo bêta
 authentique à adopter. Les autres projets sans manifeste sont refusés.
 
+Deux autres choses se produisent à chaque exécution, quel que soit le résultat du contrôle de version. Les **migrations de modules** en attente amènent un harness installé à la disposition actuelle,
+et `.claude/settings.json` est **maintenu à jour** : les hooks de capture des délégations et les règles de permission y sont fusionnés, vos clés, hooks et règles restent, et un fichier qui ne peut pas
+être fusionné sur place (un lien, un texte qui n'est pas du JSON) reçoit une proposition `.saasfoundry.new` au lieu d'une modification. `sf agents refresh` n'est plus nécessaire après une mise à jour
+pour cela. Voir [Capture des délégations et permissions](/fr/cli/sf-update#capture-des-delegations-et-permissions-harness-v5).
+
 ## Adopter un projet antérieur au manifeste
 
 L’adoption d’un projet historique est séparée de la mise à jour des modèles et de l’ajout de modules. Elle ne prend en charge que la sortie multirepo de la release publiée

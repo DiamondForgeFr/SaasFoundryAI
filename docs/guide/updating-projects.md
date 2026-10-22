@@ -18,6 +18,11 @@ All flows are driven by the manifest and the canonical capability classification
 `saasfoundry-cli@1.0.0-beta` release can first create that manifest through the explicit legacy-adoption flow below. The published beta disabled monorepo generation, so there is no authentic beta
 monorepo layout to adopt. Other projects without a manifest are refused.
 
+Two more things happen on every run, whatever the version check says. Pending **module migrations** bring an installed harness to the current layout, and `.claude/settings.json` is **kept current**:
+the delegation capture hooks and the permission rules are merged into it, your own keys, hooks and rules stay, and a file that cannot be merged in place (a link, text that is not JSON) gets a
+`.saasfoundry.new` proposal instead of an edit. `sf agents refresh` is no longer required after an update for that. See
+[Delegation capture and permissions](/cli/sf-update#delegation-capture-and-permissions-harness-v5).
+
 ## Adopt a project created before manifest support
 
 Legacy adoption is separate from updating templates or adding modules. It supports only the integrity-pinned multirepo output of the published `saasfoundry-cli@1.0.0-beta` package. It does not infer
