@@ -2,7 +2,7 @@ import { existsSync } from 'fs'
 import { lstat, mkdir, readFile, unlink, writeFile } from 'fs/promises'
 import { dirname, join, posix } from 'path'
 
-import { ADOPTION_COMMON_INSTRUCTIONS, CLAUDE_CODE_RULE_PATH, CODEX_SOURCE_CLAUDE_BRIDGE, COMMON_INSTRUCTIONS, withGeneratedInstructions, withGeneratedRegion } from './agent-instructions'
+import { CLAUDE_CODE_RULE_PATH, isGeneratedBridge as isBridgeOfKind, withGeneratedInstructions, withGeneratedRegion } from './agent-instructions'
 import { MarkdownSection, sectionHash, splitSections } from './markdown-sections'
 import { SHIPPED_SECTIONS, TemplateKind } from './shipped-instruction-sections'
 import type { ModuleMigrationPreview } from '../migrations/module/types'
@@ -133,9 +133,12 @@ const isShippedAnywhere = (section: MarkdownSection): boolean => (Object.keys(SH
 /** Keep a block separated from the next one by a blank line, as it was in CLAUDE.md. */
 const block = (text: string): string => `${text.trimEnd()}\n\n`
 
-/** A generated AGENTS.md bridge: one of the current bridges, or the bytes the CLI recorded when it wrote one. */
+/**
+ * A generated AGENTS.md bridge: one of the current bridges, the bytes a published release wrote (#935),
+ * or the bytes the CLI recorded when it wrote one.
+ */
 function isGeneratedBridge(content: string, recordedHash: string | undefined): boolean {
-  if (content === COMMON_INSTRUCTIONS || content === ADOPTION_COMMON_INSTRUCTIONS) return true
+  if (isBridgeOfKind('common', content) || isBridgeOfKind('adoption', content)) return true
   const firstLine = content.split('\n', 1)[0]
   return BRIDGE_HEADINGS.includes(firstLine) && recordedHash === hashFileContent(Buffer.from(content))
 }
@@ -144,7 +147,9 @@ async function planDirectory(projectDir: string, manifest: SaaSFoundryManifest, 
   const claude = await readRegular(join(projectDir, dir, 'CLAUDE.md'))
   const localShadow = existsSync(join(projectDir, dir, 'CLAUDE.local.md'))
   if (claude === undefined) return localShadow ? { dir, outcome: 'migrate', sections: [], mustContain: [], localShadow } : undefined
-  if (claude === CODEX_SOURCE_CLAUDE_BRIDGE) return { dir, outcome: 'remove-bridge', sections: [], mustContain: [], localShadow }
+  // The bridge to AGENTS.md of any release, not only this one: kept, it hides AGENTS.md from Claude Code and
+  // reads as a CLAUDE.md the user wrote, which turns the AGENTS.md beside it into a sidecar (#935).
+  if (isBridgeOfKind('claudeBridge', claude)) return { dir, outcome: 'remove-bridge', sections: [], mustContain: [], localShadow }
 
   const template = await currentTemplateSections(kind)
   const moves: SectionMove[] = []
