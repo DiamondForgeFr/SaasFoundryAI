@@ -56,6 +56,31 @@ GitHub operations are implemented by `.claude/skills/sf-tool-github-projects/git
 
 Status names come from the board and manifest. The orchestration layer must not invent them.
 
+### Pull request commands on a branch the host named
+
+`create-pr`, `ready-pr` and `draft-pr` work on the ticket's branch: the one `workflow.branchNaming` gives for that ticket (`feature/{N}-…` or `fix/{N}-…`, or the release convention for a release
+ticket). That is the current branch whenever it follows the naming, and nothing changes then.
+
+A delegated agent started with Claude Code's `isolation: "worktree"` is on a branch the host named, `worktree-agent-<id>`, and pushes its work to the ticket branch from there:
+
+```bash
+git push origin HEAD:feature/42-add-export
+.claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft
+```
+
+The commands accept that checkout when **origin holds the ticket's branch at the local `HEAD` commit**: the work has been pushed in full, and the pull request carries exactly what is checked out.
+
+- **Without `--head`**, the CLI looks for the feature or fix branches of the ticket on origin that point at `HEAD`. Exactly one is used, and the command prints a line saying which. None, or several,
+  is refused with an error that names `--head`. Release branches are never searched for: they carry no ticket number.
+- **With `--head <branch>`**, the branch is the one named. It must follow the ticket's `branchNaming` (a release branch is allowed where the command allows a release pull request), and origin must
+  hold it at `HEAD`. This is the way out when several branches are at `HEAD`.
+
+Everything else is refused, and the message says why: a branch missing from origin, a branch pushed but behind `HEAD` (push again: `git push origin HEAD:<branch>`), and the branch of another ticket,
+even at `HEAD`. A pull request is never promoted from a branch that is not provably the checked-out work, so another developer's branch cannot be taken by mistake.
+
+From there the branch is the ticket's own. `create-pr` pushes nothing, because origin already holds it, and opens the pull request from that branch (`gh pr create --head`). The board linkage, the
+`Resolves #<ticket>` line, the base branch and the guards are those of any other ticket branch.
+
 ## Routing from `sf-workflow`
 
 `workflow-cli.sh` is the tool-independent entry point:

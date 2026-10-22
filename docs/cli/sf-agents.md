@@ -359,6 +359,12 @@ request out of draft. The session collects the Human Testing feedback and hands 
 same worktree, which returns the ticket to AI Testing. A defect found in review goes back the same way. On a complex ticket the session runs the Examine phase itself. The tier agent prompt carries the
 same limits, so the agent is not told to do what its own prompt forbids.
 
+The branch of a delegated ticket is the agent's to name, unless the host names it first. Claude Code's `isolation: "worktree"` starts the agent on `worktree-agent-<id>`; the agent keeps that local
+branch and pushes the work to the ticket branch (`git push origin HEAD:feature/<N>-<description>`). `create-pr`, `ready-pr` and `draft-pr` accept that checkout when origin holds the ticket's branch at
+the local `HEAD` commit: they find it on their own when it is the only such branch, or take it from `--head <branch>`. A branch missing from origin, pushed but behind `HEAD`, or belonging to another
+ticket is refused. The brief to the agent names the ticket branch, so it can pass `--head`. See
+[GitHub integration](../workflow/github-integration.md#pull-request-commands-on-a-branch-the-host-named).
+
 The task kind of the delivery is sized to the work. The complexity profile of the ticket declares it (`steps.execute.taskKind`), and it is always resolved with `sf agents route`, never by naming a
 model:
 

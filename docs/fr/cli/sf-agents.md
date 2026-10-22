@@ -382,6 +382,12 @@ qui la sort du brouillon. La session recueille les retours de Human Testing et c
 ticket, dans le même worktree ; celui-ci remet le ticket en AI Testing. Un défaut trouvé en revue repart de la même façon. Sur un ticket complexe, la session mène elle-même la phase Examine. Le prompt
 de l'agent de palier porte les mêmes limites : l'agent n'est pas invité à faire ce que son propre prompt lui interdit.
 
+La branche d'un ticket délégué est celle que l'agent nomme, sauf si l'hôte la nomme avant lui. `isolation: "worktree"` de Claude Code place l'agent sur `worktree-agent-<id>` ; l'agent garde cette
+branche locale et pousse son travail vers la branche du ticket (`git push origin HEAD:feature/<N>-<description>`). `create-pr`, `ready-pr` et `draft-pr` acceptent ce checkout quand origin porte la
+branche du ticket sur le commit du `HEAD` local : elles la trouvent seules quand c'est la seule dans ce cas, ou la prennent de `--head <branche>`. Une branche absente d'origin, poussée mais en retard
+sur `HEAD`, ou appartenant à un autre ticket est refusée. Le brief à l'agent nomme la branche du ticket, pour qu'il puisse passer `--head`. Voir
+[Intégration GitHub](../workflow/github-integration.md#commandes-pr-sur-une-branche-nommee-par-lhote).
+
 Le type de tâche de la livraison est dimensionné selon le travail. Le profil de complexité du ticket le déclare (`steps.execute.taskKind`), et il est toujours résolu avec `sf agents route`, jamais en
 nommant un modèle :
 
