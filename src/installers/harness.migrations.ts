@@ -169,8 +169,11 @@ export const moveClaudeMdToAgentsMd: ModuleMigration = {
  *
  * This deposits only that file, through the merge `sf update` runs on every run (harness-settings.ts):
  * the project's own keys, hooks and rules are kept, a file that cannot be merged in place (a link, text
- * that is not JSON) is left as it is and the proposal goes to `.claude/settings.json.saasfoundry.new`.
- * It is not `writeMigratedFile`, which would replace an untracked file the user owns.
+ * that is not JSON, a `hooks` or `permissions` of another shape) is left as it is and the proposal goes
+ * to `.claude/settings.json.saasfoundry.new`. It is not `writeMigratedFile`, which would replace an
+ * untracked file the user owns. This one-shot step, like `sf agents refresh`, also takes away the two
+ * `sf agents outcome` rules a pre-release build had pre-approved, and names each one it removes: the
+ * every-update merge never removes a rule.
  *
  * Everything else the routing needs follows the CLI by its own path and is not repeated here: the tier
  * agents and the Codex hooks on every update, the AGENTS.md region with the v3 → v4 move. The consent to
@@ -180,9 +183,9 @@ export const wireDelegationCapture: ModuleMigration = {
   from: 4,
   to: 5,
   name: 'wire-delegation-capture',
-  preview: async (projectDir, manifest) => previewHarnessSettings(await syncHarnessSettingsForProject(projectDir, manifest, { dryRun: true })),
+  preview: async (projectDir, manifest) => previewHarnessSettings(await syncHarnessSettingsForProject(projectDir, manifest, { dryRun: true, revoke: true })),
   up: async (projectDir, manifest) => {
-    logHarnessSettings(await syncHarnessSettingsForProject(projectDir, manifest))
+    logHarnessSettings(await syncHarnessSettingsForProject(projectDir, manifest, { revoke: true }))
     // A Codex declaration kept in this clone's Git directory is invisible to the manifest: the refresh wires its hook.
     if (existsSync(join(projectDir, '.codex')) && !manifest.modules?.harness?.agents?.includes('codex')) {
       console.log(chalk.gray('  Run sf agents refresh to wire the Codex delegation capture hook (.codex/hooks.json) for a Codex setup local to this clone.'))

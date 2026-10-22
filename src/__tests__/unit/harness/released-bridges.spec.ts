@@ -98,6 +98,62 @@ describe('generated bridges of the published releases (#935)', () => {
       }
     })
 
+    // Review of #935, row 6: a checkout with `core.autocrlf`, or an editor, changes the bytes and not the bridge
+    describe('a bridge whose line endings or byte order mark changed', () => {
+      const crlf = (text: string): string => text.replace(/\n/g, '\r\n')
+      const BOM = String.fromCharCode(0xfeff)
+
+      it.each(RELEASES.flatMap((version) => KINDS.map((kind) => [version, kind] as const)))('%s: the %s bridge with CRLF line endings, with a BOM, and with both', async (version, kind) => {
+        const text = (await released(version, kind)).toString('utf8')
+        for (const variant of [crlf(text), `${BOM}${text}`, `${BOM}${crlf(text)}`]) {
+          expect(variant).not.toBe(text)
+          expect(isGeneratedBridge(kind, variant)).toBe(true)
+          expect(isGeneratedBridge(kind, Buffer.from(variant))).toBe(true)
+          expect(isReleasedBridge(kind, Buffer.from(variant))).toBe(true)
+          expect(releasedBridgeVersions(kind, variant)).toContain(version)
+        }
+      })
+
+      it.each(KINDS)('the %s bridge this CLI renders, as a CRLF checkout', (kind) => {
+        expect(isGeneratedBridge(kind, crlf(CURRENT[kind]))).toBe(true)
+        expect(isGeneratedBridge(kind, `${BOM}${CURRENT[kind]}`)).toBe(true)
+      })
+
+      it('is still the user’s file once anything else differs, whatever the line endings', async () => {
+        const text = (await released('1.0.1', 'common')).toString('utf8')
+        expect(isGeneratedBridge('common', crlf(`${text}\nAlso run make check.\n`))).toBe(false)
+        expect(isGeneratedBridge('common', crlf(text).replace('CLAUDE.md', 'CLAUDE.txt'))).toBe(false)
+        // A lone carriage return or a BOM in the middle is not a line ending nor a mark
+        expect(isGeneratedBridge('common', text.replace('\n', '\r'))).toBe(false)
+        expect(isGeneratedBridge('common', text.replace('\n', `\n${BOM}`))).toBe(false)
+      })
+
+      it('is read from the files: a CRLF 1.0.1 AGENTS.md bridge over a CLAUDE.md is a Claude source, planned as migrate, never mixed', async () => {
+        const bridge = crlf((await released('1.0.1', 'common')).toString('utf8'))
+        await put('CLAUDE.md', await preCleaned())
+        await put('AGENTS.md', `${BOM}${bridge}`)
+
+        expect(await inspectInstructionSource(dir)).toMatchObject({ source: 'claude' })
+        expect(await resolveInstructionFile(dir)).toBe('CLAUDE.md')
+        expect((await planClaudeMdMigration(dir, manifest())).dirs[0].outcome).toBe('migrate')
+      })
+
+      it('is read from the files: a CRLF 1.0.1 CLAUDE.md bridge over an AGENTS.md project is removed, not sidecar’d', async () => {
+        await put('CLAUDE.md', crlf((await released('1.0.1', 'claudeBridge')).toString('utf8')))
+        await put('AGENTS.md', '# My agents\n\nUse pnpm.\n')
+
+        expect(await inspectInstructionSource(dir)).toMatchObject({ source: 'codex' })
+        expect((await planClaudeMdMigration(dir, manifest())).dirs).toEqual([expect.objectContaining({ dir: '', outcome: 'remove-bridge' })])
+      })
+
+      it('is read from the files: a BOM + CRLF 1.0.1 adoption bridge is reference-only', async () => {
+        await put('CLAUDE.md', '# Mine\n')
+        await put('AGENTS.md', `${BOM}${crlf((await released('1.0.1', 'adoption')).toString('utf8'))}`)
+
+        expect(await isReferenceOnlyAdoption(dir)).toBe(true)
+      })
+    })
+
     it('does not take a bridge for another kind', async () => {
       expect(isGeneratedBridge('claudeBridge', await released('1.0.1', 'common'))).toBe(false)
       expect(isGeneratedBridge('common', await released('1.0.1', 'adoption'))).toBe(false)

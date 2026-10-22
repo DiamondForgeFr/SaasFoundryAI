@@ -145,7 +145,9 @@ Boundaries to respect:
   `CLAUDE.md` is moved into `AGENTS.md` by the harness v3 → v4 migration (#938).
 - A merged, user-owned file is never written with `writeMigratedFile` (it replaces an untracked file) and its migration never fakes a baseline in `fileHashes`. The harness v4 → v5 migration
   (`wire-delegation-capture`, #935) shows the shape: it calls the merge `sf update` runs on every run (`src/harness/harness-settings.ts`), which keeps the project's keys, writes nothing when nothing
-  is missing, and sends the proposal to `.claude/settings.json.saasfoundry.new` when the file is a link or not JSON. It has a `preview` for `--dry-run` and never writes the delegation consent.
+  is missing, and sends the proposal to `.claude/settings.json.saasfoundry.new` when the file is a link, not JSON, or has a `hooks` / `permissions` shape the merge would have to overwrite. The
+  every-update merge only adds; removing a rule (the `revoke` list) belongs to the one-shot migration and `sf agents refresh`, and each removed rule is named. It has a `preview` for `--dry-run` and
+  never writes the delegation consent.
 - A bridge the CLI generates changes text across releases: recognise the bytes of every published release by hash (`src/harness/released-bridge-hashes.ts`, generated from
   `src/__tests__/fixtures/released-bridges/`, see its README), never by equality with the current text alone. Capture a release's fixtures when it ships.
 - Scaffolded projects refresh their harness through FLOW 1 (full template regen) — FLOW 1b only runs on non-scaffold manifests (`isScaffoldManifest()` is the gate; the marker is `modules.email`, never

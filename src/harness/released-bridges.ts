@@ -16,6 +16,19 @@ export type { BridgeKind } from './released-bridge-hashes'
  */
 const sha256 = (content: Buffer | string): string => createHash('sha256').update(content).digest('hex')
 
+/** U+FEFF, spelled out: an invisible character in the source is no way to say it. */
+const BYTE_ORDER_MARK = String.fromCharCode(0xfeff)
+
+/**
+ * The text of a bridge as the release wrote it: a checkout on Windows (`core.autocrlf`) or an editor may
+ * have turned its line endings into CRLF or put a byte order mark in front, which changes the bytes and not
+ * the bridge. Recognition reads through both; a file with any other difference is still the user's.
+ */
+export function normalizeBridgeText(content: Buffer | string): string {
+  const text = typeof content === 'string' ? content : content.toString('utf8')
+  return (text.startsWith(BYTE_ORDER_MARK) ? text.slice(BYTE_ORDER_MARK.length) : text).replace(/\r\n/g, '\n')
+}
+
 const releasedHashes = (kind: BridgeKind): readonly string[] => Object.values(RELEASED_BRIDGE_HASHES[kind])
 
 /** Whether the hash is one a published release recorded for this bridge. */
@@ -23,14 +36,14 @@ export function isReleasedBridgeHash(kind: BridgeKind, hash: string | undefined)
   return hash !== undefined && releasedHashes(kind).includes(hash)
 }
 
-/** Whether these bytes are exactly what a published release wrote for this bridge. */
+/** Whether these bytes are what a published release wrote for this bridge, up to line endings and a byte order mark. */
 export function isReleasedBridge(kind: BridgeKind, content: Buffer | string): boolean {
-  return isReleasedBridgeHash(kind, sha256(content))
+  return isReleasedBridgeHash(kind, sha256(normalizeBridgeText(content)))
 }
 
-/** The releases whose bridge of this kind has exactly these bytes, for a message or a test. */
+/** The releases whose bridge of this kind has these bytes (up to line endings and a byte order mark), for a message or a test. */
 export function releasedBridgeVersions(kind: BridgeKind, content: Buffer | string): string[] {
-  const hash = sha256(content)
+  const hash = sha256(normalizeBridgeText(content))
   return Object.entries(RELEASED_BRIDGE_HASHES[kind])
     .filter(([, released]) => released === hash)
     .map(([version]) => version)

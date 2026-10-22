@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
 import { ADOPTION_COMMON_INSTRUCTIONS } from '../../../harness/agent-instructions'
+import { syncHarnessSettingsForProject } from '../../../harness/harness-settings'
 import { dropPerAppClaudeInMonorepo, dropStackSkillsWithoutStack, harnessMigrations, wireDelegationCapture } from '../../../installers/harness.migrations'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import type { SaaSFoundryManifest } from '../../../types'
@@ -272,6 +273,58 @@ describe('harness migration v4 → v5: wire-delegation-capture', () => {
     expect(JSON.parse(await read(`${SETTINGS}.saasfoundry.new`)).hooks.SubagentStop).toBeDefined()
     expect(output()).toContain('.claude/settings.json is not valid JSON')
     expect(output()).toContain('.claude/settings.json.saasfoundry.new')
+  })
+
+  // Review of #935, row 1: this one-shot step, like `sf agents refresh`, takes the two pre-release rules away,
+  // and says which; the every-update merge never does
+  it('removes the two pre-release evidence rules once, and names each one it removes', async () => {
+    await put(SETTINGS, JSON.stringify({ permissions: { allow: ['Bash(make test)', 'Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)'] } }))
+
+    await wireDelegationCapture.up(dir, manifest())
+
+    const allow: string[] = JSON.parse(await read(SETTINGS)).permissions.allow
+    expect(allow).toContain('Bash(make test)')
+    expect(allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(allow).not.toContain('Bash(sf agents outcome record *)')
+    expect(output()).toContain('.claude/settings.json: removed the rule Bash(sf agents outcome mark *)')
+    expect(output()).toContain('.claude/settings.json: removed the rule Bash(sf agents outcome record *)')
+    expect(output()).toContain('your own keys, hooks and rules are kept, except the rule named below')
+  })
+
+  it('previews the rules it would remove', async () => {
+    await put(SETTINGS, JSON.stringify({ permissions: { allow: ['Bash(sf agents outcome mark *)'] } }))
+
+    const [entry] = await wireDelegationCapture.preview!(dir, manifest())
+
+    expect(entry).toMatchObject({ action: 'merge', source: SETTINGS, reason: expect.stringContaining('Bash(sf agents outcome mark *)') })
+    expect(JSON.parse(await read(SETTINGS)).permissions.allow).toContain('Bash(sf agents outcome mark *)')
+  })
+
+  it('removes a rule once: a project that adds one back after the migration keeps it through every later run', async () => {
+    await put(SETTINGS, JSON.stringify({ permissions: { allow: ['Bash(sf agents outcome mark *)'] } }))
+    await wireDelegationCapture.up(dir, manifest())
+    const settings = JSON.parse(await read(SETTINGS))
+    settings.permissions.allow.push('Bash(sf agents outcome mark *)')
+    await put(SETTINGS, JSON.stringify(settings))
+
+    const results = await syncHarnessSettingsForProject(dir, manifest())
+
+    expect(results).toEqual([{ path: SETTINGS, status: 'unchanged' }])
+    expect(JSON.parse(await read(SETTINGS)).permissions.allow).toContain('Bash(sf agents outcome mark *)')
+  })
+
+  // Review of #935, rows 2 and 3
+  it.each([
+    ['a hooks that is an array', '{ "hooks": [] }', '.claude/settings.json has `hooks` that is not an object'],
+    ['a permissions.allow that is a string', '{ "permissions": { "allow": "Bash(npm test)" } }', '.claude/settings.json has `permissions.allow` that is not an array']
+  ])('leaves %s as it is and writes the proposal beside it', async (_name, text, message) => {
+    await put(SETTINGS, text)
+
+    await wireDelegationCapture.up(dir, manifest())
+
+    expect(await read(SETTINGS)).toBe(text)
+    expect(JSON.parse(await read(`${SETTINGS}.saasfoundry.new`)).hooks.SubagentStop).toBeDefined()
+    expect(output()).toContain(message)
   })
 
   it('is idempotent: the second run writes nothing and says nothing', async () => {

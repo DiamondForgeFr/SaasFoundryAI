@@ -5,7 +5,7 @@ import { join, posix, resolve } from 'path'
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentProfile, needsSharedSkills } from './agent-registry'
 import { CODEX_HOOKS_PATH, renderCodexHooks } from './delegation-hooks'
-import { BridgeKind, isReleasedBridge, isReleasedBridgeHash } from './released-bridges'
+import { BridgeKind, isReleasedBridge, isReleasedBridgeHash, normalizeBridgeText } from './released-bridges'
 import type { RoutingOverrides } from './routing-grid'
 import { renderTierAgents } from './tier-agents'
 import { HarnessAgent, skillsTemplatesPath } from '../types'
@@ -340,11 +340,11 @@ const CURRENT_BRIDGES: Record<BridgeKind, string> = {
 
 /**
  * Whether these bytes are a generated bridge of this kind: the text this CLI renders, or the text a
- * published release rendered (#935) — the project installed by that release still holds it.
+ * published release rendered (#935) — the project installed by that release still holds it. Line endings
+ * and a leading byte order mark do not make it another file: a CRLF checkout of a bridge is that bridge.
  */
 export function isGeneratedBridge(kind: BridgeKind, content: Buffer | string): boolean {
-  const bytes = typeof content === 'string' ? Buffer.from(content) : content
-  return bytes.equals(Buffer.from(CURRENT_BRIDGES[kind])) || isReleasedBridge(kind, bytes)
+  return normalizeBridgeText(content) === CURRENT_BRIDGES[kind] || isReleasedBridge(kind, content)
 }
 
 /** The same check against the hash a manifest or the private inventory recorded when it wrote the file. */

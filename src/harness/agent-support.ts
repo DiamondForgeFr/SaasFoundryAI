@@ -552,7 +552,8 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
 async function mergeCaptureSettings(root: string, report: AgentInstructionsReport): Promise<void> {
   try {
     // The merge `sf update` runs too (#935): a link or text that is not JSON is left as it is, with a proposal beside it.
-    const result = await syncHarnessSettings(root)
+    // A refresh also takes away the pre-release rules the harness keeps asking (each one is named in a warning); `sf update` never does.
+    const result = await syncHarnessSettings(root, '.', { revoke: true })
     if (result.status === 'created' || result.status === 'merged') report.written.push(result.path)
     for (const line of summarizeHarnessSettings([result])) if (line.needsAttention) report.warnings.push(line.text)
   } catch (error) {

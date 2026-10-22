@@ -6,7 +6,15 @@ import { isReferenceOnlyAdoption } from './agent-instructions'
 import { CLAUDE_CAPTURE_HOOKS, isLegacyCaptureCommand } from './delegation-hooks'
 import type { ModuleMigrationPreview } from '../migrations/module/types'
 import type { SaaSFoundryManifest } from '../types'
-import { ClaudeHooksConfig, mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions, mergeHooksInto, mergePermissionsInto, writeSettingsText } from '../utils/claude-settings'
+import {
+  ClaudeHooksConfig,
+  ClaudeSettingsShapeError,
+  mergeClaudeSettingsHooks,
+  mergeClaudeSettingsPermissions,
+  mergeHooksInto,
+  mergePermissionsInto,
+  writeSettingsText
+} from '../utils/claude-settings'
 
 /**
  * What the harness keeps in a project's `.claude/settings.json`: the hooks and the permission rules.
@@ -71,12 +79,24 @@ export async function mergeHarnessSettings(targetPath: string): Promise<void> {
 export const HARNESS_SETTINGS_PATH = '.claude/settings.json'
 export const HARNESS_SETTINGS_SIDECAR_SUFFIX = '.saasfoundry.new'
 
+export interface RenderHarnessSettingsOptions {
+  /**
+   * Take away the rules a pre-release build had pre-approved (`HARNESS_REVOKED_COMMANDS`). Off by default:
+   * the merge `sf update` runs on every run only adds, and never removes a rule the project may have added
+   * on purpose. Only the one-shot harness v4 -> v5 migration and `sf agents refresh` turn it on, and say
+   * which rules they removed.
+   */
+  revoke?: boolean
+}
+
 /**
  * The settings text with the harness hooks and permissions merged in, as a pure function of the text
  * the project has. `existing` undefined means no file: the render is the harness's own settings, the
- * content of the scaffold templates. An `error` says why the text cannot be merged, never throws.
+ * content of the scaffold templates. An `error` says why the text cannot be merged (it reads after the
+ * file name: "is not valid JSON", "has `hooks` that is not an object"), never throws. `removed` names the
+ * rules `revoke` took away.
  */
-export function renderHarnessSettings(existing?: string): { content: string; changed: boolean } | { error: string } {
+export function renderHarnessSettings(existing?: string, { revoke = false }: RenderHarnessSettingsOptions = {}): { content: string; changed: boolean; removed: string[] } | { error: string } {
   let settings: Record<string, unknown> = {}
   if (existing !== undefined && existing.trim()) {
     let parsed: unknown
@@ -89,21 +109,25 @@ export function renderHarnessSettings(existing?: string): { content: string; cha
     settings = parsed as Record<string, unknown>
   }
   const before = JSON.stringify(settings)
+  let removed: string[]
   try {
     mergeHooksInto(settings, HARNESS_HOOKS, HARNESS_SUPERSEDED_HOOKS)
-    mergePermissionsInto(settings, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_ASK_COMMANDS)
-  } catch {
-    return { error: 'has hooks or permissions in a shape the merge does not know' }
+    removed = mergePermissionsInto(settings, HARNESS_ALLOWED_COMMANDS, revoke ? HARNESS_REVOKED_COMMANDS : [], HARNESS_ASK_COMMANDS).revoked
+  } catch (error) {
+    if (error instanceof ClaudeSettingsShapeError) return { error: error.message }
+    throw error
   }
-  return { content: `${JSON.stringify(settings, null, 2)}\n`, changed: existing === undefined || !existing.trim() || JSON.stringify(settings) !== before }
+  return { content: `${JSON.stringify(settings, null, 2)}\n`, changed: existing === undefined || !existing.trim() || JSON.stringify(settings) !== before, removed }
 }
 
 /**
  * - `created`: no settings file yet, the harness's own was written;
- * - `merged`: the project's file gained hooks or rules, and kept everything it had;
+ * - `merged`: the project's file gained hooks or rules, and kept everything it had (bar the rules `removed`,
+ *   when the sync was asked to revoke);
  * - `unchanged`: nothing to add, the file was not touched;
- * - `sidecar`: the file is a link or not valid JSON, so it was left as it is and the merged proposal went
- *   to `settings.json.saasfoundry.new` for the developer to reconcile;
+ * - `sidecar`: the file is a link, not valid JSON or not shaped like settings (a `hooks` that is an array,
+ *   a `permissions.allow` that is a string), so it was left as it is and the merged proposal went to
+ *   `settings.json.saasfoundry.new` for the developer to reconcile;
  * - `skipped`: the location cannot be written safely (a linked `.claude`, a directory in place of the file).
  */
 export type HarnessSettingsStatus = 'created' | 'merged' | 'unchanged' | 'sidecar' | 'skipped'
@@ -116,6 +140,8 @@ export interface HarnessSettingsResult {
   sidecar?: string
   /** Why a file was not merged, for a `sidecar` or a `skipped`. */
   reason?: string
+  /** The pre-release rules the sync took away (it was asked to revoke): each one is named in the summary. */
+  removed?: string[]
 }
 
 async function lstatOrUndefined(path: string): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {
@@ -129,7 +155,7 @@ async function lstatOrUndefined(path: string): Promise<Awaited<ReturnType<typeof
 
 const settingsPathOf = (root: string): string => (root === '.' ? HARNESS_SETTINGS_PATH : `${root}/${HARNESS_SETTINGS_PATH}`)
 
-export interface SyncHarnessSettingsOptions {
+export interface SyncHarnessSettingsOptions extends RenderHarnessSettingsOptions {
   /** Report what would happen and write nothing. */
   dryRun?: boolean
 }
@@ -137,11 +163,13 @@ export interface SyncHarnessSettingsOptions {
 /**
  * Bring `<projectDir>/<root>/.claude/settings.json` up to the harness hooks and permissions, without
  * taking anything away from the project: its own keys, hooks and rules stay, a file with nothing to
- * add is not rewritten. The file is user-owned, so one that cannot be merged in place — a link, a hard
- * link, text that is not a JSON object — is left untouched and the proposal is written next to it in
+ * add is not rewritten. The one exception is the pre-release rules, removed only when the caller asks
+ * (`revoke`) and then named in the result. The file is user-owned, so one that cannot be merged in
+ * place — a link, a hard link, text that is not a JSON object, a `hooks` or `permissions` the merge
+ * would have to overwrite — is left untouched and the proposal is written next to it in
  * `settings.json.saasfoundry.new`; nothing here throws for the state of that file.
  */
-export async function syncHarnessSettings(projectDir: string, root = '.', { dryRun = false }: SyncHarnessSettingsOptions = {}): Promise<HarnessSettingsResult> {
+export async function syncHarnessSettings(projectDir: string, root = '.', { dryRun = false, revoke = false }: SyncHarnessSettingsOptions = {}): Promise<HarnessSettingsResult> {
   const path = settingsPathOf(root)
   const settingsPath = join(projectDir, path)
   const sidecarPath = `${settingsPath}${HARNESS_SETTINGS_SIDECAR_SUFFIX}`
@@ -164,13 +192,13 @@ export async function syncHarnessSettings(projectDir: string, root = '.', { dryR
     }
   }
 
-  const rendered = renderHarnessSettings(existing)
+  const rendered = renderHarnessSettings(existing, { revoke })
   if (!('error' in rendered) && !rendered.changed) return { path, status: 'unchanged' }
   if ('error' in rendered) blocked ??= rendered.error
 
   if (blocked) {
-    // A proposal needs a text to start from: the harness's own settings when the file cannot be read as JSON.
-    const proposal = 'error' in rendered ? renderHarnessSettings(undefined) : rendered
+    // A proposal needs a text to start from: the harness's own settings when the file cannot be read as settings.
+    const proposal = 'error' in rendered ? renderHarnessSettings(undefined, { revoke }) : rendered
     if ('error' in proposal) return { path, status: 'skipped', reason: proposal.error }
     const target = await lstatOrUndefined(sidecarPath)
     if (target && (target.isSymbolicLink() || !target.isFile() || target.nlink > 1)) return { path, status: 'skipped', reason: `${sidecar} is a link or not a regular file` }
@@ -178,9 +206,10 @@ export async function syncHarnessSettings(projectDir: string, root = '.', { dryR
     return { path, status: 'sidecar', sidecar, reason: blocked }
   }
 
+  const { content, removed } = rendered as { content: string; removed: string[] }
   const created = existing === undefined || !existing.trim()
-  if (!dryRun) await writeSettingsText(settingsPath, (rendered as { content: string }).content)
-  return { path, status: created ? 'created' : 'merged' }
+  if (!dryRun) await writeSettingsText(settingsPath, content)
+  return { path, status: created ? 'created' : 'merged', ...(removed.length > 0 ? { removed } : {}) }
 }
 
 /**
@@ -225,26 +254,39 @@ export interface HarnessSettingsSummaryLine {
   needsAttention: boolean
 }
 
-/** One line per result that changed or needs the developer; a file already up to date is not mentioned. */
+/** Why a pre-release rule is taken away, for the line that names it. */
+const REVOKED_REASON = 'a pre-release build had pre-approved it, and the harness keeps that command asking because it writes evidence the routing acts on'
+
+/**
+ * One line per result that changed or needs the developer, and one more for each pre-release rule a sync
+ * was asked to revoke and removed; a file already up to date is not mentioned.
+ */
 export function summarizeHarnessSettings(results: HarnessSettingsResult[], { dryRun = false }: { dryRun?: boolean } = {}): HarnessSettingsSummaryLine[] {
   return results
     .filter((result) => result.status !== 'unchanged')
-    .map((result): HarnessSettingsSummaryLine => {
+    .flatMap((result): HarnessSettingsSummaryLine[] => {
       switch (result.status) {
         case 'sidecar':
-          return {
-            needsAttention: true,
-            text: `${result.path} ${result.reason}: left as it is. ${dryRun ? 'Would write' : 'Wrote'} the merged proposal to ${result.sidecar} — review it and merge what you want.`
-          }
+          return [
+            {
+              needsAttention: true,
+              text: `${result.path} ${result.reason}: left as it is. ${dryRun ? 'Would write' : 'Wrote'} the merged proposal to ${result.sidecar} — review it and merge what you want.`
+            }
+          ]
         case 'skipped':
-          return { needsAttention: true, text: `${result.path} ${result.reason}: left as it is; the delegation capture hooks were not added.` }
+          return [{ needsAttention: true, text: `${result.path} ${result.reason}: left as it is; the delegation capture hooks were not added.` }]
         case 'created':
-          return { needsAttention: false, text: `${result.path}: ${dryRun ? 'would be written' : 'written'} with the delegation capture hooks and the harness permissions.` }
-        default:
-          return {
-            needsAttention: false,
-            text: `${result.path}: delegation capture hooks and harness permissions ${dryRun ? 'would be merged in' : 'merged in'}; your own keys, hooks and rules are kept.`
-          }
+          return [{ needsAttention: false, text: `${result.path}: ${dryRun ? 'would be written' : 'written'} with the delegation capture hooks and the harness permissions.` }]
+        default: {
+          const removed = result.removed ?? []
+          return [
+            {
+              needsAttention: false,
+              text: `${result.path}: delegation capture hooks and harness permissions ${dryRun ? 'would be merged in' : 'merged in'}; your own keys, hooks and rules are kept${removed.length > 0 ? ', except the rule named below' : ''}.`
+            },
+            ...removed.map((rule) => ({ needsAttention: true, text: `${result.path}: ${dryRun ? 'would remove' : 'removed'} the rule ${rule}: ${REVOKED_REASON}.` }))
+          ]
+        }
       }
     })
 }
@@ -265,6 +307,10 @@ export function previewHarnessSettings(results: HarnessSettingsResult[]): Module
       reason:
         result.status === 'sidecar' || result.status === 'skipped'
           ? `${result.reason}: the file stays as it is${result.sidecar ? `, the merged proposal goes to ${result.sidecar}` : ''}`
-          : 'delegation capture hooks and harness permissions are added; your own keys, hooks and rules are kept'
+          : `delegation capture hooks and harness permissions are added; your own keys, hooks and rules are kept${
+              result.removed?.length
+                ? `, except ${result.removed.length === 1 ? 'this rule, which is removed' : 'these rules, which are removed'}: ${result.removed.join(', ')} (${REVOKED_REASON})`
+                : ''
+            }`
     }))
 }
