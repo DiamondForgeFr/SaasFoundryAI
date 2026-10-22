@@ -149,7 +149,7 @@
     ".agents/skills/sf-workflow/statuses/5-human-testing.md": "aa79a5a62357bf1e94e36a487396e14497c1636d3c7d517c95e4ade8f916282a",
     ".agents/skills/sf-workflow/statuses/6-in-review.md": "7a3a43ee9ca365c238f0bd10cb69fefaa050efcac51290744371c7f17d017ebe",
     ".agents/skills/sf-workflow/statuses/7-done.md": "998216a270f6c80bb530c5c3d58e41bad05680b174c2477da36afdb11ce5e3fc",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "612636068bbad4357c38281e918fbbdd9d855956b248f52e9f3ab71802dc895d",
+    ".agents/skills/sf-workflow/workflow-cli.sh": "c1450ca9b89b6371064b93d07427bc9dbdc0f54d07d75a87c56f60dd0162ac65",
     ".claude/rules/claude-code.md": "eb481a42742bc013ed8de87e2b94839f73be77558782acc88bf45ced2135a305",
     ".claude/agents/sf-light.md": "7ac1fe358abd5b27550487302f6d62e3b47072010e049fb44ecc91566b10fee3",
     ".claude/agents/sf-edit.md": "22e62f1a595e52f5fab120a06a297b614f87f61c6d054407df45ae9ac8e5e849",

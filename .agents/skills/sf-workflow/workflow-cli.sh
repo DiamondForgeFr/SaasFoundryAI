@@ -1426,10 +1426,16 @@ sync_pr_review() {
       elif ($live.headRefName | test($release_pattern)) and $live.baseRefName == $release_branch then
         [$live.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]]
         | if length == 1 then .[0] else error("Ambiguous release ticket") end
-      else error("Unrecognized ticket branch") end
+      # A head that names no ticket (chore/sync-back-*, docs/*) has nothing to sync (#1016).
+      elif ($live.headRefName | test($release_pattern)) then error("Unrecognized ticket branch")
+      else "none" end
   ' 2>/dev/null) || {
     echo "Error: PR does not identify exactly one verified ticket under the configured branch or release rules." >&2; return 2;
   }
+  if [[ "$ticket" == none ]]; then
+    echo "::notice::$(echo "$live" | jq -r .headRefName) names no ticket under workflow.branchNaming: nothing to sync."
+    return 0
+  fi
   if ! echo "$live" | jq -e --slurpfile manifest .saasfoundry.json --argjson n "$ticket" --arg url "${server%/}/${repo}/issues/${ticket}" '
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
