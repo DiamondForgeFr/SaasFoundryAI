@@ -5,9 +5,7 @@ import { dirname, join, resolve } from 'path'
 import {
   AgentInstructionsReport,
   AgentInstructionsError,
-  ADOPTION_COMMON_INSTRUCTIONS,
   CLAUDE_CODE_RULE_PATH,
-  CODEX_SOURCE_CLAUDE_BRIDGE,
   hasGeneratedRegion,
   HarnessAgent,
   installAgentInstructions,
@@ -17,6 +15,7 @@ import {
   AgentInstructionFile,
   classifyManagedFile,
   inspectInstructionSource,
+  recordsReferenceOnlyBridge,
   type ManagedFileState
 } from './agent-instructions'
 import { inspectGitAgentScope, configureLocalAgentExcludes, removeLocalAgentExcludes, NotGitRepositoryError, GitAgentScope } from './git-agent-scope'
@@ -36,14 +35,14 @@ import {
   validateDelegation,
   writeLocalDelegation
 } from './delegation'
-import { CLAUDE_CAPTURE_HOOKS, CODEX_HOOKS_PATH } from './delegation-hooks'
+import { CODEX_HOOKS_PATH } from './delegation-hooks'
 import { requireLedgerDir } from './delegation-ledger'
+import { summarizeHarnessSettings, syncHarnessSettings } from './harness-settings'
 import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { updateLocalRouting, withLogEntry } from './routing-local'
 import { renderTierAgents, TIER_AGENT_PATH } from './tier-agents'
-import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_SUPERSEDED_HOOKS, harnessInstallerMeta } from '../installers/harness.installer'
+import { harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
-import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
 
 const AGENTS = getAgentIds()
 
@@ -451,8 +450,7 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
       targetPath: root,
       agents: candidates,
       manifest: before.manifest,
-      referenceOnly:
-        params.adoption || local.fileHashes['AGENTS.md'] === hash(Buffer.from(ADOPTION_COMMON_INSTRUCTIONS)) || local.fileHashes['CLAUDE.md'] === hash(Buffer.from(CODEX_SOURCE_CLAUDE_BRIDGE))
+      referenceOnly: params.adoption || recordsReferenceOnlyBridge(local.fileHashes)
     })
     const report: AgentInstructionsReport = { written: [], unchanged: [], conflicts: [], warnings: [...plan.warnings], fileHashes: {} }
     for (const file of plan.files) {
@@ -503,8 +501,7 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
           targetPath: root,
           agents: candidates,
           manifest: before.manifest,
-          referenceOnly:
-            params.adoption || local.fileHashes['AGENTS.md'] === hash(Buffer.from(ADOPTION_COMMON_INSTRUCTIONS)) || local.fileHashes['CLAUDE.md'] === hash(Buffer.from(CODEX_SOURCE_CLAUDE_BRIDGE))
+          referenceOnly: params.adoption || recordsReferenceOnlyBridge(local.fileHashes)
         })
     partialReport = report
     const configuredAgents = report.conflicts.length ? previous : candidates
@@ -554,11 +551,10 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
  */
 async function mergeCaptureSettings(root: string, report: AgentInstructionsReport): Promise<void> {
   try {
-    await regularPath(root, '.claude', 'directory', false)
-    await regularPath(root, '.claude/settings.json', 'file', false)
-    const hooks = await mergeClaudeSettingsHooks(root, CLAUDE_CAPTURE_HOOKS, HARNESS_SUPERSEDED_HOOKS)
-    const permissions = await mergeClaudeSettingsPermissions(root, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_ASK_COMMANDS)
-    if (hooks || permissions) report.written.push('.claude/settings.json')
+    // The merge `sf update` runs too (#935): a link or text that is not JSON is left as it is, with a proposal beside it.
+    const result = await syncHarnessSettings(root)
+    if (result.status === 'created' || result.status === 'merged') report.written.push(result.path)
+    for (const line of summarizeHarnessSettings([result])) if (line.needsAttention) report.warnings.push(line.text)
   } catch (error) {
     report.warnings.push(`.claude/settings.json: ${error instanceof Error ? error.message : String(error)}; the delegation capture hooks were not added.`)
   }
@@ -692,8 +688,7 @@ async function applyLocal(params: SupportParams, requested?: HarnessAgent[]): Pr
     targetPath: root,
     agents: effective,
     manifest: before.manifest,
-    referenceOnly:
-      params.adoption || local.fileHashes['AGENTS.md'] === hash(Buffer.from(ADOPTION_COMMON_INSTRUCTIONS)) || local.fileHashes['CLAUDE.md'] === hash(Buffer.from(CODEX_SOURCE_CLAUDE_BRIDGE))
+    referenceOnly: params.adoption || recordsReferenceOnlyBridge(local.fileHashes)
   })
   const report: AgentInstructionsReport = { written: [], unchanged: [], conflicts: [], warnings: [...plan.warnings], fileHashes: {} }
   const writable: { file: AgentInstructionFile; before?: Buffer }[] = []

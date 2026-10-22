@@ -9,15 +9,14 @@ import { installToolSkill } from './tool-skill.installer'
 import { injectWorkflowSection, installWorkflowSkill } from './workflow-skill.installer'
 import { AgentInstructionsReport, HarnessAgent, installAgentInstructions } from '../harness/agent-instructions'
 import { needsSharedInstructions, resolveHarnessAgents } from '../harness/agent-registry'
-import { CLAUDE_CAPTURE_HOOKS, isLegacyCaptureCommand } from '../harness/delegation-hooks'
+import { mergeHarnessSettings } from '../harness/harness-settings'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { SaaSFoundryManifest, WorkflowConfig, skillsTemplatesPath } from '../types'
-import { ClaudeHooksConfig, mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
 import { computeFileHashes, fileExists } from '../utils'
 
 export const harnessInstallerMeta: ModuleInstaller = {
   name: 'harness',
-  currentVersion: 4,
+  currentVersion: 5,
   migrations: harnessMigrations
 }
 
@@ -166,58 +165,9 @@ export interface InstallHarnessParams {
   stackPresent?: boolean
 }
 
-export const HARNESS_HOOKS: ClaudeHooksConfig = {
-  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }],
-  // Every routed delegation appends its outcome to the clone ledger the routing adjusts itself from (#1035).
-  ...CLAUDE_CAPTURE_HOOKS
-}
-
-const WORKFLOW_CLI = '.claude/skills/sf-workflow/workflow-cli.sh'
-const BOARD_CLI = '.claude/skills/sf-tool-github-projects/github-projects-cli.sh'
-
-/**
- * The read-only commands the harness itself tells the agent to run at every workflow step
- * (#947). Undeclared, each one asked the developer for permission, all day, in every project
- * not running in bypass mode. Commands that change a ticket, a board or a pull request stay out.
- */
-export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
-  `Bash(${WORKFLOW_CLI} status *)`,
-  `Bash(${WORKFLOW_CLI} next *)`,
-  `Bash(${WORKFLOW_CLI} help)`,
-  ...['status', 'get-ticket', 'get-labels', 'get-complexity', 'get-parent', 'get-issue-type', 'list', 'list-incomplete-children'].map((command) => `Bash(${BOARD_CLI} ${command} *)`),
-  'Bash(sf status *)',
-  'Bash(sf agents list *)',
-  // The consent to delegate ticket delivery is read at the start of a session (#1026); `allow`, `decline` and `clear` still ask.
-  'Bash(sf agents delegation status)',
-  'Bash(sf agents delegation status *)',
-  // Reading a route and the measured outcomes changes nothing (#1035). `sf agents outcome record` and `mark`, and the forms of
-  // `sf agents route` that write a route record (`--record`, `--retry-of`), write evidence the routing acts on, so they ask:
-  // the read form is allowed here, the writing forms are in HARNESS_ASK_COMMANDS, which the host evaluates first.
-  'Bash(sf agents route *)',
-  'Bash(sf agents routing report)',
-  'Bash(sf agents routing report *)',
-  'Bash(gh project item-list *)',
-  'Bash(gh project view *)',
-  'Bash(gh project field-list *)'
-]
-
-/** Rules an earlier build of this branch pre-approved and a refresh takes away again: the commands ask. */
-export const HARNESS_REVOKED_COMMANDS: readonly string[] = ['Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)']
-
-/**
- * The forms of an allowed command that write evidence the routing acts on. A permission pattern cannot say "not this
- * flag", so `sf agents route *` stays allowed for reading and these ask: Claude Code evaluates `ask` before `allow`.
- * The flag comes right after `route` or after other options, hence two patterns each.
- */
-export const HARNESS_ASK_COMMANDS: readonly string[] = ['--record', '--retry-of'].flatMap((flag) => [`Bash(sf agents route ${flag}*)`, `Bash(sf agents route * ${flag}*)`])
-
-/** What a merge of the harness hooks replaces: the bare-`sf` capture command the first build wrote. */
-export const HARNESS_SUPERSEDED_HOOKS = { supersedes: isLegacyCaptureCommand }
-
-async function mergeHarnessSettings(targetPath: string): Promise<void> {
-  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS, HARNESS_SUPERSEDED_HOOKS)
-  await mergeClaudeSettingsPermissions(targetPath, HARNESS_ALLOWED_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_ASK_COMMANDS)
-}
+// The hooks and permission rules live in one module, shared with the migration, `sf update` and the
+// scaffold templates (#935). Re-exported: the installer is where callers have always imported them from.
+export { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS, HARNESS_HOOKS, HARNESS_REVOKED_COMMANDS, HARNESS_SUPERSEDED_HOOKS } from '../harness/harness-settings'
 
 export interface MergeHarnessUserFilesParams {
   targetPath: string
