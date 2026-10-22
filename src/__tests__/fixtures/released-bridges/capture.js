@@ -25,7 +25,7 @@ const instructions = require(join(packageDir, 'dist/harness/agent-instructions.j
 const { installHarness } = require(join(packageDir, 'dist/installers/harness.installer.js'))
 
 mkdirSync(outputDir, { recursive: true })
-// v1.0.0 predates the adoption bridge: a missing export is a file the release never wrote.
+// An export the package does not have is a bridge that release never wrote: it gets no file.
 const bridges = {
   'AGENTS.common.md': instructions.COMMON_INSTRUCTIONS,
   'AGENTS.adoption.md': instructions.ADOPTION_COMMON_INSTRUCTIONS,

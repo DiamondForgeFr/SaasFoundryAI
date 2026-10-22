@@ -134,6 +134,83 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       expect(output()).not.toContain('.claude/settings.json')
     })
 
+    // Review of #935, row 1: the revoke list used to run on every update and silently removed a rule the project added on purpose
+    it('never removes a rule on a plain update: a project that pre-approved the evidence commands on purpose keeps them, run after run', async () => {
+      const mark = 'Bash(sf agents outcome mark *)'
+      const record = 'Bash(sf agents outcome record *)'
+      const hashes = await installHarnessWith(JSON.stringify({ permissions: { allow: ['Bash(make test)', mark, record] } }, null, 2))
+      await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+      await updateCommand({ nonInteractive: true })
+      await updateCommand({ nonInteractive: true })
+
+      const allow: string[] = JSON.parse(await read(SETTINGS)).permissions.allow
+      expect(allow).toEqual(expect.arrayContaining(['Bash(make test)', mark, record, 'Bash(sf agents route *)']))
+      expect(output()).toContain('your own keys, hooks and rules are kept.')
+      expect(output()).not.toContain('removed the rule')
+    })
+
+    it('removes them once, at the v4 -> v5 migration, and names each one it removes', async () => {
+      const mark = 'Bash(sf agents outcome mark *)'
+      const record = 'Bash(sf agents outcome record *)'
+      const hashes = await installHarnessWith(JSON.stringify({ permissions: { allow: ['Bash(make test)', mark, record] } }, null, 2))
+      await writeManifest({ modules: { harness: { version: 4, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+      await updateCommand({ nonInteractive: true })
+
+      const allow: string[] = JSON.parse(await read(SETTINGS)).permissions.allow
+      expect(allow).toContain('Bash(make test)')
+      expect(allow).not.toContain(mark)
+      expect(allow).not.toContain(record)
+      expect(output()).toContain(`.claude/settings.json: removed the rule ${mark}`)
+      expect(output()).toContain(`.claude/settings.json: removed the rule ${record}`)
+      expect((await readManifest()).modules?.harness?.version).toBe(5)
+
+      // A project that adds one back afterwards keeps it: no later update removes a rule
+      const settings = JSON.parse(await read(SETTINGS))
+      settings.permissions.allow.push(mark)
+      await put(SETTINGS, JSON.stringify(settings))
+      logSpy.mockClear()
+      await updateCommand({ nonInteractive: true })
+      expect(JSON.parse(await read(SETTINGS)).permissions.allow).toContain(mark)
+      expect(output()).not.toContain('removed the rule')
+    })
+
+    // Review of #935, rows 2 and 3: these shapes were overwritten while the update said it had merged
+    it.each([
+      ['hooks is an array', { model: 'opus', hooks: [] }, '.claude/settings.json has `hooks` that is not an object: left as it is'],
+      ['an event is a string', { hooks: { SubagentStop: 'nope' } }, '.claude/settings.json has `hooks.SubagentStop` that is not an array: left as it is'],
+      ['allow is a string', { permissions: { allow: 'Bash(npm test)' } }, '.claude/settings.json has `permissions.allow` that is not an array: left as it is'],
+      ['permissions is an array', { permissions: ['Bash(npm test)'] }, '.claude/settings.json has `permissions` that is not an object: left as it is']
+    ])('leaves the file as it is and writes the proposal beside it when %s', async (_name, original, message) => {
+      const text = JSON.stringify(original, null, 2)
+      const hashes = await installHarnessWith(text)
+      await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(await read(SETTINGS)).toBe(text)
+      expect(JSON.parse(await read(`${SETTINGS}.saasfoundry.new`)).hooks.SubagentStop).toBeDefined()
+      expect(output()).toContain(message)
+      expect((await readManifest()).version).toBe(cliVersion)
+
+      // Not "unchanged" the next time: the capture hooks are still missing, and the developer is told again
+      logSpy.mockClear()
+      await updateCommand({ nonInteractive: true })
+      expect(output()).toContain(message)
+      expect(await read(SETTINGS)).toBe(text)
+    })
+
+    it('says it once when the migration ran in this very update and could not merge: the every-update merge does not repeat it', async () => {
+      const hashes = await installHarnessWith(JSON.stringify({ hooks: [] }))
+      await writeManifest({ modules: { harness: { version: 4, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(output().split('has `hooks` that is not an object: left as it is')).toHaveLength(2)
+      expect((await readManifest()).modules?.harness?.version).toBe(5)
+    })
+
     it('leaves a settings file that is not JSON as it is and writes the proposal beside it, without failing the update', async () => {
       const hashes = await installHarnessWith('{ "hooks": // mine\n')
       await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })

@@ -9,6 +9,7 @@ import {
   HARNESS_ASK_COMMANDS,
   HARNESS_HOOKS,
   claudeSettingsRoots,
+  previewHarnessSettings,
   renderHarnessSettings,
   summarizeHarnessSettings,
   syncHarnessSettings,
@@ -21,7 +22,7 @@ const released = (version: string): Promise<string> => readFile(join(FIXTURES, v
 const ROOT = join(__dirname, '../../../..')
 
 type Settings = { hooks?: Record<string, { matcher?: string; hooks: { command: string }[] }[]>; permissions?: { allow?: string[]; ask?: string[] }; [key: string]: unknown }
-const rendered = (existing?: string): { content: string; changed: boolean } => {
+const rendered = (existing?: string): { content: string; changed: boolean; removed: string[] } => {
   const result = renderHarnessSettings(existing)
   if ('error' in result) throw new Error(result.error)
   return result
@@ -104,8 +105,75 @@ describe('renderHarnessSettings (#935)', () => {
     expect(renderHarnessSettings('{ "hooks": ')).toEqual({ error: 'is not valid JSON' })
     expect(renderHarnessSettings('[]')).toEqual({ error: 'is not a JSON object' })
     expect(renderHarnessSettings('null')).toEqual({ error: 'is not a JSON object' })
-    expect(renderHarnessSettings('{ "hooks": [] }')).toEqual(expect.objectContaining({ content: expect.any(String) }))
-    expect(renderHarnessSettings('{ "hooks": { "SubagentStop": "nope" } }')).toEqual({ error: expect.stringContaining('shape') })
+  })
+
+  // Review of #935, row 3: `"hooks": []` took the event keys on an array, JSON.stringify dropped them and the
+  // status said merged while the capture hooks were missing, then `unchanged` on every later run.
+  it.each([
+    ['hooks is an array', '{ "hooks": [] }', 'has `hooks` that is not an object'],
+    ['hooks is a string', '{ "hooks": "none" }', 'has `hooks` that is not an object'],
+    ['hooks is null', '{ "hooks": null }', 'has `hooks` that is not an object'],
+    ['an event is an object', '{ "hooks": { "SubagentStop": { "hooks": [] } } }', 'has `hooks.SubagentStop` that is not an array'],
+    ['an event is a string', '{ "hooks": { "PostToolUse": "nope" } }', 'has `hooks.PostToolUse` that is not an array'],
+    ['a group has no hooks array', '{ "hooks": { "SessionStart": [{ "matcher": "x" }] } }', 'has an entry of `hooks.SessionStart` that is not a hook group'],
+    ['a group is a string', '{ "hooks": { "SessionStart": ["echo hello"] } }', 'has an entry of `hooks.SessionStart` that is not a hook group'],
+    ['a hook is a string', '{ "hooks": { "SubagentStop": [{ "hooks": ["echo"] }] } }', 'has an entry of `hooks.SubagentStop` that is not a hook group']
+  ])('does not merge into hooks that are not hook groups (%s)', (_name, text, reason) => {
+    expect(renderHarnessSettings(text)).toEqual({ error: reason })
+  })
+
+  // Review of #935, row 2: a string `allow` was lost, an array `permissions` was spread into "0", "1" keys, and the
+  // status said merged.
+  it.each([
+    ['permissions is an array', '{ "permissions": ["Bash(npm test)"] }', 'has `permissions` that is not an object'],
+    ['permissions is a string', '{ "permissions": "all" }', 'has `permissions` that is not an object'],
+    ['permissions is null', '{ "permissions": null }', 'has `permissions` that is not an object'],
+    ['allow is a string', '{ "permissions": { "allow": "Bash(npm test)" } }', 'has `permissions.allow` that is not an array'],
+    ['allow is an object', '{ "permissions": { "allow": { "0": "Bash(npm test)" } } }', 'has `permissions.allow` that is not an array'],
+    ['ask is a string', '{ "permissions": { "ask": "Bash(git push *)" } }', 'has `permissions.ask` that is not an array']
+  ])('does not merge into permissions of another shape (%s)', (_name, text, reason) => {
+    expect(renderHarnessSettings(text)).toEqual({ error: reason })
+  })
+
+  it('still merges when the shapes it would add to are absent or right: other keys may be of any shape', () => {
+    const after = parsed(JSON.stringify({ env: ['not', 'an', 'object'], permissions: { deny: 'whatever', additionalDirectories: { a: 1 } }, hooks: { PreToolUse: 'not mine to judge' } }))
+    expect(after.env).toEqual(['not', 'an', 'object'])
+    expect(after.hooks?.PreToolUse).toBe('not mine to judge')
+    expect(after.hooks?.SubagentStop).toBeDefined()
+    expect(after.permissions).toMatchObject({ deny: 'whatever', additionalDirectories: { a: 1 } })
+  })
+
+  // Review of #935, row 1: the pre-release rules are revoked by the one-shot steps only, never by the merge
+  // `sf update` runs on every run, and a step that does remove one names it.
+  describe('the pre-release rules (revoke)', () => {
+    const own = JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)'] } })
+
+    it('keeps a rule the project added on purpose when the merge does not revoke, which is the default', () => {
+      const result = rendered(own)
+      expect(result.removed).toEqual([])
+      expect((JSON.parse(result.content) as Settings).permissions?.allow).toEqual(expect.arrayContaining(['Bash(npm test)', 'Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)']))
+    })
+
+    it('removes them, and names each one, when asked to revoke', () => {
+      const result = renderHarnessSettings(own, { revoke: true })
+      if ('error' in result) throw new Error(result.error)
+      expect(result.removed).toEqual(['Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)'])
+      const allow = (JSON.parse(result.content) as Settings).permissions?.allow
+      expect(allow).toContain('Bash(npm test)')
+      expect(allow).not.toContain('Bash(sf agents outcome mark *)')
+      expect(allow).not.toContain('Bash(sf agents outcome record *)')
+    })
+
+    it('counts the removal as a change even when nothing else is missing', () => {
+      const complete = JSON.parse(rendered(undefined).content) as Settings
+      complete.permissions!.allow!.push('Bash(sf agents outcome mark *)')
+      expect(renderHarnessSettings(JSON.stringify(complete), { revoke: true })).toMatchObject({ changed: true, removed: ['Bash(sf agents outcome mark *)'] })
+      expect(renderHarnessSettings(JSON.stringify(complete))).toMatchObject({ changed: false, removed: [] })
+    })
+
+    it('names nothing when the file carries none of them', () => {
+      expect(renderHarnessSettings(JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } }), { revoke: true })).toMatchObject({ removed: [] })
+    })
   })
 
   it('treats an empty file as no file', () => {
@@ -288,6 +356,81 @@ describe('syncHarnessSettings (#935)', () => {
     expect(lines[0]).toMatchObject({ needsAttention: false, text: expect.stringContaining('merged in') })
     expect(lines[1]).toMatchObject({ needsAttention: true, text: expect.stringContaining('apps/b/.claude/settings.json.saasfoundry.new') })
     expect(summarizeHarnessSettings([{ path: SETTINGS, status: 'merged' }], { dryRun: true })[0].text).toContain('would be merged in')
+  })
+
+  // Review of #935, row 2 and 3: a shape the merge would have to overwrite is a sidecar, never a "merged" that lost something
+  it.each([
+    ['hooks is an array', '{ "model": "opus", "hooks": [] }', 'has `hooks` that is not an object'],
+    ['an event is not an array', '{ "hooks": { "SubagentStop": "nope" } }', 'has `hooks.SubagentStop` that is not an array'],
+    ['permissions is an array', '{ "permissions": ["Bash(npm test)"] }', 'has `permissions` that is not an object'],
+    ['allow is a string', '{ "permissions": { "allow": "Bash(npm test)" } }', 'has `permissions.allow` that is not an array']
+  ])('leaves the file as it is and proposes a sidecar when %s', async (_name, text, reason) => {
+    await put(SETTINGS, text)
+    const before = await stat(join(dir, SETTINGS))
+
+    const result = await syncHarnessSettings(dir)
+
+    expect(result).toEqual({ path: SETTINGS, status: 'sidecar', sidecar: SIDECAR, reason })
+    expect(await read(SETTINGS)).toBe(text)
+    expect((await stat(join(dir, SETTINGS))).mtimeMs).toBe(before.mtimeMs)
+    expect(JSON.parse(await read(SIDECAR)).hooks.SubagentStop).toBeDefined()
+    // The next run says the same: it is not "unchanged" while the capture hooks are missing
+    expect((await syncHarnessSettings(dir)).status).toBe('sidecar')
+  })
+
+  // Review of #935, row 1
+  describe('revoking the pre-release rules', () => {
+    const MARK = 'Bash(sf agents outcome mark *)'
+    const RECORD = 'Bash(sf agents outcome record *)'
+    const own = (): string => JSON.stringify({ permissions: { allow: ['Bash(npm test)', MARK, RECORD] } }, null, 2)
+
+    it('never removes a rule on its own: the merge sf update runs on every run only adds', async () => {
+      await put(SETTINGS, own())
+
+      const result = await syncHarnessSettings(dir)
+
+      expect(result).toEqual({ path: SETTINGS, status: 'merged' })
+      expect(JSON.parse(await read(SETTINGS)).permissions.allow).toEqual(expect.arrayContaining(['Bash(npm test)', MARK, RECORD]))
+      expect(summarizeHarnessSettings([result]).map((line) => line.text)).toEqual([expect.stringContaining('your own keys, hooks and rules are kept.')])
+      // Run after run, it stays that way
+      expect((await syncHarnessSettings(dir)).status).toBe('unchanged')
+      expect(JSON.parse(await read(SETTINGS)).permissions.allow).toEqual(expect.arrayContaining([MARK, RECORD]))
+    })
+
+    it('removes them and names each one when asked to revoke', async () => {
+      await put(SETTINGS, own())
+
+      const result = await syncHarnessSettings(dir, '.', { revoke: true })
+
+      expect(result).toEqual({ path: SETTINGS, status: 'merged', removed: [MARK, RECORD] })
+      const allow: string[] = JSON.parse(await read(SETTINGS)).permissions.allow
+      expect(allow).toContain('Bash(npm test)')
+      expect(allow).not.toContain(MARK)
+      expect(allow).not.toContain(RECORD)
+      const lines = summarizeHarnessSettings([result])
+      expect(lines.map((line) => line.text)).toEqual([
+        expect.stringContaining('your own keys, hooks and rules are kept, except the rule named below'),
+        expect.stringContaining(`removed the rule ${MARK}`),
+        expect.stringContaining(`removed the rule ${RECORD}`)
+      ])
+      expect(lines.slice(1).every((line) => line.needsAttention)).toBe(true)
+    })
+
+    it('says what it would remove in a dry run, and removes nothing', async () => {
+      await put(SETTINGS, own())
+
+      const result = await syncHarnessSettings(dir, '.', { revoke: true, dryRun: true })
+
+      expect(result).toEqual({ path: SETTINGS, status: 'merged', removed: [MARK, RECORD] })
+      expect(await read(SETTINGS)).toBe(own())
+      expect(summarizeHarnessSettings([result], { dryRun: true }).map((line) => line.text)).toEqual(expect.arrayContaining([expect.stringContaining(`would remove the rule ${RECORD}`)]))
+    })
+
+    it('lists the rules it would remove in the preview of a migration', () => {
+      const [entry] = previewHarnessSettings([{ path: SETTINGS, status: 'merged', removed: [MARK] }])
+      expect(entry).toMatchObject({ action: 'merge', source: SETTINGS, reason: expect.stringContaining(`this rule, which is removed: ${MARK}`) })
+      expect(previewHarnessSettings([{ path: SETTINGS, status: 'merged' }])[0].reason).not.toContain('removed')
+    })
   })
 })
 

@@ -1471,9 +1471,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     // and the permission rules. It follows the CLI on every update now, with the merge the refresh and the harness
     // v4 → v5 migration use, so a rule the CLI adds reaches an installed project without a second command. Nothing
     // the project wrote is taken away, a file with nothing to add is not rewritten, and one that cannot be merged
-    // in place gets a `.saasfoundry.new` proposal. A pending migration already did it, and lists it in the preview.
+    // in place gets a `.saasfoundry.new` proposal. A pending migration lists it in the preview, and one that ran in
+    // this very update has just done it and said so: neither is repeated.
     const settingsMigrationPending = pendingModuleMigrations.some((pending) => pending.migrations.some((migration) => migration.name === 'wire-delegation-capture'))
-    if (!settingsMigrationPending) {
+    const settingsMigrationRan = moduleMigrationResult.applied.some((applied) => applied.migrations.includes('wire-delegation-capture'))
+    if (!settingsMigrationPending && !settingsMigrationRan) {
       const settingsResults = await syncHarnessSettingsForProject('.', manifest, { dryRun })
       if (dryRunReport && settingsResults.some((result) => result.status !== 'unchanged')) dryRunReport.harnessSettings = settingsResults.filter((result) => result.status !== 'unchanged')
       logHarnessSettings(settingsResults, { dryRun })
