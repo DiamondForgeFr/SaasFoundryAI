@@ -87,6 +87,12 @@ Any state other than `ok` is a `warn` of the `tierAgents` precondition, which li
 compared at all: overrides in `modules.harness.routing` that do not render, or a private inventory that cannot be read (`routing.tierAgentsIssue` in `--json`). It is skipped on a project without a
 harness and when no declared coding agent has a tier agent.
 
+### Local CI pipeline
+
+When the project declares a local pipeline in `.molten/project.json` (MoltenTerm), a `local-ci:` line (and a `localCi` object in `--json`) names it with its job count:
+`local-ci: MoltenTerm pipeline (11 jobs)`. The AI Testing step runs that pipeline (`molten ci run <branch>`) when `molten ci status` answers, and the npm suite otherwise. `sf status` only reads the
+file: it never runs `molten` or any project code, and a damaged file shows as `unreadable`, without failing the status. The line is absent on a project that declares no pipeline.
+
 ### Runtime
 
 Whether the project can actually **run**, which a well-formed manifest says nothing about. A project can be perfectly configured and still have no `node_modules`, no database answering, and no ORM

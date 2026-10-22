@@ -28,5 +28,8 @@ GEMINI.md
 .claude/rules/claude-code.md
 .claude/agents/sf-*.md
 
+# MoltenTerm pipeline file: MoltenTerm writes it with its own 4-space layout (#943)
+.molten/project.json
+
 # Byte-exact copies of shipped templates (#938): the migration recognises them by hash
 src/__tests__/fixtures/pre-937-claude-md/

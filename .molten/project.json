@@ -1,0 +1,31 @@
+{
+    "schema": 1,
+    "name": "SaaSFoundryAI",
+    "icon": "docs/public/icon.svg",
+    "versions": {
+        "tagprefix": "v",
+        "firstpublic": "1.0.0",
+        "files": [
+            { "path": "package.json", "format": "json", "keys": [["version"]] },
+            { "path": "package-lock.json", "format": "json", "keys": [["version"], ["packages", "", "version"]] },
+            { "path": ".saasfoundry.json", "format": "json", "keys": [["version"]] }
+        ]
+    },
+    "ci": {
+        "prepare": { "run": "npm ci" },
+        "statuses": "github",
+        "jobs": [
+            { "name": "format", "title": "Format check", "lane": "guards", "run": "npm run format:check" },
+            { "name": "impact-contract", "title": "Impact contract", "lane": "guards", "run": "npm run test:impact-contract" },
+            { "name": "lint", "title": "Lint", "lane": "static", "run": "npm run lint" },
+            { "name": "build", "title": "Build", "lane": "static", "run": "npm run build" },
+            { "name": "package", "title": "Package boundary", "lane": "static", "run": "npm run package:check" },
+            { "name": "unit", "title": "Unit tests", "lane": "unit", "run": "npm run test:unit" },
+            { "name": "integration", "title": "Integration tests", "lane": "integration", "run": "npm run test:integration" },
+            { "name": "e2e", "title": "E2E tests", "lane": "e2e", "run": "npm run test:e2e" },
+            { "name": "docs-build", "title": "Docs build", "lane": "docs", "run": "npm run docs:build" },
+            { "name": "docs-integrity", "title": "Docs integrity", "lane": "docs", "run": "npm run test:docs-integrity" },
+            { "name": "docker-normal", "title": "Docker lifecycle (normal lane)", "lane": "docker", "run": "npm run test:pre-push" }
+        ]
+    }
+}

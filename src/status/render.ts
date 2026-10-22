@@ -1,7 +1,7 @@
 import chalk from 'chalk'
 
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
-import type { StatusDelegation, StatusReport, StatusRouting, StatusRoutingState } from './collect'
+import type { StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
 export interface RenderPayload {
@@ -71,6 +71,15 @@ function holdsSummary(holds: StatusRoutingState['holds']): string {
   return `; ${named.join('; ')} (sf agents routing report)`
 }
 
+/**
+ * The local CI pipeline the project declares (#943), on one line: the runner the heavy validation is picked
+ * with and how many jobs it runs. Read from `.molten/project.json`, never run by status.
+ */
+export function localCiSummary(localCi: StatusLocalCi): string {
+  if ('error' in localCi) return `unreadable (${localCi.error})`
+  return `MoltenTerm pipeline (${localCi.jobs} job${localCi.jobs === 1 ? '' : 's'})`
+}
+
 const STATUS_ICON: Record<PreconditionStatus, string> = { ok: '✓', warn: '⚠', fail: '✗', skip: '·' }
 
 function colorize(status: PreconditionStatus, text: string): string {
@@ -111,6 +120,7 @@ export function renderHuman(payload: RenderPayload): string {
     const unborn = report.git.unborn ? chalk.gray(' (no commits yet)') : ''
     lines.push(`${chalk.gray('Git:')} ${report.git.branch ?? 'detached'}${unborn}${dirty}${tracking}`)
   }
+  if (report.localCi) lines.push(`${chalk.gray('local-ci:')} ${localCiSummary(report.localCi)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`${chalk.gray('Skills:')} ${report.installedSkills.join(', ')}`)
   }
@@ -160,6 +170,8 @@ export function renderJson(payload: RenderPayload): string {
     // Additive (#1035): the automatic routing of this clone, null without a harness. #933 adds the grid
     // version, the project overrides and the state of every tier agent to the same object.
     routing: report.routing ?? null,
+    // Additive (#943): the local CI pipeline the project declares in .molten/project.json, null without that file
+    localCi: report.localCi ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
     // Additive: the facts behind the three instruction preconditions (#939)
@@ -201,6 +213,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
     const state = [report.git.unborn ? 'no commits yet' : null, report.git.isClean === false ? 'dirty' : 'clean'].filter(Boolean).join(', ')
     lines.push(`- git: ${report.git.branch ?? 'detached'} (${state})`)
   }
+  if (report.localCi) lines.push(`- local-ci: ${localCiSummary(report.localCi)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`- skills: ${report.installedSkills.join(', ')}`)
   }

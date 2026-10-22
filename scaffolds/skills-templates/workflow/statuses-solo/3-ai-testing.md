@@ -37,6 +37,9 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 - [ ] **Test plan** — post a comment starting with the heading `## Test plan`, covering: setup, nominal + edge scenarios, expected results per scenario, non-regression coverage
 - [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`
 - [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`
+- [ ] **Heavy local validation** — run the project's declared local pipeline on the pushed commit before marking the PR ready. When `.molten/project.json` exists and `molten ci status` answers (exit 0, 1
+      or 2: a MoltenTerm runner is reachable), run `molten ci run <branch>` and record its verdict. Otherwise run the project's configured build/integration suite (for example `npm test` and `npm run test:pre-push`
+      when declared in `package.json`). Record command, commit and results.
 - [ ] **Local CI gate** — when `.saasfoundry.json` declares `workflow.localCi.requiredStatuses`, run the project's local CI on the exact pushed commit until every declared status is green.
       No diff is too small for it: a narrower check (`lint`, `check`) does not count. `ready-pr` refuses a head without them; `--skip-local-ci "<reason>"` is the explicit escape hatch, recorded on
       the pull request.

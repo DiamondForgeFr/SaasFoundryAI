@@ -57,6 +57,8 @@ export interface StatusReport {
   delegation?: StatusDelegation
   /** The automatic routing of this clone (#1035); absent on a project without a harness block. */
   routing?: StatusRouting
+  /** The local CI pipeline the project declares in `.molten/project.json` (#943); absent without that file. */
+  localCi?: StatusLocalCi
 }
 
 /** The effective consent with both layers, or why it could not be read: status never fails on it. */
@@ -95,6 +97,13 @@ export interface StatusRoutingState {
   capture: { agent: string; state: CaptureState }[]
 }
 export type StatusRouting = StatusRoutingState | { error: string }
+
+/**
+ * The local CI pipeline the project declares (#943): MoltenTerm's `.molten/project.json`, with the number of
+ * jobs it runs. Status reads that file only: it never runs `molten` or any project code, and a damaged file
+ * is said, not raised.
+ */
+export type StatusLocalCi = { runner: 'molten'; jobs: number } | { error: string }
 
 export interface StatusCapabilities extends ProjectCapabilities {
   reason: string
@@ -325,6 +334,19 @@ async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest
   }
 }
 
+/** The pipeline MoltenTerm declares for the project (#943), counted from its file; undefined when there is no file. */
+function collectLocalCi(projectRoot: string): StatusLocalCi | undefined {
+  const file = path.join(projectRoot, '.molten', 'project.json')
+  if (!fs.existsSync(file)) return undefined
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const ci = isRecord(parsed) ? parsed.ci : undefined
+    return { runner: 'molten', jobs: isRecord(ci) && Array.isArray(ci.jobs) ? ci.jobs.length : 0 }
+  } catch (error) {
+    return { error: `.molten/project.json: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
@@ -340,6 +362,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
   const delegation = await collectDelegation(projectRoot, manifest)
   const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
+  const localCi = collectLocalCi(projectRoot)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.
@@ -362,6 +385,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     instructions,
     ...(delegation ? { delegation } : {}),
     ...(routing ? { routing } : {}),
+    ...(localCi ? { localCi } : {}),
     ...(database ? { database } : {})
   }
 }

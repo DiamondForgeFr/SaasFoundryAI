@@ -62,8 +62,10 @@ npm test
 npm run test:pre-push
 ```
 
-Record the tested commit and environment in the ticket's test report. This is not an automatic result cache: relevant code or environment changes require revalidation, and CI independently validates
-the PR. Human review and any required Human testing remain unchanged. These scoped commit checks are contributor-only and do not alter generated projects' release policy.
+When the project declares a MoltenTerm pipeline (`.molten/project.json`) and `molten ci status` answers, the heavy validation is `molten ci run <branch>` on the pushed commit instead; the npm suite is
+the fallback. `sf status` reports the declared pipeline as a `local-ci:` line and only reads the file. Record the tested commit and environment in the ticket's test report. This is not an automatic
+result cache: relevant code or environment changes require revalidation, and CI independently validates the PR. Human review and any required Human testing remain unchanged. These scoped commit checks
+are contributor-only and do not alter generated projects' release policy.
 
 **In generated projects**, `npm run test:staged` reads `.saasfoundry/validation.commit.json` as well. It holds the same lanes as `.saasfoundry/validation.json` except two: the lifecycle lane runs the
 guards instead of `test:e2e`, and full validation runs the guards and the shared-contract checks. Every API or web change selects the lifecycle lane, so a hook that ran the E2E suite ran it on almost
