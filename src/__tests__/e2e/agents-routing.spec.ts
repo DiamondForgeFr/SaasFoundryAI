@@ -124,7 +124,7 @@ describe('compiled sf agents routing and the adjusted route (#1035)', () => {
     expect(text).toContain('Local adjustments, not promoted')
 
     const statusText = spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'status', '--agent-friendly', '--no-network'], { cwd: project, encoding: 'utf8', env: cleanEnv }).stdout
-    expect(statusText).toContain('- routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on')
+    expect(statusText).toMatch(/- routing: grid v\d+, 0 overrides; 1 local automatic adjustment not promoted \(multi-file-feature → fix for claude-code, escalate on/)
 
     const reset = sf(['routing', 'reset', 'multi-file-feature'])
     expect(reset.status).toBe(0)

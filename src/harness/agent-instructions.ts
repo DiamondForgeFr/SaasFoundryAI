@@ -12,6 +12,25 @@ import { hashFileContent } from '../utils'
 
 const hashBytes = (content: Buffer): string => createHash('sha256').update(content).digest('hex')
 
+/**
+ * Where a generated file stands against what a refresh would write (#933). One definition serves the
+ * refresh, which conflicts on `edited`, and `sf status`, which reports it:
+ *
+ * - `missing`: nothing on disk, the refresh creates it;
+ * - `ok`: the bytes are exactly the render;
+ * - `outdated`: not the render, but the bytes are the ones a refresh once recorded as the baseline, so
+ *   nobody edited them and the refresh replaces them;
+ * - `edited`: not the render and not a recorded baseline (or no baseline at all): the refresh leaves the
+ *   file alone and writes a `.saasfoundry.new` sidecar.
+ */
+export type ManagedFileState = 'ok' | 'missing' | 'outdated' | 'edited'
+
+export function classifyManagedFile(current: Buffer | undefined, rendered: Buffer, baselines: readonly (string | undefined)[]): ManagedFileState {
+  if (!current) return 'missing'
+  if (current.equals(rendered)) return 'ok'
+  return baselines.includes(hashBytes(current)) ? 'outdated' : 'edited'
+}
+
 export type { HarnessAgent } from '../types'
 
 export interface AgentInstructionsReport {
@@ -441,7 +460,7 @@ async function deposit(root: string, path: string, content: Buffer, mode: number
     report.written.push(path)
     return
   }
-  if (current && (!baselines[path] || hashBytes(current) !== baselines[path])) {
+  if (classifyManagedFile(current, content, [baselines[path]]) === 'edited') {
     report.conflicts.push(path)
     const sidecar = `${path}.saasfoundry.new`
     if (await hasLinkedAncestor(root, sidecar)) {

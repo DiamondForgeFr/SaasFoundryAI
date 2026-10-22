@@ -15,7 +15,9 @@ import {
   AgentInstructionPlan,
   planAgentInstructions,
   AgentInstructionFile,
-  inspectInstructionSource
+  classifyManagedFile,
+  inspectInstructionSource,
+  type ManagedFileState
 } from './agent-instructions'
 import { inspectGitAgentScope, configureLocalAgentExcludes, removeLocalAgentExcludes, NotGitRepositoryError, GitAgentScope } from './git-agent-scope'
 import { safeWriteAgentFile } from './agent-file-writer'
@@ -38,7 +40,7 @@ import { CLAUDE_CAPTURE_HOOKS, CODEX_HOOKS_PATH } from './delegation-hooks'
 import { requireLedgerDir } from './delegation-ledger'
 import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { updateLocalRouting, withLogEntry } from './routing-local'
-import { TIER_AGENT_PATH } from './tier-agents'
+import { renderTierAgents, TIER_AGENT_PATH } from './tier-agents'
 import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS, HARNESS_REVOKED_COMMANDS, HARNESS_SUPERSEDED_HOOKS, harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
 import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
@@ -352,6 +354,62 @@ export async function readAgentSupport(targetPath: string): Promise<AgentSupport
   return { configuredAgents: union(sharedAgents, local.agents), sharedAgents, localAgents: local.agents, discovered, runtime: 'not-checked' }
 }
 
+export interface TierAgentFileState {
+  path: string
+  state: ManagedFileState
+}
+
+export interface TierAgentInspection {
+  tierAgents: TierAgentFileState[]
+  /** Why the tier agents could not be compared with the grid: overrides that do not render, or a private inventory that cannot be read. */
+  issue?: string
+}
+
+const oneLine = (error: unknown): string => (error instanceof Error ? error.message : String(error)).replace(/\s*\n\s*/g, ' ').trim()
+
+/**
+ * How each tier agent a refresh would write stands on disk (#933), read-only. The files are rendered
+ * from the routing grid this CLI ships and the manifest's `modules.harness.routing`, then each one is
+ * classified with the refresh's own conflict rule (`classifyManagedFile`) against the baseline the
+ * manifest records, or the private inventory of this clone for a tier agent a local setup wrote. Nothing
+ * of the project is executed and nothing is written: a link, a case-colliding name or any target the
+ * refresh would refuse to touch counts as `edited`, since the refresh leaves it alone like an edit.
+ */
+export async function inspectTierAgents(targetPath: string, manifest: SaaSFoundryManifest, agents: readonly HarnessAgent[]): Promise<TierAgentInspection> {
+  const root = resolve(targetPath)
+  let files
+  try {
+    files = renderTierAgents(agents, manifest.modules?.harness?.routing)
+  } catch (error) {
+    return { tierAgents: [], issue: oneLine(error) }
+  }
+  let local: LocalAgentState | undefined
+  const tierAgents: TierAgentFileState[] = []
+  for (const file of files) {
+    const rendered = Buffer.from(file.content)
+    let current: Buffer | undefined
+    try {
+      current = await checkLocalPath(root, file.path)
+    } catch {
+      tierAgents.push({ path: file.path, state: 'edited' })
+      continue
+    }
+    let state = classifyManagedFile(current, rendered, [manifest.fileHashes?.[file.path]])
+    if (state === 'edited') {
+      // A tier agent written by a local setup keeps its baseline in this clone's private inventory, not in the manifest.
+      try {
+        const git = await optionalGitScope(root)
+        local ??= git ? await readLocalState(git) : emptyLocalState()
+      } catch (error) {
+        return { tierAgents: [], issue: oneLine(error) }
+      }
+      state = classifyManagedFile(current, rendered, [manifest.fileHashes?.[file.path], local.fileHashes[file.path], local.pendingFileHashes?.[file.path]])
+    }
+    tierAgents.push({ path: file.path, state })
+  }
+  return { tierAgents }
+}
+
 /** Atomic replacement, refusing detected edits instead of overwriting a newer manifest. */
 async function persist(root: string, before: ManifestSnapshot, next: SaaSFoundryManifest): Promise<boolean> {
   const current = await snapshot(root)
@@ -399,8 +457,9 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
     const report: AgentInstructionsReport = { written: [], unchanged: [], conflicts: [], warnings: [...plan.warnings], fileHashes: {} }
     for (const file of plan.files) {
       const current = await checkLocalPath(root, file.path)
-      if (current?.equals(file.content)) report.unchanged.push(file.path)
-      else if (current && !file.merge && before.manifest.fileHashes?.[file.path] !== hash(current)) report.conflicts.push(file.path)
+      const state = classifyManagedFile(current, file.content, [before.manifest.fileHashes?.[file.path]])
+      if (state === 'ok') report.unchanged.push(file.path)
+      else if (state === 'edited' && !file.merge) report.conflicts.push(file.path)
       else report.written.push(file.path)
       // A merged file (AGENTS.md's generated region) is project-owned: no baseline.
       if (!report.conflicts.includes(file.path) && !file.merge) report.fileHashes[file.path] = hash(file.content)

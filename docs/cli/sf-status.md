@@ -1,6 +1,6 @@
 # sf status
 
-Report the current SaaSFoundryAI project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI, agent instruction files).
+Report the current SaaSFoundryAI project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI, agent instruction files, routing and tier agents).
 
 ## Usage
 
@@ -55,15 +55,37 @@ the layer it comes from and its date, for example `delegation: allowed (shared, 
 
 ### Automatic routing
 
-On the same projects, a `routing:` line (and a `routing` object in `--json`) says where the automatic routing stands in this clone (see
-[`sf agents routing`](./sf-agents.md#measured-delegations-and-the-adjusted-routing)). It names the moves the adjustment made that nobody promoted yet, so a session knows the route it gets is not the
-shipped one, for example `routing: 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. It names a
+On the same projects, a `routing:` line (and a `routing` object in `--json`) says where the routing stands in this clone (see
+[`sf agents routing`](./sf-agents.md#measured-delegations-and-the-adjusted-routing)). It starts with the grid and what the project replaces in it:
+`grid v1, 2 overrides (multi-file-feature → plan; tier build for claude-code)` is the version of the grid this CLI ships, then one entry per kind that `modules.harness.routing` sends to another tier
+and one per tier it gives other candidates (`grid v1, 0 overrides` when the project keeps the shipped routing). `--json` carries them in the `routing` object as `gridVersion` and `overrides`
+(`{ kinds: [{ kind, tier }], tiers: [{ tier, providers }] }`), next to `tierAgents` ([below](#tier-agents)). The line goes on with the moves the adjustment made that nobody promoted yet, so a session
+knows the route it gets is not the shipped one, for example
+`routing: grid v1, 0 overrides; 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. It names a
 kind the adjustment looked at and cannot move (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) and counts the ones that only wait for evidence. It also says, for each declared coding
 agent, whether the hooks that record every delegation are in place **and can run**: `claude-code capture enforced` only when the hook is declared and the project's own CLI answers
 `agents outcome capture`; `capture hook declared but no CLI can run it` when it does not (install `saasfoundryai-cli` in the project, or put `saasfoundryai` on the PATH: until then delegations are not
 recorded); `codex capture declared` when the hook is there but Codex has to trust it first; `capture hook outdated` for the bare-`sf` hook of an earlier build; `capture hook missing`
 (`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local layer shows as `unreadable (…)` and never fails the
 status.
+
+### Tier agents
+
+The delegation agents that [`sf agents refresh`](./sf-agents.md#tier-agents) writes under `.claude/agents/` and `.codex/agents/` each carry a model and an effort. Edit one, delete one, or move to a
+CLI with a newer grid, and a delegation runs on a route the routing no longer says, with nothing in the host to tell. `tierAgents` compares every tier agent of the declared coding agents the grid
+routes with what a refresh would write now, from the grid this CLI ships and `modules.harness.routing`. It only reads the files: it runs no project code and writes nothing. `--json` lists them under
+`routing.tierAgents` as `{ path, state }`.
+
+| State      | Meaning                                                                                                                                                                                                                                                                 | Remediation                                                                                                                                                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`       | The file is exactly what a refresh would write                                                                                                                                                                                                                          | None                                                                                                                                                                                                                                     |
+| `missing`  | The file does not exist                                                                                                                                                                                                                                                 | `sf agents refresh --scope shared`                                                                                                                                                                                                       |
+| `outdated` | Nobody edited it: the file is what an earlier refresh wrote, and the grid or the overrides have moved on since                                                                                                                                                          | `sf agents refresh --scope shared`                                                                                                                                                                                                       |
+| `edited`   | The file is neither the render nor a recorded baseline (`fileHashes` in `.saasfoundry.json`, or the private inventory of this clone for a tier agent a local setup wrote), or no baseline is recorded. A link, or any file a refresh refuses to touch, counts as edited | Restore it, or move the change to `modules.harness.routing`, then `sf agents refresh --scope shared`. A refresh never overwrites an edited tier agent: it writes a `.saasfoundry.new` sidecar, so delete the file to have it regenerated |
+
+Any state other than `ok` is a `warn` of the `tierAgents` precondition, which lists the files and gives the remediation of each state. It also warns, with what to fix, when the tier agents cannot be
+compared at all: overrides in `modules.harness.routing` that do not render, or a private inventory that cannot be read (`routing.tierAgentsIssue` in `--json`). It is skipped on a project without a
+harness and when no declared coding agent has a tier agent.
 
 ### Runtime
 

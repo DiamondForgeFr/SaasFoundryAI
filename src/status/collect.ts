@@ -2,13 +2,16 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
+import type { ManagedFileState } from '../harness/agent-instructions'
+import { inspectTierAgents } from '../harness/agent-support'
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
 import { captureState, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
+import { ROUTING_GRID_VERSION, type RoutingOverrides } from '../harness/routing-grid'
 import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
-import type { SaaSFoundryManifest } from '../types'
+import type { HarnessAgent, SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
 import { collectInstructionDiagnostics, type InstructionDiagnostics } from './instruction-diagnostics'
 
@@ -59,11 +62,32 @@ export interface StatusReport {
 /** The effective consent with both layers, or why it could not be read: status never fails on it. */
 export type StatusDelegation = DelegationState | { error: string }
 
+/** One tier agent a refresh would write, and where it stands on disk (#933); see `classifyManagedFile`. */
+export interface StatusTierAgent {
+  path: string
+  state: ManagedFileState
+}
+
+/** What `modules.harness.routing` replaces in the shipped grid (#933): the kinds sent to another tier, and the tiers given other candidates. */
+export interface StatusRoutingOverrides {
+  kinds: { kind: string; tier: string }[]
+  tiers: { tier: string; providers: string[] }[]
+}
+
 /**
- * Where the automatic routing stands in this clone (#1035): the moves it made that nobody promoted yet,
- * and whether the hooks that record every delegation are in place. Status never fails on it.
+ * Where the routing stands in this clone: the grid and the project's overrides it is rendered from, the
+ * tier agents on disk (#933), the moves the automatic adjustment made that nobody promoted yet, and
+ * whether the hooks that record every delegation are in place (#1035). Status never fails on it, and
+ * never runs the project's code to know it.
  */
 export interface StatusRoutingState {
+  /** Version of the routing grid this CLI ships: the one the tier agents are compared with. */
+  gridVersion: number
+  overrides: StatusRoutingOverrides
+  /** The tier agents a refresh would write for the declared coding agents the grid routes. */
+  tierAgents: StatusTierAgent[]
+  /** Why `tierAgents` is empty although agents are declared: overrides that do not render, or an unreadable private inventory. */
+  tierAgentsIssue?: string
   adjustment: 'on' | 'off'
   adjustments: { kind: string; provider: string; tier: string; from: string; action: string; at: string }[]
   /** Kinds the adjustment looked at and left where they are, with the reason (also in the log of the local layer). */
@@ -262,13 +286,28 @@ async function collectDelegation(projectRoot: string, manifest: SaaSFoundryManif
   }
 }
 
-async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null, probe?: CaptureProbe): Promise<StatusRouting | undefined> {
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** The kinds and tiers `modules.harness.routing` replaces. A malformed entry is skipped here: the render reports it as an issue. */
+function routingOverrides(routing: RoutingOverrides | undefined): StatusRoutingOverrides {
+  const kinds = isRecord(routing?.kinds) ? Object.entries(routing.kinds).flatMap(([kind, entry]) => (isRecord(entry) && typeof entry.tier === 'string' ? [{ kind, tier: entry.tier }] : [])) : []
+  const tiers = isRecord(routing?.tiers) ? Object.entries(routing.tiers).map(([tier, candidates]) => ({ tier, providers: isRecord(candidates) ? Object.keys(candidates) : [] })) : []
+  return { kinds, tiers }
+}
+
+async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null, declaredAgents: HarnessAgent[] | undefined, probe?: CaptureProbe): Promise<StatusRouting | undefined> {
   const harness = manifest?.modules?.harness
-  if (!harness) return undefined
+  if (!manifest || !harness) return undefined
   try {
     const dir = await resolveLedgerDir(projectRoot)
     const local = dir ? await readLocalRouting(dir) : emptyLocalRouting()
+    // The effective declaration (shared and local) when the instruction files let it be read, otherwise what the manifest says.
+    const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harness.agents ?? ['claude-code'])
     return {
+      gridVersion: ROUTING_GRID_VERSION,
+      overrides: routingOverrides(harness.routing),
+      tierAgents: tiers.tierAgents,
+      ...(tiers.issue ? { tierAgentsIssue: tiers.issue } : {}),
       adjustment: harness.routing?.adjust?.enabled === false ? 'off' : 'on',
       adjustments: listLocalAdjustments(local).map(({ kind, provider, adjustment }) => ({
         kind,
@@ -300,7 +339,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
 
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
   const delegation = await collectDelegation(projectRoot, manifest)
-  const routing = await collectRouting(projectRoot, manifest, options.captureProbe)
+  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.

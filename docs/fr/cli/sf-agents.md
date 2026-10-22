@@ -319,7 +319,8 @@ Claude Code, et `minimal` pour Codex.
 
 Les agents de palier sont suivis par hash comme les autres dépôts d'agents. `sf agents enable`, `replace`, `refresh` et `sf update` réécrivent un fichier intact, et laissent en place un fichier
 modifié à côté d'un fichier `.saasfoundry.new`. Un harness géré sans liste `agents` reçoit les agents de palier de Claude Code lors de `sf update`. Aucun dépôt n'est jamais supprimé : un agent retiré,
-ou un palier qui ne sert plus aucun type, garde son fichier jusqu'à ce que vous le supprimiez. Un projet adopté n'en reçoit aucun.
+ou un palier qui ne sert plus aucun type, garde son fichier jusqu'à ce que vous le supprimiez. Un projet adopté n'en reçoit aucun. [`sf status`](./sf-status.md#agents-de-palier) compare chaque agent
+de palier à ce qu'un refresh écrirait et signale d'un `warn` celui qui manque, qui a été modifié ou qui est périmé, avec la commande qui le corrige.
 
 Claude Code choisit un sous-agent d'après sa description. Codex délègue quand vous le demandez ou quand les instructions le prévoient, et ne lit les `.codex/agents` d'un projet qu'une fois ce projet
 approuvé (trusted).
@@ -596,8 +597,9 @@ pour que les mêmes exécutions ne le déplacent pas de nouveau à la prochaine 
 livraison, et, par ticket selon la complexité (et la nature), la médiane et le p95 du coût, du **temps actif** des délégations, et du temps **entre le premier In progress et le premier Human testing**
 (In review pour un ticket qui le saute), tiré des transitions de statut que `workflow-cli.sh` a enregistrées. Un ticket qui a une délégation sans coût est une borne basse : il est compté à part des
 médianes et du p95. Un agent repris est une seule délégation, et le rapport dit combien d'arrêts supplémentaires il a comptés. Il nomme aussi les modèles sans prix, l'état de la capture de chaque
-agent, les maintiens et les déplacements locaux que personne n'a promus. `--json` est versionné (`reportVersion: 2`). `sf status` porte une ligne `routing:` avec les déplacements non promus, les
-maintiens notables et l'état de la capture.
+agent, les maintiens et les déplacements locaux que personne n'a promus. `--json` est versionné (`reportVersion: 2`). `sf status` porte une ligne `routing:` avec la version de la grille et les
+surcharges du projet, les déplacements non promus, les maintiens notables et l'état de la capture, et une précondition `tierAgents` pour les agents de palier présents sur le disque (voir
+[`sf status`](./sf-status.md#agents-de-palier)).
 
 Le rapport dit ce qu'il ne voit pas : les jetons que la session dépense à planifier, discuter et relire ne sont mesurés par aucun hook d'hôte, donc le coût d'un ticket est le coût de ses délégations.
 Un ticket est compté dès qu'il a une délégation enregistrée ; le rapport ne sait pas s'il est arrivé à Done, et le temps d'un ticket suppose que les transitions aient été enregistrées dans ce clone.
