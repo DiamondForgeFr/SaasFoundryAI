@@ -1597,12 +1597,101 @@ cmd_get_ticket() {
 # Command: create-pr
 # ───────────────────────────────────────────────────────────────────────────
 
-# Resolve only the current ticket branch. Never promote another developer's PR.
+# The commit a branch holds on origin: empty when the branch is not there, failure when origin
+# cannot be read. Asked of the remote itself rather than of a local tracking ref, which may be stale.
+remote_branch_tip() {
+  local heads
+  heads=$(git ls-remote --heads origin "refs/heads/$1" 2>/dev/null) || return 1
+  awk -v ref="refs/heads/$1" '$2 == ref { print $1; exit }' <<<"$heads"
+}
+
+# The branches of origin that match the ticket's delivery patterns (feature, fix) and hold exactly
+# the commit $1, one per line. Release branches are never searched: they carry no ticket number.
+remote_ticket_branches_at() {
+  local commit=$1 feature=$2 fix=$3 heads sha ref name
+  heads=$(git ls-remote --heads origin 2>/dev/null) || return 1
+  while IFS=$'\t' read -r sha ref; do
+    [[ "$sha" == "$commit" && "$ref" == refs/heads/* ]] || continue
+    name=${ref#refs/heads/}
+    if [[ "$name" =~ $feature || "$name" =~ $fix ]]; then printf '%s\n' "$name"; fi
+  done <<<"$heads"
+}
+
+# Sets PR_CONTEXT_KIND (and PR_TARGET_BRANCH for a release) when branch $1 is one of the ticket's
+# branches; fails otherwise. $2 allows the release convention, $3-$5 are the three patterns.
+classify_pr_branch() {
+  local branch=$1 allow_release=$2 feature=$3 fix=$4 release=$5
+  if [[ "$branch" =~ $feature || "$branch" =~ $fix ]]; then
+    PR_CONTEXT_KIND=delivery
+  elif [[ "$allow_release" == true && "$branch" =~ $release ]]; then
+    PR_CONTEXT_KIND=release
+    PR_TARGET_BRANCH=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
+  else
+    return 1
+  fi
+}
+
+# The ticket branch of a checkout that is not on it (#1036). A Claude Code agent started with
+# `isolation: "worktree"` works on `worktree-agent-<id>` and pushes `HEAD:feature/<N>-…`: the host
+# owns the local branch name, and the ticket branch exists only on origin. It is accepted when
+# origin holds it at the commit of the local HEAD, so the work has been pushed in full and the
+# pull request carries exactly what is checked out. Another developer's branch is never accepted.
+#   --head <branch>  names the branch (feature, fix or, where allowed, release convention)
+#   no --head        looks for the one delivery branch of the ticket that origin holds at HEAD
+# Sets CURRENT_BRANCH to the ticket branch and PR_HEAD_REMOTE=true.
+resolve_remote_ticket_branch() {
+  local ticket=$1 allow_release=$2 feature=$3 fix=$4 release=$5 requested=${PR_HEAD_OPTION:-}
+  local local_head short tip matches count host_branch=$CURRENT_BRANCH
+  local_head=$(git rev-parse HEAD 2>/dev/null) || { echo "Error: could not read the local HEAD commit." >&2; return 1; }
+  short=${local_head:0:8}
+  if [[ -n "$requested" ]]; then
+    classify_pr_branch "$requested" "$allow_release" "$feature" "$fix" "$release" || {
+      echo "Error: --head ${requested} does not match ticket #${ticket}'s configured branch naming." >&2
+      return 1
+    }
+    tip=$(remote_branch_tip "$requested") || {
+      echo "Error: could not read origin to check --head ${requested}. Retry once origin is reachable." >&2
+      return 1
+    }
+    if [[ -z "$tip" ]]; then
+      echo "Error: --head ${requested}: origin has no such branch. Push the work first: git push origin HEAD:${requested}" >&2
+      return 1
+    fi
+    if [[ "$tip" != "$local_head" ]]; then
+      echo "Error: --head ${requested}: origin/${requested} is at ${tip:0:8}, not at the local HEAD ${short}. Push the work first: git push origin HEAD:${requested}" >&2
+      return 1
+    fi
+    CURRENT_BRANCH=$requested
+  else
+    matches=$(remote_ticket_branches_at "$local_head" "$feature" "$fix") || {
+      echo "Error: current branch does not match ticket #${ticket}'s configured branch naming, and origin could not be read to look for the pushed branch. Retry once origin is reachable, or name the branch with --head <branch>." >&2
+      return 1
+    }
+    count=$(grep -c . <<<"$matches" || true)
+    if [[ "$count" -eq 0 ]]; then
+      echo "Error: current branch does not match ticket #${ticket}'s configured branch naming, and no branch of origin that matches it is at the local HEAD ${short}. Push the work to the ticket branch (git push origin HEAD:<branch>) or name that branch with --head <branch>." >&2
+      return 1
+    fi
+    if [[ "$count" -gt 1 ]]; then
+      echo "Error: several branches of origin match ticket #${ticket} at the local HEAD ${short}: $(paste -sd ',' - <<<"$matches" | sed 's/,/, /g'). Name the one to use with --head <branch>." >&2
+      return 1
+    fi
+    CURRENT_BRANCH=$matches
+    classify_pr_branch "$CURRENT_BRANCH" false "$feature" "$fix" "$release" || return 1
+  fi
+  PR_HEAD_REMOTE=true
+  echo -e "${BLUE}→ This checkout is on ${host_branch}: using origin/${CURRENT_BRANCH} as ticket #${ticket}'s branch, it holds the same commit as HEAD (${short}).${NC}"
+}
+
+# Resolve only the ticket's own branch. Never promote another developer's PR.
+# The current branch when it follows the ticket's naming; otherwise the branch pushed from this
+# checkout (resolve_remote_ticket_branch), named by --head (PR_HEAD_OPTION) or found on origin.
 pr_branch_context() {
   local ticket=$1 allow_release=${2:-false}
   [[ "$ticket" =~ ^[1-9][0-9]*$ ]] || { echo "Error: ticket must be a positive issue number." >&2; return 1; }
   load_config
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD) || return 1
+  PR_HEAD_REMOTE=false
   local feature fix release branch_patterns
   branch_patterns=$(jq -ce --arg ticket "$ticket" '
     def literal:
@@ -1640,14 +1729,17 @@ pr_branch_context() {
   PR_TICKET=$ticket
   PR_CONTEXT_KIND=""
   PR_TARGET_BRANCH=$DELIVERY_TARGET_BRANCH
-  if [[ "$CURRENT_BRANCH" =~ $feature || "$CURRENT_BRANCH" =~ $fix ]]; then
-    PR_CONTEXT_KIND=delivery
-  elif [[ "$allow_release" == true && "$CURRENT_BRANCH" =~ $release ]]; then
-    PR_CONTEXT_KIND=release
-    PR_TARGET_BRANCH=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
+  if [[ -z "${PR_HEAD_OPTION:-}" || "$PR_HEAD_OPTION" == "$CURRENT_BRANCH" ]]; then
+    if ! classify_pr_branch "$CURRENT_BRANCH" "$allow_release" "$feature" "$fix" "$release"; then
+      if [[ -n "${PR_HEAD_OPTION:-}" ]]; then
+        echo "Error: --head ${PR_HEAD_OPTION} does not match ticket #${ticket}'s configured branch naming." >&2
+        return 1
+      fi
+      # Not on a ticket branch: a checkout that pushed to one is accepted, a stranger's branch is not
+      resolve_remote_ticket_branch "$ticket" "$allow_release" "$feature" "$fix" "$release" || return 1
+    fi
   else
-    echo "Error: current branch does not match ticket #${ticket}'s configured branch naming." >&2
-    return 1
+    resolve_remote_ticket_branch "$ticket" "$allow_release" "$feature" "$fix" "$release" || return 1
   fi
 }
 
@@ -1732,13 +1824,20 @@ local_ci_gate() {
   echo -e "${GREEN}✓ Local CI green on ${head:0:8}: $(echo "$required" | paste -sd ',' - | sed 's/,/, /g')${NC}"
 }
 
-# `--skip-local-ci "<reason>"` and the remaining positional arguments, for create-pr and ready-pr.
+# `--skip-local-ci "<reason>"`, `--head <branch>` (#1036) and the remaining positional arguments,
+# for create-pr, ready-pr and draft-pr.
 parse_local_ci_args() {
   PR_ARGS=()
+  PR_HEAD_OPTION=""
   while [[ "$#" -gt 0 ]]; do
     if [[ "$1" == "--skip-local-ci" ]]; then
       [[ -n "${2:-}" && "${2:-}" != --* ]] || { echo "Error: --skip-local-ci requires a reason" >&2; return 1; }
       LOCAL_CI_SKIP_REASON=$2
+      shift 2
+    elif [[ "$1" == "--head" ]]; then
+      [[ -n "${2:-}" && "${2:-}" != --* ]] || { echo "Error: --head requires the name of the ticket branch pushed to origin" >&2; return 1; }
+      [[ -z "$PR_HEAD_OPTION" ]] || { echo "Error: --head can be given only once" >&2; return 1; }
+      PR_HEAD_OPTION=$2
       shift 2
     else
       PR_ARGS+=("$1")
@@ -1751,13 +1850,16 @@ cmd_create_pr() {
   parse_local_ci_args "$@" || return 1
   set -- ${PR_ARGS[@]+"${PR_ARGS[@]}"}
   if [[ "$#" -lt 1 || "$#" -gt 2 || ( "$#" -eq 2 && "$2" != "--draft" ) ]]; then
-    echo "Usage: $0 create-pr <ticket-number> [--draft] [--skip-local-ci \"<reason>\"]" >&2
+    echo "Usage: $0 create-pr <ticket-number> [--draft] [--head <branch>] [--skip-local-ci \"<reason>\"]" >&2
     return 1
   fi
   local TICKET_NUMBER=$1
-  local draft_args=()
+  local draft_args=() head_args=()
   [[ "${2:-}" == "--draft" ]] && draft_args=(--draft)
   pr_branch_context "$TICKET_NUMBER" true || return 1
+  # A checkout on a host-owned branch (`worktree-agent-<id>`) has nothing of that name to push
+  # or to open the pull request from: the ticket branch is already on origin at HEAD (#1036)
+  [[ "$PR_HEAD_REMOTE" == true ]] && head_args=(--head "$CURRENT_BRANCH")
   ISSUE_TITLE=$(gh issue view "$TICKET_NUMBER" --json title --jq ".title" 2>/dev/null) || return 1
   [[ -n "$ISSUE_TITLE" ]] || { echo "Error: Could not find issue #${TICKET_NUMBER}" >&2; return 1; }
 
@@ -1768,7 +1870,11 @@ cmd_create_pr() {
   # the push and never corrected by it. Three times in one day that read as success while
   # no PR existed (#603) — twice after a four-minute hook run.
   PUSH_STATUS=0
-  git push -u origin "$CURRENT_BRANCH" || PUSH_STATUS=$?
+  if [[ "$PR_HEAD_REMOTE" == true ]]; then
+    : # Nothing to push: origin already holds the ticket branch at HEAD, which is what was resolved
+  else
+    git push -u origin "$CURRENT_BRANCH" || PUSH_STATUS=$?
+  fi
   if [ "$PUSH_STATUS" -ne 0 ]; then
     echo -e "${RED}✗ The push failed (exit ${PUSH_STATUS}), so no pull request was created.${NC}" >&2
     echo -e "  Your commits are still here — nothing was lost. Re-run this command once the push works." >&2
@@ -1805,7 +1911,7 @@ cmd_create_pr() {
   [[ "$PR_CONTEXT_KIND" == release ]] && PR_BODY="Closes #${TICKET_NUMBER}"
   [[ -n "$LOCAL_CI_SKIP_REASON" && ${#draft_args[@]} -eq 0 ]] && PR_BODY+=$'\n\n'"Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}"
   PR_OUTPUT=$(gh pr create --title "[#${TICKET_NUMBER}] $ISSUE_TITLE" \
-    --body "$PR_BODY" --base "$PR_TARGET_BRANCH" "${draft_args[@]}" 2>&1) || PR_CREATE_STATUS=$?
+    --body "$PR_BODY" --base "$PR_TARGET_BRANCH" ${head_args[@]+"${head_args[@]}"} "${draft_args[@]}" 2>&1) || PR_CREATE_STATUS=$?
   PR_URL=$(echo "$PR_OUTPUT" | grep -oE 'https://[^[:space:]]+/pull/[0-9]+' | head -n 1 || true)
   if [[ "$PR_CREATE_STATUS" -eq 0 && -n "$PR_URL" ]]; then
     echo -e "${GREEN}✓ Pull request created${NC}"
@@ -1823,7 +1929,7 @@ cmd_set_pr_draft() {
   parse_local_ci_args "$@" || return 1
   set -- ${PR_ARGS[@]+"${PR_ARGS[@]}"}
   if [[ "$#" -ne 1 ]]; then
-    echo "Usage: $0 ${action}-pr <ticket-number>$([[ "$action" == ready ]] && echo ' [--skip-local-ci "<reason>"]')" >&2
+    echo "Usage: $0 ${action}-pr <ticket-number> [--head <branch>]$([[ "$action" == ready ]] && echo ' [--skip-local-ci "<reason>"]')" >&2
     return 1
   fi
   pr_branch_context "$1" true || return 1
@@ -2578,9 +2684,12 @@ case "$COMMAND" in
     echo "  get-parent <child>                      Print the native parent issue as JSON"
     echo "  get-issue-type <ticket>                 Print the native issue type as JSON"
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
-    echo "  create-pr <ticket> [--draft]             Open PR for current branch"
-    echo "  ready-pr <ticket>                        Mark the ticket PR ready for review"
-    echo "  draft-pr <ticket>                        Return the ticket PR to draft"
+    echo "  create-pr <ticket> [--draft] [--head <branch>]"
+    echo "                                           Open PR for the ticket branch (current branch, else the ticket branch pushed at HEAD)"
+    echo "  ready-pr <ticket> [--head <branch>]      Mark the ticket PR ready for review"
+    echo "  draft-pr <ticket> [--head <branch>]      Return the ticket PR to draft"
+    echo "                                           --head names the ticket branch pushed to origin when the checkout is on another"
+    echo "                                           branch (a worktree agent's host branch); origin must hold it at the local HEAD"
     echo "  list [status]                            List project items (optionally filtered)"
     echo "  milestone <sub> [args]                   create|list|show|scope|assign|associate|readiness"
     echo "  cache-clear                              Drop the on-disk schema cache"

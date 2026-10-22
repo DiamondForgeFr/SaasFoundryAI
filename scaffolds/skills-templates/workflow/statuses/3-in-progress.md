@@ -51,6 +51,9 @@ These stay in the `In progress` board column but flow through a **separate lifec
   - Built in the primary checkout: `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`
   - Delegated, inside the agent's own worktree (the agent creates the branch, and the primary checkout stays on `<workingBranch>`):
     `git fetch origin && git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>`
+  - Delegated on a branch the host named (Claude Code's `isolation: "worktree"` starts the agent on `worktree-agent-<id>`): keep that local branch and push the work to the ticket branch,
+    `git push origin HEAD:feature/<N>-<description>`. `create-pr`, `ready-pr` and `draft-pr` accept it when `origin` holds that branch at the local `HEAD` commit: they find it on their own when it is
+    the only such branch, or take it from `--head feature/<N>-<description>`. A branch pushed but behind `HEAD` is refused, so push again before each of these commands.
   - **Empty repository** (no commit yet): there is no `workingBranch` to branch from. Run `workflow-cli.sh bootstrap <ticket>` instead: it commits the setup on the main branch, creates `workingBranch`
     and closes this first ticket
 - [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
