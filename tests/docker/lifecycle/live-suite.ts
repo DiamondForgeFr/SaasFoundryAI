@@ -77,7 +77,7 @@ export async function runLiveSuite(context: ProductReadyContext, options: LiveSu
       env: {
         [LIVE_SUITE_CONTRACT_ENV]: JSON.stringify(contract),
         PLAYWRIGHT_BROWSERS_PATH: browserCacheRoot(chromium.executablePath),
-        NODE_OPTIONS: `--require=${join(runtimeRoot, 'lifecycle', 'egress-guard.cjs')}`
+        NODE_OPTIONS: `--require="${join(runtimeRoot, 'lifecycle', 'egress-guard.cjs')}"`
       },
       deadline: context.deadline,
       signal: context.signal,

@@ -25,10 +25,15 @@ describe('tool-saasfoundry read-project.sh through the compiled CLI', () => {
   it('reports the catalogue the CLI actually prints', async () => {
     await writeFile(join(tempDir, '.saasfoundry.json'), JSON.stringify({ projectName: 'external', structure: 'cli', version, modules: { harness: { version: 1, managed: true } } }))
 
+    // SF_CLI is word-split by the wrapper, so a checkout path with a space
+    // reaches it through a shim that sits in the temporary directory.
+    const shim = join(tempDir, 'sf')
+    await writeFile(shim, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(CLI_ROOT, 'bin/sf.js'))} "$@"\n`, { mode: 0o755 })
+
     const run = spawnSync('/bin/bash', [WRAPPER], {
       cwd: tempDir,
       encoding: 'utf8',
-      env: { ...process.env, SF_CLI: `${process.execPath} ${join(CLI_ROOT, 'bin/sf.js')}`, SF_SKILL_NO_WARN: '1' }
+      env: { ...process.env, SF_CLI: shim, SF_SKILL_NO_WARN: '1' }
     })
 
     expect(run.stderr).toBe('')

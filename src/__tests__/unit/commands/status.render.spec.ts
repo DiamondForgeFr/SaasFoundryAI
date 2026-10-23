@@ -1,3 +1,5 @@
+import { stripVTControlCharacters } from 'node:util'
+
 import { renderClaudeFriendly, renderHuman, renderJson } from '../../../status/render'
 import { describeProjectCapabilities, type StatusReport } from '../../../status/collect'
 import type { Precondition } from '../../../status/preconditions'
@@ -122,7 +124,8 @@ describe('project capability status', () => {
     const report = makeReport({ capabilities })
     const payload = { report, preconditions: [okPrecondition] }
 
-    expect(renderHuman(payload)).toContain('Preview full profile: sf update --target-profile full --dry-run --json')
+    // The human render is coloured whenever the runner forces colour.
+    expect(stripVTControlCharacters(renderHuman(payload))).toContain('Preview full profile: sf update --target-profile full --dry-run --json')
     expect(renderClaudeFriendly(payload)).toContain('- full-profile preview: sf update --target-profile full --dry-run --json')
     expect(JSON.parse(renderJson(payload)).capabilities.previewCommand).toBe('sf update --target-profile full --dry-run --json')
   })
