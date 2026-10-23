@@ -18,9 +18,15 @@ const held: Server[] = []
  * #963 — the ports used to be literals between 43500 and 49032. On Linux that is inside the
  * ephemeral range (32768–60999): any outgoing connection on a CI runner can hold one as its
  * local port, and a test failed with EADDRINUSE before asserting anything. Each test now
- * works in a run of ports the OS handed out and that was verified free just before.
+ * works in a run of ports verified free just before.
+ *
+ * The run used to start at a port the OS handed out, so inside the ephemeral range again
+ * (49152–65535 on macOS): with the Docker lane and the other suites opening connections
+ * beside it, twenty attempts found no 60 free ports in a row. It now starts below both ranges.
  */
 const RUN_LENGTH = 60
+const RUN_FLOOR = 20000
+const RUN_CEILING = 32000
 
 function canBind(port: number, host: string): Promise<boolean> {
   return new Promise((resolve) => {
@@ -30,21 +36,9 @@ function canBind(port: number, host: string): Promise<boolean> {
   })
 }
 
-function osPort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer()
-    server.once('error', reject)
-    server.listen(0, '0.0.0.0', () => {
-      const { port } = server.address() as { port: number }
-      server.close(() => resolve(port))
-    })
-  })
-}
-
 async function freeRun(length: number): Promise<number> {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const start = await osPort()
-    if (start + length > 65000) continue
+    const start = RUN_FLOOR + Math.floor(Math.random() * (RUN_CEILING - RUN_FLOOR - length))
     let free = true
     for (let port = start; port < start + length && free; port++) {
       free = (await canBind(port, '0.0.0.0')) && (await canBind(port, '::'))
