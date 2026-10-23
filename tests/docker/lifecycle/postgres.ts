@@ -74,7 +74,9 @@ export async function startPrivatePostgres(options: PrivatePostgresOptions): Pro
       deadline: options.deadline,
       signal: options.signal,
       ports: [port],
-      fatalPatterns: [/\bPANIC\b/, /\bFATAL:\s+(?!terminating connection due to administrator command)/]
+      // pg_isready probes the server while it starts, and PostgreSQL answers those probes with a FATAL line.
+      // The whitespace sits inside the lookahead: PostgreSQL pads with two spaces, and a \s+ outside it would backtrack past the exclusion.
+      fatalPatterns: [/\bPANIC\b/, /\bFATAL:(?!\s+(?:terminating connection due to administrator command|the database system is starting up))/]
     })
     await waitUntilReady(run, join(bindir, 'pg_isready'), port, options.deadline, options.signal)
     const adminArgs = ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1']
