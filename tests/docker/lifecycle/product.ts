@@ -165,7 +165,7 @@ export async function runProductPhase(options: ProductPhaseOptions): Promise<Pro
     apiEnv.SF_LIFECYCLE_MAILBOX_URL = provider.url
     apiEnv.SF_LIFECYCLE_MAILBOX_CAPABILITY = provider.capability
     apiEnv.SF_LIFECYCLE_ALLOW_INSECURE_HTTP = 'true'
-    apiEnv.NODE_OPTIONS = `--require=${options.egressGuardPath ?? '/workspace/lifecycle/egress-guard.cjs'}`
+    apiEnv.NODE_OPTIONS = `--require="${options.egressGuardPath ?? '/workspace/lifecycle/egress-guard.cjs'}"`
     api = await processApi.start({
       label: `${options.phase} api`,
       executable: 'npm',
