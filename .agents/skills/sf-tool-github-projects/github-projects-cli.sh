@@ -1968,18 +1968,43 @@ cmd_draft_pr() { cmd_set_pr_draft true draft "$@"; }
 # Command: list — list items on the project board, optionally filtered by status
 # ───────────────────────────────────────────────────────────────────────────
 
+# Every item of the board, as one JSON document. `gh project item-list --limit N` returns at most N
+# items, and its reply carries the board's own `totalCount`: a first page of 1000 covers most boards,
+# and when it is short the board is read again for exactly `totalCount` items. A board still read
+# short is named on stderr, never trimmed silently (#1082).
+list_board_items() {
+  local json total count
+  json=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 1000) || {
+    echo "github-projects-cli: could not read the board (gh project item-list failed)" >&2
+    return 1
+  }
+  total=$(printf '%s' "$json" | jq -r '.totalCount // 0')
+  count=$(printf '%s' "$json" | jq -r '.items | length')
+  if [ "$total" -gt "$count" ]; then
+    json=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit "$total") || {
+      echo "github-projects-cli: could not read the board (gh project item-list failed)" >&2
+      return 1
+    }
+    count=$(printf '%s' "$json" | jq -r '.items | length')
+  fi
+  if [ "$count" -lt "$total" ]; then
+    echo "github-projects-cli: list truncated: the board holds $total items, only $count were read" >&2
+  fi
+  printf '%s\n' "$json"
+}
+
 cmd_list() {
   require_project
   local status_filter=${1:-""}
+  local board
+  board=$(list_board_items) || return 1
   if [ -n "$status_filter" ]; then
-    gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 200 \
-      | jq -r --arg s "$status_filter" '
-        .items[] | select((.status // "") | ascii_downcase == ($s | ascii_downcase))
-        | "#\(.content.number // "?") [\(.status // "?")] \(.content.title // "?")"
-      '
+    printf '%s\n' "$board" | jq -r --arg s "$status_filter" '
+      .items[] | select((.status // "") | ascii_downcase == ($s | ascii_downcase))
+      | "#\(.content.number // "?") [\(.status // "?")] \(.content.title // "?")"
+    '
   else
-    gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit 200 \
-      | jq -r '.items[] | "#\(.content.number // "?") [\(.status // "no status")] \(.content.title // "?")"'
+    printf '%s\n' "$board" | jq -r '.items[] | "#\(.content.number // "?") [\(.status // "no status")] \(.content.title // "?")"'
   fi
 }
 
