@@ -50,7 +50,7 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "npm run clean && tsc",
+    "build": "node scripts/build-dist.js",
     "dev": "tsc -w",
     "test": "jest --passWithNoTests",
     "test:unit": "jest --selectProjects unit",
