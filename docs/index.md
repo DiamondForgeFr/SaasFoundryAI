@@ -108,8 +108,8 @@ hero:
     <li><strong>Integrate</strong><span>host-supplied candidates, budget, approval and dispatch</span></li>
   </ol>
 
-  <p class="sf-boundary-note"><strong>The v1 boundary:</strong> these two layers are not automatically wired together. The <code>sf</code> CLI does not route each subtask to a model. A host or integration must supply execution candidates, invoke the planning contracts and dispatch the selected agent or model; SaaSFoundry never installs provider accounts, copies credentials or invents unavailable candidates.</p>
-  <p><a href="./guide/agent-coexistence.html">See how agent hosts coexist →</a> · <a href="./guide/execution-planning.html">Inspect adaptive execution planning →</a></p>
+  <p class="sf-boundary-note"><strong>The v1.1 boundary:</strong> the <code>sf</code> CLI routes delegated work by task kind. <code>sf agents route</code> names the model and effort for each kind, the generated tier agents carry them, and background agents deliver tickets only after the developer's consent. The CLI never installs provider accounts, copies credentials or invents unavailable candidates. The adaptive execution planning contracts are not automatically wired together with this routing: a host or integration must still supply their candidates, budget and dispatch.</p>
+  <p><a href="./guide/routed-delegation.html">See routed delegation →</a> · <a href="./guide/agent-coexistence.html">See how agent hosts coexist →</a> · <a href="./guide/execution-planning.html">Inspect adaptive execution planning →</a></p>
   <p><a href="./getting-started/install-harness.html">Install the shared harness →</a></p>
 </section>
 
