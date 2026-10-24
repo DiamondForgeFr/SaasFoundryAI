@@ -109,8 +109,8 @@ hero:
     <li><strong>Intégrer</strong><span>candidats fournis par l'hôte, budget, approbation et dispatch</span></li>
   </ol>
 
-  <p class="sf-boundary-note"><strong>La frontière v1 :</strong> ces deux couches ne sont pas reliées automatiquement. Le CLI <code>sf</code> ne route pas chaque sous-tâche vers un modèle. Un hôte ou une intégration doit fournir les candidats d'exécution, invoquer les contrats de planification et lancer l'agent ou le modèle sélectionné ; SaaSFoundry n'installe aucun compte fournisseur, ne copie aucun identifiant et n'invente aucun candidat indisponible.</p>
-  <p><a href="./guide/agent-coexistence.html">Comprendre la coexistence des hôtes →</a> · <a href="./guide/execution-planning.html">Explorer la planification adaptative →</a></p>
+  <p class="sf-boundary-note"><strong>La frontière v1.1 :</strong> le CLI <code>sf</code> route le travail délégué par type de tâche. <code>sf agents route</code> désigne le modèle et l'effort de chaque type, les agents de palier générés les portent, et les agents en arrière-plan ne livrent les tickets qu'après l'accord du développeur. Le CLI n'installe aucun compte fournisseur, ne copie aucun identifiant et n'invente aucun candidat indisponible. Les couches de planification adaptative ne sont pas reliées automatiquement à ce routage : un hôte ou une intégration doit toujours fournir leurs candidats, leur budget et leur dispatch.</p>
+  <p><a href="./guide/routed-delegation.html">Découvrir la délégation routée →</a> · <a href="./guide/agent-coexistence.html">Comprendre la coexistence des hôtes →</a> · <a href="./guide/execution-planning.html">Explorer la planification adaptative →</a></p>
   <p><a href="./getting-started/install-harness.html">Installer le harness partagé →</a></p>
 </section>
 

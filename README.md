@@ -66,9 +66,14 @@ Software craftsmanship is operational from the first ticket. The Team workflow h
 testing means feature testing; In review means code review. A five-stage Solo preset and advanced custom workflows are also available. Complexity adjusts the depth of analysis, validation and review,
 so a typo and an authorization change do not incur the same ceremony.
 
-Supported coding-agent profiles share one project contract across Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and a generic agent. The harness records the tool profiles; it does **not**
-automatically select or dispatch a model for each subtask. Provider-neutral planning contracts are available to host integrations that explicitly supply candidates, budgets and dispatch.
+Supported coding-agent profiles share one project contract across Claude Code, Codex, Gemini CLI, Kimi Code, Qwen Code and a generic agent. The harness generates one tier agent per routing tier for
+Claude Code and Codex, and `sf agents route --task <kind>` names the model and effort for each kind of delegated work. It never installs provider accounts or copies credentials: the models and
+credentials stay in your tool. Provider-neutral planning contracts remain available to host integrations that supply their own candidates, budgets and dispatch.
 [See the workflow](https://saasfoundryai.diamondforge.fr/guide/workflow-system.html) and [agent coexistence](https://saasfoundryai.diamondforge.fr/guide/agent-coexistence.html).
+
+**Routed delegation** is the part that acts on that routing. With the developer's consent (`sf agents delegation allow`), each ticket that is not trivial is delivered by a background agent in its own
+worktree, on the tier its task kind routes to. Every delegation is measured, and the routing moves a task kind up or down a tier within declared bounds, with every move logged and reversible.
+`AGENTS.md` is the single instruction source of a project. [How it works](https://saasfoundryai.diamondforge.fr/guide/routed-delegation.html).
 
 ## After setup
 
