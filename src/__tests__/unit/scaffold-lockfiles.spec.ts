@@ -36,7 +36,7 @@ const ROOT = resolve(__dirname, '../../..')
 const MULTIREPO = join(ROOT, 'scaffolds', 'overlays', 'multirepo')
 const MONOREPO_ROOT = join(ROOT, 'scaffolds', 'overlays', 'monorepo', 'root', 'package.json')
 const SECURITY_OVERRIDES = {
-  '@nestjs/platform-express': { multer: '2.4.0' },
+  '@nestjs/platform-express': { multer: '2.5.0' },
   '@prisma/config': { 'deepmerge-ts': '8.0.2' },
   prisma: { mysql2: '3.24.4' }
 }
@@ -126,7 +126,7 @@ describe('committed multirepo lockfiles', () => {
     expect(api?.manifest.overrides).toEqual(SECURITY_OVERRIDES)
     expect(monorepoRoot.overrides).toEqual(SECURITY_OVERRIDES)
 
-    expect(resolutionDrift(api!.lock, { multer: '2.4.0', 'deepmerge-ts': '8.0.2', mysql2: '3.24.4' })).toEqual([])
+    expect(resolutionDrift(api!.lock, { multer: '2.5.0', 'deepmerge-ts': '8.0.2', mysql2: '3.24.4' })).toEqual([])
   })
 
   it('resolves patched shared parser dependencies from a fresh lock', () => {
@@ -156,9 +156,9 @@ describe('committed multirepo lockfiles', () => {
   it('fails when a vulnerable transitive resolution returns', () => {
     const api = fixtures.find((fixture) => fixture.app === 'api')!
     const staleLock = structuredClone(api.lock)
-    staleLock.packages['node_modules/multer'].version = '2.2.0'
+    staleLock.packages['node_modules/multer'].version = '2.4.0'
 
-    expect(resolutionDrift(staleLock, { multer: '2.4.0' })).toEqual(['multer: expected only 2.4.0, received 2.2.0'])
+    expect(resolutionDrift(staleLock, { multer: '2.5.0' })).toEqual(['multer: expected only 2.5.0, received 2.4.0'])
   })
 
   it('accepts newer parser patches and rejects any vulnerable resolution', () => {
