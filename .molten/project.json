@@ -15,7 +15,8 @@
             { "path": "docs/fr/guide/project-structure.md", "format": "text", "pattern": "\"version\": \"{version}\"," },
             { "path": "docs/guide/project-structure.md", "format": "text", "pattern": "\"version\": \"{version}\"," }
         ],
-        "changelogs": ["docs/changelog.md", "docs/fr/changelog.md"]
+        "changelogs": ["docs/changelog.md", "docs/fr/changelog.md"],
+        "format": "npm run format --"
     },
     "ci": {
         "prepare": { "run": "npm ci" },
@@ -41,13 +42,21 @@
                 "id": "changelog-en",
                 "title": "Write the {version} section of docs/changelog.md",
                 "phase": "cut",
-                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/changelog.md. The cut commits it with the version."
+                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/changelog.md. Cover what changed since the previous release, candidate or public. The cut commits it with the version.",
+                "check": { "path": "docs/changelog.md", "contains": "## [{version}]" }
             },
             {
                 "id": "changelog-fr",
                 "title": "Write the {version} section of docs/fr/changelog.md",
                 "phase": "cut",
-                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/fr/changelog.md. The cut commits it with the version."
+                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/fr/changelog.md. Cover what changed since the previous release, candidate or public. The cut commits it with the version.",
+                "check": { "path": "docs/fr/changelog.md", "contains": "## [{version}]" }
+            },
+            {
+                "id": "rewrite-notes",
+                "title": "Rewrite the public notes with the coding agent",
+                "notes": true,
+                "run": "molten release notes {tag}"
             },
             {
                 "id": "tag",
@@ -69,13 +78,21 @@
                 "id": "changelog-en",
                 "title": "Write the {version} section of docs/changelog.md",
                 "phase": "cut",
-                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/changelog.md. The cut commits it with the version."
+                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/changelog.md. Cover everything that changed since the last public release, release candidates included: public users never saw them. The public notes draft has that scope. The cut commits it with the version.",
+                "check": { "path": "docs/changelog.md", "contains": "## [{version}]" }
             },
             {
                 "id": "changelog-fr",
                 "title": "Write the {version} section of docs/fr/changelog.md",
                 "phase": "cut",
-                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/fr/changelog.md. The cut commits it with the version."
+                "manual": "In the release worktree (../SaaSFoundry-release, prepared on the RC branch rc-X.Y.Z made from develop), write the {version} section of docs/fr/changelog.md. Cover everything that changed since the last public release, release candidates included: public users never saw them. The public notes draft has that scope. The cut commits it with the version.",
+                "check": { "path": "docs/fr/changelog.md", "contains": "## [{version}]" }
+            },
+            {
+                "id": "rewrite-notes",
+                "title": "Rewrite the public notes with the coding agent",
+                "notes": true,
+                "run": "molten release notes {tag}"
             },
             {
                 "id": "open-pr",

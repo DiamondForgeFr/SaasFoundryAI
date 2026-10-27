@@ -1,0 +1,21 @@
+{
+    "template": 2,
+    "steps": {
+        "public/changelog-en": "90c6c6852c04",
+        "public/changelog-fr": "2f96901d0545",
+        "public/close-milestone": "c3053b36148b",
+        "public/dispatch-deploy-docs": "7fe6de425e7c",
+        "public/merge-pr": "417031c568b7",
+        "public/open-pr": "82ca7421d507",
+        "public/prepare": "6784246ea0d2",
+        "public/reconcile": "d7d9de52737e",
+        "public/rewrite-notes": "5436867c2a4f",
+        "public/sync-back": "89049bd616cb",
+        "public/tag": "9be5a5a90a04",
+        "rc/changelog-en": "cd50998ead49",
+        "rc/changelog-fr": "3e7433984b02",
+        "rc/prepare": "6784246ea0d2",
+        "rc/rewrite-notes": "5436867c2a4f",
+        "rc/tag": "2110dd761384"
+    }
+}
