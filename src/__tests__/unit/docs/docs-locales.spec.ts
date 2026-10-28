@@ -157,6 +157,11 @@ describe('documentation locale parity policy (#796)', () => {
       expect(parity.missingTranslations.length).toBeGreaterThan(0)
     }
   })
+
+  it('leaves the generated maintainer pages out of the published routes (#1115)', () => {
+    expect(existsSync(resolve(repositoryRoot, 'docs/engineering/release-pipeline.md'))).toBe(true)
+    expect(englishRoutes.filter((route) => route.startsWith('/engineering'))).toEqual([])
+  })
 })
 
 describe('documentation navigation integrity (#796)', () => {
