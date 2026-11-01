@@ -3,6 +3,9 @@ import { join } from 'path'
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 
+import { TICKET_DELIVERY_DECISIONS } from '../../../harness/delegation'
+import { ROUTING_EFFORTS, ROUTING_PROVIDERS, TASK_KINDS, routingOverrideIssues } from '../../../harness/routing-grid'
+
 // Regression guard for #286: the JSON Schema is the single source of truth
 // for `.saasfoundry.json`. If a canonical shape from manifest-schema.md stops
 // validating, scaffolded projects break — IDEs surface red squiggles where
@@ -235,5 +238,113 @@ describe('shared harness agent inventory', () => {
     for (const agents of [[], ['codex', 'codex'], ['gpt']]) {
       expect(validate({ ...baseManifest, modules: { harness: { version: 1, agents } } })).toBe(false)
     }
+  })
+})
+
+describe('saasfoundry-manifest.schema.json — harness routing overrides (#930)', () => {
+  const harness = (routing: unknown) => ({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code', 'codex'], routing } } })
+
+  it('accepts a kind override and a tier override', () => {
+    expect(validate(harness({ kinds: { 'scoped-edit': { tier: 'build' } }, tiers: { docs: { 'claude-code': { model: 'claude-sonnet-5-5', effort: 'low' } } } }))).toBe(true)
+  })
+
+  it.each([
+    ['an unknown task kind', { kinds: { deploy: { tier: 'light' } } }],
+    ['an unknown key', { budget: 5 }],
+    ['an unknown effort', { tiers: { light: { codex: { model: 'gpt-6-luna', effort: 'turbo' } } } }],
+    ['an unrouted agent', { tiers: { light: { 'gemini-cli': { model: 'x', effort: 'low' } } } }],
+    ['an empty tier', { tiers: { light: {} } }],
+    ['a tier name the grid cannot hold', { tiers: { Light: { codex: { model: 'gpt-6-luna', effort: 'low' } } } }]
+  ])('rejects %s', (_, routing) => {
+    expect(validate(harness(routing))).toBe(false)
+  })
+
+  it('names exactly the grid task kinds, routed agents and efforts', () => {
+    const routing = schema.properties.modules.properties.harness.properties.routing
+    expect(Object.keys(routing.properties.kinds.properties)).toEqual([...TASK_KINDS])
+    expect(Object.keys(routing.properties.tiers.additionalProperties.properties)).toEqual([...ROUTING_PROVIDERS])
+    expect(schema.definitions.routingCandidate.properties.effort.enum).toEqual([...ROUTING_EFFORTS])
+  })
+})
+
+// An optional block of the routing overrides (#1035): every setting has a shipped default, so a manifest
+// written before it exists keeps validating and ships without a manifest migration.
+describe('saasfoundry-manifest.schema.json — routing adjustment settings (#1035)', () => {
+  const harness = (adjust: unknown) => ({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code'], routing: { adjust } } } })
+  const PRICE = { input: '0.30', output: '1.20' }
+
+  it.each([
+    ['an empty block, the defaults', {}],
+    [
+      'every setting',
+      {
+        enabled: true,
+        window: 30,
+        escalate: { failures: 4, of: 12 },
+        deescalate: { successes: 10, failures: 0 },
+        trialShare: 0.2,
+        trialCooldownDays: 7,
+        costBand: 0.05,
+        maxDurationMs: 600000,
+        prices: { 'gpt-6.1-sol': PRICE }
+      }
+    ],
+    ['a price with its cache rates', { prices: { 'gpt-6.1-sol': { ...PRICE, cacheRead: '0.03', cacheWrite: '0.375' } } }],
+    ['the adjustment switched off', { enabled: false }]
+  ])('accepts %s', (_, adjust) => {
+    expect(validate(harness(adjust))).toBe(true)
+    expect(routingOverrideIssues({ adjust })).toEqual([])
+  })
+
+  it.each([
+    ['an unknown setting', { budget: 5 }],
+    ['a window that is not a count', { window: 'many' }],
+    ['a window below the minimum', { window: 2 }],
+    ['an escalation without its window', { escalate: { failures: 3 } }],
+    ['a trial share above half the runs', { trialShare: 0.9 }],
+    ['a cost band below zero', { costBand: -0.1 }],
+    ['a duration ceiling under a second', { maxDurationMs: 10 }],
+    ['a price without its output rate', { prices: { 'gpt-6.1-sol': { input: '0.30' } } }],
+    ['a price that is not a decimal string', { prices: { 'gpt-6.1-sol': { input: 0.3, output: '1.20' } } }],
+    ['a price with an unknown rate', { prices: { 'gpt-6.1-sol': { ...PRICE, discount: '0.5' } } }]
+  ])('rejects %s, in the schema and in the validation the commands run', (_, adjust) => {
+    expect(validate(harness(adjust))).toBe(false)
+    expect(routingOverrideIssues({ adjust }).length).toBeGreaterThan(0)
+  })
+
+  it('rejects an escalation that asks for more failures than runs, which only the validation can see', () => {
+    expect(routingOverrideIssues({ adjust: { escalate: { failures: 6, of: 5 } } }).join('\n')).toContain('cannot exceed escalate.of')
+    expect(routingOverrideIssues({ adjust: { window: 5, escalate: { failures: 3, of: 10 } } }).join('\n')).toContain('cannot exceed the window')
+  })
+})
+
+// An optional field of the harness block: a manifest written before it exists keeps validating, so
+// it ships without a manifest migration (migration-framework.md, "When NOT to add a migration").
+describe('saasfoundry-manifest.schema.json — ticket delivery delegation consent (#1026)', () => {
+  const harness = (delegation: unknown) => ({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code'], delegation } } })
+
+  it('accepts a manifest that never recorded a decision — the shape every existing project is in', () => {
+    expect(validate({ ...baseManifest, modules: { harness: { version: 4, agents: ['claude-code'] } } })).toBe(true)
+  })
+
+  it.each(TICKET_DELIVERY_DECISIONS)('accepts the %s decision', (ticketDelivery) => {
+    expect(validate(harness({ ticketDelivery, decidedAt: '2026-10-19T10:00:00.000Z' }))).toBe(true)
+  })
+
+  it.each([
+    ['an unknown decision', { ticketDelivery: 'maybe', decidedAt: '2026-10-19T10:00:00.000Z' }],
+    ['the command verb instead of the decision', { ticketDelivery: 'allow', decidedAt: '2026-10-19T10:00:00.000Z' }],
+    ['a decision without its date', { ticketDelivery: 'allowed' }],
+    ['a date that is not a date-time', { ticketDelivery: 'allowed', decidedAt: 'yesterday' }],
+    ['an unknown key', { ticketDelivery: 'allowed', decidedAt: '2026-10-19T10:00:00.000Z', scope: 'local' }],
+    ['a bare string', 'allowed']
+  ])('rejects %s', (_, delegation) => {
+    expect(validate(harness(delegation))).toBe(false)
+  })
+
+  it('names exactly the decisions the command records', () => {
+    const delegation = schema.properties.modules.properties.harness.properties.delegation
+    expect(delegation.properties.ticketDelivery.enum).toEqual([...TICKET_DELIVERY_DECISIONS])
+    expect(delegation.required).toEqual(['ticketDelivery', 'decidedAt'])
   })
 })

@@ -335,13 +335,17 @@ jobs:
           outputs: type=docker,dest=${{ runner.temp }}/sf-test.tar
           cache-from: type=gha,scope=lifecycle-image
           cache-to: type=gha,mode=max,scope=lifecycle-image
+      # The name holds no run attempt: "re-run failed jobs" re-runs the lifecycle jobs
+      # without this one, and they must still find the image it uploaded (#891). A full
+      # re-run uploads it again over the same name.
       - name: Upload lifecycle image
         uses: actions/upload-artifact@v4
         with:
-          name: lifecycle-image-${{ github.run_id }}-${{ github.run_attempt }}
+          name: lifecycle-image-${{ github.run_id }}
           path: ${{ runner.temp }}/sf-test.tar
           compression-level: 0
           retention-days: 1
+          overwrite: true
 
   lifecycle:
     needs: [classify, lifecycle_prepare]
@@ -356,7 +360,7 @@ jobs:
       - name: Download lifecycle image
         uses: actions/download-artifact@v4
         with:
-          name: lifecycle-image-${{ github.run_id }}-${{ github.run_attempt }}
+          name: lifecycle-image-${{ github.run_id }}
           path: ${{ runner.temp }}/lifecycle-image
       - name: Load lifecycle image
         run: docker load --input "${{ runner.temp }}/lifecycle-image/sf-test.tar"

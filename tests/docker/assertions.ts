@@ -2,7 +2,7 @@
 // Used by the test harness to validate generated projects.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ const PLACEHOLDER_PATTERN = /\{\{[A-Z_]+\}\}/g
 /**
  * Scan a directory recursively for unreplaced {{PLACEHOLDER}} patterns.
  * @param excludePatterns - file path substrings to exclude from scanning
- *   (e.g., in monorepo, per-app CLAUDE.md files are not processed by the skills installer)
+ *   (e.g., in monorepo, per-app AGENTS.md files are not processed by the skills installer)
  */
 export function scanForUnreplacedPlaceholders(dirPath: string, excludePatterns: string[] = []): AssertionResult {
   const violations: string[] = []
@@ -316,19 +316,38 @@ export function assertMonorepoSkills(projectPath: string): AssertionResult[] {
   return results
 }
 
-// ── CLAUDE.md Assertions ───────────────────────────────────────
+// ── AGENTS.md Assertions ───────────────────────────────────────
 
-/** Verify CLAUDE.md has been properly configured */
-export function assertClaudeMdConfigured(claudeMdPath: string, projectName: string): AssertionResult[] {
+const GENERATED_REGION_START = '<!-- saasfoundry:generated:start -->'
+const GENERATED_REGION_END = '<!-- saasfoundry:generated:end -->'
+
+/**
+ * Verify an AGENTS.md has been properly configured (#937): it is the project's instructions,
+ * no CLAUDE.md stands beside it, and a root AGENTS.md ends with the filled generated region.
+ */
+export function assertAgentsMdConfigured(agentsMdPath: string, projectName: string, { generatedRegion = true }: { generatedRegion?: boolean } = {}): AssertionResult[] {
   const results: AssertionResult[] = []
 
-  results.push(assertFileExists(claudeMdPath))
+  results.push(assertFileExists(agentsMdPath))
+  const claudeMdPath = join(dirname(agentsMdPath), 'CLAUDE.md')
+  results.push(
+    existsSync(claudeMdPath)
+      ? { passed: false, message: `FAIL: ${claudeMdPath} should not exist (AGENTS.md is the instructions of a new project)` }
+      : { passed: true, message: `OK: no CLAUDE.md beside ${agentsMdPath}` }
+  )
 
-  if (existsSync(claudeMdPath)) {
+  if (existsSync(agentsMdPath)) {
     // Should contain project name (not placeholder)
-    results.push(assertFileContains(claudeMdPath, projectName))
-    results.push(assertFileNotContains(claudeMdPath, '{{PROJECT_NAME}}'))
-    results.push(assertFileNotContains(claudeMdPath, '{{VERSION}}'))
+    results.push(assertFileContains(agentsMdPath, projectName))
+    results.push(assertFileNotContains(agentsMdPath, '{{PROJECT_NAME}}'))
+    results.push(assertFileNotContains(agentsMdPath, '{{VERSION}}'))
+    if (generatedRegion) {
+      results.push(assertFileContains(agentsMdPath, GENERATED_REGION_START))
+      results.push(assertFileContains(agentsMdPath, GENERATED_REGION_END))
+      results.push(assertFileContains(agentsMdPath, 'sf status --agent-friendly --no-network'))
+    } else {
+      results.push(assertFileNotContains(agentsMdPath, GENERATED_REGION_START))
+    }
   }
 
   return results

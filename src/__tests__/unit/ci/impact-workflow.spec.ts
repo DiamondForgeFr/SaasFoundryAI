@@ -24,6 +24,19 @@ describe('impact-aware SaaSFoundry CI contract', () => {
   const source = readFileSync(WORKFLOW_PATH, 'utf8')
   const workflow = load(source) as Workflow
 
+  // #891 — "re-run failed jobs" re-ran the lifecycle jobs without the image job, under a new attempt
+  it('names the lifecycle image artifact without the run attempt, on both sides', () => {
+    const names = (job: string) =>
+      (workflow.jobs[job].steps ?? [])
+        .filter((step) => /actions\/(upload|download)-artifact/.test(step.uses ?? '') && String(step.with?.name ?? '').startsWith('lifecycle-image'))
+        .map((step) => step.with?.name)
+    const [uploaded] = names('lifecycle_prepare')
+    const [downloaded] = names('lifecycle')
+    expect(uploaded).toBe('lifecycle-image-${{ github.run_id }}')
+    expect(downloaded).toBe(uploaded)
+    expect(source).not.toMatch(/lifecycle-image-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/)
+  })
+
   it('classifies every supported event instead of filtering paths before the safety contract runs', () => {
     expect(workflow.on).toHaveProperty('pull_request')
     expect(workflow.on).toHaveProperty('merge_group')

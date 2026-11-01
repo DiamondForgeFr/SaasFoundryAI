@@ -1,0 +1,18 @@
+{
+  "session_id": "s-1",
+  "transcript_path": "/home/dev/.claude/projects/p/s-1.jsonl",
+  "cwd": "__CWD__",
+  "permission_mode": "bypassPermissions",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Agent",
+  "tool_input": { "description": "Deliver ticket 1035", "prompt": "You are delivering ticket 1035.", "subagent_type": "sf-build" },
+  "tool_response": {
+    "status": "completed",
+    "agentId": "a1b2c3",
+    "totalDurationMs": 201500,
+    "totalTokens": 1900,
+    "totalToolUseCount": 12,
+    "resolvedModel": "claude-sonnet-5-5-20261001",
+    "usage": { "input_tokens": 2, "output_tokens": 400, "cache_read_input_tokens": 1200, "cache_creation_input_tokens": 0 }
+  }
+}

@@ -1,4 +1,4 @@
-# {{PROJECT_NAME}} Web
+# acme Web
 
 Production-ready React application generated with **SaaSFoundryAI** - An AI-First development platform.
 
@@ -130,7 +130,7 @@ Run `sf status --claude-friendly --no-network` to confirm topology before changi
 
 ## Git Workflow
 
-- Main branch: `{{MAIN_BRANCH}}`
+- Main branch: `develop`
 - **ALWAYS** use conventional commits: `<type>(#<ticket>): <description>`
 - Types: feat, fix, docs, style, refactor, perf, test, chore
 - Scope (ticket number) is required

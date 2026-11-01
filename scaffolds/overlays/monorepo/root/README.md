@@ -32,11 +32,12 @@ data.
 │   ├── shared-config/      runtime constants
 │   ├── api-client/         generated API client
 │   └── ui-primitives/      shared UI
-├── .claude/            AI harness — skills and conventions the agent follows
+├── .claude/            AI harness — skills the agent follows
+├── AGENTS.md           instructions every coding agent reads
 └── .saasfoundry.json   what this project is: modules, workflow, ports, language
 ```
 
-Each app carries its own `README.md` with the detail that belongs to it, and its own `CLAUDE.md` describing it to an AI agent.
+Each app carries its own `README.md` with the detail that belongs to it, and its own `AGENTS.md` describing it to an AI agent; the root `AGENTS.md` holds the project-wide instructions.
 
 ## Everyday commands
 

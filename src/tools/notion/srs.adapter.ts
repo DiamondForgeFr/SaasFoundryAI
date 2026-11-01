@@ -4,9 +4,22 @@ import { Client, isFullPage } from '@notionhq/client'
 
 import { renderEpicPage } from '../../builders/srs/templates/pages/epic.tpl'
 import { renderFrPage } from '../../builders/srs/templates/pages/fr.tpl'
-import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SectionAddition, SectionAdditionOutcome, SrsAdapter } from '../../builders/srs/types'
+import {
+  EpicSpec,
+  FrSpec,
+  PageContent,
+  PageRef,
+  RawContent,
+  ResolvedParent,
+  SectionAddition,
+  SectionAdditionOutcome,
+  SectionUpdate,
+  SectionUpdateOptions,
+  SectionUpdateOutcome,
+  SrsAdapter
+} from '../../builders/srs/types'
 import { loadEnvFile } from '../../utils/env-file'
-import { renderPageContentToNotionBlocks, renderTableRows } from './page-content.renderer'
+import { renderPageContentToNotionBlocks, renderRichText, renderTableRows } from './page-content.renderer'
 
 export interface NotionSrsAdapterOptions {
   apiToken: string
@@ -184,6 +197,79 @@ export class NotionSrsAdapter implements SrsAdapter {
     if (rows.length === 0) return 'unchanged'
     await this.client.blocks.children.append({ block_id: table.id, children: renderTableRows(rows) })
     return 'extended'
+  }
+
+  async updateSections(pageId: string, updates: SectionUpdate[], options: SectionUpdateOptions = {}): Promise<SectionUpdateOutcome[]> {
+    const outcomes: SectionUpdateOutcome[] = []
+    // Read again for each update: a heading the previous one rewrote is found under its new text
+    for (const update of updates) outcomes.push(await this.updateSection(pageId, update, options.dryRun === true))
+    return outcomes
+  }
+
+  private async updateSection(pageId: string, update: SectionUpdate, dryRun: boolean): Promise<SectionUpdateOutcome> {
+    if (update.kind === 'title') return this.updateTitle(pageId, update.text, dryRun)
+
+    const blocks = await this.listAllChildren(pageId)
+    const start = blocks.findIndex((block) => sameHeading(headingText(block), update.heading))
+    if (start === -1) return unplaced(`no "${update.heading}" heading on the page`)
+
+    if (update.kind === 'heading') {
+      const current = headingText(blocks[start]) ?? ''
+      if (current.trim() === update.text.trim()) return { status: 'unchanged', before: current }
+      if (!dryRun) await this.rewriteHeading(blocks[start], update.text)
+      return { status: 'updated', before: current }
+    }
+
+    const table = blocks.slice(start + 1, nextHeadingIndex(blocks, start)).find(isTableBlock)
+    if (!table) return unplaced(`no table under "${update.heading}"`)
+    const [headerRow, ...body] = (await this.listAllChildren(table.id)).filter(isTableRowBlock)
+    if (!headerRow) return unplaced(`the table under "${update.heading}" has no header row`)
+
+    const headers = headerRow.table_row.cells.map((cell) => extractRichText(cell).trim())
+    const columns = new Map<string, number>()
+    for (const name of Object.keys(update.cells)) {
+      const column = headers.findIndex((header) => header.toLowerCase() === name.trim().toLowerCase())
+      if (column === -1) return unplaced(`the table under "${update.heading}" has no "${name}" column (it has: ${headers.join(', ')})`)
+      columns.set(name, column)
+    }
+    const rows = body.filter((row) => extractRichText(row.table_row.cells[0] ?? []).trim() === update.rowKey.trim())
+    if (rows.length === 0) return unplaced(`no "${update.rowKey}" row in the table under "${update.heading}"`)
+    if (rows.length > 1) return unplaced(`${rows.length} rows start with "${update.rowKey}" in the table under "${update.heading}": it is not clear which one to change`)
+
+    const row = rows[0]
+    const cells: unknown[][] = headers.map((_, column) => (row.table_row.cells[column] ?? []).map(asRequestRichText))
+    const before: Record<string, string> = {}
+    let changed = false
+    for (const [name, text] of Object.entries(update.cells)) {
+      const column = columns.get(name)!
+      const current = extractRichText(row.table_row.cells[column] ?? [])
+      before[name] = current
+      if (current.trim() === text.trim()) continue
+      cells[column] = renderRichText(text)
+      changed = true
+    }
+    // Only the cells named are rewritten: the others are sent back as they were read
+    if (changed && !dryRun) await this.client.blocks.update({ block_id: row.id, table_row: { cells: cells as never } })
+    return { status: changed ? 'updated' : 'unchanged', before }
+  }
+
+  private async rewriteHeading(block: BlockResult, text: string): Promise<void> {
+    if (!('type' in block)) return
+    const rich_text = renderRichText(text)
+    if (block.type === 'heading_1') await this.client.blocks.update({ block_id: block.id, heading_1: { rich_text } })
+    else if (block.type === 'heading_2') await this.client.blocks.update({ block_id: block.id, heading_2: { rich_text } })
+    else if (block.type === 'heading_3') await this.client.blocks.update({ block_id: block.id, heading_3: { rich_text } })
+  }
+
+  private async updateTitle(pageId: string, text: string, dryRun: boolean): Promise<SectionUpdateOutcome> {
+    const page = await this.client.pages.retrieve({ page_id: pageId })
+    const current = extractPageTitle(page)
+    if (current.trim() === text.trim()) return { status: 'unchanged', before: current }
+    // The title property is named "title" under a page and "Name" in a database: find it by its type
+    const property = isFullPage(page) ? Object.entries(page.properties).find(([, value]) => value.type === 'title') : undefined
+    if (!property) return unplaced('the page has no title property')
+    if (!dryRun) await this.client.pages.update({ page_id: pageId, properties: { [property[0]]: { title: renderRichText(text) } } })
+    return { status: 'updated', before: current }
   }
 
   private async appendAfter(pageId: string, afterBlockId: string, children: AnyBlockRequest[]): Promise<void> {
@@ -370,8 +456,21 @@ function mapBlockToRaw(block: BlockResult): RawBlock {
   }
 }
 
-type RichTextResult = { type: string; plain_text?: string; text?: { content: string } }
+type RichTextResult = { type: string; plain_text?: string; text?: { content: string; link?: { url: string } | null }; annotations?: Record<string, unknown> }
 
 function extractRichText(rich: RichTextResult[]): string {
   return rich.map((t) => t.plain_text ?? t.text?.content ?? '').join('')
+}
+
+function unplaced(reason: string): SectionUpdateOutcome {
+  return { status: 'unplaced', reason }
+}
+
+/**
+ * A piece of rich text as it was read, in the shape a request takes: the fields the API only
+ * returns (`plain_text`, `href`) are dropped from a text object, and its formatting and link stay.
+ */
+function asRequestRichText(item: RichTextResult): unknown {
+  if (item.type !== 'text' || !item.text) return item
+  return { type: 'text', text: { content: item.text.content, ...(item.text.link ? { link: item.text.link } : {}) }, ...(item.annotations ? { annotations: item.annotations } : {}) }
 }

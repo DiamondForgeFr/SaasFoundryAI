@@ -5,7 +5,7 @@ import noVersionPrefixPlugin from './eslint-rules/no-version-prefix.mjs'
 
 export default [
   {
-    ignores: ['node_modules', 'dist', 'coverage', 'scaffolds', 'blueprints', 'overlays', 'docs/.vitepress/cache', 'docs/.vitepress/dist', 'docs-dist', '.claude/worktrees']
+    ignores: ['node_modules', 'dist', 'coverage', 'scaffolds', 'blueprints', 'overlays', 'docs/.vitepress/cache', 'docs/.vitepress/dist', 'docs-dist', '.claude/worktrees', '.tmp']
   },
 
   ...tseslint.configs.recommended,

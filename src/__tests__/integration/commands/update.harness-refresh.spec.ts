@@ -111,6 +111,21 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(manifest.fileHashes[stalePath]).toBe(hashFileContent(refreshed))
   })
 
+  it('gives a harness without an agents list its Claude Code tier agents, and leaves its other instruction files alone (#929)', async () => {
+    const hashes = await installTrackedHarness()
+    await rm(join(projectDir, '.claude/agents'), { recursive: true, force: true })
+    await writeFile(join(projectDir, 'AGENTS.md'), 'Team instructions, no generated region.\n')
+    await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+
+    const tier = await readFile(join(projectDir, '.claude/agents/sf-fix.md'), 'utf8')
+    expect(tier).toContain('model: claude-opus-5-5')
+    expect(existsSync(join(projectDir, '.codex/agents'))).toBe(false)
+    expect((await readManifest()).fileHashes['.claude/agents/sf-fix.md']).toBe(hashFileContent(tier))
+    expect(await readFile(join(projectDir, 'AGENTS.md'), 'utf8')).toBe('Team instructions, no generated region.\n')
+  })
+
   // #831 — the v1 harness deposited the stack's integration rules on every project
   it('migrates a v1 harness: removes the untouched integration rules, and the refresh does not bring them back', async () => {
     await installHarness({ targetPath: projectDir, projectName: 'acme', version: FRESH_VERSION, stackPresent: true })
@@ -148,6 +163,27 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(manifest.fileHashes['AGENTS.md']).toBe(entryBaseline)
     expect(await readFile(join(projectDir, sharedPath), 'utf8')).toBe('custom shared instructions\n')
     expect(await readFile(join(projectDir, 'AGENTS.md'), 'utf8')).toBe('custom agent entry point\n')
+  })
+
+  // The developer's answer is the team's default (#1026): a refresh rewrites the harness block, and
+  // must neither drop it nor flip it (finding 12 of the adversarial review).
+  it('keeps the recorded delegation consent and the routing overrides when it rewrites the harness block (#1026)', async () => {
+    const hashes = await installTrackedHarness()
+    const harness = {
+      version: 1,
+      managed: true,
+      agents: ['claude-code', 'codex'] as ('claude-code' | 'codex')[],
+      routing: { kinds: { prose: { tier: 'edit' } } },
+      delegation: { ticketDelivery: 'declined' as const, decidedAt: '2026-10-19T10:00:00.000Z' }
+    }
+    await writeManifest({ modules: { harness }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+    expect((await readManifest()).modules.harness).toEqual({ ...harness, version: harnessInstallerMeta.currentVersion })
+
+    // A second run has nothing left to refresh and still leaves the answer alone.
+    await updateCommand({ nonInteractive: true })
+    expect((await readManifest()).modules.harness.delegation).toEqual(harness.delegation)
   })
 
   it('writes a sidecar for a user-edited deposit, never overwriting it', async () => {

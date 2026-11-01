@@ -6,6 +6,96 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-01
+
+A feature release. Delegated ticket delivery is now routed by task kind, the agent instructions move to `AGENTS.md`, and an existing functional requirement can be changed in place. It also fixes the
+spawn, pull request and workflow problems that real runs hit.
+
+### Added
+
+#### CLI
+
+- `sf agents route --task <kind>` names the tier agent for a task kind (exploration, prose, scoped edit, bug fix, review, multi-file feature, tests, planning, terminal CI). The allocation grid ships
+  with its evidence, and `modules.harness.routing` in the manifest can override it ([#930](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/930),
+  [#1006](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1006), [#1007](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1007),
+  [#1008](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1008)).
+- Each declared coding agent receives one tier agent per routing tier (`sf-light`, `sf-edit`, `sf-build`, `sf-fix`, `sf-plan`, `sf-terminal`), with its own model and effort
+  ([#929](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/929), [#1012](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1012),
+  [#1013](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1013)). Each tier agent also lists the task kinds it does not serve, and a routing override naming an effort the host cannot express is
+  refused instead of silently running at another effort ([#1011](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1011)).
+- `sf agents delegation status|allow|decline` records whether background agents may build tickets, one worktree each. A clone can override the shared answer locally, and `sf status` shows the
+  effective value ([#1041](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1041), [#1026](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1026)).
+- Routed delegations are measured. `sf agents outcome record` and `sf agents outcome mark <ticket> rework|human-defect` keep a ledger of cost and verdict, and
+  `sf agents routing adjust|promote|report|reset` moves a task kind between tiers within declared bounds, shows what changed and undoes it
+  ([#1035](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1035), [#1050](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1050),
+  [#1051](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1051), [#1052](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1052),
+  [#1053](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1053), [#1067](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1067)).
+- `sf status` reports the grid version, the overrides, the tier agents, the delegation consent and the routing state ([#933](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/933),
+  [#1053](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1053)).
+- `sf srs apply-update` accepts `update-fr`, which changes an existing functional requirement in place where it is listed. `--dry-run` prints the old-to-new plan and writes nothing
+  ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945), [#1058](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1058),
+  [#1059](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1059)). When a conversation revises an existing requirement, the SRS evaluation rules now propose an `update-fr` patch instead of
+  appending a new design item ([#1061](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1061)).
+- `unlink-subtask` is available in the GitHub Projects CLI and the workflow CLI ([#1039](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1039)).
+- AI Testing runs the project's declared local pipeline: `molten ci run` when the project declares it, the npm suite otherwise. `sf status` shows a `local-ci:` line
+  ([#943](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/943)).
+
+#### Harness and agent instructions
+
+- `AGENTS.md` is the authoritative instruction file. A project still driven by `CLAUDE.md` is migrated to it, and the harness diagnostics report instruction shadowing, the Claude Code version and the
+  Codex instruction size limit ([#936](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/936), [#937](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/937),
+  [#938](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/938), [#939](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/939)).
+- Skills are projected where each host looks for them. The registry records each host's skill directories, shared skills are copied only for hosts that read `.agents/skills`, and the copies keep the
+  skill's code byte for byte ([#940](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/940), [#999](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/999),
+  [#1000](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1000), [#1001](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1001)).
+- The generated instructions have the session orchestrate delegated delivery. The conversation stays with the developer and hands each ticket to a background agent in its own worktree, on the tier its
+  task kind names ([#1022](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1022), [#1042](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1042),
+  [#1043](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1043)).
+- `sf-workflow` names the task kinds and the rule for splitting a ticket between agents ([#1023](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1023)).
+
+#### Workflow
+
+- The AI Testing report uses the `## Test plan` and `## Test report` headings ([#1017](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1017)).
+- The workflow escape hatches are catalogued in one reference, and the complexity profile schema is documented ([#261](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/261),
+  [#260](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/260)).
+
+### Changed
+
+- `sf update` brings the delegation capture hooks and permissions into `.claude/settings.json` and keeps them current on every update. Instruction bridges left by 1.0.0 and 1.0.1 are recognised
+  ([#935](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/935)).
+- The README and the documentation home page describe routed delegation, and a new "Routed delegation" guide page (EN and FR) explains the grid, the tier agents, the consent, the measurement and the
+  adjustment ([#1086](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1086)).
+
+### Fixed
+
+#### CLI and workflow
+
+- `create-pr` and `ready-pr` accept a ticket worked from a host-named worktree branch, such as a Claude Code agent worktree ([#1036](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1036)).
+- `pr-review-sync` no longer fails red on branches that name no ticket, such as release sync-back and `rc-*` branches ([#1016](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1016)). An early
+  "Ready for review" click is reported as a notice, not a failing check ([#1003](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1003)).
+- `github-projects-cli.sh list` returns every item of a board over 200 items, and its status filter sees all of them ([#1082](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1082)).
+- Workflow scripts read the complexity profiles block by block and trace every escape hatch they use ([#961](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/961)).
+
+#### SRS: `sf srs spawn`
+
+- Spawn no longer recreates Stories already spawned under the Epic, and its dry-run shows them ([#1037](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1037),
+  [#1038](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1038)).
+- Tickets closed as not planned are ignored when a functional requirement is matched to its ticket ([#1046](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1046)).
+- `--version` accepts a Notion page id written without dashes ([#927](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/927)).
+- The per-requirement searches are batched, and the run waits out GitHub's search rate limit instead of failing on large versions ([#952](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/952)).
+
+#### Generated projects
+
+- Generated projects pass the production audit again: zod 4.6.7 (GHSA-mrhx-c7xc-m3w5) and, in the multirepo api lockfile, body-parser 2.4.0 (GHSA-27r3-jxmh-p828), and multer 2.5.0
+  (GHSA-q7qp-rjg7-q26m) ([#1084](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1084), [#1088](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1088)).
+
+#### Tooling
+
+- The local CI passes from a path containing a space, keeps `dist/` whole during a build and keeps the lifecycle database alive through its startup probes
+  ([#1082](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1082)).
+- Re-running failed CI jobs keeps the lifecycle image artifact, and the profile transition spec gets a time budget on a loaded machine
+  ([#891](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/891), [#892](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/892)).
+
 ## [1.0.1] - 2026-10-09
 
 A maintenance release. It fixes what real projects hit after 1.0.0: `sf update` on customized projects, non-interactive harness setup, the SRS writer and spawner, workflow guards, and generated

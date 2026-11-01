@@ -123,5 +123,6 @@ describe.each([
         created: []
       })
     })
-  }, 120_000)
+    // Renders a whole project twice; beside the Docker lane of the local CI it took 158 s.
+  }, 300_000)
 })

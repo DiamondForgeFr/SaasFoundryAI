@@ -254,9 +254,11 @@ describe('generated project smoke tests', () => {
       await assertValidJson(join(paths.webPath, 'tsconfig.json'))
     })
 
-    it('should not have unreplaced placeholders in CLAUDE.md', async () => {
-      await assertNoUnreplacedPlaceholders(join(paths.apiPath, 'CLAUDE.md'))
-      await assertNoUnreplacedPlaceholders(join(paths.webPath, 'CLAUDE.md'))
+    it('should not have unreplaced placeholders in AGENTS.md, and no CLAUDE.md', async () => {
+      await assertNoUnreplacedPlaceholders(join(paths.apiPath, 'AGENTS.md'))
+      await assertNoUnreplacedPlaceholders(join(paths.webPath, 'AGENTS.md'))
+      expect(await readdir(paths.apiPath)).not.toContain('CLAUDE.md')
+      expect(await readdir(paths.webPath)).not.toContain('CLAUDE.md')
     })
 
     it('should substitute branch placeholders in CI workflows', async () => {

@@ -16,6 +16,7 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 COPY scaffolds/ ./scaffolds/
 COPY bin/ ./bin/
+COPY scripts/build-dist.js ./scripts/
 RUN npm run build
 
 # The official image carries all three matching browsers and their Ubuntu

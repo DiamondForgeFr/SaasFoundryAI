@@ -161,7 +161,7 @@ sf new --non-interactive \
 From the generated project root:
 
 ```bash
-sf status --claude-friendly --no-network
+sf status --agent-friendly --no-network
 git status
 ```
 

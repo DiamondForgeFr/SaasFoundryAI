@@ -153,7 +153,52 @@ echo '{
 }' | .claude/skills/sf-srs/scripts/srs-cli.sh apply-update
 ```
 
-La v1 est additive : le nouveau bloc est ajouté en fin de page et sera rangé dans la section canonique lors de la prochaine revue.
+TC-007 apparaît dans le tableau « Test Cases (TC) » de la page de la fonctionnalité, avec la version de la page d'où il a été ajouté ; rien n'est ajouté en fin de page, sauf si le tableau manque.
+
+## 9. Modifier une FR qui existe déjà
+
+Plus tard, la revue du ticket #43 montre que la connexion par mot de passe doit aussi verrouiller le compte après cinq échecs, et qu'elle est P2 plutôt que P1 :
+
+> La connexion par mot de passe doit verrouiller le compte après 5 échecs. Et c'est une P2, pas une P1.
+
+C'est un changement d'une FR qui existe : l'agent propose un correctif `update-fr` plutôt qu'un élément ajouté. Il désigne la FR par son identifiant et les champs qui changent, et prévisualise d'abord
+:
+
+```bash
+echo '{
+  "kind": "update-fr",
+  "frId": "FR-AUTH-001",
+  "changes": {
+    "priority": "P2",
+    "acceptanceCriteria": { "add": ["the account is locked after 5 failed attempts"] }
+  }
+}' | .claude/skills/sf-srs/scripts/srs-cli.sh apply-update --dry-run
+```
+
+L'aperçu est un document JSON : `changes` liste chaque cellule qui changerait, ancienne et nouvelle valeur, et `changeLine` la ligne que la version gagnerait. Rien n'est écrit.
+
+```jsonc
+{
+  "kind": "update-fr",
+  "frId": "FR-AUTH-001",
+  "dryRun": true,
+  "changes": [
+    { "where": "FR page › summary › Priority", "before": "P1", "after": "P2" },
+    { "where": "FR page › Priority", "before": "P1", "after": "P2" },
+    { "where": "FR page › Acceptance Criteria", "before": "• …", "after": "• …\n• the account is locked after 5 failed attempts" },
+    { "where": "version \"v1 — MVP\" › FR table › Priority", "before": "P1", "after": "P2" },
+    { "where": "feature \"Authentication\" › FR table › Priority", "before": "P1", "after": "P2" }
+  ],
+  "changeLine": { "status": "would-add", "text": "Amends FR-AUTH-001 — Password login (priority, acceptance criteria)" }
+  /* … */
+}
+```
+
+Après **acceptation**, l'agent lance le même correctif sans `--dry-run`. La page de la FR, le tableau des FR de sa version et celui de sa fonctionnalité affichent les nouvelles valeurs, la liste «
+What changed » de la version gagne une ligne, et rien n'est ajouté. Appliquer le correctif une seconde fois n'écrit rien. Si l'écriture s'arrête en cours de route, la commande sort avec le code 6 et
+affiche ce qui est appliqué et ce qui reste ; la relancer termine le travail.
+
+La Story déjà générée pour la FR (#43) garde le texte qu'avait la FR à sa génération. Le `followUps` du résultat la nomme, et vous mettez son corps à jour à la main.
 
 ## Rédiger depuis un code existant
 
@@ -191,10 +236,11 @@ Vérifiez `NOTION_API_TOKEN`, le partage explicite de la page racine et l'accès
 
 Une Story produit doit provenir de sa page FR via le spawner. Le bypass est réservé aux tickets réellement méta, avec une raison explicite.
 
-### La table de traçabilité est obsolète
+### Les références d'une FR, ou un UR / DS / TC, n'ont pas été modifiés
 
-Limite v1 : l'adaptateur Notion ajoute les blocs sans remplacer une section existante. Une FR créée par `apply-update` apparaît comme page enfant, mais la table de l'Epic doit être rafraîchie pendant
-la revue humaine.
+`apply-update` ajoute un UR, FR, DS, TC ou NFR et modifie sur place une FR qui existe (section 9). Il ne modifie pas les références d'une FR (`urRefs`, `dsRefs`, `tcRefs`, qui sont aussi listées dans
+les tableaux des UR, DS et TC — [#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056)), ni un UR, DS, TC ou NFR qui existe déjà. Un correctif qui demande le premier est refusé avec le
+code 2 et rien n'est écrit ; faites ces changements à la main pendant la prochaine revue humaine.
 
 ## Et ensuite ?
 

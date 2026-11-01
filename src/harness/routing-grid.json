@@ -1,0 +1,259 @@
+{
+  "gridVersion": 1,
+  "updated": "2026-10-14",
+  "rule": "The cheapest candidate within 5 points of the best measured score at no more than half its cost per task (NFR-AEX-004), compared within one source.",
+  "providers": {
+    "claude-code": { "vendor": "anthropic" },
+    "codex": { "vendor": "openai" }
+  },
+  "tiers": {
+    "light": {
+      "claude-code": { "model": "claude-haiku-5-5", "effort": "medium" },
+      "codex": { "model": "gpt-6.1-sol", "effort": "low" }
+    },
+    "edit": {
+      "claude-code": { "model": "claude-haiku-5-5", "effort": "high" },
+      "codex": { "model": "gpt-6.1-sol", "effort": "medium" }
+    },
+    "build": {
+      "claude-code": { "model": "claude-sonnet-5-5", "effort": "xhigh" },
+      "codex": { "model": "gpt-6.1-sol", "effort": "medium" }
+    },
+    "fix": {
+      "claude-code": { "model": "claude-opus-5-5", "effort": "medium" },
+      "codex": { "model": "gpt-6.1-sol", "effort": "medium" }
+    },
+    "plan": {
+      "claude-code": { "model": "claude-opus-5-5", "effort": "high" },
+      "codex": { "model": "gpt-6.1-sol", "effort": "medium" }
+    },
+    "terminal": {
+      "claude-code": { "model": "claude-opus-5-5", "effort": "xhigh" },
+      "codex": { "model": "gpt-6.1-sol", "effort": "high" }
+    }
+  },
+  "kinds": {
+    "exploration": {
+      "tier": "light",
+      "excluded": [],
+      "evidence": {
+        "claude-code": {
+          "status": "provisional",
+          "source": "SWE Atlas Codebase QnA (Mercor)",
+          "url": "https://www.mercor.com/apex/oss-benchmarks/oss-swe-atlas-leaderboard/",
+          "date": "2026-09-22",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "Only Sonnet 5.5 max is measured (50.3), with no cost; read-only search is seeded on the cheapest tier until the replay bench (#934) measures it."
+        },
+        "codex": {
+          "status": "provisional",
+          "source": "SWE Atlas Codebase QnA (Artificial Analysis)",
+          "url": "https://artificialanalysis.ai/articles/gpt-6-sol-and-luna-push-the-cost-efficiency-frontier",
+          "date": "2026-09-22",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "GPT-6 Sol max 58 and Luna max 44 without cost; GPT-6.1 Sol low is not measured."
+        }
+      }
+    },
+    "scoped-edit": {
+      "tier": "edit",
+      "excluded": [],
+      "evidence": {
+        "claude-code": {
+          "status": "provisional",
+          "source": "CursorBench 4.0",
+          "url": "https://cursor.com/cursorbench",
+          "date": "2026-10-07",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "No benchmark isolates small known-file edits; nearest proxy is Haiku 5.5 high on CursorBench (42.3, $0.32 per task) for larger tasks."
+        },
+        "codex": {
+          "status": "provisional",
+          "source": "FrontierCode 1.1 Main",
+          "url": "https://codingfleet.com/blog/frontiercode-v11-main-leaderboard-2026/",
+          "date": "2026-10-09",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "No scoped-edit proxy; GPT-6.1 Sol medium is the measured bug-fix seed."
+        }
+      }
+    },
+    "bug-fix": {
+      "tier": "fix",
+      "excluded": [{ "provider": "claude-code", "model": "claude-haiku-5-5", "efforts": ["low"] }],
+      "evidence": {
+        "claude-code": {
+          "status": "measured",
+          "source": "FrontierCode 1.1 Main",
+          "url": "https://codingfleet.com/blog/frontiercode-v11-main-leaderboard-2026/",
+          "date": "2026-10-09",
+          "score": 54.6,
+          "costPerTaskUsd": "0.80",
+          "note": "Best and cheapest strong Claude row; nothing else reaches 49.6 for $0.40 or less (Haiku 5.5 max 46.4 at $1.33)."
+        },
+        "codex": {
+          "status": "measured",
+          "source": "FrontierCode 1.1 Main",
+          "url": "https://codingfleet.com/blog/frontiercode-v11-main-leaderboard-2026/",
+          "date": "2026-10-09",
+          "score": 50.2,
+          "costPerTaskUsd": "0.36",
+          "note": "Within 5 points of GPT-6 Astra max (53.3, $4.22 per task in Artificial Analysis's harness)."
+        }
+      }
+    },
+    "multi-file-feature": {
+      "tier": "build",
+      "excluded": [
+        { "provider": "claude-code", "model": "claude-haiku-5-5", "efforts": ["low", "medium"] },
+        { "provider": "codex", "model": "gpt-6-luna" }
+      ],
+      "evidence": {
+        "claude-code": {
+          "status": "measured",
+          "source": "CursorBench 4.0",
+          "url": "https://cursor.com/cursorbench",
+          "date": "2026-10-07",
+          "score": 53.1,
+          "costPerTaskUsd": "2.81",
+          "note": "Best is Opus 5.5 max (57.8, $13.43); Sonnet 5.5 xhigh is the cheapest candidate within 5 points at half the cost."
+        },
+        "codex": {
+          "status": "measured",
+          "source": "FrontierCode 1.1 Main",
+          "url": "https://codingfleet.com/blog/frontiercode-v11-main-leaderboard-2026/",
+          "date": "2026-10-09",
+          "score": 50.2,
+          "costPerTaskUsd": "0.36",
+          "note": "CursorBench has no OpenAI row for these models; FrontierCode is the proxy."
+        }
+      }
+    },
+    "tests": {
+      "tier": "build",
+      "excluded": [],
+      "evidence": {
+        "claude-code": {
+          "status": "provisional",
+          "source": "SWE Atlas Test Writing (Scale)",
+          "url": "https://labs.scale.com/leaderboard/sweatlas-tw",
+          "date": "2026-07-28",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "No 5.5-generation Claude row and no cost; follows the multi-file seed."
+        },
+        "codex": {
+          "status": "provisional",
+          "source": "SWE Atlas Test Writing (Scale)",
+          "url": "https://labs.scale.com/leaderboard/sweatlas-tw",
+          "date": "2026-07-28",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "GPT-6 Astra xHigh 50.7 and gpt-5.5 xHigh 42.6, no cost; follows the multi-file seed."
+        }
+      }
+    },
+    "review": {
+      "tier": "fix",
+      "excluded": [],
+      "evidence": {
+        "claude-code": {
+          "status": "provisional",
+          "source": "FrontierCode 1.1 Main",
+          "url": "https://codingfleet.com/blog/frontiercode-v11-main-leaderboard-2026/",
+          "date": "2026-10-09",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "Code-review benchmarks rank products, not a model at an effort; seeded on the bug-fix tier."
+        },
+        "codex": {
+          "status": "provisional",
+          "source": "FrontierCode 1.1 Main",
+          "url": "https://codingfleet.com/blog/frontiercode-v11-main-leaderboard-2026/",
+          "date": "2026-10-09",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "No review proxy; seeded on the bug-fix tier."
+        }
+      }
+    },
+    "planning": {
+      "tier": "plan",
+      "excluded": [],
+      "evidence": {
+        "claude-code": {
+          "status": "measured",
+          "source": "Artificial Analysis Intelligence Index v4.3.2",
+          "url": "https://www.aifreeapi.com/en/posts/claude-opus-5-5-effort",
+          "date": "2026-10-08",
+          "score": 54,
+          "costPerTaskUsd": "1.82",
+          "note": "General-reasoning proxy; within 5 points of Opus 5.5 max (58, $5.98) at under half its cost."
+        },
+        "codex": {
+          "status": "measured",
+          "source": "Artificial Analysis Intelligence Index v4.3.2",
+          "url": "https://artificialanalysis.ai/models/gpt-6-1-sol",
+          "date": "2026-10-08",
+          "score": 48,
+          "costPerTaskUsd": "0.21",
+          "note": "General-reasoning proxy; within 5 points of GPT-6 Astra max (53, $3.26)."
+        }
+      }
+    },
+    "terminal-ci": {
+      "tier": "terminal",
+      "excluded": [
+        { "provider": "claude-code", "model": "claude-haiku-5-5" },
+        { "provider": "codex", "model": "gpt-6-luna" }
+      ],
+      "evidence": {
+        "claude-code": {
+          "status": "measured",
+          "source": "Terminal-Bench 4.0 (vals.ai)",
+          "url": "https://vals.ai/benchmarks/terminal-bench-4",
+          "date": "2026-10-13",
+          "score": 65.15,
+          "costPerTaskUsd": "13.20",
+          "note": "No candidate within 5 points at half the cost; xhigh because Anthropic's table puts it above max (66.4 vs 64.8). Haiku 5.5 scores 36.4."
+        },
+        "codex": {
+          "status": "measured",
+          "source": "Terminal-Bench 4.0 (vals.ai)",
+          "url": "https://vals.ai/benchmarks/terminal-bench-4",
+          "date": "2026-10-13",
+          "score": 55.05,
+          "costPerTaskUsd": "1.72",
+          "note": "Within 5 points of GPT-6 Astra (59.6, $9.58); the source does not state the effort, high is assumed. GPT-6 Luna scores 13.6."
+        }
+      }
+    },
+    "prose": {
+      "tier": "light",
+      "excluded": [],
+      "evidence": {
+        "claude-code": {
+          "status": "provisional",
+          "source": "GDPval-AA (Anthropic launch table)",
+          "url": "https://the-decoder.com/anthropics-claude-sonnet-5-5-nearly-matches-opus-5-5-on-benchmarks-while-costing-up-to-30-percent-less-per-task/",
+          "date": "2026-09-22",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "No coding-prose benchmark; knowledge-work Elo only (Haiku 5.5 medium 1277, max 1620)."
+        },
+        "codex": {
+          "status": "provisional",
+          "source": "Artificial Analysis Intelligence Index v4.3.2",
+          "url": "https://artificialanalysis.ai/models/gpt-6-1-sol",
+          "date": "2026-10-08",
+          "score": null,
+          "costPerTaskUsd": null,
+          "note": "No prose proxy; seeded on the cheapest tier."
+        }
+      }
+    }
+  }
+}

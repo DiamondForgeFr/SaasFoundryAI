@@ -70,15 +70,21 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 
 # The board: number, title, status.
 #
-# The limit is finite, so it has to say when it bites. At 400 this silently dropped 10 of
-# this project's 410 items — and with them two children of #482, which made the release
-# Epic look like 14 tickets instead of 16. A cap that trims without saying so produces a
-# confidently wrong answer, which is worse than an obviously incomplete one.
+# `gh project item-list --limit N` returns at most N items, and its reply carries the board's own
+# `totalCount`. A first page of 1000 covers most boards; when it is short, the board is read again
+# for exactly `totalCount` items, so no fixed ceiling drops tickets. At 400 a fixed ceiling silently
+# dropped 10 of this project's 410 items — and with them two children of #482, which made the release
+# Epic look like 14 tickets instead of 16 (#1082). A board still read short is reported as truncated.
 BOARD_LIMIT=1000
-ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit "$BOARD_LIMIT" 2>/dev/null || echo '{"items":[]}')
+ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit "$BOARD_LIMIT" 2>/dev/null || echo '{"items":[],"totalCount":0}')
+BOARD_TOTAL=$(printf '%s' "$ITEMS" | jq '.totalCount // 0' 2>/dev/null || echo 0)
 BOARD_COUNT=$(printf '%s' "$ITEMS" | jq '.items | length' 2>/dev/null || echo 0)
+if [ "$BOARD_TOTAL" -gt "$BOARD_COUNT" ]; then
+  ITEMS=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json --limit "$BOARD_TOTAL" 2>/dev/null || echo "$ITEMS")
+  BOARD_COUNT=$(printf '%s' "$ITEMS" | jq '.items | length' 2>/dev/null || echo 0)
+fi
 BOARD_TRUNCATED=false
-[ "$BOARD_COUNT" -ge "$BOARD_LIMIT" ] && BOARD_TRUNCATED=true
+if [ "$BOARD_COUNT" -lt "$BOARD_TOTAL" ]; then BOARD_TRUNCATED=true; fi
 
 MILESTONES=$(gh api "repos/${REPO}/milestones?state=all&per_page=100" 2>/dev/null || echo '[]')
 
@@ -153,7 +159,7 @@ jq -n \
   --slurpfile parents "${WORK_DIR}/parents.json" \
   --slurpfile srs "${WORK_DIR}/srs.json" \
   --arg truncated "$BOARD_TRUNCATED" \
-  --arg limit "$BOARD_LIMIT" \
+  --arg limit "$BOARD_COUNT" \
   --arg srsUnreachable "$SRS_UNREACHABLE" \
   --arg versionNamed "$VERSION_NAMED" \
   '

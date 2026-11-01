@@ -3,6 +3,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
+import { GENERATED_INSTRUCTIONS } from '../../harness/agent-instructions'
+import { CLAUDE_CAPTURE_COMMAND, CODEX_CAPTURE_COMMAND } from '../../harness/delegation-hooks'
+
 const ROOT = resolve(__dirname, '../../..')
 
 describe('compiled sf agents commands', () => {
@@ -27,8 +30,9 @@ describe('compiled sf agents commands', () => {
   function run(...args: string[]) {
     return spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', ...args], { cwd: project, encoding: 'utf8' })
   }
-  it('enables agents additively and refreshes without changing the legacy instructions or manifest again', async () => {
-    const claude = await readFile(join(project, 'CLAUDE.md'), 'utf8')
+  it('enables agents additively and refreshes without changing the project instructions or manifest again', async () => {
+    const instructions = await readFile(join(project, 'AGENTS.md'), 'utf8')
+    expect(instructions).toContain(GENERATED_INSTRUCTIONS)
     for (const agent of ['codex', 'kimi', 'claude-code']) {
       const result = run('enable', agent, '--scope', 'shared', '--json')
       expect(result.status).toBe(0)
@@ -41,8 +45,40 @@ describe('compiled sf agents commands', () => {
     expect(run('enable', 'codex', '--scope', 'shared').status).toBe(0)
     expect(run('refresh', '--scope', 'shared').status).toBe(0)
     expect(await readFile(join(project, '.saasfoundry.json'), 'utf8')).toBe(manifest)
-    expect(await readFile(join(project, 'CLAUDE.md'), 'utf8')).toBe(claude)
+    expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe(instructions)
+    await expect(readFile(join(project, 'CLAUDE.md'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
+  // Every routed delegation is captured by a host hook (#1035): installing the harness and refreshing it
+  // wire them into what the project already has, and a second refresh changes nothing.
+  it('wires the delegation capture hooks of the declared hosts on a refresh, without touching the rest of the project settings', async () => {
+    const settingsPath = join(project, '.claude/settings.json')
+    const mine = JSON.stringify({ model: 'opus', hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'echo mine' }] }] } }, null, 2) + '\n'
+    await writeFile(settingsPath, mine)
+    for (const agent of ['claude-code', 'codex']) expect(run('enable', agent, '--scope', 'shared').status).toBe(0)
+    // Enabling an agent never touches the host settings of the project; the Codex hooks file travels with its tier agents.
+    expect(await readFile(settingsPath, 'utf8')).toBe(mine)
+    expect(JSON.parse(await readFile(join(project, '.codex/hooks.json'), 'utf8')).hooks.SubagentStop).toHaveLength(1)
+    expect(run('refresh', '--scope', 'shared').status).toBe(0)
+    const settings = JSON.parse(await readFile(settingsPath, 'utf8'))
+    expect(settings.model).toBe('opus')
+    expect(settings.hooks.SessionStart[0].hooks[0].command).toBe('echo mine')
+    expect(settings.hooks.SubagentStop.flatMap((group: { hooks: { command: string }[] }) => group.hooks.map((hook) => hook.command))).toEqual([CLAUDE_CAPTURE_COMMAND])
+    expect(settings.hooks.SubagentStop[0].matcher).toBe('sf-.*')
+    expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
+    expect(settings.permissions.allow).toContain('Bash(sf agents route *)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome record *)')
+    const codex = JSON.parse(await readFile(join(project, '.codex/hooks.json'), 'utf8'))
+    expect(codex.hooks.SubagentStop[0].hooks[0].command).toBe(CODEX_CAPTURE_COMMAND)
+    const settingsText = await readFile(settingsPath, 'utf8')
+    const codexText = await readFile(join(project, '.codex/hooks.json'), 'utf8')
+    const refreshed = run('refresh', '--scope', 'shared', '--json')
+    expect(refreshed.status).toBe(0)
+    expect(JSON.parse(refreshed.stdout).report.written).not.toEqual(expect.arrayContaining(['.claude/settings.json', '.codex/hooks.json']))
+    expect(await readFile(settingsPath, 'utf8')).toBe(settingsText)
+    expect(await readFile(join(project, '.codex/hooks.json'), 'utf8')).toBe(codexText)
+  })
+
   it.each([
     ['enable', 'codex'],
     ['enable', 'gpt', '--scope', 'shared'],
@@ -55,14 +91,15 @@ describe('compiled sf agents commands', () => {
     expect(await readFile(join(project, '.saasfoundry.json'), 'utf8')).toBe(manifest)
     expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe(agentsInstructions)
   })
-  it('reports a customized destination as a conflict instead of claiming successful activation', async () => {
+  it('never rewrites a user-authored AGENTS.md without a generated region when enabling an agent', async () => {
     await writeFile(join(project, 'AGENTS.md'), '# Personal agent instructions\n')
     const result = run('enable', 'codex', '--scope', 'shared', '--json')
-    expect(result.status).not.toBe(0)
+    expect(result.status).toBe(0)
     const report = JSON.parse(result.stdout)
-    expect(report.report.conflicts).toContain('AGENTS.md')
-    expect(report.configuredAgents).not.toContain('codex')
+    expect(report.report.conflicts).toEqual([])
+    expect(report.configuredAgents).toContain('codex')
     expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe('# Personal agent instructions\n')
+    await expect(readFile(join(project, 'AGENTS.md.saasfoundry.new'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
   function succeeds(...args: string[]) {
     const result = run(...args)
@@ -104,7 +141,7 @@ describe('compiled sf agents commands', () => {
       expect(cloned.status).toBe(0)
       expect(JSON.parse(cloned.stdout).sharedAgents).toContain('codex')
       expect(JSON.parse(cloned.stdout).localAgents).toEqual([])
-      expect(await readFile(join(clone, 'AGENTS.md'), 'utf8')).toContain('SaaSFoundry agent instructions')
+      expect(await readFile(join(clone, 'AGENTS.md'), 'utf8')).toContain(GENERATED_INSTRUCTIONS)
     } finally {
       await rm(clone, { recursive: true, force: true })
     }
@@ -134,11 +171,11 @@ describe('compiled sf agents commands', () => {
     expect(JSON.parse(await readFile(join(project, '.saasfoundry.json'), 'utf8')).modules.harness.agents).toEqual(['kimi'])
     expect(await readFile(join(project, 'GEMINI.md'), 'utf8')).toBe(gemini)
   })
-  it('refuses a tracked instruction conflict before changing any project file', async () => {
+  it('enables locally without touching a tracked user-authored AGENTS.md or any tracked file', async () => {
     await writeFile(join(project, 'AGENTS.md'), '# Team rules\n')
     initializeGit()
     const manifest = await readFile(join(project, '.saasfoundry.json'), 'utf8')
-    expect(run('enable', 'codex').status).not.toBe(0)
+    expect(succeeds('enable', 'codex').status).toBe(0)
     expect(git('status', '--porcelain', '--untracked-files=all')).toBe('')
     expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe('# Team rules\n')
     expect(await readFile(join(project, '.saasfoundry.json'), 'utf8')).toBe(manifest)
@@ -176,7 +213,7 @@ describe('compiled sf agents commands', () => {
       const result = run('enable', agent, '--scope', 'shared', '--json')
       if (result.status !== 0) throw new Error(result.stdout + result.stderr)
     }
-    expect(await readFile(join(project, 'GEMINI.md'), 'utf8')).toContain('@AGENTS.md')
+    expect(await readFile(join(project, 'GEMINI.md'), 'utf8')).toBe('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
     const before = await readFile(join(project, '.saasfoundry.json'), 'utf8')
     expect(JSON.parse(run('list', '--json').stdout).configuredAgents).toEqual(expect.arrayContaining(['claude-code', 'gemini-cli', 'qwen-code', 'generic']))
     expect(run('refresh', '--scope', 'shared').status).toBe(0)

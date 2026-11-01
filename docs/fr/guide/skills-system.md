@@ -26,10 +26,16 @@ profils non-Claude déclarés :
 ```text
 .claude/skills/           source gérée et scripts protégés
 .agents/skills/           copies partagées portables
-CLAUDE.md                 point d’entrée Claude Code
-AGENTS.md                 point d’entrée portable/Codex
-GEMINI.md                 point d’entrée Gemini CLI si sélectionné
+AGENTS.md                 instructions de référence du projet, lues par tous les agents
+.claude/rules/claude-code.md  instructions propres à Claude Code si `claude-code` est déclaré
+GEMINI.md                 importe AGENTS.md si `gemini-cli` est déclaré
 ```
+
+Les copies `.agents/skills/` ne sont écrites que si un profil déclaré ne découvre pas lui-même `.claude/skills/` ; Claude Code le fait, donc un projet qui ne déclare que Claude Code n'en reçoit
+aucune. Le registre des agents enregistre où chaque outil découvre ses skills, avec la documentation qui l'établit (voir les
+[profils d'outils](/fr/cli/sf-agents#profils-d-outils-et-fournisseurs-de-modeles)). Une copie traduit dans la prose les tournures propres à Claude et conserve octet pour octet les blocs de code et le
+code inline. Un nouveau projet ne reçoit pas de `CLAUDE.md` ; le `CLAUDE.md` d'un projet installé avant que `AGENTS.md` ne fasse foi est déplacé dans `AGENTS.md` par
+[`sf update`](/fr/cli/sf-update#claude-md-passe-dans-agents-md-harness-v4).
 
 Ne déduisez jamais la prise en charge d’un runtime du nom d’un dossier. `sf agents doctor` vérifie les fichiers et les capacités documentées, mais seule une observation native dans l’hôte réel peut
 prouver la découverte, les hooks, les permissions ou l’accès au modèle.
@@ -45,7 +51,7 @@ Le manifeste enregistre la topologie et les bases gérées. `sf update` utilise 
 
 L’invocation dépend de l’hôte :
 
-- Claude Code peut découvrir la surface historique `.claude/skills` et ses conventions de commandes ;
+- Claude Code découvre `.claude/skills` et invoque un skill par `/sf-<name>`, comme le décrit `.claude/rules/claude-code.md` ;
 - Codex et les autres profils déclarés suivent leurs instructions natives de projet et les procédures partagées dans `.agents/skills` ;
 - un hôte générique peut demander à l’utilisateur ou à l’agent d’ouvrir explicitement `SKILL.md`.
 

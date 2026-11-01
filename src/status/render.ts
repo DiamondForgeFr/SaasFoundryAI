@@ -1,12 +1,83 @@
 import chalk from 'chalk'
 
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
-import type { StatusReport } from './collect'
+import type { StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
 export interface RenderPayload {
   report: StatusReport
   preconditions: Precondition[]
+}
+
+/**
+ * The consent to delegate ticket delivery (#1026), on one line a session reads at start-up: the
+ * effective answer, which layer it comes from, and when it was given. A clone's own override says
+ * what the team's default is, so nobody mistakes one for the other.
+ */
+export function delegationSummary(delegation: StatusDelegation): string {
+  if ('error' in delegation) return `unreadable (${delegation.error})`
+  if (delegation.ticketDelivery === 'unavailable') return `unavailable (${delegation.reason})`
+  if (delegation.ticketDelivery === 'not-asked') return 'not-asked (ask the developer once, then record it with sf agents delegation allow or decline)'
+  const team = delegation.source === 'local' ? `; shared team default: ${delegation.shared.ticketDelivery}` : ''
+  return `${delegation.ticketDelivery} (${delegation.source}, ${delegation.decidedAt}${team})`
+}
+
+/**
+ * The grid the routes come from and what the project replaces in it (#933), so a session knows whether
+ * the route it gets is the shipped one: `grid v1, 2 overrides (multi-file-feature → plan; tier build for claude-code)`.
+ */
+function gridSummary(routing: StatusRoutingState): string {
+  const { kinds, tiers } = routing.overrides
+  const count = kinds.length + tiers.length
+  const named = [...kinds.map((entry) => `${entry.kind} → ${entry.tier}`), ...tiers.map((entry) => `tier ${entry.tier}${entry.providers.length ? ` for ${entry.providers.join(', ')}` : ''}`)]
+  return `grid v${routing.gridVersion}, ${count} override${count === 1 ? '' : 's'}${named.length ? ` (${named.join('; ')})` : ''}`
+}
+
+/**
+ * The routing of this clone on one line: the grid and the project's overrides (#933), the automatic moves
+ * nobody promoted yet, so a session knows the route it gets is not the shipped one, and whether the hooks
+ * that record every delegation are in place for each declared coding agent (#1035). The state of the tier
+ * agents is a precondition (`tierAgents`), not a part of this line.
+ */
+export function routingSummary(routing: StatusRouting): string {
+  if ('error' in routing) return `unreadable (${routing.error})`
+  const moves = routing.adjustments.length
+    ? `${routing.adjustments.length} local automatic adjustment${routing.adjustments.length === 1 ? '' : 's'} not promoted (${routing.adjustments
+        .map((entry) => `${entry.kind} → ${entry.tier} for ${entry.provider}, ${entry.action} on ${entry.at.slice(0, 10)}`)
+        .join('; ')}; sf agents routing report, promote or reset)`
+    : 'shipped grid and shared overrides, no local adjustment'
+  const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
+  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+}
+
+const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (agent: string) => string> = {
+  enforced: () => 'capture enforced',
+  declared: (agent) => `capture declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  'declared-not-runnable': () => 'capture hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): delegations are not recorded',
+  outdated: () => 'capture hook outdated (run sf agents refresh --scope shared)',
+  missing: () => 'capture hook missing (run sf agents refresh --scope shared)',
+  'not-enforced': () => 'capture not enforced (record its delegations with sf agents outcome record)'
+}
+
+/** Holds that say something (a kind stuck on a failing tier, a tier that costs more) are named; the ordinary waits are counted. */
+const NOTABLE_HOLDS = new Set(['top-of-ladder', 'cheaper-tier-costs-more', 'tie-not-faster', 'unpriced', 'over-duration-ceiling'])
+
+function holdsSummary(holds: StatusRoutingState['holds']): string {
+  if (!holds.length) return ''
+  const notable = holds.filter((hold) => NOTABLE_HOLDS.has(hold.reason))
+  const waiting = holds.length - notable.length
+  const named = notable.map((hold) => `${hold.kind} (${hold.provider}) held: ${hold.reason} since ${hold.since.slice(0, 10)}`)
+  if (waiting) named.push(`${waiting} other kind${waiting === 1 ? '' : 's'} left where ${waiting === 1 ? 'it is' : 'they are'} for now`)
+  return `; ${named.join('; ')} (sf agents routing report)`
+}
+
+/**
+ * The local CI pipeline the project declares (#943), on one line: the runner the heavy validation is picked
+ * with and how many jobs it runs. Read from `.molten/project.json`, never run by status.
+ */
+export function localCiSummary(localCi: StatusLocalCi): string {
+  if ('error' in localCi) return `unreadable (${localCi.error})`
+  return `MoltenTerm pipeline (${localCi.jobs} job${localCi.jobs === 1 ? '' : 's'})`
 }
 
 const STATUS_ICON: Record<PreconditionStatus, string> = { ok: '✓', warn: '⚠', fail: '✗', skip: '·' }
@@ -38,6 +109,8 @@ export function renderHuman(payload: RenderPayload): string {
       lines.push(`${chalk.gray('Profile reason:')} ${report.capabilities.reason}`)
       if (report.capabilities.previewCommand) lines.push(`${chalk.gray('Preview full profile:')} ${report.capabilities.previewCommand}`)
     }
+    if (report.delegation) lines.push(`${chalk.gray('Delegation:')} ${delegationSummary(report.delegation)}`)
+    if (report.routing) lines.push(`${chalk.gray('Routing:')} ${routingSummary(report.routing)}`)
   } else {
     lines.push(chalk.red('Not a SaaSFoundryAI project (no .saasfoundry.json)'))
   }
@@ -47,6 +120,7 @@ export function renderHuman(payload: RenderPayload): string {
     const unborn = report.git.unborn ? chalk.gray(' (no commits yet)') : ''
     lines.push(`${chalk.gray('Git:')} ${report.git.branch ?? 'detached'}${unborn}${dirty}${tracking}`)
   }
+  if (report.localCi) lines.push(`${chalk.gray('local-ci:')} ${localCiSummary(report.localCi)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`${chalk.gray('Skills:')} ${report.installedSkills.join(', ')}`)
   }
@@ -91,8 +165,17 @@ export function renderJson(payload: RenderPayload): string {
         }
       : null,
     capabilities: report.capabilities ?? null,
+    // Additive (#1026): the effective consent with its shared and local layers, null without a harness
+    delegation: report.delegation ?? null,
+    // Additive (#1035): the automatic routing of this clone, null without a harness. #933 adds the grid
+    // version, the project overrides and the state of every tier agent to the same object.
+    routing: report.routing ?? null,
+    // Additive (#943): the local CI pipeline the project declares in .molten/project.json, null without that file
+    localCi: report.localCi ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
+    // Additive: the facts behind the three instruction preconditions (#939)
+    instructions: report.instructions ?? null,
     preconditions: preconditions.map((p) => ({
       name: p.name,
       description: p.description,
@@ -119,6 +202,8 @@ export function renderAgentFriendly(payload: RenderPayload): string {
       if (report.capabilities.previewCommand) lines.push(`- full-profile preview: ${report.capabilities.previewCommand}`)
     }
     lines.push(`- workflow: ${report.manifest.workflow?.tool ?? 'none'}`)
+    if (report.delegation) lines.push(`- delegation: ${delegationSummary(report.delegation)}`)
+    if (report.routing) lines.push(`- routing: ${routingSummary(report.routing)}`)
     const srs = report.manifest.tools?.srs
     lines.push(`- srs: ${srs?.enabled ? `${srs.backend} — ${srs.rootPage?.name ?? 'no root page'}` : 'not installed'}`)
   } else {
@@ -128,6 +213,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
     const state = [report.git.unborn ? 'no commits yet' : null, report.git.isClean === false ? 'dirty' : 'clean'].filter(Boolean).join(', ')
     lines.push(`- git: ${report.git.branch ?? 'detached'} (${state})`)
   }
+  if (report.localCi) lines.push(`- local-ci: ${localCiSummary(report.localCi)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`- skills: ${report.installedSkills.join(', ')}`)
   }

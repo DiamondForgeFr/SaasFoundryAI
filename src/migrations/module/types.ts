@@ -21,6 +21,21 @@ export interface ModuleMigration {
   to: number
   name: string
   up(projectDir: string, manifest: SaaSFoundryManifest): Promise<void>
+  /**
+   * Read-only: what `up` would change, listed by `sf update --dry-run` (#938). It reads the
+   * current tree, so a migration that depends on an earlier one in the same chain previews the
+   * files before that earlier one runs. A migration without it is listed with `preview: null`.
+   */
+  preview?(projectDir: string, manifest: SaaSFoundryManifest): Promise<ModuleMigrationPreview[]>
+}
+
+/** One change a module migration would make, for the dry-run report. */
+export interface ModuleMigrationPreview {
+  action: string
+  /** Project-relative path, `<path>#<heading>` for a section of a file. */
+  source: string
+  target?: string
+  reason: string
 }
 
 /**

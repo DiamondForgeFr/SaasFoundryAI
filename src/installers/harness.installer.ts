@@ -1,4 +1,3 @@
-import { copy } from 'fs-extra'
 import { lstat, readFile, readdir, writeFile } from 'fs/promises'
 import { join, resolve, sep } from 'path'
 
@@ -10,14 +9,14 @@ import { installToolSkill } from './tool-skill.installer'
 import { injectWorkflowSection, installWorkflowSkill } from './workflow-skill.installer'
 import { AgentInstructionsReport, HarnessAgent, installAgentInstructions } from '../harness/agent-instructions'
 import { needsSharedInstructions, resolveHarnessAgents } from '../harness/agent-registry'
+import { mergeHarnessSettings } from '../harness/harness-settings'
 import type { ModuleInstaller } from '../migrations/module/types'
 import { SaaSFoundryManifest, WorkflowConfig, skillsTemplatesPath } from '../types'
-import { ClaudeHooksConfig, mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../utils/claude-settings'
 import { computeFileHashes, fileExists } from '../utils'
 
 export const harnessInstallerMeta: ModuleInstaller = {
   name: 'harness',
-  currentVersion: 3,
+  currentVersion: 5,
   migrations: harnessMigrations
 }
 
@@ -28,8 +27,8 @@ export const harnessInstallerMeta: ModuleInstaller = {
  * - `.claude/skills/sf-*` — the `sf-` prefix is reserved for SaaSFoundryAI
  *   deposits; user-authored skills outside that prefix are never tracked,
  *   never touched
- * CLAUDE.md and .claude/settings.json are deliberately NOT tracked: both are
- * user-owned and managed through targeted merges (section re-injection /
+ * AGENTS.md (or a pre-#937 CLAUDE.md) and .claude/settings.json are deliberately NOT
+ * tracked: both are user-owned and managed through targeted merges (section re-injection /
  * hook merging), never through the file sweep.
  */
 export const HARNESS_SKILL_PREFIX = 'sf-'
@@ -62,7 +61,9 @@ export async function assertHarnessWritePathsSafe(targetPath: string): Promise<v
   })
   if (claudeStat?.isSymbolicLink() || (claudeStat && !claudeStat.isDirectory())) throw new Error(`Unsafe harness path: ${claudeRoot} must be a real directory.`)
 
+  await inspectHarnessTree(join(root, 'AGENTS.md'))
   await inspectHarnessTree(join(root, 'CLAUDE.md'))
+  await inspectHarnessTree(join(root, '.claude', 'rules'))
   await inspectHarnessTree(join(root, '.claude', 'settings.json'))
   await inspectHarnessTree(join(root, '.claude', 'docs'))
 
@@ -121,21 +122,24 @@ export async function computeHarnessFileHashes(targetPath: string): Promise<Reco
 export interface InstallWorkflowArtifactsParams {
   targetPath: string
   workflow?: WorkflowConfig
+  /** False for a monorepo app: the root AGENTS.md carries the workflow section. */
+  injectSection?: boolean
 }
 
 /**
  * Workflow-related deposits shared by every install path: the sf-workflow
- * skill (with CLAUDE.md section injection) and the tool-specific skill.
+ * skill (with the AGENTS.md section injection) and the tool-specific skill.
  * Builders (full profile) and the standalone harness install both delegate
  * here, so the deposited files stay identical across profiles.
  */
-export async function installWorkflowArtifacts({ targetPath, workflow }: InstallWorkflowArtifactsParams): Promise<void> {
+export async function installWorkflowArtifacts({ targetPath, workflow, injectSection }: InstallWorkflowArtifactsParams): Promise<void> {
   if (!workflow || workflow.tool === 'none') return
 
   await installWorkflowSkill({
     targetPath,
     workflow,
-    projectUrl: workflow.projectUrl
+    projectUrl: workflow.projectUrl,
+    injectSection
   })
 
   await installToolSkill({
@@ -161,34 +165,9 @@ export interface InstallHarnessParams {
   stackPresent?: boolean
 }
 
-const HARNESS_HOOKS: ClaudeHooksConfig = {
-  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }]
-}
-
-const WORKFLOW_CLI = '.claude/skills/sf-workflow/workflow-cli.sh'
-const BOARD_CLI = '.claude/skills/sf-tool-github-projects/github-projects-cli.sh'
-
-/**
- * The read-only commands the harness itself tells the agent to run at every workflow step
- * (#947). Undeclared, each one asked the developer for permission, all day, in every project
- * not running in bypass mode. Commands that change a ticket, a board or a pull request stay out.
- */
-export const HARNESS_ALLOWED_COMMANDS: readonly string[] = [
-  `Bash(${WORKFLOW_CLI} status *)`,
-  `Bash(${WORKFLOW_CLI} next *)`,
-  `Bash(${WORKFLOW_CLI} help)`,
-  ...['status', 'get-ticket', 'get-labels', 'get-complexity', 'get-parent', 'get-issue-type', 'list', 'list-incomplete-children'].map((command) => `Bash(${BOARD_CLI} ${command} *)`),
-  'Bash(sf status *)',
-  'Bash(sf agents list *)',
-  'Bash(gh project item-list *)',
-  'Bash(gh project view *)',
-  'Bash(gh project field-list *)'
-]
-
-async function mergeHarnessSettings(targetPath: string): Promise<void> {
-  await mergeClaudeSettingsHooks(targetPath, HARNESS_HOOKS)
-  await mergeClaudeSettingsPermissions(targetPath, HARNESS_ALLOWED_COMMANDS)
-}
+// The hooks and permission rules live in one module, shared with the migration, `sf update` and the
+// scaffold templates (#935). Re-exported: the installer is where callers have always imported them from.
+export { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS, HARNESS_HOOKS, HARNESS_REVOKED_COMMANDS, HARNESS_SUPERSEDED_HOOKS } from '../harness/harness-settings'
 
 export interface MergeHarnessUserFilesParams {
   targetPath: string
@@ -198,29 +177,33 @@ export interface MergeHarnessUserFilesParams {
   workflow?: WorkflowConfig
 }
 
+/** Neither AGENTS.md nor a pre-#937 CLAUDE.md: the project has no instructions of its own yet. */
+async function hasNoInstructions(targetPath: string): Promise<boolean> {
+  return !(await fileExists(join(targetPath, 'AGENTS.md'))) && !(await fileExists(join(targetPath, 'CLAUDE.md')))
+}
+
+/** Deposit the harness AGENTS.md template with its placeholders resolved. */
+async function depositAgentsMd(targetPath: string, projectName: string, version: string, mainBranch: string): Promise<void> {
+  const content = (await readFile(resolve(skillsTemplatesPath, 'harness', 'AGENTS.md'), 'utf8'))
+    .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
+    .replace(/\{\{VERSION\}\}/g, version)
+    .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
+  await assertHarnessWritePathsSafe(targetPath)
+  await writeFile(join(targetPath, 'AGENTS.md'), content)
+}
+
 /**
- * The merge-managed (non-swept) side of a harness install: CLAUDE.md
- * (template deposited only when absent, placeholders resolved, workflow
+ * The merge-managed (non-swept) side of a harness install: AGENTS.md
+ * (template deposited only when the project has no instructions, workflow
  * section re-injected idempotently) and the Claude Code hooks. Used by the
  * conflict-safe install path of `sf update` after the three-way deposit
- * merge, which by design never touches these user-owned files.
+ * merge, which by design never touches these user-owned files. Returns the
+ * instruction report when it deposited AGENTS.md, so its baselines are recorded.
  */
-export async function mergeHarnessUserFiles({ targetPath, projectName, version, mainBranch = 'main', workflow }: MergeHarnessUserFilesParams): Promise<void> {
+export async function mergeHarnessUserFiles({ targetPath, projectName, version, mainBranch = 'main', workflow }: MergeHarnessUserFilesParams): Promise<AgentInstructionsReport | undefined> {
   await assertHarnessWritePathsSafe(targetPath)
-  const claudeMdPath = join(targetPath, 'CLAUDE.md')
-  const depositedClaudeMd = !(await fileExists(claudeMdPath))
-
-  if (depositedClaudeMd) {
-    await assertHarnessWritePathsSafe(targetPath)
-    await copy(resolve(skillsTemplatesPath, 'harness', 'CLAUDE.md'), claudeMdPath)
-    let content = await readFile(claudeMdPath, 'utf8')
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
-      .replace(/\{\{VERSION\}\}/g, version)
-      .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
-    await assertHarnessWritePathsSafe(targetPath)
-    await writeFile(claudeMdPath, content)
-  }
+  const depositedAgentsMd = await hasNoInstructions(targetPath)
+  if (depositedAgentsMd) await depositAgentsMd(targetPath, projectName, version, mainBranch)
 
   if (workflow && workflow.tool !== 'none') {
     await assertHarnessWritePathsSafe(targetPath)
@@ -229,16 +212,17 @@ export async function mergeHarnessUserFiles({ targetPath, projectName, version, 
 
   await assertHarnessWritePathsSafe(targetPath)
   await mergeHarnessSettings(targetPath)
+  return depositedAgentsMd ? addAgentInstructions(targetPath, resolveHarnessAgents()) : undefined
 }
 
 /**
  * Install the AI harness onto an EXISTING repository (harness profile):
  * core skills, shared docs, optional tool skills, workflow artefacts,
- * Claude Code hooks and a minimal CLAUDE.md when the repo has none.
+ * Claude Code hooks and a minimal AGENTS.md when the repo has no instructions.
  *
- * The user's files are respected: an existing CLAUDE.md is only appended to
- * (workflow section injection), and .claude/settings.json is merged, never
- * overwritten.
+ * The user's files are respected: existing instructions (AGENTS.md, or a
+ * CLAUDE.md that predates #937) are only appended to (workflow section
+ * injection), and .claude/settings.json is merged, never overwritten.
  */
 export async function installHarness({
   targetPath,
@@ -256,18 +240,14 @@ export async function installHarness({
   // Adding discovery must not reinstall the user's customized legacy skills.
   // Refreshing those files belongs to the conflict-aware update flow.
   if (needsSharedInstructions(declaredAgents) && (await fileExists(join(targetPath, '.claude', 'skills')))) {
-    if (!(await fileExists(join(targetPath, 'CLAUDE.md')))) {
-      throw new Error('Existing Claude skills have no CLAUDE.md instruction source. Reconcile this partial harness before adding shared agent instructions; existing files were left unchanged.')
+    if (await hasNoInstructions(targetPath)) {
+      throw new Error(
+        'Existing Claude skills have no AGENTS.md or CLAUDE.md instruction source. Reconcile this partial harness before adding shared agent instructions; existing files were left unchanged.'
+      )
     }
     return addAgentInstructions(targetPath, declaredAgents)
   }
-  const claudeMdPath = join(targetPath, 'CLAUDE.md')
-  const depositedClaudeMd = !(await fileExists(claudeMdPath))
-
-  if (depositedClaudeMd) {
-    await assertHarnessWritePathsSafe(targetPath)
-    await copy(resolve(skillsTemplatesPath, 'harness', 'CLAUDE.md'), claudeMdPath)
-  }
+  if (await hasNoInstructions(targetPath)) await depositAgentsMd(targetPath, projectName, version, mainBranch)
 
   await assertHarnessWritePathsSafe(targetPath)
   await installCoreSkills({ targetPath, includeStackSkills: stackPresent })
@@ -285,19 +265,8 @@ export async function installHarness({
   await assertHarnessWritePathsSafe(targetPath)
   await mergeHarnessSettings(targetPath)
 
-  if (depositedClaudeMd) {
-    let content = await readFile(claudeMdPath, 'utf8')
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, projectName)
-      .replace(/\{\{VERSION\}\}/g, version)
-      .replace(/\{\{MAIN_BRANCH\}\}/g, mainBranch)
-    await assertHarnessWritePathsSafe(targetPath)
-    await writeFile(claudeMdPath, content)
-  }
-
-  // Universal bootstrap entrypoints let an explicitly identified but undeclared
-  // host reach the consent flow. Skill copies remain limited to the declared
-  // profiles; omission retains the legacy Claude-only declaration.
+  // Fills the generated region of AGENTS.md and the declared hosts' additions.
+  // Omission retains the legacy Claude-only declaration.
   return addAgentInstructions(targetPath, declaredAgents)
 }
 

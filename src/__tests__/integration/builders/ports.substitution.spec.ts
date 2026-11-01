@@ -92,6 +92,9 @@ describe('the generated project carries the ports it was given (#584)', () => {
 
     it('documents it', async () => {
       expect(await read(`${apiDir}/README.md`)).toContain('http://localhost:3501/api/docs')
+      const agentsMd = await read(`${apiDir}/AGENTS.md`)
+      expect(agentsMd).toContain('http://localhost:3501/api/docs')
+      expect(agentsMd).not.toContain('localhost:3500')
     })
 
     it('deploys with it', async () => {
@@ -145,7 +148,11 @@ describe('the generated project carries the ports it was given (#584)', () => {
     })
 
     it('documents it for the AI', async () => {
-      expect(await read(`${webDir}/CLAUDE.md`)).toContain('port 5174')
+      const agentsMd = await read(`${webDir}/AGENTS.md`)
+      expect(agentsMd).toContain('port 5174')
+      expect(agentsMd).not.toContain('port 5173')
+      expect(agentsMd).toContain('localhost:3501')
+      expect(agentsMd).not.toContain('localhost:3500')
     })
   })
 
@@ -173,7 +180,9 @@ describe('the generated project carries the ports it was given (#584)', () => {
       expect(webPackageJson).toContain('tcp:3501')
       expect(webPackageJson).not.toContain('tcp:3500')
 
-      expect(await read('CLAUDE.md')).toContain('http://localhost:3501/api/docs')
+      const agentsMd = await read('AGENTS.md')
+      expect(agentsMd).toContain('http://localhost:3501/api/docs')
+      expect(agentsMd).not.toContain('http://localhost:3500')
     })
 
     it('deploys the API with the same port', async () => {

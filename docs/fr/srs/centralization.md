@@ -32,14 +32,14 @@ ingénierie. Un adaptateur Markdown local est prévu pour les équipes qui souha
 
 ## Ce qui est livré en v1
 
-| Capacité                                          | État    | Signification                                                                                                        |
-| ------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
-| Contrat `SrsAdapter` indépendant du backend       | Livré   | Rédaction, navigation, écriture, mise à jour et génération de tickets n'importent pas directement un fournisseur.    |
-| Adaptateur SRS Notion                             | Livré   | Création de pages, parcours des enfants, ajouts et génération de tickets depuis le SRS fonctionnent de bout en bout. |
-| Adaptateur SRS Confluence                         | Roadmap | Le contrat le prévoit ; l'implémentation n'est pas livrée.                                                           |
-| Adaptateur SRS Markdown local                     | Roadmap | Prévu pour les spécifications Git-native ; indisponible en v1.                                                       |
-| Capture conversationnelle des exigences           | Livré   | L'agent propose un ajout et attend l'approbation avant toute écriture.                                               |
-| Réconciliation des tickets fondée sur les preuves | Livré   | La génération compare SRS, board et implémentation avant de créer ou réutiliser un ticket.                           |
+| Capacité                                          | État    | Signification                                                                                                                        |
+| ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Contrat `SrsAdapter` indépendant du backend       | Livré   | Rédaction, navigation, écriture, mise à jour et génération de tickets n'importent pas directement un fournisseur.                    |
+| Adaptateur SRS Notion                             | Livré   | Création de pages, parcours des enfants, mises à jour sur place et génération de tickets depuis le SRS fonctionnent de bout en bout. |
+| Adaptateur SRS Confluence                         | Roadmap | Le contrat le prévoit ; l'implémentation n'est pas livrée.                                                                           |
+| Adaptateur SRS Markdown local                     | Roadmap | Prévu pour les spécifications Git-native ; indisponible en v1.                                                                       |
+| Capture conversationnelle des exigences           | Livré   | L'agent propose un ajout ou la modification d'une FR et attend l'approbation avant toute écriture.                                   |
+| Réconciliation des tickets fondée sur les preuves | Livré   | La génération compare SRS, board et implémentation avant de créer ou réutiliser un ticket.                                           |
 
 ::: warning Indépendant du backend ne signifie pas que tous les backends sont disponibles
 
@@ -191,8 +191,8 @@ Désactiver le détecteur n'est pas une migration de données. Les pages Notion 
 
 ## Limites volontaires de la v1
 
-- Les mises à jour conversationnelles fonctionnent uniquement par **ajout**. L'adaptateur Notion ajoute un élément clairement identifié ; un reviewer le réintègre à la section canonique lors de la
-  prochaine revue SRS.
+- Les mises à jour conversationnelles ajoutent un UR, DS, TC ou NFR à son tableau, et ajoutent ou modifient une FR. Une FR est modifiée sur place, sur sa page et dans les tableaux qui la listent ; ses
+  références, et un UR, DS, TC ou NFR qui existe, ne sont pas encore modifiés sur place.
 - Une proposition IA n'est pas une approbation. Aucune exigence n'est écrite avant l'acceptation de l'utilisateur.
 - Les scanners fournissent des preuves, pas une compréhension exhaustive. Des résultats rares exigent une inspection guidée par un humain.
 - Confluence et Markdown local sont des destinations architecturales, pas des adaptateurs livrés.

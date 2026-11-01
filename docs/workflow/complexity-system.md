@@ -47,13 +47,14 @@ Each complexity level enables or disables specific workflow steps:
 
 ### 🐛 Bug
 
-| Step     | Behaviour                                   |
-| -------- | ------------------------------------------- |
-| Analyze  | Skipped — go directly to the bug location   |
-| Plan     | Skipped — identify root cause, fix directly |
-| Subtasks | Skipped — single fix, no decomposition      |
-| Examine  | Skipped — no adversarial review             |
-| Tests    | **Regression test mandatory** (always)      |
+| Step     | Behaviour                                                                                          |
+| -------- | -------------------------------------------------------------------------------------------------- |
+| Analyze  | Skipped — go directly to the bug location                                                          |
+| Plan     | Skipped — identify root cause, fix directly                                                        |
+| Subtasks | Skipped — single fix, no decomposition                                                             |
+| Execute  | Delivery delegated as `bug-fix`, or `scoped-edit` when the ticket already names two files or fewer |
+| Examine  | Skipped — no adversarial review                                                                    |
+| Tests    | **Regression test mandatory** (always)                                                             |
 
 **Testing matrix:** unit ✓ · regression ✓ · E2E optional.
 
@@ -64,6 +65,7 @@ Each complexity level enables or disables specific workflow steps:
 | Analyze  | Minimal — 2–3 files, direct Glob/Grep, no subagents |
 | Plan     | Minimal — mental plan, no formal doc, no approval   |
 | Subtasks | Optional — auto-create if >3 files impacted         |
+| Execute  | Delivery delegated as `scoped-edit`                 |
 | Examine  | Skipped                                             |
 | Tests    | Optional — inform the developer if skipped          |
 
@@ -76,6 +78,7 @@ Each complexity level enables or disables specific workflow steps:
 | Analyze  | Standard — 2–4 parallel exploration agents                       |
 | Plan     | Detailed file-by-file plan — **approval required** before coding |
 | Subtasks | **Mandatory** — each major file change gets a subtask            |
+| Execute  | Delivery delegated as `multi-file-feature` once decomposed       |
 | Examine  | Skipped                                                          |
 | Tests    | Recommended — unit tests for logic, E2E for user workflows       |
 
@@ -84,17 +87,39 @@ Each complexity level enables or disables specific workflow steps:
 The required exploration agents are read-only and may share the active checkout. If implementation is split across independent writing streams, each writer needs a separate ticket, branch and worktree
 with explicit file ownership. Coupled or overlapping implementation remains sequential in one feature worktree. The configured base branch comes from `workflow.workingBranch` in `.saasfoundry.json`.
 
+Each delegation names a task kind (`exploration` for the analysis, `review` for the adversarial review) that the agent resolves with
+[`sf agents route`](../cli/sf-agents.md#delegation-routing-sf-agents-route) to pick the tier agent. The workflow skill's "Delegation routing" section holds the rule.
+
 ### 🔴 Complex
 
-| Step     | Behaviour                                                                   |
-| -------- | --------------------------------------------------------------------------- |
-| Analyze  | Deep — 6–10 parallel agents (explore-codebase × N, explore-docs, websearch) |
-| Plan     | Comprehensive with dependencies — **approval required**                     |
-| Subtasks | **Mandatory + granular**                                                    |
-| Examine  | **Adversarial review** — security (OWASP Top 10), logic flaws, performance  |
-| Tests    | **Mandatory** — comprehensive unit + E2E + regression, 80% coverage target  |
+| Step     | Behaviour                                                                  |
+| -------- | -------------------------------------------------------------------------- |
+| Analyze  | Deep — 6–10 parallel `exploration` delegations (codebase, docs, web)       |
+| Plan     | Comprehensive with dependencies — **approval required**                    |
+| Subtasks | **Mandatory + granular**                                                   |
+| Execute  | Delivery delegated as `multi-file-feature` once decomposed                 |
+| Examine  | **Adversarial review** — security (OWASP Top 10), logic flaws, performance |
+| Tests    | **Mandatory** — comprehensive unit + E2E + regression, 80% coverage target |
 
 **Testing matrix:** unit ✓ · E2E ✓ · regression ✓ · coverage ≥ 80%.
+
+### Delegated delivery
+
+When the developer allowed it (`sf agents delegation allow`, see [Delegated ticket delivery](../cli/sf-agents.md#delegated-ticket-delivery-sf-agents-delegation)), the session does not build the
+ticket: it hands it, from In progress to the end of AI testing, to one background agent in its own worktree. The task kind of that delivery is sized to the work, so a small ticket is not run on the
+session's own model. Each profile declares it in `steps.execute.taskKind`, and the agent resolves it with `sf agents route`:
+
+| Ticket                                                                         | Delivery task kind                                                    |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| 🐛 Bug whose ticket or triage already names the files to change (two or fewer) | `scoped-edit` (`steps.execute.scopedTaskKind`)                        |
+| 🐛 Any other bug: the files are known only after the diagnosis                 | `bug-fix`                                                             |
+| 🟢 Low (it may touch up to three files; the delivery stays a `scoped-edit`)    | `scoped-edit`                                                         |
+| 🟡 Medium, 🔴 Complex                                                          | `multi-file-feature`, once decomposed (planning stays in the session) |
+
+A bug cannot name its files before it is diagnosed, so it defaults to `bug-fix`. A trivial change stays in the session: one known file, about 20 lines or fewer (a typo, a configuration value, a
+documentation line), which does not repay a worktree and a dependency install.
+
+The delegated agent stops at the green `## Test report` comment, with the draft pull request. On a complex ticket the session runs the adversarial review itself.
 
 ## Adversarial review (complex only)
 

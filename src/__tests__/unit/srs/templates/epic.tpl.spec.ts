@@ -1,4 +1,12 @@
-import { featureTableAdditions, renderEpicPage, versionFrAdditions } from '../../../../builders/srs/templates/pages/epic.tpl'
+import {
+  featureFrUpdates,
+  featureTableAdditions,
+  renderEpicPage,
+  versionAmendmentAdditions,
+  versionAmendmentLine,
+  versionFrAdditions,
+  versionFrUpdates
+} from '../../../../builders/srs/templates/pages/epic.tpl'
 import { EpicSpec, PageBlock, TableBlock } from '../../../../builders/srs/types'
 
 function kinds(page: ReturnType<typeof renderEpicPage>): string[] {
@@ -387,5 +395,39 @@ describe('versionFrAdditions', () => {
   it('writes a version with no change as a "No … yet." line a later addition replaces', () => {
     const page = renderEpicPage({ title: 'v1', parentId: 'F', parentPageId: 'f', urs: [], frs: [] })
     expect(page.blocks).toContainEqual({ kind: 'paragraph', text: 'No changes listed yet.' })
+  })
+})
+
+// #945 — what an FR amended in place changes in the tables that list it
+describe('the amendment of an FR in the tables of its version and its feature', () => {
+  const fr = { id: 'FR-1', title: 'Sign in with SSO', priority: 'P2' as const, description: 'Only the FR page shows it' }
+
+  it('amends the Requirement and Priority cells of its row, found by the FR id, for a new title or priority', () => {
+    const cells = { Requirement: 'Sign in with SSO', Priority: 'P2' }
+
+    expect(versionFrUpdates(fr, ['title', 'priority'])).toEqual([{ kind: 'table-cells', heading: 'Functional Requirements (FR)', rowKey: 'FR-1', cells }])
+    expect(featureFrUpdates(fr, ['title', 'priority'])).toEqual([{ kind: 'table-cells', heading: 'Functional Requirements (FR)', rowKey: 'FR-1', cells }])
+    expect(versionFrUpdates(fr, ['priority'])).toEqual([expect.objectContaining({ cells: { Priority: 'P2' } })])
+    expect(featureFrUpdates(fr, ['title'])).toEqual([expect.objectContaining({ cells: { Requirement: 'Sign in with SSO' } })])
+  })
+
+  it('leaves both tables alone for a field they do not show', () => {
+    expect(versionFrUpdates(fr, ['description', 'acceptanceCriteria', 'complexity'])).toEqual([])
+    expect(featureFrUpdates(fr, ['description', 'validationRules'])).toEqual([])
+  })
+
+  it('writes the placeholder for a priority the FR has none of', () => {
+    expect(versionFrUpdates({ id: 'FR-1', title: 'T' }, ['priority'])).toEqual([expect.objectContaining({ cells: { Priority: '—' } })])
+  })
+
+  it('words the change line from the fields the patch names, so applying the patch again states the same line', () => {
+    expect(versionAmendmentLine(fr, ['title', 'acceptance criteria'])).toBe('Amends FR-1 — Sign in with SSO (title, acceptance criteria)')
+    expect(versionAmendmentLine(fr, ['title', 'acceptance criteria'])).toBe(versionAmendmentLine(fr, ['title', 'acceptance criteria']))
+    expect(versionAmendmentLine(fr, [])).toBe('Amends FR-1 — Sign in with SSO')
+    expect(versionAmendmentLine(fr, ['title'], '  Worded by hand ')).toBe('Worded by hand')
+  })
+
+  it('adds the change line alone: the FR keeps its row in the version table', () => {
+    expect(versionAmendmentAdditions('Amends FR-1')).toEqual([{ kind: 'list-items', heading: 'What changed in this version', items: ['Amends FR-1'] }])
   })
 })

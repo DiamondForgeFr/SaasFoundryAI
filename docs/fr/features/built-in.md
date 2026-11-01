@@ -240,7 +240,7 @@ Consultez [Mettre un projet à jour](/fr/guide/updating-projects) pour la prévi
 de dupliquer les informations du projet dans les prompts.
 
 ```bash
-sf status --claude-friendly --no-network
+sf status --agent-friendly --no-network
 ```
 
 Cette commande donne à l'agent de code un résumé déterministe et hors ligne avant toute modification. Consultez [Structure du projet](/fr/guide/project-structure).

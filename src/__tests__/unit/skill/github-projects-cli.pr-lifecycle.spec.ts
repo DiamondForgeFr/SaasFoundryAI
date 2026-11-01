@@ -62,7 +62,7 @@ esac
 printf 'git %s\\n' "$*" >> "$CALLS"
 case "$1" in
   rev-parse) if [ "$2" = HEAD ]; then echo abc123; else echo "\${BRANCH:-feature/42-work}"; fi;;
-  ls-remote) printf '%s\\trefs/heads/feature/42-work\\n' "\${REMOTE_SHA:-abc123}";;
+  ls-remote) printf '%s\\trefs/heads/%s\\n' "\${REMOTE_SHA:-abc123}" "\${REMOTE_BRANCH:-feature/42-work}";;
   push) [ "$PUSH_FAIL" != 1 ];;
   *) exit 1;;
 esac
@@ -262,7 +262,8 @@ esac
     { FETCH_FAIL: '1' },
     { REMOTE_SHA: 'old' },
     { PRS: JSON.stringify([{ ...pr, headRefOid: 'old' }]) },
-    { BRANCH: 'feature/420-other' }
+    // Another ticket's branch, which is also the only one origin holds: it is not ticket 42's (#1036 keeps this refusal)
+    { BRANCH: 'feature/420-other', REMOTE_BRANCH: 'feature/420-other' }
   ])('refuses promotion for unverified state %j', async (changes) => {
     expect((await run(['ready-pr', '42'], changes)).code).not.toBe(0)
     expect(calls()).not.toContain('pr ready')

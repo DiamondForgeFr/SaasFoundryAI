@@ -33,13 +33,14 @@ moment :
 
 ### 🐛 Bug
 
-| Étape        | Comportement                             |
-| ------------ | ---------------------------------------- |
-| Analyse      | Ciblée directement sur la cause          |
-| Plan         | Pas de document formel                   |
-| Sous-tickets | Inutiles pour une correction atomique    |
-| Examen       | Pas de revue contradictoire systématique |
-| Tests        | **Test de régression obligatoire**       |
+| Étape        | Comportement                                                                                          |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| Analyse      | Ciblée directement sur la cause                                                                       |
+| Plan         | Pas de document formel                                                                                |
+| Sous-tickets | Inutiles pour une correction atomique                                                                 |
+| Exécution    | Livraison déléguée en `bug-fix`, ou en `scoped-edit` quand le ticket nomme déjà deux fichiers au plus |
+| Examen       | Pas de revue contradictoire systématique                                                              |
+| Tests        | **Test de régression obligatoire**                                                                    |
 
 ### 🟢 Low
 
@@ -48,6 +49,7 @@ moment :
 | Analyse      | Minimale, 2 à 3 fichiers, sans agents spécialisés |
 | Plan         | Mental, sans approbation formelle                 |
 | Sous-tickets | Optionnels ; utiles si le périmètre s'élargit     |
+| Exécution    | Livraison déléguée en `scoped-edit`               |
 | Examen       | Non requis                                        |
 | Tests        | Adaptés au risque ; toute omission est annoncée   |
 
@@ -58,10 +60,14 @@ moment :
 | Analyse      | Exploration structurée de plusieurs zones                    |
 | Plan         | Détaillé fichier par fichier, **approbation obligatoire**    |
 | Sous-tickets | **Obligatoires** pour les unités de livraison majeures       |
+| Exécution    | Livraison déléguée en `multi-file-feature` une fois découpée |
 | Examen       | Pas de revue contradictoire complète                         |
 | Tests        | Unitaires, E2E et régression recommandés selon le changement |
 
 Les explorateurs restent en lecture seule. Des implémentations parallèles n'utilisent des worktrees distincts que si leurs responsabilités et fichiers sont réellement indépendants.
+
+Chaque délégation nomme un type de tâche (`exploration` pour l'analyse, `review` pour la revue contradictoire) que l'agent résout avec
+[`sf agents route`](../cli/sf-agents.md#routage-des-delegations-sf-agents-route) pour choisir l'agent de palier. La section « Delegation routing » du skill workflow porte la règle.
 
 ### 🔴 Complex
 
@@ -70,8 +76,27 @@ Les explorateurs restent en lecture seule. Des implémentations parallèles n'ut
 | Analyse      | Approfondie et multi-angle                                          |
 | Plan         | Complet, dépendances explicites, **approbation obligatoire**        |
 | Sous-tickets | **Obligatoires et granulaires**                                     |
+| Exécution    | Livraison déléguée en `multi-file-feature` une fois découpée        |
 | Examen       | **Revue contradictoire** sécurité, logique et performance           |
 | Tests        | **Obligatoires** : unitaires, E2E, régression et couverture adaptée |
+
+### Livraison déléguée
+
+Lorsque le développeur l'a permis (`sf agents delegation allow`, voir [Livraison déléguée des tickets](../cli/sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation)), la session ne
+construit pas le ticket : elle le confie, de In progress à la fin d'AI testing, à un agent en arrière-plan dans son propre worktree. Le type de tâche de cette livraison est dimensionné selon le
+travail, si bien qu'un petit ticket ne tourne pas sur le modèle de la session. Chaque profil le déclare dans `steps.execute.taskKind`, et l'agent le résout avec `sf agents route` :
+
+| Ticket                                                                             | Type de tâche de la livraison                                              |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 🐛 Bug dont le ticket ou le tri nomme déjà les fichiers à changer (deux au plus)   | `scoped-edit` (`steps.execute.scopedTaskKind`)                             |
+| 🐛 Tout autre bug : les fichiers ne sont connus qu'après le diagnostic             | `bug-fix`                                                                  |
+| 🟢 Low (il peut toucher jusqu'à trois fichiers ; la livraison reste `scoped-edit`) | `scoped-edit`                                                              |
+| 🟡 Medium, 🔴 Complex                                                              | `multi-file-feature`, une fois découpé (la planification reste en session) |
+
+Un bug ne peut pas nommer ses fichiers avant d'être diagnostiqué : il prend `bug-fix` par défaut. Un changement trivial reste dans la session : un seul fichier connu, environ 20 lignes au plus (une
+coquille, une valeur de configuration, une ligne de documentation), qui ne justifie ni un worktree ni une installation de dépendances.
+
+L'agent délégué s'arrête au commentaire `## Test report` vert, avec la pull request en brouillon. Sur un ticket complexe, la session mène elle-même la revue contradictoire.
 
 ## Revue contradictoire
 

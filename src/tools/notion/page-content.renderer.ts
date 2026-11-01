@@ -20,6 +20,11 @@ function rt(text: string): RichTextItemRequest[] {
   return chunks
 }
 
+/** The rich text of one cell, heading or title, split into consecutive text objects at Notion's limit. */
+export function renderRichText(text: string): RichTextItemRequest[] {
+  return rt(text)
+}
+
 function headingRequest(level: 1 | 2 | 3, text: string): BlockObjectRequest {
   if (level === 1) return { type: 'heading_1', heading_1: { rich_text: rt(text) } }
   if (level === 2) return { type: 'heading_2', heading_2: { rich_text: rt(text) } }

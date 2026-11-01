@@ -7,9 +7,11 @@ import {
   getAgentIds,
   getAgentProfile,
   getSharedAgentEntrypoints,
+  getSkillDirectory,
   isHarnessAgent,
   listAgentProfiles,
   needsSharedInstructions,
+  needsSharedSkills,
   resolveHarnessAgents,
   validateAgentRegistry
 } from '../../../harness/agent-registry'
@@ -34,7 +36,7 @@ describe('bundled declarative agent registry (#666)', () => {
     expect(schema.properties.modules.properties.harness.properties.agents.items.enum).toEqual(getAgentIds())
   })
   it('declares bounded instruction and skill compatibility without runtime promises', () => {
-    expect(getAgentProfile('claude-code')).toMatchObject({ instructionFile: 'CLAUDE.md', sharedInstructions: false })
+    expect(getAgentProfile('claude-code')).toMatchObject({ instructionFile: 'AGENTS.md', sharedInstructions: false })
     expect(getAgentProfile('gemini-cli')).toMatchObject({ instructionFile: 'GEMINI.md', instructions: 'documented', skills: 'documented' })
     expect(getAgentProfile('qwen-code')).toMatchObject({ instructionFile: 'AGENTS.md', instructions: 'documented', skills: 'manual' })
     expect(getAgentProfile('generic')).toMatchObject({ instructions: 'manual', skills: 'manual' })
@@ -72,7 +74,7 @@ describe('bundled declarative agent registry (#666)', () => {
     expect(getAgentProfile('codex').displayName).toBe('Codex')
     expect(getAgentProfile('codex').sources).not.toContain('https://example.test/changed')
     expect(getAgentProfile('codex').limitations.length).toBeGreaterThan(0)
-    expect(getAgentProfile('claude-code').instructionFile).toBe('CLAUDE.md')
+    expect(getAgentProfile('claude-code').instructionFile).toBe('AGENTS.md')
     expect(getAgentIds()).toHaveLength(6)
   })
   it('uses an independent snapshot rather than the mutable imported JSON object', () => {
@@ -152,6 +154,36 @@ describe('bundled declarative agent registry (#666)', () => {
       }
     ],
     [
+      'skill directory traversal',
+      (data: RegistryFixture) => {
+        data.profiles.codex.skillDiscovery = { directories: ['../skills'], source: 'https://learn.chatgpt.com/docs/build-skills' }
+      }
+    ],
+    [
+      'skill discovery without listed evidence',
+      (data: RegistryFixture) => {
+        data.profiles.codex.skillDiscovery = { directories: ['.agents/skills'], source: 'https://example.test/skills' }
+      }
+    ],
+    [
+      'empty skill discovery',
+      (data: RegistryFixture) => {
+        data.profiles.codex.skillDiscovery = { directories: [], source: 'https://learn.chatgpt.com/docs/build-skills' }
+      }
+    ],
+    [
+      'missing skill discovery field',
+      (data: RegistryFixture) => {
+        delete data.profiles.codex.skillDiscovery
+      }
+    ],
+    [
+      'documented skills outside the harness directories',
+      (data: RegistryFixture) => {
+        data.profiles['qwen-code'].skills = 'documented'
+      }
+    ],
+    [
       'canonical overwrite',
       (data: RegistryFixture) => {
         data.profiles.codex.instructionFile = 'CLAUDE.md'
@@ -161,5 +193,41 @@ describe('bundled declarative agent registry (#666)', () => {
     const data = clone()
     ;(change as (value: RegistryFixture) => void)(data)
     expect(() => validateAgentRegistry(data)).toThrow()
+  })
+})
+
+describe('skill discovery evidence (#940)', () => {
+  it('records each host discovery directory with a documentation source from its sources', () => {
+    expect(listAgentProfiles().map((profile) => [profile.id, profile.skillDiscovery?.directories ?? null])).toEqual([
+      ['claude-code', ['.claude/skills']],
+      ['codex', ['.agents/skills']],
+      ['kimi', ['.kimi-code/skills', '.agents/skills']],
+      ['gemini-cli', ['.gemini/skills', '.agents/skills']],
+      ['qwen-code', ['.qwen/skills']],
+      ['generic', null]
+    ])
+    for (const profile of listAgentProfiles()) if (profile.skillDiscovery) expect(profile.sources).toContain(profile.skillDiscovery.source)
+    expect(getAgentProfile('kimi')).toMatchObject({ skills: 'documented' })
+  })
+  it('provides the canonical sources only to a host that reads them, and the projection to every other host', () => {
+    expect(getAgentIds().map((id) => [id, getSkillDirectory(id)])).toEqual([
+      ['claude-code', '.claude/skills'],
+      ['codex', '.agents/skills'],
+      ['kimi', '.agents/skills'],
+      ['gemini-cli', '.agents/skills'],
+      ['qwen-code', '.agents/skills'],
+      ['generic', '.agents/skills']
+    ])
+  })
+  it('needs the .agents/skills projection unless every declared host reads .claude/skills', () => {
+    expect(needsSharedSkills([])).toBe(false)
+    expect(needsSharedSkills(['claude-code'])).toBe(false)
+    expect(needsSharedSkills(['claude-code', 'qwen-code'])).toBe(true)
+    expect(needsSharedSkills(['generic'])).toBe(true)
+    expect(() => needsSharedSkills(['claude-code', 'future-agent'])).toThrow('Unknown coding agent')
+  })
+  it('returns a skill discovery copy that cannot modify future reads', () => {
+    getAgentProfile('kimi').skillDiscovery!.directories.push('.evil/skills')
+    expect(getAgentProfile('kimi').skillDiscovery!.directories).toEqual(['.kimi-code/skills', '.agents/skills'])
   })
 })

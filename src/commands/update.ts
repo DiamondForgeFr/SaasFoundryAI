@@ -28,7 +28,7 @@ import { promptSrsConfiguration } from '../prompts/srs.prompts'
 import { bootstrapSrs } from '../runners/srs.runner'
 import { NotionSrsAdapter } from '../tools/notion/srs.adapter'
 import { runManifestMigrations } from '../migrations/manifest/registry'
-import { runModuleMigrations } from '../migrations/module/registry'
+import { previewModuleMigrations, runModuleMigrations } from '../migrations/module/registry'
 import { classifyProjectCapabilities, hasTechnicalStack } from '../project-capabilities'
 import { recoverTechnicalStackTransition, TECHNICAL_TRANSITION_JOURNAL, TECHNICAL_TRANSITION_LOCK, TECHNICAL_TRANSITION_RECOVERY_LOCK } from '../scaffold/technical-stack.transaction'
 import { acquireManifestMutationLock } from '../scaffold/technical-stack.transaction'
@@ -54,7 +54,9 @@ import {
 import { handleProfileTransition } from './update.profile-transition'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
-import { CODEX_SOURCE_CLAUDE_BRIDGE } from '../harness/agent-instructions'
+import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
+import { TIER_AGENT_PATH } from '../harness/tier-agents'
+import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 import { readLivePackageIdentity } from '../utils/package-identity'
@@ -62,14 +64,36 @@ import { describeCliVersion, resolveCliChannel } from '../cli-channel'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
 // scaffold refreshes must neither delete them nor adopt user edits/private skills.
-const SHARED_AGENT_ENTRYPOINTS = new Set(getSharedAgentEntrypoints())
-function isSharedAgentPath(path: string, protectClaude = false): boolean {
+// The instruction files (AGENTS.md, and the CLAUDE.md of a project that predates
+// #937) are project-owned at every depth: a template refresh would delete a
+// CLAUDE.md the CLI no longer generates. Moving them is the harness v3 → v4
+// migration (#938, harness.migrations.ts).
+// A `.claude/settings.json` is the same kind of file (#935): the scaffold deposits a template, but the
+// project owns it and `sf update` keeps it current with a targeted merge on every run (harness-settings.ts).
+// Swept as a template, a file the merge already brought up to date would read as edited by the project
+// and come back as a `.saasfoundry.new` proposal of its own content.
+const SHARED_AGENT_ENTRYPOINTS = new Set([...getSharedAgentEntrypoints(), CLAUDE_CODE_RULE_PATH])
+function isSharedAgentPath(path: string): boolean {
   const normalized = path.replaceAll('\\', '/')
-  return (protectClaude && normalized === 'CLAUDE.md') || SHARED_AGENT_ENTRYPOINTS.has(normalized) || normalized.startsWith('.agents/')
+  const name = normalized.split('/').pop()
+  return (
+    name === 'CLAUDE.md' ||
+    name === 'AGENTS.md' ||
+    SHARED_AGENT_ENTRYPOINTS.has(normalized) ||
+    normalized.startsWith('.agents/') ||
+    TIER_AGENT_PATH.test(normalized) ||
+    normalized === '.claude/settings.json' ||
+    normalized.endsWith('/.claude/settings.json')
+  )
 }
 
-function withoutSharedAgentHashes(hashes: Record<string, string>, protectClaude = false): Record<string, string> {
-  return Object.fromEntries(Object.entries(hashes).filter(([path]) => !isSharedAgentPath(path, protectClaude)))
+function withoutSharedAgentHashes(hashes: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(hashes).filter(([path]) => !isSharedAgentPath(path)))
+}
+
+/** The three hash sets of a template refresh, without the shared agent paths it must never touch. */
+export function comparableTemplateHashes(baseHashes: Record<string, string>, currentHashes: Record<string, string>, targetHashes: Record<string, string>): FileHashComparison {
+  return { baseHashes: withoutSharedAgentHashes(baseHashes), currentHashes: withoutSharedAgentHashes(currentHashes), targetHashes: withoutSharedAgentHashes(targetHashes) }
 }
 
 export const DEPENDENCY_REFRESH_JOURNAL = '.saasfoundry-dependency-refresh.json'
@@ -351,10 +375,9 @@ export async function refreshDependencyLockAndInstall(label: string, packageRoot
  * tracking with it.
  */
 export function templateBaselines(manifest: SaaSFoundryManifest, targetHashes: Record<string, string>): Record<string, string> {
-  const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
-  const sharedBaselines = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([path]) => isSharedAgentPath(path, protectClaude)))
+  const sharedBaselines = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([path]) => isSharedAgentPath(path)))
   const unmanaged = new Set(manifest.unmanagedPaths ?? [])
-  return { ...Object.fromEntries(Object.entries(withoutSharedAgentHashes(targetHashes, protectClaude)).filter(([path]) => !unmanaged.has(path))), ...sharedBaselines }
+  return { ...Object.fromEntries(Object.entries(withoutSharedAgentHashes(targetHashes)).filter(([path]) => !unmanaged.has(path))), ...sharedBaselines }
 }
 
 export interface FileUpdate {
@@ -887,7 +910,7 @@ async function stageStackModuleChanges(
 
 /**
  * Deposit the current CLI's harness artefacts into a temp dir — the `target`
- * side of the FLOW 1b three-way merge. CLAUDE.md / settings.json land in the
+ * side of the FLOW 1b three-way merge. AGENTS.md / settings.json land in the
  * temp dir too but are outside the tracked scope (merge-managed, never swept).
  */
 async function depositHarnessInTempDir(
@@ -1212,7 +1235,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     // to user files go through `writeMigratedFile`, which falls back to a
     // `.saasfoundry.new` sidecar when the user has hand-edited the target.
     // Module migrations may write project files. A preview must remain strictly
-    // read-only; pending module migrations are applied only by the real update.
+    // read-only; pending module migrations are applied only by the real update,
+    // and the preview lists what each would change.
+    const pendingModuleMigrations = dryRun ? await previewModuleMigrations(manifest, '.') : []
     const moduleMigrationResult = dryRun ? { applied: [], manifest } : await runModuleMigrations(manifest, '.')
     if (moduleMigrationResult.applied.length > 0) {
       manifest = moduleMigrationResult.manifest
@@ -1246,6 +1271,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           projectVersion: manifest.version,
           conflictStrategy,
           profileTransition: requestedProfileTransition,
+          ...(pendingModuleMigrations.length > 0 ? { moduleMigrations: pendingModuleMigrations } : {}),
           templateUpdate: { status: 'up-to-date' },
           moduleAddition: { available: [], selected: [], skills: [], wouldRunNpmInstall: false }
         }
@@ -1306,12 +1332,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
           // Three-way comparison
           spinner.text = 'Comparing files...'
-          const protectClaude = manifest.fileHashes?.['CLAUDE.md'] === hashFileContent(CODEX_SOURCE_CLAUDE_BRIDGE)
-          const comparableHashes = {
-            baseHashes: withoutSharedAgentHashes(manifest.fileHashes, protectClaude),
-            currentHashes: withoutSharedAgentHashes(currentHashes, protectClaude),
-            targetHashes: withoutSharedAgentHashes(targetHashes, protectClaude)
-          }
+          const comparableHashes = comparableTemplateHashes(manifest.fileHashes, currentHashes, targetHashes)
           const updates = enforceAtomicImpactValidationBundles(computeFileUpdates(comparableHashes.baseHashes, comparableHashes.currentHashes, comparableHashes.targetHashes), comparableHashes)
 
           if (updates.length === 0) {
@@ -1440,6 +1461,24 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     if (!dryRun) await reconcileSrsIntentHook('.', Boolean(manifest.tools?.srs?.enabled))
     if (!dryRun && manifest.modules?.harness?.agents?.length) {
       await installSelectedAgentInstructions(manifest, manifest.projectName, manifest.modules.harness.agents, persistManifest)
+    } else if (!dryRun && manifest.modules?.harness?.managed && manifest.structure !== 'multirepo') {
+      // A managed harness without an agents list is implicitly Claude Code: it still gets its tier
+      // agents (#929). An adopted (unmanaged) harness and multirepo apps keep their explicit flows.
+      await installSelectedAgentInstructions(manifest, manifest.projectName, undefined, persistManifest, { tierAgentsOnly: true })
+    }
+
+    // `.claude/settings.json` is the one file `sf agents refresh` kept for itself (#935): the delegation capture hooks
+    // and the permission rules. It follows the CLI on every update now, with the merge the refresh and the harness
+    // v4 → v5 migration use, so a rule the CLI adds reaches an installed project without a second command. Nothing
+    // the project wrote is taken away, a file with nothing to add is not rewritten, and one that cannot be merged
+    // in place gets a `.saasfoundry.new` proposal. A pending migration lists it in the preview, and one that ran in
+    // this very update has just done it and said so: neither is repeated.
+    const settingsMigrationPending = pendingModuleMigrations.some((pending) => pending.migrations.some((migration) => migration.name === 'wire-delegation-capture'))
+    const settingsMigrationRan = moduleMigrationResult.applied.some((applied) => applied.migrations.includes('wire-delegation-capture'))
+    if (!settingsMigrationPending && !settingsMigrationRan) {
+      const settingsResults = await syncHarnessSettingsForProject('.', manifest, { dryRun })
+      if (dryRunReport && settingsResults.some((result) => result.status !== 'unchanged')) dryRunReport.harnessSettings = settingsResults.filter((result) => result.status !== 'unchanged')
+      logHarnessSettings(settingsResults, { dryRun })
     }
 
     // ─── FLOW 2: Module addition ───
@@ -1648,7 +1687,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
         if (Object.keys(preExisting).length === 0) {
           // No prior deposits — plain install.
-          await installHarness({
+          const instructions = await installHarness({
             targetPath: '.',
             projectName: manifest.projectName,
             version: cliVersion,
@@ -1657,7 +1696,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             advancedSkills: harnessConfig.advancedSkills,
             stackPresent: hasTechnicalStack(manifest)
           })
-          harnessTargetHashes = await computeHarnessFileHashes('.')
+          // The instruction deposits (.claude/rules, GEMINI.md, .agents/skills) need their baselines too.
+          harnessTargetHashes = { ...(await computeHarnessFileHashes('.')), ...instructions?.fileHashes }
           manifest.fileHashes = { ...(manifest.fileHashes ?? {}), ...harnessTargetHashes }
         } else {
           // Deposits already exist (stack scaffolds ship core skills; earlier
@@ -1673,7 +1713,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               updates = updates.map((u) => (u.action === 'update' ? { ...u, action: 'conflict' as const } : u))
             }
             await applyFileUpdates(updates, deposit.tempDir, moduleSpinner, conservative ? 'save-new' : conflictStrategy, async () => assertHarnessWritePathsSafe('.'))
-            await mergeHarnessUserFiles({
+            const instructions = await mergeHarnessUserFiles({
               targetPath: '.',
               projectName: manifest.projectName,
               version: cliVersion,
@@ -1681,8 +1721,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               workflow: harnessConfig.workflow
             })
             const untracked = Object.fromEntries(Object.entries(manifest.fileHashes ?? {}).filter(([p]) => !isHarnessTrackedPath(p)))
-            harnessTargetHashes = deposit.hashes
-            manifest.fileHashes = { ...untracked, ...deposit.hashes }
+            harnessTargetHashes = { ...deposit.hashes, ...instructions?.fileHashes }
+            manifest.fileHashes = { ...untracked, ...harnessTargetHashes }
           } finally {
             await rm(deposit.tempDir, { recursive: true, force: true }).catch(() => {})
           }

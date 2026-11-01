@@ -3,6 +3,8 @@ import { existsSync } from 'fs'
 import { readdir, readFile, rmdir, unlink } from 'fs/promises'
 import { join } from 'path'
 
+import { applyClaudeMdMigration, planClaudeMdMigration, previewClaudeMdMigration } from '../harness/claude-md-migration'
+import { logHarnessSettings, previewHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
 import type { ModuleMigration } from '../migrations/module/types'
 import { hasTechnicalStack } from '../project-capabilities'
 import { hashFileContent } from '../utils'
@@ -129,7 +131,69 @@ export const dropPerAppClaudeInMonorepo: ModuleMigration = {
   }
 }
 
-export const harnessMigrations: ModuleMigration[] = [dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo]
+/**
+ * harness v3 → v4 (#938). AGENTS.md is the single instruction file since #937; a project
+ * installed before keeps its instructions in CLAUDE.md, which hides AGENTS.md from Claude Code.
+ * The instructions move to AGENTS.md section by section — see claude-md-migration.ts for what
+ * moves where — and CLAUDE.md goes once every section is read back in AGENTS.md. An AGENTS.md
+ * the user wrote gets a `.saasfoundry.new` proposal instead, and CLAUDE.md stays.
+ */
+export const moveClaudeMdToAgentsMd: ModuleMigration = {
+  from: 3,
+  to: 4,
+  name: 'move-claude-md-to-agents-md',
+  preview: async (projectDir, manifest) => previewClaudeMdMigration(await planClaudeMdMigration(projectDir, manifest)),
+  up: async (projectDir, manifest) => {
+    const result = await applyClaudeMdMigration(projectDir, manifest, await planClaudeMdMigration(projectDir, manifest))
+    for (const path of result.migrated) console.log(chalk.gray(`  Moved ${path} into ${path.replace(/CLAUDE\.md$/, 'AGENTS.md')}, the instruction file every agent reads, and removed it.`))
+    for (const path of result.removedBridges) console.log(chalk.gray(`  Removed ${path}: a generated bridge to AGENTS.md, which Claude Code now reads directly.`))
+    for (const path of result.keptForReview)
+      console.log(chalk.yellow(`  ${path}: sections you had edited are kept under "Kept from CLAUDE.md for review" — merge what you still need, then delete them.`))
+    for (const path of result.sidecars) {
+      const claude = path.replace(/AGENTS\.md\.saasfoundry\.new$/, 'CLAUDE.md')
+      console.log(
+        chalk.yellow(`  Wrote ${path}: your AGENTS.md was kept as is. Review the proposal, replace AGENTS.md with it, then delete ${claude} — while it exists, Claude Code ignores AGENTS.md.`)
+      )
+    }
+    for (const path of result.localShadows)
+      console.log(chalk.yellow(`  Kept ${path}: while it exists, Claude Code ignores AGENTS.md. Move its notes into AGENTS.md or .claude/rules/, then delete it.`))
+  }
+}
+
+/**
+ * harness v4 → v5 (#935). A harness installed before the delegation routing shipped has none of what
+ * measures a routed delegation: the `SubagentStop` and `PostToolUse` hooks in `.claude/settings.json`
+ * that record each `sf-<tier>` run in the clone's ledger, and the permission rules that read a route, the
+ * delegation consent and the routing report without asking. Only the first install and `sf agents refresh`
+ * merged them, so a plain `sf update` left an installed project running every delegation unrecorded.
+ *
+ * This deposits only that file, through the merge `sf update` runs on every run (harness-settings.ts):
+ * the project's own keys, hooks and rules are kept, a file that cannot be merged in place (a link, text
+ * that is not JSON, a `hooks` or `permissions` of another shape) is left as it is and the proposal goes
+ * to `.claude/settings.json.saasfoundry.new`. It is not `writeMigratedFile`, which would replace an
+ * untracked file the user owns. This one-shot step, like `sf agents refresh`, also takes away the two
+ * `sf agents outcome` rules a pre-release build had pre-approved, and names each one it removes: the
+ * every-update merge never removes a rule.
+ *
+ * Everything else the routing needs follows the CLI by its own path and is not repeated here: the tier
+ * agents and the Codex hooks on every update, the AGENTS.md region with the v3 → v4 move. The consent to
+ * delegate is never written: only the developer's own answer records it (`sf agents delegation`).
+ */
+export const wireDelegationCapture: ModuleMigration = {
+  from: 4,
+  to: 5,
+  name: 'wire-delegation-capture',
+  preview: async (projectDir, manifest) => previewHarnessSettings(await syncHarnessSettingsForProject(projectDir, manifest, { dryRun: true, revoke: true })),
+  up: async (projectDir, manifest) => {
+    logHarnessSettings(await syncHarnessSettingsForProject(projectDir, manifest, { revoke: true }))
+    // A Codex declaration kept in this clone's Git directory is invisible to the manifest: the refresh wires its hook.
+    if (existsSync(join(projectDir, '.codex')) && !manifest.modules?.harness?.agents?.includes('codex')) {
+      console.log(chalk.gray('  Run sf agents refresh to wire the Codex delegation capture hook (.codex/hooks.json) for a Codex setup local to this clone.'))
+    }
+  }
+}
+
+export const harnessMigrations: ModuleMigration[] = [dropStackSkillsWithoutStack, dropPerAppClaudeInMonorepo, moveClaudeMdToAgentsMd, wireDelegationCapture]
 
 /** Files under `dir` with no `fileHashes` entry: not deposited by the harness, so never removed. */
 async function untrackedFiles(projectDir: string, dir: string, hashes: Record<string, string>): Promise<string[]> {

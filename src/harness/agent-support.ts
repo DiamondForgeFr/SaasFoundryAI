@@ -5,19 +5,42 @@ import { dirname, join, resolve } from 'path'
 import {
   AgentInstructionsReport,
   AgentInstructionsError,
-  ADOPTION_COMMON_INSTRUCTIONS,
-  CODEX_SOURCE_CLAUDE_BRIDGE,
+  CLAUDE_CODE_RULE_PATH,
+  hasGeneratedRegion,
   HarnessAgent,
   installAgentInstructions,
   installPlannedAgentInstructions,
   AgentInstructionPlan,
   planAgentInstructions,
   AgentInstructionFile,
-  inspectInstructionSource
+  classifyManagedFile,
+  inspectInstructionSource,
+  recordsReferenceOnlyBridge,
+  type ManagedFileState
 } from './agent-instructions'
 import { inspectGitAgentScope, configureLocalAgentExcludes, removeLocalAgentExcludes, NotGitRepositoryError, GitAgentScope } from './git-agent-scope'
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentIds, isHarnessAgent, getSharedAgentEntrypoints } from './agent-registry'
+import {
+  clearLocalDelegation,
+  DELEGATION_SCOPES,
+  DelegationScope,
+  DelegationState,
+  isDelegationScope,
+  loadDelegationState,
+  NO_HARNESS_REASON,
+  readLocalDelegation,
+  resolveDelegation,
+  TicketDeliveryDecision,
+  validateDelegation,
+  writeLocalDelegation
+} from './delegation'
+import { CODEX_HOOKS_PATH } from './delegation-hooks'
+import { requireLedgerDir } from './delegation-ledger'
+import { summarizeHarnessSettings, syncHarnessSettings } from './harness-settings'
+import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
+import { updateLocalRouting, withLogEntry } from './routing-local'
+import { renderTierAgents, TIER_AGENT_PATH } from './tier-agents'
 import { harnessInstallerMeta } from '../installers/harness.installer'
 import { SaaSFoundryManifest } from '../types'
 
@@ -55,6 +78,11 @@ interface SupportParams {
   /** Revalidate an approved adoption snapshot under the coordinator lock. */
   verify?: () => Promise<AgentInstructionPlan>
   adoption?: boolean
+  /**
+   * A shared refresh also reconciles `.claude/settings.json` (the delegation capture hooks, #1035).
+   * Enabling or replacing an agent never touches the host settings of the project (#660).
+   */
+  refreshSettings?: boolean
 }
 interface ManifestSnapshot {
   manifest: SaaSFoundryManifest
@@ -99,6 +127,7 @@ function validateManifest(value: unknown): asserts value is SaaSFoundryManifest 
       if (!isObject(harness) || !Number.isInteger(harness.version) || Number(harness.version) < 0) throw new Error('Invalid manifest harness version.')
       if (harness.managed !== undefined && typeof harness.managed !== 'boolean') throw new Error('Invalid manifest managed harness capability.')
       if (harness.agents !== undefined) validateAgents(harness.agents)
+      if (harness.delegation !== undefined) validateDelegation(harness.delegation)
     }
   }
   if (value.fileHashes !== undefined && (!isObject(value.fileHashes) || Object.values(value.fileHashes).some((hash) => typeof hash !== 'string'))) {
@@ -140,9 +169,11 @@ async function snapshot(root: string): Promise<ManifestSnapshot> {
   return { manifest, content, mode: (await lstat(path)).mode & 0o777 }
 }
 
-function configured(manifest: SaaSFoundryManifest, source: 'claude' | 'codex' | 'mixed' | 'missing' = 'claude'): HarnessAgent[] {
-  // Legacy managed harnesses already provide Claude instruction discovery.
-  return [...new Set(manifest.modules?.harness?.agents ?? (source === 'codex' ? ['codex'] : ['claude-code']))] as HarnessAgent[]
+function configured(manifest: SaaSFoundryManifest, source: 'claude' | 'codex' | 'mixed' | 'missing' = 'claude', scaffolded = false): HarnessAgent[] {
+  // An omitted declaration means Claude Code for every SaaSFoundry install: a CLAUDE.md
+  // one, or since #937 an AGENTS.md carrying the generated region. Only a user-written
+  // AGENTS.md (a Codex-first adoption) falls back to Codex.
+  return [...new Set(manifest.modules?.harness?.agents ?? (source === 'codex' && !scaffolded ? ['codex'] : ['claude-code']))] as HarnessAgent[]
 }
 
 async function inspect(root: string) {
@@ -151,16 +182,231 @@ async function inspect(root: string) {
   if (instructions.source === 'missing') throw new Error(`No managed harness at ${root}: CLAUDE.md or AGENTS.md is required. Configure project instructions before adoption.`)
   await regularPath(root, '.claude/skills', 'directory', false)
   const sharedSkills = await regularPath(root, '.agents/skills', 'directory', false)
-  return { before, source: instructions.source, discovered: { claudeInstructions: instructions.claudeInstructions, sharedInstructions: instructions.sharedInstructions, sharedSkills } }
+  return {
+    before,
+    source: instructions.source,
+    scaffolded: await hasGeneratedRegion(root),
+    discovered: { claudeInstructions: instructions.claudeInstructions, sharedInstructions: instructions.sharedInstructions, sharedSkills }
+  }
+}
+
+/**
+ * The developer's recorded consent to delegate ticket delivery (#1026), read-only: the shared team
+ * default, the clone's own override and the effective value. `not-asked` while neither exists,
+ * `unavailable` on a project without a harness block.
+ */
+export async function readDelegation(targetPath: string): Promise<DelegationState> {
+  const root = resolve(targetPath)
+  const { manifest } = await snapshot(root)
+  return loadDelegationState(root, manifest)
+}
+
+export interface DelegationRecord extends DelegationState {
+  scope: DelegationScope
+  /** False when the same decision was already recorded in that scope: nothing was written. */
+  changed: boolean
+}
+
+function requireHarness(manifest: SaaSFoundryManifest): NonNullable<NonNullable<SaaSFoundryManifest['modules']>['harness']> {
+  const harness = manifest.modules?.harness
+  if (!harness) throw new Error(`Cannot record a delegation answer: ${NO_HARNESS_REASON}.`)
+  return harness
+}
+
+function requireScope(scope: string | undefined, allowed: readonly DelegationScope[] = DELEGATION_SCOPES): DelegationScope {
+  const resolved = scope ?? allowed[0]
+  if (!isDelegationScope(resolved) || !allowed.includes(resolved)) throw new Error(`Delegation scope must be ${allowed.join(' or ')}${allowed[0] === 'shared' ? ' (default shared)' : ''}.`)
+  return resolved
+}
+
+/**
+ * Record the developer's answer. The **shared** scope (default) writes `modules.harness.delegation`
+ * through the same atomic, edit-detecting manifest replacement as `sf agents enable`: it is the
+ * team's default and travels with the repository. The **local** scope keeps an override in the Git
+ * directory of this clone, never tracked, that wins over the shared answer for this clone only.
+ * Repeating the answer already recorded in that scope keeps its `decidedAt` and writes nothing; the
+ * opposite answer replaces it.
+ */
+export async function recordDelegation(params: { targetPath: string; ticketDelivery: TicketDeliveryDecision; scope?: string; now?: () => Date }): Promise<DelegationRecord> {
+  const scope = requireScope(params.scope)
+  const root = resolve(params.targetPath)
+  const before = await snapshot(root)
+  const harness = requireHarness(before.manifest)
+  const recorded = { ticketDelivery: params.ticketDelivery, decidedAt: (params.now?.() ?? new Date()).toISOString() }
+  const local = await readLocalDelegation(root)
+  if (scope === 'local') {
+    if (local?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation, local), scope, changed: false }
+    await writeLocalDelegation(root, recorded)
+    return { ...resolveDelegation(harness.delegation, recorded), scope, changed: true }
+  }
+  if (harness.delegation?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation, local), scope, changed: false }
+  await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, delegation: recorded } } })
+  return { ...resolveDelegation(recorded, local), scope, changed: true }
+}
+
+export interface RoutingPromotion {
+  kind: TaskKind
+  tier: string
+  /** The providers whose automatic move was shared. */
+  providers: RoutingProvider[]
+  /** Providers whose own move for the kind was dropped because the shared override now decides for all of them. */
+  dropped: RoutingProvider[]
+}
+
+export interface PromoteRoutingResult {
+  promoted: RoutingPromotion[]
+  skipped: { kind: TaskKind; reason: string }[]
+  manifestChanged: boolean
+}
+
+/**
+ * Share the automatic moves of this clone (#1035): copy a kind's tier from the local routing layer into
+ * `modules.harness.routing.kinds` of the manifest through the same atomic, edit-detecting replacement as
+ * `sf agents enable`, as a change the team reviews in Git. The local entry is dropped, since the shared
+ * override now carries the choice for every provider. A kind the manifest already overrides is left
+ * alone: the developer's choice wins, and promoting must not replace it silently.
+ */
+export async function promoteLocalRouting(params: { targetPath: string; kind?: string; provider?: string; now?: () => Date }): Promise<PromoteRoutingResult> {
+  const root = resolve(params.targetPath)
+  const dir = await requireLedgerDir(root)
+  const kindFilter = params.kind === undefined ? undefined : parseTaskKind(params.kind)
+  if (params.provider !== undefined && !isRoutingProvider(params.provider)) throw new Error(`No routing for '${params.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+  const providerFilter = params.provider as RoutingProvider | undefined
+  const at = (params.now?.() ?? new Date()).toISOString()
+  return updateLocalRouting<PromoteRoutingResult>(dir, async (local) => {
+    const before = await snapshot(root)
+    const harness = before.manifest.modules?.harness
+    if (!harness) throw new Error(`Cannot promote a routing move: ${NO_HARNESS_REASON}.`)
+    const routing = harness.routing ?? {}
+    const promoted: RoutingPromotion[] = []
+    const skipped: PromoteRoutingResult['skipped'] = []
+    const kinds: Partial<Record<TaskKind, { tier: string }>> = { ...routing.kinds }
+    let next = local
+    for (const kind of kindFilter ? [kindFilter] : TASK_KINDS.filter((candidate) => local.kinds[candidate])) {
+      const entries = ROUTING_PROVIDERS.flatMap((provider) => (local.kinds[kind]?.[provider] ? [{ provider, entry: local.kinds[kind]![provider]! }] : []))
+      if (!entries.length) {
+        skipped.push({ kind, reason: 'there is no automatic move to promote' })
+        continue
+      }
+      if (routing.kinds?.[kind]) {
+        skipped.push({ kind, reason: `modules.harness.routing already overrides ${kind}: the shared choice wins, remove it first to promote the move` })
+        continue
+      }
+      const chosen = providerFilter ? entries.filter((entry) => entry.provider === providerFilter) : entries
+      if (!chosen.length) {
+        skipped.push({ kind, reason: `there is no automatic move of ${providerFilter} to promote` })
+        continue
+      }
+      const tiers = [...new Set(chosen.map((entry) => entry.entry.tier))]
+      if (tiers.length > 1)
+        throw new Error(
+          `The automatic moves of ${kind} differ (${chosen.map((entry) => `${entry.provider}: ${entry.entry.tier}`).join(', ')}) and a shared override covers every provider: promote one with --provider <agent>.`
+        )
+      kinds[kind] = { tier: tiers[0] }
+      const dropped = entries.filter((entry) => !chosen.includes(entry)).map((entry) => entry.provider)
+      promoted.push({ kind, tier: tiers[0], providers: chosen.map((entry) => entry.provider), dropped })
+      const remaining = { ...next.kinds }
+      delete remaining[kind]
+      const boundaries = { ...next.boundaries, [kind]: Object.fromEntries(entries.map((entry) => [entry.provider, at])) }
+      // The evidence starts over, and so does what was last said about the kind.
+      const holds = { ...next.holds }
+      delete holds[kind]
+      next = { ...next, kinds: remaining, boundaries, holds }
+      for (const entry of chosen) {
+        next = withLogEntry(next, {
+          at,
+          action: 'promote',
+          kind,
+          provider: entry.provider,
+          from: entry.entry.from,
+          to: entry.entry.tier,
+          evidence: entry.entry.evidence,
+          note: 'copied to modules.harness.routing'
+        })
+      }
+    }
+    if (!promoted.length) return { result: { promoted, skipped, manifestChanged: false } }
+    const nextRouting = { ...routing, kinds }
+    const issues = routingOverrideIssues(nextRouting)
+    if (issues.length) throw new Error(`Invalid modules.harness.routing after the promotion:\n- ${issues.join('\n- ')}`)
+    const manifestChanged = await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, routing: nextRouting } } })
+    return { next, result: { promoted, skipped, manifestChanged } }
+  })
+}
+
+/** Remove this clone's override so the shared answer applies again. */
+export async function clearDelegation(params: { targetPath: string; scope?: string }): Promise<DelegationRecord> {
+  const scope = requireScope(params.scope, ['local'])
+  const root = resolve(params.targetPath)
+  const { manifest } = await snapshot(root)
+  const harness = requireHarness(manifest)
+  const changed = await clearLocalDelegation(root)
+  return { ...resolveDelegation(harness.delegation), scope, changed }
 }
 
 export async function readAgentSupport(targetPath: string): Promise<AgentSupportInventory> {
   const root = resolve(targetPath)
-  const { before, discovered, source } = await inspect(root)
+  const { before, discovered, source, scaffolded } = await inspect(root)
   const git = await optionalGitScope(root)
   const local = git ? await readLocalState(git) : emptyLocalState()
-  const sharedAgents = configured(before.manifest, source)
+  const sharedAgents = configured(before.manifest, source, scaffolded)
   return { configuredAgents: union(sharedAgents, local.agents), sharedAgents, localAgents: local.agents, discovered, runtime: 'not-checked' }
+}
+
+export interface TierAgentFileState {
+  path: string
+  state: ManagedFileState
+}
+
+export interface TierAgentInspection {
+  tierAgents: TierAgentFileState[]
+  /** Why the tier agents could not be compared with the grid: overrides that do not render, or a private inventory that cannot be read. */
+  issue?: string
+}
+
+const oneLine = (error: unknown): string => (error instanceof Error ? error.message : String(error)).replace(/\s*\n\s*/g, ' ').trim()
+
+/**
+ * How each tier agent a refresh would write stands on disk (#933), read-only. The files are rendered
+ * from the routing grid this CLI ships and the manifest's `modules.harness.routing`, then each one is
+ * classified with the refresh's own conflict rule (`classifyManagedFile`) against the baseline the
+ * manifest records, or the private inventory of this clone for a tier agent a local setup wrote. Nothing
+ * of the project is executed and nothing is written: a link, a case-colliding name or any target the
+ * refresh would refuse to touch counts as `edited`, since the refresh leaves it alone like an edit.
+ */
+export async function inspectTierAgents(targetPath: string, manifest: SaaSFoundryManifest, agents: readonly HarnessAgent[]): Promise<TierAgentInspection> {
+  const root = resolve(targetPath)
+  let files
+  try {
+    files = renderTierAgents(agents, manifest.modules?.harness?.routing)
+  } catch (error) {
+    return { tierAgents: [], issue: oneLine(error) }
+  }
+  let local: LocalAgentState | undefined
+  const tierAgents: TierAgentFileState[] = []
+  for (const file of files) {
+    const rendered = Buffer.from(file.content)
+    let current: Buffer | undefined
+    try {
+      current = await checkLocalPath(root, file.path)
+    } catch {
+      tierAgents.push({ path: file.path, state: 'edited' })
+      continue
+    }
+    let state = classifyManagedFile(current, rendered, [manifest.fileHashes?.[file.path]])
+    if (state === 'edited') {
+      // A tier agent written by a local setup keeps its baseline in this clone's private inventory, not in the manifest.
+      try {
+        const git = await optionalGitScope(root)
+        local ??= git ? await readLocalState(git) : emptyLocalState()
+      } catch (error) {
+        return { tierAgents: [], issue: oneLine(error) }
+      }
+      state = classifyManagedFile(current, rendered, [manifest.fileHashes?.[file.path], local.fileHashes[file.path], local.pendingFileHashes?.[file.path]])
+    }
+    tierAgents.push({ path: file.path, state })
+  }
+  return { tierAgents }
 }
 
 /** Atomic replacement, refusing detected edits instead of overwriting a newer manifest. */
@@ -194,26 +440,27 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
   const mode = params.mode ?? 'add'
   if (scope === 'local') return applyLocal(params, requested)
   const root = resolve(params.targetPath)
-  const { before, source } = await inspect(root)
+  const { before, source, scaffolded } = await inspect(root)
   const git = await optionalGitScope(root)
   const local = git ? await readLocalState(git) : emptyLocalState()
   if (params.preview) {
-    const previous = configured(before.manifest, source)
+    const previous = configured(before.manifest, source, scaffolded)
     const candidates = selectAgents(previous, requested, mode)
     const plan = await planAgentInstructions({
       targetPath: root,
       agents: candidates,
       manifest: before.manifest,
-      referenceOnly:
-        params.adoption || local.fileHashes['AGENTS.md'] === hash(Buffer.from(ADOPTION_COMMON_INSTRUCTIONS)) || local.fileHashes['CLAUDE.md'] === hash(Buffer.from(CODEX_SOURCE_CLAUDE_BRIDGE))
+      referenceOnly: params.adoption || recordsReferenceOnlyBridge(local.fileHashes)
     })
     const report: AgentInstructionsReport = { written: [], unchanged: [], conflicts: [], warnings: [...plan.warnings], fileHashes: {} }
     for (const file of plan.files) {
       const current = await checkLocalPath(root, file.path)
-      if (current?.equals(file.content)) report.unchanged.push(file.path)
-      else if (current && before.manifest.fileHashes?.[file.path] !== hash(current)) report.conflicts.push(file.path)
+      const state = classifyManagedFile(current, file.content, [before.manifest.fileHashes?.[file.path]])
+      if (state === 'ok') report.unchanged.push(file.path)
+      else if (state === 'edited' && !file.merge) report.conflicts.push(file.path)
       else report.written.push(file.path)
-      if (!report.conflicts.includes(file.path)) report.fileHashes[file.path] = hash(file.content)
+      // A merged file (AGENTS.md's generated region) is project-owned: no baseline.
+      if (!report.conflicts.includes(file.path) && !file.merge) report.fileHashes[file.path] = hash(file.content)
     }
     return {
       scope,
@@ -246,7 +493,7 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
     // checked again before saving. No installer, hooks, Git commands or credentials.
     if ((await snapshot(root)).content !== before.content) throw new Error('Manifest changed before agent setup; retry with the current configuration.')
     if (git && JSON.stringify(await readLocalState(git)) !== JSON.stringify(local)) throw new Error('Private agent inventory changed before shared setup; retry with current configuration.')
-    const previous = configured(before.manifest, source)
+    const previous = configured(before.manifest, source, scaffolded)
     const candidates = selectAgents(previous, requested, mode)
     const report = verifiedPlan
       ? await installPlannedAgentInstructions(root, verifiedPlan, before.manifest.fileHashes ?? {})
@@ -254,8 +501,7 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
           targetPath: root,
           agents: candidates,
           manifest: before.manifest,
-          referenceOnly:
-            params.adoption || local.fileHashes['AGENTS.md'] === hash(Buffer.from(ADOPTION_COMMON_INSTRUCTIONS)) || local.fileHashes['CLAUDE.md'] === hash(Buffer.from(CODEX_SOURCE_CLAUDE_BRIDGE))
+          referenceOnly: params.adoption || recordsReferenceOnlyBridge(local.fileHashes)
         })
     partialReport = report
     const configuredAgents = report.conflicts.length ? previous : candidates
@@ -272,6 +518,7 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
     }
     if (Object.keys(report.fileHashes).length) next.fileHashes = { ...before.manifest.fileHashes, ...report.fileHashes }
     const manifestChanged = await persist(root, before, next)
+    if (params.refreshSettings && !report.conflicts.length && !params.adoption && configuredAgents.includes('claude-code')) await mergeCaptureSettings(root, report)
     let localStateChanged = false
     if (git) {
       const promoted = new Set(Object.keys(report.fileHashes))
@@ -297,6 +544,23 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
   }
 }
 
+/**
+ * A shared refresh also wires the Claude Code hooks that capture every routed delegation (#1035) and
+ * the permission to read and mark them. `.claude/settings.json` is project-owned: the hooks are merged
+ * into what it holds, never written over it, and a link or an unreadable file is a warning, not a failure.
+ */
+async function mergeCaptureSettings(root: string, report: AgentInstructionsReport): Promise<void> {
+  try {
+    // The merge `sf update` runs too (#935): a link or text that is not JSON is left as it is, with a proposal beside it.
+    // A refresh also takes away the pre-release rules the harness keeps asking (each one is named in a warning); `sf update` never does.
+    const result = await syncHarnessSettings(root, '.', { revoke: true })
+    if (result.status === 'created' || result.status === 'merged') report.written.push(result.path)
+    for (const line of summarizeHarnessSettings([result])) if (line.needsAttention) report.warnings.push(line.text)
+  } catch (error) {
+    report.warnings.push(`.claude/settings.json: ${error instanceof Error ? error.message : String(error)}; the delegation capture hooks were not added.`)
+  }
+}
+
 export async function enableAgents(params: SupportParams & { agents: string[] }): Promise<AgentSupportResult> {
   resolveScope(params.scope)
   validateAgents(params.agents)
@@ -311,7 +575,7 @@ export async function replaceAgents(params: SupportParams & { agents: string[] }
 }
 
 export async function refreshAgents(params: SupportParams): Promise<AgentSupportResult> {
-  return apply(params)
+  return apply({ ...params, refreshSettings: true })
 }
 
 interface LocalAgentState {
@@ -347,7 +611,7 @@ async function readLocalState(git: GitAgentScope): Promise<LocalAgentState> {
     isObject(value) &&
     !Object.entries(value).some(
       ([path, hash]) =>
-        !(['CLAUDE.md', ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path)) ||
+        !(['CLAUDE.md', CLAUDE_CODE_RULE_PATH, CODEX_HOOKS_PATH, ...getSharedAgentEntrypoints()].includes(path) || /^\.agents\/skills\/[a-zA-Z0-9_.\/-]+$/.test(path) || TIER_AGENT_PATH.test(path)) ||
         path.split('/').includes('..') ||
         typeof hash !== 'string' ||
         !/^[0-9a-f]{64}$/.test(hash)
@@ -414,10 +678,10 @@ async function checkLocalPath(root: string, path: string): Promise<Buffer | unde
 
 async function applyLocal(params: SupportParams, requested?: HarnessAgent[]): Promise<AgentSupportResult> {
   const root = resolve(params.targetPath)
-  const { before, source } = await inspect(root)
+  const { before, source, scaffolded } = await inspect(root)
   const git = await inspectGitAgentScope(root, { requireLocalSetup: true })
   const local = await readLocalState(git)
-  const sharedAgents = configured(before.manifest, source)
+  const sharedAgents = configured(before.manifest, source, scaffolded)
   const mode = params.mode ?? 'add'
   const localAgents = selectAgents(local.agents, requested, mode)
   const effective = union(sharedAgents, localAgents)
@@ -425,8 +689,7 @@ async function applyLocal(params: SupportParams, requested?: HarnessAgent[]): Pr
     targetPath: root,
     agents: effective,
     manifest: before.manifest,
-    referenceOnly:
-      params.adoption || local.fileHashes['AGENTS.md'] === hash(Buffer.from(ADOPTION_COMMON_INSTRUCTIONS)) || local.fileHashes['CLAUDE.md'] === hash(Buffer.from(CODEX_SOURCE_CLAUDE_BRIDGE))
+    referenceOnly: params.adoption || recordsReferenceOnlyBridge(local.fileHashes)
   })
   const report: AgentInstructionsReport = { written: [], unchanged: [], conflicts: [], warnings: [...plan.warnings], fileHashes: {} }
   const writable: { file: AgentInstructionFile; before?: Buffer }[] = []

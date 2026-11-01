@@ -19,7 +19,7 @@ import {
   assertFileContains,
   assertFileExists,
   assertPwaBuildOutput,
-  assertClaudeMdConfigured,
+  assertAgentsMdConfigured,
   assertMonorepoBuildOutput,
   assertMonorepoSharedPackages,
   assertMonorepoEmailSharedTypes,
@@ -615,15 +615,18 @@ async function runAIScenario(scenario: AIScenario): Promise<boolean> {
     }
   }
 
-  // CLAUDE.md checks
+  // Project instructions checks (the `claude-md` check name predates #937: a new project's
+  // instructions are AGENTS.md, and it carries no CLAUDE.md)
   if (scenario.checks.includes('claude-md')) {
     if (scenario.isMonorepo) {
-      results.push(...assertClaudeMdConfigured(join(projectDir, 'CLAUDE.md'), scenario.projectName))
+      results.push(...assertAgentsMdConfigured(join(projectDir, 'AGENTS.md'), scenario.projectName))
+      results.push(...assertAgentsMdConfigured(join(projectDir, 'apps', 'api', 'AGENTS.md'), scenario.projectName, { generatedRegion: false }))
+      results.push(...assertAgentsMdConfigured(join(projectDir, 'apps', 'web', 'AGENTS.md'), scenario.projectName, { generatedRegion: false }))
     } else {
       const apiPath = join(projectDir, 'apps', `${scenario.projectName}-api`)
       const webPath = join(projectDir, 'apps', `${scenario.projectName}-web`)
-      results.push(...assertClaudeMdConfigured(join(apiPath, 'CLAUDE.md'), scenario.projectName))
-      results.push(...assertClaudeMdConfigured(join(webPath, 'CLAUDE.md'), scenario.projectName))
+      results.push(...assertAgentsMdConfigured(join(apiPath, 'AGENTS.md'), scenario.projectName))
+      results.push(...assertAgentsMdConfigured(join(webPath, 'AGENTS.md'), scenario.projectName))
     }
   }
 
@@ -635,9 +638,10 @@ async function runAIScenario(scenario: AIScenario): Promise<boolean> {
       results.push(...assertWorkflowSkill(join(projectDir, 'apps', `${scenario.projectName}-api`, '.claude', 'skills', 'sf-workflow')))
     }
 
-    // Verify CLAUDE.md has workflow section
-    const wfClaudeMdPath = scenario.isMonorepo ? join(projectDir, 'CLAUDE.md') : join(projectDir, 'apps', `${scenario.projectName}-api`, 'CLAUDE.md')
-    results.push(...assertClaudeMdConfigured(wfClaudeMdPath, scenario.projectName))
+    // Verify AGENTS.md has workflow section
+    const wfAgentsMdPath = scenario.isMonorepo ? join(projectDir, 'AGENTS.md') : join(projectDir, 'apps', `${scenario.projectName}-api`, 'AGENTS.md')
+    results.push(...assertAgentsMdConfigured(wfAgentsMdPath, scenario.projectName))
+    results.push(assertFileContains(wfAgentsMdPath, '## Workflow System'))
   }
 
   // Placeholder scan (no build dirs to worry about)
@@ -803,7 +807,14 @@ async function runCliScenario(scenario: CliScenario): Promise<boolean> {
     results.push(assertFileExists(join(workspace, '.saasfoundry.json')))
     results.push(assertFileContains(join(workspace, '.saasfoundry.json'), '"structure": "cli"'))
     results.push(assertDirExists(join(workspace, '.claude')))
-    results.push(assertFileExists(join(workspace, 'CLAUDE.md')))
+    results.push(assertFileExists(join(workspace, 'AGENTS.md')))
+    results.push(assertFileContains(join(workspace, 'AGENTS.md'), '<!-- saasfoundry:generated:start -->'))
+    results.push(assertFileExists(join(workspace, '.claude', 'rules', 'claude-code.md')))
+    // #937: a new install writes no CLAUDE.md, and no GEMINI.md until gemini-cli is declared
+    for (const absentPath of ['CLAUDE.md', 'CLAUDE.local.md', 'GEMINI.md']) {
+      const absent = !existsSync(join(workspace, absentPath))
+      results.push({ passed: absent, message: absent ? `OK: harness wrote no ${absentPath}` : `FAIL: harness wrote ${absentPath}` })
+    }
 
     // Exercise multi-agent setup in this existing quick Linux scenario rather than adding
     // another scaffold/build to the matrix. The generated harness has no workflow in
@@ -867,7 +878,9 @@ async function runCliScenario(scenario: CliScenario): Promise<boolean> {
     const sharedWorkflow = join(workspace, '.agents', 'skills', 'sf-workflow')
     const sharedCli = join(sharedWorkflow, 'workflow-cli.sh')
     const sharedSkill = join(sharedWorkflow, 'SKILL.md')
-    for (const path of [join(workspace, 'CLAUDE.md'), join(workspace, 'AGENTS.md'), join(workspace, 'GEMINI.md'), sharedCli, sharedSkill]) {
+    const noClaudeMd = !existsSync(join(workspace, 'CLAUDE.md'))
+    results.push({ passed: noClaudeMd, message: noClaudeMd ? 'OK: enabling agents wrote no CLAUDE.md' : 'FAIL: enabling agents wrote a CLAUDE.md' })
+    for (const path of [join(workspace, 'AGENTS.md'), join(workspace, 'GEMINI.md'), sharedCli, sharedSkill]) {
       const regular = existsSync(path) && lstatSync(path).isFile()
       results.push({ passed: regular, message: regular ? `OK: ${path} is a regular file` : `FAIL: ${path} is missing, linked, or not a regular file` })
     }

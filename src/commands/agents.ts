@@ -1,8 +1,16 @@
 import { Command } from 'commander'
-import { AGENT_REGISTRY_VERSION, getAgentIds, listAgentProfiles } from '../harness/agent-registry'
-import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../harness/agent-support'
+import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
+import { clearDelegation, type DelegationRecord, enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
+import type { DelegationState } from '../harness/delegation'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
+import { readProjectRouting } from '../harness/project-routing'
+import { COMPLEXITIES, NATURES, type Complexity, type Nature } from '../harness/delegation-ledger'
+import { getRoutingGrid, isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider } from '../harness/routing-grid'
+import { issueRoutes, loadRoutingState } from '../harness/routing-runtime'
+import { registerOutcomeCommands } from './agents.outcome'
+import { registerRoutingCommands } from './agents.routing'
+import { errorPayload, parsePositiveInteger } from './agents.shared'
 
 interface AgentCommandOptions {
   json?: boolean
@@ -11,15 +19,125 @@ interface AgentCommandOptions {
   plan?: string
   mode?: string
   checkRuntime?: boolean
+  task?: string
+  provider?: string
+  /** `--no-trial` makes it false: answer the routed tier even when a bounded trial of the cheaper one is due. */
+  trial?: boolean
+  /** Issue a route record: an id the delegate echoes, which also reserves a trial. */
+  record?: boolean
+  ticket?: string
+  complexity?: string
+  nature?: string
+  retryOf?: string
 }
 
-function errorPayload(error: unknown): { error: string; report?: unknown; recovery?: unknown } {
-  const record = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : undefined
-  return {
-    error: error instanceof Error ? error.message : String(error),
-    ...(record?.report !== undefined ? { report: record.report } : {}),
-    ...(record?.recovery !== undefined ? { recovery: record.recovery } : {})
+/**
+ * Resolve a task kind against the shipped grid and the project's overrides. Works outside a
+ * managed project (shipped grid, both routed agents); a manifest that cannot be read fails closed.
+ */
+async function routeTask(options: AgentCommandOptions): Promise<void> {
+  const kind = parseTaskKind(options.task)
+  const root = process.cwd()
+  const project = await readProjectRouting(root, { validate: false })
+  const harness = project.manifest?.modules?.harness
+  let providers: RoutingProvider[]
+  if (options.provider !== undefined) {
+    if (!isRoutingProvider(options.provider)) throw new Error(`No routing for '${options.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+    providers = [options.provider]
+  } else if (harness) {
+    // A harness without an agent declaration is the legacy Claude Code setup.
+    providers = (harness.agents ?? ['claude-code']).filter(isRoutingProvider)
+    if (!providers.length) throw new Error(`None of the declared coding agents (${harness.agents?.join(', ')}) has routing candidates. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+  } else {
+    providers = [...ROUTING_PROVIDERS]
   }
+  // The clone's own automatic moves and its trials come from the ledger: a damaged one is reported, not fatal.
+  const state = await loadRoutingState(root, {
+    project,
+    onDamaged: (message) => process.stderr.write(`Warning: the delegation history could not be read, so the route is the shared one (${message})\n`)
+  })
+  if (!options.record && (options.ticket !== undefined || options.complexity !== undefined || options.nature !== undefined || options.retryOf !== undefined)) {
+    throw new Error('--ticket, --complexity, --nature and --retry-of describe the route record: add --record.')
+  }
+  if (options.complexity !== undefined && !(COMPLEXITIES as readonly string[]).includes(options.complexity)) throw new Error(`--complexity must be one of ${COMPLEXITIES.join(', ')}.`)
+  if (options.nature !== undefined && !(NATURES as readonly string[]).includes(options.nature)) throw new Error(`--nature must be one of ${NATURES.join(', ')}.`)
+  if (options.retryOf !== undefined && !/^[0-9a-f]{20}$/.test(options.retryOf)) throw new Error('--retry-of must be a route or run id (20 hex characters).')
+  if (options.record && providers.length > 1) {
+    throw new Error(`A route record is for one coding agent: pass --provider ${providers.join(' or ')} (the agent that will run the delegation).`)
+  }
+  const routes = await issueRoutes(state, kind, providers, {
+    record: options.record === true,
+    trial: options.trial !== false,
+    ticket: parsePositiveInteger(options.ticket, '--ticket') ?? null,
+    complexity: (options.complexity as Complexity | undefined) ?? null,
+    nature: (options.nature as Nature | undefined) ?? null,
+    retryOf: options.retryOf ?? null
+  })
+  if (options.json) {
+    const grid = getRoutingGrid()
+    process.stdout.write(JSON.stringify({ routeVersion: 2, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes }, null, 2) + '\n')
+    return
+  }
+  for (const route of routes) {
+    const evidence = route.retry
+      ? `retry of ${route.retry.of} on the tier above ${route.retry.from}, never a trial`
+      : route.trial
+        ? `${route.effectiveTier && tierRank(route.tier) > tierRank(route.effectiveTier) ? 'trial of a new stronger candidate above' : 'trial of the tier below'} ${route.effectiveTier}, a bounded sample of the kind's runs: record its outcome`
+        : route.adjustment
+          ? `${route.adjustment.action} from ${route.adjustment.from} on ${route.adjustment.at.slice(0, 10)} — ${route.adjustment.rule}`
+          : route.evidence
+            ? route.evidence.status === 'measured'
+              ? `measured: ${route.evidence.source}, score ${route.evidence.score}, $${route.evidence.costPerTaskUsd} per task`
+              : `provisional: ${route.evidence.note}`
+            : 'project choice, no shipped evidence'
+    const label = route.trial ? `${route.source}, trial` : route.source
+    const id = route.routeId ? ` route=${route.routeId}` : ''
+    process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}${id}\n`)
+    if (route.excluded)
+      process.stderr.write(`Warning: ${route.provider} ${route.candidate.model} (${route.candidate.effort}) is on the exclusion list for ${route.kind}: public scores collapse there.\n`)
+  }
+}
+
+const DELEGATION_ACTIONS = ['allow', 'decline', 'status', 'clear']
+
+function describeDelegation(state: DelegationState): string {
+  if (state.ticketDelivery === 'unavailable') return `Ticket delivery delegation: unavailable (${state.reason}).`
+  if (state.ticketDelivery === 'not-asked')
+    return 'Ticket delivery delegation: not asked yet. Ask the developer once, then record the answer with sf agents delegation allow or sf agents delegation decline.'
+  const origin = state.source === 'local' ? 'local override' : 'shared'
+  const decided = `Ticket delivery delegation: ${state.ticketDelivery} (${origin}, decided ${state.decidedAt}).`
+  const meaning = state.ticketDelivery === 'allowed' ? 'The session hands each ticket to a background agent in its own worktree.' : 'The session delivers tickets itself, one after the other.'
+  const team = state.source === 'local' ? ` The shared team default is ${state.shared.ticketDelivery}${state.shared.decidedAt ? ` (decided ${state.shared.decidedAt})` : ''}.` : ''
+  return `${decided} ${meaning}${team}`
+}
+
+/** What a repeated or clearing command tells the developer, per scope. */
+function describeRecord(result: DelegationRecord, action: string): string {
+  if (action === 'clear') return result.changed ? 'Removed the local override: the shared answer applies again.' : 'There was no local override to remove.'
+  if (!result.changed) return result.scope === 'local' ? 'Already recorded in this clone; nothing changed.' : 'Already recorded; .saasfoundry.json is unchanged.'
+  if (result.scope === 'local') return 'Recorded for this clone only, in its Git directory (never tracked): it overrides the shared team default here.'
+  const hidden = result.source === 'local' ? ' A local override on this clone still wins here: remove it with sf agents delegation clear.' : ''
+  return `Recorded in .saasfoundry.json as the shared team default: commit it with the current ticket's branch, or in a chore commit on the working branch.${hidden}`
+}
+
+/**
+ * Read or record the consent to delegate ticket delivery (#1026). The shared answer
+ * (`modules.harness.delegation`) is the team's default; `--scope local` records a clone's own
+ * override in its Git directory.
+ */
+async function delegationConsent(action: string | undefined, options: AgentCommandOptions): Promise<void> {
+  if (action === undefined || !DELEGATION_ACTIONS.includes(action)) throw new Error(`Choose what to do with the delegation consent: sf agents delegation <${DELEGATION_ACTIONS.join('|')}>.`)
+  const targetPath = process.cwd()
+  let record: DelegationRecord | undefined
+  if (action === 'clear') record = await clearDelegation({ targetPath, scope: options.scope })
+  else if (action !== 'status') record = await recordDelegation({ targetPath, ticketDelivery: action === 'allow' ? 'allowed' : 'declined', scope: options.scope })
+  const result: DelegationState = record ?? (await readDelegation(targetPath))
+  if (options.json) {
+    process.stdout.write(JSON.stringify({ delegationVersion: 1, ...result, ...(record ? { scope: record.scope, changed: record.changed } : {}) }, null, 2) + '\n')
+    return
+  }
+  process.stdout.write(describeDelegation(result) + '\n')
+  if (record) process.stdout.write(describeRecord(record, action) + '\n')
 }
 
 async function adoptAgents(agents: string[], options: AgentCommandOptions): Promise<void> {
@@ -99,8 +217,16 @@ async function doctorAgents(agents: string[], options: AgentCommandOptions): Pro
   if ([...report.checks, ...report.agents.flatMap((agent) => agent.checks)].some((check) => check.status === 'failed')) process.exitCode = 1
 }
 
-export async function agentsCommand(action: 'enable' | 'replace' | 'refresh' | 'list' | 'catalog' | 'adopt' | 'doctor', agents: string[] = [], options: AgentCommandOptions = {}): Promise<void> {
+export async function agentsCommand(
+  action: 'enable' | 'replace' | 'refresh' | 'list' | 'catalog' | 'adopt' | 'doctor' | 'route' | 'delegation',
+  agents: string[] = [],
+  options: AgentCommandOptions = {}
+): Promise<void> {
   try {
+    if (action === 'delegation') {
+      await delegationConsent(agents[0], options)
+      return
+    }
     if (action === 'adopt') {
       await adoptAgents(agents, options)
       return
@@ -109,13 +235,17 @@ export async function agentsCommand(action: 'enable' | 'replace' | 'refresh' | '
       await doctorAgents(agents, options)
       return
     }
+    if (action === 'route') {
+      await routeTask(options)
+      return
+    }
     if (action === 'catalog') {
       const profiles = listAgentProfiles()
       if (options.json) process.stdout.write(JSON.stringify({ registryVersion: AGENT_REGISTRY_VERSION, runtime: 'not-checked', profiles }, null, 2) + '\n')
       else {
         process.stdout.write('Agent tool profiles (runtime capabilities are not checked):\n')
-        for (const profile of profiles) process.stdout.write(`${profile.id}: ${profile.displayName} — ${profile.instructionFile}\n`)
-        process.stdout.write('Use --json for declared support, sources and limitations. Models and providers are configured in your agent tool.\n')
+        for (const profile of profiles) process.stdout.write(`${profile.id}: ${profile.displayName} — ${profile.instructionFile}, skills in ${getSkillDirectory(profile.id)}\n`)
+        process.stdout.write('Use --json for declared support, sources and limitations. Delegation tiers per task kind: sf agents route --task <kind>.\n')
       }
       return
     }
@@ -176,6 +306,26 @@ export function registerAgentCommands(command: Command): void {
     .option('--json', 'Output versioned profile metadata')
     .action((options: AgentCommandOptions) => agentsCommand('catalog', [], options))
   command
+    .command('route')
+    .description('Resolve the model and effort a delegated task kind runs on, from the shipped grid and project overrides')
+    .requiredOption('--task <kind>', TASK_KINDS.join(', '))
+    .option('--provider <agent>', ROUTING_PROVIDERS.join(', '))
+    .option('--no-trial', 'Answer the routed tier even when a bounded trial of the cheaper tier is due (reading the route for display)')
+    .option('--record', 'Issue a route record for a delegation: prints a route id the delegate echoes in its SF-DELEGATION line, and reserves a trial (needs --provider)')
+    .option('--ticket <number>', 'With --record: the ticket the delegation serves')
+    .option('--complexity <level>', 'With --record: bug, low, medium, complex')
+    .option('--nature <nature>', 'With --record: user-facing, internal, bundled-pr')
+    .option('--retry-of <id>', 'With --record: the route or run id of the delegation this one retries on a stronger tier after it failed')
+    .option('--json', 'Output the versioned route')
+    .action((options: AgentCommandOptions) => agentsCommand('route', [], options))
+  command
+    .command('delegation')
+    .description('Read or record the developer consent to delegate ticket delivery to background worktree agents: shared team default, optional local override')
+    .argument('<action>', 'allow, decline, status; clear removes the local override')
+    .option('--scope <scope>', 'allow/decline: shared (default, the team default in the manifest) or local (this clone only); clear: local')
+    .option('--json', 'Output the versioned decision')
+    .action((action: string, options: AgentCommandOptions) => agentsCommand('delegation', [action], options))
+  command
     .command('enable')
     .description('Add support without disabling other configured agents')
     .argument('<agents...>', getAgentIds().join(', '))
@@ -200,4 +350,6 @@ export function registerAgentCommands(command: Command): void {
     .description('List configured support and discovered files without probing runtimes')
     .option('--json', 'Output a machine-readable inventory')
     .action((options: AgentCommandOptions) => agentsCommand('list', [], options))
+  registerOutcomeCommands(command)
+  registerRoutingCommands(command)
 }

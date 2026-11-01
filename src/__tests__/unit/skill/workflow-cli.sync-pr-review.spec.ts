@@ -81,7 +81,7 @@ case "$1" in
   get-labels) [ "$LABEL_FAIL" = 1 ] && exit 1; printf '%s\\n' "$LABELS";;
   update-status) echo "Ticket #$2 → $3";;
   get-issue-type) printf '{"name":"sf-issue"}';;
-  list-incomplete-children) printf '[]';;
+  list-incomplete-children) printf '%s' "\${CHILDREN:-[]}";;
   *) exit 1;;
 esac
 `
@@ -280,6 +280,18 @@ esac
       expect(calls()).toContain('tool update-status 42 Done')
     })
 
+    // #961 — every SF_WORKFLOW_BYPASS_* variable is cleared, not only the first five.
+    it('ignores a children-guard bypass present in the listener environment', async () => {
+      const result = await merge({
+        CHILDREN: JSON.stringify([{ number: 43, title: 'Open child', status: 'In progress' }]),
+        SF_WORKFLOW_BYPASS_CHILDREN_GUARD: '1',
+        SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD: '1'
+      })
+      expect(result.code).not.toBe(0)
+      expect(changedTicket()).toBe(false)
+      expect(calls()).not.toContain('tool comment')
+    })
+
     it('does not let a merge skip review', async () => {
       const result = await merge({ STATUS: 'AI testing' })
       expect(result.code).toBe(0)
@@ -440,16 +452,24 @@ esac
     expect((await run({ STATUS: status })).code).toBe(0)
     expect(changedTicket()).toBe(false)
   })
-  it.each(['Backlog', 'Ready', 'In progress', ''])('does not skip stages from %s', async (status) => {
-    expect((await run({ STATUS: status })).code).toBe(2)
+  it.each(['Backlog', 'Ready', 'In progress'])('does not skip stages from %s, and reports the early click as a notice, not a failure (#1003)', async (status) => {
+    const result = await run({ STATUS: status })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain(`::notice::Ticket #42 is ${status}, not awaiting review yet`)
+    expect(changedTicket()).toBe(false)
+  })
+  it('fails when the ticket status cannot be read', async () => {
+    expect((await run({ STATUS: '' })).code).toBe(2)
     expect(changedTicket()).toBe(false)
   })
   it('allows internal AI testing directly', async () => {
     expect((await run({ STATUS: 'AI testing', LABELS: 'complexity: low\nnature:internal' })).code).toBe(0)
     expect(changedTicket()).toBe(true)
   })
-  it('requires human validation for user-facing AI testing despite bypass flags', async () => {
-    expect((await run({ STATUS: 'AI testing', SF_WORKFLOW_BYPASS_NATURE_GUARD: '1' })).code).toBe(2)
+  it('requires human validation for user-facing AI testing despite bypass flags, without failing the check (#1003)', async () => {
+    const result = await run({ STATUS: 'AI testing', SF_WORKFLOW_BYPASS_NATURE_GUARD: '1' })
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('::notice::Ticket #42 is in AI testing and needs Human testing before review')
     expect(changedTicket()).toBe(false)
   })
   it('supports solo workflows without Human testing', async () => {
@@ -527,5 +547,39 @@ esac
     expect(result.code).toBe(0)
     expect(calls()).toContain('tool update-status 42 In review')
     expect(calls()).not.toContain('99')
+  })
+
+  // #1016 — a head that names no ticket under workflow.branchNaming has nothing to sync: a green no-op.
+  describe('ticketless heads (#1016)', () => {
+    async function pullRequest(ref: string, base: string, body: string) {
+      await writeFile(
+        path.join(dir, 'event.json'),
+        JSON.stringify({ ...event, pull_request: { ...event.pull_request, body, head: { ...event.pull_request.head, ref }, base: { ...event.pull_request.base, ref: base } } })
+      )
+      return { LIVE: JSON.stringify({ ...live, headRefName: ref, baseRefName: base, body, closingIssuesReferences: [] }) }
+    }
+
+    it('turns a sync-back branch into a green no-op with a notice and no ticket change', async () => {
+      const result = await run(await pullRequest('chore/sync-back-v1.1.0', 'develop', 'Technical sync-back.'))
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('::notice::chore/sync-back-v1.1.0 names no ticket under workflow.branchNaming: nothing to sync.')
+      expect(changedTicket()).toBe(false)
+    })
+    it('keeps resolving the Closes #N of a release branch targeting master', async () => {
+      const result = await run(await pullRequest('rc-1.1.0', 'master', 'Delivery\n\nCloses #42'))
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 In review')
+    })
+    it('keeps failing a release branch that does not target master', async () => {
+      const result = await run(await pullRequest('rc-1.1.0', 'develop', 'Delivery\n\nCloses #42'))
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('does not identify exactly one verified ticket')
+      expect(changedTicket()).toBe(false)
+    })
+    it('keeps failing a ticket branch without its Resolves line', async () => {
+      const result = await run(await pullRequest('feature/12-x', 'develop', 'Delivery'))
+      expect(result.code).toBe(2)
+      expect(changedTicket()).toBe(false)
+    })
   })
 })

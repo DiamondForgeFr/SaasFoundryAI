@@ -86,12 +86,14 @@ In review, or an unknown status blocks the parent. Incomplete children do not bl
 
 **How to apply:** the status description for `7-done.md` requires this check before the transition. The agent never skips it.
 
-## 8. Finish the current ticket before starting another
+## 8. One agent per ticket, never a switch mid-delivery
 
-If a ticket is in `In progress` / `AI testing` / `Human testing` / `In review`, drive it to Done before claiming or starting another.
+A ticket in `In progress` / `AI testing` / `Human testing` / `In review` stays with its one agent until Done, hand-backs from Human testing included. Several tickets may be in flight at once when each
+has its own agent and worktree (delegation `allowed`, see [`sf agents delegation`](../cli/sf-agents.md#delegated-ticket-delivery-sf-agents-delegation)); the session itself never stops delivering one
+ticket to start delivering another. With delegation declined or unavailable, drive the current ticket to Done before claiming or starting another.
 
-**Why:** context-switching between tickets multiplies the risk of bypassing rules 4–7. The agent loses track of which branch to commit to, which subtasks to close, which test plan to run. The only
-sure way to avoid cross-contamination is to fully close one ticket before opening another.
+**Why:** context-switching between tickets multiplies the risk of bypassing rules 4–7. An agent that loses track of which branch to commit to, which subtasks to close or which test plan to run
+cross-contaminates tickets. One agent and one worktree per ticket keeps that context whole, and keeps the conversational session free to talk with the developer.
 
 **How to apply:** the only override is an **explicit developer request to pause** the current ticket. The agent doesn't self-authorise a pause.
 

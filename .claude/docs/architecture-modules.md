@@ -339,7 +339,7 @@ When adding a new optional module to SaaSFoundryAI, follow these steps:
    - Add credential prompt function if the module needs configuration
    - Add installation block in `src/commands/update.ts`
 
-10. **Update this CLAUDE.md**
+10. **Update the root AGENTS.md**
     - Add module to "Current Modules" table
     - Add "Files Affected" section for the new module
 

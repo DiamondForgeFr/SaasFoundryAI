@@ -1,4 +1,4 @@
-# {{PROJECT_NAME}} API
+# acme API
 
 Production-ready NestJS API generated with **SaaSFoundryAI** - An AI-First development platform.
 
@@ -111,7 +111,7 @@ When in doubt, run `sf status --claude-friendly --no-network` to confirm topolog
 
 ## Git Workflow
 
-- Main branch: `{{MAIN_BRANCH}}`
+- Main branch: `develop`
 - **ALWAYS** use conventional commits: `<type>(#<ticket>): <description>`
 - Types: feat, fix, docs, style, refactor, perf, test, chore
 - Scope (ticket number) is required

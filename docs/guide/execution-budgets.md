@@ -1,7 +1,8 @@
 # Session-derived execution budgets
 
-SaaSFoundry can delegate work to a cheaper model automatically without asking the user to configure an arbitrary spending limit. The monetary authority comes from the active user-facing session: the
-exact p95 cost of its current provider, runtime, model, normalized effort, and expected workload becomes the baseline `B` for one proposed execution plan.
+The workflow instructions route delegated work to a cheaper tier agent (see [`sf agents route`](../cli/sf-agents.md#delegation-routing-sf-agents-route)). The budget described here bounds such
+delegation without asking the user to configure an arbitrary spending limit. The monetary authority comes from the active user-facing session: the exact p95 cost of its current provider, runtime,
+model, normalized effort, and expected workload becomes the baseline `B` for one proposed execution plan.
 
 The host supplies current session workload evidence, the authoritative proposal and requirement inputs, the current candidate catalogue, and the same planning policy used to select the plan. The
 library derives the envelope and recomputes the planner decision for every authorization. A caller cannot turn a cached total or a self-hashed JSON decision into authority. The host must also

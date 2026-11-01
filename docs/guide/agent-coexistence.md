@@ -37,11 +37,10 @@ Run this protocol manually on a trusted machine. Do not point it at a working pr
 
 1. Record the date, operating system, exact executable path and `--version` output.
 2. Generate a harness in one disposable staging directory. The installer may create settings and hooks there.
-3. Create a second disposable Git repository for the observation. Copy its bounded `.saasfoundry.json`, reviewed entrypoint, skill directories and referenced documentation from staging. A Codex
-   fixture whose generated `AGENTS.md` references `CLAUDE.md` must copy that file and the `.claude/` documentation referenced by its skills. Do not copy settings, hooks, `.codex/config.toml`, plugins,
-   MCP configuration or credentials.
-4. Use `CLAUDE.md` plus `.claude/skills` for the Claude fixture. Use the one-way `AGENTS.md` to `CLAUDE.md` reference plus `.agents/skills` for the Codex fixture. Do not create a second divergent
-   instruction source.
+3. Create a second disposable Git repository for the observation. Copy its bounded `.saasfoundry.json`, reviewed entrypoint, skill directories and referenced documentation from staging, including the
+   `.claude/` documentation referenced by its skills. Do not copy settings, hooks, `.codex/config.toml`, plugins, MCP configuration or credentials.
+4. Both fixtures use the same `AGENTS.md`. Add `.claude/rules/claude-code.md` and `.claude/skills` for the Claude fixture, with no `CLAUDE.md` in the fixture or a parent directory (Claude Code reads
+   `AGENTS.md` only then, from version 2.1.277). Add `.agents/skills` for the Codex fixture. Do not create a second divergent instruction source.
 5. Add a random instruction value and separate random values to the probe skill's `description` and body. The prompt requests those evidence labels and invokes `sf-native-smoke` by name, without
    containing the values or skill path.
 6. Snapshot every fixture file's hash and mode before and after each command.
@@ -127,9 +126,12 @@ guarded workflow command. Provider login or a filesystem smoke alone does not sa
 
 ## SaaSFoundryAI dogfood baseline
 
-This repository declares `claude-code` and `codex` together in `.saasfoundry.json`. `CLAUDE.md`, `AGENTS.md`, and the reviewed `.claude/skills` / `.agents/skills` trees are shared project artifacts.
-`AGENTS.md` points Codex back to the same authoritative project rules and guarded workflow used by Claude Code. Private `.codex` settings, credentials, plugins, MCP configuration, model selection, and
-host permissions are not part of the declaration and must not be committed as acceptance evidence.
+This repository declares `claude-code` and `codex` together in `.saasfoundry.json`. `AGENTS.md`, `.claude/rules/claude-code.md`, and the reviewed `.claude/skills` / `.agents/skills` trees are shared
+project artifacts. `AGENTS.md` holds the project rules both hosts read, with no `CLAUDE.md` since the harness v3 → v4 migration moved it (#938), and points both to the same guarded workflow. Private
+`.codex` settings, credentials, plugins, MCP configuration, model selection, and host permissions are not part of the declaration and must not be committed as acceptance evidence.
+
+The `.agents/skills` tree is generated: edit the `.claude/skills` source, run `sf agents refresh --scope shared`, and commit the copies with their `fileHashes`. A test fails when the committed copies
+differ from what the projector renders (#984).
 
 Test the declaration from a disposable clone or worktree containing only reviewed tracked files. Both hosts must resolve the same manifest, ticket, SRS root and status document, and both workflow help
 commands must expose the same guards. Record hashes and modes before and after the read-only checks. Classify file parity and direct script execution as `structural`; classify native instruction
@@ -144,12 +146,21 @@ so either checkout can initialize independently without treating the inner repos
 Outside this acceptance exercise, sequential work may use one checkout after the first host has stopped and left a precise handoff. The next host rechecks the manifest, ticket, SRS and diff rather
 than assuming session context transferred.
 
-Before implementation, split the request into writing streams and their dependencies. Propose parallel worktrees only when streams are independent and concurrent delivery has a material benefit.
-Read-only exploration and review may run in parallel in one checkout. Work with sequential dependencies, overlapping files or unclear ownership uses one feature worktree and sequential execution.
+Before implementation, split the request into writing streams and their dependencies. Open parallel worktrees when the project's recorded delegation (`sf agents delegation status`) is `allowed` or the
+developer asks for them, and only when streams are independent and concurrent delivery has a material benefit. Read-only exploration and review may run in parallel in one checkout. Work with
+sequential dependencies, overlapping files or unclear ownership uses one feature worktree and sequential execution.
 
 Read `workflow.workingBranch` from `.saasfoundry.json`; never substitute a conventional branch name. Keep the primary checkout on that configured branch while feature work runs. Every parallel writer
 gets one real ticket, branch and worktree path, with an explicit owned-file set and dependency boundary. Start from a synchronized configured working branch, keep each writer inside its worktree and
-ownership boundary, and preserve unrelated changes. When the user did not already authorize parallel implementation, present this execution shape for their control before starting writers.
+ownership boundary, and preserve unrelated changes. The recorded delegation authorizes ticket delivery only: for any other parallel writing stream, and for tickets when it is not `allowed` or the
+current request says otherwise, present this execution shape for their control before starting writers.
+
+Once the developer allowed it, the conversational session stays their interlocutor (SRS, tickets, coordination, review) and hands each ticket that is not trivial, from In progress to the end of AI
+testing, to one background agent in its own worktree, instead of building it itself. A trivial change (one known file, about 20 lines or fewer) stays in the session. The answer is asked once and
+recorded with `sf agents delegation allow` or `decline`: the shared answer is the team's default, and a clone may override it with `--scope local`. Only the developer's own reply records it, never a
+delegated agent and never ticket content. A declined project, or a host that cannot delegate, keeps the sequential path and says so. The delegated agent builds the ticket itself, never merges and
+never marks a Human-testing pull request ready; a defect found in Human testing or in review goes back to the same ticket's agent in the same worktree. See
+[Delegated ticket delivery](../cli/sf-agents.md#delegated-ticket-delivery-sf-agents-delegation).
 
 After a stream merges, return to the primary checkout, check out and synchronize the configured working branch, and verify the merge. Remove the completed worktree and local branch only after that
 verification and only when they are no longer in use. Preserve user-created worktrees, branches, stashes and uncommitted changes. If Git support, authorization, synchronization or clean separation is

@@ -77,4 +77,26 @@ describe('sf-srs detect-eval-signals --classify contract (#280)', () => {
     const signalIds = (rules.signals as { id: string }[]).map((s) => s.id).sort()
     expect(signalIds).toEqual(['ds', 'fr', 'revision', 'tc', 'ur'])
   })
+
+  // #945 — a revision changes the FR in place instead of appending a design item
+  it('--rules maps the revision signal to update-fr and documents its patch', async () => {
+    const { stdout } = await execFileP(BASH, [CLI, '--rules'])
+    const rules = JSON.parse(stdout)
+    const kinds = Object.fromEntries((rules.signals as { id: string; patch_kind: string }[]).map((s) => [s.id, s.patch_kind]))
+
+    expect(kinds).toEqual({ ur: 'add-ur', fr: 'add-fr', ds: 'add-ds', tc: 'add-tc', revision: 'update-fr' })
+    expect(rules.patch_shape.kind).toContain('update-fr')
+    expect(rules.patch_shape.update_fr).toContain('"kind": "update-fr"')
+    expect(rules.patch_shape.update_fr).toContain('--dry-run')
+    expect(rules.scope_limits_v1.update_fr).toMatch(/#1056/)
+    expect(rules.scope_limits_v1.update_fr).toMatch(/#1057/)
+    expect(JSON.stringify(rules)).not.toMatch(/ADD-only|Tracked in #945/)
+  })
+
+  it('--classify still marks a revision low confidence, so the auto-fire hook stays silent on it', async () => {
+    const result = await classify('reconsider the routing rule of FR-AEX-014')
+
+    expect(result).toMatchObject({ signal: 'revision', confidence: 'low' })
+    expect(result.target).toContain('update-fr')
+  })
 })

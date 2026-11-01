@@ -3,6 +3,8 @@ import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, writeFil
 import { tmpdir } from 'os'
 import { dirname, join, relative, resolve } from 'path'
 
+import { GENERATED_INSTRUCTIONS } from '../../harness/agent-instructions'
+
 const ROOT = resolve(__dirname, '../../..')
 const CLI = join(ROOT, 'bin/sf.js')
 const INSTALLER = join(ROOT, 'dist/installers/harness.installer.js')
@@ -134,10 +136,16 @@ describe('compiled multi-agent coexistence in generated-layout fixtures (#651)',
   it.each(['cli', 'monorepo', 'multirepo'] as const)('installs and idempotently refreshes regular shared artifacts at the %s project root', async (structure) => {
     await installCompiledHarness(structure)
 
-    for (const path of ['CLAUDE.md', 'AGENTS.md', '.claude', '.agents']) {
+    for (const path of ['AGENTS.md', '.claude', '.claude/rules/claude-code.md', '.agents']) {
       expect((await lstat(join(project, path))).isSymbolicLink()).toBe(false)
     }
-    expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toContain('CLAUDE.md')
+    // AGENTS.md is the authoritative instructions (#937): no CLAUDE.md, no undeclared GEMINI.md
+    const instructions = await readFile(join(project, 'AGENTS.md'), 'utf8')
+    expect(instructions).toContain(GENERATED_INSTRUCTIONS)
+    expect(instructions).toContain('## Workflow System')
+    for (const path of ['CLAUDE.md', 'CLAUDE.local.md', 'GEMINI.md']) {
+      await expect(lstat(join(project, path))).rejects.toMatchObject({ code: 'ENOENT' })
+    }
     for (const root of ['.claude', '.agents']) {
       expect(await readFile(join(project, root, 'skills/sf-workflow/SKILL.md'), 'utf8')).toContain('# Workflow github-projects')
       expect((await lstat(join(project, root, 'skills/sf-workflow/workflow-cli.sh'))).isFile()).toBe(true)
@@ -296,10 +304,12 @@ esac
     const catalog = runAgents('catalog', '--json')
     expect(catalog.status).toBe(0)
     const profiles = JSON.parse(catalog.stdout).profiles as { id: string; instructionFile: string }[]
-    expect(profiles.find(({ id }) => id === 'claude-code')?.instructionFile).toBe('CLAUDE.md')
+    expect(profiles.find(({ id }) => id === 'claude-code')?.instructionFile).toBe('AGENTS.md')
     expect(profiles.find(({ id }) => id === 'codex')?.instructionFile).toBe('AGENTS.md')
-    expect(await readFile(join(project, 'CLAUDE.md'), 'utf8')).toContain('Workflow System')
-    expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toContain('CLAUDE.md')
+    const instructions = await readFile(join(project, 'AGENTS.md'), 'utf8')
+    expect(instructions).toContain('Workflow System')
+    expect(instructions).toContain(GENERATED_INSTRUCTIONS)
+    await expect(lstat(join(project, 'CLAUDE.md'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('rejects an exact-case discovery collision without changing the existing project', async () => {

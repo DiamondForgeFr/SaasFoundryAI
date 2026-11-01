@@ -1,6 +1,7 @@
 # sf status
 
-Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git et, facultativement, CLI GitHub.
+Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, fichiers d'instructions des agents, routage et agents de palier et,
+facultativement, CLI GitHub.
 
 ## Utilisation
 
@@ -31,6 +32,69 @@ Ce que déclare le manifest et la présence des outils nécessaires autour de lu
 | `srs`      | `tools.srs.enabled` est actif avec un `rootPage` configuré ; ignoré si le module SRS n'est pas installé |
 | `git`      | Le projet est un dépôt Git et son arbre de travail est propre                                           |
 | `gh`       | Le CLI GitHub est présent dans `$PATH` ; contrôlé uniquement avec `--check-gh`                          |
+
+### Instructions des agents
+
+Ces contrôles déterminent si les agents de code déclarés par le projet (`sf agents list`) lisent `AGENTS.md` en entier. Chaque problème est un `warn` : l'agent démarre, mais sans tout ou partie des
+règles du projet, et rien ne le signale dans l'hôte. Un contrôle est ignoré quand son agent n'est pas déclaré.
+
+| Nom                    | Vérification                                                                                                                                                                                                                                                                                                   | Remédiation                                                                                                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instructionShadowing` | Claude Code : aucun `CLAUDE.md`, `.claude/CLAUDE.md` ni `CLAUDE.local.md` dans le projet, ses dossiers d'applications ou un dossier parent. Claude Code les lit à la place d'`AGENTS.md` ; chaque fichier trouvé est listé avec son chemin                                                                     | Reporter son contenu dans `AGENTS.md` puis le supprimer. `sf update` le fait pour les fichiers laissés par un ancien harness ; un fichier au-dessus du projet est à déplacer vous-même |
+| `claudeCodeVersion`    | Claude Code : le `claude` du `$PATH` est en version 2.1.277 ou plus, la première qui lit `AGENTS.md`. Lu avec `claude --version`, en local et sans appel réseau, y compris avec `--no-network`. Ignoré si `claude` n'est pas dans le `$PATH`                                                                   | `claude update`                                                                                                                                                                        |
+| `codexInstructionSize` | Codex : ce que Codex charge à la racine et dans chaque dossier d'application doté d'un `AGENTS.md` tient dans 32 Kio, sa valeur par défaut de `project_doc_max_bytes`. Le calcul additionne chaque `AGENTS.md` (ou `AGENTS.override.md`) depuis la racine Git, et les fichiers qu'ils importent avec `@chemin` | Déplacer le détail dans des docs ou skills cités par `AGENTS.md`, ou relever `project_doc_max_bytes` dans `.codex/config.toml`                                                         |
+
+`--json` renvoie aussi les faits derrière ces trois contrôles sous `instructions` : les agents effectifs, les chemins qui masquent `AGENTS.md`, la version de Claude Code lue, et les octets comptés par
+dossier avec les fichiers qui les composent.
+
+### Accord de délégation
+
+Sur un projet doté d'un bloc harness, la sortie destinée aux agents porte une ligne `delegation:` et `--json` un objet `delegation` : l'accord du développeur pour déléguer la livraison des tickets à
+des agents en arrière-plan (voir [`sf agents delegation`](./sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation)). Une session l'apprend par le statut qu'elle lit déjà au démarrage. La
+ligne indique la réponse effective, la couche dont elle vient et sa date, par exemple `delegation: allowed (shared, 2026-10-19T15:34:52.506Z)`. Quand un clone déroge au défaut de l'équipe, elle
+devient `delegation: declined (local, <date>; shared team default: allowed)`, et `not-asked` tant que personne n'a répondu. Une réponse locale corrompue s'affiche `unreadable (…)` et ne fait jamais
+échouer le statut.
+
+### Routage automatique
+
+Sur les mêmes projets, une ligne `routing:` (et un objet `routing` dans `--json`) indique où en est le routage dans ce clone (voir
+[`sf agents routing`](./sf-agents.md#delegations-mesurees-et-routage-ajuste)). Elle commence par la grille et ce que le projet y remplace :
+`grid v1, 2 overrides (multi-file-feature → plan; tier build for claude-code)` donne la version de la grille que ce CLI livre, puis une entrée par type que `modules.harness.routing` envoie vers un
+autre palier et une par palier auquel il donne d'autres candidats (`grid v1, 0 overrides` quand le projet garde le routage livré). `--json` les porte dans l'objet `routing` sous `gridVersion` et
+`overrides` (`{ kinds: [{ kind, tier }], tiers: [{ tier, providers }] }`), à côté de `tierAgents` ([plus bas](#agents-de-palier)). La ligne continue avec les déplacements que l'ajustement a faits et
+que personne n'a encore promus, pour qu'une session sache que la route qu'elle obtient n'est pas celle livrée, par exemple
+`routing: grid v1, 0 overrides; 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. Elle nomme un
+type que l'ajustement a examiné et ne peut pas déplacer (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) et compte ceux qui attendent seulement des preuves. Elle dit aussi, pour
+chaque agent de code déclaré, si les hooks qui enregistrent chaque délégation sont en place **et peuvent s'exécuter** : `claude-code capture enforced` seulement quand le hook est déclaré et que le CLI
+du projet répond à `agents outcome capture` ; `capture hook declared but no CLI can run it` sinon (installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH : d'ici là les
+délégations ne sont pas enregistrées) ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le hook `sf` nu d'un build précédent ;
+`capture hook missing` (`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale endommagée s'affiche
+`unreadable (…)` et ne fait jamais échouer le statut.
+
+### Agents de palier
+
+Les agents de délégation que [`sf agents refresh`](./sf-agents.md#agents-de-palier) écrit sous `.claude/agents/` et `.codex/agents/` portent chacun un modèle et un effort. Modifiez-en un, supprimez-en
+un, ou passez à un CLI dont la grille est plus récente : une délégation s'exécute alors sur une route que le routage ne dit plus, sans que rien ne le signale dans l'hôte. `tierAgents` compare chaque
+agent de palier des agents de développement déclarés que la grille route à ce qu'un refresh écrirait maintenant, d'après la grille que ce CLI livre et `modules.harness.routing`. Il se contente de lire
+les fichiers : il n'exécute aucun code du projet et n'écrit rien. `--json` les liste sous `routing.tierAgents` sous la forme `{ path, state }`.
+
+| État       | Signification                                                                                                                                                                                                                                                                                                          | Remédiation                                                                                                                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`       | Le fichier est exactement ce qu'un refresh écrirait                                                                                                                                                                                                                                                                    | Aucune                                                                                                                                                                                                                                                            |
+| `missing`  | Le fichier n'existe pas                                                                                                                                                                                                                                                                                                | `sf agents refresh --scope shared`                                                                                                                                                                                                                                |
+| `outdated` | Personne ne l'a modifié : le fichier est ce qu'un refresh précédent a écrit, et la grille ou les surcharges ont changé depuis                                                                                                                                                                                          | `sf agents refresh --scope shared`                                                                                                                                                                                                                                |
+| `edited`   | Le fichier n'est ni le rendu ni une référence enregistrée (`fileHashes` dans `.saasfoundry.json`, ou l'inventaire privé de ce clone pour un agent de palier écrit par une configuration locale), ou aucune référence n'est enregistrée. Un lien, ou tout fichier qu'un refresh refuse de toucher, compte comme modifié | Le restaurer, ou reporter la modification dans `modules.harness.routing`, puis `sf agents refresh --scope shared`. Un refresh n'écrase jamais un agent de palier modifié : il écrit un fichier `.saasfoundry.new` ; supprimez le fichier pour qu'il soit régénéré |
+
+Tout état autre que `ok` est un `warn` de la précondition `tierAgents`, qui liste les fichiers et donne la remédiation de chaque état. Elle avertit aussi, en disant quoi corriger, quand les agents de
+palier ne peuvent pas être comparés du tout : des surcharges de `modules.harness.routing` qui ne se rendent pas, ou un inventaire privé illisible (`routing.tierAgentsIssue` dans `--json`). Elle est
+ignorée sur un projet sans harness et quand aucun agent de développement déclaré n'a d'agent de palier.
+
+### Pipeline CI local
+
+Quand le projet déclare un pipeline local dans `.molten/project.json` (MoltenTerm), une ligne `local-ci:` (et un objet `localCi` dans `--json`) le nomme avec son nombre de jobs :
+`local-ci: MoltenTerm pipeline (11 jobs)`. L'étape AI testing lance ce pipeline (`molten ci run <branche>`) quand `molten ci status` répond, et la suite npm sinon. `sf status` se contente de lire le
+fichier : il n'exécute jamais `molten` ni aucun code du projet, et un fichier endommagé s'affiche `unreadable`, sans faire échouer le statut. La ligne est absente d'un projet qui ne déclare aucun
+pipeline.
 
 ### Exécution
 

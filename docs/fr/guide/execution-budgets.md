@@ -1,8 +1,8 @@
 # Budgets d’exécution dérivés de la session
 
-SaaSFoundry peut déléguer automatiquement du travail à un modèle moins coûteux sans demander à l’utilisateur de configurer une limite de dépense arbitraire. L’autorité monétaire provient de la session
-active visible par l’utilisateur : le coût p95 exact de son fournisseur, de son runtime, de son modèle, de son effort normalisé et de sa charge de travail attendue devient la référence `B` pour un
-plan d’exécution proposé.
+Les instructions du workflow confient le travail délégué à un agent de palier moins coûteux (voir [`sf agents route`](../cli/sf-agents.md#routage-des-delegations-sf-agents-route)). Le budget décrit
+ici encadre cette délégation sans demander à l’utilisateur de configurer une limite de dépense arbitraire. L’autorité monétaire provient de la session active visible par l’utilisateur : le coût p95
+exact de son fournisseur, de son runtime, de son modèle, de son effort normalisé et de sa charge de travail attendue devient la référence `B` pour un plan d’exécution proposé.
 
 L’hôte fournit les preuves actuelles de charge de la session, les entrées faisant autorité de la proposition et des exigences, le catalogue de candidats actuel et la même politique de planification
 que celle utilisée pour sélectionner le plan. La bibliothèque dérive l’enveloppe et recalcule la décision du planificateur pour chaque autorisation. Un appelant ne peut pas transformer un total mis en

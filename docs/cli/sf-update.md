@@ -50,8 +50,8 @@ Machine-readable preview:
 sf update --dry-run --json > saasfoundry-update-plan.json
 ```
 
-`--json` requires `--dry-run`. The CLI reserves stdout for one versioned JSON object and sends diagnostics to stderr. A report can list template actions, module selections, profile-transition
-blockers, reason codes, and executable remediation without exposing candidate file contents or requiring provider secrets.
+`--json` requires `--dry-run`. The CLI reserves stdout for one versioned JSON object and sends diagnostics to stderr. A report can list template actions, pending module migrations with the change each
+would make (`moduleMigrations`), module selections, profile-transition blockers, reason codes, and executable remediation without exposing candidate file contents or requiring provider secrets.
 
 A dry run does not become an authorization token for a normal update. Review it, keep the Git tree clean, then run the apply command with the same intent.
 
@@ -110,11 +110,74 @@ Updates can involve three distinct mechanisms:
 2. **Module migrations** run each installed module's ordered migration chain and advance its module version only after success.
 3. **Template refresh** applies the file comparison above; it is not itself a production database migration.
 
+### CLAUDE.md moves to AGENTS.md (harness v4)
+
+`AGENTS.md` is the single instruction file every coding agent reads, Claude Code included (2.1.277 or later). A project installed before it keeps its instructions in `CLAUDE.md`, and Claude Code
+ignores `AGENTS.md` while a `CLAUDE.md` exists. The harness v3 → v4 migration moves them, section by section, in the root and in each app of a monorepo or multirepo:
+
+| `CLAUDE.md` section                                                                     | Where it lands                                                                                      |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Your own sections, the `## Workflow System` section                                     | `AGENTS.md`, verbatim and in the same order                                                         |
+| A template section still identical to a version SaaSFoundry shipped                     | `AGENTS.md`, in its current tool-neutral wording                                                    |
+| A shipped section the generated region now holds (onboarding, capabilities, file edits) | Dropped: the `saasfoundry:generated` region at the end of `AGENTS.md` regenerates it                |
+| An edited copy of one of those sections                                                 | `AGENTS.md`, verbatim under **Kept from CLAUDE.md for review**: merge what you need, then delete it |
+| Claude-only notes (session hook, `/sf-<name>` skills, permissions)                      | `.claude/rules/claude-code.md`, deposited when Claude Code is declared                              |
+
+`CLAUDE.md` is removed only once `AGENTS.md` is written and every moved section is read back in it. If `AGENTS.md` is a file you wrote rather than the generated bridge, nothing is overwritten: the
+proposal goes to `AGENTS.md.saasfoundry.new` and both files stay until you merge them. A `CLAUDE.local.md` is never deleted; the update reports it, because while it exists Claude Code still ignores
+`AGENTS.md`.
+
+The generated bridges are recognised by their bytes, whichever release wrote them: the published v1.0.0 and v1.0.1 as well as the current CLI. A `CLAUDE.md` that is only the generated bridge to an
+`AGENTS.md` is removed, because it hides `AGENTS.md` from Claude Code; it is not treated as a `CLAUDE.md` you wrote, which would have left your `AGENTS.md` beside a sidecar. An `AGENTS.md` that is
+only the generated bridge to your `CLAUDE.md` is replaced, not kept as a file of yours.
+
+Preview the move first: `sf update --dry-run --json` lists every section under `moduleMigrations`, with its action (`move`, `refresh`, `drop`, `keep-for-review`), its source and its target.
+
 When adding a technical stack to a harness project, SaaSFoundry uses a journaled transaction. A later `sf update --target-profile full` first attempts safe recovery if a previous process stopped
 mid-transition. If it cannot prove a complete commit or safe rollback, it stops and reports the unresolved paths rather than guessing.
 
 Application database changes remain an operator action. Review generated Prisma or SQL changes and use the generated project commands appropriate to your environment; `sf update` does not promise to
 migrate production data.
+
+### Tier agents
+
+Every update refreshes the [tier agents](/cli/sf-agents#tier-agents) of the declared coding agents from the current routing grid and the project's `routing` overrides: an untouched file is rewritten,
+an edited one gets a `.saasfoundry.new` sidecar. A managed harness without an `agents` list is treated as Claude Code and receives the `.claude/agents/sf-<tier>.md` files only; its other instruction
+files are left as they are.
+
+### Delegation capture and permissions (harness v5)
+
+`.claude/settings.json` is your file, and `sf update` keeps two things current in it on **every run**, with no prompt and no flag (`--non-interactive` included):
+
+- the **hooks** that record each routed delegation in the clone's ledger (`SubagentStop` for the `sf-<tier>` agents, `PostToolUse` on the delegation tool), see
+  [capture and signals](/cli/sf-agents#capture-and-signals);
+- the **permission rules** that let the agent read a route, the delegation consent and the routing report without asking, while the forms that write evidence (`--record`, `--retry-of`) still ask.
+
+It is the same merge as `sf agents refresh --scope shared`, so `sf agents refresh` is no longer required after an update for these. The harness v4 → v5 migration (`wire-delegation-capture`) is that
+merge too: a harness installed by an earlier release, v1.0.1 included, gets it on the update that raises it to v5, together with the tier agents and the `AGENTS.md` move that every update already did.
+Nothing else is deposited by the migration, and it never writes the consent to delegate: only your own answer records it (`sf agents delegation`).
+
+| Situation                                                                                                                                   | Result                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| The file lacks the hooks or the rules.                                                                                                      | They are merged in. Your own keys, hooks and rules stay, in their order; the summary names the file.                                           |
+| The file has everything.                                                                                                                    | Nothing is written: same bytes, same modification time, nothing printed.                                                                       |
+| There is no file.                                                                                                                           | It is created with the harness's hooks and rules.                                                                                              |
+| The file is a symbolic link, a hard link, or text that is not a JSON object.                                                                | It is left as it is and the merged proposal goes to `.claude/settings.json.saasfoundry.new`; the update goes on.                               |
+| `hooks` is not an object, a hook event is not a list of hook groups, `permissions` is not an object, or its `allow` or `ask` is not a list. | Same: it is left as it is and the proposal goes to the sidecar, with the reason in the summary. Merging would have overwritten what you wrote. |
+| The hook is the bare `sf agents outcome capture` command a first build wrote.                                                               | It is replaced by the command that resolves the project's own CLI.                                                                             |
+
+**A plain `sf update` only adds.** It never removes a rule from your `permissions`, so a rule you added on purpose stays, run after run. The only rules the harness ever takes away are the two that a
+pre-release build had pre-approved, `Bash(sf agents outcome record *)` and `Bash(sf agents outcome mark *)`: they write evidence the routing acts on, so the harness keeps them asking. That happens
+**once, in the harness v4 → v5 migration, and in `sf agents refresh`**, never in the every-update merge, and each rule removed is named in the output (and in the preview of `--dry-run`).
+
+It applies to the root of the project, and to each app repository of a multirepo project that has a `.claude/`. It skips a harness with `managed: false`, one whose declared agents leave Claude Code
+out, and a reference-only adoption, whose instructions ask the agent not to change settings, hooks or permissions.
+
+A generated project starts from the same hooks and rules: the three `.claude/settings.json` templates of the scaffold carry them. Because the merge owns the file, it is no longer part of the template
+comparison: a template change never turns a file the merge brought up to date into a conflict.
+
+Preview it: `sf update --dry-run` lists the file under `harnessSettings` of the report (`merged`, `created`, `sidecar`), or in the preview of the pending `wire-delegation-capture` migration when the
+harness is still below v5.
 
 ## Add capabilities after creation
 
@@ -228,7 +291,7 @@ Before applying a substantial update:
 
 ```bash
 git status
-sf status --claude-friendly --no-network
+sf status --agent-friendly --no-network
 sf update --dry-run --json > saasfoundry-update-plan.json
 ```
 

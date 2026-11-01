@@ -36,8 +36,11 @@ Actions:
                                          without --ticket the version Epic is created, or adopted on a re-run
   normalize [--feature <url-or-id>] [--version-name <name>] [--apply] [--manifest] [--root-page <id>]
                                          Enumerate FR page children of an Epic and create Story sub-tickets
-  apply-update [--patch <path>] [--manifest]
-                                         Apply a conversational eval-hook patch (ADD-only; placed in the feature and version tables)
+  apply-update [--patch <path>] [--dry-run] [--manifest]
+                                         Apply a conversational eval-hook patch: add-ur | add-fr | add-ds | add-tc | add-nfr
+                                         place the item in the feature and version tables; update-fr changes an
+                                         existing FR in place (FR page, version table, feature table, one change line).
+                                         --dry-run (update-fr only) prints the old to new plan and writes nothing
   eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--manifest]
                                          Score SRS freshness vs. codebase (batch)
 
@@ -46,7 +49,7 @@ Common options:
 
 Exit codes (shared contract):
   0 success · 2 bad input · 3 missing backend · 4 unknown backend · 5 runtime ·
-  6 write partial (rollbackHint) · 7 write ok but pendingIngestion clear failed
+  6 write partial (rollbackHint; for apply-update: applied / pending / before) · 7 write ok but pendingIngestion clear failed
 
 For details, see .claude/skills/sf-srs/SKILL.md.
 `

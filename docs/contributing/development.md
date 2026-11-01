@@ -17,7 +17,8 @@ Lifecycle lane resolution uses the repository's TypeScript runtime and has no se
 
 ## Repository layout
 
-The high-level shape is documented in [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md) — the same file Claude Code reads at session start. Key directories:
+The high-level shape is documented in [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md) — the same file every coding agent, Claude Code included, reads at session
+start. Key directories:
 
 | Path                          | Purpose                                                                                                    |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -223,7 +224,7 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 
 ## See also
 
-- [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md) — the agent's session prompt; mirrors most of this page in operational form
+- [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md) — the agents' session prompt; mirrors most of this page in operational form
 - [Workflow skill](/skills/core-skills) — full reference for the workflow CLI and status transitions
 - [Module system](/guide/module-system) — user-facing view (what modules are and how to add them to a project)
 - [Architecture: modules](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md) — internal reference for adding new modules
@@ -233,8 +234,11 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 ### Synchronizing the review button with GitHub Projects
 
 The **Ready for review** button triggers `.github/workflows/pr-review-sync.yml`. It checks the live PR and its linked ticket, then uses the guarded workflow CLI to move the ticket to **In review**.
-Configure the `SF_PROJECTS_TOKEN` Actions secret with repository access and write access to the organization Project. GitHub's default Actions token cannot access Projects; see
-[GitHub's Projects automation documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/automating-projects-using-actions).
+Clicked too early — the ticket still in AI testing and Human testing required, or not yet in testing — the job moves nothing and succeeds with a notice that names the next step; it fails only when the
+event, the ticket association or the ticket labels are wrong. A pull request whose head branch names no ticket under `workflow.branchNaming` (for example `chore/sync-back-v1.1.0`, the post-release
+sync-back into develop) has nothing to sync: the job succeeds with a notice and moves nothing. A release branch (`rc-*`) still synchronizes when it targets the release branch, and a ticket branch
+still fails without its `Resolves #N` line. Configure the `SF_PROJECTS_TOKEN` Actions secret with repository access and write access to the organization Project. GitHub's default Actions token cannot
+access Projects; see [GitHub's Projects automation documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/automating-projects-using-actions).
 
 The listener must first be merged into the repository default branch. It never runs code from the PR head. It supports same-repository PRs, requires the native closing-issue link to agree with the
 configured branch ticket, and preserves all status guards. Missing credentials or linkage fails visibly; rerun after correcting configuration. Use the CLI manually for fork PRs or clicks made before

@@ -13,11 +13,14 @@ import { checkSkillStatus } from './update'
  * Skipped: when the user has no install at all (fresh users are not nagged)
  *          and when the subcommand is the skill manager itself (install/update/uninstall),
  *          since the warning would duplicate that command's own output.
- *          Agent diagnostics also skip this unrelated user-scope inspection.
+ *          Agent diagnostics also skip this unrelated user-scope inspection, and so
+ *          does the delegation capture the host hooks run: a hook must stay silent,
+ *          or the advisory lands in the agent's session after every upgrade (#1120).
  */
 export async function maybeEmitStaleSkillWarning(argv: string[], bundledVersion: string): Promise<void> {
   if (process.env.SF_SKILL_NO_WARN === '1' || process.env.SF_SKILL_NO_WARN === 'true') return
   if (argv[2] === 'agents' && argv[3] === 'doctor') return
+  if (argv[2] === 'agents' && argv[3] === 'outcome' && argv[4] === 'capture') return
   if (isSkillLifecycleInvocation(argv)) return
 
   try {

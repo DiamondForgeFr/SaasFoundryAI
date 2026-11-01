@@ -5,15 +5,16 @@ import type { ExecutionObservedOutcome } from './replanning'
 import type { NormalizedEffort, PriceDimensionKind, PrivacyBoundary, RuntimeKind } from './types'
 
 const SAFE_ID = /^[a-z0-9][a-z0-9._:/-]{0,127}$/i
-const SECRET_LIKE =
+/** Shared with the harness delegation ledger (#1035): one secret filter, one vocabulary of outcome and check codes. */
+export const SECRET_LIKE =
   /(?:\bBearer\s+|\b(?:sk|gh[pousr]|github_pat|xox[baprs])[_-]|\beyJ[a-zA-Z0-9_-]{8,}\.|(?:api[_-]?key|authorization|client[_-]?secret|cookie|credentials?|password|private[_-]?key|refresh[_-]?token|session[_-]?id|access[_-]?token|token)\s*[:=])/i
 const FINGERPRINT = /^[a-f0-9]{64}$/
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d+)?$/
 const DIMENSIONS: PriceDimensionKind[] = ['input-token', 'output-token', 'cached-input-token', 'request', 'second', 'minute', 'tool-call']
 const DISCRETE_DIMENSIONS = new Set<PriceDimensionKind>(['input-token', 'output-token', 'cached-input-token', 'request', 'tool-call'])
-const CHECKS = ['self-review', 'type-check', 'automated-tests', 'integration-tests', 'independent-review', 'security-tests'] as const
-const OUTCOMES: ExecutionActualOutcomeCode[] = ['success', 'execution-failed', 'validation-failed', 'candidate-unavailable', 'outcome-unknown', 'cancelled']
+export const CHECKS = ['self-review', 'type-check', 'automated-tests', 'integration-tests', 'independent-review', 'security-tests'] as const
+export const OUTCOMES: ExecutionActualOutcomeCode[] = ['success', 'execution-failed', 'validation-failed', 'candidate-unavailable', 'outcome-unknown', 'cancelled']
 const MAX_OUTCOMES = 1024
 const MAX_EVIDENCE_REFS = 32
 const MAX_DECIMAL_LENGTH = 128

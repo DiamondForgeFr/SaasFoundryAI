@@ -1,7 +1,8 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
 import { buildTechnicalTransitionManifest, finalizeTechnicalAdoptionCandidate, readCandidateChildManifest } from '../../../scaffold/technical-stack.adoption'
 import { planTechnicalStackAdoption } from '../../../scaffold/technical-stack.planner'
 import { withTemporaryTechnicalStack, type RenderedTechnicalStack } from '../../../renderers/technical-stack.renderer'
@@ -109,11 +110,11 @@ describe('technical adoption candidate and manifest finalization', () => {
       candidateRoot = candidate.rootDir
       await finalizeTechnicalAdoptionCandidate({ candidate, projectRoot, manifest, cliVersion: '1.0.0' })
 
-      await expect(access(join(candidateRoot, 'CLAUDE.md'))).resolves.toBeUndefined()
+      await expect(access(join(candidateRoot, 'AGENTS.md'))).resolves.toBeUndefined()
       await expect(access(join(candidateRoot, '.claude'))).resolves.toBeUndefined()
       await expect(access(join(candidateRoot, 'package.json'))).resolves.toBeUndefined()
       const plan = await planTechnicalStackAdoption({ projectRoot, candidateRoot })
-      expect(plan.entries.some((entry) => entry.path === 'CLAUDE.md' || entry.path.startsWith('.claude/'))).toBe(false)
+      expect(plan.entries.some((entry) => entry.path === 'AGENTS.md' || entry.path === 'CLAUDE.md' || entry.path.startsWith('.claude/'))).toBe(false)
     })
   })
 
@@ -165,7 +166,10 @@ describe('technical adoption candidate and manifest finalization', () => {
         await expect(access(join(candidateRoot, 'apps', app, '.claude/skills/sf-git-commit/SKILL.md'))).resolves.toBeUndefined()
         await expect(access(join(candidateRoot, 'apps', app, 'AGENTS.md'))).resolves.toBeUndefined()
         await expect(access(join(candidateRoot, 'apps', app, 'GEMINI.md'))).resolves.toBeUndefined()
-        expect(Object.keys(child.fileHashes ?? {})).toEqual(expect.arrayContaining(['AGENTS.md', 'GEMINI.md']))
+        // AGENTS.md is project-owned (#937): only its generated region is refreshed, without a baseline
+        expect(await readFile(join(candidateRoot, 'apps', app, 'AGENTS.md'), 'utf8')).toContain(GENERATED_INSTRUCTIONS)
+        expect(Object.keys(child.fileHashes ?? {})).toEqual(expect.arrayContaining(['GEMINI.md', '.claude/rules/claude-code.md']))
+        expect(Object.keys(child.fileHashes ?? {})).not.toContain('AGENTS.md')
       }
     })
   })

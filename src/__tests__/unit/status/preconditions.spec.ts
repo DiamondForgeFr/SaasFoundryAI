@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { evaluatePreconditions } from '../../../status/preconditions'
-import type { StatusReport } from '../../../status/collect'
+import type { StatusReport, StatusRoutingState, StatusTierAgent } from '../../../status/collect'
 
 function makeReport(overrides: Partial<StatusReport> = {}): StatusReport {
   return {
@@ -350,5 +350,117 @@ describe('runtime preconditions (#587)', () => {
       expect(ghRepository(makeReport({ git: git({}) }))).toBeUndefined()
       expect(ghRepository(makeReport())).toBeUndefined()
     })
+  })
+})
+
+describe('instruction preconditions (#939)', () => {
+  const find = (report: StatusReport, name: string) => evaluatePreconditions(report).find((p) => p.name === name)
+
+  it('skips every instruction check when the declaration could not be read', () => {
+    const report = makeReport({ instructions: { shadowing: [] } })
+    for (const name of ['instructionShadowing', 'claudeCodeVersion', 'codexInstructionSize']) expect(find(report, name)?.status).toBe('skip')
+  })
+
+  it('skips the checks of an agent that is not declared', () => {
+    const report = makeReport({ instructions: { agents: ['codex'], shadowing: [], codexSizes: [] } })
+    expect(find(report, 'instructionShadowing')).toMatchObject({ status: 'skip', details: 'claude-code is not declared (sf agents list)' })
+    expect(find(report, 'claudeCodeVersion')?.status).toBe('skip')
+    expect(find(report, 'codexInstructionSize')?.status).toBe('ok')
+  })
+
+  it('names each shadowing file and how to remove it, including one above the project', () => {
+    const report = makeReport({ instructions: { agents: ['claude-code'], shadowing: ['/tmp/demo/CLAUDE.md', '/tmp/CLAUDE.md'], claudeCode: { version: '2.1.296' } } })
+    const shadowing = find(report, 'instructionShadowing')
+    expect(shadowing?.status).toBe('warn')
+    expect(shadowing?.details).toContain('/tmp/demo/CLAUDE.md, /tmp/CLAUDE.md')
+    expect(shadowing?.remediation).toContain('sf update')
+    expect(shadowing?.remediation).toContain('Files above the project (/tmp/CLAUDE.md)')
+  })
+
+  it('warns on a Claude Code older than 2.1.277 and accepts that release', () => {
+    const old = makeReport({ instructions: { agents: ['claude-code'], shadowing: [], claudeCode: { version: '2.1.276' } } })
+    expect(find(old, 'claudeCodeVersion')).toMatchObject({ status: 'warn', remediation: expect.stringContaining('claude update') })
+    const current = makeReport({ instructions: { agents: ['claude-code'], shadowing: [], claudeCode: { version: '2.1.277' } } })
+    expect(find(current, 'claudeCodeVersion')).toMatchObject({ status: 'ok', details: '2.1.277' })
+    const missing = makeReport({ instructions: { agents: ['claude-code'], shadowing: [], claudeCode: { reason: '`claude` not found on PATH' } } })
+    expect(find(missing, 'claudeCodeVersion')).toMatchObject({ status: 'skip', details: '`claude` not found on PATH' })
+  })
+
+  it('warns when Codex would load more than 32 KiB, naming the files counted', () => {
+    const report = makeReport({
+      instructions: {
+        agents: ['codex'],
+        shadowing: [],
+        codexSizes: [
+          { directory: '.', bytes: 20000, files: ['AGENTS.md'] },
+          { directory: 'apps/api', bytes: 40000, files: ['AGENTS.md', 'apps/api/AGENTS.md'] }
+        ]
+      }
+    })
+    const size = find(report, 'codexInstructionSize')
+    expect(size?.status).toBe('warn')
+    expect(size?.details).toContain('apps/api loads 40000 bytes (AGENTS.md + apps/api/AGENTS.md)')
+    expect(size?.details).not.toContain('20000')
+    expect(size?.remediation).toContain('project_doc_max_bytes')
+  })
+})
+
+describe('tier agent precondition (#933)', () => {
+  const routing = (state: Partial<StatusRoutingState> = {}): StatusRoutingState => ({
+    gridVersion: 1,
+    overrides: { kinds: [], tiers: [] },
+    tierAgents: [],
+    adjustment: 'on',
+    adjustments: [],
+    holds: [],
+    capture: [],
+    ...state
+  })
+  const find = (report: StatusReport) => evaluatePreconditions(report).find((p) => p.name === 'tierAgents')
+  const agent = (state: StatusTierAgent['state'], name = 'build'): StatusTierAgent => ({ path: `.claude/agents/sf-${name}.md`, state })
+
+  it('is skipped on a project without a harness, and when the routing could not be read', () => {
+    expect(find(makeReport())).toMatchObject({ status: 'skip', details: 'No managed harness' })
+    expect(find(makeReport({ routing: { error: 'Invalid local routing' } }))).toMatchObject({ status: 'skip' })
+  })
+
+  it('is skipped when no declared coding agent has a tier agent', () => {
+    expect(find(makeReport({ routing: routing() }))).toMatchObject({ status: 'skip', details: expect.stringContaining('sf agents list') })
+  })
+
+  it('is ok when every tier agent is what the grid renders, and says which grid', () => {
+    expect(find(makeReport({ routing: routing({ gridVersion: 3, tierAgents: [agent('ok'), agent('ok', 'fix')] }) }))).toEqual({
+      name: 'tierAgents',
+      description: 'Tier agents match the routing grid',
+      status: 'ok',
+      details: '2 match routing grid v3'
+    })
+  })
+
+  it('warns about a missing or an outdated tier agent and sends both to a refresh', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgents: [agent('missing'), agent('outdated', 'fix'), agent('ok', 'plan')] }) }))
+    expect(precondition).toMatchObject({ status: 'warn', details: '.claude/agents/sf-build.md missing; .claude/agents/sf-fix.md outdated' })
+    expect(precondition?.remediation).toBe('Run `sf agents refresh --scope shared` to regenerate the missing and outdated ones.')
+  })
+
+  it('warns about an edited tier agent: restore it or move the change to modules.harness.routing, then refresh', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgents: [agent('edited'), agent('ok', 'fix')] }) }))
+    expect(precondition).toMatchObject({ status: 'warn', details: '.claude/agents/sf-build.md edited' })
+    expect(precondition?.remediation).toContain('Restore .claude/agents/sf-build.md, or move the change to modules.harness.routing in .saasfoundry.json, then run `sf agents refresh --scope shared`')
+    expect(precondition?.remediation).toContain('A refresh never overwrites an edited tier agent')
+    expect(precondition?.remediation).not.toContain('to regenerate the missing and outdated ones')
+  })
+
+  it('gives both remediations when edited and missing tier agents are mixed', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgents: [agent('edited'), agent('missing', 'fix')] }) }))
+    expect(precondition?.remediation).toContain('to regenerate the missing and outdated ones')
+    expect(precondition?.remediation).toContain('Restore .claude/agents/sf-build.md')
+  })
+
+  it('warns, with what to fix, when the tier agents could not be compared with the grid', () => {
+    const precondition = find(makeReport({ routing: routing({ tierAgentsIssue: "Invalid modules.harness.routing: routing.kinds.prose.tier 'x' is neither shipped nor declared" }) }))
+    expect(precondition).toMatchObject({ status: 'warn', details: expect.stringContaining('could not be compared with routing grid v1') })
+    expect(precondition?.remediation).toContain('Fix modules.harness.routing')
+    expect(precondition?.remediation).toContain('sf agents refresh --scope shared')
   })
 })

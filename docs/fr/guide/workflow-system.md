@@ -94,7 +94,7 @@ La nature ajoute des exceptions protégées. Un enfant `nature:bundled-pr` n’a
 Pour le preset équipe :
 
 1. committer et pousser avant `AI testing` ;
-2. publier le plan et le rapport de test ;
+2. publier le plan et le rapport de test en commentaires du ticket, commençant par les titres `## Test plan` et `## Test report` ;
 3. créer ou réutiliser une **pull request en brouillon** avant `Human testing` ;
 4. laisser le développeur effectuer la validation fonctionnelle de la feature ;
 5. après approbation et tests de non-régression, le développeur rend la même PR prête (jamais l'agent sur ce parcours) ;
@@ -201,6 +201,32 @@ AI draft → Human review → Spawning → Done
 ```
 
 Utilisez `workflow-cli.sh transition-drafting` ; le CLI refuse pour ces tickets les transitions du parcours de code.
+
+## Échappatoires
+
+Le refus d’un garde-fou signifie qu’une condition ou une preuve manque : la réponse est de la fournir. Pour le cas rare où un garde-fou se trompe ou ne peut pas être satisfait, les scripts acceptent
+quelques échappatoires explicites. Positionnez la variable en ligne pour une seule commande, jamais avec `export`, accompagnée de `SF_WORKFLOW_BYPASS_REASON="<raison>"`. `update-status` affiche alors
+un avertissement qui nomme la variable et l’enregistre, avec la raison, dans un commentaire du ticket ; complétez ce commentaire avec les preuves. Un agent de développement n’en active jamais une de
+lui-même ; il s’arrête et vous demande.
+
+| Échappatoire                                                                 | Ce qu’elle désactive                                                                     |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                             | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                      | Exige un label `complexity:` pour quitter Backlog                                        |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                          | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                        | Exige que chaque enfant natif soit Done avant le parent                                  |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                  | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                    | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                       | Exige une PR fusionnée vérifiée avant Done                                               |
+| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic` | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
+| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                             | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
+| `--skip-local-ci "<raison>"` sur `create-pr` et `ready-pr`                   | Exige que les statuts de CI locale déclarés soient verts sur le commit de tête           |
+| `SF_CACHE_BUST=1`                                                            | Pas un garde-fou : recharge le schéma du board mis en cache                              |
+| `SF_DISABLE_SRS_HOOK=1`                                                      | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
+
+`--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`. `--bypass-srs` la publie sur le ticket
+créé et `--skip-local-ci` l’écrit sur la pull request. Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à laisser, sont décrits dans
+`.claude/skills/sf-workflow/escape-hatches.md` de tout projet qui installe le workflow.
 
 ## Continuer
 

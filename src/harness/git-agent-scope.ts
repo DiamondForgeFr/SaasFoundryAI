@@ -91,6 +91,104 @@ async function validateExtensionEnable(root: string, gitDir: string, commonDir: 
 }
 
 /**
+ * The Git directory every worktree of this clone shares, or undefined outside a Git checkout. Cheap
+ * (one `rev-parse`), so a per-session read such as `sf status` can use it. Anything kept there is
+ * private to the clone: Git never tracks its own directory.
+ */
+export async function resolveGitCommonDir(targetPath: string): Promise<string | undefined> {
+  const root = resolve(targetPath)
+  let output: string
+  try {
+    output = (await git(root, ['rev-parse', '--git-common-dir']))!.trim()
+  } catch (error) {
+    if (/not a git repository/i.test(String((error as { stderr?: string }).stderr))) return undefined
+    throw error
+  }
+  const commonDir = resolve(root, output)
+  if ((await lstat(commonDir)).isSymbolicLink()) throw new Error(`Cannot keep clone-private state through a linked metadata directory: ${commonDir}`)
+  return commonDir
+}
+
+/**
+ * The top level of the working tree `targetPath` is in (a hook runs from wherever the agent stood,
+ * possibly a subdirectory), or undefined outside a Git checkout. One `rev-parse`, no side effect.
+ */
+export async function resolveGitRoot(targetPath: string): Promise<string | undefined> {
+  const root = resolve(targetPath)
+  try {
+    return resolve((await git(root, ['rev-parse', '--show-toplevel']))!.trim())
+  } catch (error) {
+    if (/not a git repository/i.test(String((error as { stderr?: string }).stderr))) return undefined
+    throw error
+  }
+}
+
+/**
+ * The top level of the working tree and the common Git directory in one `rev-parse` (a hook that records
+ * a delegation needs both and runs in a hurry), or undefined outside a Git checkout.
+ */
+export async function resolveGitLayout(targetPath: string): Promise<{ root: string; commonDir: string } | undefined> {
+  const cwd = resolve(targetPath)
+  let output: string
+  try {
+    output = (await git(cwd, ['rev-parse', '--show-toplevel', '--git-common-dir']))!
+  } catch (error) {
+    if (/not a git repository/i.test(String((error as { stderr?: string }).stderr))) return undefined
+    throw error
+  }
+  const [top, common] = output.trim().split('\n')
+  if (!top || !common) return undefined
+  const commonDir = resolve(cwd, common)
+  if ((await lstat(commonDir)).isSymbolicLink()) throw new Error(`Cannot keep clone-private state through a linked metadata directory: ${commonDir}`)
+  return { root: resolve(top), commonDir }
+}
+
+const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,100}$/
+
+/**
+ * A file as the **committed** working branch holds it: `origin/<branch>` first, then the local branch.
+ * What a worktree has on disk may be uncommitted (an agent can edit its own manifest); a decision that
+ * moves the routing of the whole clone rests on what the team has committed. The remote comes first
+ * because a worktree is cut from it: a local branch nobody pulled for a while would make every worktree
+ * look different from what the team committed. Undefined when the branch or the file does not exist, or
+ * the branch name is not a plain one.
+ */
+export async function readCommittedFile(root: string, branch: string, path: string): Promise<string | undefined> {
+  if (!BRANCH_NAME.test(branch) || branch.includes('..')) return undefined
+  for (const ref of [`refs/remotes/origin/${branch}`, `refs/heads/${branch}`]) {
+    try {
+      return await git(root, ['show', `${ref}:${path}`])
+    } catch {
+      // The ref or the file is not there: try the next place.
+    }
+  }
+  return undefined
+}
+
+/** A file as the commit the worktree is on holds it; undefined without a commit or without the file. */
+export async function readHeadFile(root: string, path: string): Promise<string | undefined> {
+  try {
+    return await git(root, ['show', `HEAD:${path}`])
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The branch the remote calls its default (`origin/HEAD`), which nothing in a worktree can change: it is
+ * where a decision looks for the committed manifest before it trusts a branch name the worktree wrote.
+ */
+export async function defaultRemoteBranch(root: string): Promise<string | undefined> {
+  try {
+    const name = (await git(root, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']))?.trim()
+    const branch = name?.startsWith('origin/') ? name.slice('origin/'.length) : undefined
+    return branch && BRANCH_NAME.test(branch) && !branch.includes('..') ? branch : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Read-only preflight. info/exclude belongs to GIT_COMMON_DIR and is deliberately
  * not used: its patterns would affect every linked checkout.
  */

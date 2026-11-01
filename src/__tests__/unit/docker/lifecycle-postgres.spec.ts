@@ -55,6 +55,13 @@ describe('private lifecycle PostgreSQL', () => {
         stdin: Buffer.from('select 2;\n')
       })
       expect(stopped).toBe(1)
+
+      const fatalPatterns = specs.find((spec) => spec.label === 'private postgres')?.fatalPatterns ?? []
+      const isFatal = (line: string) => fatalPatterns.some((pattern) => pattern.test(line))
+      expect(isFatal('FATAL:  the database system is starting up')).toBe(false)
+      expect(isFatal('FATAL:  terminating connection due to administrator command')).toBe(false)
+      expect(isFatal('FATAL:  could not open file "global/pg_filenode.map"')).toBe(true)
+      expect(isFatal('PANIC:  could not write to file')).toBe(true)
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }

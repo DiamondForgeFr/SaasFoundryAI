@@ -1,6 +1,6 @@
 import { featureTableAdditions, versionFrAdditions } from '../builders/srs/templates/pages/epic.tpl'
 import type { DsItem, FrSpec, NfrItem, SectionAddition, SrsAdapter, TcItem, UrItem, VersionItems } from '../builders/srs/types'
-import { SrsTree, walkSrsTree } from './tree/walk'
+import { SrsTree, SrsTreeFr, walkSrsTree } from './tree/walk'
 
 const normalized = (id: string): string => id.replace(/-/g, '').toLowerCase()
 
@@ -27,6 +27,31 @@ export function locatePage(tree: SrsTree, pageId: string): PageLocation | undefi
   const fr = tree.frs.find((candidate) => normalized(candidate.pageId) === id)
   if (fr) return { level: 'fr', featurePageId: fr.featurePageId, featureTitle: fr.featureTitle, versionPageId: fr.versionPageId, versionTitle: fr.version }
   return undefined
+}
+
+export type FrLookup = { fr: SrsTreeFr; error?: undefined } | { fr?: undefined; error: string }
+
+/**
+ * Finds an FR page by the id of its FR (#945). An id that no page carries, or that two pages
+ * carry, is an error that says so; `pageId` names the page to take when the id is not enough,
+ * and must then be that FR's page.
+ */
+export function locateFr(tree: SrsTree, frId: string, pageId?: string): FrLookup {
+  const id = frId.trim().toUpperCase()
+  const candidates = tree.frs.filter((fr) => fr.id.toUpperCase() === id)
+  if (pageId) {
+    const wanted = normalized(pageId)
+    const chosen = candidates.find((fr) => normalized(fr.pageId) === wanted)
+    if (chosen) return { fr: chosen }
+    const other = tree.frs.find((fr) => normalized(fr.pageId) === wanted)
+    return { error: other ? `page ${pageId} is the page of ${other.id}, not of ${id}.` : `page ${pageId} is not an FR page of this SRS.` }
+  }
+  if (candidates.length === 0) return { error: `${id} is not an FR of this SRS: no FR page under its root carries that id.` }
+  if (candidates.length > 1) {
+    const pages = candidates.map((fr) => `"${fr.featureTitle}" › "${fr.version ?? 'no version'}" (${fr.pageId})`).join('; ')
+    return { error: `${id} is the id of ${candidates.length} FR pages: ${pages}. Name the one to change with "pageId".` }
+  }
+  return { fr: candidates[0] }
 }
 
 /** Reads the tree once for every page a batch or a patch needs to place. */

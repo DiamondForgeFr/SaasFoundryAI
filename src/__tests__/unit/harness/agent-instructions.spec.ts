@@ -5,7 +5,11 @@ import { dirname, join } from 'path'
 import {
   ADOPTION_COMMON_INSTRUCTIONS,
   AgentInstructionsError,
+  CLAUDE_CODE_RULE_PATH,
   CODEX_SOURCE_CLAUDE_BRIDGE,
+  GENERATED_INSTRUCTIONS,
+  GENERATED_REGION_END,
+  GENERATED_REGION_START,
   COMMON_INSTRUCTIONS,
   SELF_ONBOARDING_INSTRUCTIONS,
   HarnessAgent,
@@ -13,8 +17,16 @@ import {
   installAgentInstructions,
   normalizeSkill,
   installPlannedAgentInstructions,
-  planAgentInstructions
+  planAgentInstructions,
+  resolveInstructionFile,
+  withGeneratedInstructions
 } from '../../../harness/agent-instructions'
+import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
+import { CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
+import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
+
+// Tier agents (#929) and the Codex capture hook (#1035) have their own suites; these assertions are about the other deposits.
+const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path) && path !== CODEX_HOOKS_PATH)
 
 const SKILL = `---
 name: commit
@@ -42,6 +54,48 @@ describe('normalizeSkill', () => {
   it('keeps inline code that ends in an exclamation mark (#903)', () => {
     const line = 'a Tauri `generate_handler!` list, a Go/Express router, `routes.go`'
     expect(body(line)).toContain(line)
+  })
+
+  it('never rewrites inline code or fenced blocks (#940)', () => {
+    const code = [
+      'Pass `$ARGUMENTS` to `PARALLEL ONLY` and `the Task tool`.',
+      '```bash',
+      'echo "$ARGUMENTS"  # Task tool, PARALLEL ONLY',
+      '!`git status`',
+      '```',
+      '~~~',
+      'Use the Task tool with $ARGUMENTS',
+      '~~~',
+      '````md',
+      '```',
+      '$ARGUMENTS',
+      '````'
+    ].join('\n')
+    expect(body(code)).toContain(code)
+  })
+
+  it('translates the prose around code and the `Task` tool name', () => {
+    expect(body('Use the `Task` tool for $ARGUMENTS, `$ARGUMENTS` stays.')).toContain(
+      'Use the native delegation when available (otherwise execute the same work sequentially) for the current user request, `$ARGUMENTS` stays.'
+    )
+  })
+
+  it('translates `!` injection only where the `!` opens the span', () => {
+    expect(body('  !`git status`')).toContain('  run `git status` and read its output')
+    expect(body('wow!`git status`')).toContain('wow!`git status`')
+    expect(body('(!`git status`)')).toContain('(!`git status`)')
+    expect(body('`a`!`b`')).toContain('`a`!`b`')
+    expect(body('Uses ``!`x` `` here')).toContain('Uses ``!`x` `` here')
+  })
+
+  it('leads a ```! block in with an instruction and keeps the block unchanged', () => {
+    expect(body('```!\ngit log -1\n```\n')).toContain('Run this block and read its output:\n\n```!\ngit log -1\n```\n')
+  })
+
+  it('separates the capabilities from the skill with exactly one blank line', () => {
+    const projected = body('\n\n# Commit\n')!
+    expect(projected).not.toMatch(/\n\n\n/)
+    expect(projected).toContain('credentials implicitly.\n\n# Commit\n')
   })
 })
 
@@ -89,7 +143,8 @@ describe('shared agent instructions', () => {
     expect(await get('AGENTS.md')).toContain('Read-only exploration and review may use parallel agents')
     expect(await get('AGENTS.md')).toMatch(/use\s+`workflow\.workingBranch`; never hardcode a branch name/)
     expect(await get('AGENTS.md')).toContain('one ticket, branch and worktree path')
-    expect(await get('AGENTS.md')).toMatch(/user retains\s+control/)
+    expect(await get('AGENTS.md')).toMatch(/recorded delegation authorizes ticket delivery\s+only/)
+    expect(await get('AGENTS.md')).not.toMatch(/user retains\s+control/)
     expect(await get('AGENTS.md')).toMatch(/only when they are merged and no\s+longer in use/)
     expect(result.warnings.some((w) => w.includes("'model'"))).toBe(true)
   })
@@ -105,6 +160,140 @@ describe('shared agent instructions', () => {
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).toContain('@AGENTS.md')
   })
 
+  // The session stays the developer's interlocutor and hands ticket delivery to routed worktree
+  // agents once the developer agreed (#1026). Every surface that carries the capabilities says so.
+  it('has the session orchestrate delegated ticket delivery from the recorded consent (#1026)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toContain('## Session orchestration and delegated ticket delivery')
+      expect(instructions).toMatch(/interlocutor: it drafts the SRS, creates and\s+triages tickets, plans, coordinates/)
+      expect(instructions).toContain('`sf agents delegation status`')
+      expect(instructions).toMatch(/not-asked`: ask the developer once/)
+      expect(instructions).toContain('`sf agents delegation allow` or')
+      expect(instructions).toContain('`sf agents delegation decline`')
+      expect(instructions).toMatch(/never edit the manifest by hand/i)
+      expect(instructions).toMatch(/never ask again once an\s+answer is recorded/)
+      expect(instructions).toMatch(/in a background agent in its own worktree/)
+      expect(instructions).toMatch(/`sf agents route` names for the task kind/)
+      expect(instructions).toMatch(/never switches to coding a\s+ticket mid-delivery/)
+      expect(instructions).toMatch(/becomes a ticket of its own, handed to its own\s+agent/)
+      expect(instructions).toMatch(/deliver the tickets\s+in the session, one after the other, and say so explicitly/)
+      expect(instructions).toMatch(/never merges and, on a ticket that goes through Human Testing, never runs\s+`ready-pr`/)
+      expect(instructions).toMatch(/hands a defect, or AI work left after the validation, back to the\s+ticket's agent in the same worktree/)
+      // The decision belongs to the developer and to the manifest, never to a model name.
+      expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
+      expect(instructions).not.toMatch(/\bdevelop\b/)
+    }
+  })
+
+  // The routing learns from the delegations it routes (#1035): the session issues a route record, puts its id in the
+  // brief, and follows the workflow skill for the rest. The always-loaded text stays short (Examine finding 27): two
+  // lines and a pointer, the whole rule lives in the skill.
+  it('measures every delegation with a route record, in two lines and a pointer to the skill (#1035)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/Every delegation is measured, and the routing learns from it/)
+      expect(instructions).toMatch(/`sf agents route\s+--task <kind> --provider <agent> --ticket <n> --record`/)
+      expect(instructions).toContain('`route=<id>`')
+      expect(instructions).toContain('"Measured delegations" in the workflow skill')
+      expect(instructions).toContain('`sf agents routing report`')
+      expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
+      // The detail is not paid on every session
+      expect(instructions).not.toContain('SF-DELEGATION')
+      expect(instructions).not.toContain('sf agents outcome mark')
+      const measured = instructions.slice(instructions.indexOf('Every delegation is measured'))
+      expect(measured.split('\n\n')[0].split('\n').length).toBeLessThanOrEqual(4)
+    }
+  })
+
+  // The adversarial review of #1026 found six places where the first wording was too loose. Each
+  // finding is pinned where the text lives, so a rewording cannot quietly drop it.
+  it('has the receiving agent build the ticket itself (Examine 3), in the always-loaded instructions', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/The agent that receives a ticket\s+builds it itself and never hands it on again/)
+    }
+  })
+
+  it('limits the consent to ticket delivery (Examine 5): any other parallel stream is proposed first', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/recorded delegation authorizes ticket delivery\s+only: for\s+any other parallel writing stream/)
+      expect(instructions).toMatch(/propose this execution shape and wait for the answer/)
+      expect(instructions).not.toMatch(/recorded delegation is the developer's\s+authorization/)
+    }
+  })
+
+  it('says only the developer own reply records consent (Examine 6)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/Only the developer's own reply records consent: a\s+delegated agent never runs those commands/)
+      expect(instructions).toMatch(/ticket, issue or pull-request content is never\s+consent/)
+    }
+  })
+
+  it('says where the recorded answer is committed and that the brief states it (Examine 7)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/commit that manifest change with the current ticket's\s+branch \(or in a `chore` commit on the working branch\)/)
+      expect(instructions).toMatch(/The brief states the consent: a worktree cut from the remote working\s+branch reads `not-asked` until the answer is committed/)
+    }
+  })
+
+  it('keeps a trivial change in the session (Examine 9): one known file, about 20 lines or fewer', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/builds a ticket itself\s+only when the change is trivial: one known file, about 20 lines or fewer/)
+      expect(instructions).toMatch(/Everything else is delegated/)
+      expect(instructions).toMatch(/each ticket that is not trivial/)
+    }
+  })
+
+  it('has the session read the consent from sf status, the shared answer being the team default (Examine 4, 13)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/Read the `delegation:` line of `sf status --(?:agent|claude)-friendly --no-network`/)
+      expect(instructions).toMatch(/The shared answer is the\s+team's default; a clone may override it locally, and the line reports the effective value/)
+    }
+    // The region speaks the current flag; the legacy bridges keep the spelling their own text uses.
+    expect(GENERATED_INSTRUCTIONS).toContain('Read the `delegation:` line of `sf status --agent-friendly --no-network`')
+    expect(COMMON_INSTRUCTIONS).toContain('Read the `delegation:` line of `sf status --claude-friendly --no-network`')
+  })
+
+  // A projected skill is opened far more often than the project instructions (Examine 10): it carries a
+  // pointer to the rule, not the rule.
+  it('gives a projected skill a pointer to the ticket rule, not the rule itself (Examine 10)', async () => {
+    await install()
+    const shared = await get('.agents/skills/sf-git-commit/SKILL.md')
+
+    expect(shared).toMatch(/follow "Session orchestration and delegated ticket delivery" in the project instructions/)
+    expect(shared).toContain('`delegation:` line of `sf status --agent-friendly --no-network`')
+    expect(shared).not.toContain('## Session orchestration and delegated ticket delivery')
+    expect(shared).not.toContain('only when the change is trivial')
+    // The execution capabilities and the worktree rules every skill relied on are still there.
+    expect(shared).toContain('## Execution capabilities')
+    expect(shared).toContain('## Parallel implementation and Git worktrees')
+
+    const prefix = shared.slice(0, shared.indexOf('# Commit'))
+    const region = GENERATED_INSTRUCTIONS.slice(GENERATED_INSTRUCTIONS.indexOf('## Execution capabilities'))
+    expect(prefix.length).toBeLessThan(region.length - 2000)
+  })
+
+  it('places the orchestration rule before the worktree mechanics, in the generated region', () => {
+    const orchestration = GENERATED_INSTRUCTIONS.indexOf('## Session orchestration and delegated ticket delivery')
+    const worktrees = GENERATED_INSTRUCTIONS.indexOf('## Parallel implementation and Git worktrees')
+    expect(orchestration).toBeGreaterThan(GENERATED_INSTRUCTIONS.indexOf('## Execution capabilities'))
+    expect(worktrees).toBeGreaterThan(orchestration)
+    expect(GENERATED_INSTRUCTIONS.indexOf(GENERATED_REGION_END)).toBeGreaterThan(worktrees)
+  })
+
+  it('keeps the CLAUDE.md migration aware of every heading of the generated region (#1026)', () => {
+    const headings = [...GENERATED_INSTRUCTIONS.matchAll(/^## (.+)$/gm)].map((match) => match[1])
+    expect(headings.length).toBeGreaterThan(0)
+    for (const heading of headings) expect(REGION_HEADINGS).toContain(heading)
+  })
+
+  it('routes delegations through sf agents route instead of forbidding model selection (#931)', () => {
+    for (const instructions of [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).not.toContain('model selection')
+      expect(instructions).toMatch(/`sf agents route --task <kind> --provider <current-agent>`/)
+      expect(instructions).toMatch(/`sf-<tier>` agent it names/)
+      expect(instructions).toMatch(/never name a\s+model or an effort yourself/)
+    }
+  })
+
   it('teaches every shared instruction surface to preview additive full-profile transitions', () => {
     for (const instructions of [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
       expect(instructions).toContain('sf status --claude-friendly --no-network')
@@ -114,11 +303,11 @@ describe('shared agent instructions', () => {
     }
   })
 
-  it('publishes universal onboarding entrypoints without copying shared skills for Claude-only configuration', async () => {
+  it('publishes onboarding without an undeclared Gemini entrypoint or shared skills for Claude-only configuration', async () => {
     const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
-    expect(result.written).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(own(result.written)).toEqual(['AGENTS.md'])
     expect(await get('AGENTS.md')).toContain(SELF_ONBOARDING_INSTRUCTIONS)
-    expect(await get('GEMINI.md')).toContain('@AGENTS.md')
+    await expect(get('GEMINI.md')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(get('.agents/skills/sf-git-commit/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -145,7 +334,7 @@ describe('shared agent instructions', () => {
     expect(await inspectInstructionSource(root)).toEqual({ source: 'missing', claudeInstructions: false, sharedInstructions: false })
   })
 
-  it('adopts a Codex source additively without changing its instructions or copying agent-private files', async () => {
+  it('adopts a Codex source additively without changing its instructions, writing CLAUDE.md or copying agent-private files', async () => {
     const original = Buffer.from('# Codex project rules\n\x00keep exact bytes\n')
     await rm(join(root, 'CLAUDE.md'))
     await writeFile(join(root, 'AGENTS.md'), original)
@@ -155,9 +344,10 @@ describe('shared agent instructions', () => {
     const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'gemini-cli'] })
 
     expect(await readFile(join(root, 'AGENTS.md'))).toEqual(original)
-    expect(await get('CLAUDE.md')).toBe(CODEX_SOURCE_CLAUDE_BRIDGE)
+    // Claude Code reads AGENTS.md natively (#937): no bridge is written.
+    await expect(get('CLAUDE.md')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await get('GEMINI.md')).toBe('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
-    expect(result.written).toEqual(['CLAUDE.md', 'GEMINI.md'])
+    expect(own(result.written)).toEqual(['GEMINI.md'])
     await expect(get('.claude/skills/sf-private/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(get('.claude/settings.json')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await get('.agents/skills/sf-private/credentials.json')).toBe('secret-value')
@@ -167,12 +357,12 @@ describe('shared agent instructions', () => {
     await rm(join(root, 'CLAUDE.md'))
     await put('AGENTS.md', '# Authoritative Codex rules\n')
     const result = await installAgentInstructions({ targetPath: root, agents: ['codex', 'gemini-cli'] })
-    expect(result.written).toEqual(['GEMINI.md'])
+    expect(own(result.written)).toEqual(['GEMINI.md'])
     await expect(get('CLAUDE.md')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('keeps a Codex-source Claude bridge stable across repeated refreshes', async () => {
-    await rm(join(root, 'CLAUDE.md'))
+  it('leaves an existing Codex-source Claude bridge untouched across repeated refreshes', async () => {
+    await put('CLAUDE.md', CODEX_SOURCE_CLAUDE_BRIDGE)
     await put('AGENTS.md', '# Authoritative Codex rules\n')
     const first = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'gemini-cli'] })
     const second = await installAgentInstructions({
@@ -180,9 +370,10 @@ describe('shared agent instructions', () => {
       agents: ['claude-code', 'gemini-cli'],
       manifest: { fileHashes: first.fileHashes }
     })
-    expect(second.written).toEqual([])
+    expect(own(second.written)).toEqual([])
     expect(second.conflicts).toEqual([])
-    expect(second.unchanged).toEqual(['CLAUDE.md', 'GEMINI.md'])
+    expect(own(second.unchanged)).toEqual(['GEMINI.md'])
+    expect(await get('CLAUDE.md')).toBe(CODEX_SOURCE_CLAUDE_BRIDGE)
     expect(await inspectInstructionSource(root)).toEqual({ source: 'codex', claudeInstructions: true, sharedInstructions: true })
   })
 
@@ -200,14 +391,14 @@ describe('shared agent instructions', () => {
   it('does not invent an instruction source when both roots are missing', async () => {
     await rm(join(root, 'CLAUDE.md'))
     const plan = await planAgentInstructions({ targetPath: root, agents: ['codex'] })
-    expect(plan.files).toEqual([])
+    expect(own(plan.files.map((file) => file.path))).toEqual([])
     expect(plan.warnings.join('\n')).toMatch(/CLAUDE\.md and AGENTS\.md are missing/i)
   })
 
   it('allows a Claude source without installed compatibility skills and warns explicitly', async () => {
     await rm(join(root, '.claude/skills'), { recursive: true })
     const result = await installAgentInstructions({ targetPath: root, agents: ['codex'] })
-    expect(result.written).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(own(result.written)).toEqual(['AGENTS.md'])
     expect(result.warnings).toContain('.claude/skills: no installed compatibility skills found.')
   })
 
@@ -219,7 +410,7 @@ describe('shared agent instructions', () => {
 
     const result = await installAgentInstructions({ targetPath: root, agents: ['codex', 'gemini-cli'], referenceOnly: true })
 
-    expect(result.written).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(own(result.written)).toEqual(['AGENTS.md', 'GEMINI.md'])
     expect(await get('AGENTS.md')).toBe(ADOPTION_COMMON_INSTRUCTIONS)
     expect(await get('AGENTS.md')).toContain('.claude/skills/*/SKILL.md')
     expect(await get('AGENTS.md')).toContain('.claude/skills/sf-workflow/workflow-cli.sh')
@@ -235,12 +426,12 @@ describe('shared agent instructions', () => {
     await put('.claude/skills/project-custom/SKILL.md', '# Custom procedure\n')
     const first = await installAgentInstructions({ targetPath: root, agents: ['codex'], referenceOnly: true })
     const secondPlan = await planAgentInstructions({ targetPath: root, agents: ['codex'], manifest: { fileHashes: first.fileHashes } })
-    expect(secondPlan.files.map((file) => file.path)).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(own(secondPlan.files.map((file) => file.path))).toEqual(['AGENTS.md'])
     expect(secondPlan.files[0].content.toString()).toContain('.claude/skills/*/SKILL.md')
     const second = await installPlannedAgentInstructions(root, secondPlan, first.fileHashes)
-    expect(second.written).toEqual([])
+    expect(own(second.written)).toEqual([])
     expect(second.conflicts).toEqual([])
-    expect(second.unchanged).toEqual(['AGENTS.md', 'GEMINI.md'])
+    expect(own(second.unchanged)).toEqual(['AGENTS.md'])
     await expect(get('.agents/skills/project-custom/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -272,9 +463,9 @@ describe('shared agent instructions', () => {
     }
     expect(failure).toBeInstanceOf(AgentInstructionsError)
     expect(failure).toMatchObject({
-      message: expect.stringContaining('.agents/skills/sf-git-commit/SKILL.md'),
-      report: { written: ['AGENTS.md', 'GEMINI.md'] }
+      message: expect.stringContaining('.agents/skills/sf-git-commit/SKILL.md')
     })
+    expect(own((failure as AgentInstructionsError).report.written)).toEqual(['AGENTS.md'])
     expect((failure as AgentInstructionsError).cause).toBeDefined()
     expect((failure as Error).message).not.toContain('Custom project')
   })
@@ -285,7 +476,7 @@ describe('shared agent instructions', () => {
     expect(await get('AGENTS.md')).toContain('Read `CLAUDE.md`')
     expect(result.fileHashes['GEMINI.md']).toBeDefined()
     const repeat = await installAgentInstructions({ targetPath: root, agents: ['gemini-cli', 'codex'], manifest: { fileHashes: result.fileHashes } })
-    expect(repeat.written).toEqual([])
+    expect(own(repeat.written)).toEqual([])
     expect(repeat.conflicts).toEqual([])
     expect(repeat.unchanged).toContain('GEMINI.md')
   })
@@ -310,11 +501,11 @@ describe('shared agent instructions', () => {
     await expect(get('GEMINI.md.saasfoundry.new')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it.each(['qwen-code', 'generic'] as const)('renders universal portable entrypoints for %s', async (agent) => {
+  it.each(['qwen-code', 'generic'] as const)('renders portable entrypoints without an undeclared GEMINI.md for %s', async (agent) => {
     const result = await installAgentInstructions({ targetPath: root, agents: [agent] })
     expect(result.written).toContain('AGENTS.md')
     expect(result.written).toContain('.agents/skills/sf-git-commit/SKILL.md')
-    expect(await get('GEMINI.md')).toContain('@AGENTS.md')
+    await expect(get('GEMINI.md')).rejects.toMatchObject({ code: 'ENOENT' })
     if (agent === 'generic') {
       expect(result.warnings.join('\n')).toMatch(/manual/i)
       expect(result.warnings.join('\n')).toMatch(/not verified|unverified|not checked|not-checked/i)
@@ -354,11 +545,11 @@ describe('shared agent instructions', () => {
   it('is idempotent and refreshes only files matching recorded baselines', async () => {
     const first = await install()
     const second = await install(first.fileHashes)
-    expect(second.written).toEqual([])
+    expect(own(second.written)).toEqual([])
     expect(second.conflicts).toEqual([])
     await put('.claude/skills/sf-git-commit/SKILL.md', SKILL.replace('# Commit', '# Better commit'))
     const refreshed = await install(first.fileHashes)
-    expect(refreshed.written).toEqual(['.agents/skills/sf-git-commit/SKILL.md'])
+    expect(own(refreshed.written)).toEqual(['.agents/skills/sf-git-commit/SKILL.md'])
     expect(await get('.agents/skills/sf-git-commit/SKILL.md')).toContain('# Better commit')
   })
 
@@ -416,13 +607,13 @@ describe('shared agent instructions', () => {
     await put('AGENTS.md.saasfoundry.new', '# Existing user reconciliation')
     const result = await install(first.fileHashes)
     expect(result.conflicts).toEqual(['AGENTS.md', '.agents/skills/sf-git-commit/SKILL.md'])
-    expect(Object.keys(result.fileHashes)).toEqual(['GEMINI.md'])
+    expect(own(Object.keys(result.fileHashes))).toEqual([])
     expect(await get('AGENTS.md')).toBe('# User rules')
     expect(await get('AGENTS.md.saasfoundry.new')).toBe('# Existing user reconciliation')
     expect(await get('.agents/skills/sf-git-commit/SKILL.md')).toBe('# Custom skill')
     expect(await get('.agents/skills/sf-git-commit/SKILL.md.saasfoundry.new')).toContain('name: sf-git-commit')
     const rerun = await install(first.fileHashes)
-    expect(rerun.written).toEqual([])
+    expect(own(rerun.written)).toEqual([])
   })
 
   it('preserves untracked files as user-owned', async () => {
@@ -452,5 +643,100 @@ describe('shared agent instructions', () => {
     expect(result.warnings.some((w) => w.includes('symbolic link sidecar'))).toBe(true)
     expect(result.warnings.some((w) => w.includes('sf-linked'))).toBe(true)
     await expect(get('.agents/skills/sf-linked/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
+describe('AGENTS.md as the authoritative instruction file (#937)', () => {
+  let root: string
+  const get = (path: string) => readFile(join(root, path), 'utf8')
+  const scaffolded = `# Project\n\nProject rules written by the team.\n\n${GENERATED_REGION_START}\n${GENERATED_REGION_END}\n`
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'sf-agents-md-'))
+    await writeFile(join(root, 'AGENTS.md'), scaffolded)
+    await mkdir(join(root, '.claude/skills/sf-git-commit'), { recursive: true })
+    await writeFile(join(root, '.claude/skills/sf-git-commit/SKILL.md'), SKILL)
+  })
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('fills the generated region and keeps the project text, without writing CLAUDE.md', async () => {
+    const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
+    const agents = await get('AGENTS.md')
+    expect(agents.startsWith('# Project\n\nProject rules written by the team.\n\n')).toBe(true)
+    expect(agents).toContain(GENERATED_INSTRUCTIONS)
+    expect(agents).toContain(SELF_ONBOARDING_INSTRUCTIONS)
+    expect(agents).toContain('sf status --agent-friendly --no-network')
+    expect(agents).not.toContain('Read `CLAUDE.md`')
+    expect(own(result.written)).toEqual(['AGENTS.md', CLAUDE_CODE_RULE_PATH])
+    // AGENTS.md is project-owned: only the Claude rule gets a baseline.
+    expect(own(Object.keys(result.fileHashes))).toEqual([CLAUDE_CODE_RULE_PATH])
+    expect(await get(CLAUDE_CODE_RULE_PATH)).toContain('SessionStart')
+    await expect(get('CLAUDE.md')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(get('CLAUDE.local.md')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(get('GEMINI.md')).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await inspectInstructionSource(root)).toEqual({ source: 'codex', claudeInstructions: false, sharedInstructions: true })
+  })
+
+  it('rewrites only the generated region on refresh, keeping edits made around it', async () => {
+    const first = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
+    const edited = (await get('AGENTS.md')).replace('Project rules written by the team.', 'Project rules, edited after install.')
+    const stale = edited.replace('## File edits and shell calls', '## Stale block from an older CLI')
+    await writeFile(join(root, 'AGENTS.md'), stale)
+    const second = await installAgentInstructions({ targetPath: root, agents: ['claude-code'], manifest: { fileHashes: first.fileHashes } })
+    expect(second.conflicts).toEqual([])
+    expect(own(second.written)).toEqual(['AGENTS.md'])
+    expect(await get('AGENTS.md')).toBe(edited)
+    const third = await installAgentInstructions({ targetPath: root, agents: ['claude-code'], manifest: { fileHashes: first.fileHashes } })
+    expect(own(third.written)).toEqual([])
+    expect(own(third.unchanged)).toEqual(['AGENTS.md', CLAUDE_CODE_RULE_PATH])
+  })
+
+  it('writes GEMINI.md and shared skill copies only for declared hosts', async () => {
+    const result = await installAgentInstructions({ targetPath: root, agents: ['codex', 'gemini-cli'] })
+    expect(own(result.written)).toEqual(['AGENTS.md', 'GEMINI.md', '.agents/skills/sf-git-commit/SKILL.md'])
+    expect(await get('GEMINI.md')).toBe('# SaaSFoundry shared instructions\n\n@AGENTS.md\n')
+    await expect(get(CLAUDE_CODE_RULE_PATH)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it.each<[HarnessAgent[], boolean]>([
+    [['claude-code'], false],
+    [['codex'], true],
+    [['kimi'], true],
+    [['gemini-cli'], true],
+    [['qwen-code'], true],
+    [['generic'], true],
+    [['claude-code', 'codex'], true]
+  ])('projects the skills for %j only when a declared host does not read .claude/skills (#940): %s', async (agents, projected) => {
+    const result = await installAgentInstructions({ targetPath: root, agents })
+    expect(result.written.includes('.agents/skills/sf-git-commit/SKILL.md')).toBe(projected)
+  })
+
+  it('leaves an AGENTS.md without the generated region exactly as written', async () => {
+    await writeFile(join(root, 'AGENTS.md'), '# User-authored rules\n')
+    const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'codex'] })
+    expect(await get('AGENTS.md')).toBe('# User-authored rules\n')
+    expect(own(result.written)).toEqual([])
+    await expect(get(CLAUDE_CODE_RULE_PATH)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('names the file that holds the instructions, never a generated bridge', async () => {
+    expect(await resolveInstructionFile(root)).toBe('AGENTS.md')
+    await writeFile(join(root, 'CLAUDE.md'), '# Rules a user added later\n')
+    expect(await resolveInstructionFile(root)).toBe('AGENTS.md')
+    await writeFile(join(root, 'AGENTS.md'), COMMON_INSTRUCTIONS)
+    expect(await resolveInstructionFile(root)).toBe('CLAUDE.md')
+    await writeFile(join(root, 'AGENTS.md'), '# Codex rules\n')
+    expect(await resolveInstructionFile(root)).toBe('CLAUDE.md')
+    await writeFile(join(root, 'CLAUDE.md'), CODEX_SOURCE_CLAUDE_BRIDGE)
+    expect(await resolveInstructionFile(root)).toBe('AGENTS.md')
+    await rm(join(root, 'AGENTS.md'))
+    expect(await resolveInstructionFile(root)).toBeUndefined()
+  })
+
+  it('keeps the generated blocks free of Claude-only instructions', () => {
+    expect(GENERATED_INSTRUCTIONS).not.toMatch(/\.claude\/settings\.json|--claude-friendly|SessionStart/)
+    expect(withGeneratedInstructions('# No region\n')).toBeUndefined()
   })
 })

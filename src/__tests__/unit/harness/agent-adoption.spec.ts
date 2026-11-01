@@ -112,11 +112,12 @@ describe('safe existing-project agent adoption (#649)', () => {
     if (scope === 'local') await commit()
     const preview = await plan(['claude-code'], scope)
     expect(preview).toMatchObject({ source: 'codex', canApply: true })
-    expect(preview.files).toContainEqual({ path: 'CLAUDE.md', action: 'create' })
+    // Claude Code reads AGENTS.md natively (#937): adding it writes no CLAUDE.md bridge
+    expect(preview.files.map((file) => file.path)).not.toContain('CLAUDE.md')
     const result = await apply(['claude-code'], preview.planId, scope)
     expect(result.configuredAgents).toEqual(['claude-code', 'codex'])
     expect(await get('AGENTS.md')).toBe(source)
-    expect(await get('CLAUDE.md')).toContain('@AGENTS.md')
+    await expect(get('CLAUDE.md')).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await get('.codex/config.toml')).toBe('model = "custom"\n')
     expect(await get('.agents/skills/private/SKILL.md')).toBe('SECRET=keep')
   })
@@ -223,12 +224,12 @@ describe('safe existing-project agent adoption (#649)', () => {
     expect(await git('config', '--get', 'extensions.worktreeConfig').catch(() => '')).toBe('')
   })
 
-  it('journals a private Claude bridge and accepts its exact bytes on retry', async () => {
+  it('journals a private Gemini entrypoint and accepts its exact bytes on retry', async () => {
     await initGit()
     await writeManifest()
     await put('AGENTS.md', '# Codex source\n')
     await commit()
-    const approved = await plan(['claude-code'])
+    const approved = await plan(['gemini-cli'])
     const actualRename = filesystem.rename
     let inventorySaves = 0
     jest.spyOn(filesystem, 'rename').mockImplementation(async (source, destination) => {
@@ -237,21 +238,21 @@ describe('safe existing-project agent adoption (#649)', () => {
     })
     let failure: unknown
     try {
-      await apply(['claude-code'], approved.planId)
+      await apply(['gemini-cli'], approved.planId)
     } catch (error) {
       failure = error
     }
     expect(failure).toMatchObject({
       message: expect.stringContaining('local adoption stopped before completion'),
-      report: expect.objectContaining({ written: expect.arrayContaining(['CLAUDE.md']) }),
+      report: expect.objectContaining({ written: expect.arrayContaining(['GEMINI.md']) }),
       cause: expect.objectContaining({ message: 'Injected private inventory failure' })
     })
-    expect((await privateState()).pendingFileHashes['CLAUDE.md']).toMatch(/^[a-f0-9]{64}$/)
-    const bridge = await get('CLAUDE.md')
+    expect((await privateState()).pendingFileHashes['GEMINI.md']).toMatch(/^[a-f0-9]{64}$/)
+    const bridge = await get('GEMINI.md')
     jest.restoreAllMocks()
-    const retry = await plan(['claude-code'])
-    await expect(apply(['claude-code'], retry.planId)).resolves.toMatchObject({ localAgents: ['claude-code'] })
-    expect(await get('CLAUDE.md')).toBe(bridge)
+    const retry = await plan(['gemini-cli'])
+    await expect(apply(['gemini-cli'], retry.planId)).resolves.toMatchObject({ localAgents: ['gemini-cli'] })
+    expect(await get('GEMINI.md')).toBe(bridge)
     expect((await privateState()).pendingFileHashes).toBeUndefined()
   })
 

@@ -39,11 +39,10 @@ Exécutez ce protocole manuellement sur une machine de confiance, jamais sur un 
 
 1. Relevez la date, le système d’exploitation, le chemin exact de l’exécutable et sa sortie `--version`.
 2. Générez un harness dans un répertoire intermédiaire jetable ; l’installateur peut y créer des réglages et hooks.
-3. Créez un second dépôt Git jetable pour l’observation. Copiez uniquement son `.saasfoundry.json` borné, le point d’entrée vérifié, les dossiers de skills et la documentation référencée. Si le
-   `AGENTS.md` généré référence `CLAUDE.md`, copiez aussi ce fichier et les documents `.claude/` référencés. Ne copiez ni réglages, hooks, `.codex/config.toml`, plugins, configuration MCP ou
-   identifiants secrets.
-4. Pour Claude Code, utilisez `CLAUDE.md` et `.claude/skills`. Pour Codex, utilisez la référence à sens unique de `AGENTS.md` vers `CLAUDE.md` et `.agents/skills`. Ne créez pas de seconde source
-   d’instructions divergente.
+3. Créez un second dépôt Git jetable pour l’observation. Copiez uniquement son `.saasfoundry.json` borné, le point d’entrée vérifié, les dossiers de skills et la documentation référencée, y compris
+   les documents `.claude/` référencés par ses skills. Ne copiez ni réglages, hooks, `.codex/config.toml`, plugins, configuration MCP ou identifiants secrets.
+4. Les deux fixtures utilisent le même `AGENTS.md`. Pour Claude Code, ajoutez `.claude/rules/claude-code.md` et `.claude/skills`, sans aucun `CLAUDE.md` dans la fixture ni dans un répertoire parent
+   (Claude Code ne lit `AGENTS.md` qu’à cette condition, à partir de la version 2.1.277). Pour Codex, ajoutez `.agents/skills`. Ne créez pas de seconde source d’instructions divergente.
 5. Ajoutez une valeur aléatoire aux instructions et des valeurs distinctes à la `description` et au corps du skill sonde. Le prompt demande ces preuves et invoque `sf-native-smoke` par son nom, sans
    contenir les valeurs ni le chemin.
 6. Relevez le hash et le mode de chaque fichier avant et après chaque commande.
@@ -131,9 +130,12 @@ transition passe par la commande protégée. Une connexion fournisseur ou un sim
 
 ## Référence dogfood SaaSFoundryAI
 
-Ce dépôt déclare ensemble `claude-code` et `codex` dans `.saasfoundry.json`. `CLAUDE.md`, `AGENTS.md` et les arbres vérifiés `.claude/skills` et `.agents/skills` sont partagés. `AGENTS.md` renvoie
-Codex aux mêmes règles faisant autorité et au même workflow protégé. Les réglages privés `.codex`, identifiants secrets, plugins, configurations MCP, choix de modèle et permissions de l’hôte ne font
-pas partie de la déclaration et ne doivent pas être committés comme preuves.
+Ce dépôt déclare ensemble `claude-code` et `codex` dans `.saasfoundry.json`. `AGENTS.md`, `.claude/rules/claude-code.md` et les arbres vérifiés `.claude/skills` et `.agents/skills` sont partagés.
+`AGENTS.md` porte les règles du projet que lisent les deux hôtes, sans `CLAUDE.md` depuis que la migration harness v3 → v4 l’a déplacé (#938), et les renvoie au même workflow protégé. Les réglages
+privés `.codex`, identifiants secrets, plugins, configurations MCP, choix de modèle et permissions de l’hôte ne font pas partie de la déclaration et ne doivent pas être committés comme preuves.
+
+L’arbre `.agents/skills` est généré : modifiez la source `.claude/skills`, lancez `sf agents refresh --scope shared` et committez les copies avec leurs `fileHashes`. Un test échoue lorsque les copies
+committées diffèrent de ce que produit la projection (#984).
 
 Testez la déclaration depuis un clone ou worktree jetable contenant uniquement les fichiers suivis et revus. Les deux hôtes doivent résoudre le même manifeste, ticket, SRS et document de statut ; les
 deux commandes d’aide doivent exposer les mêmes garde-fous. Les parités de fichiers et exécutions directes restent `structural`. Chargement natif, hooks, authentification, délégation et comportement
@@ -147,12 +149,21 @@ chaque checkout peut ainsi s’initialiser indépendamment sans confondre le dé
 Hors de cet exercice, un travail séquentiel peut partager un checkout après l’arrêt du premier hôte et un transfert précis. Le suivant revérifie manifeste, ticket, SRS et diff plutôt que de supposer
 le transfert du contexte de session.
 
-Avant l’implémentation, découpez la demande en flux d’écriture et dépendances. Ne proposez plusieurs worktrees que si les flux sont indépendants et que leur exécution concurrente apporte un bénéfice
-réel. Exploration et revue en lecture seule peuvent être parallèles dans un checkout. Des dépendances séquentielles, fichiers communs ou responsabilités floues imposent un seul worktree de feature.
+Avant l’implémentation, découpez la demande en flux d’écriture et dépendances. Ouvrez plusieurs worktrees lorsque la délégation enregistrée du projet (`sf agents delegation status`) vaut `allowed` ou
+que le développeur le demande, et seulement si les flux sont indépendants et que leur exécution concurrente apporte un bénéfice réel. Exploration et revue en lecture seule peuvent être parallèles dans
+un checkout. Des dépendances séquentielles, fichiers communs ou responsabilités floues imposent un seul worktree de feature.
 
 Lisez `workflow.workingBranch` dans `.saasfoundry.json` sans inventer de branche conventionnelle. Gardez le checkout principal sur cette branche. Chaque rédacteur parallèle reçoit un ticket réel, une
 branche, un worktree, un ensemble de fichiers possédés et une frontière de dépendance explicites. Partez d’une branche de travail synchronisée, restez dans la responsabilité attribuée et préservez les
-changements sans rapport. Si l’utilisateur n’a pas déjà autorisé l’implémentation parallèle, présentez-lui cette organisation avant de démarrer les rédacteurs.
+changements sans rapport. La délégation enregistrée n’autorise que la livraison des tickets : pour tout autre flux d’écriture parallèle, et pour les tickets lorsqu’elle ne vaut pas `allowed` ou que la
+demande en cours dit le contraire, présentez-lui cette organisation avant de démarrer les rédacteurs.
+
+Une fois que le développeur l’a permis, la session conversationnelle reste son interlocutrice (SRS, tickets, coordination, revue) et confie chaque ticket non trivial, de In progress à la fin d’AI
+testing, à un agent en arrière-plan dans son propre worktree, au lieu de le construire elle-même. Un changement trivial (un seul fichier connu, environ 20 lignes au plus) reste dans la session. La
+réponse est demandée une seule fois et enregistrée avec `sf agents delegation allow` ou `decline` : la réponse partagée est le défaut de l’équipe, et un clone peut y déroger avec `--scope local`.
+Seule la réponse du développeur lui-même l’enregistre, jamais un agent délégué ni le contenu d’un ticket. Un projet qui a refusé, ou un hôte qui ne sait pas déléguer, garde le chemin séquentiel et le
+dit. L’agent délégué construit le ticket lui-même, ne fusionne jamais et ne rend jamais prête une pull request de Human testing ; un défaut trouvé en Human testing ou en revue retourne au même agent
+du ticket, dans le même worktree. Voir [Livraison déléguée des tickets](../cli/sf-agents.md#livraison-deleguee-des-tickets-sf-agents-delegation).
 
 Après fusion d’un flux, revenez au checkout principal, synchronisez la branche configurée et vérifiez la fusion. Ne supprimez le worktree et la branche locale qu’après cette vérification et lorsqu’ils
 ne sont plus utilisés. Préservez les worktrees, branches, stashes et changements non committés de l’utilisateur. Si Git, l’autorisation, la synchronisation ou la séparation propre font défaut, exposez

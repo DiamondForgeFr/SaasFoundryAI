@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitepress'
-import { discoverLocaleRoutes, localizedRoute, routeForPage } from './config/locale-routes'
+import { discoverLocaleRoutes, localizedRoute, routeForPage, unpublishedPatterns } from './config/locale-routes'
 import { createThemeConfig } from './config/navigation'
 
 const translatedRoutes = discoverLocaleRoutes('fr')
@@ -22,6 +22,7 @@ export default defineConfig({
    * tarball and never locally (#626).
    */
   outDir: '../docs-dist',
+  srcExclude: unpublishedPatterns,
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
   vite: {

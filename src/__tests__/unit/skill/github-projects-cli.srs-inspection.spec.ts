@@ -9,7 +9,7 @@ const execFileP = promisify(execFile)
 const REPO_ROOT = path.resolve(__dirname, '../../../..')
 const CLI = path.resolve(REPO_ROOT, '.claude/skills/sf-tool-github-projects/github-projects-cli.sh')
 
-async function sandbox() {
+async function sandbox(extraIssues: object[] = []) {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-gh-srs-inspection-'))
   const bin = path.join(dir, 'bin')
   await mkdir(bin)
@@ -20,6 +20,7 @@ async function sandbox() {
       title: 'FR-MAH-001: Existing',
       body: 'FR page: https://app.notion.com/p/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       state: 'closed',
+      state_reason: 'completed',
       html_url: 'https://github.test/issues/10',
       parent_issue_url: 'https://api.github.test/issues/42',
       type: { name: 'sf-story' },
@@ -30,12 +31,14 @@ async function sandbox() {
       title: 'Renamed requirement',
       body: 'FR-MAH-002\nFR page: https://app.notion.com/p/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?source=copy',
       state: 'open',
+      state_reason: null,
       html_url: 'https://github.test/issues/11',
       parent_issue_url: null,
       type: { name: 'sf-story' },
       labels: []
     },
-    { number: 12, title: 'Unrelated', body: '', state: 'open', html_url: 'https://github.test/issues/12', parent_issue_url: null, type: null, labels: [] }
+    { number: 12, title: 'Unrelated', body: '', state: 'open', html_url: 'https://github.test/issues/12', parent_issue_url: null, type: null, labels: [] },
+    ...extraIssues
   ]
   const gh = `#!/bin/bash
 if [ "$1" = repo ]; then printf 'Fake/repo'; exit 0; fi
@@ -58,6 +61,12 @@ if [ "$1" = api ] && [[ "$*" == *'/parent'* ]]; then
   exit 0
 fi
 if [ "$1" = api ] && [[ "$*" == *'search/issues'* ]]; then
+  [ -n "$SEARCH_LOG" ] && printf '%s\\n' "$*" >> "$SEARCH_LOG"
+  if [ -n "$RATE_LIMIT_ONCE" ] && [ ! -f "$RATE_LIMIT_ONCE" ]; then
+    : > "$RATE_LIMIT_ONCE"
+    echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2
+    exit 1
+  fi
   if [[ "$*" != *'q=repo:Fake/repo is:issue in:title,body ("FR-MAH-'*' OR "'*'")'* ]]; then
     echo "unscoped issue search: $*" >&2
     exit 1
@@ -98,6 +107,69 @@ describe('github-projects CLI — SRS ticket inspection and recovery', () => {
         expect.objectContaining({ number: '11', state: 'OPEN', boardStatus: 'Backlog', parentNumber: null, frIds: ['FR-MAH-002'] })
       ])
       expect(JSON.parse(stdout)[0]).not.toHaveProperty('body')
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  // #1037 — a duplicate closed as not planned keeps its FR page link; the spawner has to be able to tell
+  it('reports why each candidate was closed, so a duplicate closed as not planned can be told apart', async () => {
+    const duplicate = {
+      number: 13,
+      title: 'FR-MAH-002: Renamed requirement',
+      body: 'FR page: https://app.notion.com/p/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      state: 'closed',
+      state_reason: 'not_planned',
+      html_url: 'https://github.test/issues/13',
+      parent_issue_url: null,
+      type: { name: 'sf-story' },
+      labels: []
+    }
+    const s = await sandbox([duplicate])
+    try {
+      const { stdout } = await execFileP(
+        '/bin/bash',
+        [CLI, 'inspect-srs-tickets', '42', '--fr', 'FR-MAH-001=https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '--fr', 'FR-MAH-002=https://www.notion.so/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+        { cwd: s.dir, env: s.env }
+      )
+      expect(JSON.parse(stdout).map((ticket: { number: string; state: string; stateReason: string | null }) => [ticket.number, ticket.state, ticket.stateReason])).toEqual([
+        ['10', 'CLOSED', 'completed'],
+        ['11', 'OPEN', null],
+        ['13', 'CLOSED', 'not_planned']
+      ])
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  // #952 — one search per FR spent GitHub's 30-a-minute search budget on a 17-FR version
+  it('searches several FRs per query, within the search syntax limits', async () => {
+    const s = await sandbox()
+    const log = path.join(s.dir, 'searches')
+    try {
+      const frs = Array.from({ length: 7 }, (_, i) => ['--fr', `FR-MAH-${String(i + 1).padStart(3, '0')}=https://www.notion.so/${String(i).repeat(32).slice(0, 32)}`]).flat()
+      await execFileP('/bin/bash', [CLI, 'inspect-srs-tickets', '42', ...frs], { cwd: s.dir, env: { ...s.env, SEARCH_LOG: log } })
+      const queries = (await import('fs')).readFileSync(log, 'utf8').trim().split('\n')
+      expect(queries).toHaveLength(3)
+      for (const query of queries) {
+        const q = query.match(/q=(.*?) -f per_page/)![1]
+        expect(q.length).toBeLessThanOrEqual(256)
+        expect((q.match(/ OR /g) ?? []).length).toBeLessThanOrEqual(5)
+      }
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  it('waits and retries a search refused by the rate limit instead of aborting', async () => {
+    const s = await sandbox()
+    try {
+      const { stdout, stderr } = await execFileP('/bin/bash', [CLI, 'inspect-srs-tickets', '42', '--fr', 'FR-MAH-001=https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], {
+        cwd: s.dir,
+        env: { ...s.env, RATE_LIMIT_ONCE: path.join(s.dir, 'limited'), SF_SEARCH_RATE_LIMIT_WAIT: '0' }
+      })
+      expect(stderr).toContain('GitHub search rate limit reached')
+      expect(JSON.parse(stdout)).toEqual(expect.arrayContaining([expect.objectContaining({ number: '10' })]))
     } finally {
       await s.cleanup()
     }

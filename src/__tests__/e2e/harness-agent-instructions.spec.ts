@@ -3,6 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
+import { GENERATED_INSTRUCTIONS } from '../../harness/agent-instructions'
+
 const ROOT = resolve(__dirname, '../../..')
 
 describe('compiled shared harness installer', () => {
@@ -28,19 +30,26 @@ describe('compiled shared harness installer', () => {
     return JSON.parse(output)
   }
 
-  it('discovers packaged resources from another working directory and preserves a later customization', async () => {
+  it('discovers packaged resources from another working directory and never rewrites a user-authored AGENTS.md', async () => {
     expect(runInstaller().conflicts).toEqual([])
-    const claude = await readFile(join(project, 'CLAUDE.md'), 'utf8')
+    await expect(readFile(join(project, 'CLAUDE.md'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    const agents = await readFile(join(project, 'AGENTS.md'), 'utf8')
+    expect(agents).toContain('# shared-demo')
+    expect(agents).toContain(GENERATED_INSTRUCTIONS)
+    expect(agents).toContain('sf status --agent-friendly --no-network')
+    expect(await readFile(join(project, '.claude/rules/claude-code.md'), 'utf8')).not.toBe('')
+    await expect(readFile(join(project, 'GEMINI.md'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     const shared = await readFile(join(project, '.agents/skills/sf-workflow/SKILL.md'), 'utf8')
     expect(shared).toContain('name: sf-workflow')
     expect(shared).toContain('../../../.claude/docs/manifest-schema.md')
     expect(await readFile(join(project, '.claude/docs/manifest-schema.md'), 'utf8')).not.toBe('')
     expect(runInstaller().written).toEqual([])
-    expect(await readFile(join(project, 'CLAUDE.md'), 'utf8')).toBe(claude)
+    expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe(agents)
 
     await writeFile(join(project, 'AGENTS.md'), '# Personal instructions\n')
-    expect(runInstaller().conflicts).toContain('AGENTS.md')
+    expect(runInstaller().conflicts).toEqual([])
     expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe('# Personal instructions\n')
-    expect(await readFile(join(project, 'AGENTS.md.saasfoundry.new'), 'utf8')).toContain('Read `CLAUDE.md`')
+    await expect(readFile(join(project, 'AGENTS.md.saasfoundry.new'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(join(project, 'CLAUDE.md'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })

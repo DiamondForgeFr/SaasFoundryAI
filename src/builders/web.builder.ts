@@ -3,6 +3,7 @@ import { globSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { join, resolve } from 'path'
 
+import { GENERATED_REGION_END, GENERATED_REGION_START } from '../harness/agent-instructions'
 import { installAnalyticsModule } from '../installers/analytics.installer'
 import { installPwaModule } from '../installers/pwa.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
@@ -132,7 +133,13 @@ export async function renderWebApp({
     [/:3500;/g, `:${apiPort};`],
     [/saasfoundry-([a-z0-9-]+)/g, `${projectName}-$1`]
   ])
-  await replaceInFile(`${webPath}/CLAUDE.md`, [[/port 5173/g, `port ${webPort}`]])
+  await replaceInFile(`${webPath}/AGENTS.md`, [
+    [/port 5173/g, `port ${webPort}`],
+    [/localhost:3500/g, `localhost:${apiPort}`]
+  ])
+  // A multirepo app is its own repository: its AGENTS.md is the root instructions file and
+  // carries the generated region the agent-instruction planner fills (#937).
+  if (!isMonorepo) await replaceInFile(`${webPath}/AGENTS.md`, [[/\s*$/, `\n\n${GENERATED_REGION_START}\n${GENERATED_REGION_END}\n`]])
   // Monorepo overlay: the web dev script waits on the API's port before starting Vite.
   await replaceInFile(`${webPath}/package.json`, [[/tcp:3500/g, `tcp:${apiPort}`]])
   // The image describes itself, and the lockfile names the package. Both carried the
@@ -191,7 +198,7 @@ export async function renderWebApp({
   }
 
   // Install workflow artefacts (skill + tool skill) when a workflow is configured
-  await installWorkflowArtifacts({ targetPath: webPath, workflow })
+  await installWorkflowArtifacts({ targetPath: webPath, workflow, injectSection: !isMonorepo })
 
   return true
 }

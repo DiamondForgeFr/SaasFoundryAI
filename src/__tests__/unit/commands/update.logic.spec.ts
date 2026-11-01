@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { applyFileUpdates, computeFileUpdates, enforceAtomicImpactValidationBundles, FileUpdate, moduleSelectionPrefill, templateBaselines } from '../../../commands/update'
+import { applyFileUpdates, comparableTemplateHashes, computeFileUpdates, enforceAtomicImpactValidationBundles, FileUpdate, moduleSelectionPrefill, templateBaselines } from '../../../commands/update'
 import { hashFileContent } from '../../../utils'
 
 describe('moduleSelectionPrefill', () => {
@@ -357,6 +357,45 @@ describe('templateBaselines', () => {
     const manifest = { fileHashes: { 'src/app.module.ts': hashFileContent('older template\n') } } as never
 
     expect(templateBaselines(manifest, target)).toEqual(target)
+  })
+
+  // #937 — the CLI no longer generates CLAUDE.md. A template refresh of a project generated
+  // before it would delete its CLAUDE.md files and add AGENTS.md ones; that move is the harness v3 → v4 migration (#938).
+  it('never adds, updates or removes an instruction file through the template merge', () => {
+    const legacy = {
+      'CLAUDE.md': hashFileContent('root rules\n'),
+      'apps/api/CLAUDE.md': hashFileContent('api rules\n'),
+      '.claude/rules/claude-code.md': hashFileContent('old rule\n'),
+      'README.md': hashFileContent('readme\n')
+    }
+    const target = {
+      'AGENTS.md': hashFileContent('root rules\n'),
+      'apps/api/AGENTS.md': hashFileContent('api rules\n'),
+      '.claude/rules/claude-code.md': hashFileContent('new rule\n'),
+      'README.md': hashFileContent('new readme\n')
+    }
+    const comparable = comparableTemplateHashes(legacy, legacy, target)
+    expect(computeFileUpdates(comparable.baseHashes, comparable.currentHashes, comparable.targetHashes)).toEqual([{ path: 'README.md', action: 'update' }])
+    expect(templateBaselines({ fileHashes: legacy } as never, target)).toEqual({ ...legacy, 'README.md': target['README.md'] })
+  })
+
+  // #935 — a settings.json the scaffold deposited is the project's: `sf update` merges the capture hooks and the
+  // permissions into it on every run. Swept as a template too, a file the merge already brought up to date read
+  // as edited by the project and came back as a `.saasfoundry.new` proposal of its own content.
+  it('leaves .claude/settings.json to its merge: never added, updated, removed or conflicted by the template sweep', () => {
+    const old = { '.claude/settings.json': hashFileContent('old template\n'), 'apps/acme-api/.claude/settings.json': hashFileContent('old template\n'), 'README.md': hashFileContent('readme\n') }
+    const merged = { ...old, '.claude/settings.json': hashFileContent('merged by sf update\n'), 'apps/acme-api/.claude/settings.json': hashFileContent('merged by sf update\n') }
+    const target = {
+      '.claude/settings.json': hashFileContent('new template\n'),
+      'apps/acme-api/.claude/settings.json': hashFileContent('new template\n'),
+      'README.md': hashFileContent('new readme\n')
+    }
+
+    const comparable = comparableTemplateHashes(old, merged, target)
+
+    expect(computeFileUpdates(comparable.baseHashes, comparable.currentHashes, comparable.targetHashes)).toEqual([{ path: 'README.md', action: 'update' }])
+    // The baseline the manifest recorded stays: the sweep does not rewrite what it does not own.
+    expect(templateBaselines({ fileHashes: old } as never, target)).toEqual({ ...old, 'README.md': target['README.md'] })
   })
 
   it('keeps the shared agent adapter baselines the previous manifest recorded', () => {

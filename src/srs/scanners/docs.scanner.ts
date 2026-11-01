@@ -63,7 +63,7 @@ export function extractHeadings(content: string): DocHeading[] {
   return out
 }
 
-const DOC_FILE_GLOBS: RegExp[] = [/^README\.md$/i, /^CLAUDE\.md$/, /\/README\.md$/i, /\/CLAUDE\.md$/, /^docs\//, /\/docs\//]
+const DOC_FILE_GLOBS: RegExp[] = [/^README\.md$/i, /^(?:AGENTS|CLAUDE)\.md$/, /\/README\.md$/i, /\/(?:AGENTS|CLAUDE)\.md$/, /^docs\//, /\/docs\//]
 
 function isDocFile(relPath: string): boolean {
   const norm = normalizeRel(relPath)
@@ -73,7 +73,7 @@ function isDocFile(relPath: string): boolean {
 
 export const docsScanner: CodebaseScanner = {
   id: 'docs',
-  describe: 'Markdown docs (README/CLAUDE/docs) → doc-context findings (regex-based)',
+  describe: 'Markdown docs (README/AGENTS/CLAUDE/docs) → doc-context findings (regex-based)',
   async collect(context: CodebaseScannerContext): Promise<DocContextFinding[]> {
     const docFiles = context.files.filter(isDocFile)
 

@@ -55,3 +55,6 @@ Adding another provider or local runtime registers another adapter. It does not 
 
 This first contract deliberately stops before task classification, plan ranking, budget approval, retry policy, and calibration. Those layers consume immutable catalogue snapshots so they can explain
 which evidence and prices informed a decision.
+
+The task-kind allocation grid behind [`sf agents route`](/cli/sf-agents#delegation-routing-sf-agents-route) names its candidates with the same canonical `provider/runtime/model/effort` identity (for
+example `anthropic/claude-code/claude-opus-5-5/medium`). It is a static, evidence-backed recommendation per task kind, not a catalogue snapshot: it carries no availability or live price.

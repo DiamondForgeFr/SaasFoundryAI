@@ -18,6 +18,11 @@ All flows are driven by the manifest and the canonical capability classification
 `saasfoundry-cli@1.0.0-beta` release can first create that manifest through the explicit legacy-adoption flow below. The published beta disabled monorepo generation, so there is no authentic beta
 monorepo layout to adopt. Other projects without a manifest are refused.
 
+Two more things happen on every run, whatever the version check says. Pending **module migrations** bring an installed harness to the current layout, and `.claude/settings.json` is **kept current**:
+the delegation capture hooks and the permission rules are merged into it, your own keys, hooks and rules stay, and a file that cannot be merged in place (a link, text that is not JSON) gets a
+`.saasfoundry.new` proposal instead of an edit. `sf agents refresh` is no longer required after an update for that. See
+[Delegation capture and permissions](/cli/sf-update#delegation-capture-and-permissions-harness-v5).
+
 ## Adopt a project created before manifest support
 
 Legacy adoption is separate from updating templates or adding modules. It supports only the integrity-pinned multirepo output of the published `saasfoundry-cli@1.0.0-beta` package. It does not infer
@@ -306,6 +311,12 @@ your own:
 ```bash
 git checkout HEAD -- path/to/removed-file.ts
 ```
+
+### My CLAUDE.md is gone
+
+Since harness v4, `AGENTS.md` is the instruction file every agent reads, Claude Code included. `sf update` moved each section of `CLAUDE.md` into `AGENTS.md` before removing it, and kept any edited
+copy of a generated section under **Kept from CLAUDE.md for review**. Compare with `git show HEAD:CLAUDE.md`; [the move](/cli/sf-update#claude-md-moves-to-agents-md-harness-v4) lists what goes where.
+If your own `AGENTS.md` already existed, look for `AGENTS.md.saasfoundry.new` instead: `CLAUDE.md` stays until you merge it.
 
 ### Where are the tests for this merge?
 

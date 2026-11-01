@@ -36,7 +36,7 @@ Code review with mandatory green CI.
 ## Action checklist
 
 - [ ] **Ready PR** — after Human Testing the developer marks the draft ready; without Human Testing (`nature:internal`) you ran `ready-pr <ticket>` at the end of AI Testing. Keep the ticket link,
-      change summary, test plan/results and created tests in its description; assign configured reviewers.
+      change summary, test plan/results (the `## Test plan` and `## Test report` comments) and created tests in its description; assign configured reviewers.
 - [ ] **Confirm ticket** is `In Review`: the configured GitHub Ready for review listener performs the guarded transition automatically. If it is not installed, use `workflow-cli.sh update-status`.
       Investigate listener errors instead of bypassing guards.
 - [ ] **Monitor CI** — readiness starts the complete applicable suite, and later non-draft pushes rerun it. Draft-skipped checks are not successful validation.
@@ -45,6 +45,9 @@ Code review with mandatory green CI.
       to Human Testing.
 - [ ] **Monitor reviews** — answer questions, implement requested changes
 - [ ] **Reviewer asks for extra tests** — create them, run locally, commit, push, wait for green CI, resolve conversation
+- [ ] **Delegated ticket** — a defect found in review, a red CI or a requested change goes back to the ticket's own agent, in the same worktree and on the same branch (the hand-back of Human Testing);
+      the session answers the reviewer and does not code it. The agent returns the ticket to AI Testing when the change calls for retesting (SKILL.md → Delegated ticket delivery). A defect or a
+      requested change in the delegated work is a rework of that delegation: `sf agents outcome mark <ticket> rework` records it for the routing
 - [ ] **Wait for approval + green CI** — do nothing until the developer merges
 
 ## Errors to avoid
@@ -52,6 +55,7 @@ Code review with mandatory green CI.
 - Asking the developer to merge with red CI
 - Ignoring test failures in CI
 - Merging yourself (unless explicitly instructed)
+- The session coding a review fix itself while delegation is `allowed`: it goes back to the ticket's own agent
 
 ## Guard
 

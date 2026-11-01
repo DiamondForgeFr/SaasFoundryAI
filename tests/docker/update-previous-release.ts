@@ -258,11 +258,17 @@ function assertUpdatedManifest(manifest: Record<string, unknown>): void {
   if (adoption?.refreshPending !== false) throw new Error('The initial historical template refresh is still pending.')
 }
 
+/** A user-written CLAUDE.md, as a project installed before #937 holds one: the harness v3 → v4 migration moves it into AGENTS.md (#938). */
+const CLAUDE_MD_CANARY = 'SaaSFoundry fixture CLAUDE.md canary — moves to AGENTS.md line for line.'
+const FIXTURE_CLAUDE_MD = `# ${PROJECT_NAME}\n\n## Fixture conventions\n\n${CLAUDE_MD_CANARY}\n`
+
 async function assertDeposits(projectRoot: string): Promise<void> {
   const api = join(projectRoot, 'apps', `${PROJECT_NAME}-api`)
   const web = join(projectRoot, 'apps', `${PROJECT_NAME}-web`)
   await Promise.all([
-    requireRegularFile(join(projectRoot, 'CLAUDE.md')),
+    // The fixture's CLAUDE.md moves into AGENTS.md (#938), which carries the generated region
+    // since #937; no CLAUDE.md remains.
+    requireRegularFile(join(projectRoot, 'AGENTS.md')),
     requireRegularFile(join(projectRoot, '.claude', 'skills', 'sf-workflow', 'SKILL.md')),
     requireRegularFile(join(api, '.claude', 'skills', 'sf-tool-context7', 'SKILL.md')),
     requireRegularFile(join(web, '.claude', 'skills', 'sf-tool-context7', 'SKILL.md')),
@@ -280,6 +286,17 @@ async function assertDeposits(projectRoot: string): Promise<void> {
     requireRegularFile(join(web, '.saasfoundry', 'validation.json')),
     requireRegularFile(join(web, '.github', 'workflows', 'test.yml'))
   ])
+
+  const instructions = await readFile(join(projectRoot, 'AGENTS.md'), 'utf8')
+  if (!instructions.includes('<!-- saasfoundry:generated:start -->')) throw new Error('The harness transition wrote an AGENTS.md without its generated region.')
+  if (!instructions.includes(`## Fixture conventions\n\n${CLAUDE_MD_CANARY}`)) throw new Error('The user-written CLAUDE.md section did not move into AGENTS.md (#938).')
+  if (
+    await lstat(join(projectRoot, 'CLAUDE.md')).then(
+      () => true,
+      () => false
+    )
+  )
+    throw new Error('CLAUDE.md is still there: the harness v3 → v4 migration moves it into AGENTS.md (#938).')
 
   const apiClassifier = await readFile(join(api, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))
   const webClassifier = await readFile(join(web, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))
@@ -400,6 +417,7 @@ export async function runPreviousReleaseUpdateLifecycle(options: PreviousRelease
   } finally {
     await canary.close()
   }
+  await writeFile(join(projectRoot, 'CLAUDE.md'), FIXTURE_CLAUDE_MD, { flag: 'wx', mode: 0o644 })
   await assertHistoricalSourceCanaries(projectRoot, historicalCanaries)
 
   await runPreviousReleaseLifecycleHook('Previous-release pre-update runtime hook', options.beforeUpdate, { projectRoot, manifest: undefined }, deadline, options.signal)

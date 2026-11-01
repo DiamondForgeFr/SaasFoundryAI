@@ -136,7 +136,7 @@ l'accès à tous les projets, pages ou fichiers.
 Utilisez la commande de statut pour un diagnostic uniquement local :
 
 ```bash
-sf status --claude-friendly --no-network
+sf status --agent-friendly --no-network
 ```
 
 ## Ce que fait réellement l'agent

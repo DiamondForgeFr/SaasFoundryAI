@@ -4,7 +4,13 @@ import { dirname, join } from 'path'
 
 import * as adapter from '../../../harness/agent-instructions'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../../../harness/agent-support'
-import { harnessInstallerMeta } from '../../../installers/harness.installer'
+import { HARNESS_ASK_COMMANDS, harnessInstallerMeta } from '../../../installers/harness.installer'
+import { CLAUDE_CAPTURE_COMMAND, CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
+import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
+
+// Tier agents (#929) have their own suite; these assertions are about the other deposits.
+// Tier agents (#929) and the Codex capture hook (#1035) have their own suites.
+const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path) && path !== CODEX_HOOKS_PATH)
 
 const SKILL = '---\nname: commit\ndescription: Commit changes\n---\n# Commit\nFollow the project workflow.\n'
 const MANIFEST = {
@@ -85,13 +91,72 @@ describe('additive managed agent support (#660)', () => {
     const before = await get('.saasfoundry.json')
     const stamp = (await lstat(join(root, '.saasfoundry.json'))).mtimeMs
     const repeated = await enable(['kimi', 'codex'])
+    // The first refresh wires the delegation capture hooks into the project settings (#1035): a repeat changes nothing.
+    await refreshAgents({ targetPath: root, scope: 'shared' })
+    const settings = await get('.claude/settings.json')
     const refreshed = await refreshAgents({ targetPath: root, scope: 'shared' })
-    expect(repeated.report.written).toEqual([])
-    expect(refreshed.report.written).toEqual([])
+    expect(own(repeated.report.written)).toEqual([])
+    expect(own(refreshed.report.written)).toEqual([])
     expect(repeated.manifestChanged).toBe(false)
     expect(refreshed.manifestChanged).toBe(false)
     expect(await get('.saasfoundry.json')).toBe(before)
+    expect(await get('.claude/settings.json')).toBe(settings)
     expect((await lstat(join(root, '.saasfoundry.json'))).mtimeMs).toBe(stamp)
+  })
+  it('wires the delegation capture hooks into the project settings on a shared refresh, and only then', async () => {
+    await enable(['claude-code'])
+    expect(await get('.claude/settings.json')).toBe('{"hooks":{"custom":["preserve"]}}')
+    const refreshed = await refreshAgents({ targetPath: root, scope: 'shared' })
+    expect(refreshed.report.written).toContain('.claude/settings.json')
+    const settings = JSON.parse(await get('.claude/settings.json'))
+    expect(settings.hooks.custom).toEqual(['preserve'])
+    // The hook runs the CLI the project resolves, never a bare `sf`, and only for the routed sf-<tier> agents
+    expect(settings.hooks.SubagentStop[0]).toMatchObject({ matcher: 'sf-.*', hooks: [{ type: 'command', command: CLAUDE_CAPTURE_COMMAND, timeout: 30 }] })
+    expect(CLAUDE_CAPTURE_COMMAND).not.toMatch(/(^|[;&|]\s*)sf agents/)
+    expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
+    expect(settings.permissions.allow).toContain('Bash(sf agents route *)')
+    // What writes evidence the routing acts on asks first
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.ask).toEqual(expect.arrayContaining([...HARNESS_ASK_COMMANDS]))
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome record *)')
+  })
+  it('replaces the bare-sf capture hooks and the pre-approved evidence commands an earlier build wrote, and keeps the project own', async () => {
+    await put(
+      '.claude/settings.json',
+      JSON.stringify({
+        hooks: {
+          SubagentStop: [
+            {
+              hooks: [
+                { type: 'command', command: 'sf agents outcome capture --host claude-code', timeout: 30 },
+                { type: 'command', command: 'echo mine' }
+              ]
+            }
+          ]
+        },
+        permissions: { allow: ['Bash(npm test)', 'Bash(sf agents outcome mark *)', 'Bash(sf agents outcome record *)'] }
+      })
+    )
+    await enable(['claude-code'])
+    const refreshed = await refreshAgents({ targetPath: root, scope: 'shared' })
+    const settings = JSON.parse(await get('.claude/settings.json'))
+    expect(settings.hooks.SubagentStop.flatMap((group: { hooks: { command: string }[] }) => group.hooks.map((hook) => hook.command))).toEqual(['echo mine', CLAUDE_CAPTURE_COMMAND])
+    expect(settings.permissions.allow).toContain('Bash(npm test)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome mark *)')
+    expect(settings.permissions.allow).not.toContain('Bash(sf agents outcome record *)')
+    // The refresh takes those two rules away and says so, once each (#935): it never removes a rule silently
+    expect(refreshed.report.warnings.filter((warning) => warning.includes('removed the rule Bash(sf agents outcome mark *)'))).toHaveLength(1)
+    expect(refreshed.report.warnings.filter((warning) => warning.includes('removed the rule Bash(sf agents outcome record *)'))).toHaveLength(1)
+  })
+  it('does not rewrite a settings file whose permissions or hooks have a shape the merge would have to overwrite (#935)', async () => {
+    const odd = JSON.stringify({ permissions: { allow: 'Bash(npm test)' }, hooks: [] })
+    await put('.claude/settings.json', odd)
+    await enable(['claude-code'])
+    const refreshed = await refreshAgents({ targetPath: root, scope: 'shared' })
+    expect(await get('.claude/settings.json')).toBe(odd)
+    expect(refreshed.report.written).not.toContain('.claude/settings.json')
+    expect(refreshed.report.warnings.join('\n')).toContain('.claude/settings.json has `hooks` that is not an object')
+    expect(JSON.parse(await get('.claude/settings.json.saasfoundry.new')).hooks.SubagentStop).toBeDefined()
   })
   it('refreshes generated copies using their successful baselines', async () => {
     await enable(['codex'])
@@ -139,7 +204,7 @@ describe('additive managed agent support (#660)', () => {
     await put('.saasfoundry.json', JSON.stringify({ version: '1', projectName: 'legacy', structure: 'cli' }))
     expect((await enable(['codex'])).configuredAgents).toEqual(['claude-code', 'codex'])
     expect((await manifest()).modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
-    expect(Object.keys((await manifest()).fileHashes).every((key) => ['AGENTS.md', 'GEMINI.md'].includes(key) || key.startsWith('.agents/'))).toBe(true)
+    expect(Object.keys((await manifest()).fileHashes).every((key) => ['AGENTS.md', 'GEMINI.md'].includes(key) || key.startsWith('.agents/') || TIER_AGENT_PATH.test(key))).toBe(true)
   })
   it.each(['project', 'SHARED'])('refuses unsupported scope %s before changing files', async (scope) => {
     const before = await get('.saasfoundry.json')

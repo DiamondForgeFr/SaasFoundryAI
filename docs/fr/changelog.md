@@ -6,6 +6,101 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
+## [1.1.0] - 2026-11-01
+
+Version de fonctionnalités. La délégation des tickets est désormais routée selon le type de tâche, les instructions des agents passent dans `AGENTS.md`, et une exigence fonctionnelle existante peut
+être modifiée sur place. Elle corrige aussi les problèmes de `sf srs spawn`, des pull requests et du workflow que les exécutions réelles ont rencontrés.
+
+### Ajouts
+
+#### CLI
+
+- `sf agents route --task <kind>` désigne l'agent de palier pour un type de tâche (exploration, prose, édition ciblée, correction de bug, revue, fonctionnalité multi-fichiers, tests, planification, CI
+  terminal). La grille d'allocation est livrée avec ses preuves, et `modules.harness.routing` dans le manifeste peut la surcharger ([#930](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/930),
+  [#1006](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1006), [#1007](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1007),
+  [#1008](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1008)).
+- Chaque agent de code déclaré reçoit un agent de palier par palier de routage (`sf-light`, `sf-edit`, `sf-build`, `sf-fix`, `sf-plan`, `sf-terminal`), avec son propre modèle et son propre effort
+  ([#929](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/929), [#1012](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1012),
+  [#1013](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1013)). Chaque agent de palier liste aussi les types de tâche qu'il ne sert pas, et une surcharge de routage qui nomme un effort que
+  l'hôte ne sait pas exprimer est refusée au lieu de tourner silencieusement avec un autre effort ([#1011](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1011)).
+- `sf agents delegation status|allow|decline` enregistre si des agents en arrière-plan peuvent construire des tickets, chacun dans son worktree. Un clone peut surcharger localement la réponse
+  partagée, et `sf status` affiche la valeur effective ([#1041](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1041), [#1026](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1026)).
+- Les délégations routées sont mesurées. `sf agents outcome record` et `sf agents outcome mark <ticket> rework|human-defect` tiennent un registre du coût et du verdict, et
+  `sf agents routing adjust|promote|report|reset` déplace un type de tâche entre paliers dans des bornes déclarées, montre ce qui a changé et l'annule
+  ([#1035](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1035), [#1050](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1050),
+  [#1051](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1051), [#1052](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1052),
+  [#1053](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1053), [#1067](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1067)).
+- `sf status` affiche la version de la grille, les surcharges, les agents de palier, le consentement à la délégation et l'état du routage
+  ([#933](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/933), [#1053](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1053)).
+- `sf srs apply-update` accepte `update-fr`, qui modifie sur place une exigence fonctionnelle existante là où elle est listée. `--dry-run` affiche le plan ancienne valeur vers nouvelle valeur et
+  n'écrit rien ([#945](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/945), [#1058](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1058),
+  [#1059](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1059)). Quand une conversation révise une exigence existante, les règles d'évaluation du SRS proposent désormais un correctif
+  `update-fr` au lieu d'ajouter un nouvel élément de conception ([#1061](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1061)).
+- `unlink-subtask` est disponible dans la CLI GitHub Projects et dans la CLI du workflow ([#1039](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1039)).
+- Le test IA exécute le pipeline local déclaré par le projet : `molten ci run` lorsque le projet le déclare, la suite npm sinon. `sf status` affiche une ligne `local-ci:`
+  ([#943](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/943)).
+
+#### Harness et instructions des agents
+
+- `AGENTS.md` est le fichier d'instructions faisant autorité. Un projet encore piloté par `CLAUDE.md` y est migré, et les diagnostics du harness signalent les instructions masquées, la version de
+  Claude Code et la limite de taille des instructions Codex ([#936](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/936), [#937](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/937),
+  [#938](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/938), [#939](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/939)).
+- Les compétences sont projetées là où chaque hôte les cherche. Le registre enregistre les répertoires de compétences de chaque hôte, les compétences partagées ne sont copiées que pour les hôtes qui
+  lisent `.agents/skills`, et les copies conservent le code de la compétence octet pour octet ([#940](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/940),
+  [#999](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/999), [#1000](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1000),
+  [#1001](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1001)).
+- Les instructions générées confient à la session l'orchestration de la délégation. La conversation reste avec le développeur et confie chaque ticket à un agent en arrière-plan, dans son propre
+  worktree, au palier que désigne son type de tâche ([#1022](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1022), [#1042](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1042),
+  [#1043](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1043)).
+- `sf-workflow` nomme les types de tâches et la règle de découpage d'un ticket entre agents ([#1023](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1023)).
+
+#### Workflow
+
+- Le rapport du test IA utilise les titres `## Test plan` et `## Test report` ([#1017](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1017)).
+- Les échappatoires du workflow sont recensées dans une seule référence, et le schéma des profils de complexité est documenté ([#261](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/261),
+  [#260](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/260)).
+
+### Modifications
+
+- `sf update` apporte à `.claude/settings.json` les hooks de capture de délégation et les permissions, et les maintient à jour à chaque mise à jour. Les ponts d'instructions laissés par les 1.0.0 et
+  1.0.1 sont reconnus ([#935](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/935)).
+- Le README et la page d'accueil de la documentation décrivent la délégation routée, et une nouvelle page de guide « Délégation routée » (EN et FR) explique la grille, les agents de palier, le
+  consentement, la mesure et l'ajustement ([#1086](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1086)).
+
+### Corrections
+
+#### CLI et workflow
+
+- `create-pr` et `ready-pr` acceptent un ticket travaillé depuis une branche de worktree nommée par l'hôte, comme un worktree d'agent Claude Code
+  ([#1036](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1036)).
+- `pr-review-sync` ne passe plus au rouge pour les branches qui ne nomment aucun ticket, comme les branches de synchronisation de release et les branches `rc-*`
+  ([#1016](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1016)). Un clic prématuré sur « Ready for review » est signalé comme une notice, et non comme un contrôle en échec
+  ([#1003](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1003)).
+- `github-projects-cli.sh list` renvoie tous les éléments d'un board de plus de 200 éléments, et son filtre par statut les voit tous
+  ([#1082](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1082)).
+- Les scripts du workflow lisent les profils de complexité bloc par bloc et tracent chaque échappatoire utilisée ([#961](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/961)).
+
+#### CLI : `sf srs spawn`
+
+- Le spawn ne recrée plus les Stories déjà créées sous l'Epic, et son `--dry-run` les affiche ([#1037](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1037),
+  [#1038](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1038)).
+- Les tickets fermés comme non planifiés sont ignorés lorsqu'une exigence fonctionnelle est rapprochée de son ticket ([#1046](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1046)).
+- `--version` accepte un identifiant de page Notion écrit sans tirets ([#927](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/927)).
+- Les recherches par exigence sont regroupées, et l'exécution attend la fin de la limite de débit de recherche GitHub au lieu d'échouer sur les grandes versions
+  ([#952](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/952)).
+
+#### Projets générés
+
+- Les projets générés passent à nouveau l'audit de production : zod 4.6.7 (GHSA-mrhx-c7xc-m3w5) et, dans le lockfile de l'API multirepo, body-parser 2.4.0 (GHSA-27r3-jxmh-p828), et multer 2.5.0
+  (GHSA-q7qp-rjg7-q26m) ([#1084](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1084), [#1088](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1088)).
+
+#### Outillage
+
+- La CI locale passe depuis un chemin contenant une espace, garde `dist/` entier pendant un build et maintient la base du cycle de vie en vie pendant ses sondes de démarrage
+  ([#1082](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1082)).
+- Relancer les jobs de CI en échec conserve l'artefact d'image du cycle de vie, et la spécification de transition de profil dispose d'un délai sur une machine chargée
+  ([#891](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/891), [#892](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/892)).
+
 ## [1.0.1] - 2026-10-09
 
 Version de maintenance. Elle corrige ce que des projets réels ont rencontré après la 1.0.0 : `sf update` sur des projets personnalisés, l'installation non interactive du harness, l'écriture et le

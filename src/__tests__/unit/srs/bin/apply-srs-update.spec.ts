@@ -103,6 +103,16 @@ describe('parseArgs', () => {
   it('rejects --manifest with no value', () => {
     expect(() => parseArgs(['--manifest'])).toThrow(/--manifest requires a value/)
   })
+
+  // #945 — a preview of an update-fr patch
+  it('reads --dry-run, off by default', () => {
+    expect(parseArgs([]).dryRun).toBe(false)
+    expect(parseArgs(['--dry-run', '--patch', './p.json'])).toMatchObject({ dryRun: true, patchPath: './p.json' })
+  })
+
+  it('still refuses an option it does not know', () => {
+    expect(() => parseArgs(['--dryrun'])).toThrow(/unknown option '--dryrun'/)
+  })
 })
 
 describe('assertPatchShape', () => {
@@ -125,6 +135,17 @@ describe('assertPatchShape', () => {
 
   it('rejects a non-object patch entirely', () => {
     expect(() => assertPatchShape('not-an-object' as never)).toThrow(/patch must be a JSON object/)
+  })
+
+  // #945 — an update-fr patch names an FR id, not a page and an item
+  it('accepts an update-fr patch without pageId or item, and checks it', () => {
+    expect(() => assertPatchShape({ kind: 'update-fr', frId: 'FR-AEX-014', changes: { priority: 'P2' } })).not.toThrow()
+    expect(() => assertPatchShape({ kind: 'update-fr', frId: 'FR-AEX-014', changes: {} })).toThrow(/empty `changes`/)
+    expect(() => assertPatchShape({ kind: 'update-fr', frId: 'FR-AEX-014', changes: { urRefs: ['UR-1'] } as never })).toThrow(/#1056/)
+  })
+
+  it('lists update-fr among the kinds it expects', () => {
+    expect(() => assertPatchShape({ kind: 'nuke' as never, pageId: 'x', item: { id: '1', narrative: 'n' } })).toThrow(/add-nfr \| update-fr/)
   })
 })
 

@@ -1,4 +1,4 @@
-# {{PROJECT_NAME}}
+# acme
 
 Production-ready SaaS monorepo generated with **SaaSFoundryAI** - An AI-First development platform.
 
@@ -24,7 +24,7 @@ exact replacement. No change runs no mutating command. Replacement changes inven
 This is a **Turborepo monorepo** with centralized tooling and shared skills.
 
 ```
-{{PROJECT_NAME}}/
+acme/
 ├── .claude/              # ⭐ Centralized Claude skills (shared by all apps)
 │   └── skills/           # Core, workflow and tool skills (sf-*)
 ├── apps/
@@ -44,17 +44,17 @@ This is a **Turborepo monorepo** with centralized tooling and shared skills.
 
 ### 📦 Shared packages — the no-drift contract
 
-`packages/*` is the single source of truth for code that must be identical on both sides of the wire. Each package is a private npm workspace published under `@{{PROJECT_NAME}}/<name>`. **Read each package's `README.md` for the full "what goes in / what does not" rules** — the summary below is just the AI-orientation map.
+`packages/*` is the single source of truth for code that must be identical on both sides of the wire. Each package is a private npm workspace published under `@acme/<name>`. **Read each package's `README.md` for the full "what goes in / what does not" rules** — the summary below is just the AI-orientation map.
 
 | Package                                | Purpose                                                            | Distribution                            | Build artifact         |
 | -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------- | ---------------------- |
-| `@{{PROJECT_NAME}}/shared-types`       | Cross-wire TypeScript types + `z.infer` outputs                    | dist (`tsc`) + vendored mirror per app  | `dist/index.{js,d.ts}` |
-| `@{{PROJECT_NAME}}/shared-validation`  | Zod schemas for both NestJS DTOs and React Hook Form               | dist (`tsc`) + vendored mirror per app  | `dist/index.{js,d.ts}` |
-| `@{{PROJECT_NAME}}/shared-config`      | Runtime constants (MIME lists, size thresholds, public routes, …)  | dist (`tsc`), mono-only (no mirror)     | `dist/index.{js,d.ts}` |
-| `@{{PROJECT_NAME}}/ui-primitives`      | Headless ShadCN/Radix + Tailwind v4 theme tokens                   | source-only (`.tsx` via `exports`)      | none — Vite reads src  |
-| `@{{PROJECT_NAME}}/api-client`         | Auto-generated typed React Query hooks (orval from `apps/api` OAS) | source-only (`.ts` via `exports`)       | none — Vite reads src  |
+| `@acme/shared-types`       | Cross-wire TypeScript types + `z.infer` outputs                    | dist (`tsc`) + vendored mirror per app  | `dist/index.{js,d.ts}` |
+| `@acme/shared-validation`  | Zod schemas for both NestJS DTOs and React Hook Form               | dist (`tsc`) + vendored mirror per app  | `dist/index.{js,d.ts}` |
+| `@acme/shared-config`      | Runtime constants (MIME lists, size thresholds, public routes, …)  | dist (`tsc`), mono-only (no mirror)     | `dist/index.{js,d.ts}` |
+| `@acme/ui-primitives`      | Headless ShadCN/Radix + Tailwind v4 theme tokens                   | source-only (`.tsx` via `exports`)      | none — Vite reads src  |
+| `@acme/api-client`         | Auto-generated typed React Query hooks (orval from `apps/api` OAS) | source-only (`.ts` via `exports`)       | none — Vite reads src  |
 
-**Module resolution.** Each package is symlinked into the root `node_modules/@{{PROJECT_NAME}}/<name>`. `dist`-based packages need an `npm run build` before consumers see source edits — Turborepo's `build → ^build` topology takes care of that automatically. Source-only packages are picked up immediately by the consumer's bundler (Vite reads `.tsx` directly, TypeScript resolves the `exports` field).
+**Module resolution.** Each package is symlinked into the root `node_modules/@acme/<name>`. `dist`-based packages need an `npm run build` before consumers see source edits — Turborepo's `build → ^build` topology takes care of that automatically. Source-only packages are picked up immediately by the consumer's bundler (Vite reads `.tsx` directly, TypeScript resolves the `exports` field).
 
 ### 🧠 Decision matrix — where does new code go?
 
@@ -64,7 +64,7 @@ When adding a new symbol, ask in order:
 2. **Is it a Zod schema validated identically on both sides?** → `packages/shared-validation` (factory pattern; web overrides messages with i18n, api uses defaults).
 3. **Is it a TypeScript type / interface / enum used on both sides of the wire?** → `packages/shared-types` (mirror into both blueprints if hand-written; deposit via installer if module-scoped — see "Module deposits" below).
 4. **Is it a headless UI building block (button, dialog, hook used by primitives, theme token)?** → `packages/ui-primitives`. Mirror to `apps/web/src/components/ui/shadcn/` blueprint side via the drift-guard. App-specific compositions (logos, page-loaders, business widgets) stay in `apps/web/src/components/`.
-5. **Is it a backend endpoint?** Add the controller in `apps/api`, regenerate the API client (`npm run codegen`), and consume the new typed hook from `@{{PROJECT_NAME}}/api-client/generated/api/<tag>/<tag>` in `apps/web`.
+5. **Is it a backend endpoint?** Add the controller in `apps/api`, regenerate the API client (`npm run codegen`), and consume the new typed hook from `@acme/api-client/generated/api/<tag>/<tag>` in `apps/web`.
 6. **Otherwise** → it's app-specific and stays under the relevant `apps/<app>/src/`.
 
 ### 🔁 Module deposits (auto-managed shared files)
@@ -179,7 +179,7 @@ npm run test:web          # Test Web only
 
 ## 📖 Git Workflow
 
-- Main branch: `{{MAIN_BRANCH}}`
+- Main branch: `develop`
 - **ALWAYS** use conventional commits: `<type>(#<ticket>): <description>`
 - Types: feat, fix, docs, style, refactor, perf, test, chore
 - Scope (ticket number) is required

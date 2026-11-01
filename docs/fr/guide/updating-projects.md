@@ -18,6 +18,11 @@ Tous les flux partent du manifeste et de la classification canonique des capacit
 `saasfoundry-cli@1.0.0-beta` peut d’abord créer ce manifeste par le flux explicite d’adoption ci-dessous. La bêta publiée désactivait le monorepo : il n’existe donc aucune disposition monorepo bêta
 authentique à adopter. Les autres projets sans manifeste sont refusés.
 
+Deux autres choses se produisent à chaque exécution, quel que soit le résultat du contrôle de version. Les **migrations de modules** en attente amènent un harness installé à la disposition actuelle,
+et `.claude/settings.json` est **maintenu à jour** : les hooks de capture des délégations et les règles de permission y sont fusionnés, vos clés, hooks et règles restent, et un fichier qui ne peut pas
+être fusionné sur place (un lien, un texte qui n'est pas du JSON) reçoit une proposition `.saasfoundry.new` au lieu d'une modification. `sf agents refresh` n'est plus nécessaire après une mise à jour
+pour cela. Voir [Capture des délégations et permissions](/fr/cli/sf-update#capture-des-delegations-et-permissions-harness-v5).
+
 ## Adopter un projet antérieur au manifeste
 
 L’adoption d’un projet historique est séparée de la mise à jour des modèles et de l’ajout de modules. Elle ne prend en charge que la sortie multirepo de la release publiée
@@ -292,6 +297,13 @@ depuis git et committez-le comme le vôtre :
 ```bash
 git checkout HEAD -- path/to/removed-file.ts
 ```
+
+### Mon CLAUDE.md a disparu
+
+Depuis le harness v4, `AGENTS.md` est le fichier d'instructions que lisent tous les agents, Claude Code compris. `sf update` a déplacé chaque section de `CLAUDE.md` dans `AGENTS.md` avant de le
+supprimer, et a gardé toute copie modifiée d'une section générée sous **Kept from CLAUDE.md for review**. Comparez avec `git show HEAD:CLAUDE.md` ;
+[le déplacement](/fr/cli/sf-update#claude-md-passe-dans-agents-md-harness-v4) indique ce qui va où. Si votre propre `AGENTS.md` existait déjà, cherchez plutôt `AGENTS.md.saasfoundry.new` : `CLAUDE.md`
+reste jusqu'à ce que vous le fusionniez.
 
 ### Où sont les tests de fusion ?
 

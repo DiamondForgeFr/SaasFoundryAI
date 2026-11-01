@@ -55,3 +55,21 @@ const futureDecision = selectMinimumCostExecutionPlan([futureProposal, ...altern
 
 The future decision must pass normal qualification and receive fresh [budget authority](./execution-budgets.md). A stale snapshot excludes the proposal through the existing estimate freshness checks.
 Settled cost is audit and calibration evidence only; it never refunds the conservative p95 reservation used by [safe replanning](./execution-replanning.md).
+
+## The same idea for the harness's own delegations
+
+The coding agents of a managed harness delegate work to tier agents, and the [routing grid](../cli/sf-agents.md#delegation-routing-sf-agents-route) says which tier a task kind starts on. That grid is
+a prior from public benchmarks. A project corrects it from its own runs with the same discipline as this page, in a lighter form, because a harness delegation has none of the planner bindings above
+(run, lineage, dispatch permit, plan decision, proposal fingerprint): inventing them would produce evidence that looks authenticated and is not.
+
+The [delegation ledger](../cli/sf-agents.md#measured-delegations-and-the-adjusted-routing) therefore keeps its own record and reuses what this library already defines:
+
+- the **outcome codes** (`success`, `execution-failed`, `validation-failed`, `candidate-unavailable`, `outcome-unknown`, `cancelled`) and the **check codes** (`self-review`, `type-check`,
+  `automated-tests`, `integration-tests`, `independent-review`, `security-tests`);
+- the **secret filter** applied to every free-text field;
+- the **censoring rule**: a run without a usable outcome is kept for audit and never counts as a success, a failure or a cost;
+- **exact money**: decimal strings and exact rationals, rounded up once for display.
+
+Where the planner calibrates a cohort's usage and latency for future estimates, the harness calibrates the **tier** a task kind runs on, from the success rate, the cost and the duration of its runs.
+The decision compares the expected cost of delivering the work, failures included, so a cheap tier that fails often is expensive. A cheaper tier is only tried on a bounded share of the runs, and a
+move is logged with its evidence, kept in a clone-local layer, shared only by `sf agents routing promote`, and undone by `sf agents routing reset`.

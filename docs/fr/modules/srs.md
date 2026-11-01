@@ -9,7 +9,8 @@ tickets. Elle ajoute un outil de collaboration au projet, pas du code d'exécuti
 - ✅ **Notion complet en v1** — `NotionSrsAdapter`, modèles Epic/FR, ingestion de notes, rédaction depuis le code, création des Stories et hook conversationnel.
 - ✅ **Intégration au workflow** — les labels `srs:drafting`, `srs:update` et `srs:new` activent `ai-draft → human-review → spawning`.
 - ✅ **Passage spec → tickets** — chaque page FR approuvée peut produire une sous-issue GitHub reliée à sa source canonique.
-- ✅ **Évaluation continue** — l'agent propose l'ajout d'un UR, FR, DS ou TC détecté en conversation et attend l'approbation.
+- ✅ **Évaluation continue** — l'agent propose l'ajout d'un UR, FR, DS ou TC détecté en conversation, ou la modification d'une FR existante, et attend l'approbation. Une FR existante est modifiée sur
+  place, sur sa page et dans les tableaux qui la listent ; un UR, DS, TC ou NFR ne peut être qu'ajouté pour l'instant.
 
 Notion est un **backend SRS v1 complet**, mais pas un adaptateur complet de suivi des tickets. GitHub Projects reste l'intégration de workflow v1 complète. Confluence et Markdown local restent sur la
 feuille de route SRS.
@@ -75,12 +76,13 @@ L'installateur dépose les compétences, initialise la racine via `adapter.init(
 
 ## CLI et agent, mêmes garde-fous
 
-| Objectif                            | CLI                                         | Demande à l'agent                                               |
-| ----------------------------------- | ------------------------------------------- | --------------------------------------------------------------- |
-| Vérifier le backend                 | `sf srs validate`                           | « Vérifie le backend SRS sans le modifier. »                    |
-| Proposer depuis le code             | `sf srs draft --from codebase --path .`     | « Propose les exigences manquantes sans les appliquer. »        |
-| Prévisualiser les tickets d'un Epic | `sf srs spawn --epic <url-or-id> --dry-run` | « Prévisualise les tickets ; ne crée rien. »                    |
-| Appliquer un ajout approuvé         | `sf srs apply-update --patch <path>`        | « Applique ce patch additif approuvé et rapporte le résultat. » |
+| Objectif                             | CLI                                            | Demande à l'agent                                                                      |
+| ------------------------------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Vérifier le backend                  | `sf srs validate`                              | « Vérifie le backend SRS sans le modifier. »                                           |
+| Proposer depuis le code              | `sf srs draft --from codebase --path .`        | « Propose les exigences manquantes sans les appliquer. »                               |
+| Prévisualiser les tickets d'un Epic  | `sf srs spawn --epic <url-or-id> --dry-run`    | « Prévisualise les tickets ; ne crée rien. »                                           |
+| Appliquer un correctif approuvé      | `sf srs apply-update --patch <path>`           | « Applique ce patch approuvé et rapporte le résultat. »                                |
+| Prévisualiser le changement d'une FR | `sf srs apply-update --patch <path> --dry-run` | « Montre ce que cette modification de FR changerait dans le SRS ; ne l'applique pas. » |
 
 Une formulation naturelle ne supprime jamais les confirmations. Proposition, prévisualisation et application restent des actions distinctes.
 
@@ -91,7 +93,7 @@ Une formulation naturelle ne supprime jamais les confirmations. Proposition, pr�
 | Rédiger depuis des notes | `browse` puis `draft --from notion-pages`                        |
 | Rédiger depuis le code   | `draft --from codebase [--path <repo>]`                          |
 | Créer les tickets        | réconciliation puis `spawn --ticket <parent> --epic <url-or-id>` |
-| Faire évoluer la spec    | `apply-update`, additif uniquement en v1                         |
+| Faire évoluer la spec    | `apply-update` (`add-*`, `update-fr`)                            |
 
 ### Référence `srs-cli.sh`
 
@@ -103,10 +105,15 @@ srs-cli.sh draft --from codebase [--path <repo>]
 srs-cli.sh write --spec /tmp/candidates.json
 srs-cli.sh spawn --ticket 57 --epic <epic-page-url>
 srs-cli.sh apply-update < patch.json
+srs-cli.sh apply-update --dry-run < patch.json
 srs-cli.sh eval
 ```
 
-Codes communs : `0` succès, `2` entrée invalide, `3` backend absent, `4` backend inconnu, `5` exécution, `6` écriture partielle, `7` suppression de `pendingIngestion` échouée.
+`apply-update` ajoute un UR, FR, DS, TC ou NFR, ou modifie une FR existante sur place (`update-fr`). `--dry-run` prévisualise un correctif `update-fr` : l'ancienne et la nouvelle valeur de chaque
+cellule, sans rien écrire.
+
+Codes communs : `0` succès, `2` entrée invalide, `3` backend absent, `4` backend inconnu, `5` exécution (ou backend qui ne sait pas modifier une page), `6` écriture partielle, `7` suppression de
+`pendingIngestion` échouée.
 
 ## Pont obligatoire entre spec et ticket
 
@@ -142,7 +149,10 @@ Le token se crée dans les intégrations Notion. Partagez explicitement l'intég
 - backends Confluence et Markdown local ;
 - migration d'une SRS entre backends ;
 - score de fraîcheur face au code ;
-- modification et suppression, au-delà du contrat ADD-only v1.
+- modification sur place d'un UR, DS, TC ou NFR, et des références d'une FR (`urRefs`, `dsRefs`, `tcRefs`, [#1056](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1056)), et suppression : une
+  FR existante se modifie sur place avec `update-fr` ;
+- mise à jour d'une Story déjà générée quand sa FR est modifiée ([#1057](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1057)) : elle garde le texte de la FR à sa génération, et `update-fr` la
+  nomme dans `followUps`.
 
 ## Dépannage
 

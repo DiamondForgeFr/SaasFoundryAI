@@ -2,10 +2,18 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
+import type { ManagedFileState } from '../harness/agent-instructions'
+import { inspectTierAgents } from '../harness/agent-support'
+import { type DelegationState, loadDelegationState } from '../harness/delegation'
+import { captureState, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
+import { resolveLedgerDir } from '../harness/delegation-ledger'
+import { ROUTING_GRID_VERSION, type RoutingOverrides } from '../harness/routing-grid'
+import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
-import type { SaaSFoundryManifest } from '../types'
+import type { HarnessAgent, SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
+import { collectInstructionDiagnostics, type InstructionDiagnostics } from './instruction-diagnostics'
 
 export interface GitInfo {
   available: boolean
@@ -43,7 +51,59 @@ export interface StatusReport {
    * `--no-network`, or on a project that hosts no database of its own (#587).
    */
   database?: DatabaseReachability
+  /** Instruction files the declared coding agents would miss or cut (#939). Optional for legacy reports. */
+  instructions?: InstructionDiagnostics
+  /** The developer's consent to delegate ticket delivery (#1026); absent on a project without a harness block. */
+  delegation?: StatusDelegation
+  /** The automatic routing of this clone (#1035); absent on a project without a harness block. */
+  routing?: StatusRouting
+  /** The local CI pipeline the project declares in `.molten/project.json` (#943); absent without that file. */
+  localCi?: StatusLocalCi
 }
+
+/** The effective consent with both layers, or why it could not be read: status never fails on it. */
+export type StatusDelegation = DelegationState | { error: string }
+
+/** One tier agent a refresh would write, and where it stands on disk (#933); see `classifyManagedFile`. */
+export interface StatusTierAgent {
+  path: string
+  state: ManagedFileState
+}
+
+/** What `modules.harness.routing` replaces in the shipped grid (#933): the kinds sent to another tier, and the tiers given other candidates. */
+export interface StatusRoutingOverrides {
+  kinds: { kind: string; tier: string }[]
+  tiers: { tier: string; providers: string[] }[]
+}
+
+/**
+ * Where the routing stands in this clone: the grid and the project's overrides it is rendered from, the
+ * tier agents on disk (#933), the moves the automatic adjustment made that nobody promoted yet, and
+ * whether the hooks that record every delegation are in place (#1035). Status never fails on it, and
+ * never runs the project's code to know it.
+ */
+export interface StatusRoutingState {
+  /** Version of the routing grid this CLI ships: the one the tier agents are compared with. */
+  gridVersion: number
+  overrides: StatusRoutingOverrides
+  /** The tier agents a refresh would write for the declared coding agents the grid routes. */
+  tierAgents: StatusTierAgent[]
+  /** Why `tierAgents` is empty although agents are declared: overrides that do not render, or an unreadable private inventory. */
+  tierAgentsIssue?: string
+  adjustment: 'on' | 'off'
+  adjustments: { kind: string; provider: string; tier: string; from: string; action: string; at: string }[]
+  /** Kinds the adjustment looked at and left where they are, with the reason (also in the log of the local layer). */
+  holds: { kind: string; provider: string; reason: string; since: string }[]
+  capture: { agent: string; state: CaptureState }[]
+}
+export type StatusRouting = StatusRoutingState | { error: string }
+
+/**
+ * The local CI pipeline the project declares (#943): MoltenTerm's `.molten/project.json`, with the number of
+ * jobs it runs. Status reads that file only: it never runs `molten` or any project code, and a damaged file
+ * is said, not raised.
+ */
+export type StatusLocalCi = { runner: 'molten'; jobs: number } | { error: string }
 
 export interface StatusCapabilities extends ProjectCapabilities {
   reason: string
@@ -116,6 +176,8 @@ export function appPaths(manifest: SaaSFoundryManifest | null): { api: string; w
 export interface CollectOptions {
   checkNetwork?: boolean
   checkGh?: boolean
+  /** Whether the project's CLI can run the capture hook; defaults to asking the CLI it resolves. Injectable for a spec that spawns nothing. */
+  captureProbe?: CaptureProbe
 }
 
 function runSafe(cmd: string, cwd: string): string | null {
@@ -224,17 +286,83 @@ function checkTool(name: string, cmd: string, cwd: string): ToolAvailability {
   return { name, available: true, version: out.split('\n')[0].trim() }
 }
 
+async function collectDelegation(projectRoot: string, manifest: SaaSFoundryManifest | null): Promise<StatusDelegation | undefined> {
+  if (!manifest?.modules?.harness) return undefined
+  try {
+    return await loadDelegationState(projectRoot, manifest)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** The kinds and tiers `modules.harness.routing` replaces. A malformed entry is skipped here: the render reports it as an issue. */
+function routingOverrides(routing: RoutingOverrides | undefined): StatusRoutingOverrides {
+  const kinds = isRecord(routing?.kinds) ? Object.entries(routing.kinds).flatMap(([kind, entry]) => (isRecord(entry) && typeof entry.tier === 'string' ? [{ kind, tier: entry.tier }] : [])) : []
+  const tiers = isRecord(routing?.tiers) ? Object.entries(routing.tiers).map(([tier, candidates]) => ({ tier, providers: isRecord(candidates) ? Object.keys(candidates) : [] })) : []
+  return { kinds, tiers }
+}
+
+async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null, declaredAgents: HarnessAgent[] | undefined, probe?: CaptureProbe): Promise<StatusRouting | undefined> {
+  const harness = manifest?.modules?.harness
+  if (!manifest || !harness) return undefined
+  try {
+    const dir = await resolveLedgerDir(projectRoot)
+    const local = dir ? await readLocalRouting(dir) : emptyLocalRouting()
+    // The effective declaration (shared and local) when the instruction files let it be read, otherwise what the manifest says.
+    const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harness.agents ?? ['claude-code'])
+    return {
+      gridVersion: ROUTING_GRID_VERSION,
+      overrides: routingOverrides(harness.routing),
+      tierAgents: tiers.tierAgents,
+      ...(tiers.issue ? { tierAgentsIssue: tiers.issue } : {}),
+      adjustment: harness.routing?.adjust?.enabled === false ? 'off' : 'on',
+      adjustments: listLocalAdjustments(local).map(({ kind, provider, adjustment }) => ({
+        kind,
+        provider,
+        tier: adjustment.tier,
+        from: adjustment.from,
+        action: adjustment.action,
+        at: adjustment.at
+      })),
+      holds: listLocalHolds(local).map(({ kind, provider, hold }) => ({ kind, provider, reason: hold.reason, since: hold.since })),
+      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) })))
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** The pipeline MoltenTerm declares for the project (#943), counted from its file; undefined when there is no file. */
+function collectLocalCi(projectRoot: string): StatusLocalCi | undefined {
+  const file = path.join(projectRoot, '.molten', 'project.json')
+  if (!fs.existsSync(file)) return undefined
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const ci = isRecord(parsed) ? parsed.ci : undefined
+    return { runner: 'molten', jobs: isRecord(ci) && Array.isArray(ci.jobs) ? ci.jobs.length : 0 }
+  } catch (error) {
+    return { error: `.molten/project.json: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
   const capabilities = manifest ? describeProjectCapabilities(manifest) : null
 
   const git = collectGit(projectRoot)
+  const apps = appPaths(manifest)
+  const instructions = await collectInstructionDiagnostics(projectRoot, apps ? [apps.api, apps.web] : [], findGitDir(projectRoot))
 
   const tools: ToolAvailability[] = []
   if (options.checkGh) tools.push(checkTool('gh', 'gh --version', projectRoot))
 
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
+  const delegation = await collectDelegation(projectRoot, manifest)
+  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
+  const localCi = collectLocalCi(projectRoot)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.
@@ -254,6 +382,10 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     checkedNetwork: options.checkNetwork === true,
     installedSkills,
     capabilities,
+    instructions,
+    ...(delegation ? { delegation } : {}),
+    ...(routing ? { routing } : {}),
+    ...(localCi ? { localCi } : {}),
     ...(database ? { database } : {})
   }
 }

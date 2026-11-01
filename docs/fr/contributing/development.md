@@ -18,7 +18,8 @@ La résolution des voies de cycle de vie utilise le runtime TypeScript du dépô
 
 ## Structure du dépôt
 
-Le fichier [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md) expose les règles opérationnelles. Les principaux répertoires sont :
+Le fichier [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md), lu par tous les agents de code dont Claude Code, expose les règles opérationnelles. Les principaux
+répertoires sont :
 
 | Chemin                        | Rôle                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------ |
@@ -231,7 +232,11 @@ Les objectifs d'acceptation sont dans [`.claude/docs/release-objectives.md`](htt
 
 ## Synchroniser « Ready for review » avec GitHub Projects
 
-Le bouton **Ready for review** déclenche `.github/workflows/pr-review-sync.yml`. Le workflow inspecte la PR et son ticket lié, puis utilise le CLI protégé pour passer le ticket en `In review`.
+Le bouton **Ready for review** déclenche `.github/workflows/pr-review-sync.yml`. Le workflow inspecte la PR et son ticket lié, puis utilise le CLI protégé pour passer le ticket en `In review`. Cliqué
+trop tôt — ticket encore en `AI testing` avec `Human testing` requis, ou pas encore en test —, le job ne déplace rien et réussit avec une notice qui indique l'étape suivante ; il n'échoue que si
+l'événement, le lien vers le ticket ou les labels du ticket sont incorrects. Une PR dont la branche source ne désigne aucun ticket selon `workflow.branchNaming` (par exemple `chore/sync-back-v1.1.0`,
+la synchronisation post-release vers develop) n'a rien à synchroniser : le job réussit avec une notice et ne déplace rien. Une branche de release (`rc-*`) reste synchronisée lorsqu'elle cible la
+branche de release, et une branche de ticket échoue toujours sans sa ligne `Resolves #N`.
 
 Configurez le secret Actions `SF_PROJECTS_TOKEN` avec l'accès au dépôt et l'écriture sur le Project de l'organisation. Le token Actions par défaut n'accède pas à Projects.
 
@@ -240,7 +245,7 @@ numéro présent dans la branche et conserve tous les garde-fous. Après une err
 
 ## Voir aussi
 
-- [`CLAUDE.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/CLAUDE.md)
+- [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md)
 - [Compétences principales](/fr/skills/core-skills)
 - [Système de modules](/fr/guide/module-system)
 - [Architecture des modules](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md)
