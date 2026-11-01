@@ -13,6 +13,9 @@ const agentProfiles = JSON.parse(read('src/harness/agent-profiles.json')) as { p
 const agentProfileNames = Object.values(agentProfiles.profiles).map(({ displayName }) => displayName)
 const systemMap = read('docs/.vitepress/theme/components/FoundrySystemMap.vue')
 const navigation = read('docs/.vitepress/config/navigation.ts')
+// The latest stable release is the first dated, non-prerelease section of the changelog: the
+// release preparation updates both, so the test follows them instead of pinning a literal (#1120).
+const latestStableRelease = /^## \[(\d+\.\d+\.\d+)\] - /m.exec(read('docs/changelog.md'))?.[1]
 const theme = read('docs/.vitepress/theme/custom.css')
 const englishRoutes = discoverLocaleRoutes('en')
 const frenchRoutes = discoverLocaleRoutes('fr')
@@ -136,7 +139,8 @@ describe('the bilingual product landing (#395)', () => {
   })
 
   it('keeps the stable release and installation visible in the shared navigation', () => {
-    expect(navigation).toContain("text: 'v1.0.1'")
+    expect(latestStableRelease).toBeDefined()
+    expect(navigation).toContain(`text: 'v${latestStableRelease}'`)
     expect(navigation).not.toContain("text: 'v1.0.0-beta'")
     expect(navigation).toContain("install: 'Install'")
     expect(navigation).toContain("install: 'Installer'")
