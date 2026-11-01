@@ -4,7 +4,7 @@
 
 # SaaSFoundryAI
 
-**v1.0.1**
+**v1.1.0**
 
 ### Robust engineering, from day one.
 

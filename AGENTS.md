@@ -174,7 +174,7 @@ scripts/              # Version management (tag-manager.sh)
 
 - This is a **scaffold/generator** CLI — the code in `scaffolds/` is template code, not application code
 - **NEVER** modify scaffold templates without considering the impact on generated projects
-- Current version: 1.0.0-beta (npm package `saasfoundryai-cli`)
+- Current version: 1.1.0 (npm package `saasfoundryai-cli`)
 - Node.js >= 22.13.0 to run the CLI (its own `.nvmrc` says 22.15.0)
 - **The generated API and web app run different TypeScript majors, on purpose.** The API is pinned to **5.9.x** with `ignoreDeprecations: "5.0"`; the web app is on 6.x. NestJS 11's OpenAPI CLI plugin
   cannot read the TypeScript 6 AST — it emits `{ enum: string }`, a bare identifier with no runtime value, and **no generated API can start**. The compiler, the build and the unit suite all stay
