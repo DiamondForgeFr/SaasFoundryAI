@@ -20,6 +20,8 @@ pnpm-lock.yaml
 .DS_Store
 coverage/
 *.log
+# Scratch output of the test lanes (Docker artifacts, generated projects): written while format:check runs
+.tmp/
 
 # Generated shared agent adapters are byte-hash managed
 .agents/
