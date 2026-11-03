@@ -2,6 +2,8 @@ import { Command } from 'commander'
 import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
 import { clearDelegation, type DelegationRecord, enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
 import type { DelegationState } from '../harness/delegation'
+import { delegationCommitAdvice, readBranchProtection } from '../harness/branch-protection'
+import { readManifest } from '../utils'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
 import { readProjectRouting } from '../harness/project-routing'
@@ -112,12 +114,15 @@ function describeDelegation(state: DelegationState): string {
 }
 
 /** What a repeated or clearing command tells the developer, per scope. */
-function describeRecord(result: DelegationRecord, action: string): string {
+async function describeRecord(result: DelegationRecord, action: string, targetPath: string): Promise<string> {
   if (action === 'clear') return result.changed ? 'Removed the local override: the shared answer applies again.' : 'There was no local override to remove.'
   if (!result.changed) return result.scope === 'local' ? 'Already recorded in this clone; nothing changed.' : 'Already recorded; .saasfoundry.json is unchanged.'
   if (result.scope === 'local') return 'Recorded for this clone only, in its Git directory (never tracked): it overrides the shared team default here.'
   const hidden = result.source === 'local' ? ' A local override on this clone still wins here: remove it with sf agents delegation clear.' : ''
-  return `Recorded in .saasfoundry.json as the shared team default: commit it with the current ticket's branch, or in a chore commit on the working branch.${hidden}`
+  // A direct commit on a protected working branch would push past its required checks (#1124).
+  const branch = (await readManifest(targetPath))?.workflow?.workingBranch
+  const advice = delegationCommitAdvice(await readBranchProtection({ targetPath, branch }), branch)
+  return `Recorded in .saasfoundry.json as the shared team default: ${advice}${hidden}`
 }
 
 /**
@@ -137,7 +142,7 @@ async function delegationConsent(action: string | undefined, options: AgentComma
     return
   }
   process.stdout.write(describeDelegation(result) + '\n')
-  if (record) process.stdout.write(describeRecord(record, action) + '\n')
+  if (record) process.stdout.write((await describeRecord(record, action, targetPath)) + '\n')
 }
 
 async function adoptAgents(agents: string[], options: AgentCommandOptions): Promise<void> {
