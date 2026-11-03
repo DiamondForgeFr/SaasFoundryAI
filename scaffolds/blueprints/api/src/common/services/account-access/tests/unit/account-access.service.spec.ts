@@ -35,7 +35,7 @@ const entityRow = (entityId: string, entityAccountId: string, grants: Grants) =>
 
 describe('AccountAccessService (scope resolution)', () => {
   const prisma = {
-    entity: { findUnique: jest.fn() },
+    entity: { findMany: jest.fn() },
     userRoleAssignment: { findMany: jest.fn() },
     $queryRaw: jest.fn()
   }
@@ -43,13 +43,17 @@ describe('AccountAccessService (scope resolution)', () => {
   let service: AccountAccessService
 
   const givenAssignments = (...rows: unknown[]) => prisma.userRoleAssignment.findMany.mockResolvedValue(rows)
+  // The tree: e1 -> e2 -> e3 and the sibling root s1 in account A; eb in account B.
+  const ACCOUNTS: Record<string, string> = { e1: A, e2: A, e3: A, s1: A, eb: B }
+  const PARENTS: Record<string, string | null> = { e1: null, e2: 'e1', e3: 'e2', s1: null, eb: null }
+  const chainOf = (entityId: string): string[] => (PARENTS[entityId] ? [entityId, ...chainOf(PARENTS[entityId] as string)] : [entityId])
   const givenEntityTree = () => {
-    prisma.entity.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
-      const accounts: Record<string, string> = { e1: A, e2: A, e3: A, s1: A, eb: B }
-      return accounts[where.id] ? { id: where.id, accountId: accounts[where.id] } : null
-    })
-    prisma.$queryRaw.mockResolvedValue([{ id: 'e3' }, { id: 'e2' }, { id: 'e1' }])
+    prisma.entity.findMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter((id) => ACCOUNTS[id]).map((id) => ({ id, accountId: ACCOUNTS[id] })))
+    // The bulk walk returns (entity, ancestor) pairs; the service keeps the rows of each entity.
+    prisma.$queryRaw.mockResolvedValue(Object.keys(PARENTS).flatMap((entityId) => chainOf(entityId).map((ancestorId) => ({ entity_id: entityId, ancestor_id: ancestorId }))))
   }
+  /** The SQL text of the n-th raw query the service ran (a tagged template: its first argument is the list of text parts). */
+  const sqlOfCall = (n: number): string => (prisma.$queryRaw.mock.calls[n][0] as string[]).join('?')
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -68,6 +72,80 @@ describe('AccountAccessService (scope resolution)', () => {
 
       await expect(service.resolveEntityTarget('ghost')).resolves.toEqual({ kind: 'ENTITY', entityId: 'ghost', accountId: null, ancestorEntityIds: [] })
       expect(prisma.$queryRaw).not.toHaveBeenCalled()
+    })
+
+    it('resolves any number of entities in two queries (bulk), unknown ones included', async () => {
+      givenEntityTree()
+
+      const targets = await service.resolveEntityTargets(['e3', 'eb', 's1', 'ghost', 'e3'])
+
+      expect(prisma.entity.findMany).toHaveBeenCalledTimes(1)
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1)
+      expect([...targets.keys()].sort()).toEqual(['e3', 'eb', 'ghost', 's1'])
+      expect(targets.get('e3')).toEqual({ kind: 'ENTITY', entityId: 'e3', accountId: A, ancestorEntityIds: ['e3', 'e2', 'e1'] })
+      expect(targets.get('eb')).toEqual({ kind: 'ENTITY', entityId: 'eb', accountId: B, ancestorEntityIds: ['eb'] })
+      expect(targets.get('ghost')).toEqual({ kind: 'ENTITY', entityId: 'ghost', accountId: null, ancestorEntityIds: [] })
+    })
+
+    it('runs no query at all for an empty list', async () => {
+      await expect(service.resolveEntityTargets([])).resolves.toEqual(new Map())
+
+      expect(prisma.entity.findMany).not.toHaveBeenCalled()
+      expect(prisma.$queryRaw).not.toHaveBeenCalled()
+    })
+
+    it('walks the ancestors with UNION, not UNION ALL, so a parent cycle ends the walk instead of looping', async () => {
+      givenEntityTree()
+
+      await service.resolveEntityTargets(['e3'])
+      await service.getAncestorEntityIds('e3')
+      await service.getSubtreeEntityIds(['e1'])
+
+      for (const call of [0, 1, 2]) {
+        expect(sqlOfCall(call)).toMatch(/\bUNION\b/)
+        expect(sqlOfCall(call)).not.toMatch(/UNION\s+ALL/)
+      }
+    })
+  })
+
+  describe('getPermissionChecker', () => {
+    it('reads the assignments once and answers any number of checks from memory', async () => {
+      givenEntityTree()
+      givenAssignments(accountRow(A, { permissions: ['USER_ACCOUNTS_INVITATION'] }), entityRow('e1', A, { permissions: ['USER_ENTITIES_INVITATION'] }))
+
+      const checker = await service.getPermissionChecker('user-1', ['e3', 'e2', 's1'])
+
+      expect(checker.has('USER_ACCOUNTS_INVITATION', { kind: 'ACCOUNT', accountId: A })).toBe(true)
+      expect(checker.has('USER_ACCOUNTS_INVITATION', { kind: 'ACCOUNT', accountId: B })).toBe(false)
+      expect(checker.has('USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId: 'e3' })).toBe(true)
+      expect(checker.has('USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId: 'e2' })).toBe(true)
+      expect(checker.has('USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId: 's1' })).toBe(false)
+      expect(prisma.userRoleAssignment.findMany).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads only what a permission check needs: the permission names, no modules or sections', async () => {
+      givenAssignments()
+
+      await service.getPermissionChecker('user-1')
+
+      const { select } = prisma.userRoleAssignment.findMany.mock.calls[0][0]
+      expect(Object.keys(select.role.select).sort()).toEqual(['permissionsLinked', 'scope'])
+      expect(select.role.select.permissionsLinked).toEqual({ select: { permission: { select: { name: true } } } })
+    })
+
+    it('asserts with a 403 and the given message', async () => {
+      givenAssignments()
+      const checker = await service.getPermissionChecker('user-1')
+
+      expect(() => checker.assert('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: A }, 'Nope')).toThrow('Nope')
+      expect(() => checker.assert('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: A })).toThrow(ForbiddenException)
+    })
+
+    it('refuses to answer for an entity it was not built with (a programming error, not a silent denial)', async () => {
+      givenAssignments()
+      const checker = await service.getPermissionChecker('user-1', ['e1'])
+
+      expect(() => checker.has('USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId: 'e2' })).toThrow('was not resolved')
     })
   })
 
