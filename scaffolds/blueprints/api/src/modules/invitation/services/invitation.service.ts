@@ -66,17 +66,17 @@ export class InvitationService {
       message: 'Invitation sent successfully. The user will receive an email with instructions to join.'
     }
 
-    const { email, roleIds, accountIds = [], entityIds = [], accountName } = createInvitationDto
+    const { email, accountName } = createInvitationDto
     let { firstname, lastname, locale } = createInvitationDto
+
+    // The same id twice is one target: deduplicate so a repeated id costs nothing (the schema also bounds each list).
+    const requestedAccountIds = [...new Set(createInvitationDto.accountIds ?? [])]
+    const requestedEntityIds = [...new Set(createInvitationDto.entityIds ?? [])]
+    const requestedRoleIds = [...new Set(createInvitationDto.roleIds ?? [])]
 
     this.logger.debug(`Creating invitation for ${email} by user ${inviterId}`, 'createInvitation')
 
     try {
-      // Check if there is at least one account or entity ID — OR the inviter is creating an
-      // invitation for someone to **own a brand-new account** (platform-admin flow). The latter
-      // is detected later via the ACCOUNT_INVITE_OWNER permission check.
-      const isAccountOwnerInvitation = accountIds.length === 0 && entityIds.length === 0
-
       // Get inviter with their roles, permissions, accounts and entities in a single query
       const inviter = await this.prisma.user.findUnique({
         where: { id: inviterId },
@@ -137,6 +137,20 @@ export class InvitationService {
 
       if (!inviter) throw new NotFoundException('Inviter user not found')
 
+      // Re-inviting an address with a list left empty carries over what a pending invitation of that address
+      // already holds (a "resend" without the full form). The invitation that is created is then the MERGED one,
+      // so it is authorized below exactly as if the inviter had submitted every id themselves: carrying a
+      // target or a role over must never skip the checks a fresh request goes through.
+      const carriedOver = requestedAccountIds.length === 0 || requestedEntityIds.length === 0 || requestedRoleIds.length === 0 ? await this.findPendingInvitationLinks(email) : null
+      const accountIds = requestedAccountIds.length > 0 ? requestedAccountIds : (carriedOver?.accountIds ?? [])
+      const entityIds = requestedEntityIds.length > 0 ? requestedEntityIds : (carriedOver?.entityIds ?? [])
+      const roleIds = requestedRoleIds.length > 0 ? requestedRoleIds : (carriedOver?.roleIds ?? [])
+
+      // Check if there is at least one account or entity ID — OR the inviter is creating an
+      // invitation for someone to **own a brand-new account** (platform-admin flow). The latter
+      // is detected later via the ACCOUNT_INVITE_OWNER permission check.
+      const isAccountOwnerInvitation = accountIds.length === 0 && entityIds.length === 0
+
       // Extract user permissions. This union only answers "does the inviter hold this permission
       // somewhere at all" (the coarse gate below, 401); WHERE they hold it is checked per target
       // further down, through the scope-aware AccountAccessService (403).
@@ -160,8 +174,7 @@ export class InvitationService {
       // Pre-resolve role scopes when roleIds are provided — needed to distinguish a "platform
       // admin" invitation (no account/entity targets but PLATFORM-scoped role) from the legacy
       // "account-owner" invitation (no targets, no roles, spins a fresh account on acceptance).
-      const targetRoleIds = roleIds ?? []
-      const targetRoles = targetRoleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: targetRoleIds } }, select: { id: true, name: true, scope: true, accountId: true } }) : []
+      const targetRoles = roleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: roleIds } }, select: { id: true, name: true, scope: true, accountId: true } }) : []
       const hasPlatformScopedRole = targetRoles.some((r) => r.scope === 'PLATFORM')
       // A platform-admin invitation: no account/entity targets, but at least one PLATFORM-scoped
       // role provided. The invitee will become a platform admin (or carry that role) on acceptance.
@@ -174,7 +187,7 @@ export class InvitationService {
         if (!hasAccountOwnerInvitePermission) {
           throw new BadRequestException('At least one account or entity ID must be provided')
         }
-        if (roleIds && roleIds.length > 0) {
+        if (roleIds.length > 0) {
           throw new BadRequestException('Account-owner invitations cannot pre-assign roles — the new owner is auto-promoted to admin of their fresh account')
         }
       }
@@ -205,17 +218,6 @@ export class InvitationService {
           const invalidAccountIds = accountIds.filter((id) => !accessibleAccountIds.includes(id))
           if (invalidAccountIds.length > 0) throw new UnauthorizedException(`You do not have access to these accounts: ${invalidAccountIds.join(', ')}`)
         }
-
-        // The permission must be held ON each target account (PLATFORM, or an ACCOUNT assignment on it):
-        // an invitation right held on another account, or through an entity role, does not carry over.
-        for (const accountId of accountIds) {
-          await this.accountAccessService.assertPermissionInScope(
-            inviterId,
-            'USER_ACCOUNTS_INVITATION',
-            { kind: 'ACCOUNT', accountId },
-            `You do not have permission to invite users to account ${accountId}`
-          )
-        }
       }
 
       // Validate entity IDs
@@ -228,21 +230,10 @@ export class InvitationService {
           const invalidEntityIds = entityIds.filter((id) => !accessibleEntityIds.includes(id))
           if (invalidEntityIds.length > 0) throw new UnauthorizedException(`You do not have access to these entities: ${invalidEntityIds.join(', ')}`)
         }
-
-        // The permission must be held in the scope of each target entity (PLATFORM, ACCOUNT on its account,
-        // or ENTITY on it or an ancestor): never on a sibling, a descendant or another account.
-        for (const entityId of entityIds) {
-          await this.accountAccessService.assertPermissionInScope(
-            inviterId,
-            'USER_ENTITIES_INVITATION',
-            { kind: 'ENTITY', entityId },
-            `You do not have permission to invite users to entity ${entityId}`
-          )
-        }
       }
 
       // Check role assignment permission if roleIds are provided
-      if (roleIds && roleIds.length > 0) {
+      if (roleIds.length > 0) {
         if (!hasRoleAllocationPermission) throw new UnauthorizedException('You do not have permission to assign roles')
 
         // Only platform admins can assign PLATFORM-scoped roles (e.g. platform-admin). Without this
@@ -261,34 +252,52 @@ export class InvitationService {
         if (hasPlatformScopedRole && (accountIds.length > 0 || entityIds.length > 0)) {
           throw new BadRequestException('A platform-scoped role cannot be combined with account or entity targets')
         }
+      }
 
-        // A role is granted on the targets of its own scope: an ACCOUNT role on every target account, an
-        // ENTITY role on every target entity. USER_ROLE_ALLOCATION must be held in the scope of each of
-        // those targets, so an inviter whose authority is an entity can grant ENTITY roles there and
-        // nothing wider (an ACCOUNT role needs account-level authority).
-        const targetEntities = entityIds.length > 0 ? await this.prisma.entity.findMany({ where: { id: { in: entityIds } }, select: { id: true, accountId: true } }) : []
-        const targetAccountIds = [...new Set([...accountIds, ...targetEntities.map((entity) => entity.accountId)])]
+      // Scoped authority (403): the inviter must hold each right in the scope of EACH target, not merely somewhere.
+      // One checker serves every check below: the inviter's assignments are read once and the target entities
+      // resolved in bulk, however many ids the request carries.
+      if (accountIds.length > 0 || entityIds.length > 0) {
+        const checker = await this.accountAccessService.getPermissionChecker(inviterId, entityIds)
 
+        // The invitation right on each target account (PLATFORM, or an ACCOUNT assignment on it): a right held on
+        // another account, or through an entity role, does not carry over.
+        for (const accountId of accountIds) {
+          checker.assert('USER_ACCOUNTS_INVITATION', { kind: 'ACCOUNT', accountId }, `You do not have permission to invite users to account ${accountId}`)
+        }
+
+        // The invitation right in the scope of each target entity (PLATFORM, ACCOUNT on its account, or ENTITY on it
+        // or an ancestor): never on a sibling, a descendant or another account.
+        for (const entityId of entityIds) {
+          checker.assert('USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId }, `You do not have permission to invite users to entity ${entityId}`)
+        }
+
+        // A role is granted on the targets of its own scope: an ACCOUNT role on every target account, an ENTITY role on
+        // every target entity. USER_ROLE_ALLOCATION must be held in the scope of each of those targets, so an inviter
+        // whose authority is an entity can grant ENTITY roles there and nothing wider.
         if (targetRoles.some((r) => r.scope === 'ACCOUNT')) {
           // With no account target the role would be dropped silently: check the accounts of the target entities instead.
-          for (const accountId of accountIds.length > 0 ? accountIds : targetAccountIds) {
-            await this.accountAccessService.assertPermissionInScope(
-              inviterId,
-              'USER_ROLE_ALLOCATION',
-              { kind: 'ACCOUNT', accountId },
-              `You do not have permission to assign account roles in account ${accountId}`
-            )
+          const accountsOfEntities = [...new Set(entityIds.map((entityId) => checker.entityTarget(entityId).accountId).filter((id): id is string => id !== null))]
+          for (const accountId of accountIds.length > 0 ? accountIds : accountsOfEntities) {
+            checker.assert('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId }, `You do not have permission to assign account roles in account ${accountId}`)
           }
         }
         if (targetRoles.some((r) => r.scope === 'ENTITY')) {
           for (const entityId of entityIds) {
-            await this.accountAccessService.assertPermissionInScope(inviterId, 'USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId }, `You do not have permission to assign roles in entity ${entityId}`)
+            checker.assert('USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId }, `You do not have permission to assign roles in entity ${entityId}`)
           }
         }
 
-        // A role owned by an account can only be granted inside that account (system and global roles have no owner).
-        const foreignRole = targetRoles.find((r) => Boolean(r.accountId) && !targetAccountIds.includes(r.accountId as string))
-        if (foreignRole) throw new ForbiddenException(`The role ${foreignRole.name} does not belong to the accounts you are inviting into`)
+        // A role owned by an account only lands in that account: checked per role and per target it will be granted on
+        // (system and global roles have no owner). An ACCOUNT role lands on every target account, an ENTITY role in
+        // the account of every target entity: one target of another account is enough to refuse.
+        for (const role of targetRoles) {
+          if (!role.accountId) continue
+          const landsElsewhere =
+            (role.scope === 'ACCOUNT' && accountIds.some((accountId) => accountId !== role.accountId)) ||
+            (role.scope === 'ENTITY' && entityIds.some((entityId) => checker.entityTarget(entityId).accountId !== role.accountId))
+          if (landsElsewhere) throw new ForbiddenException(`The role ${role.name} belongs to another account than the ones you are inviting into`)
+        }
       }
 
       // Check if the email already exists
@@ -301,34 +310,11 @@ export class InvitationService {
 
       // Use existing user or create a new one if none exists
       let user: User
-      let previousAccountIds: string[] = []
-      let previousEntityIds: string[] = []
-      let previousRoleIds: number[] = []
 
       if (existingUser) {
         // Re-using existing inactive user - just create a new invitation token
         this.logger.debug(`Re-inviting existing inactive user: ${email}`, 'createInvitation')
         user = existingUser
-
-        // Récupérer l'invitation précédente avec ses liens
-        const previousInvitation = await this.prisma.invitation.findFirst({
-          where: {
-            inviteeUserEmail: email,
-            status: InvitationStatus.SENT
-          },
-          include: {
-            accountsLinked: true,
-            entitiesLinked: true,
-            rolesLinked: true
-          }
-        })
-
-        if (previousInvitation) {
-          // Récupérer les IDs des liens précédents
-          previousAccountIds = previousInvitation.accountsLinked.map((link) => link.accountId)
-          previousEntityIds = previousInvitation.entitiesLinked.map((link) => link.entityId)
-          previousRoleIds = previousInvitation.rolesLinked.map((link) => link.roleId)
-        }
 
         // Récupérer le token précédent pour conserver les informations
         const previousToken = await this.prisma.userToken.findFirst({
@@ -422,15 +408,11 @@ export class InvitationService {
           }
         })
 
-        // Utiliser les nouveaux IDs s'ils sont fournis, sinon utiliser les précédents
-        const finalAccountIds = accountIds.length > 0 ? accountIds : previousAccountIds
-        const finalEntityIds = entityIds.length > 0 ? entityIds : previousEntityIds
-        const finalRoleIds = roleIds && roleIds.length > 0 ? roleIds : previousRoleIds
-
+        // The links of the invitation are the ones that were authorized above (carried-over ids included).
         // Create the links with the accounts
-        if (finalAccountIds.length > 0) {
+        if (accountIds.length > 0) {
           await tx.invitationAccountLink.createMany({
-            data: finalAccountIds.map((accountId) => ({
+            data: accountIds.map((accountId) => ({
               invitationId: invitation.id,
               accountId
             }))
@@ -438,9 +420,9 @@ export class InvitationService {
         }
 
         // Create the links with the entities
-        if (finalEntityIds.length > 0) {
+        if (entityIds.length > 0) {
           await tx.invitationEntityLink.createMany({
-            data: finalEntityIds.map((entityId) => ({
+            data: entityIds.map((entityId) => ({
               invitationId: invitation.id,
               entityId
             }))
@@ -448,9 +430,9 @@ export class InvitationService {
         }
 
         // Create the links with the roles
-        if (finalRoleIds.length > 0) {
+        if (roleIds.length > 0) {
           await tx.invitationRoleLink.createMany({
-            data: finalRoleIds.map((roleId) => ({
+            data: roleIds.map((roleId) => ({
               invitationId: invitation.id,
               roleId
             }))
@@ -718,6 +700,22 @@ export class InvitationService {
   /**
    * Private methods
    */
+
+  /** The targets and roles of the pending (SENT) invitation of an address, whoever sent it; null when there is none. */
+  private async findPendingInvitationLinks(email: string): Promise<{ accountIds: string[]; entityIds: string[]; roleIds: number[] } | null> {
+    const pending = await this.prisma.invitation.findFirst({
+      where: { inviteeUserEmail: email, status: InvitationStatus.SENT },
+      include: { accountsLinked: true, entitiesLinked: true, rolesLinked: true }
+    })
+    if (!pending) return null
+
+    return {
+      accountIds: pending.accountsLinked.map((link) => link.accountId),
+      entityIds: pending.entitiesLinked.map((link) => link.entityId),
+      roleIds: pending.rolesLinked.map((link) => link.roleId)
+    }
+  }
+
   private async activateInvitedUserAccount(
     userId: string,
     email: string,

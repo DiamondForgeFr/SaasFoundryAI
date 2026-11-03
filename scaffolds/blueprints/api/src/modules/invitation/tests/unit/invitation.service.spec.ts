@@ -20,7 +20,16 @@ import { InvitationService } from '@modules/invitation/services/invitation.servi
  * Test infrastructure
  */
 import { ServiceTestBase } from '@common/tests/unit/base/service-test-base'
-import { mockAccountAccessService, mockAuthService, mockEmailService, mockEnvConfig, mockJwtService, mockLogger, mockPrismaService } from '@common/tests/unit/mocks/service-mocks'
+import {
+  fakePermissionChecker,
+  mockAccountAccessService,
+  mockAuthService,
+  mockEmailService,
+  mockEnvConfig,
+  mockJwtService,
+  mockLogger,
+  mockPrismaService
+} from '@common/tests/unit/mocks/service-mocks'
 import { mockAccount, mockEntity, mockUser } from '@common/tests/unit/mocks/test-data'
 import { MockManager, TestAssertions, TestScenario } from '@common/tests/unit/utils/advanced-test-utils'
 
@@ -411,86 +420,247 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
         const ACCOUNT_ROLE = { id: 1, name: 'account-admin', scope: 'ACCOUNT', accountId: null }
         const ENTITY_ROLE = { id: 3, name: 'entity-admin', scope: 'ENTITY', accountId: null }
         const PLATFORM_ROLE = { id: 9, name: 'platform-admin', scope: 'PLATFORM', accountId: null }
+        const OTHER_ACCOUNT = 'another-account'
+        const OTHER_ENTITY = 'another-entity'
 
-        /** Resolve the inviter, the role scopes and the target entities; `denied` lists the permission checks the inviter fails. */
-        const given = (options: { roles: { id: number; name: string; scope: string; accountId: string | null }[]; denied?: string[]; entitiesOf?: Record<string, string>; inviter?: object }) => {
+        /** A member of two accounts (and of their entities): the membership check lets both through, only the scoped checks decide. */
+        const memberOfBothAccounts = {
+          ...mockInviter,
+          accountsLinked: [
+            { account: { id: mockAccount.id, isActive: true, entities: [{ id: mockEntity.id, accountId: mockAccount.id, isActive: true }] } },
+            { account: { id: OTHER_ACCOUNT, isActive: true, entities: [{ id: OTHER_ENTITY, accountId: OTHER_ACCOUNT, isActive: true }] } }
+          ]
+        }
+
+        interface Given {
+          roles: { id: number; name: string; scope: string; accountId: string | null }[]
+          /** Permissions the inviter does not hold in any scope (the checker refuses them). */
+          denied?: string[]
+          /** The account each entity belongs to. */
+          entityAccounts?: Record<string, string>
+          inviter?: object
+          /** The pending (SENT) invitation of the address, when there is one. */
+          pending?: { accountIds?: string[]; entityIds?: string[]; roleIds?: number[] }
+        }
+
+        /** Resolve the inviter, the roles, the pending invitation and the permission checker of one request. */
+        const given = (options: Given) => {
           const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          const checker = fakePermissionChecker({ denied: options.denied, entityAccounts: options.entityAccounts })
           prismaServiceAny.user.findUnique.mockResolvedValueOnce(options.inviter ?? mockInviter).mockResolvedValueOnce(null)
           prismaServiceAny.role.findMany.mockResolvedValue(options.roles)
-          prismaServiceAny.entity.findMany.mockResolvedValue(Object.entries(options.entitiesOf ?? {}).map(([id, accountId]) => ({ id, accountId })))
+          prismaServiceAny.invitation.findFirst.mockReset()
+          prismaServiceAny.invitation.findFirst.mockResolvedValue(
+            options.pending
+              ? {
+                  accountsLinked: (options.pending.accountIds ?? []).map((accountId) => ({ accountId })),
+                  entitiesLinked: (options.pending.entityIds ?? []).map((entityId) => ({ entityId })),
+                  rolesLinked: (options.pending.roleIds ?? []).map((roleId) => ({ roleId }))
+                }
+              : null
+          )
+          prismaServiceAny.invitationAccountLink.createMany.mockReset()
+          prismaServiceAny.invitationEntityLink.createMany.mockReset()
+          prismaServiceAny.invitationRoleLink.createMany.mockReset()
+          prismaServiceAny.invitation.create.mockClear()
           this.accountAccessService.isPlatformAdmin.mockReset()
           this.accountAccessService.isPlatformAdmin.mockResolvedValue(false)
-          this.accountAccessService.assertPermissionInScope.mockReset()
-          this.accountAccessService.assertPermissionInScope.mockImplementation(async (_userId, permission) => {
-            if ((options.denied ?? []).includes(permission)) throw new ForbiddenException(`missing ${permission}`)
-          })
+          this.accountAccessService.getPermissionChecker.mockReset()
+          this.accountAccessService.getPermissionChecker.mockResolvedValue(checker as never)
           this.jwtService.sign.mockReturnValue(mockInvitationToken)
           this.envConfig.get.mockImplementation((key) => ({ JWT_SECRET_INVITATION: 'test-secret', JWT_INVITATION_EXPIRES_IN: '1d', NODE_ENV: 'test' })[key])
           prismaServiceAny.user.create.mockResolvedValue({ id: '2', email: createInvitationDto.email, isActive: false, password: '' })
           this.authService.createUniqueToken.mockResolvedValue(mockUserTokenRecord)
-          return prismaServiceAny
+          return { prisma: prismaServiceAny, checker }
+        }
+
+        /** An inviter who holds every invitation right except role allocation. */
+        const inviterWithoutAllocation = {
+          ...mockInviter,
+          roleAssignments: [
+            {
+              ...mockInviter.roleAssignments[0],
+              role: {
+                ...mockInviter.roleAssignments[0].role,
+                permissionsLinked: mockInviter.roleAssignments[0].role.permissionsLinked.filter((link) => link.permission.name !== 'USER_ROLE_ALLOCATION')
+              }
+            }
+          ]
         }
 
         it('checks USER_ACCOUNTS_INVITATION in the scope of every target account and answers 403 when it is missing', async () => {
-          given({ roles: [ACCOUNT_ROLE], denied: ['USER_ACCOUNTS_INVITATION'] })
+          const { checker } = given({ roles: [ACCOUNT_ROLE], denied: ['USER_ACCOUNTS_INVITATION'] })
 
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] }), ForbiddenException)
 
-          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ACCOUNTS_INVITATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
+          expect(checker.assert).toHaveBeenCalledWith('USER_ACCOUNTS_INVITATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
         })
 
         it('checks USER_ENTITIES_INVITATION in the scope of every target entity and answers 403 when it is missing', async () => {
-          given({ roles: [ENTITY_ROLE], denied: ['USER_ENTITIES_INVITATION'] })
+          const { checker } = given({ roles: [ENTITY_ROLE], denied: ['USER_ENTITIES_INVITATION'] })
 
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], roleIds: [3] }), ForbiddenException)
 
-          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId: mockEntity.id }, expect.any(String))
+          expect(checker.assert).toHaveBeenCalledWith('USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId: mockEntity.id }, expect.any(String))
         })
 
         it('checks USER_ROLE_ALLOCATION on the target accounts for an ACCOUNT role and answers 403 when it is missing', async () => {
-          given({ roles: [ACCOUNT_ROLE], denied: ['USER_ROLE_ALLOCATION'], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+          const { checker } = given({ roles: [ACCOUNT_ROLE], denied: ['USER_ROLE_ALLOCATION'], entityAccounts: { [mockEntity.id]: mockAccount.id } })
 
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] }), ForbiddenException)
 
-          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
+          expect(checker.assert).toHaveBeenCalledWith('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
         })
 
         it('checks USER_ROLE_ALLOCATION in the target entities for an ENTITY role and answers 403 when it is missing', async () => {
-          given({ roles: [ENTITY_ROLE], denied: ['USER_ROLE_ALLOCATION'], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+          const { checker } = given({ roles: [ENTITY_ROLE], denied: ['USER_ROLE_ALLOCATION'], entityAccounts: { [mockEntity.id]: mockAccount.id } })
 
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], roleIds: [3] }), ForbiddenException)
 
-          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId: mockEntity.id }, expect.any(String))
+          expect(checker.assert).toHaveBeenCalledWith('USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId: mockEntity.id }, expect.any(String))
         })
 
         it('keeps an entity-only inviter from granting an ACCOUNT role through an entity invitation', async () => {
-          given({ roles: [ACCOUNT_ROLE], denied: ['USER_ROLE_ALLOCATION'], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+          const { checker } = given({ roles: [ACCOUNT_ROLE], denied: ['USER_ROLE_ALLOCATION'], entityAccounts: { [mockEntity.id]: mockAccount.id } })
 
           await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [] }), ForbiddenException)
 
-          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
+          expect(checker.assert).toHaveBeenCalledWith('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
         })
 
         it('lets an ENTITY-authority inviter grant an ENTITY role in its entity', async () => {
-          given({ roles: [ENTITY_ROLE], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+          given({ roles: [ENTITY_ROLE], entityAccounts: { [mockEntity.id]: mockAccount.id } })
 
           const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], roleIds: [3] })
 
           expect(result.message).toEqual(expect.any(String))
         })
 
-        it('refuses a role owned by another account (403)', async () => {
-          given({ roles: [{ ...ACCOUNT_ROLE, accountId: 'another-account' }], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+        describe('role ownership (per role, per target it lands on)', () => {
+          it('refuses an ACCOUNT role owned by another account (403)', async () => {
+            given({ roles: [{ ...ACCOUNT_ROLE, accountId: OTHER_ACCOUNT }], entityAccounts: { [mockEntity.id]: mockAccount.id } })
 
-          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] }), ForbiddenException)
+            await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] }), ForbiddenException)
+          })
+
+          it('refuses an ACCOUNT role of account A when ONE of the target accounts is B (it would land on B too)', async () => {
+            given({ roles: [{ ...ACCOUNT_ROLE, accountId: mockAccount.id }], inviter: memberOfBothAccounts })
+
+            await TestAssertions.assertThrows(
+              () => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [mockAccount.id, OTHER_ACCOUNT], entityIds: [] }),
+              ForbiddenException
+            )
+          })
+
+          it('refuses an ENTITY role of account A when ONE of the target entities belongs to B', async () => {
+            given({ roles: [{ ...ENTITY_ROLE, accountId: mockAccount.id }], inviter: memberOfBothAccounts, entityAccounts: { [mockEntity.id]: mockAccount.id, [OTHER_ENTITY]: OTHER_ACCOUNT } })
+
+            await TestAssertions.assertThrows(
+              () => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], entityIds: [mockEntity.id, OTHER_ENTITY], roleIds: [3] }),
+              ForbiddenException
+            )
+          })
+
+          it('accepts an ACCOUNT role owned by the only target account', async () => {
+            given({ roles: [{ ...ACCOUNT_ROLE, accountId: mockAccount.id }], entityAccounts: { [mockEntity.id]: mockAccount.id } })
+
+            const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] })
+
+            expect(result.message).toEqual(expect.any(String))
+          })
+
+          it('accepts an ENTITY role owned by the account of every target entity', async () => {
+            given({ roles: [{ ...ENTITY_ROLE, accountId: mockAccount.id }], entityAccounts: { [mockEntity.id]: mockAccount.id } })
+
+            const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], roleIds: [3] })
+
+            expect(result.message).toEqual(expect.any(String))
+          })
         })
 
-        it('accepts a role owned by the target account', async () => {
-          given({ roles: [{ ...ACCOUNT_ROLE, accountId: mockAccount.id }], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+        describe('re-invitation (carried-over targets and roles)', () => {
+          it('authorizes the roles carried over from a pending invitation: no role allocation right, no admin role (401)', async () => {
+            const { prisma } = given({ roles: [ACCOUNT_ROLE], inviter: inviterWithoutAllocation, pending: { accountIds: [mockAccount.id], roleIds: [1] } })
 
-          const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] })
+            await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, roleIds: [], entityIds: [] }), UnauthorizedException)
 
-          expect(result.message).toEqual(expect.any(String))
+            expect(prisma.invitation.create).not.toHaveBeenCalled()
+            expect(prisma.invitationRoleLink.createMany).not.toHaveBeenCalled()
+          })
+
+          it('authorizes the targets carried over from a pending invitation in their own scope (403)', async () => {
+            // The inviter is a plain member of the entity (the membership check passes): only its scoped right is missing.
+            const memberOfOtherEntity = {
+              ...mockInviter,
+              accountsLinked: [{ account: { id: mockAccount.id, isActive: true, entities: [{ id: OTHER_ENTITY, accountId: mockAccount.id, isActive: true }] } }]
+            }
+            const { prisma, checker } = given({
+              roles: [ENTITY_ROLE],
+              denied: ['USER_ENTITIES_INVITATION'],
+              inviter: memberOfOtherEntity,
+              pending: { entityIds: [OTHER_ENTITY], roleIds: [3] },
+              entityAccounts: { [OTHER_ENTITY]: OTHER_ACCOUNT }
+            })
+
+            await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, roleIds: [], entityIds: [] }), ForbiddenException)
+
+            expect(checker.assert).toHaveBeenCalledWith('USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId: OTHER_ENTITY }, expect.any(String))
+            expect(prisma.invitationEntityLink.createMany).not.toHaveBeenCalled()
+          })
+
+          it('creates the merged invitation when the inviter is authorized for every carried-over id', async () => {
+            const { prisma } = given({ roles: [ACCOUNT_ROLE], pending: { accountIds: [mockAccount.id], roleIds: [1] } })
+
+            await this.service.createInvitation(mockUser.id, { ...createInvitationDto, roleIds: [], entityIds: [], accountIds: [] })
+
+            expect(prisma.invitationAccountLink.createMany).toHaveBeenCalledWith({ data: [{ invitationId: 'mock-invitation-id', accountId: mockAccount.id }] })
+            expect(prisma.invitationRoleLink.createMany).toHaveBeenCalledWith({ data: [{ invitationId: 'mock-invitation-id', roleId: 1 }] })
+          })
+
+          it('does not look at a pending invitation when the request carries every list itself', async () => {
+            const { prisma } = given({ roles: [ACCOUNT_ROLE], pending: { entityIds: [OTHER_ENTITY] } })
+
+            await this.service.createInvitation(mockUser.id, createInvitationDto)
+
+            expect(prisma.invitation.findFirst).not.toHaveBeenCalled()
+            expect(prisma.invitationEntityLink.createMany).toHaveBeenCalledWith({ data: [{ invitationId: 'mock-invitation-id', entityId: mockEntity.id }] })
+          })
+        })
+
+        describe('cost does not grow with the ids (deduplicated, one checker)', () => {
+          it('treats a repeated id as one target: one check, one link', async () => {
+            const { prisma, checker } = given({ roles: [ACCOUNT_ROLE], entityAccounts: { [mockEntity.id]: mockAccount.id } })
+
+            await this.service.createInvitation(mockUser.id, {
+              ...createInvitationDto,
+              accountIds: [mockAccount.id, mockAccount.id, mockAccount.id],
+              entityIds: [mockEntity.id, mockEntity.id],
+              roleIds: [1, 1]
+            })
+
+            expect(checker.assert.mock.calls.filter(([permission]) => permission === 'USER_ACCOUNTS_INVITATION')).toHaveLength(1)
+            expect(checker.assert.mock.calls.filter(([permission]) => permission === 'USER_ENTITIES_INVITATION')).toHaveLength(1)
+            expect(prisma.invitationAccountLink.createMany).toHaveBeenCalledWith({ data: [{ invitationId: 'mock-invitation-id', accountId: mockAccount.id }] })
+            expect(prisma.invitationEntityLink.createMany).toHaveBeenCalledWith({ data: [{ invitationId: 'mock-invitation-id', entityId: mockEntity.id }] })
+            expect(prisma.invitationRoleLink.createMany).toHaveBeenCalledWith({ data: [{ invitationId: 'mock-invitation-id', roleId: 1 }] })
+          })
+
+          it('loads the inviter assignments and resolves the entities once, however many targets there are', async () => {
+            const entityIds = Array.from({ length: 30 }, (_, index) => `entity-${index}`)
+            const accountIds = Array.from({ length: 5 }, (_, index) => `account-${index}`)
+            const inviter = {
+              ...mockInviter,
+              accountsLinked: accountIds.map((id) => ({ account: { id, isActive: true, entities: entityIds.map((entityId) => ({ id: entityId, accountId: id, isActive: true })) } }))
+            }
+            given({ roles: [ACCOUNT_ROLE], inviter })
+
+            await this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds, entityIds, roleIds: [] })
+
+            expect(this.accountAccessService.getPermissionChecker).toHaveBeenCalledTimes(1)
+            expect(this.accountAccessService.getPermissionChecker).toHaveBeenCalledWith(mockUser.id, entityIds)
+            expect(this.accountAccessService.assertPermissionInScope).not.toHaveBeenCalled()
+            expect(this.accountAccessService.hasPermissionInScope).not.toHaveBeenCalled()
+          })
         })
 
         it('does not take a role that merely carries the platform section for a platform admin (stays 401)', async () => {
@@ -511,13 +681,13 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
         })
 
         it('lets a real platform admin assign a PLATFORM role', async () => {
-          const prismaServiceAny = given({ roles: [PLATFORM_ROLE] })
+          const { prisma } = given({ roles: [PLATFORM_ROLE] })
           this.accountAccessService.isPlatformAdmin.mockResolvedValue(true)
 
           const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], entityIds: [], roleIds: [9] })
 
           expect(result.message).toEqual(expect.any(String))
-          expect(prismaServiceAny.invitation.create).toHaveBeenCalled()
+          expect(prisma.invitation.create).toHaveBeenCalled()
         })
       })
     })
