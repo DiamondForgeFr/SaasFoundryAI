@@ -78,7 +78,8 @@ them; it receives the elected scope from the session and filters routes, tabs an
 remains the authority.
 
 Routes of the `PLATFORM_ADMINISTRATION` module count platform roles only, whatever the target, so a custom account or entity role that carries a platform section never gives platform reach. A URL that
-names an account or entity that does not exist answers `404`; one that exists but where the user holds no role answers `403`.
+names an account or entity that does not exist answers `404`, and an account the user does not belong to answers `401`, as before; a target the user belongs to but holds no applicable role on answers
+`403`.
 
 The services check what the guard cannot see. `PATCH /accounts/:id/users/:userId` checks each change in the scope it acts on (`ACCOUNT_USER_MANAGEMENT` at account scope to change the active flag,
 `USER_ROLE_ALLOCATION` at account scope for the account roles, `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice), and `POST /invitations`, `POST /entities` and the role routes check
@@ -88,6 +89,19 @@ the permission in the scope of each target. An entity administrator therefore ma
 
 Endpoints without a scope use the union of the user's assignments, which is what lets a role held in one account act on another. Every route that takes an account or entity id must declare it with
 `@ScopeFrom`; when the target is not in the URL (the body, or a role id), the service must check the permission in the scope of each target.
+
+:::
+
+::: tip Updating a project generated before 1.1.1
+
+Versions before 1.1.1 checked an account or entity route against the union of every role the user holds: an entity role, or the admin role of another account the user is only a member of, could pass
+account-admin checks (a seeded `entity-admin` could promote itself to account admin). The fix lives in blueprint files that no installer owns, so `sf update` applies it with the three-way merge: a
+file you did not edit is updated in place, and a file you edited gets a `.saasfoundry.new` sidecar to merge by hand (`permissions.guard.ts`, `account.controller.ts`, `account.service.ts`,
+`entity.controller.ts`, `entity.service.ts`, `invitation.service.ts`, `account-access.service.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`). Three things change for code you wrote:
+
+- `PermissionsGuard` takes `AccountAccessService` as a constructor dependency. The module is global; add `AccountAccessModule` to the testing modules of your own e2e specs.
+- A route that takes an account or entity id must declare it with `@ScopeFrom`, or it keeps the union of every role.
+- The per-target checks answer `403`; the existing `401` checks keep their status.
 
 :::
 

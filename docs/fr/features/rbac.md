@@ -78,7 +78,8 @@ dans l'URL. L'application React ne les envoie pas : elle reçoit la portée choi
 permissions. Masquer une action améliore la lisibilité ; le guard backend reste l'autorité.
 
 Les routes du module `PLATFORM_ADMINISTRATION` ne comptent que les rôles plateforme, quelle que soit la cible : un rôle personnalisé de compte ou d'entité qui porte une section de plateforme ne donne
-donc jamais l'accès plateforme. Une URL qui nomme un compte ou une entité inexistants répond `404` ; une URL qui nomme un identifiant existant sur lequel l'utilisateur n'a aucun rôle répond `403`.
+donc jamais l'accès plateforme. Une URL qui nomme un compte ou une entité inexistants répond `404`, et un compte auquel l'utilisateur n'appartient pas répond `401`, comme avant ; une cible à laquelle
+l'utilisateur appartient mais sur laquelle il n'a aucun rôle applicable répond `403`.
 
 Les services contrôlent ce que le guard ne voit pas. `PATCH /accounts/:id/users/:userId` contrôle chaque modification dans la portée où elle agit (`ACCOUNT_USER_MANAGEMENT` au niveau du compte pour
 l'état actif, `USER_ROLE_ALLOCATION` au niveau du compte pour les rôles de compte, `USER_ROLE_ALLOCATION` dans la portée de l'entité pour chaque tranche d'entité), et `POST /invitations`,
@@ -88,6 +89,20 @@ l'état actif, `USER_ROLE_ALLOCATION` au niveau du compte pour les rôles de com
 
 Un endpoint sans portée utilise l'union des affectations de l'utilisateur, ce qui permet à un rôle détenu dans un compte d'agir sur un autre. Toute route qui prend un identifiant de compte ou d'entité
 doit le déclarer avec `@ScopeFrom` ; quand la cible n'est pas dans l'URL (corps de requête, identifiant de rôle), le service doit contrôler la permission dans la portée de chaque cible.
+
+:::
+
+::: tip Mettre à jour un projet généré avant la 1.1.1
+
+Avant la 1.1.1, une route de compte ou d'entité était contrôlée contre l'union de tous les rôles de l'utilisateur : un rôle d'entité, ou le rôle d'administrateur d'un autre compte dont l'utilisateur
+est simple membre, pouvait passer les contrôles d'administrateur de compte (un `entity-admin` fourni par défaut pouvait se promouvoir administrateur du compte). Le correctif touche des fichiers du
+blueprint qu'aucun installeur ne possède : `sf update` l'applique par fusion à trois voies. Un fichier que vous n'avez pas modifié est mis à jour sur place ; un fichier modifié reçoit un fichier
+annexe `.saasfoundry.new` à fusionner à la main (`permissions.guard.ts`, `account.controller.ts`, `account.service.ts`, `entity.controller.ts`, `entity.service.ts`, `invitation.service.ts`,
+`account-access.service.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`). Trois points changent pour le code que vous avez écrit :
+
+- `PermissionsGuard` reçoit `AccountAccessService` en dépendance de constructeur. Le module est global ; ajoutez `AccountAccessModule` aux modules de test de vos propres specs e2e.
+- Une route qui prend un identifiant de compte ou d'entité doit le déclarer avec `@ScopeFrom`, sinon elle garde l'union de tous les rôles.
+- Les contrôles par cible répondent `403` ; les contrôles `401` existants gardent leur statut.
 
 :::
 
