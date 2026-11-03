@@ -5,6 +5,8 @@ import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
 
+import { hermeticPath, nodeBinDir } from '../../helpers/hermetic-path'
+
 const execFileP = promisify(execFile)
 
 const REPO_ROOT = path.resolve(__dirname, '../../../..')
@@ -50,7 +52,7 @@ esac
   return {
     dir,
     // A PATH with the system tools only: a developer machine's own saasfoundryai or sf must not leak in.
-    env: { ...process.env, PWD: dir, PATH: '/usr/bin:/bin:/usr/local/bin' },
+    env: { ...process.env, PWD: dir, PATH: hermeticPath('/usr/bin:/bin:/usr/local/bin') },
     calls: async (expected = 0) => {
       const deadline = Date.now() + (expected ? 8000 : 700)
       while (Date.now() < deadline) {
@@ -134,7 +136,7 @@ describe('workflow-cli update-status tells the ledger of the clone (#1067)', () 
       await writeFile(path.join(box.dir, 'package.json'), '{\n  "name": "saasfoundryai-cli"\n}\n')
       await mkdir(path.join(box.dir, 'bin'), { recursive: true })
       await writeFile(path.join(box.dir, 'bin/sf.js'), `require('fs').appendFileSync(${JSON.stringify(path.join(box.dir, 'calls.log'))}, 'sf.js ' + process.argv.slice(2).join(' ') + '\\n')\n`)
-      await transition(box, { PATH: `${path.dirname(process.execPath)}:${box.env.PATH}` })
+      await transition(box, { PATH: `${nodeBinDir()}:${box.env.PATH}` })
       expect(await box.calls(1)).toEqual(['sf.js agents outcome status-event 1067 In progress'])
     } finally {
       await box.cleanup()

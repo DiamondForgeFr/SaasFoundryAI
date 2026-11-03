@@ -17,8 +17,10 @@ import {
   resolveCaptureCli
 } from '../../../harness/delegation-hooks'
 import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../../../utils/claude-settings'
+import { hermeticPath, nodeBinDir } from '../../helpers/hermetic-path'
 
-const SYSTEM_PATH = '/usr/bin:/bin'
+// The system tools only, without any CLI the machine installed there (#1128).
+const SYSTEM_PATH = hermeticPath('/usr/bin:/bin')
 
 describe('the hooks that capture delegations (#1035)', () => {
   let root: string
@@ -43,7 +45,7 @@ describe('the hooks that capture delegations (#1035)', () => {
   /** Run the hook command the way a host does: through a shell, in the project, the payload on stdin. */
   const runHook = (command: string, payload: string, env: Record<string, string> = {}) =>
     new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
-      const child = spawn('sh', ['-c', command], { cwd: root, env: { PATH: `${root}/bin:${dirname(process.execPath)}:${SYSTEM_PATH}`, ...env } })
+      const child = spawn('sh', ['-c', command], { cwd: root, env: { PATH: `${root}/bin:${nodeBinDir()}:${SYSTEM_PATH}`, ...env } })
       let stdout = ''
       let stderr = ''
       child.stdout.on('data', (chunk) => (stdout += chunk))
