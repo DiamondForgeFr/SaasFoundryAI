@@ -165,7 +165,14 @@ describe('the hooks that capture delegations (#1035)', () => {
       await program('node_modules/.bin/saasfoundryai', 1, 'echo "error: unknown command capture" >&2')
       expect(await defaultCaptureProbe(root)).toBe(false)
       await rm(join(root, 'node_modules'), { recursive: true })
-      expect(await defaultCaptureProbe(root)).toBe(false)
+      // The probe falls back to the PATH: keep a CLI installed on the machine out of the assertion.
+      const hostPath = process.env.PATH
+      process.env.PATH = SYSTEM_PATH
+      try {
+        expect(await defaultCaptureProbe(root)).toBe(false)
+      } finally {
+        process.env.PATH = hostPath
+      }
     })
   })
 
