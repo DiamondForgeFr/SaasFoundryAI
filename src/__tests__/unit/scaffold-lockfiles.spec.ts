@@ -37,6 +37,7 @@ const MULTIREPO = join(ROOT, 'scaffolds', 'overlays', 'multirepo')
 const MONOREPO_ROOT = join(ROOT, 'scaffolds', 'overlays', 'monorepo', 'root', 'package.json')
 const SECURITY_OVERRIDES = {
   '@nestjs/platform-express': { multer: '2.5.0' },
+  '@nestjs/swagger': { 'js-yaml': '5.5.0' },
   '@prisma/config': { 'deepmerge-ts': '8.0.2' },
   prisma: { mysql2: '3.24.4' }
 }
@@ -105,6 +106,26 @@ function resolutionDrift(lock: PackageLock, expected: Record<string, string>): s
   })
 }
 
+/**
+ * The copy of `dependency` that `parent` loads, found the way Node finds it: the parent's own
+ * `node_modules` first, then each enclosing one. A lock can hold several copies of the same
+ * package (the API lock holds three js-yaml majors), and only this one is what the parent runs.
+ */
+function resolutionFrom(lock: PackageLock, parent: string, dependency: string, version: string): string[] {
+  let base = `node_modules/${parent}`
+  for (;;) {
+    const candidate = lock.packages[`${base}/node_modules/${dependency}`]
+    if (candidate) {
+      return candidate.version === version ? [] : [`${parent} -> ${dependency}: expected ${version}, received ${candidate.version}`]
+    }
+    const enclosing = base.lastIndexOf('/node_modules/')
+    if (enclosing === -1) break
+    base = base.slice(0, enclosing)
+  }
+  const hoisted = lock.packages[`node_modules/${dependency}`]
+  return hoisted?.version === version ? [] : [`${parent} -> ${dependency}: expected ${version}, received ${hoisted?.version ?? 'nothing'}`]
+}
+
 describe('committed multirepo lockfiles', () => {
   const fixtures = ['api', 'web'].map((app) => {
     const directory = join(MULTIREPO, app)
@@ -127,13 +148,15 @@ describe('committed multirepo lockfiles', () => {
     expect(monorepoRoot.overrides).toEqual(SECURITY_OVERRIDES)
 
     expect(resolutionDrift(api!.lock, { multer: '2.5.0', 'deepmerge-ts': '8.0.2', mysql2: '3.24.4' })).toEqual([])
+    // The lock holds three js-yaml copies, so the swagger one is read from where swagger loads it.
+    expect(resolutionFrom(api!.lock, '@nestjs/swagger', 'js-yaml', '5.5.0')).toEqual([])
   })
 
   it('resolves patched shared parser dependencies from a fresh lock', () => {
     const api = fixtures.find((fixture) => fixture.app === 'api')
     const web = fixtures.find((fixture) => fixture.app === 'web')
 
-    expect(minimumResolutionDrift(api!.lock, { 'fast-uri': '3.1.8', qs: '6.16.0' })).toEqual([])
+    expect(minimumResolutionDrift(api!.lock, { 'fast-uri': '3.1.9', handlebars: '4.7.10', qs: '6.16.0' })).toEqual([])
     expect(minimumResolutionDrift(web!.lock, { 'fast-uri': '3.1.8' })).toEqual([])
   })
 
@@ -161,15 +184,44 @@ describe('committed multirepo lockfiles', () => {
     expect(resolutionDrift(staleLock, { multer: '2.5.0' })).toEqual(['multer: expected only 2.5.0, received 2.4.0'])
   })
 
+  it('fails when swagger loads a vulnerable js-yaml, whatever the other copies resolve to', () => {
+    const api = fixtures.find((fixture) => fixture.app === 'api')!
+    const swaggerCopy = 'node_modules/@nestjs/swagger/node_modules/js-yaml'
+    expect(api.lock.packages[swaggerCopy]).toBeDefined()
+
+    const staleLock = structuredClone(api.lock)
+    staleLock.packages[swaggerCopy].version = '5.3.0'
+    expect(resolutionFrom(staleLock, '@nestjs/swagger', 'js-yaml', '5.5.0')).toEqual(['@nestjs/swagger -> js-yaml: expected 5.5.0, received 5.3.0'])
+
+    // A patched copy elsewhere in the tree must not hide the vulnerable one swagger loads.
+    const maskedLock = structuredClone(staleLock)
+    maskedLock.packages['node_modules/js-yaml'].version = '5.5.0'
+    expect(resolutionFrom(maskedLock, '@nestjs/swagger', 'js-yaml', '5.5.0')).toEqual(['@nestjs/swagger -> js-yaml: expected 5.5.0, received 5.3.0'])
+
+    // With no copy nested under swagger, the hoisted one is what it loads.
+    const hoistedLock = structuredClone(api.lock)
+    delete hoistedLock.packages[swaggerCopy]
+    hoistedLock.packages['node_modules/js-yaml'].version = '5.5.0'
+    expect(resolutionFrom(hoistedLock, '@nestjs/swagger', 'js-yaml', '5.5.0')).toEqual([])
+    hoistedLock.packages['node_modules/js-yaml'].version = '4.3.2'
+    expect(resolutionFrom(hoistedLock, '@nestjs/swagger', 'js-yaml', '5.5.0')).toEqual(['@nestjs/swagger -> js-yaml: expected 5.5.0, received 4.3.2'])
+  })
+
   it('accepts newer parser patches and rejects any vulnerable resolution', () => {
     const api = fixtures.find((fixture) => fixture.app === 'api')!
     const newerLock = structuredClone(api.lock)
     newerLock.packages['node_modules/fast-uri'].version = '3.2.0'
-    expect(minimumResolutionDrift(newerLock, { 'fast-uri': '3.1.8' })).toEqual([])
+    expect(minimumResolutionDrift(newerLock, { 'fast-uri': '3.1.9' })).toEqual([])
 
     const staleLock = structuredClone(api.lock)
+    staleLock.packages['node_modules/fast-uri'].version = '3.1.8'
+    expect(minimumResolutionDrift(staleLock, { 'fast-uri': '3.1.9' })).toEqual(['fast-uri: expected every resolution to be at least 3.1.9, received 3.1.8'])
     staleLock.packages['node_modules/fast-uri'].version = '2.99.0'
-    expect(minimumResolutionDrift(staleLock, { 'fast-uri': '3.1.8' })).toEqual(['fast-uri: expected every resolution to be at least 3.1.8, received 2.99.0'])
+    expect(minimumResolutionDrift(staleLock, { 'fast-uri': '3.1.9' })).toEqual(['fast-uri: expected every resolution to be at least 3.1.9, received 2.99.0'])
+
+    const staleHandlebars = structuredClone(api.lock)
+    staleHandlebars.packages['node_modules/handlebars'].version = '4.7.9'
+    expect(minimumResolutionDrift(staleHandlebars, { handlebars: '4.7.10' })).toEqual(['handlebars: expected every resolution to be at least 4.7.10, received 4.7.9'])
   })
 })
 
