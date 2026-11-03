@@ -7,7 +7,7 @@ import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger'
 /**
  * Dependencies
  */
-import { RequirePermissions } from '@common/decorators/require-permissions.decorator'
+import { RequirePermissions, ScopeFrom } from '@common/decorators/require-permissions.decorator'
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard'
 import { PermissionsGuard } from '@modules/auth/guards/permissions.guard'
 import { EntityService } from '@modules/entities/services/entity.service'
@@ -62,8 +62,11 @@ export class EntitiesController {
     return this.entityService.createOwnEntity(req.user.id, createEntityDto)
   }
 
+  // `:id` is an entity id: @ScopeFrom('id', 'ENTITY') makes PermissionsGuard count only the roles that apply to THAT
+  // entity (PLATFORM, ACCOUNT on its account, ENTITY on it or an ancestor), never the union of the actor's roles.
   @Patch(':id')
   @RequirePermissions(['ACCOUNT_ENTITY_MANAGEMENT'], 'ACCOUNT_ADMINISTRATION')
+  @ScopeFrom('id', 'ENTITY')
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Update entity', description: 'Update an entity name/description/isActive and its profile organization fields.' })
@@ -90,6 +93,7 @@ export class EntitiesController {
 
   @Patch(':id/users')
   @RequirePermissions(['ENTITY_USER_MANAGEMENT'], 'ACCOUNT_ADMINISTRATION')
+  @ScopeFrom('id', 'ENTITY')
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Update entity users', description: 'Update the users linked to an entity.' })
