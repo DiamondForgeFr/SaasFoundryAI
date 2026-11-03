@@ -57,20 +57,37 @@ The NestJS guard returns `401` when no authenticated user exists and `403` when 
 
 ## Scope follows the request
 
-The backend resolves the active authorization context from explicit scope headers or route parameters:
+A user holds several role assignments (a platform role, an account role, one role per entity). The guard counts only the ones that apply to the account or entity the request acts on, so a role held in
+one place never authorises an action somewhere else. A route declares its target with `@ScopeFrom`:
 
-1. `X-Scope-Account-Id`
-2. `X-Scope-Entity-Id`
-3. `:accountId`
-4. `:entityId`
+```ts
+@Patch(':id/status')
+@RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+@ScopeFrom('id', 'ACCOUNT') // `:id` is an account id
+updateStatus() {}
+```
 
-The React application receives the elected scope from the session, sends it with API requests and filters routes, tabs and actions through the same module, sub-module and permission vocabulary. UI
-hiding improves clarity; the backend guard remains the authority.
+| Target                  | Assignments that count                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account A (`'ACCOUNT'`) | Platform roles; account roles held on A. Entity roles of an entity of A count only on the routes that opt in with `includeEntityAssignments`.           |
+| Entity E (`'ENTITY'`)   | Platform roles; account roles held on E's account; entity roles held on E or on one of its ancestors. Never a descendant, a sibling or another account. |
+
+The backend resolves the target in this order: the route's `@ScopeFrom`, then a legacy `:accountId` or `:entityId` route parameter, then the `X-Scope-Account-Id` / `X-Scope-Entity-Id` headers. The
+headers are the weakest hint: they are read only when the route declares no scope, so they cannot redirect a check away from the account or entity named in the URL. The React application does not send
+them; it receives the elected scope from the session and filters routes, tabs and actions through the same module, sub-module and permission vocabulary. UI hiding improves clarity; the backend guard
+remains the authority.
+
+Routes of the `PLATFORM_ADMINISTRATION` module count platform roles only, whatever the target, so a custom account or entity role that carries a platform section never gives platform reach. A URL that
+names an account or entity that does not exist answers `404`; one that exists but where the user holds no role answers `403`.
+
+The services check what the guard cannot see. `PATCH /accounts/:id/users/:userId` checks each change in the scope it acts on (`ACCOUNT_USER_MANAGEMENT` at account scope to change the active flag,
+`USER_ROLE_ALLOCATION` at account scope for the account roles, `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice), and `POST /invitations`, `POST /entities` and the role routes check
+the permission in the scope of each target. An entity administrator therefore manages its own entity and its subtree, and nothing at the account level.
 
 ::: warning Scope-less endpoints
 
-Endpoints without a scope hint use the union of the user's assignments for backward compatibility. New tenant-sensitive endpoints should carry an account or entity scope so the guard can enforce the
-narrowest context.
+Endpoints without a scope use the union of the user's assignments, which is what lets a role held in one account act on another. Every route that takes an account or entity id must declare it with
+`@ScopeFrom`; when the target is not in the URL (the body, or a role id), the service must check the permission in the scope of each target.
 
 :::
 

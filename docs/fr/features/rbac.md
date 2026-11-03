@@ -57,20 +57,37 @@ Le guard NestJS renvoie `401` en l'absence d'utilisateur authentifié et `403` l
 
 ## La portée suit la requête
 
-Le backend résout le contexte d'autorisation actif à partir des en-têtes explicites ou des paramètres de route :
+Un utilisateur détient plusieurs affectations de rôle (un rôle plateforme, un rôle de compte, un rôle par entité). Le guard ne compte que celles qui s'appliquent au compte ou à l'entité sur lesquels
+la requête agit : un rôle détenu à un endroit n'autorise donc jamais une action ailleurs. Une route déclare sa cible avec `@ScopeFrom` :
 
-1. `X-Scope-Account-Id`
-2. `X-Scope-Entity-Id`
-3. `:accountId`
-4. `:entityId`
+```ts
+@Patch(':id/status')
+@RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+@ScopeFrom('id', 'ACCOUNT') // `:id` est un identifiant de compte
+updateStatus() {}
+```
 
-L'application React reçoit la portée choisie depuis la session, l'envoie avec les appels API et filtre routes, onglets et actions avec le même vocabulaire de modules, sous-modules et permissions.
-Masquer une action améliore la lisibilité ; le guard backend reste l'autorité.
+| Cible                  | Affectations qui comptent                                                                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Compte A (`'ACCOUNT'`) | Rôles plateforme ; rôles de compte détenus sur A. Les rôles d'entité d'une entité de A ne comptent que sur les routes qui l'activent avec `includeEntityAssignments`.               |
+| Entité E (`'ENTITY'`)  | Rôles plateforme ; rôles de compte détenus sur le compte de E ; rôles d'entité détenus sur E ou sur l'un de ses ancêtres. Jamais un descendant, une entité sœur ou un autre compte. |
+
+Le backend résout la cible dans cet ordre : le `@ScopeFrom` de la route, puis un paramètre de route historique `:accountId` ou `:entityId`, puis les en-têtes `X-Scope-Account-Id` /
+`X-Scope-Entity-Id`. Les en-têtes sont l'indice le plus faible : ils ne sont lus que si la route ne déclare aucune portée, et ne peuvent donc pas détourner un contrôle du compte ou de l'entité nommés
+dans l'URL. L'application React ne les envoie pas : elle reçoit la portée choisie depuis la session et filtre routes, onglets et actions avec le même vocabulaire de modules, sous-modules et
+permissions. Masquer une action améliore la lisibilité ; le guard backend reste l'autorité.
+
+Les routes du module `PLATFORM_ADMINISTRATION` ne comptent que les rôles plateforme, quelle que soit la cible : un rôle personnalisé de compte ou d'entité qui porte une section de plateforme ne donne
+donc jamais l'accès plateforme. Une URL qui nomme un compte ou une entité inexistants répond `404` ; une URL qui nomme un identifiant existant sur lequel l'utilisateur n'a aucun rôle répond `403`.
+
+Les services contrôlent ce que le guard ne voit pas. `PATCH /accounts/:id/users/:userId` contrôle chaque modification dans la portée où elle agit (`ACCOUNT_USER_MANAGEMENT` au niveau du compte pour
+l'état actif, `USER_ROLE_ALLOCATION` au niveau du compte pour les rôles de compte, `USER_ROLE_ALLOCATION` dans la portée de l'entité pour chaque tranche d'entité), et `POST /invitations`,
+`POST /entities` ainsi que les routes de rôles contrôlent la permission dans la portée de chaque cible. Un administrateur d'entité gère donc son entité et son sous-arbre, et rien au niveau du compte.
 
 ::: warning Endpoints sans portée
 
-Pour compatibilité, les endpoints sans indication de portée utilisent l'union des affectations de l'utilisateur. Tout nouvel endpoint sensible au tenant devrait porter une portée compte ou entité afin
-d'imposer le contexte le plus étroit.
+Un endpoint sans portée utilise l'union des affectations de l'utilisateur, ce qui permet à un rôle détenu dans un compte d'agir sur un autre. Toute route qui prend un identifiant de compte ou d'entité
+doit le déclarer avec `@ScopeFrom` ; quand la cible n'est pas dans l'URL (corps de requête, identifiant de rôle), le service doit contrôler la permission dans la portée de chaque cible.
 
 :::
 
