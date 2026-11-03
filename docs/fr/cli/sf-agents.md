@@ -389,10 +389,14 @@ ticket, dans le même worktree ; celui-ci remet le ticket en AI Testing. Un déf
 de l'agent de palier porte les mêmes limites : l'agent n'est pas invité à faire ce que son propre prompt lui interdit.
 
 La branche d'un ticket délégué est celle que l'agent nomme, sauf si l'hôte la nomme avant lui. `isolation: "worktree"` de Claude Code place l'agent sur `worktree-agent-<id>` ; l'agent garde cette
-branche locale et pousse son travail vers la branche du ticket (`git push origin HEAD:feature/<N>-<description>`). `create-pr`, `ready-pr` et `draft-pr` acceptent ce checkout quand origin porte la
-branche du ticket sur le commit du `HEAD` local : elles la trouvent seules quand c'est la seule dans ce cas, ou la prennent de `--head <branche>`. Une branche absente d'origin, poussée mais en retard
-sur `HEAD`, ou appartenant à un autre ticket est refusée. Le brief à l'agent nomme la branche du ticket, pour qu'il puisse passer `--head`. Voir
+branche locale et pousse son travail vers la branche du ticket (`git push origin HEAD:feature/<N>-<description>`). `create-pr` accepte ce checkout quand origin porte la branche du ticket sur le commit
+du `HEAD` local : elle la trouve seule quand c'est la seule dans ce cas, ou la prend de `--head <branche>`. Une branche absente d'origin, poussée mais en retard sur `HEAD`, ou appartenant à un autre
+ticket est refusée. Le brief à l'agent nomme la branche du ticket, pour qu'il puisse passer `--head`. Voir
 [Intégration GitHub](../workflow/github-integration.md#commandes-pr-sur-une-branche-nommee-par-lhote).
+
+La session lance `ready-pr <ticket>` et `draft-pr <ticket>` depuis le checkout principal, sur la branche de travail, jamais depuis le worktree de l'agent : hors de la branche du ticket, elles trouvent
+sur GitHub la seule pull request ouverte du ticket d'après la convention de branches, refusent en listant les candidates quand plusieurs correspondent (`--pr <numéro>` en choisit une), et vérifient
+son commit de tête contre origin et la porte de CI locale. Voir [Intégration GitHub](../workflow/github-integration.md#ready-pr-et-draft-pr-depuis-le-checkout-principal).
 
 Le type de tâche de la livraison est dimensionné selon le travail. Le profil de complexité du ticket le déclare (`steps.execute.taskKind`), et il est toujours résolu avec `sf agents route`, jamais en
 nommant un modèle :

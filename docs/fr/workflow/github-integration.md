@@ -58,8 +58,7 @@ git push origin HEAD:feature/42-add-export
 .claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft
 ```
 
-Les commandes acceptent ce checkout quand **origin porte la branche du ticket sur le commit du `HEAD` local** : le travail est poussé en entier, et la pull request contient exactement ce qui est
-extrait.
+`create-pr` accepte ce checkout quand **origin porte la branche du ticket sur le commit du `HEAD` local** : le travail est poussé en entier, et la pull request contient exactement ce qui est extrait.
 
 - **Sans `--head`**, la CLI cherche sur origin les branches feature ou fix du ticket qui pointent sur `HEAD`. Une seule est utilisée, et la commande affiche une ligne qui dit laquelle. Aucune, ou
   plusieurs, est refusée par une erreur qui nomme `--head`. Les branches de release ne sont jamais cherchées : elles ne portent pas de numéro de ticket.
@@ -72,6 +71,28 @@ branche d'un autre ticket, même sur `HEAD`. Une pull request n'est jamais promu
 
 À partir de là, la branche est celle du ticket. `create-pr` ne pousse rien, puisqu'origin la porte déjà, et ouvre la pull request depuis cette branche (`gh pr create --head`). Le rattachement au
 tableau, la ligne `Resolves #<ticket>`, la branche de base et les garde-fous sont ceux de n'importe quelle branche de ticket.
+
+### `ready-pr` et `draft-pr` depuis le checkout principal
+
+En livraison déléguée, la session change l'état brouillon de la pull request d'un ticket depuis le checkout principal, sur la branche de travail, alors que la branche du ticket vit dans le worktree de
+l'agent. Inutile d'entrer dans ce worktree :
+
+```bash
+# Sur develop, dans le checkout principal
+.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42
+.claude/skills/sf-workflow/workflow-cli.sh draft-pr 42 --pr 123
+```
+
+Quand la branche courante n'est pas celle du ticket, `ready-pr` et `draft-pr` ne regardent pas le `HEAD` local. Elles trouvent la pull request sur GitHub :
+
+- **Sans option**, la seule pull request ouverte de ce dépôt dont la branche de tête respecte le `branchNaming` du ticket (feature ou fix) est utilisée, et la commande affiche une ligne qui la nomme.
+  Si aucune ne correspond, la commande refuse. Plusieurs sont refusées avec la liste des candidates (`#123 (feature/42-…), #124 (fix/42-…)`) : en choisir une avec `--pr <numéro>`.
+- **Avec `--pr <numéro>`**, la pull request est celle qui est nommée. Sa branche de tête doit tout de même respecter la convention du ticket.
+- **Avec `--head <branche>`**, la pull request ouverte de cette branche est utilisée.
+
+Le commit de tête de la pull request doit être celui qu'origin porte pour sa branche, et c'est ce commit que vérifie la porte de CI locale. Sur la branche du ticket elle-même, rien ne change : le
+`HEAD` local, origin et la pull request doivent concorder. L'axe de nature reste appliqué par `update-status` : le passage en In review exige toujours une pull request sortie du brouillon, et Human
+testing une pull request en brouillon.
 
 ## Routage depuis `sf-workflow`
 
