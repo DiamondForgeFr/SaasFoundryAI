@@ -35,6 +35,9 @@ interface PackageLock {
 const ROOT = resolve(__dirname, '../../..')
 const MULTIREPO = join(ROOT, 'scaffolds', 'overlays', 'multirepo')
 const MONOREPO_ROOT = join(ROOT, 'scaffolds', 'overlays', 'monorepo', 'root', 'package.json')
+const MONOREPO_WEB = join(ROOT, 'scaffolds', 'overlays', 'monorepo', 'web', 'package.json')
+// Vite 8.2.0 to 8.2.3 carry six advisories: 8.2.4 is the first patched release, and the templates pin a later one.
+const VITE_PATCHED_FLOOR = '8.2.4'
 const SECURITY_OVERRIDES = {
   '@nestjs/platform-express': { multer: '2.5.0' },
   '@nestjs/swagger': { 'js-yaml': '5.5.0' },
@@ -157,7 +160,18 @@ describe('committed multirepo lockfiles', () => {
     const web = fixtures.find((fixture) => fixture.app === 'web')
 
     expect(minimumResolutionDrift(api!.lock, { 'fast-uri': '3.1.9', handlebars: '4.7.10', qs: '6.16.0' })).toEqual([])
-    expect(minimumResolutionDrift(web!.lock, { 'fast-uri': '3.1.8' })).toEqual([])
+    expect(minimumResolutionDrift(web!.lock, { 'fast-uri': '3.1.9', 'source-map-js': '1.2.2' })).toEqual([])
+  })
+
+  it('resolves the pinned, patched Vite in the web lock and keeps both web overlays on the same pin', () => {
+    const web = fixtures.find((fixture) => fixture.app === 'web')!
+    const monorepoWeb = readJson<PackageManifest>(MONOREPO_WEB)
+    const pin = web.manifest.devDependencies?.vite
+
+    expect(pin).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(monorepoWeb.devDependencies?.vite).toBe(pin)
+    expect(resolutionDrift(web.lock, { vite: pin! })).toEqual([])
+    expect(minimumResolutionDrift(web.lock, { vite: VITE_PATCHED_FLOOR })).toEqual([])
   })
 
   it('fails when a lock root omits a dependency or pins a different version', () => {
@@ -222,6 +236,21 @@ describe('committed multirepo lockfiles', () => {
     const staleHandlebars = structuredClone(api.lock)
     staleHandlebars.packages['node_modules/handlebars'].version = '4.7.9'
     expect(minimumResolutionDrift(staleHandlebars, { handlebars: '4.7.10' })).toEqual(['handlebars: expected every resolution to be at least 4.7.10, received 4.7.9'])
+  })
+
+  it('fails when the web lock goes back to a vulnerable Vite, fast-uri or source-map-js', () => {
+    const web = fixtures.find((fixture) => fixture.app === 'web')!
+    const staleLock = structuredClone(web.lock)
+    staleLock.packages['node_modules/vite'].version = '8.2.2'
+    staleLock.packages['node_modules/fast-uri'].version = '3.1.8'
+    staleLock.packages['node_modules/source-map-js'].version = '1.2.1'
+
+    expect(minimumResolutionDrift(staleLock, { vite: VITE_PATCHED_FLOOR, 'fast-uri': '3.1.9', 'source-map-js': '1.2.2' })).toEqual([
+      `vite: expected every resolution to be at least ${VITE_PATCHED_FLOOR}, received 8.2.2`,
+      'fast-uri: expected every resolution to be at least 3.1.9, received 3.1.8',
+      'source-map-js: expected every resolution to be at least 1.2.2, received 1.2.1'
+    ])
+    expect(resolutionDrift(staleLock, { vite: web.manifest.devDependencies!.vite })).toEqual([`vite: expected only ${web.manifest.devDependencies!.vite}, received 8.2.2`])
   })
 })
 
