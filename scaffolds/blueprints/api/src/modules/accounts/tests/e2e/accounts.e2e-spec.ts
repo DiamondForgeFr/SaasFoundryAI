@@ -612,6 +612,8 @@ describe('Accounts Module (e2e)', () => {
     let otherAccountAdminAgent: ReturnType<typeof request.agent>
     let strangerAdmin: TestUser
     let strangerAdminAgent: ReturnType<typeof request.agent>
+    let mixedUser: TestUser
+    let mixedAgent: ReturnType<typeof request.agent>
     let platformAdmin: TestUser
     let platformAdminAgent: ReturnType<typeof request.agent>
     let entityScopedRole: { id: number }
@@ -660,6 +662,14 @@ describe('Accounts Module (e2e)', () => {
       strangerAdminAgent = request.agent(app.getHttpServer())
       if (!(await loginTestUser(strangerAdminAgent, strangerAdmin.email, password))) throw new Error('Failed to login stranger admin')
 
+      // Both at once: admin of its OWN account (ACCOUNT role on M) and entity-admin of an entity of THIS account (ENTITY role on A).
+      mixedUser = await setupTestUser(prismaService, { email: 'scope-mixed@saasfoundryai.test', password, firstname: 'Mixed', lastname: 'Roles', roles: ['account-admin'] })
+      const entityAdminRole = await prismaService.role.findFirstOrThrow({ where: { name: 'entity-admin', accountId: null } })
+      await prismaService.userEntityLink.create({ data: { userId: mixedUser.id, entityId } })
+      await prismaService.userRoleAssignment.create({ data: { userId: mixedUser.id, roleId: entityAdminRole.id, entityId } })
+      mixedAgent = request.agent(app.getHttpServer())
+      if (!(await loginTestUser(mixedAgent, mixedUser.email, password))) throw new Error('Failed to login mixed-role user')
+
       platformAdmin = await setupTestUser(prismaService, { email: 'scope-platform@saasfoundryai.test', password, firstname: 'Platform', lastname: 'Admin', roles: ['platform-admin'] })
       platformAdminAgent = request.agent(app.getHttpServer())
       if (!(await loginTestUser(platformAdminAgent, platformAdmin.email, password))) throw new Error('Failed to login platform admin')
@@ -676,6 +686,7 @@ describe('Accounts Module (e2e)', () => {
       await prismaService.entity.deleteMany({ where: { id: siblingEntityId } })
       await cleanupTestUser(prismaService, otherAccountAdmin.email)
       await cleanupTestUser(prismaService, strangerAdmin.email)
+      await cleanupTestUser(prismaService, mixedUser.email)
       await cleanupTestUser(prismaService, platformAdmin.email)
     })
 
@@ -714,8 +725,64 @@ describe('Accounts Module (e2e)', () => {
         await prismaService.userRoleAssignment.deleteMany({ where: { userId: testUser.id, entityId } })
       })
 
-      it('a seeded entity-admin may send an unchanged form back (no-op slices need no permission)', async () => {
-        await entityAdminAgent.patch(`/api/accounts/${accountId}/users/${testUser.id}`).send({ isActive: true }).expect(200)
+      it('a seeded entity-admin may send the whole form back unchanged: 200, and not one assignment is rewritten', async () => {
+        const assignmentsOf = () =>
+          prismaService.userRoleAssignment.findMany({ where: { userId: testUser.id }, orderBy: { id: 'asc' }, select: { id: true, roleId: true, accountId: true, entityId: true } })
+        const stored = await assignmentsOf()
+        const accountRoleIds = stored.filter((a) => a.accountId === accountId).map((a) => a.roleId)
+        expect(accountRoleIds.length).toBeGreaterThan(0)
+
+        // Every field and every slice equals what is stored: the account roles (which this actor may NOT change), a
+        // slice of its own entity and one of an entity it does not administer. The form is a no-op.
+        await entityAdminAgent
+          .patch(`/api/accounts/${accountId}/users/${testUser.id}`)
+          .send({
+            isActive: true,
+            accountRoleIds,
+            entityRoleIds: [
+              { entityId, roleIds: [] },
+              { entityId: siblingEntityId, roleIds: [] }
+            ]
+          })
+          .expect(200)
+
+        // Same rows, same ids: rewriting them from a stale form could restore a role revoked in the meantime.
+        expect(await assignmentsOf()).toEqual(stored)
+      })
+
+      it('a changed slice is written, an unchanged slice sent with it is left alone (even one the actor cannot administer)', async () => {
+        const holdingBefore = await prismaService.userRoleAssignment.create({ data: { userId: testUser.id, roleId: entityUserRoleId, entityId: siblingEntityId } })
+
+        // Own entity: changed (authorized). Sibling entity: unchanged (the actor holds nothing there, and needs nothing).
+        await entityAdminAgent
+          .patch(`/api/accounts/${accountId}/users/${testUser.id}`)
+          .send({
+            entityRoleIds: [
+              { entityId, roleIds: [entityUserRoleId] },
+              { entityId: siblingEntityId, roleIds: [entityUserRoleId] }
+            ]
+          })
+          .expect(200)
+
+        expect(await prismaService.userRoleAssignment.count({ where: { userId: testUser.id, entityId, roleId: entityUserRoleId } })).toBe(1)
+        const holdingAfter = await prismaService.userRoleAssignment.findFirstOrThrow({ where: { userId: testUser.id, entityId: siblingEntityId } })
+        expect(holdingAfter.id).toBe(holdingBefore.id)
+        await prismaService.userRoleAssignment.deleteMany({ where: { userId: testUser.id, entityId: { in: [entityId, siblingEntityId] } } })
+      })
+
+      it('a changed slice in an entity the actor does not administer is refused even when the rest of the form is a no-op', async () => {
+        await entityAdminAgent
+          .patch(`/api/accounts/${accountId}/users/${testUser.id}`)
+          .send({
+            isActive: true,
+            entityRoleIds: [
+              { entityId, roleIds: [] },
+              { entityId: siblingEntityId, roleIds: [entityUserRoleId] }
+            ]
+          })
+          .expect(403)
+
+        expect(await prismaService.userRoleAssignment.count({ where: { userId: testUser.id, entityId: siblingEntityId } })).toBe(0)
       })
 
       it('a custom ENTITY role holding USER_ROLE_ALLOCATION gets 403 on accountRoleIds', async () => {
@@ -727,6 +794,38 @@ describe('Accounts Module (e2e)', () => {
           .expect(403)
 
         expect(await prismaService.userRoleAssignment.count({ where: { userId: probe.user.id, accountId } })).toBe(0)
+      })
+    })
+
+    describe('a user who is admin of its own account AND entity-admin here', () => {
+      it('acts with the entity role on this account, never with the account role of its own account', async () => {
+        const holds = (roleId: number) => prismaService.userRoleAssignment.count({ where: { userId: testUser.id, roleId, entityId } })
+
+        // The ENTITY role held here counts: allocating a role inside its own entity is allowed.
+        await mixedAgent
+          .patch(`/api/accounts/${accountId}/users/${testUser.id}`)
+          .send({ entityRoleIds: [{ entityId, roleIds: [entityUserRoleId] }] })
+          .expect(200)
+        expect(await holds(entityUserRoleId)).toBe(1)
+        await prismaService.userRoleAssignment.deleteMany({ where: { userId: testUser.id, entityId } })
+
+        // The ACCOUNT role held on ITS OWN account does not count here: no account-level change, whatever the field.
+        await mixedAgent
+          .patch(`/api/accounts/${accountId}/users/${testUser.id}`)
+          .send({ accountRoleIds: [accountAdminRoleId] })
+          .expect(403)
+        await mixedAgent.patch(`/api/accounts/${accountId}/users/${testUser.id}`).send({ isActive: false }).expect(403)
+        await mixedAgent.patch(`/api/accounts/${accountId}/status`).send({ isActive: false }).expect(403)
+        expect((await prismaService.user.findUniqueOrThrow({ where: { id: testUser.id } })).isActive).toBe(true)
+      })
+
+      it('does not borrow the sections of its own account admin role (the ENTITIES section is not held on this account)', async () => {
+        // Its own account-admin role carries ENTITIES; the entity-admin role held here does not (D5). Only the latter counts.
+        await mixedAgent.get(`/api/accounts/${accountId}/entities`).expect(403)
+        // The sections the entity role does hold stay readable.
+        await mixedAgent.get(`/api/accounts/${accountId}/users`).expect(200)
+        // And its own account is fully administrable with its account role.
+        await mixedAgent.get(`/api/accounts/${mixedUser.accountId}/entities`).expect(200)
       })
     })
 
