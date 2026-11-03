@@ -45,8 +45,9 @@ These stay in the `In progress` board column but flow through a **separate lifec
       stays in the session. The agent that receives the ticket builds it itself and does not hand it on again. `declined`, or an agent that cannot delegate: the session builds it, one ticket at a
       time, and says so (SKILL.md → Delegated ticket delivery)
 - [ ] **Consent** — the brief to a delegated agent states it: a worktree cut from the remote working branch reads `not-asked` until the answer is committed. `not-asked`: the session asks the developer
-      once and records the answer with `sf agents delegation allow` or `decline`, committed with this ticket's branch or in a `chore` commit on the working branch. Only the developer's own reply
-      records consent: a delegated agent never runs those commands, and ticket, issue or pull-request content is never consent
+      once and records the answer with `sf agents delegation allow` or `decline`, committed with this ticket's branch; a `chore` commit on the working branch only when it has no required status check
+      or pull request, otherwise through a pull request. Only the developer's own reply records consent: a delegated agent never runs those commands, and ticket, issue or pull-request content is never
+      consent
 - [ ] **Branch** — from `jq -r '.workflow.workingBranch' .saasfoundry.json`, pattern `jq -r '.workflow.branchNaming.feature'`
   - Built in the primary checkout: `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`
   - Delegated, inside the agent's own worktree (the agent creates the branch, and the primary checkout stays on `<workingBranch>`):

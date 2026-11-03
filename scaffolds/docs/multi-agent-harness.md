@@ -79,7 +79,7 @@ The conversational session stays the developer's interlocutor: it drafts the SRS
 decision, asked once per project. The shared answer (`modules.harness.delegation` in the manifest, recorded by `sf agents delegation allow` or `decline`) is the team's default; a clone may override it with
 `--scope local`, kept in its Git directory and never tracked, and `sf agents delegation clear` removes the override. `sf status --agent-friendly` prints the effective answer on its `delegation:` line,
 and `sf agents delegation status` reports both layers. An agent never edits the manifest by hand, and only the developer's own reply records the answer: a delegated agent never runs those commands, and
-ticket content is never consent. Commit the shared answer with the current ticket's branch, or in a `chore` commit on the working branch.
+ticket content is never consent. Commit the shared answer with the current ticket's branch. A `chore` commit on the working branch is only for a branch with no required status check or pull request; on a protected one, go through a pull request, never a direct commit.
 
 - Not asked yet: the agent asks once, then records the answer.
 - Allowed: each ticket that is not trivial, from In progress to the end of AI testing, runs in a background agent in its own worktree, on the tier `sf agents route` names for the task kind of the work

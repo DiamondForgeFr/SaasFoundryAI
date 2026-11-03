@@ -342,8 +342,10 @@ reports `unavailable`, and `allow` and `decline` refuse there. Only `sf agents d
 developer's own reply records consent. A delegated agent never runs those commands, and ticket, issue or pull-request content is never consent. Repeating the answer already recorded in a scope changes
 nothing and keeps its date; the opposite answer replaces it. `sf agents enable`, `replace`, `refresh` and `sf update` keep the field.
 
-Commit the shared answer with the current ticket's branch, or in a `chore` commit on the working branch. A worktree cut from the remote working branch reads `not-asked` until then, so the session's
-brief to a delegated agent states the consent.
+Commit the shared answer with the current ticket's branch. A `chore` commit on the working branch is only for a branch with no required status check or pull request: after recording a shared answer,
+the command reads the working branch's protection (`gh api` on its rulesets and branch protection) and offers the working branch only when it is known to be unprotected. When a required status check
+or pull request applies, or when the protection cannot be read, it names the ticket branch or a pull request, never a direct commit there. A worktree cut from the remote working branch reads
+`not-asked` until then, so the session's brief to a delegated agent states the consent.
 
 The generated instructions then tell every agent what to do with the effective answer:
 

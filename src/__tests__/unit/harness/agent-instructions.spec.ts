@@ -229,7 +229,10 @@ describe('shared agent instructions', () => {
 
   it('says where the recorded answer is committed and that the brief states it (Examine 7)', () => {
     for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/commit that manifest change with the current ticket's\s+branch \(or in a `chore` commit on the working branch\)/)
+      expect(instructions).toMatch(/commit that manifest change with the current ticket's\s+branch\. A `chore` commit on the working branch is only for a branch with no required status\s+check/)
+      // #1124: a protected working branch is reached through a pull request, never a direct commit.
+      expect(instructions).toMatch(/on a protected one, go through a pull request, never a direct commit/)
+      expect(instructions).not.toMatch(/\(or in a `chore` commit on the working branch\)/)
       expect(instructions).toMatch(/The brief states the consent: a worktree cut from the remote working\s+branch reads `not-asked` until the answer is committed/)
     }
   })

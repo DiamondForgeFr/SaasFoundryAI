@@ -43,6 +43,9 @@ describe('compiled sf agents delegation (#1026)', () => {
     expect(allowed.stdout).toContain('Ticket delivery delegation: allowed (shared, decided ')
     expect(allowed.stdout).toContain('shared team default')
     expect(allowed.stdout).toContain("commit it with the current ticket's branch")
+    // No GitHub repository to read the protection from: never a direct commit on the working branch (#1124).
+    expect(allowed.stdout).toContain('could not be read, so never commit it there directly')
+    expect(allowed.stdout).not.toContain('chore commit')
 
     const recorded = (await readManifest()).modules.harness.delegation
     expect(recorded).toEqual({ ticketDelivery: 'allowed', decidedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) })

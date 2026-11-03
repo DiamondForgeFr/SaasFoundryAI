@@ -365,8 +365,10 @@ modifie jamais le manifeste à la main, et seule la réponse du développeur lui
 pull request n'est jamais un accord. Répéter la réponse déjà enregistrée dans une portée ne change rien et conserve sa date ; la réponse inverse la remplace. `sf agents enable`, `replace`, `refresh`
 et `sf update` conservent le champ.
 
-Commitez la réponse partagée avec la branche du ticket en cours, ou dans un commit `chore` sur la branche de travail. Un worktree créé depuis la branche de travail distante lit `not-asked` d'ici là :
-le brief de la session à un agent délégué énonce donc l'accord.
+Commitez la réponse partagée avec la branche du ticket en cours. Un commit `chore` sur la branche de travail n'est permis que si elle n'exige ni status check ni pull request : après avoir enregistré
+une réponse partagée, la commande lit la protection de la branche de travail (`gh api` sur ses rulesets et sa protection de branche) et ne propose la branche de travail que si elle est connue pour ne
+pas être protégée. Quand un status check ou une pull request est exigé, ou quand la protection ne peut pas être lue, elle nomme la branche du ticket ou une pull request, jamais un commit direct sur
+cette branche. Un worktree créé depuis la branche de travail distante lit `not-asked` d'ici là : le brief de la session à un agent délégué énonce donc l'accord.
 
 Les instructions générées indiquent ensuite à chaque agent quoi faire de la réponse effective :
 
