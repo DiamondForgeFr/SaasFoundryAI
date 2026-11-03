@@ -209,20 +209,26 @@ carries a role id, as `POST /invitations`, `POST /entities` and `PATCH roles/:ro
 The guard answers "may this user call this route in this scope"; **which rows they may see is the service's job**. Do not filter by hand: use `AccountAccessService`
 (`src/common/services/account-access/account-access.service.ts`):
 
-| Need                                                 | Method                                                                                             |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Reject a user with no access to an account           | `validateUserAccountAccess(userId, accountId, methodName)`                                         |
-| Reject a user with no access to an entity            | `validateUserEntityAccess(userId, entityId, methodName)`                                           |
-| Platform administrator / account administrator check | `isPlatformAdmin(userId)` / `isAccountAdminOn(userId, accountId)`                                  |
-| A permission held in one scope                       | `hasPermissionInScope(userId, permission, scope)` / `assertPermissionInScope(...)` (throws 403)    |
-| Everything a user holds in one scope                 | `getScopedGrants(userId, scope)` — modules, sections and permissions of the assignments that apply |
-| An entity's account and ancestor chain               | `resolveEntityTarget(entityId)` / `getAncestorEntityIds(entityId)`                                 |
-| Entities a user may see in an account                | `resolveVisibleEntityIdsForAccount(userId, accountId)` — `null` means unrestricted                 |
-| An entity and everything below it                    | `getSubtreeEntityIds(rootEntityIds)`                                                               |
+| Need                                                 | Method                                                                                              |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Reject a user with no access to an account           | `validateUserAccountAccess(userId, accountId, methodName)`                                          |
+| Reject a user with no access to an entity            | `validateUserEntityAccess(userId, entityId, methodName)`                                            |
+| Platform administrator / account administrator check | `isPlatformAdmin(userId)` / `isAccountAdminOn(userId, accountId)`                                   |
+| A permission held in one scope                       | `hasPermissionInScope(userId, permission, scope)` / `assertPermissionInScope(...)` (throws 403)     |
+| Several checks in one request                        | `getPermissionChecker(userId, entityIds)`, then `checker.has(...)` / `checker.assert(...)` (403)    |
+| Everything a user holds in one scope                 | `getScopedGrants(userId, scope)` — modules, sections and permissions of the assignments that apply  |
+| An entity's account and ancestor chain               | `resolveEntityTarget(entityId)` / `resolveEntityTargets(entityIds)` (bulk) / `getAncestorEntityIds` |
+| Entities a user may see in an account                | `resolveVisibleEntityIdsForAccount(userId, accountId)` — `null` means unrestricted                  |
+| An entity and everything below it                    | `getSubtreeEntityIds(rootEntityIds)`                                                                |
 
 `scope` is `{ kind: 'ACCOUNT', accountId, includeEntityAssignments? }` or `{ kind: 'ENTITY', entityId }`, the same rule as the table above. Check a change only when it changes something (compare it
 with the stored state), and check **each target on its own** — `PATCH :id/users/:userId` needs `ACCOUNT_USER_MANAGEMENT` at account scope for `isActive`, `USER_ROLE_ALLOCATION` at account scope for
-the account roles and `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice.
+the account roles and `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice. Write only what changed: a slice sent back unchanged is neither checked nor rewritten, so a stale form cannot
+restore a role someone has revoked.
+
+Keep the cost flat when a request carries a list of ids. Bound the list in the zod schema (`.max(n)`), deduplicate it, and never call `assertPermissionInScope` once per id: build **one**
+`getPermissionChecker(userId, entityIds)` (the user's assignments are read once, the entities resolved in bulk) and ask it as often as needed. When a carried-over id (a resend that inherits the
+pending invitation's targets and roles) ends up in the record you create, authorize the merged set exactly as if the caller had submitted it.
 
 Entities form a tree (`Entity.parentEntityId`, `prisma/schema/organizations.prisma`): an entity administrator sees the subtree under their entity, never its siblings. Pass the ids these methods return
 into the Prisma `where` (`{ id: { in: visibleIds } }`) — see `AccountService` for the pattern.

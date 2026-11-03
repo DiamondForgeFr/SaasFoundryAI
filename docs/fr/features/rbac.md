@@ -83,7 +83,9 @@ l'utilisateur appartient mais sur laquelle il n'a aucun rôle applicable répond
 
 Les services contrôlent ce que le guard ne voit pas. `PATCH /accounts/:id/users/:userId` contrôle chaque modification dans la portée où elle agit (`ACCOUNT_USER_MANAGEMENT` au niveau du compte pour
 l'état actif, `USER_ROLE_ALLOCATION` au niveau du compte pour les rôles de compte, `USER_ROLE_ALLOCATION` dans la portée de l'entité pour chaque tranche d'entité), et `POST /invitations`,
-`POST /entities` ainsi que les routes de rôles contrôlent la permission dans la portée de chaque cible. Un administrateur d'entité gère donc son entité et son sous-arbre, et rien au niveau du compte.
+`POST /entities` ainsi que les routes de rôles contrôlent la permission dans la portée de chaque cible. Un administrateur d'entité lit donc les utilisateurs et les rôles de son compte, invite des
+utilisateurs et attribue des rôles dans son entité et dans le sous-arbre de celle-ci, et gère les rôles personnalisés de portée `ENTITY` du compte (ce sont des définitions de rôle valables pour tout
+le compte, pas limitées à son entité). Il ne modifie rien d'autre au niveau du compte : ni rôle de compte, ni état d'utilisateur, ni paramètre du compte.
 
 ::: warning Endpoints sans portée
 
@@ -97,12 +99,21 @@ doit le déclarer avec `@ScopeFrom` ; quand la cible n'est pas dans l'URL (corps
 Avant la 1.1.1, une route de compte ou d'entité était contrôlée contre l'union de tous les rôles de l'utilisateur : un rôle d'entité, ou le rôle d'administrateur d'un autre compte dont l'utilisateur
 est simple membre, pouvait passer les contrôles d'administrateur de compte (un `entity-admin` fourni par défaut pouvait se promouvoir administrateur du compte). Le correctif touche des fichiers du
 blueprint qu'aucun installeur ne possède : `sf update` l'applique par fusion à trois voies. Un fichier que vous n'avez pas modifié est mis à jour sur place ; un fichier modifié reçoit un fichier
-annexe `.saasfoundry.new` à fusionner à la main (`permissions.guard.ts`, `account.controller.ts`, `account.service.ts`, `entity.controller.ts`, `entity.service.ts`, `invitation.service.ts`,
-`account-access.service.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`). Trois points changent pour le code que vous avez écrit :
+annexe `.saasfoundry.new` à fusionner à la main. Les fichiers concernés sont `permissions.guard.ts`, `require-permissions.decorator.ts`, `authenticated-request.type.ts`, `jwt.strategy.ts`,
+`jwt-auth.guard.ts`, `account-access.service.ts`, `account.controller.ts`, `account.service.ts`, `entity.controller.ts`, `entity.service.ts`, `invitation.service.ts` et
+`shared-validation/invitation.ts`, ainsi que les nouveaux `scope-filter.ts`, `permission-checker.ts` et `authenticated-user.include.ts`.
+
+Si vous avez modifié `jwt.strategy.ts`, fusionnez-le en premier : il doit charger l'`entity` de chaque affectation (reprenez `authenticatedUserInclude`). `AuthenticatedUser` exige désormais `entity` :
+une stratégie périmée fait échouer `tsc` au lieu de retirer silencieusement à chaque administrateur d'entité ses droits sur les routes de compte jusqu'au prochain rafraîchissement du jeton.
+
+Trois points changent pour le code que vous avez écrit :
 
 - `PermissionsGuard` reçoit `AccountAccessService` en dépendance de constructeur. Le module est global ; ajoutez `AccountAccessModule` aux modules de test de vos propres specs e2e.
 - Une route qui prend un identifiant de compte ou d'entité doit le déclarer avec `@ScopeFrom`, sinon elle garde l'union de tous les rôles.
 - Les contrôles par cible répondent `403` ; les contrôles `401` existants gardent leur statut.
+
+Une invitation vers une adresse qui en a déjà une en attente reprend désormais ses cibles et ses rôles seulement si vous avez le droit de les attribuer : l'invitation fusionnée est autorisée comme si
+vous l'aviez soumise en entier. Les listes `accountIds`, `entityIds` et `roleIds` sont dédoublonnées et plafonnées (100, 100 et 20).
 
 :::
 
