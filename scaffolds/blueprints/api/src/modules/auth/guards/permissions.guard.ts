@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { CanActivate, ExecutionContext, ForbiddenException, HttpException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 /**
@@ -72,7 +72,7 @@ export class PermissionsGuard implements CanActivate {
 
     if (!hasModuleAccess) {
       this.logger.warn(`Access denied: User ${user.id} has no access to ${requiredModule} in scope ${this.describeScope(resolved)}`, 'PermissionsGuard')
-      throw await this.denial(resolved, `You do not have access to ${requiredModule.toLowerCase().replace('_', ' ')}`)
+      throw await this.denial(user.id, resolved, `You do not have access to ${requiredModule.toLowerCase().replace('_', ' ')}`)
     }
 
     // Sub-module (section visibility) gate for read endpoints. The section is visible when the
@@ -82,7 +82,7 @@ export class PermissionsGuard implements CanActivate {
 
       if (!hasSubModuleAccess) {
         this.logger.warn(`Access denied: User ${user.id} has no access to section ${requiredSubModule} in scope ${this.describeScope(resolved)}`, 'PermissionsGuard')
-        throw await this.denial(resolved, `You do not have access to the ${requiredSubModule.toLowerCase().replace(/_/g, ' ')} section`)
+        throw await this.denial(user.id, resolved, `You do not have access to the ${requiredSubModule.toLowerCase().replace(/_/g, ' ')} section`)
       }
     }
 
@@ -100,7 +100,7 @@ export class PermissionsGuard implements CanActivate {
         `Access denied: User ${user.id} does not have ${requiredText} required permissions in scope ${this.describeScope(resolved)}: ${requiredPermissions.join(', ')}`,
         'PermissionsGuard'
       )
-      throw await this.denial(resolved, 'You do not have the required permissions')
+      throw await this.denial(user.id, resolved, 'You do not have the required permissions')
     }
 
     return true
@@ -149,16 +149,24 @@ export class PermissionsGuard implements CanActivate {
   }
 
   /**
-   * The exception for a denied request: 403, except when the URL names an account or entity that does
-   * not exist. The services answer 404 for an unknown id, and a denied-by-scope request must not turn
-   * that into a 403 (nothing is exposed that the 404 did not already say: only an existing target
-   * the caller has no role on answers 403).
+   * The exception for a denied request. A request that names an account or entity the user cannot reach
+   * used to reach the service, whose membership check answered 404 for an unknown account (or entity)
+   * and 401 for an account the user does not belong to. Those answers are part of the API, so the guard
+   * keeps them: it asks the same membership check before answering. Only a target that exists and that
+   * the user belongs to, but where they hold no applicable role, answers 403.
    */
-  private async denial(resolved: ResolvedScope | null, message: string): Promise<ForbiddenException | NotFoundException> {
+  private async denial(userId: string, resolved: ResolvedScope | null, message: string): Promise<HttpException> {
     if (resolved?.fromPath) {
       const { target } = resolved
       if (target.kind === 'ENTITY' && target.accountId === null) return new NotFoundException(`Entity with ID ${target.entityId} not found`)
-      if (target.kind === 'ACCOUNT' && !(await this.accountAccessService.accountExists(target.accountId))) return new NotFoundException(`Account with ID ${target.accountId} not found`)
+      if (target.kind === 'ACCOUNT') {
+        try {
+          await this.accountAccessService.validateUserAccountAccess(userId, target.accountId, 'PermissionsGuard', { allowDisabled: true })
+        } catch (error) {
+          if (error instanceof HttpException) return error
+          throw error
+        }
+      }
     }
     return new ForbiddenException(message)
   }
