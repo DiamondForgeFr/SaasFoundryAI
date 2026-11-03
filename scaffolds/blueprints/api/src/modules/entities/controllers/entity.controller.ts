@@ -48,6 +48,8 @@ export class EntitiesController {
     return this.entityService.createEntity(req.user.id, createEntityDto)
   }
 
+  // The target (account or parent entity) is in the body, not the URL: the guard only proves the permission is held
+  // somewhere, and `createOwnEntity` checks ENTITY_OWN_CREATE in the scope of that account or parent.
   @Post('own')
   @RequirePermissions(['ENTITY_OWN_CREATE'], 'MULTI_ENTITY_MANAGEMENT')
   @UseGuards(PermissionsGuard)
