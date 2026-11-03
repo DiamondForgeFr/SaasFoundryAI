@@ -83,7 +83,9 @@ names an account or entity that does not exist answers `404`, and an account the
 
 The services check what the guard cannot see. `PATCH /accounts/:id/users/:userId` checks each change in the scope it acts on (`ACCOUNT_USER_MANAGEMENT` at account scope to change the active flag,
 `USER_ROLE_ALLOCATION` at account scope for the account roles, `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice), and `POST /invitations`, `POST /entities` and the role routes check
-the permission in the scope of each target. An entity administrator therefore manages its own entity and its subtree, and nothing at the account level.
+the permission in the scope of each target. An entity administrator therefore reads the users and roles of its account, invites users and allocates roles inside its own entity and that entity's
+subtree, and manages the custom roles of `ENTITY` scope of the account (these are account-wide role definitions, not limited to its own entity). It changes nothing else at the account level: no
+account role, no user status, no account setting.
 
 ::: warning Scope-less endpoints
 
@@ -96,12 +98,21 @@ Endpoints without a scope use the union of the user's assignments, which is what
 
 Versions before 1.1.1 checked an account or entity route against the union of every role the user holds: an entity role, or the admin role of another account the user is only a member of, could pass
 account-admin checks (a seeded `entity-admin` could promote itself to account admin). The fix lives in blueprint files that no installer owns, so `sf update` applies it with the three-way merge: a
-file you did not edit is updated in place, and a file you edited gets a `.saasfoundry.new` sidecar to merge by hand (`permissions.guard.ts`, `account.controller.ts`, `account.service.ts`,
-`entity.controller.ts`, `entity.service.ts`, `invitation.service.ts`, `account-access.service.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`). Three things change for code you wrote:
+file you did not edit is updated in place, and a file you edited gets a `.saasfoundry.new` sidecar to merge by hand. The files involved are `permissions.guard.ts`, `require-permissions.decorator.ts`,
+`authenticated-request.type.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`, `account-access.service.ts`, `account.controller.ts`, `account.service.ts`, `entity.controller.ts`, `entity.service.ts`,
+`invitation.service.ts` and `shared-validation/invitation.ts`, plus the new `scope-filter.ts`, `permission-checker.ts` and `authenticated-user.include.ts`.
+
+If you edited `jwt.strategy.ts`, merge it first: it must load each assignment's `entity` (take `authenticatedUserInclude`). `AuthenticatedUser` now requires `entity`, so a stale strategy fails `tsc`
+instead of quietly taking the account-route rights of every entity administrator away until the next token refresh.
+
+Three things change for code you wrote:
 
 - `PermissionsGuard` takes `AccountAccessService` as a constructor dependency. The module is global; add `AccountAccessModule` to the testing modules of your own e2e specs.
 - A route that takes an account or entity id must declare it with `@ScopeFrom`, or it keeps the union of every role.
 - The per-target checks answer `403`; the existing `401` checks keep their status.
+
+An invitation to an address that already has a pending one now carries over its targets and roles only if you are allowed to grant them: the merged invitation is authorized as if you had submitted it.
+The `accountIds`, `entityIds` and `roleIds` lists are deduplicated and capped (100, 100 and 20).
 
 :::
 
