@@ -314,6 +314,13 @@ describe('Invitation Module (e2e)', () => {
     let entityAdminAgent: ReturnType<typeof request.agent>
     let sectionHolderAgent: ReturnType<typeof request.agent>
     let foreignRoleId: number
+    let accountAdminRoleId: number
+    let noAllocationAgent: ReturnType<typeof request.agent>
+    let platformAdmin: TestUser
+    let platformAdminAgent: ReturnType<typeof request.agent>
+    let accountOwnedRoleId: number
+    let entityOwnedRoleId: number
+    let entityOfOtherAccountId: string
 
     const inviteeEmail = (label: string) => `${inviteePrefix}${label}-${Date.now()}@billmate.test`
     const invitationsTo = (email: string) => prismaService.invitation.count({ where: { inviteeUserEmail: email } })
@@ -383,10 +390,26 @@ describe('Invitation Module (e2e)', () => {
 
       // An ACCOUNT role owned by the OTHER account.
       foreignRoleId = (await createCustomRole('scope-b-owned-role', 'ACCOUNT', otherAdmin.accountId, ['USER_ROLE_ALLOCATION'])).id
+
+      accountAdminRoleId = (await prismaService.role.findFirstOrThrow({ where: { name: 'account-admin', accountId: null } })).id
+
+      // An inviter who may invite into this account and its entities but may NOT allocate roles.
+      const inviteOnlyRole = await createCustomRole('scope-invite-only', 'ACCOUNT', testUser.accountId, ['USER_ACCOUNTS_INVITATION', 'USER_ENTITIES_INVITATION'])
+      const inviteOnly = await createInviter('scope-invite-only@billmate.test', { roleId: inviteOnlyRole.id, accountId: testUser.accountId }, { accountIds: [testUser.accountId] })
+      noAllocationAgent = inviteOnly.agent
+
+      // A platform admin (reaches every account) and roles owned by THIS account, one per scope.
+      platformAdmin = await setupTestUser(prismaService, { email: 'scope-invite-platform@billmate.test', password, firstname: 'Platform', lastname: 'Admin', roles: ['platform-admin'] })
+      platformAdminAgent = request.agent(app.getHttpServer())
+      if (!(await loginTestUser(platformAdminAgent, platformAdmin.email, password))) throw new Error('Failed to login the platform admin')
+      accountOwnedRoleId = (await createCustomRole('scope-a-account-role', 'ACCOUNT', testUser.accountId, ['USER_ROLE_ALLOCATION'])).id
+      entityOwnedRoleId = (await createCustomRole('scope-a-entity-role', 'ENTITY', testUser.accountId, ['USER_ROLE_ALLOCATION'])).id
+      entityOfOtherAccountId = (await prismaService.entity.create({ data: { accountId: otherAdmin.accountId, isActive: true } })).id
+      createdEntityIds.push(entityOfOtherAccountId)
     })
 
     afterAll(async () => {
-      const inviters = await prismaService.user.findMany({ where: { email: { in: [...probeEmails, otherAdmin.email, testUser.email] } }, select: { id: true } })
+      const inviters = await prismaService.user.findMany({ where: { email: { in: [...probeEmails, otherAdmin.email, platformAdmin.email, testUser.email] } }, select: { id: true } })
       await prismaService.invitation.deleteMany({ where: { inviterUserId: { in: inviters.map((u) => u.id) } } })
       const invitees = await prismaService.user.findMany({ where: { email: { startsWith: inviteePrefix } }, select: { id: true } })
       await prismaService.userToken.deleteMany({ where: { userId: { in: invitees.map((u) => u.id) } } })
@@ -396,6 +419,7 @@ describe('Invitation Module (e2e)', () => {
       await prismaService.role.deleteMany({ where: { id: { in: createdRoleIds } } })
       await prismaService.entity.deleteMany({ where: { id: { in: createdEntityIds } } })
       await cleanupTestUser(prismaService, otherAdmin.email)
+      await cleanupTestUser(prismaService, platformAdmin.email)
     })
 
     describe('an admin of another account', () => {
@@ -502,6 +526,132 @@ describe('Invitation Module (e2e)', () => {
           .expect(401)
 
         expect(await invitationsTo(email)).toBe(0)
+      })
+    })
+
+    describe('a re-invitation is authorized as the invitation it becomes (carried-over roles and targets)', () => {
+      const roleLinksOfPending = async (email: string) => {
+        const pending = await prismaService.invitation.findFirst({ where: { inviteeUserEmail: email, status: 'SENT' }, include: { rolesLinked: true, entitiesLinked: true, accountsLinked: true } })
+        return {
+          invitation: pending,
+          roleIds: pending?.rolesLinked.map((l) => l.roleId) ?? [],
+          entityIds: pending?.entitiesLinked.map((l) => l.entityId) ?? [],
+          accountIds: pending?.accountsLinked.map((l) => l.accountId) ?? []
+        }
+      }
+
+      it('an inviter without USER_ROLE_ALLOCATION cannot obtain the admin role by leaving roleIds empty on an address with a pending admin invitation', async () => {
+        const email = inviteeEmail('carry-role')
+        await agent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [testUser.accountId]), roleIds: [accountAdminRoleId] })
+          .expect(201)
+        const before = await roleLinksOfPending(email)
+
+        // Account invitation right but no role allocation: it may invite, not grant roles. The empty roleIds must not
+        // quietly inherit the pending invitation's admin role.
+        await noAllocationAgent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [testUser.accountId]), roleIds: [] })
+          .expect(401)
+
+        const after = await roleLinksOfPending(email)
+        expect(after.invitation?.id).toBe(before.invitation?.id)
+        expect(after.roleIds).toEqual([accountAdminRoleId])
+        expect(await invitationsTo(email)).toBe(1)
+      })
+
+      it('an admin of account B cannot re-point a pending invitation of account A at A by leaving entityIds empty (403)', async () => {
+        const email = inviteeEmail('carry-entity')
+        await agent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [], [ownEntityId]), roleIds: [entityUserRoleId] })
+          .expect(201)
+        const before = await roleLinksOfPending(email)
+
+        // otherAdmin is a member of account A and admin of account B; only B is named. The entity (and role) of A's
+        // pending invitation would be carried over without ever being checked.
+        await otherAdminAgent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [otherAdmin.accountId]), roleIds: [] })
+          .expect(403)
+
+        const after = await roleLinksOfPending(email)
+        expect(after.invitation?.id).toBe(before.invitation?.id)
+        expect(after.entityIds).toEqual([ownEntityId])
+        expect(await invitationsTo(email)).toBe(1)
+      })
+
+      it('the inviter who holds every right can still resend with empty lists: the pending targets and roles are kept', async () => {
+        const email = inviteeEmail('carry-ok')
+        await agent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [], [ownEntityId]), roleIds: [entityUserRoleId] })
+          .expect(201)
+
+        await agent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [testUser.accountId]), roleIds: [] })
+          .expect(201)
+
+        const after = await roleLinksOfPending(email)
+        expect(after.roleIds).toEqual([entityUserRoleId])
+        expect(after.entityIds).toEqual([ownEntityId])
+        expect(after.accountIds).toEqual([testUser.accountId])
+      })
+    })
+
+    describe('a role owned by one account lands only in that account (per role, per target)', () => {
+      it('an ACCOUNT role of account A cannot ride along when one of the target accounts is B (403)', async () => {
+        const email = inviteeEmail('mixed-accounts')
+
+        await platformAdminAgent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [testUser.accountId, otherAdmin.accountId]), roleIds: [accountOwnedRoleId] })
+          .expect(403)
+
+        expect(await invitationsTo(email)).toBe(0)
+      })
+
+      it('an ENTITY role of account A cannot ride along when one of the target entities belongs to B (403)', async () => {
+        const email = inviteeEmail('mixed-entities')
+
+        await platformAdminAgent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [], [ownEntityId, entityOfOtherAccountId]), roleIds: [entityOwnedRoleId] })
+          .expect(403)
+
+        expect(await invitationsTo(email)).toBe(0)
+      })
+
+      it('the same roles are granted when every target belongs to account A', async () => {
+        const accountEmail = inviteeEmail('own-account-role')
+        const entityEmail = inviteeEmail('own-entity-role')
+
+        await platformAdminAgent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(accountEmail, [testUser.accountId]), roleIds: [accountOwnedRoleId] })
+          .expect(201)
+        await platformAdminAgent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(entityEmail, [], [ownEntityId, siblingEntityId]), roleIds: [entityOwnedRoleId] })
+          .expect(201)
+      })
+    })
+
+    describe('the id lists are deduplicated', () => {
+      it('a repeated id is one target: one link, no constraint error', async () => {
+        const email = inviteeEmail('dedupe')
+
+        await agent
+          .post('/api/invitations')
+          .send({ ...createInvitationDto(email, [testUser.accountId, testUser.accountId], [ownEntityId, ownEntityId]), roleIds: [entityUserRoleId, entityUserRoleId] })
+          .expect(201)
+
+        const created = await prismaService.invitation.findFirstOrThrow({ where: { inviteeUserEmail: email }, include: { accountsLinked: true, entitiesLinked: true, rolesLinked: true } })
+        expect(created.accountsLinked).toHaveLength(1)
+        expect(created.entitiesLinked).toHaveLength(1)
+        expect(created.rolesLinked).toHaveLength(1)
       })
     })
   })
