@@ -66,6 +66,8 @@ async createOrganization(
 }
 ```
 
+A route that takes an account or entity id also declares it, right after the RBAC decorator: `@ScopeFrom('id', 'ACCOUNT')` (see "Scopes (RBAC v2)").
+
 Routes that don't need a specific permission but still need module access use `@RequirePermissions([], '<MODULE_NAME>')`. Public routes are not guarded (omit `@UseGuards(JwtAuthGuard)` at the class
 level only if **all** routes are public; otherwise prefer keeping the class-level guard and exposing public endpoints via a different controller).
 
@@ -176,29 +178,50 @@ A user holds **role assignments**, not roles: `UserRoleAssignment` (`prisma/sche
 `accountId` / `entityId`. A database trigger (`check_role_assignment_scope.sql`) rejects an assignment whose ids do not match its scope. The authenticated user carries them as
 `request.user.roleAssignments` (`src/common/types/authenticated-request.type.ts`).
 
-`PermissionsGuard` only counts the assignments that apply to the request's scope, resolved in this order (`resolveScopeContext`):
+`PermissionsGuard` only counts the assignments that apply to the account or entity the request acts on. **A route that takes an account or entity id declares it with `@ScopeFrom`**
+(`src/common/decorators/require-permissions.decorator.ts`):
 
-1. `X-Scope-Account-Id` header
-2. `X-Scope-Entity-Id` header
-3. `:accountId` path param
-4. `:entityId` path param
+```ts
+@Patch(':id/status')
+@RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+@ScopeFrom('id', 'ACCOUNT') // `:id` is an account id; use 'ENTITY' when it is an entity id
+@UseGuards(PermissionsGuard)
+```
 
-Without any of them the guard falls back to the union of all assignments, which keeps unscoped endpoints (`/me`, `/auth/*`) working. A `PLATFORM` assignment applies to every scope.
+What counts for each target (`filterAssignmentsForTarget`, `src/common/services/account-access/scope-filter.ts` — the guard and the services share it):
 
-The shipped account routes are named `/accounts/:id/...`, which the guard does not read: it checks them against the union of assignments, and their services enforce the account with
-`validateUserAccountAccess`. **For a new endpoint acting on one account or entity, name the parameter `:accountId` or `:entityId`** so the guard scopes the permission check, and still validate access
-in the service.
+| Target                                                           | Assignments that count                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account A: `@ScopeFrom('id', 'ACCOUNT')` or a `:accountId` param | `PLATFORM`; `ACCOUNT` assignments on A. `ENTITY` assignments on an entity of A count only with `@ScopeFrom('id', 'ACCOUNT', { includeEntityAssignments: true })`. An `ACCOUNT` role held on another account never counts. |
+| Entity E: `@ScopeFrom('id', 'ENTITY')` or an `:entityId` param   | `PLATFORM`; `ACCOUNT` assignments on E's account; `ENTITY` assignments on E or one of its ancestors — never a descendant, a sibling or another account.                                                                   |
+
+Turn `includeEntityAssignments` on only for the routes an entity administrator legitimately reaches (reading the account, allocating roles in its entity), and let the service narrow the action to that
+entity's subtree. Resolution order: the declared `@ScopeFrom`, then the legacy `:accountId` / `:entityId` params, then the `X-Scope-Account-Id` / `X-Scope-Entity-Id` headers — the headers are read
+only when the route declares no scope, so they can never redirect a check away from the account or entity in the URL (the web app does not send them). Routes of the `PLATFORM_ADMINISTRATION` module
+count `PLATFORM` assignments only, whatever the target. A URL that names an account or entity that does not exist answers 404; one that exists but where the user holds no role answers 403.
+
+**A route with no `@ScopeFrom` and no scope param falls back to the union of every assignment the user holds**, which keeps unscoped endpoints (`/me`, `/auth/*`) working — and is exactly what lets a
+role held in one account or entity act on another. Never leave an account or entity id unannotated. When the scope is not in the URL (the account or entity comes from the body, or the route only
+carries a role id, as `POST /invitations`, `POST /entities` and `PATCH roles/:roleId` do), **the guard cannot scope it: the service must check the permission in the scope of each target** with
+`hasPermissionInScope` / `assertPermissionInScope` below (403 when missing).
 
 The guard answers "may this user call this route in this scope"; **which rows they may see is the service's job**. Do not filter by hand: use `AccountAccessService`
 (`src/common/services/account-access/account-access.service.ts`):
 
-| Need                                                 | Method                                                                             |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Reject a user with no access to an account           | `validateUserAccountAccess(userId, accountId, methodName)`                         |
-| Reject a user with no access to an entity            | `validateUserEntityAccess(userId, entityId, methodName)`                           |
-| Platform administrator / account administrator check | `isPlatformAdmin(userId)` / `isAccountAdminOn(userId, accountId)`                  |
-| Entities a user may see in an account                | `resolveVisibleEntityIdsForAccount(userId, accountId)` — `null` means unrestricted |
-| An entity and everything below it                    | `getSubtreeEntityIds(rootEntityIds)`                                               |
+| Need                                                 | Method                                                                                             |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Reject a user with no access to an account           | `validateUserAccountAccess(userId, accountId, methodName)`                                         |
+| Reject a user with no access to an entity            | `validateUserEntityAccess(userId, entityId, methodName)`                                           |
+| Platform administrator / account administrator check | `isPlatformAdmin(userId)` / `isAccountAdminOn(userId, accountId)`                                  |
+| A permission held in one scope                       | `hasPermissionInScope(userId, permission, scope)` / `assertPermissionInScope(...)` (throws 403)    |
+| Everything a user holds in one scope                 | `getScopedGrants(userId, scope)` — modules, sections and permissions of the assignments that apply |
+| An entity's account and ancestor chain               | `resolveEntityTarget(entityId)` / `getAncestorEntityIds(entityId)`                                 |
+| Entities a user may see in an account                | `resolveVisibleEntityIdsForAccount(userId, accountId)` — `null` means unrestricted                 |
+| An entity and everything below it                    | `getSubtreeEntityIds(rootEntityIds)`                                                               |
+
+`scope` is `{ kind: 'ACCOUNT', accountId, includeEntityAssignments? }` or `{ kind: 'ENTITY', entityId }`, the same rule as the table above. Check a change only when it changes something (compare it
+with the stored state), and check **each target on its own** — `PATCH :id/users/:userId` needs `ACCOUNT_USER_MANAGEMENT` at account scope for `isActive`, `USER_ROLE_ALLOCATION` at account scope for
+the account roles and `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice.
 
 Entities form a tree (`Entity.parentEntityId`, `prisma/schema/organizations.prisma`): an entity administrator sees the subtree under their entity, never its siblings. Pass the ids these methods return
 into the Prisma `where` (`{ id: { in: visibleIds } }`) — see `AccountService` for the pattern.

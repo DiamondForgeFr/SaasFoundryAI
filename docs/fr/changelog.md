@@ -6,6 +6,30 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
+### Sécurité
+
+#### Projets générés : isolation des rôles par portée
+
+- Un rôle détenu dans un compte, ou sur une entité, n'autorise plus une action sur un autre compte ou une autre entité. `PermissionsGuard` contrôlait une route de compte ou d'entité contre l'union de
+  tous les rôles de l'utilisateur : un rôle d'entité, ou un rôle d'administrateur d'un autre compte dont l'utilisateur est simple membre, pouvait donc passer les contrôles d'administrateur de compte.
+  Un `entity-admin` fourni par défaut pouvait se promouvoir administrateur du compte ou désactiver n'importe quel utilisateur de son compte, et l'administrateur du compte B pouvait modifier le statut,
+  les utilisateurs et les rôles du compte A. Les routes déclarent désormais le compte ou l'entité visés avec `@ScopeFrom`, et le guard ne compte que les affectations qui s'y appliquent (une
+  affectation `PLATFORM` toujours ; les rôles `ACCOUNT` de ce compte ; les rôles `ENTITY` de cette entité ou d'un ancêtre et, sur les routes de compte que l'administrateur d'entité atteint, les rôles
+  `ENTITY` du compte). Les services contrôlent chaque modification dans la portée où elle agit : `PATCH /accounts/:id/users/:userId`, les routes de rôles, `POST /invitations` et `POST /entities`. Un
+  rôle personnalisé qui porte une section de plateforme ne donne plus l'accès plateforme : les routes `PLATFORM_ADMINISTRATION` ne comptent que les affectations `PLATFORM`
+  ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072)).
+- Les en-têtes de portée `X-Scope-Account-Id` et `X-Scope-Entity-Id` ne peuvent plus détourner un contrôle du compte ou de l'entité nommés dans l'URL, et l'application web ne les envoie pas
+  ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072)).
+- Après un rafraîchissement du jeton, l'utilisateur authentifié porte les mêmes relations qu'après une connexion normale : une route de lecture qui vérifie une section n'échoue plus au premier appel
+  qui suit un rafraîchissement ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072)).
+
+**Mettre à jour un projet existant.** Le correctif touche des fichiers du blueprint qu'aucun installeur ne possède : `sf update` l'applique par fusion à trois voies. Un fichier que vous n'avez pas
+modifié est mis à jour sur place ; un fichier modifié reçoit un fichier annexe `.saasfoundry.new` à fusionner à la main (`permissions.guard.ts`, `account.controller.ts`, `account.service.ts`,
+`entity.controller.ts`, `entity.service.ts`, `invitation.service.ts`, `account-access.service.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`). Trois points changent pour le code que vous avez écrit :
+`PermissionsGuard` reçoit `AccountAccessService` en dépendance de constructeur (le module est global ; ajoutez `AccountAccessModule` aux modules de test de vos propres specs e2e), une route qui prend
+un identifiant de compte ou d'entité doit le déclarer avec `@ScopeFrom` sinon elle garde l'union de tous les rôles, et un identifiant de compte ou d'entité inconnu répond toujours 404 alors qu'un
+identifiant existant sur lequel l'utilisateur n'a aucun rôle répond 403. Les nouveaux contrôles par cible répondent 403 ; les contrôles 401 existants gardent leur statut.
+
 ## [1.1.0] - 2026-11-01
 
 Version de fonctionnalités. La délégation des tickets est désormais routée selon le type de tâche, les instructions des agents passent dans `AGENTS.md`, et une exigence fonctionnelle existante peut
