@@ -11,6 +11,7 @@ import { Strategy } from 'passport-jwt'
 import { EnvConfig } from '@configs/env/services/env.service'
 import { PrismaService } from '@configs/prisma/services/prisma.service'
 import { Logger } from '@common/services/logger/logger.service'
+import { authenticatedUserInclude } from '@modules/auth/authenticated-user.include'
 
 /**
  * Type
@@ -39,46 +40,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: TokenPayload): Promise<AuthenticatedUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: {
-        roleAssignments: {
-          where: {
-            role: {
-              isActive: true
-            }
-          },
-          include: {
-            role: {
-              include: {
-                modulesLinked: {
-                  where: {
-                    module: {
-                      isActive: true
-                    }
-                  },
-                  include: {
-                    module: true
-                  }
-                },
-                subModulesLinked: {
-                  where: {
-                    subModule: {
-                      isActive: true
-                    }
-                  },
-                  include: {
-                    subModule: true
-                  }
-                },
-                permissionsLinked: {
-                  include: {
-                    permission: true
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+      include: authenticatedUserInclude
     })
 
     if (!user) {
