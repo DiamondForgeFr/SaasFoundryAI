@@ -41,11 +41,17 @@ export interface EntityScopeTarget {
   entityId: string
   /** The account the entity belongs to, or null when the entity does not exist (only PLATFORM counts then). */
   accountId: string | null
-  /** The entity itself followed by every ancestor up to the root. Empty when the entity does not exist. */
+  /** The entity itself and every ancestor up to the root (no order). Empty when the entity does not exist. */
   ancestorEntityIds: string[]
 }
 
 export type ScopeTarget = AccountScopeTarget | EntityScopeTarget
+
+/**
+ * The account or entity a check acts on, before an ENTITY is resolved (its account and ancestor chain).
+ * `includeEntityAssignments` has the same meaning as on `@ScopeFrom`.
+ */
+export type ScopeRequest = { kind: 'ACCOUNT'; accountId: string; includeEntityAssignments?: boolean } | { kind: 'ENTITY'; entityId: string }
 
 /**
  * Declaration

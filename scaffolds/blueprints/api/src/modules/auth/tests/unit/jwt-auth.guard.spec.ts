@@ -12,7 +12,25 @@ import { authenticatedUserInclude } from '@modules/auth/authenticated-user.inclu
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard'
 import { AuthService } from '@modules/auth/services/auth.service'
 
+/**
+ * Type
+ */
+import type { AuthenticatedUser } from '@common/types/authenticated-request.type'
+
+/**
+ * Compile-time guard: `entity` is REQUIRED on an assignment of the authenticated user. If it were optional, a project
+ * whose own `jwt.strategy.ts` does not load it would still compile and every entity admin would silently lose its
+ * rights on the account routes until the next token refresh. Required, the stale strategy fails `tsc`. This line
+ * stops compiling (so the suite fails) the day `entity` becomes optional again.
+ */
+type AssignmentOfAuthenticatedUser = AuthenticatedUser['roleAssignments'][number]
+const entityIsRequired: Record<never, never> extends Pick<AssignmentOfAuthenticatedUser, 'entity'> ? never : true = true
+
 describe('authenticatedUserInclude', () => {
+  it('keeps `entity` required on the authenticated user (a stale strategy must fail tsc)', () => {
+    expect(entityIsRequired).toBe(true)
+  })
+
   it('loads what PermissionsGuard reads: modules, sections, permissions and the entity of each assignment', () => {
     const { roleAssignments } = authenticatedUserInclude
 
