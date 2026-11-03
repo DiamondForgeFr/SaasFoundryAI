@@ -1907,7 +1907,8 @@ export class AccountService {
       }
 
       // Authority: each change is checked in the scope it acts on (the route guard checked none of this).
-      await this.assertUpdateAccountUserAuthority(actorUserId, accountId, targetUser, payload, requestedRoles)
+      // The plan keeps only the changes that really change something: those are the only ones written.
+      const plan = await this.planAccountUserUpdate(actorUserId, accountId, targetUser, payload, requestedRoles)
 
       // Last-admin guard — refuse a deactivation that would leave any account, or the platform
       // itself, with no remaining active admin. The user must deactivate the whole account
@@ -1945,28 +1946,28 @@ export class AccountService {
         }
       }
 
+      // Only what changed is written. A slice sent back unchanged is left alone: rewriting it from a stale form
+      // could restore a role someone has revoked since the form was loaded, with no permission ever checked.
       const updated = await this.prisma.$transaction(async (tx) => {
-        if (payload.isActive !== undefined) {
-          await tx.user.update({ where: { id: targetUserId }, data: { isActive: payload.isActive } })
+        if (plan.setActive !== null) {
+          await tx.user.update({ where: { id: targetUserId }, data: { isActive: plan.setActive } })
         }
 
-        if (payload.accountRoleIds !== undefined) {
+        if (plan.accountRoleIds !== null) {
           await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, accountId, role: { scope: 'ACCOUNT' } } })
-          if (payload.accountRoleIds.length > 0) {
+          if (plan.accountRoleIds.length > 0) {
             await tx.userRoleAssignment.createMany({
-              data: payload.accountRoleIds.map((roleId) => ({ userId: targetUserId, roleId, accountId }))
+              data: plan.accountRoleIds.map((roleId) => ({ userId: targetUserId, roleId, accountId }))
             })
           }
         }
 
-        if (payload.entityRoleIds !== undefined) {
-          for (const { entityId, roleIds } of payload.entityRoleIds) {
-            await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, entityId, role: { scope: 'ENTITY' } } })
-            if (roleIds.length > 0) {
-              await tx.userRoleAssignment.createMany({
-                data: roleIds.map((roleId) => ({ userId: targetUserId, roleId, entityId }))
-              })
-            }
+        for (const { entityId, roleIds } of plan.entitySlices) {
+          await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, entityId, role: { scope: 'ENTITY' } } })
+          if (roleIds.length > 0) {
+            await tx.userRoleAssignment.createMany({
+              data: roleIds.map((roleId) => ({ userId: targetUserId, roleId, entityId }))
+            })
           }
         }
 
@@ -2066,55 +2067,80 @@ export class AccountService {
    */
 
   /**
-   * `updateAccountUser` authority: every change the payload makes is checked in the scope it acts on
-   * (see the method's doc). A field or slice that matches the target's current state changes nothing
-   * and needs no permission, so a client may send the whole form back.
+   * `updateAccountUser` plan: compares the payload with the target's stored state, checks every real change
+   * in the scope it acts on (see the method's doc) and returns ONLY what must be written. A field or slice
+   * that matches the stored state changes nothing, needs no permission and is not written back, so a client
+   * may send the whole form without a stale value undoing someone else's revocation.
+   *
+   * Cost does not grow with the number of slices: the target's assignments are read in one query, the
+   * actor's assignments and the slices' entities once (a scoped permission checker), the rest is in memory.
    *
    * Throws a 403 for a missing permission and for a role that belongs to another account.
    */
-  private async assertUpdateAccountUserAuthority(
+  private async planAccountUserUpdate(
     actorUserId: string,
     accountId: string,
     target: { id: string; isActive: boolean },
     payload: { isActive?: boolean; accountRoleIds?: number[]; entityRoleIds?: { entityId: string; roleIds: number[] }[] },
     requestedRoles: { id: number; accountId: string | null }[]
-  ): Promise<void> {
-    if (payload.isActive !== undefined && payload.isActive !== target.isActive) {
-      await this.accountAccessService.assertPermissionInScope(
-        actorUserId,
-        'ACCOUNT_USER_MANAGEMENT',
-        { kind: 'ACCOUNT', accountId },
-        'You are not allowed to change the status of the users of this account'
+  ): Promise<{ setActive: boolean | null; accountRoleIds: number[] | null; entitySlices: { entityId: string; roleIds: number[] }[] }> {
+    const unique = (roleIds: number[]) => [...new Set(roleIds)]
+    const slices = (payload.entityRoleIds ?? []).map((slice) => ({ entityId: slice.entityId, roleIds: unique(slice.roleIds) }))
+    const sliceEntityIds = [...new Set(slices.map((slice) => slice.entityId))]
+
+    // The target's stored ACCOUNT roles on this account and ENTITY roles on the sliced entities: one query.
+    const storedAccountRoleIds: number[] = []
+    const storedEntityRoleIds = new Map<string, number[]>()
+    if (payload.accountRoleIds !== undefined || sliceEntityIds.length > 0) {
+      const stored = await this.prisma.userRoleAssignment.findMany({
+        where: {
+          userId: target.id,
+          OR: [{ accountId, role: { scope: 'ACCOUNT' } }, ...(sliceEntityIds.length > 0 ? [{ entityId: { in: sliceEntityIds }, role: { scope: 'ENTITY' as const } }] : [])]
+        },
+        select: { roleId: true, accountId: true, entityId: true }
+      })
+      for (const assignment of stored) {
+        if (assignment.entityId === null) storedAccountRoleIds.push(assignment.roleId)
+        else storedEntityRoleIds.set(assignment.entityId, [...(storedEntityRoleIds.get(assignment.entityId) ?? []), assignment.roleId])
+      }
+    }
+
+    const setActive = payload.isActive !== undefined && payload.isActive !== target.isActive ? payload.isActive : null
+    const requestedAccountRoleIds = payload.accountRoleIds === undefined ? null : unique(payload.accountRoleIds)
+    const accountRoleIds = requestedAccountRoleIds !== null && !this.sameRoleSet(storedAccountRoleIds, requestedAccountRoleIds) ? requestedAccountRoleIds : null
+    const entitySlices = slices.filter((slice) => !this.sameRoleSet(storedEntityRoleIds.get(slice.entityId) ?? [], slice.roleIds))
+
+    if (setActive === null && accountRoleIds === null && entitySlices.length === 0) return { setActive, accountRoleIds, entitySlices }
+
+    // Every real change is checked against the actor's rights in its own scope, from one set of loaded assignments.
+    const checker = await this.accountAccessService.getPermissionChecker(
+      actorUserId,
+      entitySlices.map((slice) => slice.entityId)
+    )
+
+    if (setActive !== null) {
+      checker.assert('ACCOUNT_USER_MANAGEMENT', { kind: 'ACCOUNT', accountId }, 'You are not allowed to change the status of the users of this account')
+    }
+
+    if (accountRoleIds !== null) {
+      checker.assert('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId }, 'You are not allowed to allocate account roles in this account')
+      this.assertRolesUsableInAccount(
+        requestedRoles,
+        accountRoleIds.filter((roleId) => !storedAccountRoleIds.includes(roleId)),
+        accountId
       )
     }
 
-    if (payload.accountRoleIds !== undefined) {
-      const current = await this.prisma.userRoleAssignment.findMany({ where: { userId: target.id, accountId, role: { scope: 'ACCOUNT' } }, select: { roleId: true } })
-      const currentRoleIds = current.map((assignment) => assignment.roleId)
-
-      if (!this.sameRoleSet(currentRoleIds, payload.accountRoleIds)) {
-        await this.accountAccessService.assertPermissionInScope(actorUserId, 'USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId }, 'You are not allowed to allocate account roles in this account')
-        this.assertRolesUsableInAccount(
-          requestedRoles,
-          payload.accountRoleIds.filter((roleId) => !currentRoleIds.includes(roleId)),
-          accountId
-        )
-      }
+    for (const { entityId, roleIds } of entitySlices) {
+      checker.assert('USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId }, 'You are not allowed to allocate roles in this entity')
+      this.assertRolesUsableInAccount(
+        requestedRoles,
+        roleIds.filter((roleId) => !(storedEntityRoleIds.get(entityId) ?? []).includes(roleId)),
+        accountId
+      )
     }
 
-    for (const { entityId, roleIds } of payload.entityRoleIds ?? []) {
-      const current = await this.prisma.userRoleAssignment.findMany({ where: { userId: target.id, entityId, role: { scope: 'ENTITY' } }, select: { roleId: true } })
-      const currentRoleIds = current.map((assignment) => assignment.roleId)
-
-      if (!this.sameRoleSet(currentRoleIds, roleIds)) {
-        await this.accountAccessService.assertPermissionInScope(actorUserId, 'USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId }, 'You are not allowed to allocate roles in this entity')
-        this.assertRolesUsableInAccount(
-          requestedRoles,
-          roleIds.filter((roleId) => !currentRoleIds.includes(roleId)),
-          accountId
-        )
-      }
-    }
+    return { setActive, accountRoleIds, entitySlices }
   }
 
   /**
