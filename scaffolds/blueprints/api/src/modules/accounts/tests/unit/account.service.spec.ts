@@ -3,7 +3,7 @@
  * This demonstrates how to use the base classes and utilities for cleaner, more maintainable tests
  */
 
-import { BadRequestException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 
 /**
  * Dependencies
@@ -34,11 +34,11 @@ interface PaginationDto {
  * Test implementation using the new infrastructure
  */
 class AccountServiceTest extends ServiceTestBase<AccountService> {
-  private mockManager = new MockManager()
-  private logger: jest.Mocked<Logger>
-  private prismaService: jest.Mocked<PrismaService>
-  private accountAccessService: jest.Mocked<AccountAccessService>
-  private paginationService: jest.Mocked<PaginationService>
+  protected mockManager = new MockManager()
+  protected logger: jest.Mocked<Logger>
+  protected prismaService: jest.Mocked<PrismaService>
+  protected accountAccessService: jest.Mocked<AccountAccessService>
+  protected paginationService: jest.Mocked<PaginationService>
 
   protected getServiceClass() {
     return AccountService
@@ -987,9 +987,217 @@ class AccountServiceTest extends ServiceTestBase<AccountService> {
   }
 }
 
+/**
+ * Scope isolation: updateAccountUser and the role routes check each action in the scope it acts on
+ */
+class AccountServiceScopeTest extends AccountServiceTest {
+  testUpdateAccountUserAuthority(): void {
+    describe('updateAccountUser (scoped authority)', () => {
+      const accountId = 'acc-1'
+      const actorId = 'actor-1'
+      const targetId = 'target-1'
+      const forbidden = () => new ForbiddenException('denied')
+
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const given = (
+        options: {
+          targetIsActive?: boolean
+          accountRoles?: number[]
+          entityRoles?: Record<string, number[]>
+          roles?: { id: number; scope: string; accountId: string | null }[]
+          entityIds?: string[]
+        } = {}
+      ) => {
+        const prisma = this.prismaService as any
+        this.accountAccessService.validateUserAccountAccess.mockResolvedValue({} as never)
+        this.accountAccessService.assertPermissionInScope.mockReset()
+        this.accountAccessService.assertPermissionInScope.mockResolvedValue(undefined)
+        prisma.user.findUnique.mockResolvedValue({ id: targetId, isActive: options.targetIsActive ?? true, accountsLinked: [{ accountId }], entitiesLinked: [] })
+        prisma.entity.findMany.mockResolvedValue((options.entityIds ?? []).map((id) => ({ id, accountId })))
+        prisma.role.findMany.mockResolvedValue(options.roles ?? [])
+        // The current assignments of the target: ACCOUNT slice on the account, ENTITY slice per entity.
+        prisma.userRoleAssignment.findMany.mockImplementation(async ({ where }: { where: { entityId?: string; role?: { scope?: string } } }) => {
+          if (where.entityId) return (options.entityRoles?.[where.entityId] ?? []).map((roleId) => ({ roleId }))
+          if (where.role?.scope === 'ACCOUNT') return (options.accountRoles ?? []).map((roleId) => ({ roleId }))
+          return []
+        })
+        const tx = {
+          user: { update: jest.fn(), findUniqueOrThrow: jest.fn().mockResolvedValue({ id: targetId, isActive: true }) },
+          userRoleAssignment: { deleteMany: jest.fn(), createMany: jest.fn() }
+        }
+        prisma.$transaction.mockImplementation(async (callback: (client: unknown) => unknown) => callback(tx))
+        return { prisma, tx }
+      }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+
+      it('requires ACCOUNT_USER_MANAGEMENT at ACCOUNT scope to change isActive, and writes nothing when refused', async () => {
+        const { prisma } = given({ targetIsActive: true })
+        this.accountAccessService.assertPermissionInScope.mockRejectedValueOnce(forbidden())
+
+        await TestAssertions.assertThrows(() => this.service.updateAccountUser(actorId, accountId, targetId, { isActive: false }), ForbiddenException)
+
+        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(actorId, 'ACCOUNT_USER_MANAGEMENT', { kind: 'ACCOUNT', accountId }, expect.any(String))
+        expect(prisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('lets a holder of ACCOUNT_USER_MANAGEMENT change isActive', async () => {
+        const { tx } = given({ targetIsActive: true })
+
+        await this.service.updateAccountUser(actorId, accountId, targetId, { isActive: false })
+
+        expect(tx.user.update).toHaveBeenCalledWith({ where: { id: targetId }, data: { isActive: false } })
+      })
+
+      it('treats an unchanged isActive as a no-op: no permission needed', async () => {
+        given({ targetIsActive: true })
+
+        await this.service.updateAccountUser(actorId, accountId, targetId, { isActive: true })
+
+        expect(this.accountAccessService.assertPermissionInScope).not.toHaveBeenCalled()
+      })
+
+      it('requires USER_ROLE_ALLOCATION at ACCOUNT scope to change accountRoleIds, and writes nothing when refused', async () => {
+        const { prisma } = given({ accountRoles: [10], roles: [{ id: 11, scope: 'ACCOUNT', accountId: null }] })
+        this.accountAccessService.assertPermissionInScope.mockRejectedValueOnce(forbidden())
+
+        await TestAssertions.assertThrows(() => this.service.updateAccountUser(actorId, accountId, targetId, { accountRoleIds: [11] }), ForbiddenException)
+
+        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(actorId, 'USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId }, expect.any(String))
+        expect(prisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('treats accountRoleIds equal to the current assignments as a no-op: no permission needed', async () => {
+        given({
+          accountRoles: [10, 11],
+          roles: [
+            { id: 10, scope: 'ACCOUNT', accountId: null },
+            { id: 11, scope: 'ACCOUNT', accountId: accountId }
+          ]
+        })
+
+        await this.service.updateAccountUser(actorId, accountId, targetId, { accountRoleIds: [11, 10] })
+
+        expect(this.accountAccessService.assertPermissionInScope).not.toHaveBeenCalled()
+      })
+
+      it('checks each changed entity slice in the scope of that entity, and skips an unchanged one', async () => {
+        given({
+          entityIds: ['ent-1', 'ent-2'],
+          entityRoles: { 'ent-1': [20], 'ent-2': [20] },
+          roles: [
+            { id: 20, scope: 'ENTITY', accountId: null },
+            { id: 21, scope: 'ENTITY', accountId: null }
+          ]
+        })
+
+        await this.service.updateAccountUser(actorId, accountId, targetId, {
+          entityRoleIds: [
+            { entityId: 'ent-1', roleIds: [20, 21] },
+            { entityId: 'ent-2', roleIds: [20] }
+          ]
+        })
+
+        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledTimes(1)
+        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(actorId, 'USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId: 'ent-1' }, expect.any(String))
+      })
+
+      it('refuses an entity slice outside the actor authority with a 403 and writes nothing', async () => {
+        const { prisma } = given({ entityIds: ['ent-1'], roles: [{ id: 21, scope: 'ENTITY', accountId: null }] })
+        this.accountAccessService.assertPermissionInScope.mockRejectedValueOnce(forbidden())
+
+        await TestAssertions.assertThrows(() => this.service.updateAccountUser(actorId, accountId, targetId, { entityRoleIds: [{ entityId: 'ent-1', roleIds: [21] }] }), ForbiddenException)
+
+        expect(prisma.$transaction).not.toHaveBeenCalled()
+      })
+
+      it('refuses to grant a role owned by another account (403)', async () => {
+        given({ roles: [{ id: 30, scope: 'ACCOUNT', accountId: 'acc-other' }] })
+
+        await TestAssertions.assertThrows(
+          () => this.service.updateAccountUser(actorId, accountId, targetId, { accountRoleIds: [30] }),
+          ForbiddenException,
+          'One or more roles do not belong to this account'
+        )
+      })
+
+      it('accepts a role owned by the account and a global role', async () => {
+        const { tx } = given({
+          roles: [
+            { id: 30, scope: 'ACCOUNT', accountId },
+            { id: 31, scope: 'ACCOUNT', accountId: null }
+          ]
+        })
+
+        await this.service.updateAccountUser(actorId, accountId, targetId, { accountRoleIds: [30, 31] })
+
+        expect(tx.userRoleAssignment.createMany).toHaveBeenCalled()
+      })
+    })
+  }
+
+  testRoleRoutesAreCheckedInTheRoleAccount(): void {
+    describe('custom role routes (ROLE_CUSTOM_MANAGEMENT in the role account)', () => {
+      const actorId = 'actor-1'
+      const forbidden = () => new ForbiddenException('denied')
+
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const givenRole = (role: { id: number; scope: string; accountId: string | null; isSystem?: boolean; name?: string }) => {
+        const prisma = this.prismaService as any
+        prisma.role.findUnique = jest.fn().mockResolvedValue({ name: 'custom', description: null, isSystem: false, isActive: true, ...role })
+        prisma.role.update = jest.fn().mockResolvedValue({ id: role.id, name: 'custom', isActive: false })
+        prisma.role.delete = jest.fn().mockResolvedValue({})
+        prisma.userRoleAssignment.findFirst.mockResolvedValue(null)
+        this.accountAccessService.validateUserAccountAccess.mockResolvedValue({} as never)
+        this.accountAccessService.assertPermissionInScope.mockReset()
+        this.accountAccessService.assertPermissionInScope.mockResolvedValue(undefined)
+        return prisma
+      }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+
+      it.each([
+        ['updateCustomRole', (service: AccountService) => service.updateCustomRole(actorId, 5, { name: 'renamed' })],
+        ['deleteCustomRole', (service: AccountService) => service.deleteCustomRole(actorId, 5)],
+        ['toggleRoleStatus', (service: AccountService) => service.toggleRoleStatus(actorId, 5, false)]
+      ])('%s answers 403 (not 400) when ROLE_CUSTOM_MANAGEMENT is missing in the role account', async (_name, call) => {
+        givenRole({ id: 5, scope: 'ENTITY', accountId: 'acc-1' })
+        this.accountAccessService.assertPermissionInScope.mockRejectedValueOnce(forbidden())
+
+        await TestAssertions.assertThrows(() => call(this.service), ForbiddenException)
+      })
+
+      it('asks for ROLE_CUSTOM_MANAGEMENT in the account that owns the role, entity assignments included for an ENTITY role', async () => {
+        givenRole({ id: 5, scope: 'ENTITY', accountId: 'acc-1' })
+
+        await this.service.deleteCustomRole(actorId, 5)
+
+        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(
+          actorId,
+          'ROLE_CUSTOM_MANAGEMENT',
+          { kind: 'ACCOUNT', accountId: 'acc-1', includeEntityAssignments: true },
+          expect.any(String)
+        )
+      })
+
+      it('does not accept entity assignments for an ACCOUNT-scoped role', async () => {
+        const prisma = givenRole({ id: 6, scope: 'ACCOUNT', accountId: 'acc-1' })
+        prisma.userRoleAssignment.findFirst.mockResolvedValue({ id: 'admin-assignment' })
+
+        await this.service.deleteCustomRole(actorId, 6)
+
+        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(
+          actorId,
+          'ROLE_CUSTOM_MANAGEMENT',
+          { kind: 'ACCOUNT', accountId: 'acc-1', includeEntityAssignments: false },
+          expect.any(String)
+        )
+      })
+    })
+  }
+}
+
 // Execute the tests
 describe('AccountService (Refactored)', () => {
-  const accountServiceTest = new AccountServiceTest()
+  const accountServiceTest = new AccountServiceScopeTest()
 
   beforeEach(async () => {
     await accountServiceTest.setupTest()
@@ -1007,4 +1215,6 @@ describe('AccountService (Refactored)', () => {
   accountServiceTest.testFetchAccountUsers()
   accountServiceTest.testFetchAccountEntities()
   accountServiceTest.testFetchAccountRoles()
+  accountServiceTest.testUpdateAccountUserAuthority()
+  accountServiceTest.testRoleRoutesAreCheckedInTheRoleAccount()
 })

@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common'
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 /**
@@ -19,6 +19,15 @@ import type { ScopeFromMetadata } from '@common/decorators/require-permissions.d
 import type { ScopeTarget } from '@common/services/account-access/scope-filter'
 import type { AuthenticatedUser } from '@common/types/authenticated-request.type'
 import type { Request } from 'express'
+
+/**
+ * The account or entity a request acts on, and where the guard read it from.
+ * `fromPath` is true when it comes from the URL (a declared scope or a legacy path param), false for a header.
+ */
+interface ResolvedScope {
+  target: ScopeTarget
+  fromPath: boolean
+}
 
 /**
  * The module whose routes belong to the platform operators. Only PLATFORM assignments count there, in
@@ -55,15 +64,15 @@ export class PermissionsGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required')
     }
 
-    const target = await this.resolveScopeTarget(context, request, user)
-    const scopedAssignments = target ? filterAssignmentsForTarget(user.roleAssignments, target) : user.roleAssignments
+    const resolved = await this.resolveScope(context, request, user)
+    const scopedAssignments = resolved ? filterAssignmentsForTarget(user.roleAssignments, resolved.target) : user.roleAssignments
     const relevantAssignments = requiredModule === PLATFORM_ADMINISTRATION_MODULE ? keepPlatformAssignments(scopedAssignments) : scopedAssignments
 
     const hasModuleAccess = relevantAssignments.some((assignment) => assignment.role.modulesLinked.some((moduleLink) => moduleLink.module.name === requiredModule))
 
     if (!hasModuleAccess) {
-      this.logger.warn(`Access denied: User ${user.id} has no access to ${requiredModule} in scope ${this.describeScope(target)}`, 'PermissionsGuard')
-      throw new ForbiddenException(`You do not have access to ${requiredModule.toLowerCase().replace('_', ' ')}`)
+      this.logger.warn(`Access denied: User ${user.id} has no access to ${requiredModule} in scope ${this.describeScope(resolved)}`, 'PermissionsGuard')
+      throw await this.denial(resolved, `You do not have access to ${requiredModule.toLowerCase().replace('_', ' ')}`)
     }
 
     // Sub-module (section visibility) gate for read endpoints. The section is visible when the
@@ -72,8 +81,8 @@ export class PermissionsGuard implements CanActivate {
       const hasSubModuleAccess = relevantAssignments.some((assignment) => assignment.role.subModulesLinked.some((subModuleLink) => subModuleLink.subModule.name === requiredSubModule))
 
       if (!hasSubModuleAccess) {
-        this.logger.warn(`Access denied: User ${user.id} has no access to section ${requiredSubModule} in scope ${this.describeScope(target)}`, 'PermissionsGuard')
-        throw new ForbiddenException(`You do not have access to the ${requiredSubModule.toLowerCase().replace(/_/g, ' ')} section`)
+        this.logger.warn(`Access denied: User ${user.id} has no access to section ${requiredSubModule} in scope ${this.describeScope(resolved)}`, 'PermissionsGuard')
+        throw await this.denial(resolved, `You do not have access to the ${requiredSubModule.toLowerCase().replace(/_/g, ' ')} section`)
       }
     }
 
@@ -88,10 +97,10 @@ export class PermissionsGuard implements CanActivate {
     if (!hasRequiredPermissions) {
       const requiredText = requireAll === false ? 'at least one of' : 'all of'
       this.logger.warn(
-        `Access denied: User ${user.id} does not have ${requiredText} required permissions in scope ${this.describeScope(target)}: ${requiredPermissions.join(', ')}`,
+        `Access denied: User ${user.id} does not have ${requiredText} required permissions in scope ${this.describeScope(resolved)}: ${requiredPermissions.join(', ')}`,
         'PermissionsGuard'
       )
-      throw new ForbiddenException('You do not have the required permissions')
+      throw await this.denial(resolved, 'You do not have the required permissions')
     }
 
     return true
@@ -112,7 +121,7 @@ export class PermissionsGuard implements CanActivate {
    * Returns `null` for the permissive case. A declared scope whose parameter is missing from the
    * request fails closed (403): it is a route declaration mistake, not a reason to widen the check.
    */
-  private async resolveScopeTarget(context: ExecutionContext, request: Request, user: AuthenticatedUser): Promise<ScopeTarget | null> {
+  private async resolveScope(context: ExecutionContext, request: Request, user: AuthenticatedUser): Promise<ResolvedScope | null> {
     const declared = this.reflector.getAllAndOverride<ScopeFromMetadata | undefined>(SCOPE_FROM_KEY, [context.getHandler(), context.getClass()])
     const params = (request.params || {}) as Record<string, string | undefined>
 
@@ -122,19 +131,36 @@ export class PermissionsGuard implements CanActivate {
         this.logger.error(`Access denied: route declares @ScopeFrom('${declared.param}') but the request carries no such parameter (user ${user.id})`, 'PermissionsGuard')
         throw new ForbiddenException('You do not have the required permissions')
       }
-      return declared.kind === 'ENTITY' ? this.accountAccessService.resolveEntityTarget(value) : { kind: 'ACCOUNT', accountId: value, includeEntityAssignments: declared.includeEntityAssignments }
+      const target: ScopeTarget =
+        declared.kind === 'ENTITY' ? await this.accountAccessService.resolveEntityTarget(value) : { kind: 'ACCOUNT', accountId: value, includeEntityAssignments: declared.includeEntityAssignments }
+      return { target, fromPath: true }
     }
 
-    if (params.accountId) return { kind: 'ACCOUNT', accountId: params.accountId }
-    if (params.entityId) return this.accountAccessService.resolveEntityTarget(params.entityId)
+    if (params.accountId) return { target: { kind: 'ACCOUNT', accountId: params.accountId }, fromPath: true }
+    if (params.entityId) return { target: await this.accountAccessService.resolveEntityTarget(params.entityId), fromPath: true }
 
     const accountHeader = this.firstString(request.headers['x-scope-account-id'])
-    if (accountHeader) return { kind: 'ACCOUNT', accountId: accountHeader }
+    if (accountHeader) return { target: { kind: 'ACCOUNT', accountId: accountHeader }, fromPath: false }
 
     const entityHeader = this.firstString(request.headers['x-scope-entity-id'])
-    if (entityHeader) return this.accountAccessService.resolveEntityTarget(entityHeader)
+    if (entityHeader) return { target: await this.accountAccessService.resolveEntityTarget(entityHeader), fromPath: false }
 
     return null
+  }
+
+  /**
+   * The exception for a denied request: 403, except when the URL names an account or entity that does
+   * not exist. The services answer 404 for an unknown id, and a denied-by-scope request must not turn
+   * that into a 403 (nothing is exposed that the 404 did not already say: only an existing target
+   * the caller has no role on answers 403).
+   */
+  private async denial(resolved: ResolvedScope | null, message: string): Promise<ForbiddenException | NotFoundException> {
+    if (resolved?.fromPath) {
+      const { target } = resolved
+      if (target.kind === 'ENTITY' && target.accountId === null) return new NotFoundException(`Entity with ID ${target.entityId} not found`)
+      if (target.kind === 'ACCOUNT' && !(await this.accountAccessService.accountExists(target.accountId))) return new NotFoundException(`Account with ID ${target.accountId} not found`)
+    }
+    return new ForbiddenException(message)
   }
 
   private firstString(value: string | string[] | undefined): string | undefined {
@@ -142,8 +168,9 @@ export class PermissionsGuard implements CanActivate {
     return Array.isArray(value) ? value[0] : value
   }
 
-  private describeScope(target: ScopeTarget | null): string {
-    if (!target) return 'permissive'
+  private describeScope(resolved: ResolvedScope | null): string {
+    if (!resolved) return 'permissive'
+    const { target } = resolved
     return target.kind === 'ACCOUNT' ? `account:${target.accountId}` : `entity:${target.entityId}`
   }
 }
