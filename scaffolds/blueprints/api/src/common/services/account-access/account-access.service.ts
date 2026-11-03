@@ -244,6 +244,12 @@ export class AccountAccessService {
     return rows.map((r) => r.id)
   }
 
+  /** Does this account exist? (PermissionsGuard asks it when it denies a request, to keep answering 404 for an unknown id.) */
+  async accountExists(accountId: string): Promise<boolean> {
+    const account = await this.prisma.account.findUnique({ where: { id: accountId }, select: { id: true } })
+    return account !== null
+  }
+
   /**
    * Resolve an entity into the target the scope filter needs: the account it belongs to and its
    * ancestor chain (the entity itself first). An unknown entity resolves to a target with no account

@@ -35,6 +35,7 @@ const entityRow = (entityId: string, entityAccountId: string, grants: Grants) =>
 
 describe('AccountAccessService (scope resolution)', () => {
   const prisma = {
+    account: { findUnique: jest.fn() },
     entity: { findUnique: jest.fn() },
     userRoleAssignment: { findMany: jest.fn() },
     $queryRaw: jest.fn()
@@ -54,6 +55,15 @@ describe('AccountAccessService (scope resolution)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     service = new AccountAccessService(prisma as unknown as PrismaService, logger as unknown as Logger)
+  })
+
+  describe('accountExists', () => {
+    it('is true for a known account and false for an unknown one', async () => {
+      prisma.account.findUnique.mockResolvedValueOnce({ id: A }).mockResolvedValueOnce(null)
+
+      await expect(service.accountExists(A)).resolves.toBe(true)
+      await expect(service.accountExists('ghost')).resolves.toBe(false)
+    })
   })
 
   describe('resolveEntityTarget', () => {
