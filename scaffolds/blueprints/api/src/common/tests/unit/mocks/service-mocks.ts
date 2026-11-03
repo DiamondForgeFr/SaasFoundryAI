@@ -41,6 +41,7 @@ export const mockPrismaService = {
   },
   entity: {
     findUnique: jest.fn() as MockedFunction<PrismaClientMethod>,
+    findMany: jest.fn().mockResolvedValue([]) as MockedFunction<PrismaClientMethod>,
     create: jest.fn() as MockedFunction<PrismaClientMethod>,
     update: jest.fn() as MockedFunction<PrismaClientMethod>
   },
