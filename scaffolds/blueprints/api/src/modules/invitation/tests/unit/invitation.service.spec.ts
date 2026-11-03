@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Locale, TokenType } from '@/generated/prisma/client'
 
@@ -34,6 +34,7 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
   private jwtService: jest.Mocked<JwtService>
   private envConfig: jest.Mocked<EnvConfig>
   private authService: jest.Mocked<AuthService>
+  private accountAccessService: jest.Mocked<AccountAccessService>
 
   protected getServiceClass() {
     return InvitationService
@@ -104,6 +105,7 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
     this.jwtService = this.getService(JwtService)
     this.envConfig = this.getService(EnvConfig)
     this.authService = this.getService(AuthService)
+    this.accountAccessService = this.getService(AccountAccessService)
   }
 
   /**
@@ -402,6 +404,120 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
 
           // Verify
           expect(this.logger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to create invitation'), 'createInvitation')
+        })
+      })
+
+      describe('scoped authority (per target)', () => {
+        const ACCOUNT_ROLE = { id: 1, name: 'account-admin', scope: 'ACCOUNT', accountId: null }
+        const ENTITY_ROLE = { id: 3, name: 'entity-admin', scope: 'ENTITY', accountId: null }
+        const PLATFORM_ROLE = { id: 9, name: 'platform-admin', scope: 'PLATFORM', accountId: null }
+
+        /** Resolve the inviter, the role scopes and the target entities; `denied` lists the permission checks the inviter fails. */
+        const given = (options: { roles: { id: number; name: string; scope: string; accountId: string | null }[]; denied?: string[]; entitiesOf?: Record<string, string>; inviter?: object }) => {
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.user.findUnique.mockResolvedValueOnce(options.inviter ?? mockInviter).mockResolvedValueOnce(null)
+          prismaServiceAny.role.findMany.mockResolvedValue(options.roles)
+          prismaServiceAny.entity.findMany.mockResolvedValue(Object.entries(options.entitiesOf ?? {}).map(([id, accountId]) => ({ id, accountId })))
+          this.accountAccessService.isPlatformAdmin.mockReset()
+          this.accountAccessService.isPlatformAdmin.mockResolvedValue(false)
+          this.accountAccessService.assertPermissionInScope.mockReset()
+          this.accountAccessService.assertPermissionInScope.mockImplementation(async (_userId, permission) => {
+            if ((options.denied ?? []).includes(permission)) throw new ForbiddenException(`missing ${permission}`)
+          })
+          this.jwtService.sign.mockReturnValue(mockInvitationToken)
+          this.envConfig.get.mockImplementation((key) => ({ JWT_SECRET_INVITATION: 'test-secret', JWT_INVITATION_EXPIRES_IN: '1d', NODE_ENV: 'test' })[key])
+          prismaServiceAny.user.create.mockResolvedValue({ id: '2', email: createInvitationDto.email, isActive: false, password: '' })
+          this.authService.createUniqueToken.mockResolvedValue(mockUserTokenRecord)
+          return prismaServiceAny
+        }
+
+        it('checks USER_ACCOUNTS_INVITATION in the scope of every target account and answers 403 when it is missing', async () => {
+          given({ roles: [ACCOUNT_ROLE], denied: ['USER_ACCOUNTS_INVITATION'] })
+
+          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] }), ForbiddenException)
+
+          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ACCOUNTS_INVITATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
+        })
+
+        it('checks USER_ENTITIES_INVITATION in the scope of every target entity and answers 403 when it is missing', async () => {
+          given({ roles: [ENTITY_ROLE], denied: ['USER_ENTITIES_INVITATION'] })
+
+          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], roleIds: [3] }), ForbiddenException)
+
+          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ENTITIES_INVITATION', { kind: 'ENTITY', entityId: mockEntity.id }, expect.any(String))
+        })
+
+        it('checks USER_ROLE_ALLOCATION on the target accounts for an ACCOUNT role and answers 403 when it is missing', async () => {
+          given({ roles: [ACCOUNT_ROLE], denied: ['USER_ROLE_ALLOCATION'], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+
+          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] }), ForbiddenException)
+
+          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
+        })
+
+        it('checks USER_ROLE_ALLOCATION in the target entities for an ENTITY role and answers 403 when it is missing', async () => {
+          given({ roles: [ENTITY_ROLE], denied: ['USER_ROLE_ALLOCATION'], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+
+          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], roleIds: [3] }), ForbiddenException)
+
+          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId: mockEntity.id }, expect.any(String))
+        })
+
+        it('keeps an entity-only inviter from granting an ACCOUNT role through an entity invitation', async () => {
+          given({ roles: [ACCOUNT_ROLE], denied: ['USER_ROLE_ALLOCATION'], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+
+          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [] }), ForbiddenException)
+
+          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
+        })
+
+        it('lets an ENTITY-authority inviter grant an ENTITY role in its entity', async () => {
+          given({ roles: [ENTITY_ROLE], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+
+          const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], roleIds: [3] })
+
+          expect(result.message).toEqual(expect.any(String))
+        })
+
+        it('refuses a role owned by another account (403)', async () => {
+          given({ roles: [{ ...ACCOUNT_ROLE, accountId: 'another-account' }], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+
+          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] }), ForbiddenException)
+        })
+
+        it('accepts a role owned by the target account', async () => {
+          given({ roles: [{ ...ACCOUNT_ROLE, accountId: mockAccount.id }], entitiesOf: { [mockEntity.id]: mockAccount.id } })
+
+          const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, entityIds: [] })
+
+          expect(result.message).toEqual(expect.any(String))
+        })
+
+        it('does not take a role that merely carries the platform section for a platform admin (stays 401)', async () => {
+          const sectionHolder = {
+            ...mockInviter,
+            roleAssignments: [
+              {
+                ...mockInviter.roleAssignments[0],
+                role: { ...mockInviter.roleAssignments[0].role, subModulesLinked: [{ subModule: { name: 'PLATFORM_ACCOUNTS' } }] }
+              }
+            ]
+          }
+          given({ roles: [PLATFORM_ROLE], inviter: sectionHolder })
+
+          await TestAssertions.assertThrows(() => this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], entityIds: [], roleIds: [9] }), UnauthorizedException)
+
+          expect(this.accountAccessService.isPlatformAdmin).toHaveBeenCalledWith(mockUser.id)
+        })
+
+        it('lets a real platform admin assign a PLATFORM role', async () => {
+          const prismaServiceAny = given({ roles: [PLATFORM_ROLE] })
+          this.accountAccessService.isPlatformAdmin.mockResolvedValue(true)
+
+          const result = await this.service.createInvitation(mockUser.id, { ...createInvitationDto, accountIds: [], entityIds: [], roleIds: [9] })
+
+          expect(result.message).toEqual(expect.any(String))
+          expect(prismaServiceAny.invitation.create).toHaveBeenCalled()
         })
       })
     })

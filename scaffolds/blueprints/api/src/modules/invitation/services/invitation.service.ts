@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { InvitationStatus, Locale, TokenType } from '@/generated/prisma/client'
 import * as bcrypt from 'bcrypt'
@@ -90,11 +90,6 @@ export class InvitationService {
                     include: {
                       permission: true
                     }
-                  },
-                  subModulesLinked: {
-                    include: {
-                      subModule: true
-                    }
                   }
                 }
               }
@@ -142,7 +137,9 @@ export class InvitationService {
 
       if (!inviter) throw new NotFoundException('Inviter user not found')
 
-      // Extract user permissions
+      // Extract user permissions. This union only answers "does the inviter hold this permission
+      // somewhere at all" (the coarse gate below, 401); WHERE they hold it is checked per target
+      // further down, through the scope-aware AccountAccessService (403).
       const userPermissions = inviter.roleAssignments.flatMap((assignment) => assignment.role.permissionsLinked.map((permissionLink) => permissionLink.permission.name))
 
       // Remove duplicates
@@ -153,19 +150,18 @@ export class InvitationService {
       const hasEntityInvitePermission = uniquePermissions.includes('USER_ENTITIES_INVITATION')
       const hasRoleAllocationPermission = uniquePermissions.includes('USER_ROLE_ALLOCATION')
       const hasAccountOwnerInvitePermission = uniquePermissions.includes('ACCOUNT_INVITE_OWNER')
-      // Platform-reach actor identifier: holding the PLATFORM_ACCOUNTS sub-module (the all-accounts
-      // list, granted to platform roles) is the canonical marker of platform reach. Used below to
-      // (1) bypass the per-account/-entity accessibility check (a platform actor sees every account)
-      // and (2) gate the assignment of PLATFORM-scoped roles to invitees (so a regular admin cannot
-      // promote someone to platform admin).
-      const uniqueSubModules = [...new Set(inviter.roleAssignments.flatMap((assignment) => assignment.role.subModulesLinked.map((subModuleLink) => subModuleLink.subModule.name)))]
-      const isPlatformAdminActor = uniqueSubModules.includes('PLATFORM_ACCOUNTS')
+      // Platform-reach actor identifier: a PLATFORM-scoped assignment holding the PLATFORM_ACCOUNTS
+      // sub-module (the all-accounts list, granted to platform roles). A role of another scope that
+      // merely carries that section does not count. Used below to (1) bypass the per-account/-entity
+      // accessibility check (a platform actor sees every account) and (2) gate the assignment of
+      // PLATFORM-scoped roles to invitees (so a regular admin cannot promote someone to platform admin).
+      const isPlatformAdminActor = await this.accountAccessService.isPlatformAdmin(inviterId)
 
       // Pre-resolve role scopes when roleIds are provided — needed to distinguish a "platform
       // admin" invitation (no account/entity targets but PLATFORM-scoped role) from the legacy
       // "account-owner" invitation (no targets, no roles, spins a fresh account on acceptance).
       const targetRoleIds = roleIds ?? []
-      const targetRoles = targetRoleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: targetRoleIds } }, select: { id: true, name: true, scope: true } }) : []
+      const targetRoles = targetRoleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: targetRoleIds } }, select: { id: true, name: true, scope: true, accountId: true } }) : []
       const hasPlatformScopedRole = targetRoles.some((r) => r.scope === 'PLATFORM')
       // A platform-admin invitation: no account/entity targets, but at least one PLATFORM-scoped
       // role provided. The invitee will become a platform admin (or carry that role) on acceptance.
@@ -209,6 +205,17 @@ export class InvitationService {
           const invalidAccountIds = accountIds.filter((id) => !accessibleAccountIds.includes(id))
           if (invalidAccountIds.length > 0) throw new UnauthorizedException(`You do not have access to these accounts: ${invalidAccountIds.join(', ')}`)
         }
+
+        // The permission must be held ON each target account (PLATFORM, or an ACCOUNT assignment on it):
+        // an invitation right held on another account, or through an entity role, does not carry over.
+        for (const accountId of accountIds) {
+          await this.accountAccessService.assertPermissionInScope(
+            inviterId,
+            'USER_ACCOUNTS_INVITATION',
+            { kind: 'ACCOUNT', accountId },
+            `You do not have permission to invite users to account ${accountId}`
+          )
+        }
       }
 
       // Validate entity IDs
@@ -220,6 +227,17 @@ export class InvitationService {
         if (!isPlatformAdminActor) {
           const invalidEntityIds = entityIds.filter((id) => !accessibleEntityIds.includes(id))
           if (invalidEntityIds.length > 0) throw new UnauthorizedException(`You do not have access to these entities: ${invalidEntityIds.join(', ')}`)
+        }
+
+        // The permission must be held in the scope of each target entity (PLATFORM, ACCOUNT on its account,
+        // or ENTITY on it or an ancestor): never on a sibling, a descendant or another account.
+        for (const entityId of entityIds) {
+          await this.accountAccessService.assertPermissionInScope(
+            inviterId,
+            'USER_ENTITIES_INVITATION',
+            { kind: 'ENTITY', entityId },
+            `You do not have permission to invite users to entity ${entityId}`
+          )
         }
       }
 
@@ -243,6 +261,34 @@ export class InvitationService {
         if (hasPlatformScopedRole && (accountIds.length > 0 || entityIds.length > 0)) {
           throw new BadRequestException('A platform-scoped role cannot be combined with account or entity targets')
         }
+
+        // A role is granted on the targets of its own scope: an ACCOUNT role on every target account, an
+        // ENTITY role on every target entity. USER_ROLE_ALLOCATION must be held in the scope of each of
+        // those targets, so an inviter whose authority is an entity can grant ENTITY roles there and
+        // nothing wider (an ACCOUNT role needs account-level authority).
+        const targetEntities = entityIds.length > 0 ? await this.prisma.entity.findMany({ where: { id: { in: entityIds } }, select: { id: true, accountId: true } }) : []
+        const targetAccountIds = [...new Set([...accountIds, ...targetEntities.map((entity) => entity.accountId)])]
+
+        if (targetRoles.some((r) => r.scope === 'ACCOUNT')) {
+          // With no account target the role would be dropped silently: check the accounts of the target entities instead.
+          for (const accountId of accountIds.length > 0 ? accountIds : targetAccountIds) {
+            await this.accountAccessService.assertPermissionInScope(
+              inviterId,
+              'USER_ROLE_ALLOCATION',
+              { kind: 'ACCOUNT', accountId },
+              `You do not have permission to assign account roles in account ${accountId}`
+            )
+          }
+        }
+        if (targetRoles.some((r) => r.scope === 'ENTITY')) {
+          for (const entityId of entityIds) {
+            await this.accountAccessService.assertPermissionInScope(inviterId, 'USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId }, `You do not have permission to assign roles in entity ${entityId}`)
+          }
+        }
+
+        // A role owned by an account can only be granted inside that account (system and global roles have no owner).
+        const foreignRole = targetRoles.find((r) => Boolean(r.accountId) && !targetAccountIds.includes(r.accountId as string))
+        if (foreignRole) throw new ForbiddenException(`The role ${foreignRole.name} does not belong to the accounts you are inviting into`)
       }
 
       // Check if the email already exists
@@ -415,7 +461,7 @@ export class InvitationService {
       return response
     } catch (error) {
       this.logger.error(`Failed to create invitation for ${email}: ${error.message}`, 'createInvitation')
-      if (error instanceof UnauthorizedException || error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
       }
       throw new BadRequestException(`Failed to create invitation: ${error.message}`)
@@ -522,7 +568,7 @@ export class InvitationService {
       }
     } catch (error) {
       this.logger.error(`Failed to accept invitation: ${error.message}`, 'acceptInvitation')
-      if (error instanceof UnauthorizedException || error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
       }
       throw new BadRequestException(`Failed to accept invitation: ${error.message}`)
