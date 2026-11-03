@@ -365,10 +365,13 @@ same worktree, which returns the ticket to AI Testing. A defect found in review 
 same limits, so the agent is not told to do what its own prompt forbids.
 
 The branch of a delegated ticket is the agent's to name, unless the host names it first. Claude Code's `isolation: "worktree"` starts the agent on `worktree-agent-<id>`; the agent keeps that local
-branch and pushes the work to the ticket branch (`git push origin HEAD:feature/<N>-<description>`). `create-pr`, `ready-pr` and `draft-pr` accept that checkout when origin holds the ticket's branch at
-the local `HEAD` commit: they find it on their own when it is the only such branch, or take it from `--head <branch>`. A branch missing from origin, pushed but behind `HEAD`, or belonging to another
-ticket is refused. The brief to the agent names the ticket branch, so it can pass `--head`. See
-[GitHub integration](../workflow/github-integration.md#pull-request-commands-on-a-branch-the-host-named).
+branch and pushes the work to the ticket branch (`git push origin HEAD:feature/<N>-<description>`). `create-pr` accepts that checkout when origin holds the ticket's branch at the local `HEAD` commit:
+it finds it on its own when it is the only such branch, or takes it from `--head <branch>`. A branch missing from origin, pushed but behind `HEAD`, or belonging to another ticket is refused. The brief
+to the agent names the ticket branch, so it can pass `--head`. See [GitHub integration](../workflow/github-integration.md#pull-request-commands-on-a-branch-the-host-named).
+
+The session runs `ready-pr <ticket>` and `draft-pr <ticket>` from the primary checkout, on the working branch, never from the agent's worktree: off the ticket branch they find the ticket's one open
+pull request on GitHub from the branch naming, refuse and list the candidates when several match (`--pr <number>` picks one), and check its head commit against origin and the local CI gate. See
+[GitHub integration](../workflow/github-integration.md#ready-pr-and-draft-pr-from-the-primary-checkout).
 
 The task kind of the delivery is sized to the work. The complexity profile of the ticket declares it (`steps.execute.taskKind`), and it is always resolved with `sf agents route`, never by naming a
 model:

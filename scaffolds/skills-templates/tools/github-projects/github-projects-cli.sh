@@ -1683,11 +1683,83 @@ resolve_remote_ticket_branch() {
   echo -e "${BLUE}→ This checkout is on ${host_branch}: using origin/${CURRENT_BRANCH} as ticket #${ticket}'s branch, it holds the same commit as HEAD (${short}).${NC}"
 }
 
+# ready-pr and draft-pr from a checkout that is not on the ticket branch (#1125). With delegated
+# delivery, the session takes a ticket's draft pull request out of draft from the primary checkout,
+# on the working branch: the ticket branch lives in the agent's worktree, and the local HEAD says
+# nothing about it. The pull request is looked up on GitHub instead: the one open pull request of
+# this repository whose head branch follows the ticket's delivery naming (feature, fix), or the
+# one --head names (release convention allowed) or --pr picks. Several candidates are refused and
+# listed. verify_pr_head_on_origin then checks its head commit against origin, and the local CI
+# gate reads that commit. Another ticket's pull request is never accepted.
+# Sets CURRENT_BRANCH to the PR's head branch, PR_RESOLVED_NUMBER and PR_ORIGIN_RESOLVED=true.
+resolve_ticket_pr_on_origin() {
+  local ticket=$1 allow_release=$2 feature=$3 fix=$4 release=$5 host_branch=$CURRENT_BRANCH
+  local payload number branch found_number="" found_branch=""
+  local -a candidates=()
+  if [[ -n "${PR_HEAD_OPTION:-}" ]]; then
+    classify_pr_branch "$PR_HEAD_OPTION" "$allow_release" "$feature" "$fix" "$release" || {
+      echo "Error: --head ${PR_HEAD_OPTION} does not match ticket #${ticket}'s configured branch naming." >&2
+      return 1
+    }
+  fi
+  payload=$(gh pr list --state open --limit 200 --json number,headRefName,isCrossRepository 2>/dev/null) || {
+    echo "Error: unable to read open PRs. Retry after restoring GitHub access." >&2; return 1;
+  }
+  echo "$payload" | jq -e 'type == "array"' >/dev/null 2>&1 || {
+    echo "Error: unreadable open PR list; no pull request was changed." >&2; return 1;
+  }
+  while IFS=$'\t' read -r number branch; do
+    [[ -n "$number" && -n "$branch" ]] || continue
+    if [[ -n "${PR_NUMBER_OPTION:-}" ]]; then
+      [[ "$number" == "$PR_NUMBER_OPTION" ]] || continue
+    elif [[ -n "${PR_HEAD_OPTION:-}" ]]; then
+      [[ "$branch" == "$PR_HEAD_OPTION" ]] || continue
+    else
+      [[ "$branch" =~ $feature || "$branch" =~ $fix ]] || continue
+    fi
+    candidates+=("#${number} (${branch})")
+    found_number=$number
+    found_branch=$branch
+  done < <(echo "$payload" | jq -r '.[] | select(.isCrossRepository == false and (.number | type) == "number" and (.headRefName | type) == "string") | "\(.number)\t\(.headRefName)"')
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    if [[ -n "${PR_NUMBER_OPTION:-}" ]]; then
+      echo "Error: --pr ${PR_NUMBER_OPTION}: no open pull request of this repository has that number." >&2
+    elif [[ -n "${PR_HEAD_OPTION:-}" ]]; then
+      echo "Error: --head ${PR_HEAD_OPTION}: no open pull request of this repository has that head branch. Open it first with create-pr ${ticket} --draft." >&2
+    else
+      echo "Error: this checkout is on ${host_branch}, and no open pull request of this repository has a head branch that follows ticket #${ticket}'s configured branch naming. Open it first with create-pr ${ticket} --draft, or name it with --pr <number>." >&2
+    fi
+    return 1
+  fi
+  if [[ ${#candidates[@]} -gt 1 ]]; then
+    local list
+    list=$(printf '%s\n' "${candidates[@]}" | paste -sd ',' - | sed 's/,/, /g')
+    echo "Error: several open pull requests match ticket #${ticket}: ${list}. Name the one to use with --pr <number>." >&2
+    return 1
+  fi
+  if [[ -n "${PR_NUMBER_OPTION:-}" ]]; then
+    classify_pr_branch "$found_branch" "$allow_release" "$feature" "$fix" "$release" || {
+      echo "Error: --pr ${PR_NUMBER_OPTION}: its head branch ${found_branch} does not match ticket #${ticket}'s configured branch naming." >&2
+      return 1
+    }
+  elif [[ -z "${PR_HEAD_OPTION:-}" ]]; then
+    classify_pr_branch "$found_branch" false "$feature" "$fix" "$release" || return 1
+  fi
+  CURRENT_BRANCH=$found_branch
+  PR_RESOLVED_NUMBER=$found_number
+  PR_ORIGIN_RESOLVED=true
+  echo -e "${BLUE}→ This checkout is on ${host_branch}: using origin/${CURRENT_BRANCH}, the head of ticket #${ticket}'s open pull request #${found_number}.${NC}"
+}
+
 # Resolve only the ticket's own branch. Never promote another developer's PR.
-# The current branch when it follows the ticket's naming; otherwise the branch pushed from this
-# checkout (resolve_remote_ticket_branch), named by --head (PR_HEAD_OPTION) or found on origin.
+# The current branch when it follows the ticket's naming; otherwise, for create-pr, the branch
+# pushed from this checkout (resolve_remote_ticket_branch), named by --head (PR_HEAD_OPTION) or
+# found on origin at HEAD; for ready-pr and draft-pr (mode `origin`), the ticket's open pull
+# request found on GitHub (resolve_ticket_pr_on_origin), which --pr may name.
 pr_branch_context() {
-  local ticket=$1 allow_release=${2:-false}
+  local ticket=$1 allow_release=${2:-false} mode=${3:-local}
+  PR_ORIGIN_RESOLVED=false
+  PR_RESOLVED_NUMBER=""
   [[ "$ticket" =~ ^[1-9][0-9]*$ ]] || { echo "Error: ticket must be a positive issue number." >&2; return 1; }
   load_config
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD) || return 1
@@ -1729,6 +1801,15 @@ pr_branch_context() {
   PR_TICKET=$ticket
   PR_CONTEXT_KIND=""
   PR_TARGET_BRANCH=$DELIVERY_TARGET_BRANCH
+  if [[ "$mode" == origin ]]; then
+    # On the ticket branch itself, with nothing named: the checkout is the work, checked as before
+    if [[ -z "${PR_NUMBER_OPTION:-}" && ( -z "${PR_HEAD_OPTION:-}" || "$PR_HEAD_OPTION" == "$CURRENT_BRANCH" ) ]] \
+        && classify_pr_branch "$CURRENT_BRANCH" "$allow_release" "$feature" "$fix" "$release"; then
+      return 0
+    fi
+    resolve_ticket_pr_on_origin "$ticket" "$allow_release" "$feature" "$fix" "$release" || return 1
+    return 0
+  fi
   if [[ -z "${PR_HEAD_OPTION:-}" || "$PR_HEAD_OPTION" == "$CURRENT_BRANCH" ]]; then
     if ! classify_pr_branch "$CURRENT_BRANCH" "$allow_release" "$feature" "$fix" "$release"; then
       if [[ -n "${PR_HEAD_OPTION:-}" ]]; then
@@ -1786,6 +1867,33 @@ verify_pr_head() {
     echo "Error: PR, local branch and remote head do not match. Push and retry before marking ready." >&2
     return 1
   fi
+  PR_HEAD_COMMIT=$LOCAL_HEAD
+}
+
+# ready-pr and draft-pr on a pull request found on GitHub (#1125): this checkout holds another
+# branch, so the local HEAD is not compared. The PR's head commit must be the commit origin holds
+# for its head branch, and that commit is the one the local CI gate checks (PR_HEAD_COMMIT).
+verify_pr_head_on_origin() {
+  local pr_head pr_number
+  pr_head=$(echo "$BRANCH_PRS" | jq -r '.[0].headRefOid')
+  pr_number=$(echo "$BRANCH_PRS" | jq -r '.[0].number')
+  if [[ -n "${PR_RESOLVED_NUMBER:-}" && "$pr_number" != "$PR_RESOLVED_NUMBER" ]]; then
+    echo "Error: the open pull request of ${CURRENT_BRANCH} is #${pr_number}, not #${PR_RESOLVED_NUMBER}. Retry after checking GitHub." >&2
+    return 1
+  fi
+  REMOTE_HEAD=$(remote_branch_tip "$CURRENT_BRANCH") || {
+    echo "Error: could not read origin to check origin/${CURRENT_BRANCH}. Retry once origin is reachable." >&2
+    return 1
+  }
+  if [[ -z "$REMOTE_HEAD" ]]; then
+    echo "Error: origin has no branch ${CURRENT_BRANCH}, the head of pull request #${pr_number}." >&2
+    return 1
+  fi
+  if [[ "$pr_head" != "$REMOTE_HEAD" ]]; then
+    echo "Error: pull request #${pr_number} is at ${pr_head:0:8}, but origin/${CURRENT_BRANCH} is at ${REMOTE_HEAD:0:8}. Retry once GitHub has the last push." >&2
+    return 1
+  fi
+  PR_HEAD_COMMIT=$pr_head
 }
 
 # The project's local CI gate (#918). A project that verifies pull requests locally declares
@@ -1824,13 +1932,19 @@ local_ci_gate() {
   echo -e "${GREEN}✓ Local CI green on ${head:0:8}: $(echo "$required" | paste -sd ',' - | sed 's/,/, /g')${NC}"
 }
 
-# `--skip-local-ci "<reason>"`, `--head <branch>` (#1036) and the remaining positional arguments,
-# for create-pr, ready-pr and draft-pr.
+# `--skip-local-ci "<reason>"`, `--head <branch>` (#1036), `--pr <number>` (#1125, ready-pr and
+# draft-pr only) and the remaining positional arguments, for create-pr, ready-pr and draft-pr.
 parse_local_ci_args() {
   PR_ARGS=()
   PR_HEAD_OPTION=""
+  PR_NUMBER_OPTION=""
   while [[ "$#" -gt 0 ]]; do
-    if [[ "$1" == "--skip-local-ci" ]]; then
+    if [[ "$1" == "--pr" ]]; then
+      [[ "${2:-}" =~ ^[1-9][0-9]*$ ]] || { echo "Error: --pr requires the number of the ticket's open pull request" >&2; return 1; }
+      [[ -z "$PR_NUMBER_OPTION" ]] || { echo "Error: --pr can be given only once" >&2; return 1; }
+      PR_NUMBER_OPTION=$2
+      shift 2
+    elif [[ "$1" == "--skip-local-ci" ]]; then
       [[ -n "${2:-}" && "${2:-}" != --* ]] || { echo "Error: --skip-local-ci requires a reason" >&2; return 1; }
       LOCAL_CI_SKIP_REASON=$2
       shift 2
@@ -1851,6 +1965,10 @@ cmd_create_pr() {
   set -- ${PR_ARGS[@]+"${PR_ARGS[@]}"}
   if [[ "$#" -lt 1 || "$#" -gt 2 || ( "$#" -eq 2 && "$2" != "--draft" ) ]]; then
     echo "Usage: $0 create-pr <ticket-number> [--draft] [--head <branch>] [--skip-local-ci \"<reason>\"]" >&2
+    return 1
+  fi
+  if [[ -n "$PR_NUMBER_OPTION" ]]; then
+    echo "Error: --pr applies to ready-pr and draft-pr; create-pr opens the pull request of the ticket branch (--head <branch>)." >&2
     return 1
   fi
   local TICKET_NUMBER=$1
@@ -1929,18 +2047,26 @@ cmd_set_pr_draft() {
   parse_local_ci_args "$@" || return 1
   set -- ${PR_ARGS[@]+"${PR_ARGS[@]}"}
   if [[ "$#" -ne 1 ]]; then
-    echo "Usage: $0 ${action}-pr <ticket-number> [--head <branch>]$([[ "$action" == ready ]] && echo ' [--skip-local-ci "<reason>"]')" >&2
+    echo "Usage: $0 ${action}-pr <ticket-number> [--head <branch> | --pr <number>]$([[ "$action" == ready ]] && echo ' [--skip-local-ci "<reason>"]')" >&2
     return 1
   fi
-  pr_branch_context "$1" true || return 1
+  if [[ -n "$PR_NUMBER_OPTION" && -n "$PR_HEAD_OPTION" ]]; then
+    echo "Error: name the pull request with --pr <number> or its branch with --head <branch>, not both." >&2
+    return 1
+  fi
+  pr_branch_context "$1" true origin || return 1
   read_branch_pr || return 1
   [[ $(echo "$BRANCH_PRS" | jq length) -eq 1 ]] || { echo "Error: no open PR for ticket #$1 on ${CURRENT_BRANCH}." >&2; return 1; }
-  verify_pr_head || return 1
+  if [[ "$PR_ORIGIN_RESOLVED" == true ]]; then
+    verify_pr_head_on_origin || return 1
+  else
+    verify_pr_head || return 1
+  fi
   local pr_number state_args=()
   pr_number=$(echo "$BRANCH_PRS" | jq -r '.[0].number')
   # Marking ready asks for review: the local CI verdict must be on the head first (#918)
   if [[ "$desired_draft" == false ]]; then
-    local_ci_gate "$LOCAL_HEAD" || { echo "  Pull request #${pr_number} stays a draft." >&2; return 1; }
+    local_ci_gate "$PR_HEAD_COMMIT" || { echo "  Pull request #${pr_number} stays a draft." >&2; return 1; }
     [[ -n "$LOCAL_CI_SKIP_REASON" ]] && gh pr comment "$pr_number" --body "Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}" >/dev/null
   fi
   [[ "$desired_draft" == true ]] && state_args=(--undo)
@@ -1951,7 +2077,11 @@ cmd_set_pr_draft() {
       echo "Error: PR draft state could not be confirmed. Retry after checking GitHub." >&2
       return 1
     fi
-    verify_pr_head || return 1
+    if [[ "$PR_ORIGIN_RESOLVED" == true ]]; then
+      verify_pr_head_on_origin || return 1
+    else
+      verify_pr_head || return 1
+    fi
   fi
   if [[ "$desired_draft" == true ]]; then
     echo "✓ Pull request #${pr_number} is a draft for Human Testing."
@@ -2711,10 +2841,14 @@ case "$COMMAND" in
     echo "  get-ticket <ticket>                      Print title + body (for scripting)"
     echo "  create-pr <ticket> [--draft] [--head <branch>]"
     echo "                                           Open PR for the ticket branch (current branch, else the ticket branch pushed at HEAD)"
-    echo "  ready-pr <ticket> [--head <branch>]      Mark the ticket PR ready for review"
-    echo "  draft-pr <ticket> [--head <branch>]      Return the ticket PR to draft"
     echo "                                           --head names the ticket branch pushed to origin when the checkout is on another"
     echo "                                           branch (a worktree agent's host branch); origin must hold it at the local HEAD"
+    echo "  ready-pr <ticket> [--head <branch> | --pr <number>]"
+    echo "                                           Mark the ticket PR ready for review"
+    echo "  draft-pr <ticket> [--head <branch> | --pr <number>]"
+    echo "                                           Return the ticket PR to draft"
+    echo "                                           Off the ticket branch (the primary checkout), the ticket's one open PR is found"
+    echo "                                           on GitHub from the branch naming; its head must be origin's commit for that branch"
     echo "  list [status]                            List project items (optionally filtered)"
     echo "  milestone <sub> [args]                   create|list|show|scope|assign|associate|readiness"
     echo "  cache-clear                              Drop the on-disk schema cache"

@@ -68,7 +68,7 @@ git push origin HEAD:feature/42-add-export
 .claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft
 ```
 
-The commands accept that checkout when **origin holds the ticket's branch at the local `HEAD` commit**: the work has been pushed in full, and the pull request carries exactly what is checked out.
+`create-pr` accepts that checkout when **origin holds the ticket's branch at the local `HEAD` commit**: the work has been pushed in full, and the pull request carries exactly what is checked out.
 
 - **Without `--head`**, the CLI looks for the feature or fix branches of the ticket on origin that point at `HEAD`. Exactly one is used, and the command prints a line saying which. None, or several,
   is refused with an error that names `--head`. Release branches are never searched for: they carry no ticket number.
@@ -80,6 +80,27 @@ even at `HEAD`. A pull request is never promoted from a branch that is not prova
 
 From there the branch is the ticket's own. `create-pr` pushes nothing, because origin already holds it, and opens the pull request from that branch (`gh pr create --head`). The board linkage, the
 `Resolves #<ticket>` line, the base branch and the guards are those of any other ticket branch.
+
+### `ready-pr` and `draft-pr` from the primary checkout
+
+With delegated delivery, the session changes the draft state of a ticket's pull request from the primary checkout, on the working branch, while the ticket branch lives in the agent's worktree. There
+is no need to enter that worktree:
+
+```bash
+# On develop, in the primary checkout
+.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42
+.claude/skills/sf-workflow/workflow-cli.sh draft-pr 42 --pr 123
+```
+
+When the current branch is not the ticket's, `ready-pr` and `draft-pr` do not look at the local `HEAD`. They find the pull request on GitHub:
+
+- **Without an option**, the ticket's one open pull request of this repository whose head branch follows the ticket's `branchNaming` (feature or fix) is used, and the command prints a line naming it.
+  When none matches, the command refuses. Several are refused with the list of candidates (`#123 (feature/42-…), #124 (fix/42-…)`): pick one with `--pr <number>`.
+- **With `--pr <number>`**, the pull request is the one named. Its head branch must still follow the ticket's naming.
+- **With `--head <branch>`**, the open pull request of that branch is used.
+
+The pull request's head commit must be the commit origin holds for its branch, and that commit is the one the local CI gate checks. On the ticket branch itself nothing changes: the local `HEAD`,
+origin and the pull request must all match. The nature axis is enforced by `update-status` as before: the In review transition still requires a non-draft pull request, and Human testing a draft one.
 
 ## Routing from `sf-workflow`
 

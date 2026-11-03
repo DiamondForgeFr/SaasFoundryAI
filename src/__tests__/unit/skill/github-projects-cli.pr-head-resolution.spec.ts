@@ -72,6 +72,8 @@ case "$1 $2" in
     else printf '%s' "$PRS"; fi;;
   'pr create') echo 'https://github.com/FakeOrg/FakeRepo/pull/123';;
   'pr ready') if [ "$4" = --undo ]; then echo true; else echo false; fi > "$READY_MARKER";;
+  'pr comment') ;;
+  'api '*) if [ "$2" = "repos/FakeOrg/FakeRepo/commits/$STATUS_SHA/status" ]; then printf '%s' "$STATUSES"; else echo '[]'; fi;;
   *) exit 1;;
 esac
 `
@@ -301,6 +303,153 @@ esac
     })
   })
 
+  // #1125 — with delegated delivery the session runs ready-pr / draft-pr from the primary checkout, on the working
+  // branch, while the ticket branch lives in the agent's worktree. The local HEAD says nothing about the work there:
+  // the ticket's open pull request is found on GitHub, and its head is checked against origin.
+  describe('ready-pr and draft-pr from the primary checkout (#1125)', () => {
+    let agentCommit: string
+    const statuses = (state: string) =>
+      JSON.stringify([
+        { context: 'local-check', state },
+        { context: 'local-e2e', state: 'success' }
+      ])
+
+    beforeEach(() => {
+      // The agent pushed its work; the session sits on the working branch, at another commit
+      pushTo('feature/42-work')
+      agentCommit = head()
+      git('checkout', 'develop')
+    })
+
+    const prAt = (branch: string, overrides: Record<string, unknown> = {}) => pr(branch, { headRefOid: agentCommit, ...overrides })
+
+    it('ready-pr finds the ticket PR on GitHub and marks it ready, without looking at the local HEAD', async () => {
+      expect(head()).not.toBe(agentCommit)
+      const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work')]) })
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain("This checkout is on develop: using origin/feature/42-work, the head of ticket #42's open pull request #123")
+      expect(result.stdout).toContain('Pull request #123 is ready for review')
+      expect(calls()).toContain('pr list --state open')
+      expect(calls()).toContain('pr ready 123')
+      // Nothing is pushed from the primary checkout
+      expect(remoteHeads().sort()).toEqual(['develop', 'feature/42-work'])
+    })
+
+    it('draft-pr returns the ticket PR to draft the same way', async () => {
+      const result = await run(['draft-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work', { isDraft: false })]) })
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('pr ready 123 --undo')
+    })
+
+    it('also works from a detached HEAD and from a fix branch PR', async () => {
+      git('checkout', '--detach')
+      pushTo('fix/42-repair')
+      const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('fix/42-repair', { headRefOid: head() })]) })
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('pr list --head fix/42-repair')
+      expect(calls()).toContain('pr ready 123')
+    })
+
+    it('refuses two matching PRs and lists them, then --pr picks one', async () => {
+      pushTo('fix/42-repair')
+      const prs = JSON.stringify([prAt('feature/42-work'), prAt('fix/42-repair', { number: 124, headRefOid: head(), url: 'https://github.com/FakeOrg/FakeRepo/pull/124' })])
+      const refused = await run(['ready-pr', '42'], { PRS: prs })
+      expect(refused.code).not.toBe(0)
+      expect(refused.stderr).toContain('several open pull requests match ticket #42: #123 (feature/42-work), #124 (fix/42-repair)')
+      expect(refused.stderr).toContain('--pr <number>')
+      expect(calls()).not.toContain('pr ready')
+
+      const picked = await run(['ready-pr', '42', '--pr', '124'], { PRS: prs })
+      expect(picked.code).toBe(0)
+      expect(calls()).toContain('pr ready 124')
+      expect(calls()).not.toContain('pr ready 123')
+    })
+
+    it('--head names the branch of the PR to use', async () => {
+      const result = await run(['ready-pr', '42', '--head', 'feature/42-work'], { PRS: JSON.stringify([prAt('feature/42-work')]) })
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('pr ready 123')
+    })
+
+    it("never takes another ticket's PR, a fork's PR or an unknown --pr", async () => {
+      pushTo('feature/43-other')
+      pushTo('feature/420-other')
+      const others = [prAt('feature/43-other', { number: 130 }), prAt('feature/420-other', { number: 131 }), prAt('feature/42-work', { number: 132, isCrossRepository: true })]
+      const none = await run(['ready-pr', '42'], { PRS: JSON.stringify(others) })
+      expect(none.code).not.toBe(0)
+      expect(none.stderr).toContain("no open pull request of this repository has a head branch that follows ticket #42's configured branch naming")
+      const otherTicket = await run(['ready-pr', '42', '--pr', '130'], { PRS: JSON.stringify(others) })
+      expect(otherTicket.code).not.toBe(0)
+      expect(otherTicket.stderr).toContain("--pr 130: its head branch feature/43-other does not match ticket #42's configured branch naming")
+      const unknown = await run(['ready-pr', '42', '--pr', '999'], { PRS: JSON.stringify(others) })
+      expect(unknown.code).not.toBe(0)
+      expect(unknown.stderr).toContain('--pr 999: no open pull request')
+      expect(calls()).not.toContain('pr ready')
+    })
+
+    it('refuses a PR whose head is not the commit origin holds for its branch', async () => {
+      const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work', { headRefOid: 'f'.repeat(40) })]) })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain(`pull request #123 is at ffffffff, but origin/feature/42-work is at ${agentCommit.slice(0, 8)}`)
+      expect(calls()).not.toContain('pr ready')
+    })
+
+    it('refuses a PR whose branch origin no longer has', async () => {
+      git('push', 'origin', '--delete', 'feature/42-work')
+      const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work')]) })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain('origin has no branch feature/42-work')
+      expect(calls()).not.toContain('pr ready')
+    })
+
+    describe('the local CI gate reads the PR head commit', () => {
+      beforeEach(async () => {
+        await writeFile(
+          path.join(work, '.saasfoundry.json'),
+          JSON.stringify({
+            workflow: {
+              workingBranch: 'develop',
+              prTargetBranch: 'develop',
+              releaseBranch: 'master',
+              branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' },
+              localCi: { requiredStatuses: ['local-check', 'local-e2e'] }
+            }
+          })
+        )
+      })
+
+      it('keeps the PR a draft when a declared status is not green on the PR head', async () => {
+        const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work')]), GH_REPO: 'FakeOrg/FakeRepo', STATUS_SHA: agentCommit, STATUSES: statuses('pending') })
+        expect(result.code).not.toBe(0)
+        expect(result.stderr).toContain('local-check: pending')
+        expect(result.stderr).toContain('Pull request #123 stays a draft')
+        expect(calls()).toContain(`api repos/FakeOrg/FakeRepo/commits/${agentCommit}/status`)
+        expect(calls()).not.toContain('pr ready')
+      })
+
+      it('marks it ready once every declared status is green on the PR head, not on the local HEAD', async () => {
+        const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work')]), GH_REPO: 'FakeOrg/FakeRepo', STATUS_SHA: agentCommit, STATUSES: statuses('success') })
+        expect(result.code).toBe(0)
+        expect(calls()).not.toContain(`commits/${head()}/status`)
+        expect(calls()).toContain('pr ready 123')
+      })
+    })
+
+    it.each([
+      [['ready-pr', '42', '--pr']],
+      [['ready-pr', '42', '--pr', 'abc']],
+      [['ready-pr', '42', '--pr', '1', '--pr', '2']],
+      [['ready-pr', '42', '--pr', '123', '--head', 'feature/42-work']],
+      [['create-pr', '42', '--pr', '123']]
+    ])('rejects %j', async (args) => {
+      const result = await run(args, { PRS: JSON.stringify([prAt('feature/42-work')]) })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toMatch(/--pr/)
+      expect(calls()).not.toContain('pr ready')
+      expect(calls()).not.toContain('pr create')
+    })
+  })
+
   describe('a release branch', () => {
     it('is used when --head names it, with the release base and closing line', async () => {
       pushTo('rc-1.0.0')
@@ -340,7 +489,10 @@ esac
   it.each([
     ['create-pr', ['42', '--draft', '--head', 'feature/42-work']],
     ['ready-pr', ['42', '--head', 'feature/42-work']],
-    ['draft-pr', ['42', '--head', 'feature/42-work']]
+    ['draft-pr', ['42', '--head', 'feature/42-work']],
+    // #1125 — the explicit pull request choice reaches the adapter unchanged
+    ['ready-pr', ['42', '--pr', '123']],
+    ['draft-pr', ['42', '--pr', '123']]
   ])('%s', async (command, args) => {
     await exec('/bin/bash', [WORKFLOW_CLI, command, ...args], { cwd: dir, env: process.env })
     expect(readFileSync(path.join(dir, 'tool.log'), 'utf8')).toContain(`${command} ${args.join(' ')}`)
