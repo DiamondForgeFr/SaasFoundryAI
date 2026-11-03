@@ -35,17 +35,37 @@ and `@prisma/client` agree on a stable major again.
 
 ## Scoped security overrides
 
-The generated API currently needs three transitive security overrides. They live at both actual npm install roots: `scaffolds/overlays/multirepo/api/package.json` for an independent API and
+The generated API currently needs four transitive security overrides. They live at both actual npm install roots: `scaffolds/overlays/multirepo/api/package.json` for an independent API and
 `scaffolds/overlays/monorepo/root/package.json` for npm workspaces. An override inside `apps/api` would be ignored in a monorepo.
 
-| Parent dependency          | Forced dependency      | Why it is pinned                                                                 | Remove when                                                                                                |
-| -------------------------- | ---------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@nestjs/platform-express` | `multer` `2.4.0`       | Keeps the NestJS 11 upload path on the patched Multer release without NestJS 12. | NestJS 11 resolves an equally new patched Multer itself, or the project completes its NestJS 12 migration. |
-| `@prisma/config`           | `deepmerge-ts` `8.0.2` | Removes the vulnerable Prisma configuration merge implementation.                | The supported Prisma 7 line declares `deepmerge-ts >= 8.0.2` without an override.                          |
-| `prisma`                   | `mysql2` `3.24.4`      | Patches Prisma's optional MySQL driver even though PostgreSQL is the default.    | The supported Prisma line resolves `mysql2 >= 3.24.4` itself.                                              |
+| Parent dependency          | Forced dependency      | Why it is pinned                                                                                                                                               | Remove when                                                                                                                 |
+| -------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `@nestjs/platform-express` | `multer` `2.5.0`       | Keeps the NestJS 11 upload path on the patched Multer release without NestJS 12.                                                                               | NestJS 11 resolves an equally new patched Multer itself, or the project completes its NestJS 12 migration.                  |
+| `@nestjs/swagger`          | `js-yaml` `5.5.0`      | `@nestjs/swagger` 11.4.7 pins `js-yaml` to exactly `5.3.0` (GHSA-r3ph-w7gj-g6xm, fixed in 5.5.0). The next swagger major needs NestJS 12, so there is no bump. | A NestJS 11 `@nestjs/swagger` release declares `js-yaml >= 5.5.0` itself, or the project completes its NestJS 12 migration. |
+| `@prisma/config`           | `deepmerge-ts` `8.0.2` | Removes the vulnerable Prisma configuration merge implementation.                                                                                              | The supported Prisma 7 line declares `deepmerge-ts >= 8.0.2` without an override.                                           |
+| `prisma`                   | `mysql2` `3.24.4`      | Patches Prisma's optional MySQL driver even though PostgreSQL is the default.                                                                                  | The supported Prisma line resolves `mysql2 >= 3.24.4` itself.                                                               |
+
+The js-yaml override is scoped to swagger on purpose: the API lock holds three js-yaml majors (3.x under the Jest coverage tooling, 4.x for the lint and commit tooling, 5.x for swagger), and a global
+override would force every consumer onto a major it was not written for.
 
 Do not broaden these overrides to unrelated dependency trees. Before removing one, regenerate both multirepo lockfiles from an empty npm 11 resolution and run the generated production audit. The
-committed lock guard must still resolve `fast-uri >= 3.1.8`, `qs >= 6.16.0`, and every exact override target above.
+committed lock guard (`src/__tests__/unit/scaffold-lockfiles.spec.ts`) must still resolve:
+
+- on the API: `fast-uri >= 3.1.9`, `handlebars >= 4.7.10`, `qs >= 6.16.0`, the js-yaml copy that `@nestjs/swagger` loads at `5.5.0`, and every exact override target above;
+- on the web app: `fast-uri >= 3.1.9`, `source-map-js >= 1.2.2`, and the pinned `vite` (`>= 8.2.4`, the first release without the 8.2.0 to 8.2.3 advisories), the same in both web overlays.
+
+Refresh a lock for an advisory with a targeted update, not a full regeneration, so the diff stays reviewable: under Node 24.19.0 and npm 11 (the generated projects' runtime),
+`npm install --package-lock-only`, then `npm update <package> --package-lock-only`, then `npm ci --dry-run`. A full regeneration from an empty resolution is a dependency-upgrade ticket's job.
+
+## Known residual advisories
+
+`npm audit --omit=dev` on a generated project reports no advisory that has a patched release, on either topology. One advisory has no fix at all: `deepmerge` (GHSA-gcqx-w48m-w2h4, low, reached through
+`nestjs-zod` in the API, and through the PWA toolchain in the web app's development tree). The development trees also carry `minimatch` (GHSA-g3hv-75wg-m249, fixed only in `minimatch` 11) and `glob`
+(GHSA-3g3m-2fjr-6pw4, fixed only in `glob` 14). A cross-major override would move the lint, test and build tooling off the major it targets, so these wait for their parents to move: they are tracked
+in [#1111](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1111). Recheck this list whenever a lock is regenerated.
+
+The monorepo has no committed lock, so a fresh install resolves whatever the pinned parents allow. Its development tree can therefore report advisories that the multirepo locks do not, because a
+parent is pinned exactly (`vitest` pins `@vitest/mocker`, `orval` pins its own `js-yaml`). Those are in-major bumps for a dependency-upgrade ticket, not overrides.
 
 ## Method for the next upgrade
 
