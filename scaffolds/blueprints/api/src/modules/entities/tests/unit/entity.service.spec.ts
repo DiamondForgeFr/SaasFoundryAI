@@ -138,6 +138,53 @@ class EntityServiceTest extends ServiceTestBase<EntityService> {
         })
       })
 
+      describe('scoped authority (ENTITY_CREATION in the scope it acts on)', () => {
+        it('checks a root entity in the scope of the target account', async () => {
+          this.accountAccessService.validateUserAccountAccess.mockResolvedValue(mockUserAccountLink)
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.organization.findUnique.mockResolvedValue(mockOrganization)
+          prismaServiceAny.organization.update.mockResolvedValue(mockOrganization)
+          prismaServiceAny.entity.create.mockResolvedValue(mockEntity)
+
+          await this.service.createEntity(mockUser.id, createEntityDto)
+
+          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'ENTITY_CREATION', { kind: 'ACCOUNT', accountId: mockAccount.id }, expect.any(String))
+        })
+
+        it('answers 403 and writes nothing when ENTITY_CREATION is missing on the account', async () => {
+          this.accountAccessService.validateUserAccountAccess.mockResolvedValue(mockUserAccountLink)
+          this.accountAccessService.assertPermissionInScope.mockRejectedValueOnce(new ForbiddenException('denied'))
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+
+          await TestAssertions.assertThrows(() => this.service.createEntity(mockUser.id, createEntityDto), ForbiddenException)
+
+          expect(prismaServiceAny.entity.create).not.toHaveBeenCalled()
+        })
+
+        it('checks a nested entity in the scope of its parent entity', async () => {
+          this.accountAccessService.validateUserEntityAccess.mockResolvedValue({ entity: { ...mockEntity, accountId: mockAccount.id }, userId: mockUser.id, via: 'entity-admin' } as never)
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.organization.findUnique.mockResolvedValue(mockOrganization)
+          prismaServiceAny.organization.update.mockResolvedValue(mockOrganization)
+          prismaServiceAny.entity.create.mockResolvedValue(mockEntity)
+
+          await this.service.createEntity(mockUser.id, { ...createEntityDto, parentEntityId: 'parent-entity' })
+
+          expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(mockUser.id, 'ENTITY_CREATION', { kind: 'ENTITY', entityId: 'parent-entity' }, expect.any(String))
+        })
+
+        it('answers 403 for a nested entity when ENTITY_CREATION is missing in the parent scope', async () => {
+          this.accountAccessService.validateUserEntityAccess.mockResolvedValue({ entity: { ...mockEntity, accountId: mockAccount.id }, userId: mockUser.id, via: 'entity-admin' } as never)
+          this.accountAccessService.assertPermissionInScope.mockRejectedValueOnce(new ForbiddenException('denied'))
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          prismaServiceAny.organization.findUnique.mockResolvedValue(mockOrganization)
+
+          await TestAssertions.assertThrows(() => this.service.createEntity(mockUser.id, { ...createEntityDto, parentEntityId: 'parent-entity' }), ForbiddenException)
+
+          expect(prismaServiceAny.entity.create).not.toHaveBeenCalled()
+        })
+      })
+
       describe('when errors occur', () => {
         it('should throw NotFoundException if organization does not exist', async () => {
           // Arrange

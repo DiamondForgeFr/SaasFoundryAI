@@ -437,4 +437,99 @@ describe('Entities Module (e2e)', () => {
       await entityAdminAgent.get(`/api/accounts/${testUser.accountId}/entities`).expect(403)
     })
   })
+
+  /**
+   * RBAC scope isolation (#1072): an entity route counts the roles that apply to THAT entity, and a
+   * root entity is created with a right held on the target account, not on another one.
+   */
+  describe('RBAC scope isolation', () => {
+    const password = 'TestPassword123'
+    const probeEmails: string[] = []
+    const createdEntityIds: string[] = []
+    let otherAccountAdmin: TestUser
+    let otherAccountAdminAgent: ReturnType<typeof request.agent>
+    let dualAdmin: TestUser
+    let dualAdminAgent: ReturnType<typeof request.agent>
+    let foreignEntityId: string
+
+    const countEntities = (accountId: string) => prismaService.entity.count({ where: { accountId } })
+
+    beforeAll(async () => {
+      // An admin of ANOTHER account who is also a plain member of testUser's account.
+      otherAccountAdmin = await setupTestUser(prismaService, {
+        email: 'scope-entity-b-admin@billmate.test',
+        password,
+        firstname: 'Other',
+        lastname: 'Admin',
+        roles: ['account-admin'],
+        permissions: ['ENTITY_CREATION']
+      })
+      probeEmails.push(otherAccountAdmin.email)
+      await prismaService.userAccountLink.create({ data: { userId: otherAccountAdmin.id, accountId: testUser.accountId } })
+      otherAccountAdminAgent = request.agent(app.getHttpServer())
+      if (!(await loginTestUser(otherAccountAdminAgent, otherAccountAdmin.email, password))) throw new Error('Failed to login the other-account admin')
+
+      // An entity in that other account.
+      foreignEntityId = (await prismaService.entity.create({ data: { accountId: otherAccountAdmin.accountId, isActive: true } })).id
+      createdEntityIds.push(foreignEntityId)
+
+      // An admin of one account AND entity-admin of an entity of testUser's account.
+      dualAdmin = await setupTestUser(prismaService, { email: 'scope-entity-dual@billmate.test', password, firstname: 'Dual', lastname: 'Admin', roles: ['account-admin'] })
+      probeEmails.push(dualAdmin.email)
+      const entityAdminRole = await prismaService.role.findFirstOrThrow({ where: { name: 'entity-admin', scope: 'ENTITY', accountId: null } })
+      await prismaService.userEntityLink.create({ data: { userId: dualAdmin.id, entityId: createdEntityId } })
+      await prismaService.userRoleAssignment.create({ data: { userId: dualAdmin.id, roleId: entityAdminRole.id, entityId: createdEntityId } })
+      dualAdminAgent = request.agent(app.getHttpServer())
+      if (!(await loginTestUser(dualAdminAgent, dualAdmin.email, password))) throw new Error('Failed to login the dual admin')
+    })
+
+    afterAll(async () => {
+      for (const email of probeEmails) await cleanupTestUser(prismaService, email)
+      await prismaService.entity.deleteMany({ where: { id: { in: createdEntityIds } } })
+    })
+
+    it('an admin of account B who is only a member of account A cannot create an entity in A (403)', async () => {
+      const before = await countEntities(testUser.accountId)
+
+      await otherAccountAdminAgent
+        .post('/api/entities')
+        .send({ accountId: testUser.accountId, organization: { name: `Scope intruder ${Date.now()}`, type: OrganizationType.COMPANY, description: 'must not be created' } })
+        .expect(403)
+
+      expect(await countEntities(testUser.accountId)).toBe(before)
+    })
+
+    it('the same admin still creates entities in its own account', async () => {
+      const res = await otherAccountAdminAgent
+        .post('/api/entities')
+        .send({ accountId: otherAccountAdmin.accountId, organization: { name: `Scope own ${Date.now()}`, type: OrganizationType.COMPANY, description: 'own account' } })
+        .expect(201)
+
+      createdEntityIds.push(res.body.id)
+    })
+
+    it('an entity route does not accept a right held on another account (403)', async () => {
+      // dualAdmin governs the entity (entity-admin marker) and holds ACCOUNT_ENTITY_MANAGEMENT, but only on ITS OWN account.
+      await dualAdminAgent.patch(`/api/entities/${createdEntityId}`).send({ isActive: true }).expect(403)
+    })
+
+    it('an entity route still accepts the rights the role holds on that entity', async () => {
+      // ENTITY_USER_MANAGEMENT comes with the entity-admin role held on this very entity.
+      await dualAdminAgent
+        .patch(`/api/entities/${createdEntityId}/users`)
+        .send({ userIds: [dualAdmin.id, testUser.id] })
+        .expect(200)
+    })
+
+    it('the account admin updates an entity of its account (200) but not one of another account (403)', async () => {
+      await agent.patch(`/api/entities/${createdEntityId}`).send({ isActive: true }).expect(200)
+      await agent.patch(`/api/entities/${foreignEntityId}`).send({ isActive: false }).expect(403)
+
+      expect((await prismaService.entity.findUniqueOrThrow({ where: { id: foreignEntityId } })).isActive).toBe(true)
+    })
+
+    it('answers 404 for an entity that does not exist', async () => {
+      await agent.patch('/api/entities/non-existent-id').send({ isActive: true }).expect(404)
+    })
+  })
 })
