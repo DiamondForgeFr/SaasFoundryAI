@@ -479,11 +479,17 @@ describe('Entities Module (e2e)', () => {
       const entityAdminRole = await prismaService.role.findFirstOrThrow({ where: { name: 'entity-admin', scope: 'ENTITY', accountId: null } })
       await prismaService.userEntityLink.create({ data: { userId: dualAdmin.id, entityId: createdEntityId } })
       await prismaService.userRoleAssignment.create({ data: { userId: dualAdmin.id, roleId: entityAdminRole.id, entityId: createdEntityId } })
+      // ...and a plain member (an entity link, no role) of an entity of the OTHER account.
+      await prismaService.userEntityLink.create({ data: { userId: dualAdmin.id, entityId: foreignEntityId } })
       dualAdminAgent = request.agent(app.getHttpServer())
       if (!(await loginTestUser(dualAdminAgent, dualAdmin.email, password))) throw new Error('Failed to login the dual admin')
+
+      // ENTITY_OWN_CREATE is only effective while the opt-in MULTI_ENTITY_MANAGEMENT module is active.
+      await prismaService.module.updateMany({ where: { name: 'MULTI_ENTITY_MANAGEMENT' }, data: { isActive: true } })
     })
 
     afterAll(async () => {
+      await prismaService.module.updateMany({ where: { name: 'MULTI_ENTITY_MANAGEMENT' }, data: { isActive: false } })
       for (const email of probeEmails) await cleanupTestUser(prismaService, email)
       await prismaService.entity.deleteMany({ where: { id: { in: createdEntityIds } } })
     })
@@ -526,6 +532,28 @@ describe('Entities Module (e2e)', () => {
       await agent.patch(`/api/entities/${foreignEntityId}`).send({ isActive: false }).expect(403)
 
       expect((await prismaService.entity.findUniqueOrThrow({ where: { id: foreignEntityId } })).isActive).toBe(true)
+    })
+
+    it('POST /entities/own: a right held on an entity of account A does not let a mere member of account B create one in B (403)', async () => {
+      const before = await countEntities(otherAccountAdmin.accountId)
+
+      // dualAdmin holds ENTITY_OWN_CREATE through its entity-admin role on an entity of A, and has an entity link in B.
+      await dualAdminAgent
+        .post('/api/entities/own')
+        .send({ accountId: otherAccountAdmin.accountId, organization: { name: `Scope own intruder ${Date.now()}`, type: OrganizationType.COMPANY, description: 'must not be created' } })
+        .expect(403)
+
+      expect(await countEntities(otherAccountAdmin.accountId)).toBe(before)
+      expect(await prismaService.userRoleAssignment.count({ where: { userId: dualAdmin.id, entity: { accountId: otherAccountAdmin.accountId } } })).toBe(0)
+    })
+
+    it('POST /entities/own: the entity-admin still creates an own entity in the account where it holds the right (201)', async () => {
+      const res = await dualAdminAgent
+        .post('/api/entities/own')
+        .send({ accountId: testUser.accountId, organization: { name: `Scope own legit ${Date.now()}`, type: OrganizationType.COMPANY, description: 'legit own entity' } })
+        .expect(201)
+
+      createdEntityIds.push(res.body.id)
     })
 
     it('answers 404 for an entity that does not exist', async () => {

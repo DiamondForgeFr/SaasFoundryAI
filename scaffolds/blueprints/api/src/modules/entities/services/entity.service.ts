@@ -174,6 +174,14 @@ export class EntityService {
       let resolvedAccountId = dto.accountId
       if (dto.parentEntityId) {
         const parentAccess = await this.accountAccessService.validateUserEntityAccess(userId, dto.parentEntityId, 'createOwnEntity')
+        // ENTITY_OWN_CREATE must be held in the scope of the PARENT (PLATFORM, ACCOUNT on its account, ENTITY on it
+        // or an ancestor): the route guard only proved the actor holds it somewhere.
+        await this.accountAccessService.assertPermissionInScope(
+          userId,
+          'ENTITY_OWN_CREATE',
+          { kind: 'ENTITY', entityId: dto.parentEntityId },
+          'You do not have permission to create your own entities under this entity'
+        )
         resolvedAccountId = parentAccess.entity.accountId
         if (dto.accountId !== resolvedAccountId) throw new BadRequestException('Parent entity must belong to the same account')
       } else {
@@ -181,6 +189,15 @@ export class EntityService {
           where: { userId, entity: { accountId: dto.accountId } }
         })
         if (!existingLink) throw new UnauthorizedException('You do not have entity access to this account')
+        // A link only proves membership. The permission must be held on THIS account: through a platform or account
+        // assignment, or through an ENTITY assignment on an entity of the account (the entity-admin case), never
+        // through a role held on another account or on an entity elsewhere.
+        await this.accountAccessService.assertPermissionInScope(
+          userId,
+          'ENTITY_OWN_CREATE',
+          { kind: 'ACCOUNT', accountId: dto.accountId, includeEntityAssignments: true },
+          'You do not have permission to create your own entities in this account'
+        )
       }
 
       const entityAdminRole = await this.prisma.role.findFirst({
