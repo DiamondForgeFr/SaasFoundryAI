@@ -139,6 +139,9 @@
     "@nestjs/platform-express": {
       "multer": "2.5.0"
     },
+    "@nestjs/swagger": {
+      "js-yaml": "5.5.0"
+    },
     "@prisma/config": {
       "deepmerge-ts": "8.0.2"
     },
