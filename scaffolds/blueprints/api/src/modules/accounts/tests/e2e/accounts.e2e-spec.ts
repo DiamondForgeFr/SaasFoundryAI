@@ -610,6 +610,8 @@ describe('Accounts Module (e2e)', () => {
     let siblingEntityId: string
     let otherAccountAdmin: TestUser
     let otherAccountAdminAgent: ReturnType<typeof request.agent>
+    let strangerAdmin: TestUser
+    let strangerAdminAgent: ReturnType<typeof request.agent>
     let platformAdmin: TestUser
     let platformAdminAgent: ReturnType<typeof request.agent>
     let entityScopedRole: { id: number }
@@ -653,6 +655,11 @@ describe('Accounts Module (e2e)', () => {
       otherAccountAdminAgent = request.agent(app.getHttpServer())
       if (!(await loginTestUser(otherAccountAdminAgent, otherAccountAdmin.email, password))) throw new Error('Failed to login other-account admin')
 
+      // An admin of yet another account that has NO link to this one.
+      strangerAdmin = await setupTestUser(prismaService, { email: 'scope-stranger@saasfoundryai.test', password, firstname: 'Stranger', lastname: 'Admin', roles: ['account-admin'] })
+      strangerAdminAgent = request.agent(app.getHttpServer())
+      if (!(await loginTestUser(strangerAdminAgent, strangerAdmin.email, password))) throw new Error('Failed to login stranger admin')
+
       platformAdmin = await setupTestUser(prismaService, { email: 'scope-platform@saasfoundryai.test', password, firstname: 'Platform', lastname: 'Admin', roles: ['platform-admin'] })
       platformAdminAgent = request.agent(app.getHttpServer())
       if (!(await loginTestUser(platformAdminAgent, platformAdmin.email, password))) throw new Error('Failed to login platform admin')
@@ -668,6 +675,7 @@ describe('Accounts Module (e2e)', () => {
       await prismaService.role.deleteMany({ where: { id: { in: createdRoleIds } } })
       await prismaService.entity.deleteMany({ where: { id: siblingEntityId } })
       await cleanupTestUser(prismaService, otherAccountAdmin.email)
+      await cleanupTestUser(prismaService, strangerAdmin.email)
       await cleanupTestUser(prismaService, platformAdmin.email)
     })
 
@@ -746,6 +754,13 @@ describe('Accounts Module (e2e)', () => {
         const role = await prismaService.role.findUniqueOrThrow({ where: { id: entityScopedRole.id } })
         expect(role.name).toBe('scope-probe-entity')
         expect(role.isActive).toBe(true)
+      })
+
+      it('keeps the membership answers: 401 for an account the user does not belong to, 404 for an unknown one', async () => {
+        // strangerAdmin administers another account and has no link to this one.
+        await strangerAdminAgent.get(`/api/accounts/${accountId}/entities`).expect(401)
+        await strangerAdminAgent.patch(`/api/accounts/${accountId}/status`).send({ isActive: false }).expect(401)
+        await agent.get('/api/accounts/non-existent-id/users').expect(404)
       })
 
       it('still administers its own account', async () => {

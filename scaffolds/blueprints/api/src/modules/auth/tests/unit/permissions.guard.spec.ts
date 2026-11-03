@@ -75,7 +75,7 @@ interface RequestOptions {
 
 describe('PermissionsGuard', () => {
   const logger = { warn: jest.fn(), error: jest.fn(), debug: jest.fn(), log: jest.fn() } as unknown as Logger
-  const accountAccessService = { resolveEntityTarget: jest.fn(), accountExists: jest.fn() } as unknown as jest.Mocked<AccountAccessService>
+  const accountAccessService = { resolveEntityTarget: jest.fn(), validateUserAccountAccess: jest.fn() } as unknown as jest.Mocked<AccountAccessService>
 
   const buildGuard = (route: RouteOptions) => {
     const metadata: Record<string, unknown> = {
@@ -101,7 +101,11 @@ describe('PermissionsGuard', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     accountAccessService.resolveEntityTarget.mockImplementation(async (entityId: string) => ENTITY_TREE[entityId] ?? { kind: 'ENTITY', entityId, accountId: null, ancestorEntityIds: [] })
-    accountAccessService.accountExists.mockImplementation(async (accountId: string) => accountId !== 'ghost-account')
+    accountAccessService.validateUserAccountAccess.mockImplementation(async (_userId: string, accountId: string) => {
+      if (accountId === 'ghost-account') throw new NotFoundException(`Account with ID ${accountId} not found`)
+      if (accountId === 'foreign-account') throw new UnauthorizedException('You do not have access to this account')
+      return {} as never
+    })
   })
 
   describe('request without a required module', () => {
@@ -176,17 +180,26 @@ describe('PermissionsGuard', () => {
       await expect(run(route, { user, params: { id: A }, headers: { 'x-scope-account-id': B } })).rejects.toBeInstanceOf(ForbiddenException)
     })
 
-    it('answers 404 (not 403) when the URL names an account that does not exist', async () => {
+    it('keeps the membership answers when the URL names an account the user cannot reach: 404 if unknown, 401 if not a member', async () => {
       const user = userWith(accountAssignment(A, ADMIN))
 
       await expect(run(route, { user, params: { id: 'ghost-account' } })).rejects.toBeInstanceOf(NotFoundException)
+      await expect(run(route, { user, params: { id: 'foreign-account' } })).rejects.toBeInstanceOf(UnauthorizedException)
+      expect(accountAccessService.validateUserAccountAccess).toHaveBeenCalledWith('user-1', 'foreign-account', 'PermissionsGuard', { allowDisabled: true })
     })
 
-    it('answers 403, not 404, for a scope header naming an unknown account', async () => {
+    it('answers 403 for an account the user belongs to but holds no applicable role on', async () => {
+      const user = userWith(accountAssignment(B, ADMIN))
+
+      await expect(run(route, { user, params: { id: A } })).rejects.toBeInstanceOf(ForbiddenException)
+    })
+
+    it('answers 403, not the membership answer, for a scope header naming an unknown account', async () => {
       const user = userWith(accountAssignment(A, ADMIN))
       const permissive: RouteOptions = { module: 'ACCOUNT_ADMINISTRATION', permissions: ['ACCOUNT_USER_MANAGEMENT'] }
 
       await expect(run(permissive, { user, headers: { 'x-scope-account-id': 'ghost-account' } })).rejects.toBeInstanceOf(ForbiddenException)
+      expect(accountAccessService.validateUserAccountAccess).not.toHaveBeenCalled()
     })
 
     it('fails closed (403) when the declared parameter is missing from the request', async () => {
