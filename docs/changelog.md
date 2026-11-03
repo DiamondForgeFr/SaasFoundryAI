@@ -6,28 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Security
-
-#### Generated projects: role scope isolation
-
-- A role held in one account, or on one entity, no longer authorises an action on another account or entity. `PermissionsGuard` used to check an account or entity route against the union of every role
-  the user holds, so an entity role, or an admin role of another account the user is only a member of, could pass account-admin checks: a seeded `entity-admin` could promote itself to account admin or
-  deactivate any user of its account, and an admin of account B could change the status, users and roles of account A. Routes now declare the account or entity they act on with `@ScopeFrom`, and the
-  guard counts only the assignments that apply to it (a `PLATFORM` assignment always; `ACCOUNT` roles of that account; `ENTITY` roles of that entity or an ancestor, and on the account routes an
-  entity-admin reaches, `ENTITY` roles of the account). The services check each change in the scope it acts on: `PATCH /accounts/:id/users/:userId`, the role routes, `POST /invitations` and
-  `POST /entities`. A custom role that carries a platform section no longer gives platform reach: `PLATFORM_ADMINISTRATION` routes count `PLATFORM` assignments only
-  ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072)).
-- The scope headers `X-Scope-Account-Id` and `X-Scope-Entity-Id` can no longer redirect a check away from the account or entity named in the URL, and the web application does not send them
-  ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072)).
-- After a token refresh the authenticated user now carries the same relations as after a plain login, so a read route that checks a section no longer fails on the first call after a refresh
-  ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072)).
-
-**Updating an existing project.** The fix is in blueprint files that no installer owns, so `sf update` applies it with the three-way merge: a file you did not edit is updated in place, and a file you
-edited gets a `.saasfoundry.new` sidecar to merge by hand (`permissions.guard.ts`, `account.controller.ts`, `account.service.ts`, `entity.controller.ts`, `entity.service.ts`, `invitation.service.ts`,
-`account-access.service.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`). Three things change for code you wrote: `PermissionsGuard` takes `AccountAccessService` as a constructor dependency (the module is
-global; add `AccountAccessModule` to the testing modules of your own e2e specs), a route that takes an account or entity id must declare it with `@ScopeFrom` or it keeps the union of every role, and
-an unknown account or entity id still answers 404 while an existing one the user holds no role on answers 403. New per-target checks answer 403; the existing 401 checks keep their status.
-
 ## [1.1.0] - 2026-11-01
 
 A feature release. Delegated ticket delivery is now routed by task kind, the agent instructions move to `AGENTS.md`, and an existing functional requirement can be changed in place. It also fixes the

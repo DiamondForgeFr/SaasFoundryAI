@@ -198,7 +198,8 @@ What counts for each target (`filterAssignmentsForTarget`, `src/common/services/
 Turn `includeEntityAssignments` on only for the routes an entity administrator legitimately reaches (reading the account, allocating roles in its entity), and let the service narrow the action to that
 entity's subtree. Resolution order: the declared `@ScopeFrom`, then the legacy `:accountId` / `:entityId` params, then the `X-Scope-Account-Id` / `X-Scope-Entity-Id` headers — the headers are read
 only when the route declares no scope, so they can never redirect a check away from the account or entity in the URL (the web app does not send them). Routes of the `PLATFORM_ADMINISTRATION` module
-count `PLATFORM` assignments only, whatever the target. A URL that names an account or entity that does not exist answers 404; one that exists but where the user holds no role answers 403.
+count `PLATFORM` assignments only, whatever the target. A URL that names an account or entity that does not exist answers 404 and an account the user does not belong to answers 401 (the membership
+answers of `validateUserAccountAccess`, kept); a target the user belongs to but holds no applicable role on answers 403.
 
 **A route with no `@ScopeFrom` and no scope param falls back to the union of every assignment the user holds**, which keeps unscoped endpoints (`/me`, `/auth/*`) working — and is exactly what lets a
 role held in one account or entity act on another. Never leave an account or entity id unannotated. When the scope is not in the URL (the account or entity comes from the body, or the route only
