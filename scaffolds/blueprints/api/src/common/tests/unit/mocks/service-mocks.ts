@@ -97,7 +97,13 @@ export const mockAccountAccessService = {
   resolveVisibleEntityIdsForAccount: jest.fn(),
   getSubtreeEntityIds: jest.fn(),
   isPlatformAdmin: jest.fn(),
-  isAccountAdminOn: jest.fn()
+  isAccountAdminOn: jest.fn(),
+  // Scope-aware checks (RBAC scope isolation): `hasPermissionInScope` answers false by default,
+  // `assertPermissionInScope` resolves (permission held) — make it reject with a ForbiddenException to test a denial.
+  resolveEntityTarget: jest.fn(),
+  getScopedGrants: jest.fn(),
+  hasPermissionInScope: jest.fn(),
+  assertPermissionInScope: jest.fn()
 }
 
 export const mockJwtService = {

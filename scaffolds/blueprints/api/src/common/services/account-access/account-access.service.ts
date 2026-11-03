@@ -7,8 +7,14 @@ import { Prisma } from '@/generated/prisma/client'
 /**
  * Dependencies
  */
+import { filterAssignmentsForTarget } from '@common/services/account-access/scope-filter'
 import { Logger } from '@common/services/logger/logger.service'
 import { PrismaService } from '@configs/prisma/services/prisma.service'
+
+/**
+ * Type
+ */
+import type { EntityScopeTarget, ScopeTarget } from '@common/services/account-access/scope-filter'
 
 /**
  * Type definitions
@@ -38,6 +44,20 @@ export interface UserEntityAccess {
   entity: { id: string; accountId: string; parentEntityId: string | null; isActive: boolean }
   userId: string
   via: 'platform' | 'account-admin' | 'entity-admin'
+}
+
+/**
+ * The account or entity a check acts on. An ENTITY scope is resolved (its account and ancestor chain)
+ * by the service; an ACCOUNT scope can opt in to the ENTITY assignments held on entities of the account
+ * (`includeEntityAssignments`, same meaning as on `@ScopeFrom`).
+ */
+export type ScopeRequest = { kind: 'ACCOUNT'; accountId: string; includeEntityAssignments?: boolean } | { kind: 'ENTITY'; entityId: string }
+
+/** What a user holds in one scope: only the role assignments that apply to it (see scope-filter.ts) contribute. */
+export interface ScopedGrants {
+  modules: Set<string>
+  subModules: Set<string>
+  permissions: Set<string>
 }
 
 /**
@@ -210,7 +230,7 @@ export class AccountAccessService {
    * via a recursive CTE walking `parent_entity_id`. Used to test whether the user entity-admins any
    * ancestor of the target — i.e. whether the target sits in a subtree they govern.
    */
-  private async getAncestorEntityIds(entityId: string): Promise<string[]> {
+  async getAncestorEntityIds(entityId: string): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       WITH RECURSIVE ancestors AS (
         SELECT id, parent_entity_id FROM "entities" WHERE id = ${entityId}
@@ -222,6 +242,79 @@ export class AccountAccessService {
       SELECT id FROM ancestors
     `
     return rows.map((r) => r.id)
+  }
+
+  /**
+   * Resolve an entity into the target the scope filter needs: the account it belongs to and its
+   * ancestor chain (the entity itself first). An unknown entity resolves to a target with no account
+   * and no ancestors, so only PLATFORM assignments count for it and the caller's own existence check
+   * (404) stays the one that answers.
+   */
+  async resolveEntityTarget(entityId: string): Promise<EntityScopeTarget> {
+    const entity = await this.prisma.entity.findUnique({ where: { id: entityId }, select: { id: true, accountId: true } })
+    if (!entity) return { kind: 'ENTITY', entityId, accountId: null, ancestorEntityIds: [] }
+
+    return { kind: 'ENTITY', entityId, accountId: entity.accountId, ancestorEntityIds: await this.getAncestorEntityIds(entityId) }
+  }
+
+  /** Turn a ScopeRequest into the target the scope filter takes (resolves an ENTITY scope). */
+  async resolveScopeTarget(scope: ScopeRequest): Promise<ScopeTarget> {
+    if (scope.kind === 'ENTITY') return this.resolveEntityTarget(scope.entityId)
+    return { kind: 'ACCOUNT', accountId: scope.accountId, includeEntityAssignments: scope.includeEntityAssignments === true }
+  }
+
+  /**
+   * What `userId` holds in `scope`: the modules, sections and permissions of the role assignments that
+   * apply to that account or entity (PLATFORM always; ACCOUNT on the account; ENTITY per the scope
+   * rule). Reads the user's current assignments (active roles only), so a service sees a revocation
+   * at once instead of waiting for the access token to be rebuilt.
+   *
+   * This is the service-level twin of PermissionsGuard: both go through `filterAssignmentsForTarget`.
+   */
+  async getScopedGrants(userId: string, scope: ScopeRequest): Promise<ScopedGrants> {
+    const target = await this.resolveScopeTarget(scope)
+
+    const assignments = await this.prisma.userRoleAssignment.findMany({
+      where: { userId, role: { isActive: true } },
+      select: {
+        accountId: true,
+        entityId: true,
+        entity: { select: { id: true, accountId: true } },
+        role: {
+          select: {
+            scope: true,
+            modulesLinked: { where: { module: { isActive: true } }, select: { module: { select: { name: true } } } },
+            subModulesLinked: { where: { subModule: { isActive: true } }, select: { subModule: { select: { name: true } } } },
+            permissionsLinked: { select: { permission: { select: { name: true } } } }
+          }
+        }
+      }
+    })
+
+    const grants: ScopedGrants = { modules: new Set(), subModules: new Set(), permissions: new Set() }
+    for (const assignment of filterAssignmentsForTarget(assignments, target)) {
+      assignment.role.modulesLinked.forEach((link) => grants.modules.add(link.module.name))
+      assignment.role.subModulesLinked.forEach((link) => grants.subModules.add(link.subModule.name))
+      assignment.role.permissionsLinked.forEach((link) => grants.permissions.add(link.permission.name))
+    }
+    return grants
+  }
+
+  /** Does `userId` hold `permission` in `scope`? (Only the assignments that apply to the scope are read.) */
+  async hasPermissionInScope(userId: string, permission: string, scope: ScopeRequest): Promise<boolean> {
+    const grants = await this.getScopedGrants(userId, scope)
+    return grants.permissions.has(permission)
+  }
+
+  /**
+   * Same as `hasPermissionInScope`, but throws a 403 (authenticated, not authorised) when the
+   * permission is missing in that scope.
+   */
+  async assertPermissionInScope(userId: string, permission: string, scope: ScopeRequest, message = 'You do not have the required permissions'): Promise<void> {
+    if (await this.hasPermissionInScope(userId, permission, scope)) return
+
+    this.logger.warn(`User ${userId} lacks ${permission} in ${scope.kind === 'ACCOUNT' ? `account:${scope.accountId}` : `entity:${scope.entityId}`}`, 'assertPermissionInScope')
+    throw new ForbiddenException(message)
   }
 
   /**
