@@ -49,6 +49,8 @@ docs/.vitepress/dist/
 # Claude Code runtime
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+# Evidence the workflow scripts write while a ticket is delivered: it made the git precondition warn at every session
+.claude/output/
 
 # Local env (tokens, secrets — never committed)
 .env

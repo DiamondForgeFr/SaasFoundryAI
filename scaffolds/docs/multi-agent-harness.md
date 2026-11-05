@@ -44,7 +44,7 @@ The installer returns generated-file hashes for its caller to retain as the refr
 
 ## Workflow and access
 
-Run `sf status --agent-friendly --no-network` before work; `--claude-friendly` remains a compatible alias. Both flags return Markdown with a non-failing process exit code, so read and resolve any failing preconditions in the output. Read the applicable workflow status file and use the project workflow CLI for transitions. Skill content is guidance; the CLI guards remain the common enforcement layer.
+Run `sf status --agent-friendly --no-network` before work; `--claude-friendly` remains a compatible alias. Both flags return Markdown with a non-failing process exit code, so read and resolve any failing preconditions in the output. The report states facts; the rules for acting on it are in the "Reading the project status" section of `AGENTS.md`. Claude Code's `SessionStart` hook runs the same report through the project's own CLI (`node_modules/.bin/saasfoundryai`), not through a bare `sf`, which can be an older SaaSFoundryAI or another program. Read the applicable workflow status file and use the project workflow CLI for transitions. Skill content is guidance; the CLI guards remain the common enforcement layer.
 
 GitHub and SRS credentials are resolved by the existing CLIs. Do not copy secrets into agent instructions, settings, or the repository. Each agent's sandbox and approval rules still apply. Installed files alone do not demonstrate that Git push, network access, or all hooks work in a particular host.
 

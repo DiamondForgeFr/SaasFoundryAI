@@ -145,7 +145,8 @@ For a reproducible native-observation protocol and safe Claude/Codex handoffs, s
 1. Load the project's entrypoint (`AGENTS.md`, `GEMINI.md`, or `CLAUDE.md` in a project installed before `AGENTS.md` became authoritative) and every project instruction it references. Read
    `.saasfoundry.json` for the workflow, SRS backend and output language. Reconcile missing or conflicting instructions before implementation.
 2. Run `sf status --agent-friendly --no-network` and act on its preconditions. The friendly flag retains an exit code of zero for hook compatibility; a `fail` in its output still requires resolution.
-   Existing `--claude-friendly` hooks remain compatible.
+   The `--claude-friendly` alias remains accepted; a session-start hook that runs the bare `sf status --claude-friendly --no-network` is replaced by a refresh with one that runs the project's own CLI
+   ([the session-start hook](/cli/sf-status#the-session-start-hook)).
 3. Run `sf agents doctor <tool-id>`. Read applicable skills explicitly if native discovery has not been verified. Reference-only adoption can intentionally keep procedures in the original
    `.claude/skills` or `.agents/skills` directory; an absent copy is not permission to invent a replacement process.
 4. Read the project's workflow skill and current status document, then call the existing guarded workflow CLI with `status <ticket>`. Use the CLI selected by those instructions for transitions. A

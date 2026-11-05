@@ -149,22 +149,28 @@ files are left as they are.
 
 `.claude/settings.json` is your file, and `sf update` keeps two things current in it on **every run**, with no prompt and no flag (`--non-interactive` included):
 
-- the **hooks** that record each routed delegation in the clone's ledger (`SubagentStop` for the `sf-<tier>` agents, `PostToolUse` on the delegation tool), see
-  [capture and signals](/cli/sf-agents#capture-and-signals);
+- the **hooks**: the one that puts the project status in front of the session at its start (`SessionStart`, which runs the project's own CLI and not a bare `sf`, see
+  [the session-start hook](/cli/sf-status#the-session-start-hook)), and those that record each routed delegation in the clone's ledger (`SubagentStop` for the `sf-<tier>` agents, `PostToolUse` on the
+  delegation tool), see [capture and signals](/cli/sf-agents#capture-and-signals);
 - the **permission rules** that let the agent read a route, the delegation consent and the routing report without asking, while the forms that write evidence (`--record`, `--retry-of`) still ask.
 
 It is the same merge as `sf agents refresh --scope shared`, so `sf agents refresh` is no longer required after an update for these. The harness v4 → v5 migration (`wire-delegation-capture`) is that
 merge too: a harness installed by an earlier release, v1.0.1 included, gets it on the update that raises it to v5, together with the tier agents and the `AGENTS.md` move that every update already did.
 Nothing else is deposited by the migration, and it never writes the consent to delegate: only your own answer records it (`sf agents delegation`).
 
-| Situation                                                                                                                                   | Result                                                                                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| The file lacks the hooks or the rules.                                                                                                      | They are merged in. Your own keys, hooks and rules stay, in their order; the summary names the file.                                           |
-| The file has everything.                                                                                                                    | Nothing is written: same bytes, same modification time, nothing printed.                                                                       |
-| There is no file.                                                                                                                           | It is created with the harness's hooks and rules.                                                                                              |
-| The file is a symbolic link, a hard link, or text that is not a JSON object.                                                                | It is left as it is and the merged proposal goes to `.claude/settings.json.saasfoundry.new`; the update goes on.                               |
-| `hooks` is not an object, a hook event is not a list of hook groups, `permissions` is not an object, or its `allow` or `ask` is not a list. | Same: it is left as it is and the proposal goes to the sidecar, with the reason in the summary. Merging would have overwritten what you wrote. |
-| The hook is the bare `sf agents outcome capture` command a first build wrote.                                                               | It is replaced by the command that resolves the project's own CLI.                                                                             |
+| Situation                                                                                                                                   | Result                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The file lacks the hooks or the rules.                                                                                                      | They are merged in. Your own keys, hooks and rules stay, in their order; the summary names the file.                                                           |
+| The file has everything.                                                                                                                    | Nothing is written: same bytes, same modification time, nothing printed.                                                                                       |
+| There is no file.                                                                                                                           | It is created with the harness's hooks and rules.                                                                                                              |
+| The file is a symbolic link, a hard link, or text that is not a JSON object.                                                                | It is left as it is and the merged proposal goes to `.claude/settings.json.saasfoundry.new`; the update goes on.                                               |
+| `hooks` is not an object, a hook event is not a list of hook groups, `permissions` is not an object, or its `allow` or `ask` is not a list. | Same: it is left as it is and the proposal goes to the sidecar, with the reason in the summary. Merging would have overwritten what you wrote.                 |
+| The hook is the bare `sf agents outcome capture` command a first build wrote.                                                               | It is replaced by the command that resolves the project's own CLI.                                                                                             |
+| The `SessionStart` hook is the bare `sf status --claude-friendly --no-network` (or `--agent-friendly`) command that 1.0.x wrote.            | It is replaced by the command that resolves the project's own CLI; your other `SessionStart` hooks stay. A hook you wrote with other flags is yours and stays. |
+
+No module version is bumped for this: the hook is delivered by the settings merge that runs on every update, not by an installer's file set, so there is no module migration to preview or run. A
+project that wrote exactly `sf status --claude-friendly --no-network` itself loses that line on the next update, since it cannot be told from the one the harness wrote; the resolved command takes its
+place.
 
 **A plain `sf update` only adds.** It never removes a rule from your `permissions`, so a rule you added on purpose stays, run after run. The only rules the harness ever takes away are the two that a
 pre-release build had pre-approved, `Bash(sf agents outcome record *)` and `Bash(sf agents outcome mark *)`: they write evidence the routing acts on, so the harness keeps them asking. That happens

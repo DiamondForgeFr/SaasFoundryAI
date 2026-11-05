@@ -154,7 +154,8 @@ Pour un protocole reproductible d'observation native et des passages sûrs entre
 1. Chargez le point d'entrée du projet — `AGENTS.md`, `GEMINI.md`, ou `CLAUDE.md` dans un projet installé avant que `AGENTS.md` ne fasse foi — et toutes les instructions projet qu'il référence. Lisez
    `.saasfoundry.json` pour le workflow, le backend SRS et les langues de sortie. Réconciliez toute instruction absente ou contradictoire avant l'implémentation.
 2. Exécutez `sf status --agent-friendly --no-network` et traitez ses préconditions. L'option destinée aux agents conserve un code de sortie nul pour rester compatible avec les hooks ; un `fail` dans
-   le rapport exige tout de même une résolution. Les hooks `--claude-friendly` existants restent compatibles.
+   le rapport exige tout de même une résolution. L'alias `--claude-friendly` reste accepté ; un hook de début de session qui exécute la commande nue `sf status --claude-friendly --no-network` est
+   remplacé par un refresh par un hook qui exécute le CLI propre au projet ([le hook de début de session](/fr/cli/sf-status#le-hook-de-debut-de-session)).
 3. Exécutez `sf agents doctor <tool-id>`. Lisez explicitement les skills applicables si leur découverte native n'est pas vérifiée. Une adoption par références peut volontairement laisser les
    procédures dans leur dossier `.claude/skills` ou `.agents/skills` d'origine ; l'absence d'une copie n'autorise pas l'invention d'un processus de remplacement.
 4. Lisez la skill de workflow du projet et le document du statut courant, puis appelez le CLI protégé existant avec `status <ticket>`. Utilisez pour les transitions le CLI sélectionné par ces
