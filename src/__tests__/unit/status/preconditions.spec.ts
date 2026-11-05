@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { evaluatePreconditions } from '../../../status/preconditions'
-import type { StatusReport, StatusRoutingState, StatusTierAgent } from '../../../status/collect'
+import type { StatusCli, StatusReport, StatusRoutingState, StatusTierAgent } from '../../../status/collect'
 
 function makeReport(overrides: Partial<StatusReport> = {}): StatusReport {
   return {
@@ -462,5 +462,115 @@ describe('tier agent precondition (#933)', () => {
     expect(precondition).toMatchObject({ status: 'warn', details: expect.stringContaining('could not be compared with routing grid v1') })
     expect(precondition?.remediation).toContain('Fix modules.harness.routing')
     expect(precondition?.remediation).toContain('sf agents refresh --scope shared')
+  })
+})
+
+describe('the CLI preconditions (#1103)', () => {
+  const manifest = (version: string, harness?: number): StatusReport['manifest'] => ({
+    version,
+    generatedAt: '2026-11-05T00:00:00Z',
+    structure: 'cli',
+    projectName: 'demo',
+    ...(harness === undefined ? {} : { modules: { harness: { version: harness, managed: true } } })
+  })
+  const packageCli = (version: string, harnessCurrentVersion = 5): StatusCli => ({ version, channel: { channel: 'package' }, harnessCurrentVersion, sourceRepository: false })
+  const names = (report: StatusReport) => evaluatePreconditions(report).map((p) => p.name)
+
+  describe('cliVersion', () => {
+    const find = (report: StatusReport) => evaluatePreconditions(report).find((p) => p.name === 'cliVersion')
+
+    it('is left out when the caller did not say which CLI runs', () => {
+      expect(names(makeReport({ manifest: manifest('1.1.0', 5) }))).not.toContain('cliVersion')
+    })
+
+    it('is skipped without a manifest', () => {
+      expect(find(makeReport({ cli: packageCli('1.1.0') }))).toMatchObject({ status: 'skip', details: 'No manifest' })
+    })
+
+    it.each([
+      ['the same version', '1.1.0', '1.1.0'],
+      ['a newer version', '1.2.0', '1.1.0'],
+      ['a release of a version the project got as a release candidate', '1.1.0', '1.1.0-rc.1']
+    ])('is ok for %s', (_name, running, recorded) => {
+      const precondition = find(makeReport({ cli: packageCli(running), manifest: manifest(recorded, 5) }))
+      expect(precondition).toMatchObject({ status: 'ok' })
+      expect(precondition?.details).toBe(`CLI ${running}; project last updated by ${recorded}`)
+    })
+
+    it('warns when the CLI is older than the one that last updated the project, and names both numbers and the channel', () => {
+      const precondition = find(makeReport({ cli: packageCli('1.0.1'), manifest: manifest('1.1.0', 5) }))
+      expect(precondition).toMatchObject({ status: 'warn', description: "SaaSFoundryAI CLI is not older than the project's harness" })
+      expect(precondition?.details).toBe('CLI 1.0.1 is older than 1.1.0, the version that last updated this project (running 1.0.1, package)')
+      expect(precondition?.remediation).toContain('npm install -D saasfoundryai-cli@1.1.0')
+      expect(precondition?.remediation).toContain('npm install -g saasfoundryai-cli@latest')
+    })
+
+    it('warns when the project holds a newer harness than the CLI installs', () => {
+      const precondition = find(makeReport({ cli: packageCli('1.1.0', 4), manifest: manifest('1.1.0', 5) }))
+      expect(precondition).toMatchObject({ status: 'warn' })
+      expect(precondition?.details).toContain("the project's harness is v5 and this CLI installs v4")
+    })
+
+    it('reports both problems together', () => {
+      const precondition = find(makeReport({ cli: packageCli('1.0.1', 4), manifest: manifest('1.1.0', 5) }))
+      expect(precondition?.details).toContain('is older than 1.1.0')
+      expect(precondition?.details).toContain("the project's harness is v5")
+    })
+
+    it('reads a prerelease CLI as older than its release', () => {
+      expect(find(makeReport({ cli: packageCli('1.1.0-rc.1'), manifest: manifest('1.1.0', 5) }))).toMatchObject({ status: 'warn' })
+    })
+
+    it('sends a development checkout to its own update and build, not to npm', () => {
+      const cli: StatusCli = { version: '1.0.1', channel: { channel: 'checkout', path: '/src/sf', commit: 'abc1234' }, harnessCurrentVersion: 5, sourceRepository: false }
+      const precondition = find(makeReport({ cli, manifest: manifest('1.1.0', 5) }))
+      expect(precondition?.details).toContain('development checkout: /src/sf @ abc1234')
+      expect(precondition?.remediation).toBe('Update the checkout at /src/sf (git pull) and run `npm run build` there.')
+    })
+
+    it('does not warn on a version it cannot compare, and says so', () => {
+      const precondition = find(makeReport({ cli: packageCli('next'), manifest: manifest('1.1.0', 5) }))
+      expect(precondition).toMatchObject({ status: 'ok' })
+      expect(precondition?.details).toContain('could not be compared')
+    })
+
+    it('does not warn for a project without a harness block', () => {
+      expect(find(makeReport({ cli: packageCli('1.1.0'), manifest: manifest('1.1.0') }))).toMatchObject({ status: 'ok' })
+    })
+  })
+
+  describe('cliBuild', () => {
+    const find = (report: StatusReport) => evaluatePreconditions(report).find((p) => p.name === 'cliBuild')
+    const sourceCli = (build?: NonNullable<StatusCli['build']>): StatusCli => ({ version: '1.1.0', channel: { channel: 'package' }, sourceRepository: true, ...(build ? { build } : {}) })
+    const BUILT = Date.parse('2026-11-05T10:00:00Z')
+
+    it('is left out of a project that is not the CLI repository, and when no CLI is reported', () => {
+      expect(find(makeReport({ cli: packageCli('1.1.0') }))).toBeUndefined()
+      expect(find(makeReport())).toBeUndefined()
+    })
+
+    it('warns, with the command that fixes it, when dist is missing', () => {
+      const precondition = find(makeReport({ cli: sourceCli({ newestSourceMtimeMs: BUILT, newestSource: 'src/index.ts' }) }))
+      expect(precondition).toMatchObject({ status: 'warn', remediation: 'Run `npm run build`.' })
+      expect(precondition?.details).toContain('dist/index.js is missing')
+    })
+
+    it('warns when a source file is newer than the build, and names it', () => {
+      const precondition = find(makeReport({ cli: sourceCli({ distMtimeMs: BUILT, newestSourceMtimeMs: BUILT + 1000, newestSource: 'src/status/collect.ts' }) }))
+      expect(precondition).toMatchObject({ status: 'warn', remediation: 'Run `npm run build`.' })
+      expect(precondition?.details).toContain('src/status/collect.ts changed 2026-11-05T10:00:01.000Z, after dist/index.js was built 2026-11-05T10:00:00.000Z')
+    })
+
+    it('is ok when the build is as new as the newest source, or when there is no source to compare', () => {
+      expect(find(makeReport({ cli: sourceCli({ distMtimeMs: BUILT, newestSourceMtimeMs: BUILT, newestSource: 'src/index.ts' }) }))).toMatchObject({
+        status: 'ok',
+        details: 'dist/index.js built 2026-11-05T10:00:00.000Z'
+      })
+      expect(find(makeReport({ cli: sourceCli({ distMtimeMs: BUILT }) }))).toMatchObject({ status: 'ok' })
+    })
+
+    it('has nothing to say about a repository whose build was not looked at', () => {
+      expect(find(makeReport({ cli: sourceCli() }))).toBeUndefined()
+    })
   })
 })

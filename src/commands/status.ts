@@ -1,3 +1,6 @@
+import { version as cliVersion } from '../../package.json'
+import { resolveCliChannel } from '../cli-channel'
+import { harnessInstallerMeta } from '../installers/harness.installer'
 import { collectStatus } from '../status/collect'
 import { evaluatePreconditions } from '../status/preconditions'
 import { renderAgentFriendly, renderHuman, renderJson } from '../status/render'
@@ -14,7 +17,11 @@ export async function statusCommand(options: StatusCommandOptions = {}): Promise
   const agentFriendly = options.agentFriendly || options.claudeFriendly
   const report = await collectStatus(process.cwd(), {
     checkNetwork: options.network !== false,
-    checkGh: options.checkGh === true
+    checkGh: options.checkGh === true,
+    // Which CLI answers, so the report names it and the project's harness can be compared with it (#1103).
+    cliVersion,
+    cliChannel: resolveCliChannel(),
+    harnessCurrentVersion: harnessInstallerMeta.currentVersion
   })
   const preconditions = evaluatePreconditions(report)
   const payload = { report, preconditions }

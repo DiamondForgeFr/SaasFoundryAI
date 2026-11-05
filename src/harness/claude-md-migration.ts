@@ -29,6 +29,7 @@ import { hashFileContent } from '../utils'
 export const REGION_HEADINGS = [
   'Coding-agent identity and onboarding',
   'Managed project capabilities',
+  'Reading the project status',
   'File edits and shell calls',
   'Execution capabilities',
   'Session orchestration and delegated ticket delivery',

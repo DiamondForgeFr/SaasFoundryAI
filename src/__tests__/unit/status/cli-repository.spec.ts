@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 import { collectStatus, describeProjectCapabilities } from '../../../status/collect'
 import type { SaaSFoundryManifest } from '../../../types'
@@ -63,6 +63,59 @@ describe('the SaaSFoundryAI CLI source repository in sf status (#1103)', () => {
 
       expect(capabilities).toMatchObject({ effectiveProfile: 'harness', previewCommand: 'sf update --target-profile full --dry-run --json' })
       expect(capabilities?.reason).not.toContain('CLI source repository')
+    })
+
+    describe('the CLI block', () => {
+      const layOut = async () => {
+        await mkdir(join(root, 'bin'))
+        await writeFile(join(root, 'bin', 'sf.js'), '\n')
+        await mkdir(join(root, 'src', 'deep'), { recursive: true })
+        await mkdir(join(root, 'src', '__tests__'), { recursive: true })
+        await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'saasfoundryai-cli' }))
+      }
+      const touch = async (file: string, mtime: Date) => {
+        await mkdir(dirname(join(root, file)), { recursive: true })
+        await writeFile(join(root, file), '\n')
+        await utimes(join(root, file), mtime, mtime)
+      }
+      const at = (iso: string) => new Date(iso)
+
+      it('is absent when the caller does not say which CLI runs, so a legacy caller sees no CLI preconditions', async () => {
+        await layOut()
+        expect((await collectStatus(root, { checkNetwork: false })).cli).toBeUndefined()
+      })
+
+      it('carries the running version, channel and harness version, and looks at no build outside the CLI repository', async () => {
+        const report = await collectStatus(root, { checkNetwork: false, cliVersion: '1.1.0', harnessCurrentVersion: 5, cliChannel: { channel: 'checkout', path: '/src/sf', commit: 'abc1234' } })
+        expect(report.cli).toEqual({ version: '1.1.0', channel: { channel: 'checkout', path: '/src/sf', commit: 'abc1234' }, harnessCurrentVersion: 5, sourceRepository: false })
+      })
+
+      it('defaults to a published package', async () => {
+        expect((await collectStatus(root, { checkNetwork: false, cliVersion: '1.1.0' })).cli).toMatchObject({ channel: { channel: 'package' } })
+      })
+
+      it('reads the build against the newest source, tests and dependencies left out', async () => {
+        await layOut()
+        await touch('dist/index.js', at('2026-11-05T10:00:00Z'))
+        await touch('src/index.ts', at('2026-11-05T09:00:00Z'))
+        await touch('src/deep/newest.ts', at('2026-11-05T09:30:00Z'))
+        await touch('src/__tests__/newer.spec.ts', at('2026-11-05T11:00:00Z'))
+        await touch('src/node_modules/newer.js', at('2026-11-05T11:00:00Z'))
+
+        const { cli } = await collectStatus(root, { checkNetwork: false, cliVersion: '1.1.0' })
+
+        expect(cli?.sourceRepository).toBe(true)
+        expect(cli?.build).toEqual({ distMtimeMs: at('2026-11-05T10:00:00Z').getTime(), newestSourceMtimeMs: at('2026-11-05T09:30:00Z').getTime(), newestSource: join('src', 'deep', 'newest.ts') })
+      })
+
+      it('reports a missing build as no dist time', async () => {
+        await layOut()
+        await touch('src/index.ts', at('2026-11-05T09:00:00Z'))
+
+        const { cli } = await collectStatus(root, { checkNetwork: false, cliVersion: '1.1.0' })
+
+        expect(cli?.build).toEqual({ newestSourceMtimeMs: at('2026-11-05T09:00:00Z').getTime(), newestSource: join('src', 'index.ts') })
+      })
     })
   })
 })

@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from 'node:util'
 
-import { renderClaudeFriendly, renderHuman, renderJson } from '../../../status/render'
-import { describeProjectCapabilities, type StatusReport } from '../../../status/collect'
+import { cliSummary, renderClaudeFriendly, renderHuman, renderJson } from '../../../status/render'
+import { describeProjectCapabilities, type StatusCli, type StatusReport } from '../../../status/collect'
 import type { Precondition } from '../../../status/preconditions'
 import type { SaaSFoundryManifest } from '../../../types'
 
@@ -132,18 +132,60 @@ describe('project capability status', () => {
 })
 
 describe('renderClaudeFriendly', () => {
-  it('emits markdown with the usage block and status lines', () => {
+  it('emits markdown with the status lines and the preconditions', () => {
     const out = renderClaudeFriendly({ report: makeReport(), preconditions: [okPrecondition, failPrecondition] })
     expect(out).toContain('# SaaSFoundryAI project status')
     expect(out).toContain('- [ok] Manifest present')
     expect(out).toContain('- [fail] Manifest present')
     expect(out).toContain('remediation: Run sf new')
-    expect(out).toContain('## How to use this output')
+  })
+
+  // #1103 — the report is facts. The rules for reading it are in the generated AGENTS.md region.
+  it('states facts only: no how-to block and no imperative at the foot of the report', () => {
+    const out = renderClaudeFriendly({ report: makeReport(), preconditions: [okPrecondition, failPrecondition] })
+    expect(out).not.toContain('How to use this output')
+    expect(out).not.toMatch(/\bMUST\b/)
+    expect(out.trimEnd().split('\n').pop()).toBe('  - remediation: Run sf new')
   })
 
   it('handles missing manifest gracefully', () => {
     const out = renderClaudeFriendly({ report: makeReport({ manifest: null }), preconditions: [failPrecondition] })
     expect(out).toContain('NOT a SaaSFoundryAI project')
+  })
+})
+
+describe('the CLI that produced the report (#1103)', () => {
+  const payload = (cli?: StatusCli, manifest: StatusReport['manifest'] = makeReport().manifest) => ({ report: makeReport({ cli, manifest }), preconditions: [okPrecondition] })
+
+  it('names a published package', () => {
+    const cli = { version: '1.1.0', channel: { channel: 'package' as const }, sourceRepository: false }
+    expect(cliSummary(cli)).toBe('1.1.0 (package)')
+    expect(renderClaudeFriendly(payload(cli))).toContain('- cli: 1.1.0 (package)')
+  })
+
+  it('names a development checkout with its path and commit', () => {
+    const cli = { version: '1.1.0', channel: { channel: 'checkout' as const, path: '/src/sf', commit: 'abc1234' }, sourceRepository: true }
+    expect(cliSummary(cli)).toBe('1.1.0 (development checkout: /src/sf @ abc1234)')
+    expect(renderClaudeFriendly(payload(cli))).toContain('- cli: 1.1.0 (development checkout: /src/sf @ abc1234)')
+  })
+
+  it('comes right after the project line, and also names the CLI outside a SaaSFoundryAI project', () => {
+    const cli = { version: '1.1.0', channel: { channel: 'package' as const }, sourceRepository: false }
+    const lines = renderClaudeFriendly(payload(cli)).split('\n')
+    expect(lines[lines.findIndex((line) => line.startsWith('- project:')) + 1]).toBe('- cli: 1.1.0 (package)')
+    expect(renderClaudeFriendly(payload(cli, null))).toContain('- cli: 1.1.0 (package)')
+  })
+
+  it('says nothing about a CLI it was not told about', () => {
+    expect(renderClaudeFriendly(payload())).not.toContain('- cli:')
+    expect(stripVTControlCharacters(renderHuman(payload()))).not.toContain('CLI:')
+    expect(JSON.parse(renderJson(payload())).cli).toBeNull()
+  })
+
+  it('shows it in the human and the JSON render', () => {
+    const cli = { version: '1.1.0', channel: { channel: 'package' as const }, harnessCurrentVersion: 5, sourceRepository: false }
+    expect(stripVTControlCharacters(renderHuman(payload(cli)))).toContain('CLI: 1.1.0 (package)')
+    expect(JSON.parse(renderJson(payload(cli))).cli).toEqual(cli)
   })
 })
 
@@ -166,9 +208,10 @@ describe('output language in the status renders', () => {
     expect(out).toContain('- output language: srs en, tickets en, code comments en')
   })
 
-  it('tells the agent the conversation language is not the signal', () => {
+  // The rule that the conversation language is not the signal moved to the generated AGENTS.md region (#1103).
+  it('leaves the reading rule to the project instructions', () => {
     const out = renderClaudeFriendly({ report: makeReport(), preconditions: [okPrecondition] })
-    expect(out).toContain('The language of the conversation is NOT the signal')
+    expect(out).not.toContain('conversation')
   })
 
   it('reports what the project actually configured', () => {

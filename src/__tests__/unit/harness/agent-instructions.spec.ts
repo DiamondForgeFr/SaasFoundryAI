@@ -19,6 +19,7 @@ import {
   installPlannedAgentInstructions,
   planAgentInstructions,
   resolveInstructionFile,
+  STATUS_OUTPUT_INSTRUCTIONS,
   withGeneratedInstructions
 } from '../../../harness/agent-instructions'
 import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
@@ -741,5 +742,31 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
   it('keeps the generated blocks free of Claude-only instructions', () => {
     expect(GENERATED_INSTRUCTIONS).not.toMatch(/\.claude\/settings\.json|--claude-friendly|SessionStart/)
     expect(withGeneratedInstructions('# No region\n')).toBeUndefined()
+  })
+
+  // #1103 — the rules for reading the status report moved here from the foot of the report.
+  it('carries the rules for reading the project status, in the generated region only', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain('## Reading the project status')
+    expect(GENERATED_INSTRUCTIONS).toContain(STATUS_OUTPUT_INSTRUCTIONS.trimEnd())
+    for (const rule of [
+      'A `fail` precondition is resolved before any project action',
+      'A `warn` precondition can block a specific flow',
+      'A `skip` means the check did not apply',
+      'The language of the conversation is not the signal',
+      'The `cli:` line names the CLI'
+    ]) {
+      expect(STATUS_OUTPUT_INSTRUCTIONS).toContain(rule)
+    }
+    // The bridges and the common instructions are recognised by released bytes: the section is not added to them.
+    expect(COMMON_INSTRUCTIONS).not.toContain('## Reading the project status')
+    expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Reading the project status')
+  })
+
+  it('refreshes the section into an AGENTS.md whose generated region predates it', () => {
+    const older = `# Mine\n\n${GENERATED_REGION_START}\n## File edits and shell calls\nold text\n${GENERATED_REGION_END}\n\nMy notes.\n`
+    const refreshed = withGeneratedInstructions(older)
+    expect(refreshed).toContain('## Reading the project status')
+    expect(refreshed).toContain('My notes.')
+    expect(refreshed).not.toContain('old text')
   })
 })
