@@ -60,7 +60,7 @@ import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 import { readLivePackageIdentity } from '../utils/package-identity'
-import { describeCliVersion, resolveCliChannel } from '../cli-channel'
+import { describeCliVersion, isCliSourceRepository, resolveCliChannel } from '../cli-channel'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
 // scaffold refreshes must neither delete them nor adopt user edits/private skills.
@@ -929,7 +929,7 @@ async function depositHarnessInTempDir(
       mainBranch: manifest.mainBranch,
       workflow: overrides?.workflow ?? manifest.workflow,
       advancedSkills: overrides?.advancedSkills ?? manifest.modules?.advancedSkills ?? [],
-      stackPresent: hasTechnicalStack(manifest)
+      stackPresent: hasTechnicalStack(manifest) || isCliSourceRepository(process.cwd())
     })
     if (manifest.tools?.srs?.enabled) {
       await installSrsSkill({ targetPath: tempDir })
@@ -1694,7 +1694,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             mainBranch: manifest.mainBranch,
             workflow: harnessConfig.workflow,
             advancedSkills: harnessConfig.advancedSkills,
-            stackPresent: hasTechnicalStack(manifest)
+            stackPresent: hasTechnicalStack(manifest) || isCliSourceRepository(process.cwd())
           })
           // The instruction deposits (.claude/rules, GEMINI.md, .agents/skills) need their baselines too.
           harnessTargetHashes = { ...(await computeHarnessFileHashes('.')), ...instructions?.fileHashes }

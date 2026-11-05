@@ -2,6 +2,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
+import { isCliSourceRepository } from '../cli-channel'
 import type { ManagedFileState } from '../harness/agent-instructions'
 import { inspectTierAgents } from '../harness/agent-support'
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
@@ -117,9 +118,25 @@ export interface DatabaseReachability {
 
 const FULL_PROFILE_PREVIEW = 'sf update --target-profile full --dry-run --json'
 
+/** What the project root adds to the manifest when the profile is described. */
+export interface DescribeCapabilitiesOptions {
+  /** The root is the SaaSFoundryAI CLI's own source repository (`isCliSourceRepository`). */
+  cliSourceRepository?: boolean
+}
+
 /** Turn the shared capability classification into stable, actionable status data. */
-export function describeProjectCapabilities(manifest: SaaSFoundryManifest): StatusCapabilities {
+export function describeProjectCapabilities(manifest: SaaSFoundryManifest, options: DescribeCapabilitiesOptions = {}): StatusCapabilities {
   const classified = classifyProjectCapabilities(manifest)
+
+  // The CLI repository runs the harness it ships and generates no application of its own: a full-profile
+  // preview there would offer to scaffold a stack into the generator.
+  if (options.cliSourceRepository && classified.effectiveProfile === 'harness') {
+    return {
+      ...classified,
+      reason: 'SaaSFoundryAI CLI source repository: it runs the managed harness on itself and has no generated technical stack.',
+      previewCommand: null
+    }
+  }
 
   switch (classified.effectiveProfile) {
     case 'full':
@@ -350,7 +367,7 @@ function collectLocalCi(projectRoot: string): StatusLocalCi | undefined {
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
-  const capabilities = manifest ? describeProjectCapabilities(manifest) : null
+  const capabilities = manifest ? describeProjectCapabilities(manifest, { cliSourceRepository: isCliSourceRepository(projectRoot) }) : null
 
   const git = collectGit(projectRoot)
   const apps = appPaths(manifest)
