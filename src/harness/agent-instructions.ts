@@ -5,6 +5,7 @@ import { join, posix, resolve } from 'path'
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentProfile, needsSharedSkills } from './agent-registry'
 import { CODEX_HOOKS_PATH, renderCodexHooks } from './delegation-hooks'
+import { withCodexSessionStart } from './session-start-hook'
 import { BridgeKind, isReleasedBridge, isReleasedBridgeHash, normalizeBridgeText } from './released-bridges'
 import type { RoutingOverrides } from './routing-grid'
 import { renderTierAgents } from './tier-agents'
@@ -860,7 +861,10 @@ async function planCaptureHooks(targetPath: string, agents: HarnessAgent[], warn
     warnings.push(`${rendered.error}; the delegation capture hook was not added.`)
     return []
   }
-  return [{ path: CODEX_HOOKS_PATH, content: Buffer.from(rendered.content), mode: 0o644, merge: true }]
+  // A bare-`sf` SessionStart command an earlier build wrote is replaced by the resolved one (#1103). The file is
+  // the project's: a session-start hook it does not have is not added.
+  const withSessionStart = withCodexSessionStart(rendered.content)
+  return [{ path: CODEX_HOOKS_PATH, content: Buffer.from('error' in withSessionStart ? rendered.content : withSessionStart.content), mode: 0o644, merge: true }]
 }
 
 /**

@@ -3,6 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { COMMON_INSTRUCTIONS, GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
+import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS, installHarness, installWorkflowArtifacts } from '../../../installers/harness.installer'
 import { HarnessAgent, WorkflowConfig } from '../../../types'
 import { fileExists } from '../../../utils'
@@ -72,7 +73,7 @@ describe('harness installer', () => {
 
       // Claude Code hooks
       const settings = JSON.parse(await readFile(join(dir, '.claude', 'settings.json'), 'utf8'))
-      expect(JSON.stringify(settings.hooks.SessionStart)).toContain('sf status --claude-friendly --no-network')
+      expect(settings.hooks.SessionStart[0].hooks[0].command).toBe(SESSION_START_COMMAND)
       expect(settings.hooks.UserPromptSubmit).toBeUndefined()
     })
 

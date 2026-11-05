@@ -58,25 +58,25 @@ describe('Preconditions first directive (scaffold mirrors)', () => {
   })
 })
 
+// The hook runs the CLI the project resolves, not a bare `sf` (#1103): `status --agent-friendly` through `saasfoundryai`.
 describe('SessionStart hook (scaffold mirrors)', () => {
-  it.each(SETTINGS_SCAFFOLDS)('%s wires a SessionStart hook calling sf status', (file) => {
-    const parsed = JSON.parse(readFileSync(file, 'utf8'))
-    const sessionStart = parsed?.hooks?.SessionStart
+  const sessionStartCommands = (file: string): string[] => {
+    const sessionStart = JSON.parse(readFileSync(file, 'utf8'))?.hooks?.SessionStart
     expect(Array.isArray(sessionStart)).toBe(true)
     expect(sessionStart.length).toBeGreaterThan(0)
-    const commands: string[] = sessionStart.flatMap((entry: { hooks?: Array<{ type?: string; command?: string }> }) =>
-      (entry.hooks ?? []).filter((h) => h.type === 'command').map((h) => h.command ?? '')
-    )
-    expect(commands.some((cmd: string) => cmd.includes('sf status') && cmd.includes('--claude-friendly'))).toBe(true)
+    return sessionStart.flatMap((entry: { hooks?: Array<{ type?: string; command?: string }> }) => (entry.hooks ?? []).filter((h) => h.type === 'command').map((h) => h.command ?? ''))
+  }
+  const runsStatus = (cmd: string) => cmd.includes('status --agent-friendly --no-network') && cmd.includes('saasfoundryai')
+
+  it.each(SETTINGS_SCAFFOLDS)('%s wires a SessionStart hook that runs the project CLI status', (file) => {
+    const commands = sessionStartCommands(file)
+    expect(commands.some(runsStatus)).toBe(true)
+    expect(commands.some((cmd) => /^sf status\b/.test(cmd))).toBe(false)
   })
 
-  it('repo-root .claude/settings.json wires a SessionStart hook calling sf status', () => {
-    const parsed = JSON.parse(readFileSync(path.resolve(ROOT, '.claude/settings.json'), 'utf8'))
-    const sessionStart = parsed?.hooks?.SessionStart
-    expect(Array.isArray(sessionStart)).toBe(true)
-    const commands: string[] = sessionStart.flatMap((entry: { hooks?: Array<{ type?: string; command?: string }> }) =>
-      (entry.hooks ?? []).filter((h) => h.type === 'command').map((h) => h.command ?? '')
-    )
-    expect(commands.some((cmd: string) => cmd.includes('sf status') && cmd.includes('--claude-friendly'))).toBe(true)
+  it('repo-root .claude/settings.json wires a SessionStart hook that runs the project CLI status', () => {
+    const commands = sessionStartCommands(path.resolve(ROOT, '.claude/settings.json'))
+    expect(commands.some(runsStatus)).toBe(true)
+    expect(commands.some((cmd) => /^sf status\b/.test(cmd))).toBe(false)
   })
 })

@@ -42,6 +42,7 @@ jest.mock('terminal-link', () => ({
 
 import { newCommand } from '../../../commands/new'
 import { GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
+import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import { renderTechnicalStack } from '../../../renderers/technical-stack.renderer'
 import { collectStatus } from '../../../status/collect'
@@ -144,7 +145,7 @@ describe('newCommand (--profile integration)', () => {
     expect(await readdir(tempDir)).not.toContain('CLAUDE.local.md')
     expect(await readdir(tempDir)).not.toContain('GEMINI.md')
     const settings = JSON.parse(await readFile(join(tempDir, '.claude', 'settings.json'), 'utf8'))
-    expect(JSON.stringify(settings.hooks.SessionStart)).toContain('sf status --claude-friendly --no-network')
+    expect(settings.hooks.SessionStart[0].hooks[0].command).toBe(SESSION_START_COMMAND)
     expect(await readdir(tempDir)).not.toContain('apps')
 
     // TC-1: sf status preconditions all pass on the harness install

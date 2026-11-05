@@ -4,6 +4,7 @@ import { join } from 'path'
 
 import { isReferenceOnlyAdoption } from './agent-instructions'
 import { CLAUDE_CAPTURE_HOOKS, isLegacyCaptureCommand } from './delegation-hooks'
+import { isLegacySessionStartCommand, SESSION_START_HOOKS } from './session-start-hook'
 import type { ModuleMigrationPreview } from '../migrations/module/types'
 import type { SaaSFoundryManifest } from '../types'
 import {
@@ -23,7 +24,8 @@ import {
  * rule added here reaches new and installed projects alike (#935).
  */
 export const HARNESS_HOOKS: ClaudeHooksConfig = {
-  SessionStart: [{ hooks: [{ type: 'command', command: 'sf status --claude-friendly --no-network' }] }],
+  // The project status at the start of a session, from the CLI the project resolves and not a bare `sf` (#1103).
+  ...SESSION_START_HOOKS,
   // Every routed delegation appends its outcome to the clone ledger the routing adjusts itself from (#1035).
   ...CLAUDE_CAPTURE_HOOKS
 }
@@ -67,8 +69,18 @@ export const HARNESS_REVOKED_COMMANDS: readonly string[] = ['Bash(sf agents outc
  */
 export const HARNESS_ASK_COMMANDS: readonly string[] = ['--record', '--retry-of'].flatMap((flag) => [`Bash(sf agents route ${flag}*)`, `Bash(sf agents route * ${flag}*)`])
 
-/** What a merge of the harness hooks replaces: the bare-`sf` capture command the first build wrote. */
-export const HARNESS_SUPERSEDED_HOOKS = { supersedes: isLegacyCaptureCommand }
+/**
+ * The commands an earlier release wrote and a merge of the harness hooks replaces: each test recognises one
+ * released string, and a command that matches none is the project's own and stays. Add a test here when a
+ * release changes a hook command, so the merge, which only adds a command whose exact string is missing, does
+ * not leave the old one next to the new.
+ *
+ * - the bare-`sf` capture command the first build wrote (#1035);
+ * - the bare `sf status` SessionStart command, which runs whatever `sf` comes first on the PATH (#1103).
+ */
+export const HARNESS_SUPERSEDED_COMMANDS: readonly ((command: unknown) => boolean)[] = [isLegacyCaptureCommand, isLegacySessionStartCommand]
+
+export const HARNESS_SUPERSEDED_HOOKS = { supersedes: (command: string): boolean => HARNESS_SUPERSEDED_COMMANDS.some((supersedes) => supersedes(command)) }
 
 /** Merge the harness hooks and permission rules into `<targetPath>/.claude/settings.json`; an unreadable file throws. */
 export async function mergeHarnessSettings(targetPath: string): Promise<void> {

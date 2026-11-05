@@ -5,6 +5,7 @@ import { dirname, join } from 'path'
 
 import { ADOPTION_COMMON_INSTRUCTIONS } from '../../../harness/agent-instructions'
 import { syncHarnessSettingsForProject } from '../../../harness/harness-settings'
+import { SESSION_START_HOOKS } from '../../../harness/session-start-hook'
 import { dropPerAppClaudeInMonorepo, dropStackSkillsWithoutStack, harnessMigrations, wireDelegationCapture } from '../../../installers/harness.migrations'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
 import type { SaaSFoundryManifest } from '../../../types'
@@ -243,7 +244,9 @@ describe('harness migration v4 → v5: wire-delegation-capture', () => {
     await wireDelegationCapture.up(dir, manifest())
 
     const settings = JSON.parse(await read(SETTINGS))
-    expect(settings.hooks.SessionStart).toEqual(JSON.parse(await v101()).hooks.SessionStart)
+    // The bare `sf status` command 1.0.1 wrote is replaced by the one that resolves the project's CLI (#1103)
+    expect(JSON.parse(await v101()).hooks.SessionStart[0].hooks[0].command).toBe('sf status --claude-friendly --no-network')
+    expect(settings.hooks.SessionStart).toEqual(SESSION_START_HOOKS.SessionStart)
     expect(settings.hooks.SubagentStop[0].matcher).toBe('sf-.*')
     expect(settings.hooks.PostToolUse[0].matcher).toBe('Agent|Task')
     expect(settings.permissions.allow).toEqual(expect.arrayContaining([...JSON.parse(await v101()).permissions.allow, 'Bash(sf agents route *)', 'Bash(sf agents routing report)']))
