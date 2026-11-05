@@ -1,7 +1,7 @@
 # sf status
 
-Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, fichiers d'instructions des agents, routage et agents de palier et,
-facultativement, CLI GitHub.
+Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, CLI qui répond, fichiers d'instructions des agents, routage et agents de palier
+et, facultativement, CLI GitHub. Le rapport énonce des faits ; les règles pour le lire sont dans les instructions du projet.
 
 ## Utilisation
 
@@ -46,6 +46,49 @@ règles du projet, et rien ne le signale dans l'hôte. Un contrôle est ignoré 
 
 `--json` renvoie aussi les faits derrière ces trois contrôles sous `instructions` : les agents effectifs, les chemins qui masquent `AGENTS.md`, la version de Claude Code lue, et les octets comptés par
 dossier avec les fichiers qui les composent.
+
+### Le CLI qui répond
+
+La sortie destinée aux agents nomme le CLI qui l'a produite sur une ligne `cli:`, juste après la ligne `project:`, et `--json` la porte sous la forme d'un objet `cli` : `cli: 1.1.0 (package)` pour un
+package installé, `cli: 1.1.0 (development checkout: /chemin/vers/SaaSFoundry @ 415509ae)` pour un checkout lié. Le rapport n'énonce que des faits. Il ne se termine plus par un bloc « How to use this
+output » d'impératifs : ce qu'il faut faire d'un `fail`, d'un `warn` ou d'un `skip`, et la règle selon laquelle la langue de la conversation n'est pas le signal de la langue des artefacts, se lisent
+dans la section **Reading the project status** de la région générée d'`AGENTS.md`, là où se trouvent les autres règles.
+
+Deux préconditions lisent cet objet `cli`. Aucune n'exécute de processus.
+
+| Nom          | Vérification                                                                                                                                                                                                                                                                                                                                                                                                    | Remédiation                                                                                                                                                                                    |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cliVersion` | Le CLI n'est pas plus ancien que ce qui a écrit le projet en dernier : sa version est au moins le `version` du projet (le CLI qui l'a mis à jour en dernier), et la version du harness du projet ne dépasse pas celle que ce CLI installe. Les préversions se comparent comme le fait semver (`1.1.0-rc.1` est plus ancienne que `1.1.0`). Le détail nomme les deux numéros et le canal                         | `npm install -D saasfoundryai-cli@<version>` dans le projet (ou `npm install -g saasfoundryai-cli@latest`) ; pour un checkout de développement, le mettre à jour puis y lancer `npm run build` |
+| `cliBuild`   | Dans le dépôt du CLI SaaSFoundryAI uniquement : `dist/index.js` existe et est plus récent que chaque fichier de `src/` (tests exclus), car `bin/sf.js` exécute `dist/` et rien ne le reconstruit après un pull. Elle compare les dates de modification : un pull, un checkout ou une modification locale se voient, et un build commité ensuite ne déclenche pas de fausse alerte. Absente de tout autre projet | `npm run build`                                                                                                                                                                                |
+
+Les deux sont absentes quand l'appelant ne dit pas quel CLI s'exécute. Un CLI plus ancien que ces contrôles ne peut pas les rapporter, c'est pourquoi le hook de début de session ci-dessous cesse
+d'exécuter un `sf` nu.
+
+### Le hook de début de session
+
+Claude Code exécute `sf status` pour vous au début d'une session et injecte sa sortie. Le hook de `.claude/settings.json` n'appelle pas un `sf` nu, c'est-à-dire ce qui vient en premier dans le PATH :
+un SaaSFoundryAI plus ancien dont le rapport n'a pas les lignes `delegation:`, `routing:` et `local-ci:`, ou le CLI Salesforce. Il exécute le CLI que le projet résout, dans cet ordre :
+
+1. `node_modules/.bin/saasfoundryai`, le CLI que le projet a installé ;
+2. `bin/sf.js`, quand le projet est le dépôt du CLI SaaSFoundryAI lui-même (son `package.json` le nomme) et que `dist/index.js` est construit ;
+3. `saasfoundryai` dans le PATH.
+
+Le `node_modules/.bin/sf` d'un projet n'est pas essayé, car ce peut être le CLI Salesforce. Le hook se place dans `CLAUDE_PROJECT_DIR` (le dossier courant quand l'hôte n'en définit pas), exécute
+`status --agent-friendly --no-network` avec l'avertissement de skills périmés réduit au silence, et termine toujours avec le code 0. Il affiche le rapport, et quand il ne peut pas en produire un, il
+affiche un fait et non une instruction : `- cli: no SaaSFoundryAI CLI found (…)`, `- cli: bin/sf.js is not built (run npm run build); trying saasfoundryai on the PATH`, ou
+`- status: <commande> exited <code>`.
+
+`sf update` et `sf agents refresh` remplacent la commande `sf status --claude-friendly --no-network` nue qu'écrivaient les versions précédentes (voir
+[`sf update`](./sf-update.md#capture-des-delegations-et-permissions-harness-v5)). Dans `.codex/hooks.json`, le même remplacement a lieu là où un projet a câblé la commande nue à la main ; aucun hook
+n'est ajouté à un fichier qui n'en a pas.
+
+### Le dépôt du CLI lui-même
+
+Le dépôt du CLI SaaSFoundryAI exécute le harness géré sur lui-même et ne génère aucune application. Son manifest porte toujours `modules.email = { provider: "none" }`, que la migration de manifest 002
+écrit dans tout manifest qui a un objet `modules`, y compris sans stack. Sur un projet `cli`, ce bloc avec un fournisseur `none` et aucun marqueur de base de données, de stockage ou d'analytics à côté
+n'est pas une stack technique : le projet se lit `harness` (stack `absent`), pas `inconsistent`. Tout autre marqueur, ou un fournisseur d'envoi d'e-mails, reste lu comme contradictoire. Dans le dépôt
+du CLI lui-même (le package nommé `saasfoundryai-cli` avec son `bin/sf.js` et son `src/`), la raison du profil le dit, et `sf status` ne propose aucun aperçu `sf update --target-profile full`.
+`sf update` y continue de déposer les skills de stack.
 
 ### Accord de délégation
 
