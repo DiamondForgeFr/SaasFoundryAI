@@ -1,7 +1,8 @@
 import chalk from 'chalk'
 
+import { describeCliVersion } from '../cli-channel'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
-import type { StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
+import type { StatusCli, StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
 export interface RenderPayload {
@@ -103,6 +104,7 @@ export function renderHuman(payload: RenderPayload): string {
   lines.push('')
   if (report.manifest) {
     lines.push(`${chalk.gray('Project:')} ${report.manifest.projectName} (${report.manifest.structure}) — v${report.manifest.version}`)
+    if (report.cli) lines.push(`${chalk.gray('CLI:')} ${cliSummary(report.cli)}`)
     if (report.capabilities) {
       lines.push(`${chalk.gray('Profile:')} ${report.capabilities.effectiveProfile}`)
       lines.push(`${chalk.gray('Capabilities:')} stack ${report.capabilities.technicalStack}, harness ${report.capabilities.collaborationHarness}`)
@@ -113,6 +115,7 @@ export function renderHuman(payload: RenderPayload): string {
     if (report.routing) lines.push(`${chalk.gray('Routing:')} ${routingSummary(report.routing)}`)
   } else {
     lines.push(chalk.red('Not a SaaSFoundryAI project (no .saasfoundry.json)'))
+    if (report.cli) lines.push(`${chalk.gray('CLI:')} ${cliSummary(report.cli)}`)
   }
   if (report.git.available) {
     const dirty = report.git.isClean === false ? chalk.yellow(' (dirty)') : ''
@@ -172,6 +175,8 @@ export function renderJson(payload: RenderPayload): string {
     routing: report.routing ?? null,
     // Additive (#943): the local CI pipeline the project declares in .molten/project.json, null without that file
     localCi: report.localCi ?? null,
+    // Additive (#1103): the CLI that produced the report and, in the CLI's own repository, how its build stands
+    cli: report.cli ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
     // Additive: the facts behind the three instruction preconditions (#939)
@@ -187,6 +192,19 @@ export function renderJson(payload: RenderPayload): string {
   return JSON.stringify(out, null, 2)
 }
 
+/**
+ * The CLI that produced the report (#1103): its version and where it comes from, so a session sees which CLI
+ * answered. The rules for reading the report are not part of it; they live in the project instructions.
+ */
+export function cliSummary(cli: StatusCli): string {
+  return cli.channel.channel === 'package' ? `${cli.version} (package)` : describeCliVersion(cli.version, cli.channel)
+}
+
+/**
+ * The status report states facts. What an agent does with a `fail`, a `warn` or a `skip` is written once, in the
+ * generated region of the project's `AGENTS.md` (`STATUS_OUTPUT_INSTRUCTIONS`), where it is read with the rest of
+ * the rules: a hook that ends in "you MUST" repeats an order the instructions already give.
+ */
 export function renderAgentFriendly(payload: RenderPayload): string {
   const { report, preconditions } = payload
   const lines: string[] = []
@@ -194,6 +212,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
   lines.push('')
   if (report.manifest) {
     lines.push(`- project: ${report.manifest.projectName} (${report.manifest.structure}, v${report.manifest.version})`)
+    if (report.cli) lines.push(`- cli: ${cliSummary(report.cli)}`)
     if (report.capabilities) {
       lines.push(`- effective profile: ${report.capabilities.effectiveProfile}`)
       lines.push(`- technical stack: ${report.capabilities.technicalStack}`)
@@ -208,6 +227,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
     lines.push(`- srs: ${srs?.enabled ? `${srs.backend} — ${srs.rootPage?.name ?? 'no root page'}` : 'not installed'}`)
   } else {
     lines.push('- project: NOT a SaaSFoundryAI project (no .saasfoundry.json)')
+    if (report.cli) lines.push(`- cli: ${cliSummary(report.cli)}`)
   }
   if (report.git.available) {
     const state = [report.git.unborn ? 'no commits yet' : null, report.git.isClean === false ? 'dirty' : 'clean'].filter(Boolean).join(', ')
@@ -229,14 +249,6 @@ export function renderAgentFriendly(payload: RenderPayload): string {
       lines.push(`  - remediation: ${p.remediation}`)
     }
   }
-  lines.push('')
-  lines.push('## How to use this output')
-  lines.push('- Any `fail` precondition means you MUST resolve it before taking project actions; read the remediation.')
-  lines.push('- `warn` preconditions may block specific flows (e.g. workflow transitions, SRS drafters); treat the remediation as required for that flow.')
-  lines.push('- `skip` means the check was not applicable or not requested; do not act on it.')
-  lines.push(
-    '- Write every artefact in the `output language` above — SRS pages, tickets and their comments, code comments, commit messages. The language of the conversation is NOT the signal: a session held in French still produces English artefacts when the project says `en`.'
-  )
   lines.push('')
   return lines.join('\n')
 }

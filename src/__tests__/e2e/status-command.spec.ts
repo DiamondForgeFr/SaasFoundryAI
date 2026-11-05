@@ -1,4 +1,4 @@
-import { mkdir, rm } from 'fs/promises'
+import { mkdir, rm, utimes, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -71,7 +71,10 @@ describe('status command (E2E)', () => {
     expect(out).toContain('# SaaSFoundryAI project status')
     expect(out).toContain('project: demo')
     expect(out).toContain('workflow: github-projects')
-    expect(out).toContain('## How to use this output')
+    expect(out).toMatch(/^- cli: \d+\.\d+\.\d+ \(/m)
+    // The rules for reading the report are in the generated AGENTS.md region, not at the foot of the report (#1103).
+    expect(out).not.toContain('How to use this output')
+    expect(out).not.toMatch(/\bMUST\b/)
   })
 
   it('does not set exit code to 1 when --claude-friendly is used even with fail preconditions', async () => {
@@ -96,7 +99,7 @@ describe('status command (E2E)', () => {
     expect(neutral.stdout).toBe(legacy.stdout)
     expect(legacy.status).toBe(0)
     expect(neutral.stdout).toContain('[fail]')
-    expect(neutral.stdout).toContain('How to use this output')
+    expect(neutral.stdout).not.toContain('How to use this output')
 
     const json = run('--json')
     const neutralJson = run('--json', '--agent-friendly')
@@ -106,6 +109,74 @@ describe('status command (E2E)', () => {
     expect(legacyJson.status).toBe(0)
     expect(JSON.parse(neutralJson.stdout)).toEqual(JSON.parse(json.stdout))
     expect(neutralJson.stdout).toBe(legacyJson.stdout)
+  })
+
+  // #1103 — the SaaSFoundryAI CLI's own repository carries the stackless email block of manifest migration 002, which read
+  // as a contradiction at every session. The layout is faked in a tmp directory: the check is of the compiled CLI.
+  describe('the CLI source repository', () => {
+    const status = (...args: string[]) =>
+      spawnSync(process.execPath, [join(CLI_ROOT, 'bin/sf.js'), 'status', '--no-network', ...args], { cwd: tempDir, encoding: 'utf8', env: { ...process.env, SF_SKILL_NO_WARN: '1' } })
+
+    beforeEach(async () => {
+      const manifest: SaaSFoundryManifest = {
+        version: '1.1.0',
+        generatedAt: new Date().toISOString(),
+        structure: 'cli',
+        projectName: 'saasfoundryai-cli',
+        workflow: { tool: 'github-projects' },
+        modules: { email: { provider: 'none', version: 1 }, harness: { version: 5, managed: true } }
+      }
+      await writeManifest(tempDir, manifest)
+    })
+
+    const layOutCliRepository = async () => {
+      await mkdir(join(tempDir, 'bin'))
+      await mkdir(join(tempDir, 'src'))
+      await writeFile(join(tempDir, 'bin', 'sf.js'), '\n')
+      await writeFile(join(tempDir, 'src', 'index.ts'), '\n')
+      await writeFile(join(tempDir, 'package.json'), JSON.stringify({ name: 'saasfoundryai-cli' }))
+    }
+
+    it('reads as a harness project that offers no full-profile preview, and says its build is missing', async () => {
+      await layOutCliRepository()
+
+      const out = status('--agent-friendly').stdout
+
+      expect(out).toContain('- effective profile: harness')
+      expect(out).toContain('- technical stack: absent')
+      expect(out).toContain('SaaSFoundryAI CLI source repository')
+      expect(out).not.toContain('full-profile preview')
+      expect(out).not.toContain('inconsistent')
+      expect(out).toContain('[warn] CLI build is newer than its sources')
+      expect(out).toContain('remediation: Run `npm run build`.')
+    })
+
+    it('finds the build current once dist is newer than every source', async () => {
+      await layOutCliRepository()
+      await mkdir(join(tempDir, 'dist'))
+      await writeFile(join(tempDir, 'dist', 'index.js'), '\n')
+      const later = new Date(Date.now() + 60_000)
+      await utimes(join(tempDir, 'dist', 'index.js'), later, later)
+
+      expect(status('--agent-friendly').stdout).toMatch(/\[ok\] CLI build is newer than its sources — dist\/index\.js built /)
+    })
+
+    it('warns when a source changed after the build', async () => {
+      await layOutCliRepository()
+      await mkdir(join(tempDir, 'dist'))
+      await writeFile(join(tempDir, 'dist', 'index.js'), '\n')
+      const earlier = new Date(Date.now() - 60_000)
+      await utimes(join(tempDir, 'dist', 'index.js'), earlier, earlier)
+
+      expect(status('--agent-friendly').stdout).toContain('[warn] CLI build is newer than its sources — src/index.ts changed')
+    })
+
+    it('leaves the build precondition out of a project that is not the CLI repository', () => {
+      const out = status('--agent-friendly').stdout
+      expect(out).not.toContain('CLI build is newer')
+      expect(out).toContain('- effective profile: harness')
+      expect(out).toContain('full-profile preview')
+    })
   })
 
   // #825 — `git rev-parse --abbrev-ref HEAD` exits 128 before the first commit, which read as

@@ -5,7 +5,7 @@ import type { HarnessAgent } from '../harness/agent-registry'
 import { BOOTSTRAP_COMMAND } from '../installers/harness-provisioning'
 import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
-import { CODEX_INSTRUCTION_LIMIT, compareVersions, MIN_CLAUDE_CODE_VERSION } from './instruction-diagnostics'
+import { CODEX_INSTRUCTION_LIMIT, compareCliVersions, compareVersions, MIN_CLAUDE_CODE_VERSION } from './instruction-diagnostics'
 
 export type PreconditionStatus = 'ok' | 'warn' | 'fail' | 'skip'
 
@@ -353,8 +353,76 @@ function checkTierAgents(report: StatusReport): Precondition {
   return { name, description, status: 'warn', details: off.map((agent) => `${agent.path} ${agent.state}`).join('; '), remediation: remediation.join(' ') }
 }
 
+/**
+ * Whether the CLI that produced the report is at least as new as what last wrote the project (#1103). A
+ * project records the CLI version that last updated it (`version`) and the harness version it installed
+ * (`modules.harness.version`); a CLI older than either reads a layout it predates, and its report can lack
+ * lines the project's instructions rely on (`delegation:`, `routing:`). Left out when the caller did not say
+ * which CLI runs. Nothing here runs a process.
+ */
+function checkCliVersion(report: StatusReport): Precondition | undefined {
+  const cli = report.cli
+  if (!cli) return undefined
+  const name = 'cliVersion'
+  const description = "SaaSFoundryAI CLI is not older than the project's harness"
+  if (!report.manifest) return { name, description, status: 'skip', details: 'No manifest' }
+
+  const where = cli.channel.channel === 'package' ? 'package' : `development checkout: ${cli.channel.path}${cli.channel.commit ? ` @ ${cli.channel.commit}` : ''}`
+  const problems: string[] = []
+  const comparison = compareCliVersions(cli.version, report.manifest.version)
+  if (comparison !== undefined && comparison < 0) problems.push(`CLI ${cli.version} is older than ${report.manifest.version}, the version that last updated this project`)
+  const projectHarness = report.manifest.modules?.harness?.version
+  if (cli.harnessCurrentVersion !== undefined && projectHarness !== undefined && projectHarness > cli.harnessCurrentVersion) {
+    problems.push(`the project's harness is v${projectHarness} and this CLI installs v${cli.harnessCurrentVersion}`)
+  }
+
+  if (problems.length === 0) {
+    const noted = comparison === undefined ? `; ${cli.version} and ${report.manifest.version} could not be compared` : ''
+    return { name, description, status: 'ok', details: `CLI ${cli.version}; project last updated by ${report.manifest.version}${noted}` }
+  }
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `${problems.join('; ')} (running ${cli.version}, ${where})`,
+    remediation:
+      cli.channel.channel === 'package'
+        ? `Run \`npm install -D saasfoundryai-cli@${report.manifest.version}\` in the project (or \`npm install -g saasfoundryai-cli@latest\`): the project's own node_modules/.bin/saasfoundryai is the first CLI the session-start hook runs.`
+        : `Update the checkout at ${cli.channel.path} (git pull) and run \`npm run build\` there.`
+  }
+}
+
+/**
+ * Whether `dist/` is as new as `src/` in the CLI's own repository (#1103). `bin/sf.js` runs `dist/index.js`, which
+ * nothing rebuilds after a pull, so the CLI the session-start hook resolves there can predate the sources it sits
+ * next to. Left out anywhere else. Compares modification times that `collectStatus` read: nothing here touches the disk.
+ */
+function checkCliBuild(report: StatusReport): Precondition | undefined {
+  const cli = report.cli
+  if (!cli?.sourceRepository || !cli.build) return undefined
+  const name = 'cliBuild'
+  const description = 'CLI build is newer than its sources'
+  const { distMtimeMs, newestSourceMtimeMs, newestSource } = cli.build
+  const remediation = 'Run `npm run build`.'
+  if (distMtimeMs === undefined) {
+    return { name, description, status: 'warn', details: 'dist/index.js is missing: bin/sf.js cannot run, and the session-start hook falls back to the saasfoundryai on the PATH', remediation }
+  }
+  if (newestSourceMtimeMs !== undefined && newestSourceMtimeMs > distMtimeMs) {
+    return {
+      name,
+      description,
+      status: 'warn',
+      details: `${newestSource ?? 'a file under src/'} changed ${new Date(newestSourceMtimeMs).toISOString()}, after dist/index.js was built ${new Date(distMtimeMs).toISOString()}: bin/sf.js runs the older build`,
+      remediation
+    }
+  }
+  return { name, description, status: 'ok', details: `dist/index.js built ${new Date(distMtimeMs).toISOString()}` }
+}
+
 export function evaluatePreconditions(report: StatusReport): Precondition[] {
   const ghRepository = checkGhRepository(report)
+  const cliVersion = checkCliVersion(report)
+  const cliBuild = checkCliBuild(report)
   return [
     checkManifest(report),
     checkWorkflow(report),
@@ -362,6 +430,8 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkGit(report),
     ...(ghRepository ? [ghRepository] : []),
     checkGh(report),
+    ...(cliVersion ? [cliVersion] : []),
+    ...(cliBuild ? [cliBuild] : []),
     checkInstructionShadowing(report),
     checkClaudeCodeVersion(report),
     checkCodexInstructionSize(report),

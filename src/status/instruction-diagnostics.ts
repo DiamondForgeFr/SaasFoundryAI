@@ -123,6 +123,44 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
+const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/
+
+/** Semver precedence of two prerelease tags: numeric identifiers by value and before the others, a longer tag after its prefix. */
+function comparePrerelease(a: string | undefined, b: string | undefined): number {
+  if (a === b) return 0
+  // A release outranks every prerelease of the same version.
+  if (a === undefined) return 1
+  if (b === undefined) return -1
+  const left = a.split('.')
+  const right = b.split('.')
+  for (let i = 0; i < Math.min(left.length, right.length); i++) {
+    if (left[i] === right[i]) continue
+    const leftNumeric = /^\d+$/.test(left[i])
+    const rightNumeric = /^\d+$/.test(right[i])
+    if (leftNumeric && rightNumeric) return Number(left[i]) - Number(right[i])
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1
+    return left[i] < right[i] ? -1 : 1
+  }
+  return left.length - right.length
+}
+
+/**
+ * Negative, zero or positive as CLI version `a` is older than, equal to or newer than `b`, or
+ * undefined when either is not a semver string. Unlike `compareVersions`, it reads a prerelease
+ * (`1.1.0-rc.1` is older than `1.1.0`) instead of returning NaN: a CLI version is whatever the
+ * package or a release candidate carries.
+ */
+export function compareCliVersions(a: string, b: string): number | undefined {
+  const left = SEMVER.exec(a.trim())
+  const right = SEMVER.exec(b.trim())
+  if (!left || !right) return undefined
+  for (let i = 1; i <= 3; i++) {
+    const difference = Number(left[i]) - Number(right[i])
+    if (difference !== 0) return difference
+  }
+  return comparePrerelease(left[4], right[4])
+}
+
 /**
  * What Codex loads when started in each directory holding an AGENTS.md: it concatenates the
  * AGENTS.md (or AGENTS.override.md) of every directory from the Git root down to the working

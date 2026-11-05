@@ -212,6 +212,29 @@ the harness path; a throwaway POC uses the documented POC-preservation and clean
 `
 
 /**
+ * How to read the status report (#1103). The report is facts: what to do with a `fail`, a `warn` or a
+ * `skip`, and which language to write in, is a rule, so it lives with the other rules, here, and not at the
+ * foot of a report a hook injects. In the generated region only: the bridges and the common instructions
+ * are recognised by released bytes and stay as they are. It names neither the hook nor its settings file
+ * (a spec holds the region to that), so it reads the same for every host.
+ */
+export const STATUS_OUTPUT_INSTRUCTIONS = `## Reading the project status
+
+The report of \`sf status --agent-friendly --no-network\` states facts; these are the rules for acting
+on it:
+
+- A \`fail\` precondition is resolved before any project action: read its remediation.
+- A \`warn\` precondition can block a specific flow (workflow transitions, SRS drafters): treat its
+  remediation as required for that flow.
+- A \`skip\` means the check did not apply or was not requested: do not act on it.
+- The \`cli:\` line names the CLI that produced the report. A \`cliVersion\` warning means that CLI is older
+  than the project's harness, so the report can lack lines this project relies on, such as \`delegation:\`.
+- Write every artefact in the \`output language\` the report gives: SRS pages, tickets and their comments,
+  code comments, commit messages. The language of the conversation is not the signal: a session held in
+  French still produces English artefacts when the project says \`en\`.
+`
+
+/**
  * How to touch files and the shell so the host can check each call (#947). An interpreter
  * heredoc that writes files cannot be analysed and asks the developer every time, even in
  * bypass mode; sub-agents see no memory of that, only these instructions.
@@ -248,6 +271,7 @@ export const GENERATED_INSTRUCTIONS = `${GENERATED_REGION_START}
 
 ${AGENT_TOOLING_HYGIENE}
 ${PROFILE_TRANSITION_INSTRUCTIONS.replace('--claude-friendly', '--agent-friendly')}
+${STATUS_OUTPUT_INSTRUCTIONS}
 ${SELF_ONBOARDING_INSTRUCTIONS}
 ${CAPABILITIES.trimEnd().replaceAll('--claude-friendly', '--agent-friendly')}
 ${GENERATED_REGION_END}`

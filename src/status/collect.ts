@@ -2,7 +2,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
-import { isCliSourceRepository } from '../cli-channel'
+import { type CliChannel, isCliSourceRepository } from '../cli-channel'
 import type { ManagedFileState } from '../harness/agent-instructions'
 import { inspectTierAgents } from '../harness/agent-support'
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
@@ -60,6 +60,33 @@ export interface StatusReport {
   routing?: StatusRouting
   /** The local CI pipeline the project declares in `.molten/project.json` (#943); absent without that file. */
   localCi?: StatusLocalCi
+  /** The CLI that produced this report (#1103); absent for a caller that does not say which CLI runs. */
+  cli?: StatusCli
+}
+
+/**
+ * The CLI that runs `sf status`, and what the project's checkout says about it. Nothing here runs a
+ * process: the caller hands in the running version and channel, the rest is read from the file system.
+ */
+export interface StatusCli {
+  /** Version of the running CLI (`package.json`). */
+  version: string
+  channel: CliChannel
+  /** `currentVersion` of the harness installer the running CLI ships: the newest harness it knows how to install. */
+  harnessCurrentVersion?: number
+  /** The project root is the SaaSFoundryAI CLI's own source repository (`isCliSourceRepository`). */
+  sourceRepository: boolean
+  /** Only on the CLI source repository: how `dist/` stands against `src/`. */
+  build?: StatusCliBuild
+}
+
+/** `dist/index.js` against the newest file under `src/` (tests excluded), as modification times. */
+export interface StatusCliBuild {
+  /** Absent when the build is missing. */
+  distMtimeMs?: number
+  newestSourceMtimeMs?: number
+  /** Path of the newest source file, relative to the root. */
+  newestSource?: string
 }
 
 /** The effective consent with both layers, or why it could not be read: status never fails on it. */
@@ -195,6 +222,12 @@ export interface CollectOptions {
   checkGh?: boolean
   /** Whether the project's CLI can run the capture hook; defaults to asking the CLI it resolves. Injectable for a spec that spawns nothing. */
   captureProbe?: CaptureProbe
+  /** Version of the running CLI. Without it the report carries no `cli` block, and the CLI preconditions are left out. */
+  cliVersion?: string
+  /** Where the running CLI comes from; defaults to a published package. */
+  cliChannel?: CliChannel
+  /** `currentVersion` of the harness installer the running CLI ships. */
+  harnessCurrentVersion?: number
 }
 
 function runSafe(cmd: string, cwd: string): string | null {
@@ -364,6 +397,55 @@ function collectLocalCi(projectRoot: string): StatusLocalCi | undefined {
   }
 }
 
+/** The newest modification time under `dir`, tests excluded: what a build of the sources has to be newer than. */
+function newestSourceFile(root: string, dir: string): { mtimeMs: number; file: string } | undefined {
+  let newest: { mtimeMs: number; file: string } | undefined
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return undefined
+  }
+  for (const entry of entries) {
+    if (entry.name === '__tests__' || entry.name === 'node_modules') continue
+    const full = path.join(dir, entry.name)
+    const candidate = entry.isDirectory() ? newestSourceFile(root, full) : entry.isFile() ? statMtime(root, full) : undefined
+    if (candidate && (!newest || candidate.mtimeMs > newest.mtimeMs)) newest = candidate
+  }
+  return newest
+}
+
+function statMtime(root: string, file: string): { mtimeMs: number; file: string } | undefined {
+  try {
+    return { mtimeMs: fs.statSync(file).mtimeMs, file: path.relative(root, file) }
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The CLI that produced the report (#1103), and for the CLI's own repository how its build stands: `bin/sf.js`
+ * runs `dist/`, which nothing rebuilds after a pull. Modification times, not commit times: they catch a pull, a
+ * checkout and a local edit, and do not warn after a build that was committed afterwards.
+ */
+function collectCli(projectRoot: string, options: CollectOptions): StatusCli | undefined {
+  if (options.cliVersion === undefined) return undefined
+  const sourceRepository = isCliSourceRepository(projectRoot)
+  let build: StatusCliBuild | undefined
+  if (sourceRepository) {
+    const dist = statMtime(projectRoot, path.join(projectRoot, 'dist', 'index.js'))
+    const source = newestSourceFile(projectRoot, path.join(projectRoot, 'src'))
+    build = { ...(dist ? { distMtimeMs: dist.mtimeMs } : {}), ...(source ? { newestSourceMtimeMs: source.mtimeMs, newestSource: source.file } : {}) }
+  }
+  return {
+    version: options.cliVersion,
+    channel: options.cliChannel ?? { channel: 'package' },
+    ...(options.harnessCurrentVersion !== undefined ? { harnessCurrentVersion: options.harnessCurrentVersion } : {}),
+    sourceRepository,
+    ...(build ? { build } : {})
+  }
+}
+
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
@@ -380,6 +462,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   const delegation = await collectDelegation(projectRoot, manifest)
   const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
   const localCi = collectLocalCi(projectRoot)
+  const cli = collectCli(projectRoot, options)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.
@@ -403,6 +486,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     ...(delegation ? { delegation } : {}),
     ...(routing ? { routing } : {}),
     ...(localCi ? { localCi } : {}),
+    ...(cli ? { cli } : {}),
     ...(database ? { database } : {})
   }
 }

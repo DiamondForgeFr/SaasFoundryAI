@@ -2,7 +2,15 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { collectInstructionDiagnostics, compareVersions, findShadowingFiles, importsOf, measureCodexInstructions, readClaudeCodeVersion } from '../../../status/instruction-diagnostics'
+import {
+  collectInstructionDiagnostics,
+  compareCliVersions,
+  compareVersions,
+  findShadowingFiles,
+  importsOf,
+  measureCodexInstructions,
+  readClaudeCodeVersion
+} from '../../../status/instruction-diagnostics'
 
 let base: string
 
@@ -74,6 +82,36 @@ describe('compareVersions', () => {
     expect(compareVersions('2.1.276', '2.1.277')).toBeLessThan(0)
     expect(compareVersions('2.1.277', '2.1.277')).toBe(0)
     expect(compareVersions('2.10.0', '2.9.999')).toBeGreaterThan(0)
+  })
+})
+
+describe('compareCliVersions (#1103)', () => {
+  it('orders x.y.z numerically, like compareVersions', () => {
+    expect(compareCliVersions('1.0.1', '1.1.0')).toBeLessThan(0)
+    expect(compareCliVersions('1.1.0', '1.1.0')).toBe(0)
+    expect(compareCliVersions('1.10.0', '1.9.9')).toBeGreaterThan(0)
+  })
+
+  it('reads a prerelease: older than its release, newer than the release before', () => {
+    expect(compareCliVersions('1.1.0-rc.1', '1.1.0')).toBeLessThan(0)
+    expect(compareCliVersions('1.1.0', '1.1.0-rc.1')).toBeGreaterThan(0)
+    expect(compareCliVersions('1.1.0-rc.1', '1.0.9')).toBeGreaterThan(0)
+    expect(compareCliVersions('1.0.0-beta', '1.0.0-beta')).toBe(0)
+  })
+
+  it('orders prerelease tags the way semver does', () => {
+    const ordered = ['1.0.0-alpha', '1.0.0-alpha.1', '1.0.0-alpha.beta', '1.0.0-beta', '1.0.0-beta.2', '1.0.0-beta.11', '1.0.0-rc.1', '1.0.0']
+    for (let i = 0; i < ordered.length - 1; i++) expect(compareCliVersions(ordered[i], ordered[i + 1])).toBeLessThan(0)
+  })
+
+  it('ignores build metadata', () => {
+    expect(compareCliVersions('1.1.0+abc', '1.1.0')).toBe(0)
+  })
+
+  it('answers undefined for what is not a version, where compareVersions answers NaN', () => {
+    expect(compareCliVersions('1.1', '1.1.0')).toBeUndefined()
+    expect(compareCliVersions('latest', '1.1.0')).toBeUndefined()
+    expect(compareVersions('1.1.0-rc.1', '1.1.0')).toBeNaN()
   })
 })
 
