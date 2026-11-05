@@ -8,6 +8,8 @@ import {
   HARNESS_ALLOWED_COMMANDS,
   HARNESS_ASK_COMMANDS,
   HARNESS_HOOKS,
+  HARNESS_SUPERSEDED_COMMANDS,
+  HARNESS_SUPERSEDED_HOOKS,
   claudeSettingsRoots,
   previewHarnessSettings,
   renderHarnessSettings,
@@ -15,6 +17,7 @@ import {
   syncHarnessSettings,
   syncHarnessSettingsForProject
 } from '../../../harness/harness-settings'
+import { SESSION_START_COMMAND, SESSION_START_HOOKS } from '../../../harness/session-start-hook'
 import type { SaaSFoundryManifest } from '../../../types'
 
 const FIXTURES = join(__dirname, '../../fixtures/released-bridges')
@@ -34,7 +37,9 @@ describe('renderHarnessSettings (#935)', () => {
     const before = JSON.parse(await released('1.0.1')) as Settings
     const after = parsed(await released('1.0.1'))
 
-    expect(after.hooks?.SessionStart).toEqual(before.hooks?.SessionStart)
+    // The bare `sf status` command 1.0.1 wrote is replaced by the one that resolves the project's CLI (#1103).
+    expect(before.hooks?.SessionStart?.map((group) => group.hooks[0].command)).toEqual(['sf status --claude-friendly --no-network'])
+    expect(after.hooks?.SessionStart).toEqual(SESSION_START_HOOKS.SessionStart)
     expect(after.hooks?.SubagentStop).toEqual(CLAUDE_CAPTURE_HOOKS.SubagentStop)
     expect(after.hooks?.PostToolUse).toEqual(CLAUDE_CAPTURE_HOOKS.PostToolUse)
     // Everything 1.0.1 allowed is still allowed, in its order, and the delegation rules come after.
@@ -84,7 +89,7 @@ describe('renderHarnessSettings (#935)', () => {
     expect(after.env).toEqual({ FOO: 'bar' })
     expect(after.hooks?.PreToolUse).toEqual(own.hooks.PreToolUse)
     expect(after.hooks?.SessionStart?.[0]).toEqual(own.hooks.SessionStart[0])
-    expect(after.hooks?.SessionStart?.map((group) => group.hooks[0].command)).toContain('sf status --claude-friendly --no-network')
+    expect(after.hooks?.SessionStart?.map((group) => group.hooks[0].command)).toContain(SESSION_START_COMMAND)
     expect(after.hooks?.SubagentStop?.[0]).toEqual(own.hooks.SubagentStop[0])
     expect(after.hooks?.SubagentStop?.some((group) => group.hooks.some((hook) => hook.command === CLAUDE_CAPTURE_COMMAND))).toBe(true)
     expect(after.permissions).toMatchObject({ deny: ['Bash(rm -rf *)'] })
@@ -99,6 +104,64 @@ describe('renderHarnessSettings (#935)', () => {
 
     const commands = (after.hooks?.SubagentStop ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
     expect(commands).toEqual([CLAUDE_CAPTURE_COMMAND])
+  })
+
+  // #1103 — the settings merge only adds a command whose exact string is missing, so a changed hook command has to
+  // supersede the one it replaces, or the project would run both.
+  describe('the session-start hook (#1103)', () => {
+    const sessionStart = (settings: Settings) => (settings.hooks?.SessionStart ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('is the command that resolves the project CLI, with a timeout, and no bare sf', () => {
+      expect(HARNESS_HOOKS.SessionStart).toEqual([{ hooks: [{ type: 'command', command: SESSION_START_COMMAND, timeout: 30 }] }])
+      expect(SESSION_START_COMMAND).toContain('node_modules/.bin/saasfoundryai')
+      expect(SESSION_START_COMMAND).toContain('status --agent-friendly --no-network')
+      expect(SESSION_START_COMMAND).not.toContain('sf status')
+    })
+
+    it.each(['sf status --claude-friendly --no-network', 'sf status --agent-friendly --no-network'])('replaces the bare `%s` and keeps the hooks around it', (bare) => {
+      const own = {
+        hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'echo hello' }] }, { hooks: [{ type: 'command', command: bare }] }, { hooks: [{ type: 'command', command: 'echo after' }] }] }
+      }
+
+      const after = parsed(JSON.stringify(own))
+
+      expect(sessionStart(after)).toEqual(['echo hello', 'echo after', SESSION_START_COMMAND])
+    })
+
+    it('renders the settings of the 1.0.0 and 1.0.1 harness once, with no duplicate on a second pass', async () => {
+      for (const version of ['1.0.0', '1.0.1']) {
+        const first = rendered(await released(version))
+        expect(sessionStart(JSON.parse(first.content) as Settings)).toEqual([SESSION_START_COMMAND])
+        const second = rendered(first.content)
+        expect(second.changed).toBe(false)
+        expect(second.content).toBe(first.content)
+      }
+    })
+
+    it('leaves a session-start command the project wrote itself', () => {
+      const own = {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                { type: 'command', command: 'sf status --agent-friendly' },
+                { type: 'command', command: 'saasfoundryai status --json' }
+              ]
+            }
+          ]
+        }
+      }
+      expect(sessionStart(parsed(JSON.stringify(own)))).toEqual(['sf status --agent-friendly', 'saasfoundryai status --json', SESSION_START_COMMAND])
+    })
+
+    it('shares one superseded list with the capture hook, so a later release appends to it', () => {
+      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(2)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes('sf status --claude-friendly --no-network')).toBe(true)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes('sf agents outcome capture --host codex')).toBe(true)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes(SESSION_START_COMMAND)).toBe(false)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes(CLAUDE_CAPTURE_COMMAND)).toBe(false)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes('echo hello')).toBe(false)
+    })
   })
 
   it('says why text that is not a JSON object cannot be merged, and never throws', () => {

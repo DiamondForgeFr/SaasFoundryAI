@@ -203,6 +203,21 @@ additive transition with `sf update --target-profile full --dry-run --json`. Do 
 `sf new --profile full` inside an existing repository. A retained external product stays on
 the harness path; a throwaway POC uses the documented POC-preservation and clean-project flow.
 
+## Reading the project status
+
+The report of `sf status --agent-friendly --no-network` states facts; these are the rules for acting
+on it:
+
+- A `fail` precondition is resolved before any project action: read its remediation.
+- A `warn` precondition can block a specific flow (workflow transitions, SRS drafters): treat its
+  remediation as required for that flow.
+- A `skip` means the check did not apply or was not requested: do not act on it.
+- The `cli:` line names the CLI that produced the report. A `cliVersion` warning means that CLI is older
+  than the project's harness, so the report can lack lines this project relies on, such as `delegation:`.
+- Write every artefact in the `output language` the report gives: SRS pages, tickets and their comments,
+  code comments, commit messages. The language of the conversation is not the signal: a session held in
+  French still produces English artefacts when the project says `en`.
+
 ## Coding-agent identity and onboarding
 
 At session initialization, use the coding-agent identity explicitly supplied by the current

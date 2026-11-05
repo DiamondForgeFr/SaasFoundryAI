@@ -33,6 +33,7 @@ jest.mock('ora', () => () => {
 import { updateCommand } from '../../../commands/update'
 import { GENERATED_REGION_START } from '../../../harness/agent-instructions'
 import { CLAUDE_CAPTURE_COMMAND } from '../../../harness/delegation-hooks'
+import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../../../installers/harness.installer'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
@@ -114,6 +115,7 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       expect(settings.permissions?.ask).toEqual(expect.arrayContaining(['Bash(sf agents route --record*)']))
       expect(settings.hooks?.SubagentStop?.some((group) => group.hooks.some((hook) => hook.command === CLAUDE_CAPTURE_COMMAND))).toBe(true)
       expect(settings.hooks?.PostToolUse?.some((group) => group.hooks.some((hook) => hook.command === CLAUDE_CAPTURE_COMMAND))).toBe(true)
+      expect(settings.hooks?.SessionStart?.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual([SESSION_START_COMMAND])
       expect(settings.model).toBe('opus')
       expect(settings.hooks?.PreToolUse).toEqual(own.hooks.PreToolUse)
       expect(output()).toContain('.claude/settings.json: delegation capture hooks and harness permissions merged in')
@@ -245,6 +247,26 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       await updateCommand({ nonInteractive: true })
 
       expect(await read(SETTINGS)).toBe(older)
+    })
+
+    // #1103 — the bare `sf status` that 1.0.1 wrote runs whatever `sf` comes first on the PATH
+    it('replaces the bare sf status SessionStart command with the one that resolves the project CLI, keeping the project hook beside it', async () => {
+      const older = JSON.parse(await released('1.0.1', 'settings.json'))
+      const own = { hooks: [{ type: 'command', command: 'echo hello' }] }
+      const hashes = await installHarnessWith(JSON.stringify({ ...older, hooks: { ...older.hooks, SessionStart: [own, ...older.hooks.SessionStart] } }, null, 2))
+      await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+      const before = await read(SETTINGS)
+
+      await updateCommand({ nonInteractive: true, dryRun: true })
+
+      expect(await read(SETTINGS)).toBe(before)
+      expect(JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0]).harnessSettings).toEqual([{ path: SETTINGS, status: 'merged' }])
+
+      await updateCommand({ nonInteractive: true })
+
+      const commands = ((JSON.parse(await read(SETTINGS)) as Settings).hooks?.SessionStart ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+      expect(commands).toEqual(['echo hello', SESSION_START_COMMAND])
+      expect(commands).not.toContain('sf status --claude-friendly --no-network')
     })
 
     it('shows what it would merge in the dry-run report, and writes nothing', async () => {
