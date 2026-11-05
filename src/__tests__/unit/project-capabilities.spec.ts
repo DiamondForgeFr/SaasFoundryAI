@@ -1,4 +1,4 @@
-import { classifyProjectCapabilities } from '../../project-capabilities'
+import { classifyProjectCapabilities, hasTechnicalStack } from '../../project-capabilities'
 import type { SaaSFoundryManifest } from '../../types'
 
 const base: SaaSFoundryManifest = {
@@ -67,5 +67,58 @@ describe('classifyProjectCapabilities', () => {
     { ...base, workflow: { tool: 'github-projects' as const } }
   ])('fails closed on partial or contradictory state', (manifest) => {
     expect(classifyProjectCapabilities(manifest as SaaSFoundryManifest).effectiveProfile).toBe('inconsistent')
+  })
+
+  describe('the stackless email block of manifest migration 002', () => {
+    const cliHarness: SaaSFoundryManifest = {
+      version: '1.1.0',
+      generatedAt: 'x',
+      structure: 'cli',
+      projectName: 'saasfoundryai-cli',
+      workflow: { tool: 'github-projects' },
+      modules: { email: { provider: 'none', version: 1 }, harness: { version: 5, managed: true } }
+    }
+
+    it('is not a technical stack: a cli project with a managed harness is a harness project', () => {
+      expect(classifyProjectCapabilities(cliHarness)).toEqual({ technicalStack: 'absent', collaborationHarness: 'managed', effectiveProfile: 'harness' })
+    })
+
+    it('stays absent when the manifest also lists advanced skills', () => {
+      const manifest = { ...cliHarness, modules: { ...cliHarness.modules, advancedSkills: [] } }
+      expect(classifyProjectCapabilities(manifest).technicalStack).toBe('absent')
+    })
+
+    it.each([
+      ['a provider that sends mail', { email: { provider: 'mailersend' as const, version: 1 } }],
+      ['a database setup', { email: { provider: 'none' as const, version: 1 }, dbSetup: 'docker' as const }],
+      ['an object-storage setup', { email: { provider: 'none' as const, version: 1 }, s3Setup: 'manual' as const }],
+      ['the analytics flag', { email: { provider: 'none' as const, version: 1 }, includeAnalytics: false }]
+    ])('stays contradictory next to %s', (_name, extra) => {
+      const manifest: SaaSFoundryManifest = { ...cliHarness, modules: { ...extra, harness: { version: 5, managed: true } } }
+      expect(classifyProjectCapabilities(manifest)).toMatchObject({ technicalStack: 'inconsistent', effectiveProfile: 'inconsistent' })
+    })
+
+    it('does not make a stack of a non-cli project', () => {
+      const manifest: SaaSFoundryManifest = { ...cliHarness, structure: 'monorepo' }
+      expect(classifyProjectCapabilities(manifest).technicalStack).toBe('inconsistent')
+    })
+
+    it('does not let a legacy multirepo child pass as a standalone harness', () => {
+      const child: SaaSFoundryManifest = {
+        ...cliHarness,
+        projectName: 'acme-api',
+        workflow: undefined,
+        mainBranch: 'main',
+        fileHashes: {},
+        modules: { email: { provider: 'none', version: 1 }, harness: { version: 5, managed: true }, advancedSkills: [] }
+      }
+      expect(classifyProjectCapabilities(child)).toMatchObject({ technicalStack: 'absent', effectiveProfile: 'projection' })
+    })
+  })
+
+  it('keeps hasTechnicalStack true for a contradictory manifest and false for the stackless email block', () => {
+    const cli: SaaSFoundryManifest = { ...base, structure: 'cli', modules: { email: { provider: 'none', version: 1 }, harness: { version: 5, managed: true } }, workflow: { tool: 'github-projects' } }
+    expect(hasTechnicalStack(cli)).toBe(false)
+    expect(hasTechnicalStack({ ...cli, modules: { ...cli.modules, dbSetup: 'docker' } })).toBe(true)
   })
 })
