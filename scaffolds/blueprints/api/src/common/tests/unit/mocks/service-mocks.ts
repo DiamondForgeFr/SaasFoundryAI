@@ -2,6 +2,7 @@
  * Common service mocks for unit tests
  */
 
+import { ForbiddenException } from '@nestjs/common'
 import { MockedFunction } from '@common/tests/unit/types/mocked-function.type'
 
 export const mockLogger = {
@@ -41,6 +42,7 @@ export const mockPrismaService = {
   },
   entity: {
     findUnique: jest.fn() as MockedFunction<PrismaClientMethod>,
+    findMany: jest.fn().mockResolvedValue([]) as MockedFunction<PrismaClientMethod>,
     create: jest.fn() as MockedFunction<PrismaClientMethod>,
     update: jest.fn() as MockedFunction<PrismaClientMethod>
   },
@@ -91,13 +93,42 @@ export const mockPrismaService = {
   $transaction: jest.fn((callback) => callback(mockPrismaService))
 }
 
+export interface FakePermissionCheckerOptions {
+  /** Permissions the user does NOT hold (everything else is held). */
+  denied?: string[]
+  /** The account each entity belongs to (an entity not listed has no known account). */
+  entityAccounts?: Record<string, string>
+}
+
+/** Stands in for the ScopedPermissionChecker that `AccountAccessService.getPermissionChecker` resolves. */
+export const fakePermissionChecker = (options: FakePermissionCheckerOptions = {}) => {
+  const denied = options.denied ?? []
+  return {
+    has: jest.fn((permission: string) => !denied.includes(permission)),
+    assert: jest.fn((permission: string, _scope: unknown, message = 'You do not have the required permissions') => {
+      if (denied.includes(permission)) throw new ForbiddenException(message)
+    }),
+    entityTarget: jest.fn((entityId: string) => ({ kind: 'ENTITY' as const, entityId, accountId: options.entityAccounts?.[entityId] ?? null, ancestorEntityIds: [entityId] }))
+  }
+}
+
 export const mockAccountAccessService = {
   validateUserAccountAccess: jest.fn(),
   validateUserEntityAccess: jest.fn(),
   resolveVisibleEntityIdsForAccount: jest.fn(),
   getSubtreeEntityIds: jest.fn(),
   isPlatformAdmin: jest.fn(),
-  isAccountAdminOn: jest.fn()
+  isAccountAdminOn: jest.fn(),
+  // Scope-aware checks (RBAC scope isolation): `hasPermissionInScope` answers false by default,
+  // `assertPermissionInScope` resolves (permission held) — make it reject with a ForbiddenException to test a denial.
+  resolveEntityTarget: jest.fn(),
+  resolveEntityTargets: jest.fn(),
+  getScopedGrants: jest.fn(),
+  hasPermissionInScope: jest.fn(),
+  assertPermissionInScope: jest.fn(),
+  // `getPermissionChecker` resolves a checker that holds every permission, in an entity with no known account. Make it
+  // resolve `fakePermissionChecker({ denied: [...] })` (or a real ScopedPermissionChecker) to test a denial.
+  getPermissionChecker: jest.fn().mockResolvedValue(fakePermissionChecker())
 }
 
 export const mockJwtService = {

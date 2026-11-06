@@ -26,9 +26,10 @@ export const buildCreateInvitationPayloadSchema = (messages: CreateInvitationPay
         .string()
         .max(30, { message: messages.lastnameMaxLength ?? 'Last name must not exceed 30 characters' })
         .optional(),
-      roleIds: z.array(z.number()).optional(),
-      accountIds: z.array(z.string()).optional(),
-      entityIds: z.array(z.string()).optional(),
+      // Bounded: each target costs authorization work, so a request cannot ask for thousands of them.
+      roleIds: z.array(z.number()).max(20).optional(),
+      accountIds: z.array(z.string()).max(100).optional(),
+      entityIds: z.array(z.string()).max(100).optional(),
       // Suggested account name when this is an account-owner invitation (no targets).
       // Stored in the invitation token and used as the default value at acceptance time.
       accountName: z.string().max(100).optional(),

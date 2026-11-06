@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { Prisma } from '@/generated/prisma/client'
 
 /**
@@ -1345,6 +1345,7 @@ export class AccountService {
         // Custom role: caller needs access to the owning account.
         if (!role.accountId) throw new UnauthorizedException('Custom role is missing its owning account')
         await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'updateCustomRole')
+        await this.assertRoleManagementInAccount(userId, role)
         // Entity-admins can only edit ENTITY-scoped custom roles on their account.
         const isPlatformAdmin = await this.isPlatformAdmin(userId)
         if (!isPlatformAdmin) {
@@ -1416,7 +1417,7 @@ export class AccountService {
 
       return { id: updated.id, name: updated.name }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof BadRequestException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error
       this.logger.error(`Failed to update role: ${error.message}`, 'updateCustomRole')
       throw new BadRequestException('Failed to update role')
     }
@@ -1434,6 +1435,7 @@ export class AccountService {
       if (!role.accountId) throw new UnauthorizedException('Cannot delete a global role from this endpoint')
 
       await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'deleteCustomRole')
+      await this.assertRoleManagementInAccount(userId, role)
 
       // Entity-admins can only delete ENTITY-scoped custom roles.
       const isPlatformAdmin = await this.isPlatformAdmin(userId)
@@ -1447,7 +1449,7 @@ export class AccountService {
       await this.prisma.role.delete({ where: { id: roleId } })
       return { id: roleId }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException) throw error
       this.logger.error(`Failed to delete custom role: ${error.message}`, 'deleteCustomRole')
       throw new BadRequestException('Failed to delete custom role')
     }
@@ -1484,7 +1486,8 @@ export class AccountService {
         if (role.isSystem) throw new UnauthorizedException('Only platform-admin can toggle system roles')
         if (!role.accountId) throw new UnauthorizedException('Only platform-admin can toggle global templates')
         await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'toggleRoleStatus')
-        // Caller also needs ROLE_CUSTOM_MANAGEMENT — enforced at the route via @RequirePermissions.
+        // ROLE_CUSTOM_MANAGEMENT must be held for THIS role's account: the route only checks it somewhere.
+        await this.assertRoleManagementInAccount(userId, role)
         // Entity-admins can only toggle ENTITY-scoped custom roles.
         const isAccountAdmin = await this.isAccountAdminOn(userId, role.accountId)
         if (!isAccountAdmin && role.scope !== 'ENTITY') {
@@ -1495,7 +1498,7 @@ export class AccountService {
       const updated = await this.prisma.role.update({ where: { id: roleId }, data: { isActive } })
       return { id: updated.id, isActive: updated.isActive }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof BadRequestException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error
       this.logger.error(`Failed to toggle role status: ${error.message}`, 'toggleRoleStatus')
       throw new BadRequestException('Failed to toggle role status')
     }
@@ -1844,10 +1847,15 @@ export class AccountService {
    *   - accountRoleIds    : *replace* every ACCOUNT-scoped assignment on (user, account) by these role IDs
    *   - entityRoleIds     : per (entityId, roleIds) tuple, *replace* every ENTITY-scoped assignment on (user, entity)
    *
-   * Authorization:
-   *   - `ACCOUNT_USER_MANAGEMENT` is required for isActive
-   *   - `USER_ROLE_ALLOCATION`    is required for assignment changes
-   *   - decorator-level guard checks at least one of them is held; per-action checks happen here
+   * Authorization (the route guard only proves the actor holds ONE of the two permissions somewhere
+   * in the account; each change is then checked here, in the scope it acts on, and only when it
+   * actually changes something — a field or slice sent back unchanged is a no-op):
+   *   - `isActive` change          → `ACCOUNT_USER_MANAGEMENT` at ACCOUNT scope (PLATFORM or ACCOUNT assignment on this account)
+   *   - `accountRoleIds` change    → `USER_ROLE_ALLOCATION` at ACCOUNT scope
+   *   - an `entityRoleIds` slice   → `USER_ROLE_ALLOCATION` in the scope of THAT entity (PLATFORM, ACCOUNT on its account, ENTITY on it or an ancestor)
+   *   - a role being granted must be a system/global role or belong to this account
+   * An ENTITY assignment therefore never reaches the account level: an entity-admin cannot promote
+   * itself (or anyone) to account admin, nor change a user's active flag, nor touch another entity's roles.
    */
   public async updateAccountUser(
     actorUserId: string,
@@ -1887,6 +1895,7 @@ export class AccountService {
 
       // Validate role scopes
       const allRoleIds = Array.from(new Set([...(payload.accountRoleIds ?? []), ...(payload.entityRoleIds ?? []).flatMap((e) => e.roleIds)]))
+      let requestedRoles: { id: number; accountId: string | null }[] = []
       if (allRoleIds.length > 0) {
         const roles = await this.prisma.role.findMany({ where: { id: { in: allRoleIds } } })
         if (roles.length !== allRoleIds.length) throw new BadRequestException('One or more role IDs could not be found')
@@ -1894,7 +1903,12 @@ export class AccountService {
         const entityRoles = (payload.entityRoleIds ?? []).flatMap((e) => e.roleIds).map((id) => roles.find((r) => r.id === id)!)
         if (accountRoles.some((r) => r.scope !== 'ACCOUNT')) throw new BadRequestException('accountRoleIds must reference ACCOUNT-scoped roles only')
         if (entityRoles.some((r) => r.scope !== 'ENTITY')) throw new BadRequestException('entityRoleIds must reference ENTITY-scoped roles only')
+        requestedRoles = roles
       }
+
+      // Authority: each change is checked in the scope it acts on (the route guard checked none of this).
+      // The plan keeps only the changes that really change something: those are the only ones written.
+      const plan = await this.planAccountUserUpdate(actorUserId, accountId, targetUser, payload, requestedRoles)
 
       // Last-admin guard — refuse a deactivation that would leave any account, or the platform
       // itself, with no remaining active admin. The user must deactivate the whole account
@@ -1932,28 +1946,28 @@ export class AccountService {
         }
       }
 
+      // Only what changed is written. A slice sent back unchanged is left alone: rewriting it from a stale form
+      // could restore a role someone has revoked since the form was loaded, with no permission ever checked.
       const updated = await this.prisma.$transaction(async (tx) => {
-        if (payload.isActive !== undefined) {
-          await tx.user.update({ where: { id: targetUserId }, data: { isActive: payload.isActive } })
+        if (plan.setActive !== null) {
+          await tx.user.update({ where: { id: targetUserId }, data: { isActive: plan.setActive } })
         }
 
-        if (payload.accountRoleIds !== undefined) {
+        if (plan.accountRoleIds !== null) {
           await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, accountId, role: { scope: 'ACCOUNT' } } })
-          if (payload.accountRoleIds.length > 0) {
+          if (plan.accountRoleIds.length > 0) {
             await tx.userRoleAssignment.createMany({
-              data: payload.accountRoleIds.map((roleId) => ({ userId: targetUserId, roleId, accountId }))
+              data: plan.accountRoleIds.map((roleId) => ({ userId: targetUserId, roleId, accountId }))
             })
           }
         }
 
-        if (payload.entityRoleIds !== undefined) {
-          for (const { entityId, roleIds } of payload.entityRoleIds) {
-            await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, entityId, role: { scope: 'ENTITY' } } })
-            if (roleIds.length > 0) {
-              await tx.userRoleAssignment.createMany({
-                data: roleIds.map((roleId) => ({ userId: targetUserId, roleId, entityId }))
-              })
-            }
+        for (const { entityId, roleIds } of plan.entitySlices) {
+          await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, entityId, role: { scope: 'ENTITY' } } })
+          if (roleIds.length > 0) {
+            await tx.userRoleAssignment.createMany({
+              data: roleIds.map((roleId) => ({ userId: targetUserId, roleId, entityId }))
+            })
           }
         }
 
@@ -1962,7 +1976,7 @@ export class AccountService {
 
       return { id: updated.id, isActive: updated.isActive }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof BadRequestException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error
       this.logger.error(`Failed to update account user ${targetUserId}: ${error.message}`, 'updateAccountUser')
       throw new BadRequestException('Failed to update user')
     }
@@ -2051,6 +2065,113 @@ export class AccountService {
   /**
    * Privates methods
    */
+
+  /**
+   * `updateAccountUser` plan: compares the payload with the target's stored state, checks every real change
+   * in the scope it acts on (see the method's doc) and returns ONLY what must be written. A field or slice
+   * that matches the stored state changes nothing, needs no permission and is not written back, so a client
+   * may send the whole form without a stale value undoing someone else's revocation.
+   *
+   * Cost does not grow with the number of slices: the target's assignments are read in one query, the
+   * actor's assignments and the slices' entities once (a scoped permission checker), the rest is in memory.
+   *
+   * Throws a 403 for a missing permission and for a role that belongs to another account.
+   */
+  private async planAccountUserUpdate(
+    actorUserId: string,
+    accountId: string,
+    target: { id: string; isActive: boolean },
+    payload: { isActive?: boolean; accountRoleIds?: number[]; entityRoleIds?: { entityId: string; roleIds: number[] }[] },
+    requestedRoles: { id: number; accountId: string | null }[]
+  ): Promise<{ setActive: boolean | null; accountRoleIds: number[] | null; entitySlices: { entityId: string; roleIds: number[] }[] }> {
+    const unique = (roleIds: number[]) => [...new Set(roleIds)]
+    const slices = (payload.entityRoleIds ?? []).map((slice) => ({ entityId: slice.entityId, roleIds: unique(slice.roleIds) }))
+    const sliceEntityIds = [...new Set(slices.map((slice) => slice.entityId))]
+
+    // The target's stored ACCOUNT roles on this account and ENTITY roles on the sliced entities: one query.
+    const storedAccountRoleIds: number[] = []
+    const storedEntityRoleIds = new Map<string, number[]>()
+    if (payload.accountRoleIds !== undefined || sliceEntityIds.length > 0) {
+      const stored = await this.prisma.userRoleAssignment.findMany({
+        where: {
+          userId: target.id,
+          OR: [{ accountId, role: { scope: 'ACCOUNT' } }, ...(sliceEntityIds.length > 0 ? [{ entityId: { in: sliceEntityIds }, role: { scope: 'ENTITY' as const } }] : [])]
+        },
+        select: { roleId: true, accountId: true, entityId: true }
+      })
+      for (const assignment of stored) {
+        if (assignment.entityId === null) storedAccountRoleIds.push(assignment.roleId)
+        else storedEntityRoleIds.set(assignment.entityId, [...(storedEntityRoleIds.get(assignment.entityId) ?? []), assignment.roleId])
+      }
+    }
+
+    const setActive = payload.isActive !== undefined && payload.isActive !== target.isActive ? payload.isActive : null
+    const requestedAccountRoleIds = payload.accountRoleIds === undefined ? null : unique(payload.accountRoleIds)
+    const accountRoleIds = requestedAccountRoleIds !== null && !this.sameRoleSet(storedAccountRoleIds, requestedAccountRoleIds) ? requestedAccountRoleIds : null
+    const entitySlices = slices.filter((slice) => !this.sameRoleSet(storedEntityRoleIds.get(slice.entityId) ?? [], slice.roleIds))
+
+    if (setActive === null && accountRoleIds === null && entitySlices.length === 0) return { setActive, accountRoleIds, entitySlices }
+
+    // Every real change is checked against the actor's rights in its own scope, from one set of loaded assignments.
+    const checker = await this.accountAccessService.getPermissionChecker(
+      actorUserId,
+      entitySlices.map((slice) => slice.entityId)
+    )
+
+    if (setActive !== null) {
+      checker.assert('ACCOUNT_USER_MANAGEMENT', { kind: 'ACCOUNT', accountId }, 'You are not allowed to change the status of the users of this account')
+    }
+
+    if (accountRoleIds !== null) {
+      checker.assert('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId }, 'You are not allowed to allocate account roles in this account')
+      this.assertRolesUsableInAccount(
+        requestedRoles,
+        accountRoleIds.filter((roleId) => !storedAccountRoleIds.includes(roleId)),
+        accountId
+      )
+    }
+
+    for (const { entityId, roleIds } of entitySlices) {
+      checker.assert('USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId }, 'You are not allowed to allocate roles in this entity')
+      this.assertRolesUsableInAccount(
+        requestedRoles,
+        roleIds.filter((roleId) => !(storedEntityRoleIds.get(entityId) ?? []).includes(roleId)),
+        accountId
+      )
+    }
+
+    return { setActive, accountRoleIds, entitySlices }
+  }
+
+  /**
+   * ROLE_CUSTOM_MANAGEMENT must be held for the account that owns the role. The route guard cannot
+   * tell (the route carries a role id, not an account id), so a permission held in another account
+   * would otherwise pass. An ENTITY-scoped role also accepts the ENTITY assignments held on entities
+   * of that account (the entity-admin manages ENTITY roles); an ACCOUNT-scoped role does not.
+   */
+  private async assertRoleManagementInAccount(userId: string, role: { accountId: string | null; scope: string }): Promise<void> {
+    if (!role.accountId) return
+
+    await this.accountAccessService.assertPermissionInScope(
+      userId,
+      'ROLE_CUSTOM_MANAGEMENT',
+      { kind: 'ACCOUNT', accountId: role.accountId, includeEntityAssignments: role.scope === 'ENTITY' },
+      'You are not allowed to manage the roles of this account'
+    )
+  }
+
+  /** A role can be granted in an account when it is a system/global role (no owning account) or belongs to that account. */
+  private assertRolesUsableInAccount(roles: { id: number; accountId: string | null }[], roleIds: number[], accountId: string): void {
+    const foreign = roles.filter((role) => roleIds.includes(role.id) && role.accountId !== null && role.accountId !== accountId)
+    if (foreign.length > 0) throw new ForbiddenException('One or more roles do not belong to this account')
+  }
+
+  private sameRoleSet(left: number[], right: number[]): boolean {
+    const a = new Set(left)
+    const b = new Set(right)
+    return a.size === b.size && [...a].every((roleId) => b.has(roleId))
+  }
+
   /**
    * Discriminate a user's pending state purely from data (no heuristic on link counts):
    *   - active user                              → null (not pending)

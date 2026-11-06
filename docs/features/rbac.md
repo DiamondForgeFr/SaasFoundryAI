@@ -57,20 +57,62 @@ The NestJS guard returns `401` when no authenticated user exists and `403` when 
 
 ## Scope follows the request
 
-The backend resolves the active authorization context from explicit scope headers or route parameters:
+A user holds several role assignments (a platform role, an account role, one role per entity). The guard counts only the ones that apply to the account or entity the request acts on, so a role held in
+one place never authorises an action somewhere else. A route declares its target with `@ScopeFrom`:
 
-1. `X-Scope-Account-Id`
-2. `X-Scope-Entity-Id`
-3. `:accountId`
-4. `:entityId`
+```ts
+@Patch(':id/status')
+@RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+@ScopeFrom('id', 'ACCOUNT') // `:id` is an account id
+updateStatus() {}
+```
 
-The React application receives the elected scope from the session, sends it with API requests and filters routes, tabs and actions through the same module, sub-module and permission vocabulary. UI
-hiding improves clarity; the backend guard remains the authority.
+| Target                  | Assignments that count                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account A (`'ACCOUNT'`) | Platform roles; account roles held on A. Entity roles of an entity of A count only on the routes that opt in with `includeEntityAssignments`.           |
+| Entity E (`'ENTITY'`)   | Platform roles; account roles held on E's account; entity roles held on E or on one of its ancestors. Never a descendant, a sibling or another account. |
+
+The backend resolves the target in this order: the route's `@ScopeFrom`, then a legacy `:accountId` or `:entityId` route parameter, then the `X-Scope-Account-Id` / `X-Scope-Entity-Id` headers. The
+headers are the weakest hint: they are read only when the route declares no scope, so they cannot redirect a check away from the account or entity named in the URL. The React application does not send
+them; it receives the elected scope from the session and filters routes, tabs and actions through the same module, sub-module and permission vocabulary. UI hiding improves clarity; the backend guard
+remains the authority.
+
+Routes of the `PLATFORM_ADMINISTRATION` module count platform roles only, whatever the target, so a custom account or entity role that carries a platform section never gives platform reach. A URL that
+names an account or entity that does not exist answers `404`, and an account the user does not belong to answers `401`, as before; a target the user belongs to but holds no applicable role on answers
+`403`.
+
+The services check what the guard cannot see. `PATCH /accounts/:id/users/:userId` checks each change in the scope it acts on (`ACCOUNT_USER_MANAGEMENT` at account scope to change the active flag,
+`USER_ROLE_ALLOCATION` at account scope for the account roles, `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice), and `POST /invitations`, `POST /entities` and the role routes check
+the permission in the scope of each target. An entity administrator therefore reads the users and roles of its account, invites users and allocates roles inside its own entity and that entity's
+subtree, and manages the custom roles of `ENTITY` scope of the account (these are account-wide role definitions, not limited to its own entity). It changes nothing else at the account level: no
+account role, no user status, no account setting.
 
 ::: warning Scope-less endpoints
 
-Endpoints without a scope hint use the union of the user's assignments for backward compatibility. New tenant-sensitive endpoints should carry an account or entity scope so the guard can enforce the
-narrowest context.
+Endpoints without a scope use the union of the user's assignments, which is what lets a role held in one account act on another. Every route that takes an account or entity id must declare it with
+`@ScopeFrom`; when the target is not in the URL (the body, or a role id), the service must check the permission in the scope of each target.
+
+:::
+
+::: tip Updating a project generated before 1.1.1
+
+Versions before 1.1.1 checked an account or entity route against the union of every role the user holds: an entity role, or the admin role of another account the user is only a member of, could pass
+account-admin checks (a seeded `entity-admin` could promote itself to account admin). The fix lives in blueprint files that no installer owns, so `sf update` applies it with the three-way merge: a
+file you did not edit is updated in place, and a file you edited gets a `.saasfoundry.new` sidecar to merge by hand. The files involved are `permissions.guard.ts`, `require-permissions.decorator.ts`,
+`authenticated-request.type.ts`, `jwt.strategy.ts`, `jwt-auth.guard.ts`, `account-access.service.ts`, `account.controller.ts`, `account.service.ts`, `entity.controller.ts`, `entity.service.ts`,
+`invitation.service.ts` and `shared-validation/invitation.ts`, plus the new `scope-filter.ts`, `permission-checker.ts` and `authenticated-user.include.ts`.
+
+If you edited `jwt.strategy.ts`, merge it first: it must load each assignment's `entity` (take `authenticatedUserInclude`). `AuthenticatedUser` now requires `entity`, so a stale strategy fails `tsc`
+instead of quietly taking the account-route rights of every entity administrator away until the next token refresh.
+
+Three things change for code you wrote:
+
+- `PermissionsGuard` takes `AccountAccessService` as a constructor dependency. The module is global; add `AccountAccessModule` to the testing modules of your own e2e specs.
+- A route that takes an account or entity id must declare it with `@ScopeFrom`, or it keeps the union of every role.
+- The per-target checks answer `403`; the existing `401` checks keep their status.
+
+An invitation to an address that already has a pending one now carries over its targets and roles only if you are allowed to grant them: the merged invitation is authorized as if you had submitted it.
+The `accountIds`, `entityIds` and `roleIds` lists are deduplicated and capped (100, 100 and 20).
 
 :::
 

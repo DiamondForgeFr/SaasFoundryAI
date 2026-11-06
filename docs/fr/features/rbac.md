@@ -57,20 +57,63 @@ Le guard NestJS renvoie `401` en l'absence d'utilisateur authentifié et `403` l
 
 ## La portée suit la requête
 
-Le backend résout le contexte d'autorisation actif à partir des en-têtes explicites ou des paramètres de route :
+Un utilisateur détient plusieurs affectations de rôle (un rôle plateforme, un rôle de compte, un rôle par entité). Le guard ne compte que celles qui s'appliquent au compte ou à l'entité sur lesquels
+la requête agit : un rôle détenu à un endroit n'autorise donc jamais une action ailleurs. Une route déclare sa cible avec `@ScopeFrom` :
 
-1. `X-Scope-Account-Id`
-2. `X-Scope-Entity-Id`
-3. `:accountId`
-4. `:entityId`
+```ts
+@Patch(':id/status')
+@RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+@ScopeFrom('id', 'ACCOUNT') // `:id` est un identifiant de compte
+updateStatus() {}
+```
 
-L'application React reçoit la portée choisie depuis la session, l'envoie avec les appels API et filtre routes, onglets et actions avec le même vocabulaire de modules, sous-modules et permissions.
-Masquer une action améliore la lisibilité ; le guard backend reste l'autorité.
+| Cible                  | Affectations qui comptent                                                                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Compte A (`'ACCOUNT'`) | Rôles plateforme ; rôles de compte détenus sur A. Les rôles d'entité d'une entité de A ne comptent que sur les routes qui l'activent avec `includeEntityAssignments`.               |
+| Entité E (`'ENTITY'`)  | Rôles plateforme ; rôles de compte détenus sur le compte de E ; rôles d'entité détenus sur E ou sur l'un de ses ancêtres. Jamais un descendant, une entité sœur ou un autre compte. |
+
+Le backend résout la cible dans cet ordre : le `@ScopeFrom` de la route, puis un paramètre de route historique `:accountId` ou `:entityId`, puis les en-têtes `X-Scope-Account-Id` /
+`X-Scope-Entity-Id`. Les en-têtes sont l'indice le plus faible : ils ne sont lus que si la route ne déclare aucune portée, et ne peuvent donc pas détourner un contrôle du compte ou de l'entité nommés
+dans l'URL. L'application React ne les envoie pas : elle reçoit la portée choisie depuis la session et filtre routes, onglets et actions avec le même vocabulaire de modules, sous-modules et
+permissions. Masquer une action améliore la lisibilité ; le guard backend reste l'autorité.
+
+Les routes du module `PLATFORM_ADMINISTRATION` ne comptent que les rôles plateforme, quelle que soit la cible : un rôle personnalisé de compte ou d'entité qui porte une section de plateforme ne donne
+donc jamais l'accès plateforme. Une URL qui nomme un compte ou une entité inexistants répond `404`, et un compte auquel l'utilisateur n'appartient pas répond `401`, comme avant ; une cible à laquelle
+l'utilisateur appartient mais sur laquelle il n'a aucun rôle applicable répond `403`.
+
+Les services contrôlent ce que le guard ne voit pas. `PATCH /accounts/:id/users/:userId` contrôle chaque modification dans la portée où elle agit (`ACCOUNT_USER_MANAGEMENT` au niveau du compte pour
+l'état actif, `USER_ROLE_ALLOCATION` au niveau du compte pour les rôles de compte, `USER_ROLE_ALLOCATION` dans la portée de l'entité pour chaque tranche d'entité), et `POST /invitations`,
+`POST /entities` ainsi que les routes de rôles contrôlent la permission dans la portée de chaque cible. Un administrateur d'entité lit donc les utilisateurs et les rôles de son compte, invite des
+utilisateurs et attribue des rôles dans son entité et dans le sous-arbre de celle-ci, et gère les rôles personnalisés de portée `ENTITY` du compte (ce sont des définitions de rôle valables pour tout
+le compte, pas limitées à son entité). Il ne modifie rien d'autre au niveau du compte : ni rôle de compte, ni état d'utilisateur, ni paramètre du compte.
 
 ::: warning Endpoints sans portée
 
-Pour compatibilité, les endpoints sans indication de portée utilisent l'union des affectations de l'utilisateur. Tout nouvel endpoint sensible au tenant devrait porter une portée compte ou entité afin
-d'imposer le contexte le plus étroit.
+Un endpoint sans portée utilise l'union des affectations de l'utilisateur, ce qui permet à un rôle détenu dans un compte d'agir sur un autre. Toute route qui prend un identifiant de compte ou d'entité
+doit le déclarer avec `@ScopeFrom` ; quand la cible n'est pas dans l'URL (corps de requête, identifiant de rôle), le service doit contrôler la permission dans la portée de chaque cible.
+
+:::
+
+::: tip Mettre à jour un projet généré avant la 1.1.1
+
+Avant la 1.1.1, une route de compte ou d'entité était contrôlée contre l'union de tous les rôles de l'utilisateur : un rôle d'entité, ou le rôle d'administrateur d'un autre compte dont l'utilisateur
+est simple membre, pouvait passer les contrôles d'administrateur de compte (un `entity-admin` fourni par défaut pouvait se promouvoir administrateur du compte). Le correctif touche des fichiers du
+blueprint qu'aucun installeur ne possède : `sf update` l'applique par fusion à trois voies. Un fichier que vous n'avez pas modifié est mis à jour sur place ; un fichier modifié reçoit un fichier
+annexe `.saasfoundry.new` à fusionner à la main. Les fichiers concernés sont `permissions.guard.ts`, `require-permissions.decorator.ts`, `authenticated-request.type.ts`, `jwt.strategy.ts`,
+`jwt-auth.guard.ts`, `account-access.service.ts`, `account.controller.ts`, `account.service.ts`, `entity.controller.ts`, `entity.service.ts`, `invitation.service.ts` et
+`shared-validation/invitation.ts`, ainsi que les nouveaux `scope-filter.ts`, `permission-checker.ts` et `authenticated-user.include.ts`.
+
+Si vous avez modifié `jwt.strategy.ts`, fusionnez-le en premier : il doit charger l'`entity` de chaque affectation (reprenez `authenticatedUserInclude`). `AuthenticatedUser` exige désormais `entity` :
+une stratégie périmée fait échouer `tsc` au lieu de retirer silencieusement à chaque administrateur d'entité ses droits sur les routes de compte jusqu'au prochain rafraîchissement du jeton.
+
+Trois points changent pour le code que vous avez écrit :
+
+- `PermissionsGuard` reçoit `AccountAccessService` en dépendance de constructeur. Le module est global ; ajoutez `AccountAccessModule` aux modules de test de vos propres specs e2e.
+- Une route qui prend un identifiant de compte ou d'entité doit le déclarer avec `@ScopeFrom`, sinon elle garde l'union de tous les rôles.
+- Les contrôles par cible répondent `403` ; les contrôles `401` existants gardent leur statut.
+
+Une invitation vers une adresse qui en a déjà une en attente reprend désormais ses cibles et ses rôles seulement si vous avez le droit de les attribuer : l'invitation fusionnée est autorisée comme si
+vous l'aviez soumise en entier. Les listes `accountIds`, `entityIds` et `roleIds` sont dédoublonnées et plafonnées (100, 100 et 20).
 
 :::
 
