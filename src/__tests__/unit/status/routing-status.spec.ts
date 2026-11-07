@@ -5,6 +5,7 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 
+import { appendCaptureError } from '../../../harness/capture-errors'
 import { CLAUDE_CAPTURE_HOOKS, type CaptureProbe } from '../../../harness/delegation-hooks'
 import { ROUTING_GRID_VERSION } from '../../../harness/routing-grid'
 import { emptyLocalRouting, localRoutingPath, updateLocalRouting } from '../../../harness/routing-local'
@@ -162,7 +163,8 @@ describe('the automatic routing in sf status (#1035)', () => {
         capture: [
           { agent: 'claude-code', state: 'missing' },
           { agent: 'codex', state: 'missing' }
-        ]
+        ],
+        captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
         `- routing: grid v${ROUTING_GRID_VERSION}, 0 overrides; shipped grid and shared overrides, no local adjustment; claude-code capture hook missing (run sf agents refresh --scope shared); codex capture hook missing`
@@ -189,14 +191,16 @@ describe('the automatic routing in sf status (#1035)', () => {
         adjustment: 'on',
         adjustments: [{ ...move }],
         holds: [{ kind: 'terminal-ci', provider: 'claude-code', reason: 'top-of-ladder', since: AT }],
-        capture: [{ agent: 'claude-code', state: 'enforced' }]
+        capture: [{ agent: 'claude-code', state: 'enforced' }],
+        captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
         `- routing: grid v${ROUTING_GRID_VERSION}, 0 overrides; 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on`
       )
       expect(await render(renderAgentFriendly)).toContain('terminal-ci (claude-code) held: top-of-ladder since 2026-10-20')
       expect(await render(renderHuman)).toMatch(/Routing:.*1 local automatic adjustment not promoted/)
-      expect(JSON.parse(await render(renderJson)).routing).toEqual(routing)
+      // `since` is the clock of each collection: the two reads are a few milliseconds apart
+      expect(JSON.parse(await render(renderJson)).routing).toEqual({ ...routing, captureErrors: { count: 0, since: expect.any(String) } })
     })
 
     it('reports a declared hook as not runnable when the project resolves no CLI that has the command', async () => {
@@ -244,6 +248,80 @@ describe('the automatic routing in sf status (#1035)', () => {
         expect(await render(renderAgentFriendly)).toContain(`- routing: grid v${ROUTING_GRID_VERSION}, 2 overrides (multi-file-feature → plan; tier build for claude-code); `)
         expect(await render(renderHuman)).toMatch(/Routing:.*2 overrides \(multi-file-feature → plan; tier build for claude-code\)/)
         expect(JSON.parse(await render(renderJson)).routing).toMatchObject({ gridVersion: ROUTING_GRID_VERSION, overrides: routing.overrides })
+      })
+    })
+
+    // #1105 — the host discards the output of a capture hook, so a failure leaves no other trace than this
+    describe('the capture errors', () => {
+      const NOW = new Date('2026-11-07T10:00:00.000Z')
+      const day = 86_400_000
+      const failure = (message: string, daysAgo: number, stage: 'payload' | 'ledger' | 'adjustment' | 'ignored' = 'ledger') =>
+        appendCaptureError(layer(), { host: 'claude-code', event: 'SubagentStop', stage, message }, () => new Date(NOW.getTime() - daysAgo * day))
+      const collect = async () => collectStatus(root, { checkNetwork: false, captureProbe: runnable, now: () => NOW })
+      const checkOf = async () => evaluatePreconditions(await collect()).find((entry) => entry.name === 'captureErrors')!
+
+      it('says nothing on the routing line, and an ok precondition, while the log is empty', async () => {
+        await manifest({ version: 4, agents: ['claude-code'] })
+        const status = await collect()
+        expect((status.routing as StatusRoutingState).captureErrors).toEqual({ count: 0, since: '2026-10-31T10:00:00.000Z' })
+        expect(routingSummary(status.routing as StatusRoutingState)).not.toContain('capture error')
+        expect(await checkOf()).toEqual({ name: 'captureErrors', description: 'Delegation capture records every run', status: 'ok', details: 'No capture error in the last 7 days' })
+      })
+
+      it('counts the errors of the last 7 days, names the last one on the routing line, and warns with where to look', async () => {
+        await manifest({ version: 4, agents: ['claude-code'] })
+        await failure('the hook payload is not valid JSON', 12, 'payload')
+        await failure('the ledger is locked by another process', 3, 'ledger')
+        await failure('the routing adjustment was skipped (EACCES)', 1, 'adjustment')
+        const status = await collect()
+        const routing = status.routing as StatusRoutingState
+        expect(routing.captureErrors).toMatchObject({ count: 2, last: { at: '2026-11-06T10:00:00.000Z', stage: 'adjustment', message: 'the routing adjustment was skipped (EACCES)' } })
+        const line = routingSummary(routing)
+        expect(line).toContain('; 2 capture errors in 7 days, last 2026-11-06: the routing adjustment was skipped (EACCES)')
+        expect(renderAgentFriendly({ report: status, preconditions: evaluatePreconditions(status) })).toContain(`- routing: grid v${ROUTING_GRID_VERSION}`)
+        expect(await render(renderHuman)).toMatch(/Routing:.*2 capture errors in 7 days/)
+        const warning = await checkOf()
+        expect(warning).toMatchObject({ status: 'warn', details: '2 capture errors in the last 7 days; last 2026-11-06T10:00:00.000Z (adjustment): the routing adjustment was skipped (EACCES)' })
+        expect(warning.remediation).toContain('capture-errors.jsonl')
+        expect(warning.remediation).toContain('sf agents routing report')
+      })
+
+      it('speaks of one error in the singular, and forgets an error older than the window', async () => {
+        await manifest({ version: 4, agents: ['claude-code'] })
+        await failure('an old failure', 9)
+        expect((await checkOf()).status).toBe('ok')
+        await failure('a recent one', 1)
+        expect(routingSummary((await collect()).routing as StatusRoutingState)).toContain('; 1 capture error in 7 days, last 2026-11-06: a recent one')
+        expect((await checkOf()).details).toMatch(/^1 capture error in the last 7 days; /)
+      })
+
+      it('carries the field additively in the JSON, next to the keys it already had', async () => {
+        await manifest({ version: 4, agents: ['claude-code'] })
+        await failure('the ledger is locked', 1)
+        const status = await collect()
+        const json = JSON.parse(renderJson({ report: status, preconditions: evaluatePreconditions(status) }))
+        expect(Object.keys(json.routing)).toEqual(['gridVersion', 'overrides', 'tierAgents', 'adjustment', 'adjustments', 'holds', 'capture', 'captureErrors'])
+        expect(json.routing.captureErrors).toMatchObject({ count: 1, since: '2026-10-31T10:00:00.000Z', last: { stage: 'ledger', message: 'the ledger is locked' } })
+      })
+
+      it('is skipped without a harness, or when the routing cannot be read, and never fails the status', async () => {
+        await manifest()
+        expect(await checkOf()).toMatchObject({ status: 'skip', details: 'No managed harness' })
+        await manifest({ version: 4, agents: ['claude-code'] })
+        await mkdir(layer(), { recursive: true })
+        await writeFile(localRoutingPath(layer()), '{ nope')
+        expect(await checkOf()).toMatchObject({ status: 'skip', details: 'The routing could not be read' })
+      })
+
+      it('counts nothing outside a Git checkout, which has no log to read', async () => {
+        const elsewhere = await realpath(await mkdtemp(join(tmpdir(), 'sf-status-capture-nogit-')))
+        try {
+          await writeFile(join(elsewhere, '.saasfoundry.json'), JSON.stringify({ version: '1.0.0-beta', projectName: 'x', structure: 'cli', modules: { harness: { version: 4 } } }))
+          const status = await collectStatus(elsewhere, { checkNetwork: false, captureProbe: runnable, now: () => NOW })
+          expect((status.routing as StatusRoutingState).captureErrors).toEqual({ count: 0, since: '2026-10-31T10:00:00.000Z' })
+        } finally {
+          await rm(elsewhere, { recursive: true, force: true })
+        }
       })
     })
 

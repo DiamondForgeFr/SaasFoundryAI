@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
+import { appendCaptureError } from '../../../harness/capture-errors'
 import { CLAUDE_CAPTURE_HOOKS } from '../../../harness/delegation-hooks'
 import { agentToken, buildRunRecord, buildStatusRecord, foldLedger, type LedgerRun } from '../../../harness/delegation-ledger'
 import { resolveAdjustPolicy, type RoutingAdjustConfig } from '../../../harness/routing-adjust-config'
@@ -47,7 +48,20 @@ describe('sf agents routing report (#1035, AC-3)', () => {
   it('has a stable, versioned envelope', async () => {
     const report = await buildRoutingReport(state([]), NOW, { probe: probe(true) })
     expect(REPORT_VERSION).toBe(2)
-    expect(Object.keys(report)).toEqual(['reportVersion', 'generatedAt', 'ledger', 'policy', 'unpricedModels', 'capture', 'kinds', 'tickets', 'localAdjustments', 'holds', 'staleTierAgents'])
+    expect(Object.keys(report)).toEqual([
+      'reportVersion',
+      'generatedAt',
+      'ledger',
+      'policy',
+      'unpricedModels',
+      'capture',
+      'captureErrors',
+      'kinds',
+      'tickets',
+      'localAdjustments',
+      'holds',
+      'staleTierAgents'
+    ])
     expect(report).toMatchObject({
       reportVersion: 2,
       generatedAt: NOW.toISOString(),
@@ -279,6 +293,28 @@ describe('sf agents routing report (#1035, AC-3)', () => {
         { agent: 'gemini-cli', state: 'not-enforced' }
       ])
       expect((await buildRoutingReport(state([], { agents }), NOW, { probe: probe(false) })).capture[0]).toEqual({ agent: 'claude-code', state: 'declared-not-runnable' })
+    })
+
+    // #1105 — a hook that fails leaves no other trace: the report says how many delegations it may have lost
+    it('counts the capture errors of the last 7 days, names the last one, and says none when the log is empty', async () => {
+      const dir = join(root, 'saasfoundry')
+      const withDir = { ...state([]), dir }
+      const empty = await buildRoutingReport(withDir, NOW, { probe: probe(true) })
+      expect(empty.captureErrors).toEqual({ count: 0, since: '2026-10-13T08:00:00.000Z' })
+      expect(renderRoutingReport(empty)).toContain('Capture errors: none in 7 days.')
+
+      const day = 86_400_000
+      await appendCaptureError(dir, { host: 'claude-code', event: 'SubagentStop', stage: 'payload', message: 'old' }, () => new Date(NOW.getTime() - 9 * day))
+      await appendCaptureError(dir, { host: 'claude-code', event: 'SubagentStop', stage: 'ledger', message: 'the ledger is locked by another process' }, () => new Date(NOW.getTime() - 2 * day))
+      await appendCaptureError(dir, { host: 'codex', event: 'SubagentStop', stage: 'adjustment', message: 'the routing adjustment was skipped' }, () => new Date(NOW.getTime() - day))
+      const report = await buildRoutingReport(withDir, NOW, { probe: probe(true) })
+      expect(report.captureErrors).toMatchObject({ count: 2, last: { stage: 'adjustment', message: 'the routing adjustment was skipped' } })
+      expect(renderRoutingReport(report)).toContain('Capture errors: 2 in 7 days (last 2026-10-19, adjustment: the routing adjustment was skipped).')
+    })
+
+    it('reports no capture error outside a Git checkout, which has no log to read', async () => {
+      const report = await buildRoutingReport(state([]), NOW, { probe: probe(true) })
+      expect(report.captureErrors).toEqual({ count: 0, since: '2026-10-13T08:00:00.000Z' })
     })
 
     it('lists the local moves nobody promoted yet, with the figure that justified each and the tier agents that fell behind', async () => {

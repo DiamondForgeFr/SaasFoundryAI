@@ -5,6 +5,7 @@ import path from 'path'
 import { type CliChannel, isCliSourceRepository } from '../cli-channel'
 import type { ManagedFileState } from '../harness/agent-instructions'
 import { inspectTierAgents } from '../harness/agent-support'
+import { captureErrorWindowStart, readCaptureErrors, type CaptureErrorSummary } from '../harness/capture-errors'
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
 import { captureState, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
@@ -130,6 +131,11 @@ export interface StatusRoutingState {
   /** Kinds the adjustment looked at and left where they are, with the reason (also in the log of the local layer). */
   holds: { kind: string; provider: string; reason: string; since: string }[]
   capture: { agent: string; state: CaptureState }[]
+  /**
+   * The failures the capture hooks logged in the last 7 days (#1105): a hook that fails leaves no other trace, since
+   * the host discards its output. Optional for a caller that builds a report without reading the log.
+   */
+  captureErrors?: CaptureErrorSummary
 }
 export type StatusRouting = StatusRoutingState | { error: string }
 
@@ -238,6 +244,8 @@ export interface CollectOptions {
   harnessCurrentVersion?: number
   /** The home directory whose `.claude/skills` holds the personal skills; defaults to the current user's (`$HOME`). Injectable for a spec. */
   userHome?: string
+  /** The clock the capture error window is counted from; defaults to now. Injectable for a spec. */
+  now?: () => Date
 }
 
 function runSafe(cmd: string, cwd: string): string | null {
@@ -364,12 +372,20 @@ function routingOverrides(routing: RoutingOverrides | undefined): StatusRoutingO
   return { kinds, tiers }
 }
 
-async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null, declaredAgents: HarnessAgent[] | undefined, probe?: CaptureProbe): Promise<StatusRouting | undefined> {
+async function collectRouting(
+  projectRoot: string,
+  manifest: SaaSFoundryManifest | null,
+  declaredAgents: HarnessAgent[] | undefined,
+  probe?: CaptureProbe,
+  now: () => Date = () => new Date()
+): Promise<StatusRouting | undefined> {
   const harness = manifest?.modules?.harness
   if (!manifest || !harness) return undefined
   try {
     const dir = await resolveLedgerDir(projectRoot)
     const local = dir ? await readLocalRouting(dir) : emptyLocalRouting()
+    const since = captureErrorWindowStart(now())
+    const captureErrors = dir ? await readCaptureErrors(dir, { since }) : { count: 0, since: since.toISOString() }
     // The effective declaration (shared and local) when the instruction files let it be read, otherwise what the manifest says.
     const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harness.agents ?? ['claude-code'])
     return {
@@ -387,7 +403,8 @@ async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest
         at: adjustment.at
       })),
       holds: listLocalHolds(local).map(({ kind, provider, hold }) => ({ kind, provider, reason: hold.reason, since: hold.since })),
-      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) })))
+      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) }))),
+      captureErrors
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
@@ -470,7 +487,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
   const personalSkills = collectPersonalSkills(projectRoot, manifest, options.userHome)
   const delegation = await collectDelegation(projectRoot, manifest)
-  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
+  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe, options.now)
   const localCi = collectLocalCi(projectRoot)
   // The gate is applied by the github-projects tool's pull request commands only
   const localCiGate = manifest?.workflow?.tool === 'github-projects' ? resolveLocalCiGate(projectRoot, manifest) : undefined

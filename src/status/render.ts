@@ -1,6 +1,7 @@
 import chalk from 'chalk'
 
 import { describeCliVersion } from '../cli-channel'
+import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
 import { localCiGateSummary } from '../local-ci-gate'
 import type { StatusCli, StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
@@ -49,7 +50,17 @@ export function routingSummary(routing: StatusRouting): string {
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
   const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
-  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+}
+
+/**
+ * The failures the capture hooks logged (#1105), said only when there are some: the host discards a hook's output,
+ * so this is where a capture that went wrong shows. `; 2 capture errors in 7 days, last 2026-11-06: <message>`.
+ */
+export function captureErrorsSummary(errors: StatusRoutingState['captureErrors']): string {
+  if (!errors || errors.count === 0) return ''
+  const last = errors.last ? `, last ${errors.last.at.slice(0, 10)}: ${errors.last.message}` : ''
+  return `; ${errors.count} capture error${errors.count === 1 ? '' : 's'} in ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`
 }
 
 const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (agent: string) => string> = {
