@@ -1,8 +1,10 @@
 import { Command } from 'commander'
+import { isAbsolute } from 'path'
 
 import { parseList, parseNonNegativeInteger, parsePositiveInteger, runAgentsSubcommand } from './agents.shared'
+import { appendCaptureError, type CaptureErrorStage } from '../harness/capture-errors'
 import { CAPTURE_HOSTS, captureHostEvent, type CaptureResult } from '../harness/delegation-capture'
-import { appendEntry, appendRun, appendSignal, buildRunRecord, buildSignalRecord, buildStatusRecord, readLedger, requireLedgerDir, type RunInput } from '../harness/delegation-ledger'
+import { appendEntry, appendRun, appendSignal, buildRunRecord, buildSignalRecord, buildStatusRecord, readLedger, requireLedgerDir, resolveLedgerDir, type RunInput } from '../harness/delegation-ledger'
 import { readProjectRouting } from '../harness/project-routing'
 import { ROUTING_PROVIDERS, TASK_KINDS, parseTaskKind, type TaskKind } from '../harness/routing-grid'
 import { runAdjustment } from '../harness/routing-runtime'
@@ -145,23 +147,39 @@ export interface OutcomeCaptureOptions {
   json?: boolean
 }
 
+/** A failure of the payload itself (not JSON, too large): the capture logs it as such and shows only this text, never a piece of the payload. */
+class CapturePayloadError extends Error {}
+
 async function readStdin(limit = 8 * 1024 * 1024): Promise<string> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of process.stdin) {
     const buffer = Buffer.from(chunk as Uint8Array)
     size += buffer.length
-    if (size > limit) throw new Error('The hook payload is larger than 8 MiB.')
+    if (size > limit) throw new CapturePayloadError('The hook payload is larger than 8 MiB.')
     chunks.push(buffer)
   }
   return Buffer.concat(chunks).toString('utf8')
 }
 
+/** A short word naming the hook event, for the error log; never payload text. */
+function eventWord(payload: unknown): string {
+  const name = typeof payload === 'object' && payload !== null && !Array.isArray(payload) ? (payload as Record<string, unknown>).hook_event_name : undefined
+  return typeof name === 'string' && /^[A-Za-z]{1,32}$/.test(name) ? name : 'unknown'
+}
+
+/** The directory the payload says the project is in, when it says one: a hook may run from anywhere. */
+function payloadCwd(payload: unknown): string | undefined {
+  const cwd = typeof payload === 'object' && payload !== null && !Array.isArray(payload) ? (payload as Record<string, unknown>).cwd : undefined
+  return typeof cwd === 'string' && isAbsolute(cwd) ? cwd : undefined
+}
+
 /**
  * `sf agents outcome capture --host <claude-code|codex>`: the command the host hooks run, with the hook
  * payload on stdin. A hook must never break the agent it observes, so everything that goes wrong after
- * the arguments were understood (an unreadable payload, a project without a ledger) is reported on
- * stderr with exit 0; only a wrong `--host` fails.
+ * the arguments were understood (an unreadable payload, a project without a ledger) exits 0; only a wrong
+ * `--host` fails. The host hooks discard stderr, so a failure is also written to the capture error log
+ * (`capture-errors.jsonl`, in the Git directory of the clone), which `sf status` reports (#1105).
  */
 export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<void> {
   const host = options.host
@@ -170,15 +188,44 @@ export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<vo
     process.exitCode = 1
     return
   }
-  let result: CaptureResult
-  try {
-    if (process.stdin.isTTY) throw new Error('capture reads a hook payload on stdin: it is run by the host hooks, not by hand (use sf agents outcome record).')
-    const text = await readStdin()
-    result = await captureHostEvent(host, JSON.parse(text))
-  } catch (error) {
-    result = { status: 'ignored', reason: `capture failed: ${error instanceof Error ? error.message : String(error)}` }
-    process.stderr.write(`sf agents outcome capture: ${result.reason}\n`)
+  let event = 'unknown'
+  let project: string | undefined
+  /** Log a failure where `sf status` finds it; the line goes to stderr too, and is all there is outside a Git checkout. */
+  const logFailure = async (stage: CaptureErrorStage, message: string, dir?: string): Promise<void> => {
+    let ledgerDir = dir
+    if (!ledgerDir) {
+      try {
+        ledgerDir = await resolveLedgerDir(project ?? process.cwd())
+      } catch {
+        ledgerDir = undefined
+      }
+    }
+    if (ledgerDir) await appendCaptureError(ledgerDir, { host, event, stage, message })
   }
+  let result: CaptureResult
+  if (process.stdin.isTTY) {
+    result = { status: 'ignored', reason: 'capture reads a hook payload on stdin: it is run by the host hooks, not by hand (use sf agents outcome record).' }
+    process.stderr.write(`sf agents outcome capture: ${result.reason}\n`)
+  } else {
+    try {
+      let payload: unknown
+      try {
+        payload = JSON.parse(await readStdin())
+      } catch (error) {
+        // The message of a JSON syntax error quotes the text it choked on: the payload stays out of every log.
+        throw error instanceof SyntaxError ? new CapturePayloadError('the hook payload is not valid JSON') : error
+      }
+      event = eventWord(payload)
+      project = payloadCwd(payload)
+      result = await captureHostEvent(host, payload)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      result = { status: 'ignored', reason: `capture failed: ${message}` }
+      process.stderr.write(`sf agents outcome capture: ${result.reason}\n`)
+      await logFailure(error instanceof CapturePayloadError ? 'payload' : 'ledger', message)
+    }
+  }
+  if (result.status === 'ignored' && result.abnormal) await logFailure('ignored', result.reason)
   // After each recorded run the routing looks at the evidence again: a move is applied without asking,
   // and logged where `sf agents routing report` and `sf status` show it. It reads the state the append
   // just returned, the project and the directory the capture already resolved: nothing is read twice.
@@ -190,7 +237,9 @@ export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<vo
       const lines = describeAdjustment(adjusted)
       if (lines.length) process.stderr.write(`${lines.map((line) => `sf routing: ${line}`).join('\n')}\n`)
     } catch (error) {
-      process.stderr.write(`sf agents outcome capture: the routing adjustment was skipped (${error instanceof Error ? error.message : String(error)})\n`)
+      const message = `the routing adjustment was skipped (${error instanceof Error ? error.message : String(error)})`
+      process.stderr.write(`sf agents outcome capture: ${message}\n`)
+      await logFailure('adjustment', message, result.dir)
     }
   }
   if (options.json) {

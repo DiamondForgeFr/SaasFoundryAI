@@ -232,6 +232,38 @@ describe('compiled sf agents outcome record | mark (#1035)', () => {
       expect(result.stderr).toContain('sf agents outcome capture: capture failed')
     })
 
+    // The host hooks discard stderr: a failure that left no other trace would be invisible (#1105).
+    describe('the capture error log', () => {
+      const errorLog = () => join(project, '.git', 'saasfoundry', 'capture-errors.jsonl')
+      const logged = async () =>
+        (await readFile(errorLog(), 'utf8'))
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line))
+
+      it('keeps a line for a payload it cannot read, prints nothing on stdout, and keeps the payload out of the log', async () => {
+        const result = capture('claude-code', 'this is not json, last_assistant_message: secret')
+        expect(result.status).toBe(0)
+        expect(result.stdout).toBe('')
+        const [entry] = await logged()
+        expect(entry).toMatchObject({ v: 1, host: 'claude-code', event: 'unknown', stage: 'payload', message: 'the hook payload is not valid JSON' })
+        expect(JSON.stringify(entry)).not.toContain('secret')
+      })
+
+      it('names the hook event of a payload that read, and logs a payload that is not an object', async () => {
+        expect(capture('codex', '"just a string"').status).toBe(0)
+        expect((await logged())[0]).toMatchObject({ host: 'codex', stage: 'ignored', message: 'the payload is not a JSON object' })
+      })
+
+      it('logs a tier the project never declared, and nothing for an event that is simply not a delegation', async () => {
+        expect(capture('claude-code', JSON.stringify({ hook_event_name: 'SessionStart', cwd: project })).status).toBe(0)
+        expect(capture('claude-code', JSON.stringify({ hook_event_name: 'SubagentStop', agent_type: 'Explore', cwd: project })).status).toBe(0)
+        await expect(stat(errorLog())).rejects.toThrow()
+        expect(capture('claude-code', JSON.stringify({ hook_event_name: 'SubagentStop', agent_type: 'sf-nowhere', cwd: project })).status).toBe(0)
+        expect(await logged()).toEqual([expect.objectContaining({ event: 'SubagentStop', stage: 'ignored', message: 'tier nowhere is not declared for claude-code' })])
+      })
+    })
+
     it('fails only on a host it does not know', () => {
       const result = capture('gemini-cli', '{}')
       expect(result.status).toBe(1)
