@@ -32,7 +32,7 @@ jest.mock('ora', () => () => {
 
 import { updateCommand } from '../../../commands/update'
 import { GENERATED_REGION_START } from '../../../harness/agent-instructions'
-import { CLAUDE_CAPTURE_COMMAND } from '../../../harness/delegation-hooks'
+import { CLAUDE_CAPTURE_COMMAND, CODEX_CAPTURE_COMMAND, CODEX_HOOKS_PATH, CODEX_RETRUST_NOTICE, V1_1_0_CAPTURE_COMMANDS } from '../../../harness/delegation-hooks'
 import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../../../installers/harness.installer'
 
@@ -280,6 +280,68 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       const report = JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0])
       expect(report.harnessSettings).toEqual([{ path: SETTINGS, status: 'merged' }])
       expect(output()).toContain('would be merged in')
+    })
+  })
+
+  // #1105 — v1.1.0, the current npm release, wrote a capture command that discarded the CLI stdout. The command that
+  // replaces it lets the decision through, so the old text has to go: an update that left it beside the new one would
+  // run two capture hooks, and the old, silent one would go on dropping every delegation that ended without its line.
+  describe('a harness installed by v1.1.0 (#1105)', () => {
+    let warnSpy: jest.SpyInstance
+    const v110 = (name: string): Promise<string> => readFile(join(FIXTURES, 'harness', 'v1.1.0', name), 'utf8')
+    const commands = (config: Settings, event: string): string[] => (config.hooks?.[event] ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    beforeEach(async () => {
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const hashes = await installHarnessWith(await v110('claude-settings.json'))
+      await put(CODEX_HOOKS_PATH, await v110('codex-hooks.json'))
+      await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true, agents: ['claude-code', 'codex'] } }, workflow: { tool: 'none' }, fileHashes: hashes })
+    })
+    afterEach(() => warnSpy.mockRestore())
+
+    it('has exactly one new capture hook per event after sf update, in the settings and in the Codex hooks file', async () => {
+      await updateCommand({ nonInteractive: true })
+
+      const settings = JSON.parse(await read(SETTINGS)) as Settings
+      expect(commands(settings, 'SubagentStop')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(commands(settings, 'PostToolUse')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      const codex = JSON.parse(await read(CODEX_HOOKS_PATH)) as Settings
+      expect(commands(codex, 'SubagentStop')).toEqual([CODEX_CAPTURE_COMMAND])
+      // nothing of v1.1.0 is left anywhere in either file
+      for (const old of V1_1_0_CAPTURE_COMMANDS) {
+        expect(await read(SETTINGS)).not.toContain(JSON.stringify(old).slice(1, -1))
+        expect(await read(CODEX_HOOKS_PATH)).not.toContain(JSON.stringify(old).slice(1, -1))
+      }
+    })
+
+    it('tells the developer that Codex has to trust the replaced hook, once', async () => {
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).toContain(CODEX_RETRUST_NOTICE)
+
+      warnSpy.mockClear()
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).not.toContain(CODEX_RETRUST_NOTICE)
+    })
+
+    it('is byte-idempotent: a second sf update leaves both files as the first wrote them', async () => {
+      await updateCommand({ nonInteractive: true })
+      const once = [await read(SETTINGS), await read(CODEX_HOOKS_PATH)]
+      const mtimes = [(await stat(path(SETTINGS))).mtimeMs, (await stat(path(CODEX_HOOKS_PATH))).mtimeMs]
+
+      await updateCommand({ nonInteractive: true })
+
+      expect([await read(SETTINGS), await read(CODEX_HOOKS_PATH)]).toEqual(once)
+      expect([(await stat(path(SETTINGS))).mtimeMs, (await stat(path(CODEX_HOOKS_PATH))).mtimeMs]).toEqual(mtimes)
+    })
+
+    it('lists the replacement in the dry run and writes neither file', async () => {
+      const before = [await read(SETTINGS), await read(CODEX_HOOKS_PATH)]
+
+      await updateCommand({ nonInteractive: true, dryRun: true })
+
+      expect([await read(SETTINGS), await read(CODEX_HOOKS_PATH)]).toEqual(before)
+      const report = JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0])
+      expect(report.harnessSettings).toEqual([{ path: SETTINGS, status: 'merged' }])
     })
   })
 

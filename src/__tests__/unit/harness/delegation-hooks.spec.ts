@@ -11,10 +11,12 @@ import {
   CLAUDE_CAPTURE_HOOKS,
   CODEX_CAPTURE_COMMAND,
   CODEX_HOOKS_PATH,
+  CODEX_RETRUST_NOTICE,
   defaultCaptureProbe,
   isLegacyCaptureCommand,
   renderCodexHooks,
-  resolveCaptureCli
+  resolveCaptureCli,
+  V1_1_0_CAPTURE_COMMANDS
 } from '../../../harness/delegation-hooks'
 import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../../../utils/claude-settings'
 import { hermeticPath, nodeBinDir } from '../../helpers/hermetic-path'
@@ -134,9 +136,26 @@ describe('the hooks that capture delegations (#1035)', () => {
       expect(await calls()).toEqual([])
     })
 
-    it('exits 0 and says nothing when the CLI fails or is too old to know the command', async () => {
-      await program('node_modules/.bin/saasfoundryai', 1, 'echo "error: unknown command outcome" >&2; echo noise')
+    // #1105: the CLI's stdout is the host's: it carries the decision that keeps a delegate running. Its stderr is not.
+    it('exits 0 and keeps the CLI error out of the host when the CLI fails or is too old to know the command', async () => {
+      await program('node_modules/.bin/saasfoundryai', 1, 'echo "error: unknown command outcome" >&2')
       expect(await runHook(CLAUDE_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: '', stderr: '' })
+    })
+
+    it('lets what the CLI prints on stdout reach the host and nothing of its stderr, and still exits 0 when the CLI fails', async () => {
+      const decision = '{"decision":"block","reason":"add the line"}'
+      await program('node_modules/.bin/saasfoundryai', 3, `echo '${decision}'; echo "a warning" >&2`)
+      expect(await runHook(CLAUDE_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: `${decision}\n`, stderr: '' })
+      await rm(join(root, 'calls.log'))
+      expect(await runHook(CODEX_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: `${decision}\n`, stderr: '' })
+    })
+
+    it('prints the decision once, whichever CLI answers first: the first one that resolves is the only one that runs', async () => {
+      await program('node_modules/.bin/saasfoundryai', 0, 'echo \'{"decision":"block","reason":"first"}\'')
+      await program('node_modules/.bin/sf', 0, 'echo \'{"decision":"block","reason":"second"}\'')
+      const result = await runHook(CLAUDE_CAPTURE_COMMAND, SUBAGENT)
+      expect(result.stdout).toBe('{"decision":"block","reason":"first"}\n')
+      expect(await calls()).toHaveLength(1)
     })
 
     it('exits 0 and says nothing when no CLI can be found, a project that never installed it among them', async () => {
@@ -147,6 +166,75 @@ describe('the hooks that capture delegations (#1035)', () => {
       await program('bin/saasfoundryai')
       await runHook(CODEX_CAPTURE_COMMAND, SUBAGENT)
       expect((await calls())[0]).toContain(`${root}/bin/saasfoundryai agents outcome capture --host codex`)
+    })
+  })
+
+  // The commands v1.1.0 shipped sit in every project it installed or updated. They are replaced, never duplicated (#1105).
+  describe('the commands v1.1.0 shipped', () => {
+    const V110 = join(__dirname, '../../fixtures/harness/v1.1.0')
+    const fixtureText = (name: string) => readFile(join(V110, name), 'utf8')
+    /** Every command of an event, flattened. */
+    const commands = (config: { hooks: Record<string, { hooks: { command: string }[] }[]> }, event: string) => config.hooks[event].flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('are written out as the golden bytes of the tag, and are not today command', async () => {
+      const claude = JSON.parse(await fixtureText('claude-settings.json'))
+      const codex = JSON.parse(await fixtureText('codex-hooks.json'))
+      expect(commands(claude, 'SubagentStop')).toEqual([V1_1_0_CAPTURE_COMMANDS[0]])
+      expect(commands(claude, 'PostToolUse')).toEqual([V1_1_0_CAPTURE_COMMANDS[0]])
+      expect(commands(codex, 'SubagentStop')).toEqual([V1_1_0_CAPTURE_COMMANDS[1]])
+      expect(V1_1_0_CAPTURE_COMMANDS[0]).toContain('--host claude-code >/dev/null 2>&1; exit 0; }')
+      expect(V1_1_0_CAPTURE_COMMANDS[1]).toContain('--host codex >/dev/null 2>&1; exit 0; }')
+      expect(V1_1_0_CAPTURE_COMMANDS).not.toContain(CLAUDE_CAPTURE_COMMAND)
+      expect(V1_1_0_CAPTURE_COMMANDS).not.toContain(CODEX_CAPTURE_COMMAND)
+      // The only difference with today is the redirection that discarded the CLI stdout
+      expect(CLAUDE_CAPTURE_COMMAND).toBe(V1_1_0_CAPTURE_COMMANDS[0].replace('>/dev/null 2>&1', '2>/dev/null'))
+      expect(CODEX_CAPTURE_COMMAND).toBe(V1_1_0_CAPTURE_COMMANDS[1].replace('>/dev/null 2>&1', '2>/dev/null'))
+    })
+
+    it('are legacy commands, and a hand-edited copy or today command is not', () => {
+      for (const command of V1_1_0_CAPTURE_COMMANDS) {
+        expect(isLegacyCaptureCommand(command)).toBe(true)
+        expect(isLegacyCaptureCommand(`${command} # mine`)).toBe(false)
+      }
+      expect(isLegacyCaptureCommand(CLAUDE_CAPTURE_COMMAND)).toBe(false)
+      expect(isLegacyCaptureCommand(CODEX_CAPTURE_COMMAND)).toBe(false)
+    })
+
+    it('are replaced in a Claude Code settings file by one capture hook per event, keeping everything else', async () => {
+      const original = await fixtureText('claude-settings.json')
+      await put('.claude/settings.json', original)
+      expect(await mergeClaudeSettingsHooks(root, CLAUDE_CAPTURE_HOOKS, { supersedes: isLegacyCaptureCommand })).toBe(true)
+      const merged = JSON.parse(await get('.claude/settings.json'))
+      expect(commands(merged, 'SubagentStop')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(commands(merged, 'PostToolUse')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(commands(merged, 'UserPromptSubmit')).toEqual(['.claude/skills/sf-srs/scripts/srs-intent-hook.sh'])
+      expect(merged.permissions).toEqual(JSON.parse(original).permissions)
+      // and the next run has nothing to do
+      expect(await mergeClaudeSettingsHooks(root, CLAUDE_CAPTURE_HOOKS, { supersedes: isLegacyCaptureCommand })).toBe(false)
+    })
+
+    it('are replaced in a Codex hooks file, which keeps its other hooks, says Codex has to trust the new one, and then changes nothing', async () => {
+      const original = await fixtureText('codex-hooks.json')
+      const first = renderCodexHooks(original) as { content: string; replaced?: true }
+      expect(first.replaced).toBe(true)
+      const config = JSON.parse(first.content)
+      expect(commands(config, 'SubagentStop')).toEqual([CODEX_CAPTURE_COMMAND])
+      expect(commands(config, 'UserPromptSubmit')).toEqual(['.claude/skills/sf-srs/scripts/srs-intent-hook.sh'])
+      expect(commands(config, 'SessionStart')).toEqual(JSON.parse(original).hooks.SessionStart.map((group: { hooks: { command: string }[] }) => group.hooks[0].command))
+      const again = renderCodexHooks(first.content) as { content: string; replaced?: true }
+      expect(again).toEqual({ content: first.content })
+      expect(CODEX_RETRUST_NOTICE).toContain('/hooks')
+    })
+
+    it('are an outdated hook, not a missing one, and a refresh makes the new one enforced', async () => {
+      await put('.claude/settings.json', await fixtureText('claude-settings.json'))
+      await put(CODEX_HOOKS_PATH, await fixtureText('codex-hooks.json'))
+      expect(await captureState(root, 'claude-code', async () => true)).toBe('outdated')
+      expect(await captureState(root, 'codex', async () => true)).toBe('outdated')
+      await mergeClaudeSettingsHooks(root, CLAUDE_CAPTURE_HOOKS, { supersedes: isLegacyCaptureCommand })
+      await put(CODEX_HOOKS_PATH, (renderCodexHooks(await fixtureText('codex-hooks.json')) as { content: string }).content)
+      expect(await captureState(root, 'claude-code', async () => true)).toBe('enforced')
+      expect(await captureState(root, 'codex', async () => true)).toBe('declared')
     })
   })
 
@@ -308,6 +396,23 @@ describe('the hooks that capture delegations (#1035)', () => {
       const config = JSON.parse(await get(CODEX_HOOKS_PATH))
       expect(config.hooks.SessionStart).toHaveLength(1)
       expect(config.hooks.SubagentStop).toHaveLength(1)
+    })
+
+    // Codex runs a project hook only once it is trusted, and trust follows the text of the hook (#1105)
+    it('tells the developer to trust the replaced hook again, once: a second refresh has nothing to say', async () => {
+      await put(CODEX_HOOKS_PATH, await readFile(join(__dirname, '../../fixtures/harness/v1.1.0/codex-hooks.json'), 'utf8'))
+      const first = await installAgentInstructions({ targetPath: root, agents: ['codex'] })
+      expect(first.warnings).toContain(CODEX_RETRUST_NOTICE)
+      expect(JSON.parse(await get(CODEX_HOOKS_PATH)).hooks.SubagentStop).toEqual([{ hooks: [{ type: 'command', command: CODEX_CAPTURE_COMMAND, timeout: 30 }] }])
+      const second = await installAgentInstructions({ targetPath: root, agents: ['codex'] })
+      expect(second.warnings).not.toContain(CODEX_RETRUST_NOTICE)
+      expect(second.written).not.toContain(CODEX_HOOKS_PATH)
+    })
+
+    it('does not mention the trust of a hook it only adds', async () => {
+      const first = await installAgentInstructions({ targetPath: root, agents: ['codex'] })
+      expect(first.written).toContain(CODEX_HOOKS_PATH)
+      expect(first.warnings).not.toContain(CODEX_RETRUST_NOTICE)
     })
 
     it('warns and leaves a hooks file that is not JSON exactly as it is', async () => {
