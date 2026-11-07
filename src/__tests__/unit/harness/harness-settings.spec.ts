@@ -3,7 +3,7 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
 import { ADOPTION_COMMON_INSTRUCTIONS } from '../../../harness/agent-instructions'
-import { CLAUDE_CAPTURE_COMMAND, CLAUDE_CAPTURE_HOOKS } from '../../../harness/delegation-hooks'
+import { CLAUDE_CAPTURE_COMMAND, CLAUDE_CAPTURE_HOOKS, V1_1_0_CAPTURE_COMMANDS } from '../../../harness/delegation-hooks'
 import {
   HARNESS_ALLOWED_COMMANDS,
   HARNESS_ASK_COMMANDS,
@@ -104,6 +104,47 @@ describe('renderHarnessSettings (#935)', () => {
 
     const commands = (after.hooks?.SubagentStop ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
     expect(commands).toEqual([CLAUDE_CAPTURE_COMMAND])
+  })
+
+  // #1105 — v1.1.0, the current npm release, wrote a capture command that discarded the CLI stdout. The new one lets it
+  // through, so the old text is superseded: left beside the new hook it would stay and go on dropping every decision.
+  describe('a project updated from v1.1.0 (#1105)', () => {
+    const v110 = (): Promise<string> => readFile(join(__dirname, '../../fixtures/harness/v1.1.0/claude-settings.json'), 'utf8')
+    const eventCommands = (settings: Settings, event: string) => (settings.hooks?.[event] ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('ends with one capture hook per event, the new one, and keeps the hooks and rules it had', async () => {
+      const before = JSON.parse(await v110()) as Settings
+      const result = rendered(await v110())
+      const after = JSON.parse(result.content) as Settings
+
+      expect(result.changed).toBe(true)
+      expect(eventCommands(after, 'SubagentStop')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(eventCommands(after, 'PostToolUse')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(after.hooks?.SubagentStop).toEqual(CLAUDE_CAPTURE_HOOKS.SubagentStop)
+      expect(eventCommands(after, 'SessionStart')).toEqual([SESSION_START_COMMAND])
+      expect(after.hooks?.UserPromptSubmit).toEqual(before.hooks?.UserPromptSubmit)
+      expect(after.permissions?.allow?.slice(0, before.permissions!.allow!.length)).toEqual(before.permissions?.allow)
+      expect(after.permissions?.ask).toEqual([...HARNESS_ASK_COMMANDS])
+    })
+
+    it('is idempotent: a second run has nothing to change and writes the same text', async () => {
+      const once = rendered(await v110())
+      const twice = rendered(once.content)
+      expect(twice.changed).toBe(false)
+      expect(twice.content).toBe(once.content)
+    })
+
+    it('supersedes the v1.1.0 commands of both hosts, and only those', () => {
+      for (const command of V1_1_0_CAPTURE_COMMANDS) expect(HARNESS_SUPERSEDED_HOOKS.supersedes(command)).toBe(true)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes(CLAUDE_CAPTURE_COMMAND)).toBe(false)
+      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(2)
+    })
+
+    it('leaves a hand-edited copy of the old command alone: it is the project own, and the new hook comes beside it', () => {
+      const mine = `${V1_1_0_CAPTURE_COMMANDS[0]} # mine`
+      const after = parsed(JSON.stringify({ hooks: { SubagentStop: [{ matcher: 'sf-.*', hooks: [{ type: 'command', command: mine }] }] } }))
+      expect(eventCommands(after, 'SubagentStop')).toEqual([mine, CLAUDE_CAPTURE_COMMAND])
+    })
   })
 
   // #1103 — the settings merge only adds a command whose exact string is missing, so a changed hook command has to

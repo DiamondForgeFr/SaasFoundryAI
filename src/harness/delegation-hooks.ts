@@ -19,7 +19,10 @@ import type { ClaudeHooksConfig } from '../utils/claude-settings'
  * 2. runs the CLI the **project** resolves: `node_modules/.bin/saasfoundryai`, then `.../sf`, then this
  *    repository's own `bin/sf.js` when the project is SaaSFoundry itself, then `saasfoundryai` on the PATH
  *    (never a bare `sf`);
- * 3. exits 0 whatever happens, silently: a hook must never break the agent it observes.
+ * 3. exits 0 whatever happens, and lets only the CLI's **stdout** reach the host (#1105): a stop of a delegate
+ *    that left out its `SF-DELEGATION` line is answered with one JSON object (`{"decision":"block",...}`) that
+ *    keeps the agent running. Anything else the capture has to say goes to the capture error log, which
+ *    `sf status` reports, so stderr is discarded: a hook must never break the agent it observes.
  */
 export type CaptureHost = 'claude-code' | 'codex'
 
@@ -27,7 +30,7 @@ const CAPTURE_SCRIPT = [
   'p=$(cat)',
   'case "$p" in *sf-*) ;; *) exit 0;; esac',
   'd="${CLAUDE_PROJECT_DIR:-.}"',
-  'run() { printf %s "$p" | "$@" agents outcome capture --host @HOST@ >/dev/null 2>&1; exit 0; }',
+  'run() { printf %s "$p" | "$@" agents outcome capture --host @HOST@ 2>/dev/null; exit 0; }',
   'for c in "$d/node_modules/.bin/saasfoundryai" "$d/node_modules/.bin/sf"; do [ -x "$c" ] && run "$c"; done',
   '[ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && run node "$d/bin/sf.js"',
   'command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai',
@@ -40,9 +43,26 @@ export const captureCommand = (host: CaptureHost): string => CAPTURE_SCRIPT.repl
 export const CLAUDE_CAPTURE_COMMAND = captureCommand('claude-code')
 export const CODEX_CAPTURE_COMMAND = captureCommand('codex')
 
-/** The commands the first release wrote: a bare `sf`. A refresh replaces them. */
+/** The commands the first build wrote: a bare `sf`. A refresh replaces them. */
 const LEGACY_CAPTURE_COMMAND = /^sf agents outcome capture --host (?:claude-code|codex)$/
-export const isLegacyCaptureCommand = (command: unknown): boolean => typeof command === 'string' && LEGACY_CAPTURE_COMMAND.test(command)
+
+/**
+ * The capture commands v1.1.0 shipped, as written then (#1105). They are literals on purpose, never built from
+ * `CAPTURE_SCRIPT`: that one changes (the v1.1.0 line discarded the CLI's stdout, so it could not carry a decision
+ * to the host), and a string rebuilt from it would stop matching what installed projects hold. A merge only
+ * adds a command whose exact string is missing, so without these a project updated from v1.1.0 would run two
+ * capture hooks, and the old, silent one would stay. The golden spec pastes both from the v1.1.0 tag.
+ */
+export const V1_1_0_CAPTURE_COMMANDS: readonly string[] = [
+  'p=$(cat); case "$p" in *sf-*) ;; *) exit 0;; esac; d="${CLAUDE_PROJECT_DIR:-.}"; run() { printf %s "$p" | "$@" agents outcome capture --host claude-code >/dev/null 2>&1; exit 0; }; for c in "$d/node_modules/.bin/saasfoundryai" "$d/node_modules/.bin/sf"; do [ -x "$c" ] && run "$c"; done; [ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && run node "$d/bin/sf.js"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0',
+  'p=$(cat); case "$p" in *sf-*) ;; *) exit 0;; esac; d="${CLAUDE_PROJECT_DIR:-.}"; run() { printf %s "$p" | "$@" agents outcome capture --host codex >/dev/null 2>&1; exit 0; }; for c in "$d/node_modules/.bin/saasfoundryai" "$d/node_modules/.bin/sf"; do [ -x "$c" ] && run "$c"; done; [ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && run node "$d/bin/sf.js"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0'
+]
+
+/**
+ * A capture command an earlier release wrote and a refresh replaces: the first build's bare `sf`, and the v1.1.0
+ * shell line (#1105). A hand-edited copy of either is the project's own and is left.
+ */
+export const isLegacyCaptureCommand = (command: unknown): boolean => typeof command === 'string' && (LEGACY_CAPTURE_COMMAND.test(command) || V1_1_0_CAPTURE_COMMANDS.includes(command))
 
 const HOOK_TIMEOUT_SECONDS = 30
 /** The routed tier agents are all named `sf-<tier>`: the host runs the hook only for them. */
@@ -79,10 +99,12 @@ function registers(config: unknown, event: string, accepts: (command: unknown) =
 
 /**
  * The Codex hooks file with the capture hook added to what the project already has there: other hooks
- * and keys are kept, the first release's bare-`sf` command is replaced, a repeated render changes nothing.
- * An existing file that is not JSON is left alone.
+ * and keys are kept, the commands an earlier release wrote (the first build's bare `sf`, the v1.1.0 shell
+ * line) are replaced, a repeated render changes nothing. An existing file that is not JSON is left alone.
+ * `replaced` is set when a command an earlier release wrote was taken out: Codex runs a project hook only
+ * once it is trusted, and trust follows the hook's text, so the developer has to review the new one.
  */
-export function renderCodexHooks(existing?: string): { content: string } | { error: string } {
+export function renderCodexHooks(existing?: string): { content: string; replaced?: true } | { error: string } {
   let config: Record<string, unknown> = {}
   if (existing !== undefined && existing.trim()) {
     try {
@@ -102,8 +124,11 @@ export function renderCodexHooks(existing?: string): { content: string } | { err
   if (!groups.some((group) => group?.hooks?.some((hook) => hook?.command === CODEX_CAPTURE_COMMAND)))
     groups.push({ hooks: [{ type: 'command', command: CODEX_CAPTURE_COMMAND, timeout: HOOK_TIMEOUT_SECONDS }] })
   hooks.SubagentStop = groups
-  return { content: `${JSON.stringify({ ...config, hooks }, null, 2)}\n` }
+  return { content: `${JSON.stringify({ ...config, hooks }, null, 2)}\n`, ...(legacy ? { replaced: true as const } : {}) }
 }
+
+/** What a developer is told when Codex has to trust a changed capture hook again. */
+export const CODEX_RETRUST_NOTICE = `${CODEX_HOOKS_PATH}: the delegation capture hook was replaced. Codex skips a changed project hook until it is trusted: review and trust it with /hooks, or delegations stay unrecorded.`
 
 /**
  * `enforced`: the hook is declared and the project's CLI can run it. `declared`: Codex runs it only once its
