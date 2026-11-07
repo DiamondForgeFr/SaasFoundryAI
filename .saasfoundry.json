@@ -153,7 +153,7 @@
     ".agents/skills/sf-workflow/scripts/detect-complexity.sh": "ffc15a241693cdc74e8ea83293feee6f3f15c2979b57d768704b6363f71a75d9",
     ".agents/skills/sf-workflow/scripts/examine.sh": "54a0e9e90f529a2de21db25a938be2563104695d42663c92b45eb7867db4ae06",
     ".agents/skills/sf-workflow/scripts/plan.sh": "cec9907f9800b41a22251352ef8cc2d589a6e55212f75ce743dcbc1f7a9cbac6",
-    ".agents/skills/sf-workflow/SKILL.md": "eab3f97f278e81d2ba89f3b8f76394bb629da807f404191e0e62e1ceabc64f4a",
+    ".agents/skills/sf-workflow/SKILL.md": "39580b768a8e2cfc18b9a2d808d025eea4cb1b0a5ad0f6be94156db6e678276d",
     ".agents/skills/sf-workflow/statuses/1-backlog.md": "35aae23e623e0dc76ee6c1bb4e6aa3b4579e604dc739529a226c933178a08feb",
     ".agents/skills/sf-workflow/statuses/2-ready.md": "cc67916a7cdedd0c8f8bb6184848b3ad5daa8cc87c146d2a1ab4f50d9c161137",
     ".agents/skills/sf-workflow/statuses/3-in-progress.md": "fdb76b06469f84cbbdd6afa21b394fbcb527409b62e00847288abb6a8ef6e9cc",
