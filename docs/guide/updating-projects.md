@@ -102,6 +102,12 @@ For each file, the comparison produces one of four actions:
 | `!base` AND `target` AND `current != target`   | **conflict** | A user-owned file already occupies the new template path.            |
 | `base` AND `!target` AND `current == base`     | **remove**   | Template removed the file, you didn't touch it → removed and listed. |
 
+The manifest does not record every answer `sf new` rendered into a file, so the target is rendered with values read back from your project: the package description and repository URLs from each
+`package.json`; the MailerSend sender from the deployment workflow (then the API's `.env.test` and `.env`); the Docker database credentials and the Docker bucket from `docker-compose.dev-services.yml`
+(then the API's `.env`). A template that did not change therefore yields no update and no conflict. Up to 1.1.0, `sf update` rendered the sender with placeholders (`noreply@example.com`, `App`) and
+recorded that render as the baseline. On such a project, a workflow that still carries the placeholders gets its sender back from the `.env.test` or the `.env`, and a workflow you edited is not
+reported as a conflict.
+
 ### Why this matters
 
 The merge is conservative by design:

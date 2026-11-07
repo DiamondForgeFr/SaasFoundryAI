@@ -106,6 +106,12 @@ Pour chaque fichier :
 | `!base` et `target` et `current != target`    | **conflict** | Un fichier utilisateur occupe déjà le chemin.                          |
 | `base` et `!target` et `current == base`      | **remove**   | Le modèle a retiré un fichier intact : suppression, listée.            |
 
+Le manifeste n'enregistre pas toutes les réponses que `sf new` a écrites dans les fichiers : la cible est donc générée avec des valeurs relues dans le projet. La description et les URL de dépôt
+viennent de chaque `package.json` ; l'expéditeur MailerSend, du workflow de déploiement (puis du `.env.test` et du `.env` de l'API) ; les identifiants de la base Docker et le bucket Docker, de
+`docker-compose.dev-services.yml` (puis du `.env` de l'API). Un modèle inchangé ne produit donc ni mise à jour ni conflit. Jusqu'à la 1.1.0, `sf update` générait l'expéditeur avec des valeurs fictives
+(`noreply@example.com`, `App`) et enregistrait ce rendu comme base. Sur un tel projet, un workflow qui porte encore ces valeurs retrouve son expéditeur à partir du `.env.test` ou du `.env`, et un
+workflow que vous avez modifié n'est pas signalé en conflit.
+
 Cette fusion est volontairement prudente :
 
 - les modifications utilisateur ne sont jamais écrasées silencieusement ;

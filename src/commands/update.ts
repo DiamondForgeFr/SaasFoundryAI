@@ -60,6 +60,7 @@ import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 import { readLivePackageIdentity } from '../utils/package-identity'
+import { legacyRenderSettings, readLiveRenderSettings, sameRenderSettings, type RenderSettings } from '../utils/live-render-settings'
 import { describeCliVersion, isCliSourceRepository, resolveCliChannel } from '../cli-channel'
 
 // Shared agent deposits have their own conflict-aware baselines. Generic
@@ -455,12 +456,22 @@ export function enforceAtomicImpactValidationBundles(updates: FileUpdate[], hash
  *
  * Returns the temp dir path and the file hashes of the regenerated project.
  */
-export async function regenerateInTempDir(manifest: SaaSFoundryManifest, liveRoot = '.'): Promise<{ tempDir: string; hashes: Record<string, string> }> {
+export async function regenerateInTempDir(
+  manifest: SaaSFoundryManifest,
+  liveRoot = '.',
+  renderSettings?: RenderSettings
+): Promise<{ tempDir: string; hashes: Record<string, string>; settings: RenderSettings }> {
   // Template regeneration only applies to projects scaffolded by `sf new`.
   // Harness-only manifests carry a `modules` block too, but have no stack to regenerate.
   if (!isScaffoldManifest(manifest)) {
     throw new Error('regenerateInTempDir requires a complete scaffolded manifest')
   }
+  /**
+   * The sender, the Docker database credentials and the Docker bucket, read back from the
+   * project. Placeholders here replaced the project's sender in the deployment workflow and
+   * recorded that render as the new baseline (#1151).
+   */
+  const settings = renderSettings ?? (await readLiveRenderSettings(manifest, liveRoot))
   const tempDir = await mkdtemp(join(tmpdir(), 'saasfoundry-update-'))
   const projectDir = join(tempDir, manifest.projectName)
 
@@ -502,20 +513,26 @@ export async function regenerateInTempDir(manifest: SaaSFoundryManifest, liveRoo
       dbCredentials: {
         host: 'localhost',
         port: String(ports.db),
-        user: 'db_dev_user',
-        password: 'db_dev_password',
-        database: 'db_dev',
+        user: settings.dbUser,
+        password: settings.dbPassword,
+        database: settings.dbName,
         dbType: 'postgresql'
       },
       dbSetup: manifest.modules.dbSetup,
       initDb: false,
       mainBranch, // pre-mainBranch manifests: backfill deferred (#424 step 6)
       emailService: manifest.modules.email.provider,
+      // The API key only reaches the ignored `.env`; the sender reaches the tracked deployment workflow (#1151).
       mailersendApiKey: manifest.modules.email.provider === 'mailersend' ? 'dummy-key' : undefined,
-      mailersendSenderEmail: manifest.modules.email.provider === 'mailersend' ? 'noreply@example.com' : undefined,
-      mailersendSenderName: manifest.modules.email.provider === 'mailersend' ? 'App' : undefined,
+      mailersendSenderEmail: settings.mailersendSenderEmail,
+      mailersendSenderName: settings.mailersendSenderName,
       s3Setup: manifest.modules.s3Setup,
-      s3Credentials: manifest.modules.s3Setup === 'credentials' ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' } : undefined,
+      s3Credentials:
+        manifest.modules.s3Setup === 'credentials'
+          ? { endpoint: '', accessKey: '', secretKey: '', bucket: '', region: '' }
+          : manifest.modules.s3Setup === 'docker' && settings.s3Bucket
+            ? { endpoint: '', accessKey: '', secretKey: '', bucket: settings.s3Bucket, region: '' }
+            : undefined,
       includeAnalytics: manifest.modules.includeAnalytics,
       includePwa: manifest.modules.pwa !== undefined,
       advancedSkills: manifest.modules.advancedSkills || [],
@@ -549,10 +566,61 @@ export async function regenerateInTempDir(manifest: SaaSFoundryManifest, liveRoo
     // Compute hashes of the regenerated project
     const hashes = await computeFileHashes(projectDir)
 
-    return { tempDir, hashes }
+    return { tempDir, hashes, settings }
   } catch (error) {
     await rm(tempDir, { recursive: true, force: true }).catch(() => {})
     throw error
+  }
+}
+
+/**
+ * Baselines an earlier `sf update` recorded from a placeholder render, replaced by the target.
+ *
+ * Before #1151 the regeneration rendered the sender, the Docker database credentials and the
+ * Docker bucket with placeholders, and stored that render as the baseline. A path whose
+ * baseline is exactly the placeholder render (`legacyHashes`) of an unchanged template, in a
+ * project that has its own version of the file, would otherwise read as "template changed"
+ * and, edited, as a conflict nobody made. Its baseline becomes the target, so the file is
+ * left alone.
+ *
+ * A file still equal to that baseline is the placeholder render itself, written over an
+ * untouched file: it keeps its baseline, so the plan updates it back to the project's
+ * values. A deleted file keeps its baseline too, and is restored as before.
+ */
+export function repairedPlaceholderBaselines(
+  baseHashes: Record<string, string>,
+  currentHashes: Record<string, string>,
+  targetHashes: Record<string, string>,
+  legacyHashes: Record<string, string>
+): Record<string, string> {
+  const repaired = { ...baseHashes }
+  for (const [path, base] of Object.entries(baseHashes)) {
+    const target = targetHashes[path]
+    const current = currentHashes[path]
+    if (legacyHashes[path] === base && target && target !== base && current !== undefined && current !== base) repaired[path] = target
+  }
+  return repaired
+}
+
+/**
+ * `repairedPlaceholderBaselines` for a live project: renders the placeholder settings only
+ * when the project's own settings differ from them, since otherwise both renders are equal.
+ */
+export async function repairPlaceholderBaselines(
+  manifest: SaaSFoundryManifest,
+  settings: RenderSettings,
+  baseHashes: Record<string, string>,
+  currentHashes: Record<string, string>,
+  targetHashes: Record<string, string>,
+  liveRoot = '.'
+): Promise<Record<string, string>> {
+  const legacy = legacyRenderSettings(manifest)
+  if (sameRenderSettings(settings, legacy)) return baseHashes
+  const { tempDir, hashes: legacyHashes } = await regenerateInTempDir(manifest, liveRoot, legacy)
+  try {
+    return repairedPlaceholderBaselines(baseHashes, currentHashes, targetHashes, legacyHashes)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
 }
 
@@ -1330,9 +1398,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           spinner.text = 'Computing current file hashes...'
           const currentHashes = await computeFileHashes('.')
 
-          // Three-way comparison
+          // Three-way comparison, on baselines cleared of an earlier placeholder render (#1151)
           spinner.text = 'Comparing files...'
-          const comparableHashes = comparableTemplateHashes(manifest.fileHashes, currentHashes, targetHashes)
+          const baseHashes = await repairPlaceholderBaselines(manifest, result.settings, manifest.fileHashes, currentHashes, targetHashes)
+          const comparableHashes = comparableTemplateHashes(baseHashes, currentHashes, targetHashes)
           const updates = enforceAtomicImpactValidationBundles(computeFileUpdates(comparableHashes.baseHashes, comparableHashes.currentHashes, comparableHashes.targetHashes), comparableHashes)
 
           if (updates.length === 0) {
