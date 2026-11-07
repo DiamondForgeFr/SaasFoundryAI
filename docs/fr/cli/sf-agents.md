@@ -302,8 +302,8 @@ La réponse reflète aussi les exécutions propres au projet (voir [Délégation
 `modules.harness.routing`, puis les déplacements que l'ajustement automatique a faits dans ce clone (source `auto`, avec le déplacement et sa règle dans `adjustment`), puis la grille livrée. Dans la
 limite de la part déclarée des exécutions d'un type, la réponse est le palier moins cher situé sous le palier routé (ou un nouveau candidat plus fort situé au-dessus) et le dit avec `trial: true` et
 `effectiveTier` ; déléguez à ce palier. `--no-trial` répond le palier routé, pour l'affichage. `--record` (avec `--ticket`, `--complexity`, `--nature`, `--retry-of`) émet un **enregistrement de
-route** pour une délégation mesurée : il affiche `route=<id>` à mettre dans le brief et réserve l'essai qu'il accorde (voir [Enregistrements de route](#enregistrements-de-route)). Un registre ou une
-couche locale endommagés sont signalés sur stderr et le routage partagé répond.
+route** pour une délégation mesurée : il affiche `route=<id>` à mettre dans le brief et réserve l'essai qu'il accorde (voir [Enregistrements de route](#enregistrements-de-route)). Avec `--ticket` et
+sans `--complexity` (ou `--nature`), la valeur est lue dans les étiquettes du ticket. Un registre ou une couche locale endommagés sont signalés sur stderr et le routage partagé répond.
 
 ### Agents de palier
 
@@ -469,6 +469,18 @@ jours est **expirée** : une exécution qui la reprend ensuite est conservée et
 route n'expire jamais, si bien qu'un agent repris qui rend la main plusieurs jours plus tard garde son verdict. Un enregistrement vaut pour un seul agent de code : passez `--provider` quand plusieurs
 sont déclarés.
 
+**Le ticket dit sa complexité.** La forme ci-dessus nomme `--complexity` et `--nature`, mais celle que la plupart des sessions recopient ne le fait pas :
+`sf agents route --task <kind> --provider <agent> --ticket <n> --record`. Pour une valeur que les options n'indiquent pas, la commande lit les étiquettes du ticket
+(`complexity: <bug|low|medium|complex>`, `nature:<user-facing|internal|bundled-pr>`) par le CLI d'outil que le workflow utilise lui-même (`.claude/skills/sf-tool-<tool>/<tool>-cli.sh get-labels <n>`,
+puis la copie de `.agents/skills` pour un projet Codex seul), et les enregistre. Une option explicite l'emporte, et un ticket dont la complexité et la nature sont toutes deux données n'est pas
+interrogé. La sortie texte dit d'où vient chaque valeur (`Ticket #1105: complexity medium (from the ticket label), nature internal (from the ticket label).`, au-dessus de la ligne de route, qui reste
+la dernière), et `--json` ajoute `complexity`, `complexitySource`, `nature` et `natureSource` (`flag`, `label` ou `null`).
+
+La lecture ne retient jamais une délégation. Elle a lieu avant la prise du verrou du registre, dure dix secondes au plus et échoue en laissant passer : un outil dont le CLI n'a pas de `get-labels`
+(seul GitHub Projects en a un aujourd'hui), l'absence de CLI d'outil, un `gh` hors ligne, un délai dépassé ou un ticket sans étiquette de complexité n'enregistrent aucune complexité et le disent une
+fois sur stderr, en nommant la cause et l'option à passer : `Warning: the complexity of #1105 could not be read (<why>): the route record carries none; pass --complexity <level>`. Un ticket sans
+étiquette `nature:` est le ticket par défaut (user-facing), pas une lacune, et n'est pas signalé. Rien n'est lu sans `--ticket`.
+
 ### Ce que rapporte le délégué
 
 L'hôte sait ce qu'une délégation a coûté ; seul le délégué sait s'il a fait le travail. Chaque agent de palier termine son dernier message par une ligne :
@@ -481,23 +493,59 @@ SF-DELEGATION: pass route=0a1b2c3d4e5f60718293 checks=type-check,automated-tests
 `self-review`, `type-check`, `automated-tests`, `integration-tests`, `independent-review`, `security-tests` ; le prompt les liste, car un délégué à qui on ne les donne pas écrit du texte libre. Un
 `pass` qui ne nomme aucun contrôle, ou seulement `self-review`, est enregistré comme inconnu. La ligne est la **dernière ligne non vide du message hors d'un bloc de code**. Les blocs de code sont
 suivis sur **tout le message** depuis sa première ligne (un bloc ne se ferme qu'avec la même marque, au moins aussi longue, et rien après), quelle que soit la longueur du message : un exemple cité
-plus haut ou un long bloc de code ne peut pas décider du verdict. Toute autre clé de la ligne (`kind=`, `ticket=`, `trial=`) est ignorée. Un message sans cette ligne est un résultat inconnu.
+plus haut ou un long bloc de code ne peut pas décider du verdict. Toute autre clé de la ligne (`kind=`, `ticket=`, `trial=`) est ignorée. Un message sans cette ligne est un résultat inconnu, et le
+délégué la réclame une fois (section suivante).
+
+### Réclamer la ligne manquante
+
+Un délégué qui oublie sa ligne de fin était enregistré comme un résultat inconnu puis écarté : personne ne le voyait, et le routage ne pouvait pas apprendre de l'exécution. La capture répond
+maintenant au `SubagentStop` d'un tel délégué par une **décision de blocage**, sur Claude Code comme sur Codex : l'hôte laisse le sous-agent continuer et lui remet la raison comme prochaine
+instruction.
+
+```json
+{
+  "decision": "block",
+  "reason": "Your final message has no SF-DELEGATION line, so this delegation cannot be measured. Do not redo any work. …\nSF-DELEGATION: <pass|fail> route=<the id from your brief, if it gave one> checks=<codes>"
+}
+```
+
+Elle ne réclame que si toutes les conditions sont réunies, et jamais deux fois :
+
+- l'événement est un `SubagentStop` d'un agent `sf-<tier>` routé dont le palier est déclaré pour l'hôte, avec un dernier message non vide qui n'a **aucune ligne** (un `pass` qui ne nomme qu'une
+  auto-revue a une ligne, il n'est donc jamais réclamé : réclamer à nouveau ne changerait pas le contrôle) ;
+- l'hôte ne dit pas qu'il continue déjà à cause d'un hook d'arrêt (`stop_hook_active`) ;
+- aucun segment antérieur du même agent ne porte la référence de preuve `asked-for-sf-delegation-line`. Cette garde est la nôtre : elle tient quand l'indicateur de boucle d'un hôte est faux ou absent.
+
+L'arrêt est enregistré d'abord, avec cette référence, pour que rien ne se perde si l'agent ne s'arrête jamais plus. L'arrêt qui répond est le segment suivant du même agent : il se fond dans **une
+seule délégation**, avec le verdict et la route de la réponse et le coût des deux arrêts (voir plus bas). Quand le brief a donné un identifiant de route (`route=<id>` dans un prompt utilisateur de la
+transcription de l'agent, jamais dans un résultat d'outil) et que l'enregistrement de route accepterait cet agent, la raison le porte comme la ligne exacte à écrire ; sinon elle dit d'utiliser
+l'identifiant du brief. Cet identifiant ne fait que remplir la suggestion : la ligne que le délégué écrit est ce qui attribue l'exécution.
 
 ### Capture et signaux
 
 `sf agents outcome capture --host <claude-code|codex>` lit la charge d'un hook sur l'entrée standard, ajoute un enregistrement, puis lance l'ajustement sur l'état qu'il vient d'écrire. Il ne fait
-jamais échouer l'hôte : ce qui se passe mal une fois les arguments compris est signalé sur stderr avec le code de sortie 0. Ne le lancez à la main que pour tester un hook.
+jamais échouer l'hôte : ce qui se passe mal une fois les arguments compris se termine par le code de sortie 0. Ne le lancez à la main que pour tester un hook. Il n'écrit rien sur stdout, sauf un objet
+JSON quand il réclame sa ligne manquante à un délégué ([ci-dessus](#reclamer-la-ligne-manquante) ; `--json` le porte dans le résultat versionné à la place).
 
 Le hook est une ligne de shell, pas un `sf` nu (ce nom peut être un autre CLI, ou un SaaSFoundry plus ancien sans la commande). Il s'arrête aussitôt, avant le démarrage de Node, sauf si la charge
 mentionne un agent `sf-<tier>`, puis lance le CLI que le **projet** résout : `node_modules/.bin/saasfoundryai`, puis son `sf`, puis le build de ce dépôt quand le projet est SaaSFoundry lui-même, puis
-`saasfoundryai` dans le PATH. Il sort avec 0 et ne dit rien, quoi qu'il arrive : un CLI absent ou trop ancien ne dérange jamais l'agent.
+`saasfoundryai` dans le PATH. Il sort avec 0, quoi qu'il arrive : un CLI absent ou trop ancien ne dérange jamais l'agent. La **stdout** du CLI parvient à l'hôte (c'est ainsi que la décision y arrive)
+et sa stderr est écartée.
+
+Un échec ne se perd pas pour autant. La capture ajoute une ligne à **`capture-errors.jsonl`**, à côté du registre dans le répertoire Git du clone (jamais suivi, partagé par tous les worktrees), pour
+une charge illisible, un registre impossible à écrire ou un ajustement de routage sauté, et pour les écarts anormaux (une charge qui n'est pas un objet, un palier que le projet n'a jamais déclaré pour
+l'hôte, un résultat d'outil sans identifiant d'agent). Les écarts ordinaires (un événement qui n'est pas une délégation, un agent qui n'est pas un `sf-<tier>`, un lancement en arrière-plan) ne
+laissent rien. Une ligne porte l'heure, l'hôte, l'événement du hook, une étape (`payload`, `ledger`, `adjustment` ou `ignored`) et un message d'environ 300 caractères, sans texte de charge ni
+identifiant d'agent de l'hôte. Au-delà de 64 Kio le fichier garde ses 200 dernières lignes. `sf status` compte les erreurs des 7 derniers jours (voir [`sf status`](./sf-status.md#erreurs-de-capture))
+et `sf agents routing report` aussi. Hors d'un dépôt Git il n'y a pas de journal, et l'échec reste sur stderr.
 
 - **Claude Code.** `SubagentStop` (matcher `sf-.*`, donc les autres sous-agents ne le déclenchent jamais) est l'événement principal : le palier vient de l'agent `sf-<tier>` et les jetons sont
   additionnés sur les appels d'API distincts de la transcription du sous-agent. `PostToolUse` sur l'outil `Agent` est rattaché à l'arrêt par l'identifiant d'agent et ajoute la durée mesurée par
   l'hôte, le modèle résolu et un statut en échec ou interrompu. Les deux vont dans `.claude/settings.json`.
 - **Codex.** `SubagentStop` dans le `.codex/hooks.json` suivi par Git, qui conserve les hooks que le projet y a déjà. Les jetons viennent du rollout et restent inconnus quand il ne peut pas être lu.
   Codex n'exécute un hook de projet qu'une fois la couche `.codex/` approuvée et le hook lui-même approuvé (il conserve cette approbation hook par hook) ; rien ici ne peut le voir, donc `sf status`
-  dit **declared**, pas appliqué.
+  dit **declared**, pas appliqué. L'approbation suit le texte du hook : quand `sf update` ou `sf agents refresh` remplace une commande de capture antérieure (celle de la v1.1.0, voir plus bas), il le
+  dit, et Codex ignore le nouveau hook tant que vous ne l'avez pas relu et approuvé avec `/hooks`. D'ici là, les délégations Codex de ce projet ne sont pas enregistrées.
 - **Autres hôtes.** Pas de hook. La session enregistre à la main avec `sf agents outcome record`, et `sf status` indique que la capture n'est pas appliquée.
 
 Un agent que la session **reprend** pour lui rendre un résultat émet un nouveau `SubagentStop` avec le même identifiant d'agent. Chaque arrêt est une exécution à part : elle ne compte que les octets
@@ -505,9 +553,11 @@ de transcription écrits depuis l'arrêt précédent, se relie à lui, et l'ense
 résultat. Le **temps actif** d'un arrêt est la somme des écarts entre les événements de sa transcription, chacun plafonné à cinq minutes : le temps mort entre un arrêt et sa reprise n'est pas du
 travail ; la durée que l'hôte rapporte pour le premier appel l'emporte quand elle existe.
 
-`sf update` et `sf agents refresh --scope shared` déposent les hooks, fusionnés dans ce que les fichiers contiennent déjà et remplaçant la commande `sf` nue qu'un build précédent avait écrite ;
-`.claude/settings.json` est écrit en entier ou pas du tout. Activer un agent n'y touche jamais. `sf status` ne dit `enforced` que lorsque le hook est déclaré **et** que le CLI du projet répond à
-`agents outcome capture --help` ; sinon `declared-not-runnable`, `declared` (Codex), `outdated` (le hook `sf` nu d'un build précédent) ou `missing`.
+`sf update` et `sf agents refresh --scope shared` déposent les hooks, fusionnés dans ce que les fichiers contiennent déjà et remplaçant les commandes qu'une version précédente avait écrites : la
+commande `sf` nue du premier build, et la ligne de shell que la **v1.1.0** a livrée, qui écartait la stdout du CLI et ne pouvait donc pas porter une décision jusqu'à l'hôte. Les deux sont reconnues à
+leur texte exact et remplacées, jamais laissées à côté du nouveau hook ; une copie que vous avez modifiée à la main est la vôtre et reste. `.claude/settings.json` est écrit en entier ou pas du tout.
+Activer un agent n'y touche jamais. `sf status` ne dit `enforced` que lorsque le hook est déclaré **et** que le CLI du projet répond à `agents outcome capture --help` ; sinon `declared-not-runnable`,
+`declared` (Codex), `outdated` (le hook d'une version précédente) ou `missing`.
 
 ```bash
 # Un hôte sans hooks, ou une exécution que les hooks n'ont pas vue : affichée dans le rapport, ne déplace jamais le routage
@@ -606,9 +656,9 @@ pour que les mêmes exécutions ne le déplacent pas de nouveau à la prochaine 
 livraison, et, par ticket selon la complexité (et la nature), la médiane et le p95 du coût, du **temps actif** des délégations, et du temps **entre le premier In progress et le premier Human testing**
 (In review pour un ticket qui le saute), tiré des transitions de statut que `workflow-cli.sh` a enregistrées. Un ticket qui a une délégation sans coût est une borne basse : il est compté à part des
 médianes et du p95. Un agent repris est une seule délégation, et le rapport dit combien d'arrêts supplémentaires il a comptés. Il nomme aussi les modèles sans prix, l'état de la capture de chaque
-agent, les maintiens et les déplacements locaux que personne n'a promus. `--json` est versionné (`reportVersion: 2`). `sf status` porte une ligne `routing:` avec la version de la grille et les
-surcharges du projet, les déplacements non promus, les maintiens notables et l'état de la capture, et une précondition `tierAgents` pour les agents de palier présents sur le disque (voir
-[`sf status`](./sf-status.md#agents-de-palier)).
+agent, les erreurs de capture des 7 derniers jours (`Capture errors: 2 in 7 days (last 2026-11-06, ledger: …)`, ou `none`), les maintiens et les déplacements locaux que personne n'a promus. `--json`
+est versionné (`reportVersion: 2`). `sf status` porte une ligne `routing:` avec la version de la grille et les surcharges du projet, les déplacements non promus, les maintiens notables et l'état de la
+capture, et une précondition `tierAgents` pour les agents de palier présents sur le disque (voir [`sf status`](./sf-status.md#agents-de-palier)).
 
 Le rapport dit ce qu'il ne voit pas : les jetons que la session dépense à planifier, discuter et relire ne sont mesurés par aucun hook d'hôte, donc le coût d'un ticket est le coût de ses délégations.
 Un ticket est compté dès qu'il a une délégation enregistrée ; le rapport ne sait pas s'il est arrivé à Done, et le temps d'un ticket suppose que les transitions aient été enregistrées dans ce clone.

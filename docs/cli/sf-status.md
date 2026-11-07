@@ -109,9 +109,23 @@ knows the route it gets is not the shipped one, for example
 kind the adjustment looked at and cannot move (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) and counts the ones that only wait for evidence. It also says, for each declared coding
 agent, whether the hooks that record every delegation are in place **and can run**: `claude-code capture enforced` only when the hook is declared and the project's own CLI answers
 `agents outcome capture`; `capture hook declared but no CLI can run it` when it does not (install `saasfoundryai-cli` in the project, or put `saasfoundryai` on the PATH: until then delegations are not
-recorded); `codex capture declared` when the hook is there but Codex has to trust it first; `capture hook outdated` for the bare-`sf` hook of an earlier build; `capture hook missing`
-(`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local layer shows as `unreadable (…)` and never fails the
-status.
+recorded); `codex capture declared` when the hook is there but Codex has to trust it first; `capture hook outdated` for the bare-`sf` hook of the first build or the hook v1.1.0 shipped;
+`capture hook missing` (`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local layer shows as `unreadable (…)` and
+never fails the status.
+
+### Capture errors
+
+The hooks that record delegations run with their output discarded and exit 0, so a capture that fails (a payload it cannot read, a ledger it cannot write, a routing adjustment it skipped) used to
+leave no trace, and the routing learned from fewer outcomes than it was given. The capture now logs each failure in `capture-errors.jsonl`, next to the ledger in the Git directory of the clone (see
+[capture and signals](./sf-agents.md#capture-and-signals)), and `sf status` counts the errors of the **last 7 days**, so an old failure does not warn for ever:
+
+- the `routing:` line gains `; 2 capture errors in 7 days, last 2026-11-06: <message>` **only when there is at least one**; `--json` carries `routing.captureErrors` as `{ count, since, last? }`, where
+  `last` is `{ at, host, event, stage, message }` (additive: a report built without the log omits the field);
+- the `captureErrors` precondition, "Delegation capture records every run", is a `warn` with the count, the last error and where the log is, `ok` when the window holds none, and skipped without a
+  harness, when the routing cannot be read, or for a report that did not read the log. The remediation points to the log and to [`sf agents routing report`](./sf-agents.md#the-report), which prints
+  the same count.
+
+It only reads the log: nothing is written, and a log that is missing or unreadable counts as empty, so the status never fails on it. Outside a Git checkout there is no log.
 
 ### Tier agents
 
