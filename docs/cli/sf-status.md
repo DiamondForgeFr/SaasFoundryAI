@@ -136,6 +136,9 @@ When the project declares a local pipeline in `.molten/project.json` (MoltenTerm
 `local-ci: MoltenTerm pipeline (11 jobs)`. The AI Testing step runs that pipeline (`molten ci run <branch>`) when `molten ci status` answers, and the npm suite otherwise. `sf status` only reads the
 file: it never runs `molten` or any project code, and a damaged file shows as `unreadable`, without failing the status. The line is absent on a project that declares no pipeline.
 
+A pipeline counts only when `ci.jobs` lists at least one job. A `.molten/project.json` that holds only the project name and icon, or an empty `ci.jobs`, declares no pipeline: the line reads
+`local-ci: npm suite (.molten/project.json declares no CI job)` (`{ "runner": "npm", "reason": "no-ci-jobs" }` in `--json`), and AI Testing runs the npm suite.
+
 ### Runtime
 
 Whether the project can actually **run**, which a well-formed manifest says nothing about. A project can be perfectly configured and still have no `node_modules`, no database answering, and no ORM

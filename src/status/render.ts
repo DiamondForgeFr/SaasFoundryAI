@@ -78,6 +78,7 @@ function holdsSummary(holds: StatusRoutingState['holds']): string {
  */
 export function localCiSummary(localCi: StatusLocalCi): string {
   if ('error' in localCi) return `unreadable (${localCi.error})`
+  if (localCi.runner === 'npm') return 'npm suite (.molten/project.json declares no CI job)'
   return `MoltenTerm pipeline (${localCi.jobs} job${localCi.jobs === 1 ? '' : 's'})`
 }
 
