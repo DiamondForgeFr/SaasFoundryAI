@@ -203,6 +203,47 @@ describe('compiled sf agents outcome record | mark (#1035)', () => {
       expect(written[1]).toMatchObject({ type: 'run', host: 'claude-code', tier: 'build', route, ticket: 1035, taskKind: 'multi-file-feature', outcome: 'success', cost: { amount: '0.01196000' } })
     })
 
+    // The hook output reaches the host (#1105): a stop without the closing line is answered with a block, exactly one JSON object on stdout.
+    describe('a delegate that ended without its line', () => {
+      const noLine = (route?: string) => payload('claude-subagent-stop-no-line.json', join(FIXTURES, 'claude-subagent.jsonl'), route ?? 'f'.repeat(20))
+
+      it('prints exactly one JSON object, the block decision, and exits 0', async () => {
+        const result = capture('claude-code', await noLine())
+        expect(result.status).toBe(0)
+        expect(result.stderr).toBe('')
+        expect(result.stdout.endsWith('\n')).toBe(true)
+        const printed = JSON.parse(result.stdout)
+        expect(Object.keys(printed)).toEqual(['decision', 'reason'])
+        expect(printed.decision).toBe('block')
+        expect(printed.reason).toContain('SF-DELEGATION: <pass|fail> route=')
+        // The stop is recorded with the question it asked
+        expect((await lines())[0]).toMatchObject({ type: 'run', outcome: 'outcome-unknown', evidenceRefs: expect.arrayContaining(['no-sf-delegation-line', 'asked-for-sf-delegation-line']) })
+      })
+
+      it('asks once: the same stop seen again, and the stop that comes after the answer, print nothing', async () => {
+        expect(capture('claude-code', await noLine()).stdout).not.toBe('')
+        expect(capture('claude-code', await noLine()).stdout).toBe('')
+        const route = routeId('multi-file-feature', 'claude-code')
+        const answered = await payload('claude-subagent-stop.json', join(FIXTURES, 'claude-subagent.jsonl'), route)
+        const result = capture('claude-code', answered)
+        expect(result.status).toBe(0)
+        expect(result.stdout).toBe('')
+      })
+
+      it('puts the decision in the versioned result on request, and still prints no second object', async () => {
+        const result = capture('claude-code', await noLine(), '--json')
+        expect(result.status).toBe(0)
+        expect(JSON.parse(result.stdout)).toMatchObject({ outcomeVersion: 1, status: 'appended', decision: { decision: 'block', reason: expect.stringContaining('no SF-DELEGATION line') } })
+      })
+
+      it('asks a Codex delegate the same way', async () => {
+        const text = (await readFile(join(FIXTURES, 'codex-subagent-stop-no-line.json'), 'utf8')).replaceAll('__CWD__', project).replaceAll('__TRANSCRIPT__', join(FIXTURES, 'codex-rollout.jsonl'))
+        const result = capture('codex', text)
+        expect(result.status).toBe(0)
+        expect(JSON.parse(result.stdout)).toMatchObject({ decision: 'block' })
+      })
+    })
+
     it('records a Codex SubagentStop and prints the versioned result on request', async () => {
       const route = routeId('tests', 'codex')
       const result = capture('codex', await payload('codex-subagent-stop.json', join(FIXTURES, 'codex-rollout.jsonl'), route), '--json')

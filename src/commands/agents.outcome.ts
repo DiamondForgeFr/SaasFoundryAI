@@ -226,6 +226,10 @@ export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<vo
     }
   }
   if (result.status === 'ignored' && result.abnormal) await logFailure('ignored', result.reason)
+  // The decision goes to the host first, before the routing adjustment: the host waits for the hook, and a stdout
+  // that is exactly one JSON object is how both hosts read it. Nothing else the capture does writes to stdout.
+  const decision = 'decision' in result ? result.decision : undefined
+  if (decision && !options.json) process.stdout.write(`${JSON.stringify(decision)}\n`)
   // After each recorded run the routing looks at the evidence again: a move is applied without asking,
   // and logged where `sf agents routing report` and `sf status` show it. It reads the state the append
   // just returned, the project and the directory the capture already resolved: nothing is read twice.
