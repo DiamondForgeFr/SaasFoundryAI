@@ -176,8 +176,12 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
     expect(skill).toContain('**Measured delegations.**')
     // The route record decides what a delegation was; the delegate only echoes its id
-    expect(skill).toContain('`sf agents route --task <kind> --provider <current-agent> --ticket <n> --complexity <level> --record`')
+    expect(skill).toContain('`sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`')
+    // The complexity and the nature are read from the ticket labels, so the flags are optional (#1105)
+    expect(skill).toContain('`--complexity <level>` and `--nature <nature>` are optional')
     expect(skill).toContain('`SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`')
+    // A delegate that forgets the line is asked for it once, while it is still running (#1105)
+    expect(skill).toContain('is asked for it once, while it is still running')
     expect(skill).toContain('`--retry-of <route id>`')
     expect(skill).toContain('`self-review` alone is not one')
     expect(skill).toContain('`sf agents outcome mark <ticket> rework`')
