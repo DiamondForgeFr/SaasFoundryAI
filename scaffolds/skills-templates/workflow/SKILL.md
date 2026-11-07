@@ -179,15 +179,18 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
    from it (`sf agents routing report` shows what it did). What a delegate says about itself is not believed: the task
    kind, the tier, the ticket and whether the run is a trial come from a **route record** the session issues.
    - Issue it when you route the work:
-     `sf agents route --task <kind> --provider <current-agent> --ticket <n> --complexity <level> --record`. It prints
-     `route=<id>` (`--json` gives `routeId`): put that id in the brief. Reading a route without `--record`, to display
-     it, records nothing. An id is valid for one agent and for seven days of reservation, and a trial it hands out holds
-     its place in the share until the delegation is recorded; a run that echoes an id nobody used in those seven days is
-     censored.
+     `sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`. It prints `route=<id>`
+     (`--json` gives `routeId`): put that id in the brief. The complexity and the nature of the ticket are read from
+     its labels, so `--complexity <level>` and `--nature <nature>` are optional: pass one when the ticket has no such
+     label, or when the command warns on stderr that it could not read it (the record then carries none). Reading a
+     route without `--record`, to display it, records nothing. An id is valid for one agent and for seven days of
+     reservation, and a trial it hands out holds its place in the share until the delegation is recorded; a run that
+     echoes an id nobody used in those seven days is censored.
    - The tier agent closes its final message with `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`; a hook
-     records the cost, the active time and that verdict. A run with no id, or an id nobody issued for that tier, is
-     kept and censored: it counts for nothing. A `pass` needs a real check among the codes; `self-review` alone is not
-     one.
+     records the cost, the active time and that verdict. A delegate that ends without the line is asked for it once,
+     while it is still running: the hook blocks its stop with the exact line to write, and its answer is the next stop
+     of the same delegation. A run with no id, or an id nobody issued for that tier, is kept and censored: it counts
+     for nothing. A `pass` needs a real check among the codes; `self-review` alone is not one.
    - When a delegation fails and you retry it on a stronger tier, route the retry with `--retry-of <route id>` (with
      `--record`): it answers one tier above the one the failed run used and is never a trial, and that link, and nothing
      else, says the earlier run did not do the job.

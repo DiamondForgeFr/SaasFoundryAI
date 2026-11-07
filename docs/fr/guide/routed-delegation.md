@@ -100,13 +100,16 @@ La session reste en dialogue avec le développeur pendant toute la livraison. Un
 Le harness ne se fie pas au récit qu'un délégué fait de son travail. Il mesure trois choses et conserve les preuves dans le répertoire Git commun du clone.
 
 - **L'enregistrement de route.** `sf agents route --task <type> --provider <agent> --ticket <n> --record` écrit un enregistrement et affiche `route=<id>`. La session met cet identifiant dans le brief,
-  et le délégué le rappelle : la capture prend le type de tâche et le palier depuis l'enregistrement, et non depuis le délégué. Un enregistrement réserve aussi tout essai qu'il délivre, et une route
-  que personne ne rappelle pendant sept jours expire.
+  et le délégué le rappelle : la capture prend le type de tâche et le palier depuis l'enregistrement, et non depuis le délégué. L'enregistrement porte la complexité et la nature du ticket : quand
+  `--complexity` ou `--nature` est omis, la commande les lit dans les étiquettes du ticket, et avertit sur stderr, sans retenir la délégation, quand elle ne le peut pas. Un enregistrement réserve
+  aussi tout essai qu'il délivre, et une route que personne ne rappelle pendant sept jours expire.
 - **La ligne de verdict.** Chaque agent de palier termine son dernier message par `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` signifie que la vérification demandée par le brief a
-  été exécutée et satisfaite. Un message sans cette ligne donne un résultat inconnu.
+  été exécutée et satisfaite. Un délégué qui termine sans cette ligne la reçoit en réclamation une fois, pendant qu'il tourne encore : le hook de capture répond à son arrêt par un blocage qui porte la
+  ligne exacte à écrire, et la réponse est l'arrêt suivant de la même délégation. Un message qui n'a toujours pas la ligne donne un résultat inconnu.
 - **Le registre.** `<git-common-dir>/saasfoundry/delegations.jsonl` est un fichier en ajout seul qui contient les exécutions (jetons, coût, temps actif, résultat, vérifications, palier et candidat),
   les enregistrements de route et les signaux. Sur Claude Code, les hooks `SubagentStop` et `PostToolUse` capturent chaque exécution automatiquement. Les autres hôtes enregistrent à la main avec
-  `sf agents outcome record`. Un coût n'est jamais deviné : un modèle sans prix publié conserve sa fiabilité mais n'a pas de coût tant que le projet n'en déclare pas un.
+  `sf agents outcome record`. Un coût n'est jamais deviné : un modèle sans prix publié conserve sa fiabilité mais n'a pas de coût tant que le projet n'en déclare pas un. Une capture qui échoue n'est
+  pas silencieuse : elle est journalisée à côté du registre, et `sf status` et `sf agents routing report` comptent les erreurs des 7 derniers jours.
 
 Un verdict ultérieur s'ajoute comme signal, et la ligne d'origine n'est jamais modifiée. La session marque un travail délégué qu'elle a dû refaire avec `sf agents outcome mark <ticket> rework`, et un
 défaut revenu de Human testing ou de la revue avec `human-defect`. Ces deux écritures demandent une autorisation dans l'agent de développement, car elles modifient ce que le routage fera ensuite.

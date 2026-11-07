@@ -284,7 +284,8 @@ The answer also reflects the project's own runs (see [Measured delegations](#mea
 then the moves the automatic adjustment made in this clone (source `auto`, with the move and its rule in `adjustment`), then the shipped grid. Within the declared share of a kind's runs, the answer is
 the cheaper tier below the routed one (or a new stronger candidate above it) and says so with `trial: true` and `effectiveTier`; delegate to that tier. `--no-trial` answers the routed tier, for
 display. `--record` (with `--ticket`, `--complexity`, `--nature`, `--retry-of`) issues a **route record** for a delegation that is measured: it prints `route=<id>` to put in the brief, and reserves
-the trial it hands out (see [Route records](#route-records)). A damaged ledger or local layer is reported on stderr and the shared routing answers.
+the trial it hands out (see [Route records](#route-records)). With `--ticket` and no `--complexity` (or `--nature`), the value is read from the ticket's labels. A damaged ledger or local layer is
+reported on stderr and the shared routing answers.
 
 ### Tier agents
 
@@ -438,6 +439,18 @@ ledger lock, so routes asked for at the same moment cannot all be trials. A rout
 (`route-expired`), because its kind and its trial flag can no longer be trusted. An agent that already used the route is never expired, so a resumed agent that hands back days later keeps its verdict.
 A record is written for one coding agent: pass `--provider` when several are declared.
 
+**The ticket says its complexity.** The form above names `--complexity` and `--nature`, but the form most sessions copy does not:
+`sf agents route --task <kind> --provider <agent> --ticket <n> --record`. For a value the flags leave out, the command reads the labels of the ticket (`complexity: <bug|low|medium|complex>`,
+`nature:<user-facing|internal|bundled-pr>`) through the tool CLI the workflow itself uses (`.claude/skills/sf-tool-<tool>/<tool>-cli.sh get-labels <n>`, then the `.agents/skills` copy for a Codex-only
+project), and records them. An explicit flag wins, and a ticket whose complexity and nature are both given is not asked. The text output says where each value came from
+(`Ticket #1105: complexity medium (from the ticket label), nature internal (from the ticket label).`, above the route line, which stays the last line), and `--json` adds `complexity`,
+`complexitySource`, `nature` and `natureSource` (`flag`, `label` or `null`).
+
+The read never holds up a delegation. It runs before the ledger lock is taken, is bounded to ten seconds, and fails open: a tool whose CLI has no `get-labels` (only GitHub Projects has it today), no
+tool CLI, a `gh` that is offline, a timeout or a ticket without a complexity label records no complexity, and says so once on stderr, naming the cause and the flag to pass:
+`Warning: the complexity of #1105 could not be read (<why>): the route record carries none; pass --complexity <level>`. A ticket with no `nature:` label is the default one (user-facing), not a gap,
+and is not reported. Nothing is read without `--ticket`.
+
 ### What the delegate reports
 
 The host knows what a delegation cost; only the delegate knows whether it did the job. Every tier agent ends its final message with one line:
@@ -450,22 +463,56 @@ SF-DELEGATION: pass route=0a1b2c3d4e5f60718293 checks=type-check,automated-tests
 `automated-tests`, `integration-tests`, `independent-review`, `security-tests`; the prompt lists them, because a delegate that is not told the codes writes free text. A `pass` that names no check, or
 only `self-review`, is recorded as unknown. The line is the **last non-empty line of the message outside a code fence**. The fences are tracked over the **whole message** from its first line (a fence
 closes only with the same mark, at least as long, and nothing after it), however long the message is, so an example quoted earlier or a long fenced block cannot decide the verdict. Any other key on
-the line (`kind=`, `ticket=`, `trial=`) is ignored. A message without the line is an unknown outcome.
+the line (`kind=`, `ticket=`, `trial=`) is ignored. A message without the line is an unknown outcome, and the delegate is asked for it once (next section).
+
+### Asking for the missing line
+
+A delegate that forgets its closing line used to be recorded as an unknown outcome and dropped: nobody saw it, and the routing could not learn from the run. The capture now answers the `SubagentStop`
+of such a delegate with a **block decision**, on Claude Code and on Codex alike: the host keeps the subagent running and hands it the reason as its next instruction.
+
+```json
+{
+  "decision": "block",
+  "reason": "Your final message has no SF-DELEGATION line, so this delegation cannot be measured. Do not redo any work. …\nSF-DELEGATION: <pass|fail> route=<the id from your brief, if it gave one> checks=<codes>"
+}
+```
+
+It asks only when every condition holds, and never twice:
+
+- the event is a `SubagentStop` of a routed `sf-<tier>` agent whose tier is declared for the host, with a non-empty final message that has **no line at all** (a `pass` that names only a self-review
+  has a line, so it is never asked: asking again would not change the check);
+- the host does not say it is already continuing because of a stop hook (`stop_hook_active`);
+- no earlier segment of the same agent carries the evidence reference `asked-for-sf-delegation-line`. That guard is ours: it holds when a host's own loop flag is wrong or missing.
+
+The stop is recorded first, with that reference, so nothing is lost if the agent never stops again. The stop that answers is the next segment of the same agent, so it folds into **one delegation**
+with the verdict and the route of the answer and the cost of both stops (see below). When the brief gave a route id (`route=<id>` in a user prompt of the agent's transcript, never a tool result) and
+the route record would accept this agent for it, the reason carries it as the exact line to write; otherwise it says to use the id from the brief. That id only fills in the suggestion: the line the
+delegate writes is what attributes the run.
 
 ### Capture and signals
 
 `sf agents outcome capture --host <claude-code|codex>` reads a hook payload on stdin, appends one record, then runs the adjustment on the state it just wrote. It never fails the host: what goes wrong
-after the arguments were understood is reported on stderr with exit 0. Run it by hand only to test a hook.
+after the arguments were understood exits 0. Run it by hand only to test a hook. It prints nothing on stdout, except one JSON object when it asks a delegate for its missing line
+([above](#asking-for-the-missing-line); `--json` carries it in the versioned result instead).
 
 The hook is a shell line, not a bare `sf` (that name may be another CLI, or an older SaaSFoundry without the command). It leaves at once, before Node starts, unless the payload mentions an `sf-<tier>`
 agent, then runs the CLI the **project** resolves: `node_modules/.bin/saasfoundryai`, then its `sf`, then the build of this repository when the project is SaaSFoundry itself, then `saasfoundryai` on
-the PATH. It exits 0 and says nothing whatever happens, so a missing or too old CLI never disturbs the agent.
+the PATH. It exits 0 whatever happens, so a missing or too old CLI never disturbs the agent. The CLI's **stdout** reaches the host (that is how the decision gets there) and its stderr is discarded.
+
+A failure is not lost with it. The capture appends one line to **`capture-errors.jsonl`**, next to the ledger in the Git directory of the clone (never tracked, shared by every worktree), for a payload
+that cannot be read, a ledger that cannot be written or a routing adjustment that was skipped, and for the abnormal ignores (a payload that is not an object, a tier the project never declared for the
+host, a tool result without an agent id). The ordinary ignores (an event that is not a delegation, an agent that is not an `sf-<tier>`, a background launch) leave nothing. A line holds the time, the
+host, the hook event, a stage (`payload`, `ledger`, `adjustment` or `ignored`) and a message of about 300 characters, with no payload text and no host agent id. Past 64 KiB the file keeps its last 200
+lines. `sf status` counts the errors of the last 7 days (see [`sf status`](./sf-status.md#capture-errors)) and so does `sf agents routing report`. Outside a Git checkout there is no log, and the
+failure stays on stderr.
 
 - **Claude Code.** `SubagentStop` (matcher `sf-.*`, so the other subagents never start it) is the primary event: the tier comes from the `sf-<tier>` agent and the tokens are summed over the distinct
   API calls of the subagent transcript. `PostToolUse` on the `Agent` tool is joined to the stop by the agent id and adds the duration the host measured, the model it resolved and a failed or killed
   status. Both go into `.claude/settings.json`.
 - **Codex.** `SubagentStop` in the tracked `.codex/hooks.json`, which keeps the hooks a project already has there. Tokens come from the rollout and stay unknown when it cannot be parsed. Codex runs a
   project hook once the `.codex/` layer is trusted and the hook itself has been trusted (it persists that trust per hook); nothing here can see that, so `sf status` says **declared**, not enforced.
+  The trust follows the text of the hook: when `sf update` or `sf agents refresh` replaces an earlier capture command (the v1.1.0 one, see below), it says so, and Codex skips the new hook until you
+  review and trust it with `/hooks`. Until then the delegations of that project are not recorded.
 - **Other hosts.** No hook. The session records by hand with `sf agents outcome record`, and `sf status` says capture is not enforced.
 
 An agent the session **resumes** to hand a result back emits another `SubagentStop` with the same agent id. Each stop is a run of its own: it counts only the transcript bytes written since the
@@ -473,9 +520,10 @@ previous stop, it links to the previous one, and the whole is one delegation. Th
 time** of a stop is the sum of the gaps between its transcript events, each capped at five minutes, so the idle time between a stop and its resume is not work; the duration the host reports for the
 first call wins when there is one.
 
-`sf update` and `sf agents refresh --scope shared` deposit the hooks, merged into what the files already hold and replacing the bare-`sf` command an earlier build wrote; `.claude/settings.json` is
-written whole or not at all. Enabling an agent never touches it. `sf status` reports `enforced` only when the hook is declared **and** the project's CLI answers `agents outcome capture --help`;
-otherwise `declared-not-runnable`, `declared` (Codex), `outdated` (the bare-`sf` hook of an earlier build) or `missing`.
+`sf update` and `sf agents refresh --scope shared` deposit the hooks, merged into what the files already hold and replacing the commands an earlier release wrote: the bare-`sf` one of the first build,
+and the shell line **v1.1.0** shipped, which discarded the CLI's stdout and so could not carry a decision to the host. Both are recognised by their exact text and replaced, never left beside the new
+hook; a copy you edited by hand is yours and stays. `.claude/settings.json` is written whole or not at all. Enabling an agent never touches it. `sf status` reports `enforced` only when the hook is
+declared **and** the project's CLI answers `agents outcome capture --help`; otherwise `declared-not-runnable`, `declared` (Codex), `outdated` (the hook of an earlier release) or `missing`.
 
 ```bash
 # A host without hooks, or a run the hooks could not see: shown in the report, never moves the routing
@@ -566,9 +614,10 @@ override is not changed.
 `sf agents routing report [--json]` is read-only. It shows, per task kind and tier, the delegations, the censored count, the success rate, the p95 cost and duration and the expected feature cost, and,
 per ticket by complexity (and nature), the median and p95 of the cost, of the **active time** of the delegations, and of the time **from the first In progress to the first Human testing** (to In
 review for a ticket that skips it), taken from the status transitions `workflow-cli.sh` recorded. A ticket with a delegation that has no cost is a lower bound: it is counted apart from the medians and
-the p95. A resumed agent is one delegation, and the report says how many further stops it counted. It also names the models without a price, the capture state of each agent, the holds and the local
-moves nobody promoted. `--json` is versioned (`reportVersion: 2`). `sf status` carries one `routing:` line with the grid version and the project overrides, the unpromoted moves, the notable holds and
-the capture state, and a `tierAgents` precondition for the tier agents on disk (see [`sf status`](./sf-status.md#tier-agents)).
+the p95. A resumed agent is one delegation, and the report says how many further stops it counted. It also names the models without a price, the capture state of each agent, the capture errors of the
+last 7 days (`Capture errors: 2 in 7 days (last 2026-11-06, ledger: …)`, or `none`), the holds and the local moves nobody promoted. `--json` is versioned (`reportVersion: 2`). `sf status` carries one
+`routing:` line with the grid version and the project overrides, the unpromoted moves, the notable holds and the capture state, and a `tierAgents` precondition for the tier agents on disk (see
+[`sf status`](./sf-status.md#tier-agents)).
 
 The report says what it cannot see: the tokens the session spends planning, talking and reviewing are metered by no host hook, so the cost of a ticket is the cost of its delegations. A ticket is
 counted once it has a recorded delegation; the report does not know whether it reached Done, and the time of a ticket needs the transitions to have been recorded in this clone.

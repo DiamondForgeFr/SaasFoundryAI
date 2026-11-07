@@ -113,9 +113,25 @@ que personne n'a encore promus, pour qu'une session sache que la route qu'elle o
 type que l'ajustement a examiné et ne peut pas déplacer (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) et compte ceux qui attendent seulement des preuves. Elle dit aussi, pour
 chaque agent de code déclaré, si les hooks qui enregistrent chaque délégation sont en place **et peuvent s'exécuter** : `claude-code capture enforced` seulement quand le hook est déclaré et que le CLI
 du projet répond à `agents outcome capture` ; `capture hook declared but no CLI can run it` sinon (installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH : d'ici là les
-délégations ne sont pas enregistrées) ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le hook `sf` nu d'un build précédent ;
-`capture hook missing` (`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale endommagée s'affiche
-`unreadable (…)` et ne fait jamais échouer le statut.
+délégations ne sont pas enregistrées) ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le hook `sf` nu du premier build ou celui
+que la v1.1.0 a livré ; `capture hook missing` (`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale
+endommagée s'affiche `unreadable (…)` et ne fait jamais échouer le statut.
+
+### Erreurs de capture
+
+Les hooks qui enregistrent les délégations s'exécutent avec leur sortie écartée et sortent avec 0 : une capture qui échoue (une charge illisible, un registre impossible à écrire, un ajustement de
+routage sauté) ne laissait donc aucune trace, et le routage apprenait de moins de résultats qu'on ne lui en donnait. La capture journalise maintenant chaque échec dans `capture-errors.jsonl`, à côté
+du registre dans le répertoire Git du clone (voir [capture et signaux](./sf-agents.md#capture-et-signaux)), et `sf status` compte les erreurs des **7 derniers jours**, si bien qu'un échec ancien
+n'avertit pas pour toujours :
+
+- la ligne `routing:` gagne `; 2 capture errors in 7 days, last 2026-11-06: <message>` **seulement quand il y en a au moins une** ; `--json` porte `routing.captureErrors` sous la forme
+  `{ count, since, last? }`, où `last` est `{ at, host, event, stage, message }` (additif : un rapport construit sans le journal omet le champ) ;
+- la précondition `captureErrors`, « Delegation capture records every run », est un `warn` avec le nombre, la dernière erreur et l'emplacement du journal, `ok` quand la fenêtre n'en contient aucune,
+  et ignorée sans harness, quand le routage est illisible, ou pour un rapport qui n'a pas lu le journal. La remédiation renvoie au journal et à [`sf agents routing report`](./sf-agents.md#le-rapport),
+  qui affiche le même nombre.
+
+Il ne fait que lire le journal : rien n'est écrit, et un journal absent ou illisible compte pour vide, si bien que le statut n'échoue jamais à cause de lui. Hors d'un dépôt Git il n'y a pas de
+journal.
 
 ### Agents de palier
 
