@@ -25,6 +25,10 @@ describe('the local CI pipeline in sf status (#943)', () => {
       expect(localCiSummary({ runner: 'molten', jobs: 1 })).toBe('MoltenTerm pipeline (1 job)')
     })
 
+    it('names the npm suite when the file declares no CI job (#1155)', () => {
+      expect(localCiSummary({ runner: 'npm', reason: 'no-ci-jobs' })).toBe('npm suite (.molten/project.json declares no CI job)')
+    })
+
     it('says an unreadable file, and does not raise', () => {
       expect(localCiSummary({ error: '.molten/project.json: Unexpected token' })).toBe('unreadable (.molten/project.json: Unexpected token)')
     })
@@ -59,10 +63,21 @@ describe('the local CI pipeline in sf status (#943)', () => {
       expect(JSON.parse(await render(renderJson)).localCi).toEqual({ runner: 'molten', jobs: 11 })
     })
 
-    it('counts no job for a file that declares no jobs list', async () => {
+    // #1155 — a file holding only the project name and icon (DiamondForge) is no pipeline: the npm suite runs.
+    it.each([
+      ['no ci block', { schema: 1, name: 'status-demo', icon: 'icon.svg' }],
+      ['a ci block without jobs', { schema: 1, name: 'status-demo', ci: { prepare: { run: 'npm ci' } } }],
+      ['an empty jobs list', pipeline(0)],
+      ['jobs without a name', { schema: 1, name: 'status-demo', ci: { jobs: [{ run: 'npm test' }, 'lint'] } }]
+    ])('reports the npm suite for a file with %s, never a pipeline of 0 jobs', async (_case, file) => {
       await mkdir(join(root, '.molten'))
-      await writeFile(pipelineFile(), JSON.stringify({ schema: 1, name: 'status-demo' }))
-      expect((await report()).localCi).toEqual({ runner: 'molten', jobs: 0 })
+      await writeFile(pipelineFile(), JSON.stringify(file))
+      expect((await report()).localCi).toEqual({ runner: 'npm', reason: 'no-ci-jobs' })
+      const agentFriendly = await render(renderAgentFriendly)
+      expect(agentFriendly).toContain('- local-ci: npm suite (.molten/project.json declares no CI job)')
+      expect(agentFriendly).not.toContain('MoltenTerm pipeline')
+      expect(await render(renderHuman)).toMatch(/local-ci:.*npm suite/)
+      expect(JSON.parse(await render(renderJson)).localCi).toEqual({ runner: 'npm', reason: 'no-ci-jobs' })
     })
 
     it('says a damaged file is unreadable, and never fails the status', async () => {

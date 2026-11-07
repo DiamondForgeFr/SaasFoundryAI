@@ -141,6 +141,9 @@ Quand le projet déclare un pipeline local dans `.molten/project.json` (MoltenTe
 fichier : il n'exécute jamais `molten` ni aucun code du projet, et un fichier endommagé s'affiche `unreadable`, sans faire échouer le statut. La ligne est absente d'un projet qui ne déclare aucun
 pipeline.
 
+Un pipeline ne compte que si `ci.jobs` liste au moins un job. Un `.molten/project.json` qui ne contient que le nom et l'icône du projet, ou un `ci.jobs` vide, ne déclare aucun pipeline : la ligne
+indique `local-ci: npm suite (.molten/project.json declares no CI job)` (`{ "runner": "npm", "reason": "no-ci-jobs" }` dans `--json`), et l'étape AI testing lance la suite npm.
+
 ### Exécution
 
 Ces contrôles déterminent si le projet peut réellement **fonctionner**, ce qu'un manifest valide ne suffit pas à garantir. Un projet peut être parfaitement configuré sans avoir de `node_modules`, de

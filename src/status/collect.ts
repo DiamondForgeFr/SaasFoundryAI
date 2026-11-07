@@ -10,6 +10,7 @@ import { captureState, type CaptureProbe, type CaptureState } from '../harness/d
 import { resolveLedgerDir } from '../harness/delegation-ledger'
 import { ROUTING_GRID_VERSION, type RoutingOverrides } from '../harness/routing-grid'
 import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
+import { readMoltenCiJobs } from '../molten-pipeline'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { HarnessAgent, SaaSFoundryManifest } from '../types'
@@ -128,10 +129,11 @@ export type StatusRouting = StatusRoutingState | { error: string }
 
 /**
  * The local CI pipeline the project declares (#943): MoltenTerm's `.molten/project.json`, with the number of
- * jobs it runs. Status reads that file only: it never runs `molten` or any project code, and a damaged file
- * is said, not raised.
+ * jobs it runs. A file that declares no job in `ci.jobs` is no pipeline: the npm suite is the heavy validation
+ * (#1155). Status reads that file only: it never runs `molten` or any project code, and a damaged file is said,
+ * not raised.
  */
-export type StatusLocalCi = { runner: 'molten'; jobs: number } | { error: string }
+export type StatusLocalCi = { runner: 'molten'; jobs: number } | { runner: 'npm'; reason: 'no-ci-jobs' } | { error: string }
 
 export interface StatusCapabilities extends ProjectCapabilities {
   reason: string
@@ -386,12 +388,11 @@ async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest
 
 /** The pipeline MoltenTerm declares for the project (#943), counted from its file; undefined when there is no file. */
 function collectLocalCi(projectRoot: string): StatusLocalCi | undefined {
-  const file = path.join(projectRoot, '.molten', 'project.json')
-  if (!fs.existsSync(file)) return undefined
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
-    const ci = isRecord(parsed) ? parsed.ci : undefined
-    return { runner: 'molten', jobs: isRecord(ci) && Array.isArray(ci.jobs) ? ci.jobs.length : 0 }
+    const jobs = readMoltenCiJobs(projectRoot)
+    if (jobs === undefined) return undefined
+    // A pipeline with no job is not a local CI (#1155): the heavy validation falls back to the npm suite.
+    return jobs.length > 0 ? { runner: 'molten', jobs: jobs.length } : { runner: 'npm', reason: 'no-ci-jobs' }
   } catch (error) {
     return { error: `.molten/project.json: ${error instanceof Error ? error.message : String(error)}` }
   }

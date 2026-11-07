@@ -230,6 +230,10 @@ on it:
 - A \`skip\` means the check did not apply or was not requested: do not act on it.
 - The \`cli:\` line names the CLI that produced the report. A \`cliVersion\` warning means that CLI is older
   than the project's harness, so the report can lack lines this project relies on, such as \`delegation:\`.
+- The \`local-ci:\` line names the heavy validation of AI Testing. A Molten pipeline counts only when
+  \`.molten/project.json\` declares at least one job in \`ci.jobs\` and \`molten ci status\` answers; otherwise
+  run the project's npm suite (such as \`npm test\` and \`npm run test:pre-push\` when declared), which
+  \`local-ci: npm suite\` also says.
 - Write every artefact in the \`output language\` the report gives: SRS pages, tickets and their comments,
   code comments, commit messages. The language of the conversation is not the signal: a session held in
   French still produces English artefacts when the project says \`en\`.

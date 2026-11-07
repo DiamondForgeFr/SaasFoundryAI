@@ -762,6 +762,15 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Reading the project status')
   })
 
+  // #1155 — a .molten/project.json with no job is no pipeline: AI Testing falls back to the npm suite.
+  it('counts a Molten pipeline only when it declares a job, in the generated region', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain('The `local-ci:` line names the heavy validation of AI Testing.')
+    expect(GENERATED_INSTRUCTIONS.replace(/\s+/g, ' ')).toContain(
+      "A Molten pipeline counts only when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers; otherwise run the project's npm suite"
+    )
+    expect(GENERATED_INSTRUCTIONS).not.toContain('when `.molten/project.json` exists and')
+  })
+
   it('refreshes the section into an AGENTS.md whose generated region predates it', () => {
     const older = `# Mine\n\n${GENERATED_REGION_START}\n## File edits and shell calls\nold text\n${GENERATED_REGION_END}\n\nMy notes.\n`
     const refreshed = withGeneratedInstructions(older)
