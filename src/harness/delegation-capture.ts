@@ -304,7 +304,8 @@ export type CaptureResult =
   /** The stop was recorded before and the transcript has nothing new: no state was read. */
   | { status: 'replayed'; id: string; record: DelegationRunRecord; root: string; dir: string; project: ProjectRouting }
   | { status: 'detail'; id: string; state: LedgerState; root: string; dir: string; project: ProjectRouting }
-  | { status: 'ignored'; reason: string }
+  /** `abnormal`: not a plain "this is not ours" (a payload that is not an object, an undeclared tier, a tool result without an agent id): it goes to the capture error log. */
+  | { status: 'ignored'; reason: string; abnormal?: true }
 
 const FAILED_TOOL_STATUS = new Set(['failed', 'error', 'timeout', 'timed_out'])
 const CANCELLED_TOOL_STATUS = new Set(['killed', 'cancelled', 'canceled'])
@@ -326,7 +327,7 @@ const FALLBACK_PROJECT: ProjectRouting = (() => {
 
 /** Capture one hook payload. Never throws for a payload that is not ours: it is ignored with the reason. */
 export async function captureHostEvent(host: CaptureHost, payload: unknown, options: CaptureOptions = {}): Promise<CaptureResult> {
-  if (!object(payload)) return { status: 'ignored', reason: 'the payload is not a JSON object' }
+  if (!object(payload)) return { status: 'ignored', reason: 'the payload is not a JSON object', abnormal: true }
   const event = squash(payload.hook_event_name ?? payload.event ?? payload.type)
   const isStop = event === 'subagentstop'
   const isTool = event === 'posttooluse' && host === 'claude-code' && ['agent', 'task'].includes(squash(payload.tool_name))
@@ -353,7 +354,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
     project = FALLBACK_PROJECT
   }
   const candidate = resolveTierCandidate(tier, host, project.decision.routing)
-  if (!candidate) return { status: 'ignored', reason: `tier ${tier} is not declared for ${host}` }
+  if (!candidate) return { status: 'ignored', reason: `tier ${tier} is not declared for ${host}`, abnormal: true }
 
   // An agent id is the host's own: it is never recorded as it came, only a hash of it.
   const rawAgentId = isStop ? payload.agent_id : (toolResponse.agentId ?? toolResponse.agent_id ?? payload.agent_id)
@@ -363,7 +364,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
 
   if (!isStop) {
     const status = String(toolResponse.status ?? '').toLowerCase()
-    if (!agentId) return { status: 'ignored', reason: 'the tool result names no agent id, so it cannot be joined to the agent stop' }
+    if (!agentId) return { status: 'ignored', reason: 'the tool result names no agent id, so it cannot be joined to the agent stop', abnormal: true }
     if (BACKGROUND_TOOL_STATUS.has(status)) return { status: 'ignored', reason: 'a background launch: the agent stop carries the result' }
     const resolved = toolResponse.resolvedModel ?? toolResponse.model
     const detail = buildDetailRecord({

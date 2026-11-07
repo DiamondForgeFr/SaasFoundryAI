@@ -711,7 +711,7 @@ describe('capturing a host event (#1035)', () => {
 
     it('ignores a tier the project never declared for the host', async () => {
       const result = await captureHostEvent('claude-code', { hook_event_name: 'SubagentStop', agent_type: 'sf-nowhere', cwd: root }, { now: NOW })
-      expect(result).toEqual({ status: 'ignored', reason: 'tier nowhere is not declared for claude-code' })
+      expect(result).toEqual({ status: 'ignored', reason: 'tier nowhere is not declared for claude-code', abnormal: true })
     })
 
     it('ignores an event outside a Git checkout, which has no clone to keep a ledger in', async () => {
