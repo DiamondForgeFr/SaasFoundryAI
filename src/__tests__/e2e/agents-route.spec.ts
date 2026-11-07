@@ -102,7 +102,8 @@ describe('compiled sf agents route (#930)', () => {
       expect(text.status).toBe(0)
       expect(text.stderr).toBe('')
       expect(text.stdout).toMatch(/route=[0-9a-f]{20}\n/)
-      expect(text.stdout).toContain('Recorded for #1105: complexity medium (from the ticket label), nature internal (from the ticket label).')
+      // the route line stays the last line of the output, with its id last on it
+      expect(text.stdout).toMatch(/^Ticket #1105: complexity medium \(from the ticket label\), nature internal \(from the ticket label\)\.\n.* route=[0-9a-f]{20}\n$/)
       expect(await routes()).toEqual([expect.objectContaining({ ticket: 1105, complexity: 'medium', nature: 'internal' })])
       expect(await calls()).toEqual(['get-labels 1105'])
     })
@@ -126,7 +127,7 @@ describe('compiled sf agents route (#930)', () => {
       const result = record('--ticket', '77')
       expect(result.status).toBe(0)
       expect(result.stdout).toMatch(/route=[0-9a-f]{20}\n/)
-      expect(result.stdout).toContain('Recorded for #77: complexity unknown.')
+      expect(result.stdout).toContain('Ticket #77: complexity unknown.')
       expect(result.stderr).toContain('Warning: the complexity of #77 could not be read')
       expect(result.stderr).toContain('exited with code 1): the route record carries none; pass --complexity <level>')
       expect(await routes()).toEqual([expect.objectContaining({ ticket: 77, complexity: null, nature: null })])
