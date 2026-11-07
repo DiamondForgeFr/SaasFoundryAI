@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 
 import type { HarnessAgent } from '../harness/agent-registry'
+import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
 import { BOOTSTRAP_COMMAND } from '../installers/harness-provisioning'
 import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
@@ -383,6 +384,33 @@ function checkTierAgents(report: StatusReport): Precondition {
 }
 
 /**
+ * Capture errors — whether the hooks that record every delegation have failed lately (#1105). The host discards a
+ * hook's output and the hook always exits 0, so a payload that could not be read, a ledger that could not be written
+ * or a routing adjustment that was skipped left no trace, and the routing learned from fewer outcomes. The capture now
+ * logs each failure in the Git directory of the clone; this counts the last 7 days, so an old failure does not warn
+ * for ever. A `warn`, not a `fail`: a delegation still runs, it is the measure that is lost.
+ */
+function checkCaptureErrors(report: StatusReport): Precondition {
+  const name = 'captureErrors'
+  const description = 'Delegation capture records every run'
+  const routing = report.routing
+  if (!routing) return { name, description, status: 'skip', details: 'No managed harness' }
+  if ('error' in routing) return { name, description, status: 'skip', details: 'The routing could not be read' }
+  const errors = routing.captureErrors
+  if (!errors) return { name, description, status: 'skip', details: 'The capture error log was not read' }
+  if (errors.count === 0) return { name, description, status: 'ok', details: `No capture error in the last ${CAPTURE_ERROR_WINDOW_DAYS} days` }
+  const last = errors.last ? `; last ${errors.last.at} (${errors.last.stage}): ${errors.last.message}` : ''
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `${errors.count} capture error${errors.count === 1 ? '' : 's'} in the last ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`,
+    remediation:
+      'The hooks that record delegations failed, so those delegations are missing from the ledger the routing learns from. The errors are in capture-errors.jsonl, in the Git directory of the clone (the saasfoundry folder next to delegations.jsonl). Fix the cause the last error names, then run `sf agents routing report` to see what was recorded; `sf agents refresh --scope shared` replaces an outdated hook.'
+  }
+}
+
+/**
  * Whether the CLI that produced the report is at least as new as what last wrote the project (#1103). A
  * project records the CLI version that last updated it (`version`) and the harness version it installed
  * (`modules.harness.version`); a CLI older than either reads a layout it predates, and its report can lack
@@ -468,6 +496,7 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkInstructionReferences(report),
     checkTierAgents(report),
     ...(personalSkills ? [personalSkills] : []),
+    checkCaptureErrors(report),
     checkDependencies(report),
     checkDatabase(report),
     checkOrmClient(report)

@@ -513,6 +513,53 @@ describe('tier agent precondition (#933)', () => {
   })
 })
 
+describe('capture errors precondition (#1105)', () => {
+  const routing = (captureErrors?: StatusRoutingState['captureErrors']): StatusRoutingState => ({
+    gridVersion: 1,
+    overrides: { kinds: [], tiers: [] },
+    tierAgents: [],
+    adjustment: 'on',
+    adjustments: [],
+    holds: [],
+    capture: [],
+    ...(captureErrors ? { captureErrors } : {})
+  })
+  const find = (report: StatusReport) => evaluatePreconditions(report).find((p) => p.name === 'captureErrors')
+  const SINCE = '2026-10-31T10:00:00.000Z'
+
+  it('is skipped on a project without a harness, when the routing could not be read, and for a report built without the log', () => {
+    expect(find(makeReport())).toMatchObject({ status: 'skip', details: 'No managed harness' })
+    expect(find(makeReport({ routing: { error: 'Invalid local routing' } }))).toMatchObject({ status: 'skip', details: 'The routing could not be read' })
+    expect(find(makeReport({ routing: routing() }))).toMatchObject({ status: 'skip', details: 'The capture error log was not read' })
+  })
+
+  it('is ok while the log holds no error of the last 7 days', () => {
+    expect(find(makeReport({ routing: routing({ count: 0, since: SINCE }) }))).toEqual({
+      name: 'captureErrors',
+      description: 'Delegation capture records every run',
+      status: 'ok',
+      details: 'No capture error in the last 7 days'
+    })
+  })
+
+  it('warns with the count and the last error, and says where the log is and what to run', () => {
+    const precondition = find(
+      makeReport({ routing: routing({ count: 3, since: SINCE, last: { at: '2026-11-06T09:00:00.000Z', host: 'codex', event: 'SubagentStop', stage: 'ledger', message: 'the ledger is locked' } }) })
+    )
+    expect(precondition).toMatchObject({
+      status: 'warn',
+      details: '3 capture errors in the last 7 days; last 2026-11-06T09:00:00.000Z (ledger): the ledger is locked'
+    })
+    expect(precondition?.remediation).toContain('capture-errors.jsonl')
+    expect(precondition?.remediation).toContain('Git directory of the clone')
+    expect(precondition?.remediation).toContain('sf agents routing report')
+  })
+
+  it('speaks of a single error in the singular, even without a last entry to name', () => {
+    expect(find(makeReport({ routing: routing({ count: 1, since: SINCE }) }))).toMatchObject({ status: 'warn', details: '1 capture error in the last 7 days' })
+  })
+})
+
 describe('the CLI preconditions (#1103)', () => {
   const manifest = (version: string, harness?: number): StatusReport['manifest'] => ({
     version,
