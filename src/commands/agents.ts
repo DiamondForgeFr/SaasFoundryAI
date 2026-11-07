@@ -90,6 +90,15 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
     process.stdout.write(JSON.stringify({ routeVersion: 2, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes, ...recorded }, null, 2) + '\n')
     return
   }
+  // What the record carries about the ticket goes before the route lines: the route line ends the output, as it always did.
+  if (facts && ticket !== null) {
+    const source = (from: RouteFacts['complexitySource']) => (from === 'label' ? 'from the ticket label' : 'from the flag')
+    const recorded = [
+      facts.complexity ? `complexity ${facts.complexity} (${source(facts.complexitySource)})` : 'complexity unknown',
+      ...(facts.nature ? [`nature ${facts.nature} (${source(facts.natureSource)})`] : [])
+    ]
+    process.stdout.write(`Ticket #${ticket}: ${recorded.join(', ')}.\n`)
+  }
   for (const route of routes) {
     const evidence = route.retry
       ? `retry of ${route.retry.of} on the tier above ${route.retry.from}, never a trial`
@@ -107,14 +116,6 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
     process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}${id}\n`)
     if (route.excluded)
       process.stderr.write(`Warning: ${route.provider} ${route.candidate.model} (${route.candidate.effort}) is on the exclusion list for ${route.kind}: public scores collapse there.\n`)
-  }
-  if (facts && ticket !== null) {
-    const source = (from: RouteFacts['complexitySource']) => (from === 'label' ? 'from the ticket label' : 'from the flag')
-    const recorded = [
-      facts.complexity ? `complexity ${facts.complexity} (${source(facts.complexitySource)})` : 'complexity unknown',
-      ...(facts.nature ? [`nature ${facts.nature} (${source(facts.natureSource)})`] : [])
-    ]
-    process.stdout.write(`Recorded for #${ticket}: ${recorded.join(', ')}.\n`)
   }
 }
 
