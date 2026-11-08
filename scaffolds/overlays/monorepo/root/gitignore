@@ -26,11 +26,12 @@ lerna-debug.log*
 /coverage
 coverage/
 coverage-e2e/
-/.nyc_output
+.nyc_output/
 test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+dev-dist/
 
 # IDEs and editors
 /.idea

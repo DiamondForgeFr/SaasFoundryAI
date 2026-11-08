@@ -6,7 +6,18 @@ import noVersionPrefixPlugin from './eslint-rules/no-version-prefix.mjs'
 
 export default [
   {
-    ignores: ['node_modules', 'dist', 'src/generated']
+    ignores: [
+      'node_modules',
+      'dist',
+      'build',
+      'src/generated',
+      // Test and tool outputs: coverage reports ship minified scripts that keep ESLint busy for
+      // minutes after a coverage run (#1092)
+      'coverage',
+      'coverage-e2e',
+      '.nyc_output',
+      'test-results'
+    ]
   },
 
   ...tseslint.configs.recommended,
