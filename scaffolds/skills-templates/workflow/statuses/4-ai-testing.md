@@ -61,8 +61,7 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 - [ ] **Returning from review** — if human retesting is needed, use `workflow-cli.sh draft-pr <ticket>` before returning to Human Testing. `create-pr --draft` reuses a PR without changing its state.
 - [ ] **On green** — post the test report as a comment starting with the heading `## Test report` (layout below; include examine findings if complex), then transition:
 
-  - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing** (the local CI guard reads the draft PR's head). Do not mark it
-    ready: after Human Testing, the developer does
+  - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing**. Do not mark it ready: after Human Testing, the developer does
   - `nature:internal`: no Human Testing, so taking the PR out of draft is yours: `workflow-cli.sh ready-pr <ticket>`, then → **In Review** directly (see SKILL.md "Nature axis" section). The transition
     is enforced by the workflow guard.
 
