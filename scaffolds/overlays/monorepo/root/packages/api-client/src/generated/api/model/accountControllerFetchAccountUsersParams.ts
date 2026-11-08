@@ -18,28 +18,16 @@ export type AccountControllerFetchAccountUsersParams = {
    * @minimum 1
    */
   limit?: number
-  /**
-   * Search term to filter users
-   */
+  /** Search term to filter users */
   search?: string
-  /**
-   * Filter by role IDs
-   */
+  /** Filter by role IDs */
   roleIds?: number[]
-  /**
-   * Filter by entity IDs
-   */
+  /** Filter by entity IDs */
   entityIds?: string[]
-  /**
-   * Filter by active status
-   */
+  /** Filter by active status */
   isActive?: boolean
-  /**
-   * Order by field
-   */
+  /** Order by field */
   orderBy?: AccountControllerFetchAccountUsersOrderBy
-  /**
-   * Include users linked directly to the account
-   */
+  /** Include users linked directly to the account */
   includeDirectUsers?: boolean
 }

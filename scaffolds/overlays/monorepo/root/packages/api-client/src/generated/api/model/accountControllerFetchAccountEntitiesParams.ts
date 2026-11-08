@@ -18,24 +18,14 @@ export type AccountControllerFetchAccountEntitiesParams = {
    * @minimum 1
    */
   limit?: number
-  /**
-   * Search term to filter entities
-   */
+  /** Search term to filter entities */
   search?: string
-  /**
-   * Filter by user IDs (entities with these users)
-   */
+  /** Filter by user IDs (entities with these users) */
   userIds?: string[]
-  /**
-   * Filter by active status
-   */
+  /** Filter by active status */
   isActive?: boolean
-  /**
-   * Include users that are not active
-   */
+  /** Include users that are not active */
   includeInactiveUsers?: boolean
-  /**
-   * Order by field
-   */
+  /** Order by field */
   orderBy?: AccountControllerFetchAccountEntitiesOrderBy
 }

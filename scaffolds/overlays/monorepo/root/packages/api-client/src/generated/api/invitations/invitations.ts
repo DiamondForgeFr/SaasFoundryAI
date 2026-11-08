@@ -76,6 +76,7 @@ export type InvitationControllerCreateInvitationMutationError = ErrorType<void>
 export type InvitationControllerCreateInvitationMutationVariables = { data: BodyType<CreateInvitationDto> }
 
 /**
+ * Create an invitation for a new user to join an account or entity.
  * @summary Create invitation
  */
 export const useInvitationControllerCreateInvitation = <TError = ErrorType<void>, TContext = unknown>(
@@ -111,6 +112,10 @@ export const getInvitationControllerGetUserInvitationsQueryOptions = <TData = Aw
 export type InvitationControllerGetUserInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>>
 export type InvitationControllerGetUserInvitationsQueryError = ErrorType<void>
 
+/**
+ * Get all invitations sent by the authenticated user.
+ * @summary Get user invitations
+ */
 export function useInvitationControllerGetUserInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError = ErrorType<void>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError, TData>> &
@@ -118,6 +123,10 @@ export function useInvitationControllerGetUserInvitations<TData = Awaited<Return
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Get all invitations sent by the authenticated user.
+ * @summary Get user invitations
+ */
 export function useInvitationControllerGetUserInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError = ErrorType<void>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError, TData>> &
@@ -125,14 +134,18 @@ export function useInvitationControllerGetUserInvitations<TData = Awaited<Return
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Get all invitations sent by the authenticated user.
+ * @summary Get user invitations
+ */
 export function useInvitationControllerGetUserInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Get all invitations sent by the authenticated user.
  * @summary Get user invitations
  */
-
 export function useInvitationControllerGetUserInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetUserInvitations>>, TError, TData>> },
   queryClient?: QueryClient
@@ -176,6 +189,10 @@ export const getInvitationControllerGetPlatformAccountOwnerInvitationsQueryOptio
 export type InvitationControllerGetPlatformAccountOwnerInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>>
 export type InvitationControllerGetPlatformAccountOwnerInvitationsQueryError = ErrorType<unknown>
 
+/**
+ * Returns every PENDING (SENT or EXPIRED) account-owner invitation on the platform — invitations with zero account/entity targets that, on acceptance, spin up a new account. Restricted to platform-admins.
+ * @summary List platform-wide account-owner invitations
+ */
 export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> &
@@ -190,6 +207,10 @@ export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData 
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns every PENDING (SENT or EXPIRED) account-owner invitation on the platform — invitations with zero account/entity targets that, on acceptance, spin up a new account. Restricted to platform-admins.
+ * @summary List platform-wide account-owner invitations
+ */
 export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> &
@@ -204,14 +225,18 @@ export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData 
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns every PENDING (SENT or EXPIRED) account-owner invitation on the platform — invitations with zero account/entity targets that, on acceptance, spin up a new account. Restricted to platform-admins.
+ * @summary List platform-wide account-owner invitations
+ */
 export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Returns every PENDING (SENT or EXPIRED) account-owner invitation on the platform — invitations with zero account/entity targets that, on acceptance, spin up a new account. Restricted to platform-admins.
  * @summary List platform-wide account-owner invitations
  */
-
 export function useInvitationControllerGetPlatformAccountOwnerInvitations<TData = Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof invitationControllerGetPlatformAccountOwnerInvitations>>, TError, TData>> },
   queryClient?: QueryClient
@@ -258,6 +283,7 @@ export type InvitationControllerCancelInvitationMutationError = ErrorType<void>
 export type InvitationControllerCancelInvitationMutationVariables = { id: string }
 
 /**
+ * Cancel a pending invitation. Only the inviter can cancel their own invitation. Idempotent for already-finalized invitations.
  * @summary Cancel invitation
  */
 export const useInvitationControllerCancelInvitation = <TError = ErrorType<void>, TContext = unknown>(
@@ -301,6 +327,7 @@ export type InvitationControllerAcceptInvitationMutationError = ErrorType<void>
 export type InvitationControllerAcceptInvitationMutationVariables = { data: BodyType<AcceptInvitationDto> }
 
 /**
+ * Accept an invitation and complete account setup.
  * @summary Accept invitation
  */
 export const useInvitationControllerAcceptInvitation = <TError = ErrorType<void>, TContext = unknown>(

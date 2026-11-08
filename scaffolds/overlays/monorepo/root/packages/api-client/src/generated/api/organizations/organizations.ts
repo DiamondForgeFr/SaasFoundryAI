@@ -71,6 +71,10 @@ export const getOrganizationControllerFetchOrganizationQueryOptions = <TData = A
 export type OrganizationControllerFetchOrganizationQueryResult = NonNullable<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>>
 export type OrganizationControllerFetchOrganizationQueryError = ErrorType<void>
 
+/**
+ * Fetch detailed account information.
+ * @summary Fetch organization details
+ */
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void>>(
   id: string,
   options: {
@@ -79,6 +83,10 @@ export function useOrganizationControllerFetchOrganization<TData = Awaited<Retur
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch detailed account information.
+ * @summary Fetch organization details
+ */
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void>>(
   id: string,
   options?: {
@@ -87,15 +95,19 @@ export function useOrganizationControllerFetchOrganization<TData = Awaited<Retur
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch detailed account information.
+ * @summary Fetch organization details
+ */
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void>>(
   id: string,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Fetch detailed account information.
  * @summary Fetch organization details
  */
-
 export function useOrganizationControllerFetchOrganization<TData = Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError = ErrorType<void>>(
   id: string,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof organizationControllerFetchOrganization>>, TError, TData>> },
@@ -143,6 +155,7 @@ export type OrganizationControllerUpdateOrganizationMutationError = ErrorType<vo
 export type OrganizationControllerUpdateOrganizationMutationVariables = { id: string; data: BodyType<UpdateOrganizationDto> }
 
 /**
+ * Update the organization details.
  * @summary Update organization
  */
 export const useOrganizationControllerUpdateOrganization = <TError = ErrorType<void>, TContext = unknown>(
@@ -186,6 +199,7 @@ export type OrganizationControllerCreateOrganizationMutationError = ErrorType<vo
 export type OrganizationControllerCreateOrganizationMutationVariables = { data: BodyType<CreateOrganizationDto> }
 
 /**
+ * Create a new organization for an account.
  * @summary Create organization
  */
 export const useOrganizationControllerCreateOrganization = <TError = ErrorType<void>, TContext = unknown>(
@@ -232,6 +246,7 @@ export type OrganizationControllerUploadLogoMutationError = ErrorType<void>
 export type OrganizationControllerUploadLogoMutationVariables = { id: string; data: BodyType<OrganizationControllerUploadLogoBody> }
 
 /**
+ * Upload a logo image for the organization.
  * @summary Upload organization logo
  */
 export const useOrganizationControllerUploadLogo = <TError = ErrorType<void>, TContext = unknown>(
