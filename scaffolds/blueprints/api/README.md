@@ -43,9 +43,8 @@ npm install
 cp .env.test .env
 # Edit .env with your configurations
 
-# 4. Start the database
-docker network create saasfoundry-network
-docker-compose -f ../db/docker-compose.db-dev.yml up -d
+# 4. Start the database (creates the saasfoundry-network Docker network first if it is missing)
+npm run services:up
 
 # 5. Initialize database (migration-free: db push --force-reset + apply prisma/sql/*)
 npm run db:setup:dev
