@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom'
  * Dependencies
  */
 import { decodeJwtPayload } from '@/hooks/auth/useTokenDecoder'
-import { extractTokenFromUrl } from '@/utils/tokenExtractor'
+import { readTokenFromUrl, removeTokenFromUrl } from '@/utils/tokenExtractor'
 
 /**
  * Components
@@ -42,8 +42,14 @@ export function UserInvitation() {
   const { t: tAuth } = useTranslation('auth')
   const { t: tCommon } = useTranslation('common')
   const [invitationError, setInvitationError] = useState<string | null>(null)
-  const [invitationToken] = useState(() => extractTokenFromUrl('invitationToken'))
+  const [invitationToken] = useState(() => readTokenFromUrl('invitationToken'))
   const [countdown, setCountdown] = useState(5)
+
+  // The token is read without side effect (React reruns a render that suspends), then the
+  // address bar is cleaned once the page has committed.
+  useEffect(() => {
+    if (invitationToken) removeTokenFromUrl()
+  }, [invitationToken])
 
   const tokenData = invitationToken ? decodeJwtPayload<{ firstname?: string; lastname?: string }>(invitationToken) : null
 
