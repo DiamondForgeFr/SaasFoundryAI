@@ -5,6 +5,8 @@ import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
 
+import { initPushedRepo, sandboxGitEnv } from '../../helpers/pushed-git-sandbox'
+
 const execFileP = promisify(execFile)
 
 const REPO_ROOT = path.resolve(__dirname, '../../../..')
@@ -110,8 +112,10 @@ echo "srs-cli: $*"
   writeFileSync(cli, readFileSync(CLI))
   chmodSync(cli, 0o755)
 
+  // A ticket reaches AI testing with its work pushed (#1104): the sandbox is a checkout on the ticket branch, clean and on origin
+  const repo = initPushedRepo(dir)
   const env: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...sandboxGitEnv(),
     PWD: dir
   }
 
@@ -122,7 +126,10 @@ echo "srs-cli: $*"
     srsShim,
     srsLogPath,
     toolLogPath,
-    cleanup: () => rm(dir, { recursive: true, force: true })
+    cleanup: async () => {
+      repo.cleanup()
+      await rm(dir, { recursive: true, force: true })
+    }
   }
 }
 

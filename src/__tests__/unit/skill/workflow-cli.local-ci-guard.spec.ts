@@ -182,7 +182,7 @@ describe('sf-workflow CLI — local CI guard (→ Human testing)', () => {
   })
 
   describe('where the guard does not apply', () => {
-    it.each(['In review', 'AI testing', 'In progress'])('does not call the gate for a move to %s', async (target) => {
+    it.each(['In review', 'In progress'])('does not call the gate for a move to %s', async (target) => {
       sandbox = await buildSandbox(READY_PR, { natureLabel: 'internal' })
       const res = await runCli(['update-status', '42', target], sandbox, { GATE_EXIT: '1' })
       expect(res.code).toBe(0)
