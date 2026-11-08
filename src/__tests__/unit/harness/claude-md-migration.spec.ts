@@ -207,4 +207,113 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
     expect(await read('AGENTS.md')).toBe(after)
     expect(await moveClaudeMdToAgentsMd.preview!(dir, manifest())).toEqual([])
   })
+
+  describe('references to the CLAUDE.md files it removes (#1152)', () => {
+    /** Mentions that name a CLAUDE.md the migration does not remove: they must come out as they went in. */
+    const UNRELATED = '## Notes\n\nPersonal notes live in CLAUDE.local.md and ~/.claude/CLAUDE.md; see https://docs.example.com/guide/CLAUDE.md and MYCLAUDE.md.\n'
+
+    /**
+     * The monorepo CLAUDE.md of a project that customised the sections holding the references (as DiamondForge did),
+     * so they are moved verbatim instead of being replaced by the current template wording.
+     */
+    const customised = async (): Promise<string> => {
+      const claude = (await fixture('monorepo'))
+        .replace('This is a **Turborepo monorepo**', 'This is the DiamondForge **Turborepo monorepo**')
+        .replace('- ✅ Tests run automatically before push', '- ✅ Tests run automatically before push, in CI too')
+        .replace('- **API Docs**:', '- **Runbook**: `docs/runbook.md`\n- **API Docs**:')
+      return `${claude.trimEnd()}\n\n${WORKFLOW_SECTION}\n${UNRELATED}`
+    }
+    const monorepo = (): SaaSFoundryManifest => manifest({ structure: 'monorepo', fileHashes: {} })
+
+    it('points the project-structure tree and the app-specific links at the AGENTS.md files that replace them', async () => {
+      await put({ 'CLAUDE.md': await customised(), 'apps/api/CLAUDE.md': await fixture('api'), 'apps/web/CLAUDE.md': await fixture('web') })
+
+      await moveClaudeMdToAgentsMd.up(dir, monorepo())
+
+      const agents = await read('AGENTS.md')
+      expect(agents).toContain('│   │   └── AGENTS.md     # API-specific context')
+      expect(agents).toContain('│       └── AGENTS.md     # Web-specific context')
+      expect(agents).toContain('- ✅ Use AGENTS.md files in apps/ for app-specific context')
+      expect(agents).toContain('- **App-specific context**: Check `apps/api/AGENTS.md` and `apps/web/AGENTS.md`')
+      // The customisations that kept these sections out of the template refresh are still there
+      expect(agents).toContain('DiamondForge')
+      expect(agents).toContain('docs/runbook.md')
+      // Nothing is left that names a file the migration deleted (the notes section names other files, and is checked below)
+      expect(agents.replace(UNRELATED.trimEnd(), '')).not.toContain('CLAUDE.md')
+      expect(output()).toContain('Pointed 5 reference(s) in AGENTS.md')
+    })
+
+    it('leaves every mention of a CLAUDE.md it does not remove as written', async () => {
+      await put({ 'CLAUDE.md': await customised(), 'apps/api/CLAUDE.md': await fixture('api'), 'apps/web/CLAUDE.md': await fixture('web') })
+
+      await moveClaudeMdToAgentsMd.up(dir, monorepo())
+
+      expect(await read('AGENTS.md')).toContain(UNRELATED.trimEnd())
+    })
+
+    it('rewrites a reference found in a section it keeps for review', async () => {
+      const edited = '## Coding-agent identity and onboarding\n\nAsk me first. The rules of the API are in apps/api/CLAUDE.md.\n'
+      await put({ 'CLAUDE.md': `# acme\n\n${edited}\n${USER_SECTION}`, 'apps/api/CLAUDE.md': '# api\n\nUse pnpm.\n' })
+
+      await moveClaudeMdToAgentsMd.up(dir, manifest({ structure: 'monorepo', fileHashes: {} }))
+
+      const agents = await read('AGENTS.md')
+      expect(agents).toContain('The rules of the API are in apps/api/AGENTS.md.')
+      // The heading and the comment that name CLAUDE.md as the origin of the review block stay: they say where it came from
+      expect(agents).toContain(KEPT_FOR_REVIEW_HEADING)
+    })
+
+    it('lists every rewrite in the preview, with its line, and writes nothing', async () => {
+      const claude = await customised()
+      await put({ 'CLAUDE.md': claude, 'apps/api/CLAUDE.md': await fixture('api'), 'apps/web/CLAUDE.md': await fixture('web') })
+      const lineOf = (needle: string): number => claude.split('\n').findIndex((line) => line.includes(needle)) + 1
+
+      const preview = await moveClaudeMdToAgentsMd.preview!(dir, monorepo())
+
+      const rewrites = preview.filter((entry) => entry.action === 'rewrite' && entry.source.startsWith('CLAUDE.md#'))
+      expect(rewrites.map((entry) => entry.reason)).toEqual([
+        expect.stringContaining(`CLAUDE.md line ${lineOf('API-specific context')}: CLAUDE.md → AGENTS.md`),
+        expect.stringContaining(`CLAUDE.md line ${lineOf('Web-specific context')}: CLAUDE.md → AGENTS.md`),
+        expect.stringContaining(`CLAUDE.md line ${lineOf('Use CLAUDE.md files in apps/')}: CLAUDE.md → AGENTS.md`),
+        expect.stringContaining(`CLAUDE.md line ${lineOf('Check `apps/api/CLAUDE.md`')}: apps/api/CLAUDE.md → apps/api/AGENTS.md`),
+        expect.stringContaining(`CLAUDE.md line ${lineOf('Check `apps/api/CLAUDE.md`')}: apps/web/CLAUDE.md → apps/web/AGENTS.md`)
+      ])
+      expect(rewrites[0]).toMatchObject({ source: 'CLAUDE.md#🏗️ Monorepo Structure', target: 'AGENTS.md' })
+      // Each rewrite sits beside the section it belongs to, which the preview still lists as moved verbatim
+      expect(preview).toContainEqual(expect.objectContaining({ action: 'move', source: 'CLAUDE.md#🏗️ Monorepo Structure', target: 'AGENTS.md' }))
+      expect(await read('CLAUDE.md')).toBe(claude)
+      expect(existsSync(join(dir, 'AGENTS.md'))).toBe(false)
+    })
+
+    it('rewrites the reference to an app CLAUDE.md that is a generated bridge, which the migration removes', async () => {
+      await put({ 'CLAUDE.md': await customised(), 'apps/api/CLAUDE.md': await fixture('api'), 'apps/web/CLAUDE.md': CODEX_SOURCE_CLAUDE_BRIDGE, 'apps/web/AGENTS.md': '# web\n' })
+
+      await moveClaudeMdToAgentsMd.up(dir, monorepo())
+
+      expect(existsSync(join(dir, 'apps/web/CLAUDE.md'))).toBe(false)
+      expect(await read('AGENTS.md')).toContain('Check `apps/api/AGENTS.md` and `apps/web/AGENTS.md`')
+    })
+
+    it('keeps the reference to an app CLAUDE.md that stays, because the app has an AGENTS.md of its own', async () => {
+      await put({ 'CLAUDE.md': await customised(), 'apps/api/CLAUDE.md': await fixture('api'), 'apps/api/AGENTS.md': '# My API\n\nUse pnpm.\n', 'apps/web/CLAUDE.md': await fixture('web') })
+
+      await moveClaudeMdToAgentsMd.up(dir, monorepo())
+
+      expect(existsSync(join(dir, 'apps/api/CLAUDE.md'))).toBe(true)
+      expect(existsSync(join(dir, 'apps/web/CLAUDE.md'))).toBe(false)
+      expect(await read('AGENTS.md')).toContain('Check `apps/api/CLAUDE.md` and `apps/web/AGENTS.md`')
+    })
+
+    it('changes nothing in a CLAUDE.md that names no removed file', async () => {
+      const claude = `# acme\n\n${USER_SECTION}\n${UNRELATED}`
+      await put({ 'CLAUDE.md': claude })
+
+      const preview = await moveClaudeMdToAgentsMd.preview!(dir, manifest())
+      await moveClaudeMdToAgentsMd.up(dir, manifest())
+
+      expect(preview.filter((entry) => entry.action === 'rewrite')).toEqual([])
+      expect(await read('AGENTS.md')).toContain(UNRELATED.trimEnd())
+      expect(output()).not.toContain('Pointed')
+    })
+  })
 })
