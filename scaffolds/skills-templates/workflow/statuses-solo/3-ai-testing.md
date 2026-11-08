@@ -35,15 +35,19 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 ## Action checklist
 
 - [ ] **Test plan** — post a comment starting with the heading `## Test plan`, covering: setup, nominal + edge scenarios, expected results per scenario, non-regression coverage
-- [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`
+- [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`. The pushed-commits guard checks the work first: a tracked file that is not committed, a commit `origin` does not have, a branch
+      `origin` lacks or an unreachable `origin` refuses the move and names the command to run (commit, then `git push`). Untracked files only warn
 - [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`
 - [ ] **Heavy local validation** — run the project's declared local pipeline on the pushed commit before marking the PR ready. A Molten pipeline counts only when `.molten/project.json` declares at least
       one job in `ci.jobs` and `molten ci status` answers (exit 0, 1 or 2: a MoltenTerm runner is reachable): then run `molten ci run <branch>` and record its verdict. A file with no job in `ci.jobs`
       declares no pipeline (`molten ci status` says "the pipeline declares no CI job", `sf status` shows `local-ci: npm suite`). Otherwise run the project's configured build/integration suite (for example `npm test` and `npm run test:pre-push`
       when declared in `package.json`). Record command, commit and results.
-- [ ] **Local CI gate** — when `.saasfoundry.json` declares `workflow.localCi.requiredStatuses`, run the project's local CI on the exact pushed commit until every declared status is green.
-      No diff is too small for it: a narrower check (`lint`, `check`) does not count. `ready-pr` refuses a head without them; `--skip-local-ci "<reason>"` is the explicit escape hatch, recorded on
-      the pull request.
+- [ ] **Local CI gate** — make the project's required local CI statuses green on the exact pushed commit. They come from `workflow.localCi.requiredStatuses` when it is recorded
+      (`sf workflow set-local-ci`; `sf workflow show` and `sf status` print the list and where it comes from); otherwise from `local-<job>` for each job of `.molten/project.json` when it publishes
+      to GitHub (`"ci": { "statuses": "github" }`), which `molten ci run <branch>` publishes; otherwise it is the status `AI testing / Local CI`, which you publish once the project's suite (`npm test`,
+      `npm run test:pre-push` when declared) is green on that commit: `workflow-cli.sh ai-status <ticket> "Local CI" success "<command, commit, result>"` (the draft PR must exist to carry it).
+      No diff is too small for it: a narrower check (`lint`, `check`) does not count. `create-pr` (without `--draft`) and `ready-pr` refuse a head without them and name the command to run
+      (`workflow-cli.sh local-ci-gate <ticket>` runs the same check on its own); `--skip-local-ci "<reason>"` is the explicit escape hatch, recorded on the pull request.
 - [ ] **Show progress on the PR** — around every heavy run, `workflow-cli.sh ai-status <ticket> "<step>" pending "<what runs>"`, then `success` or `failure` with a one-line result. The developer follows it from the PR's checks, which link to one progress comment; open the draft PR first (`create-pr <ticket> --draft`).
 - [ ] **Execute test plan** step by step — verify each scenario, document any failure
 - [ ] **On failure** — document, fix, commit, push, restart from automated tests

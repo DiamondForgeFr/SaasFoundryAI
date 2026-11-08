@@ -93,9 +93,11 @@ La nature ajoute des exceptions protégées. Un enfant `nature:bundled-pr` n’a
 
 Pour le preset équipe :
 
-1. committer et pousser avant `AI testing` ;
+1. committer et pousser avant `AI testing` : le garde-fou des commits poussés refuse un ticket dont des fichiers suivis ne sont pas commités ou dont `origin` n'a pas les commits, et nomme la commande
+   à lancer ;
 2. publier le plan et le rapport de test en commentaires du ticket, commençant par les titres `## Test plan` et `## Test report` ;
-3. créer ou réutiliser une **pull request en brouillon** avant `Human testing` ;
+3. créer ou réutiliser une **pull request en brouillon** avant `Human testing`, et rendre vertes sur son commit de tête les statuts de CI locale du projet : le garde-fou de CI locale refuse sinon le
+   passage en `Human testing` (voir plus bas) ;
 4. laisser le développeur effectuer la validation fonctionnelle de la feature ;
 5. après approbation et tests de non-régression, le développeur rend la même PR prête (jamais l'agent sur ce parcours) ;
 6. entrer dans `In review` pour la revue de code et la CI complète ;
@@ -115,6 +117,24 @@ $WORKFLOW update-status 42 Done
 
 Sans `Human testing` (preset Solo, ou ticket `nature:internal`), l'agent ouvre aussi la PR en brouillon pendant `AI testing`, puis la rend prête lui-même avec `ready-pr` à la fin d'`AI testing` :
 `In review` est alors la barrière humaine.
+
+### Deux garde-fous aux bords d'`AI testing`
+
+`update-status` vérifie deux points qui n'étaient jusqu'ici que des consignes :
+
+- **`→ AI testing` exige un travail poussé.** Le garde-fou ne lit que git : il vaut donc pour tous les outils de workflow. Il inspecte le checkout qui porte le travail : la branche du ticket, la
+  branche du parent de livraison pour un enfant bundled, une branche nommée par l'hôte (`worktree-agent-<id>`) comparée à l'unique branche du ticket sur `origin`, ou, depuis le checkout principal, le
+  worktree de la branche du ticket. Sont refusés : des modifications suivies (indexées ou non), une branche absente d'`origin`, un commit qu'il n'a pas, une branche qu'il a dépassée, un `origin`
+  injoignable et un HEAD détaché ; le message nomme la commande de commit, de push ou de `git pull --rebase`. Les fichiers non suivis ne font qu'avertir. La même vérification couvre le retour de
+  `Human testing` vers `AI testing` après un correctif.
+- **`→ Human testing` exige une CI locale verte.** Avec GitHub Projects, le garde-fou lit le commit de tête de la pull request en brouillon qu'il vient d'identifier, depuis n'importe quel checkout, et
+  exige que les statuts de CI locale du projet y soient verts. Ils viennent de `workflow.localCi.requiredStatuses` quand il est enregistré (`sf workflow set-local-ci`), sinon de `local-<job>` pour
+  chaque job de `.molten/project.json` quand il publie vers GitHub, sinon du statut `AI testing / Local CI` que l'agent publie avec `workflow-cli.sh ai-status <ticket> "Local CI" success` une fois la
+  suite du projet verte. Le refus nomme la source et la commande à lancer (`molten ci run <branche>`, ou la suite puis l'appel `ai-status`). `workflow-cli.sh local-ci-gate <ticket>` lance la même
+  vérification seule. Un projet sans CI locale l'enregistre avec `sf workflow set-local-ci --none`.
+
+Une liste enregistrée est figée : un job ajouté ensuite à `.molten/project.json` n'est exigé qu'une fois la liste enregistrée de nouveau, ou effacée avec `sf workflow set-local-ci --clear` pour suivre
+le pipeline. `sf workflow show` et `sf status` affichent la liste effective et sa provenance.
 
 ## Le premier ticket
 
@@ -143,6 +163,7 @@ Le garde-fou de Done accepte ce ticket parce que l'unique commit racine du dép�
 sf workflow show
 sf workflow validate
 sf workflow set-working-branch develop
+sf workflow set-local-ci --from-molten
 sf workflow set-ai-rules
 
 .claude/skills/sf-workflow/workflow-cli.sh status 42
@@ -209,24 +230,25 @@ quelques échappatoires explicites. Positionnez la variable en ligne pour une se
 un avertissement qui nomme la variable et l’enregistre, avec la raison, dans un commentaire du ticket ; complétez ce commentaire avec les preuves. Un agent de développement n’en active jamais une de
 lui-même ; il s’arrête et vous demande.
 
-| Échappatoire                                                                 | Ce qu’elle désactive                                                                     |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                             | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
-| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                      | Exige un label `complexity:` pour quitter Backlog                                        |
-| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                          | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
-| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                        | Exige que chaque enfant natif soit Done avant le parent                                  |
-| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                  | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
-| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                    | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
-| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                       | Exige une PR fusionnée vérifiée avant Done                                               |
-| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic` | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
-| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                             | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
-| `--skip-local-ci "<raison>"` sur `create-pr` et `ready-pr`                   | Exige que les statuts de CI locale déclarés soient verts sur le commit de tête           |
-| `SF_CACHE_BUST=1`                                                            | Pas un garde-fou : recharge le schéma du board mis en cache                              |
-| `SF_DISABLE_SRS_HOOK=1`                                                      | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
+| Échappatoire                                                                                | Ce qu’elle désactive                                                                     |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                            | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                     | Exige un label `complexity:` pour quitter Backlog                                        |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                         | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                       | Exige que chaque enfant natif soit Done avant le parent                                  |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                 | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
+| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                         | Exige que le travail du ticket soit commité et poussé avant AI testing                   |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                   | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                      | Exige une PR fusionnée vérifiée avant Done                                               |
+| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic`                | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
+| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                                            | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
+| `--skip-local-ci "<raison>"` sur `create-pr`, `ready-pr`, `update-status … "Human testing"` | Exige que les statuts de CI locale requis soient verts sur le commit de tête             |
+| `SF_CACHE_BUST=1`                                                                           | Pas un garde-fou : recharge le schéma du board mis en cache                              |
+| `SF_DISABLE_SRS_HOOK=1`                                                                     | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
 
 `--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`. `--bypass-srs` la publie sur le ticket
-créé et `--skip-local-ci` l’écrit sur la pull request. Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à laisser, sont décrits dans
-`.claude/skills/sf-workflow/escape-hatches.md` de tout projet qui installe le workflow.
+créé et `--skip-local-ci` l’écrit sur la pull request (ou sur le ticket quand aucune pull request ne peut le porter). Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à
+laisser, sont décrits dans `.claude/skills/sf-workflow/escape-hatches.md` de tout projet qui installe le workflow.
 
 ## Continuer
 

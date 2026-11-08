@@ -7,6 +7,8 @@ entry_conditions:
   - All AI Testing steps passed
   - Test plan ready for human validation
   - An open draft PR exists for the ticket, containing the test plan and AI test results (the `## Test plan` and `## Test report` comments)
+  - The project's required local CI statuses are green on that draft PR's head commit (the local CI guard of `update-status … "Human testing"` reads them; `--skip-local-ci "<reason>"` is the recorded
+    hatch)
 mandatory_actions:
   - Wait for developer validation
   - On bug report — the session collects it and hands the fix to the ticket's own agent (or fixes it itself when delegation is not allowed); commit, push, return to AI Testing
@@ -49,7 +51,8 @@ In Review directly. See SKILL.md "Nature axis" section.
     was)
   - With delegation `allowed`, the session does not code the fix: it hands the defect to the ticket's own agent, in the same worktree and on the same branch (SKILL.md → Delegated ticket delivery).
     When delegation is not allowed, the session fixes it itself
-  - Fix, commit, push, then return to **AI Testing** (re-run automated tests): the agent that fixes it moves the ticket back
+  - Fix, commit, push, then return to **AI Testing** (re-run automated tests): the agent that fixes it moves the ticket back. The pushed-commits guard checks that the fix is committed and pushed
+    before it accepts the move, and the local CI statuses must be green again on the new head before the ticket comes back to Human Testing
 - [ ] **On approval** — create non-regression tests (and any other AI work the validation leaves, such as follow-ups): the session hands them to the ticket's own agent the same way:
   - Complex/critical → E2E tests (Playwright)
   - Edge-case bug fix → unit non-regression test

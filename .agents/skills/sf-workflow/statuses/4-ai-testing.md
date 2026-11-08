@@ -4,7 +4,7 @@ banner_ai: Post the test plan, run automated + manual tests, fix on red, post th
 banner_human: Nothing yet — get ready to test manually (user-facing) or review the PR (internal)
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
-  - Code pushed and ready for testing
+  - Code committed and pushed to `origin` (the pushed-commits guard of `update-status` checks it) and ready for testing
 mandatory_actions:
   - Generate test plan and post as ticket comment, starting with the heading `## Test plan`
   - Move ticket to `AI Testing`
@@ -15,7 +15,7 @@ mandatory_actions:
   - If problems found — fix, commit, push, restart from automated tests
   - Post test report summary as comment when all green, starting with the heading `## Test report`
 exit_conditions:
-  - All automated tests pass, including the configured heavy local validation before Human Testing
+  - All automated tests pass, including the configured heavy local validation before Human Testing, with the required local CI statuses green on the pull request head (the local CI guard checks it)
   - Test plan fully executed and validated
   - Adversarial review complete (complex tickets only)
   - All Critical/High findings fixed
@@ -32,16 +32,20 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 ## Action checklist
 
 - [ ] **Test plan** — post a comment starting with the heading `## Test plan`, covering: setup, nominal + edge scenarios, expected results per scenario, non-regression coverage
-- [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`
+- [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`. The pushed-commits guard checks the work first: a tracked file that is not committed, a commit `origin` does not have, a
+      branch `origin` lacks or an unreachable `origin` refuses the move and names the command to run (commit, then `git push`). Untracked files only warn
 - [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`
 - [ ] **Heavy local validation** — run the project's declared local pipeline on the pushed commit before Human Testing. A Molten pipeline counts only when `.molten/project.json` declares at least one
       job in `ci.jobs` and `molten ci status` answers (exit 0, 1 or 2: a MoltenTerm runner is reachable): then run `molten ci run <branch>` and record its verdict with `molten ci status`. A file with
       no job in `ci.jobs` declares no pipeline (`molten ci status` says "the pipeline declares no CI job", `sf status` shows `local-ci: npm suite`). Otherwise run the project's configured
       build/integration suite (for example `npm test` and `npm run test:pre-push` when declared in `package.json`). Record command, commit and results. Repeat after relevant fixes; ordinary pushes do
       not rerun this suite. A delegated run is `terminal-ci` (SKILL.md → Delegation routing).
-- [ ] **Local CI gate** — when `.saasfoundry.json` declares `workflow.localCi.requiredStatuses`, run the project's local CI on the exact pushed commit until every declared status is green. No diff is
-      too small for it: a narrower check (`lint`, `check`) does not count. `create-pr` (without `--draft`) and `ready-pr` refuse a head without them; `--skip-local-ci "<reason>"` is the explicit
-      escape hatch, recorded on the pull request.
+- [ ] **Local CI gate** — make the project's required local CI statuses green on the exact pushed commit. They come from `workflow.localCi.requiredStatuses` when it is recorded
+      (`sf workflow set-local-ci`; `sf workflow show` and `sf status` print the list and where it comes from); otherwise from `local-<job>` for each job of `.molten/project.json` when it publishes to
+      GitHub (`"ci": { "statuses": "github" }`), which `molten ci run <branch>` publishes; otherwise it is the status `AI testing / Local CI`, which you publish once the project's suite (`npm test`,
+      `npm run test:pre-push` when declared) is green on that commit: `workflow-cli.sh ai-status <ticket> "Local CI" success "<command, commit, result>"` (the draft PR must exist to carry it). No diff
+      is too small for it: a narrower check (`lint`, `check`) does not count. `create-pr` (without `--draft`), `ready-pr` and the move to **Human Testing** refuse a head without them and name the
+      command to run (`workflow-cli.sh local-ci-gate <ticket>` runs the same check on its own); `--skip-local-ci "<reason>"` is the explicit escape hatch, recorded on the pull request.
 - [ ] **Show progress on the PR** — around every heavy run, `workflow-cli.sh ai-status <ticket> "<step>" pending "<what runs>"`, then `success` or `failure` with a one-line result. The developer
       follows it from the PR's checks, which link to one progress comment; open the draft PR first (`create-pr <ticket> --draft`).
 - [ ] **Execute test plan** step by step — verify each scenario, document any failure
@@ -57,7 +61,8 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 - [ ] **Returning from review** — if human retesting is needed, use `workflow-cli.sh draft-pr <ticket>` before returning to Human Testing. `create-pr --draft` reuses a PR without changing its state.
 - [ ] **On green** — post the test report as a comment starting with the heading `## Test report` (layout below; include examine findings if complex), then transition:
 
-  - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing**. Do not mark it ready: after Human Testing, the developer does
+  - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing** (the local CI guard reads the draft PR's head). Do not mark it
+    ready: after Human Testing, the developer does
   - `nature:internal`: no Human Testing, so taking the PR out of draft is yours: `workflow-cli.sh ready-pr <ticket>`, then → **In Review** directly (see SKILL.md "Nature axis" section). The transition
     is enforced by the workflow guard.
 

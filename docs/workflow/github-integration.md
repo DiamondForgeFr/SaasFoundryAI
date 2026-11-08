@@ -102,6 +102,30 @@ When the current branch is not the ticket's, `ready-pr` and `draft-pr` do not lo
 The pull request's head commit must be the commit origin holds for its branch, and that commit is the one the local CI gate checks. On the ticket branch itself nothing changes: the local `HEAD`,
 origin and the pull request must all match. The nature axis is enforced by `update-status` as before: the In review transition still requires a non-draft pull request, and Human testing a draft one.
 
+### The local CI gate
+
+A pull request opened for review (`create-pr` without `--draft`), marked ready (`ready-pr`) and a ticket moved to **Human testing** need the project's local CI statuses green on the exact head commit
+of the pull request. A draft still opens early and waits for them. The statuses come from one of three sources, in this order, and the refusal names the one that applies and the command to run:
+
+1. **The manifest**: `workflow.localCi.requiredStatuses`, written by `sf workflow set-local-ci`. It always wins. An empty list (`--none`) is a deliberate "this project has no local CI": the gate
+   prints a notice and checks nothing.
+2. **A Molten pipeline**: with the key absent, `.molten/project.json` declares at least one job in `ci.jobs` and `"ci": { "statuses": "github" }`. Each job `<name>` publishes the status
+   `local-<name>`, and every one is required. `molten ci run <branch>` publishes them. A pipeline file that cannot be read is a refusal, never a fallback.
+3. **Neither**: the status `AI testing / Local CI`, which the agent publishes with `workflow-cli.sh ai-status 42 "Local CI" success "<what ran>"` once the project's own suite (`npm test`,
+   `npm run test:pre-push`) is green on the pushed commit. The draft pull request must exist to carry it.
+
+```bash
+# The same check, on its own: reads the head commit of the ticket's open pull request, changes nothing
+.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42
+# A recorded list, or a deliberate "no local CI"
+sf workflow set-local-ci --from-molten
+sf workflow set-local-ci --none
+```
+
+`update-status 42 "Human testing"` runs the gate after its pull request checks, on the draft pull request it matched, from any checkout, and fails closed: a pull request, a commit or statuses that
+cannot be read refuse. `--skip-local-ci "<reason>"` (after the ticket, on `update-status`) is the only hatch, recorded on the pull request. The same transition to **AI testing** is guarded by the
+pushed-commits guard: the ticket's tracked changes must be committed and its commits on `origin`, or the move is refused with the command to run.
+
 ## Routing from `sf-workflow`
 
 `workflow-cli.sh` is the tool-independent entry point:
@@ -129,12 +153,13 @@ $CLI create-subtask 42 "Backend API"
 git commit -m "feat(#SUB-1): add backend API" && git push
 $CLI update-status <SUB-1> "Done"
 
-# Automated validation
+# Automated validation (the work is committed and pushed: the pushed-commits guard checks it)
 $CLI update-status 42 "AI testing"
-npm run test:pre-push # or: molten ci run <branch>, when .molten/project.json declares at least one job in ci.jobs
-
-# Functional feature testing on a draft PR
 $CLI create-pr 42 --draft
+npm run test:pre-push # or: molten ci run <branch>, when .molten/project.json declares at least one job in ci.jobs
+$CLI ai-status 42 "Local CI" success "npm run test:pre-push green on <sha>" # only when no list is recorded and no Molten pipeline publishes to GitHub
+
+# Functional feature testing on the draft PR (the local CI guard reads its head commit)
 $CLI update-status 42 "Human testing"
 
 # Code review: the developer clicks Ready for review (ready-pr is the agent's only without Human testing)
