@@ -140,6 +140,11 @@ file: it never runs `molten` or any project code, and a damaged file shows as `u
 A pipeline counts only when `ci.jobs` lists at least one job. A `.molten/project.json` that holds only the project name and icon, or an empty `ci.jobs`, declares no pipeline: the line reads
 `local-ci: npm suite (.molten/project.json declares no CI job)` (`{ "runner": "npm", "reason": "no-ci-jobs" }` in `--json`), and AI Testing runs the npm suite.
 
+With the GitHub Projects workflow, a `local-ci gate:` line (`local-ci-gate:` in the agent-friendly report, `localCiGate` in `--json`) says which commit statuses a pull request needs before review and
+where that list comes from: `workflow.localCi.requiredStatuses` (`2 statuses from workflow.localCi.requiredStatuses`), the jobs of the Molten pipeline
+(`11 local-<job> statuses derived from .molten/project.json`), or the status the agent publishes once the project's suite is green (`AI testing / Local CI, published by ai-status…`).
+`{ "source": "manifest" | "manifest-none" | "molten" | "agent", "requiredStatuses": [...] }` in `--json`; an unreadable declaration reads `unreadable (…)`. `sf workflow set-local-ci` records the list.
+
 ### Personal skills
 
 Claude Code gives a **personal** skill (`~/.claude/skills/<name>`) precedence over a **project** skill (`.claude/skills/<name>`), as its [skills documentation](https://code.claude.com/docs/en/skills)

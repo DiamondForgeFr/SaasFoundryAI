@@ -76,7 +76,22 @@
         "description": "Defect or unexpected behavior to investigate and fix",
         "color": "RED"
       }
-    ]
+    ],
+    "localCi": {
+      "requiredStatuses": [
+        "local-format",
+        "local-impact-contract",
+        "local-lint",
+        "local-build",
+        "local-package",
+        "local-unit",
+        "local-integration",
+        "local-e2e",
+        "local-docs-build",
+        "local-docs-integrity",
+        "local-docker-normal"
+      ]
+    }
   },
   "tools": {
     "srs": {

@@ -397,7 +397,7 @@
         },
         "localCi": {
           "type": "object",
-          "description": "The project's local CI gate: commit statuses that must be green on a pull request's head before create-pr opens it for review or ready-pr marks it ready (#918).",
+          "description": "The project's local CI gate: commit statuses that must be green on a pull request's head before create-pr opens it for review, ready-pr marks it ready or the ticket moves to Human Testing (#918, #1104). This list always wins; when it is absent the gate derives it (local-<job> for each job of .molten/project.json that publishes to GitHub, otherwise the 'AI testing / Local CI' status the agent publishes). An empty list means the project has no local CI. Written by `sf workflow set-local-ci`.",
           "required": ["requiredStatuses"],
           "additionalProperties": false,
           "properties": {

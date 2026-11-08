@@ -145,6 +145,12 @@ pipeline.
 Un pipeline ne compte que si `ci.jobs` liste au moins un job. Un `.molten/project.json` qui ne contient que le nom et l'icône du projet, ou un `ci.jobs` vide, ne déclare aucun pipeline : la ligne
 indique `local-ci: npm suite (.molten/project.json declares no CI job)` (`{ "runner": "npm", "reason": "no-ci-jobs" }` dans `--json`), et l'étape AI testing lance la suite npm.
 
+Avec le workflow GitHub Projects, une ligne `local-ci gate:` (`local-ci-gate:` dans le rapport pour agents, `localCiGate` dans `--json`) indique quels statuts de commit une pull request exige avant la
+revue et d'où vient cette liste : `workflow.localCi.requiredStatuses` (`2 statuses from workflow.localCi.requiredStatuses`), les jobs du pipeline Molten
+(`11 local-<job> statuses derived from .molten/project.json`), ou le statut que l'agent publie une fois la suite du projet verte (`AI testing / Local CI, published by ai-status…`).
+`{ "source": "manifest" | "manifest-none" | "molten" | "agent", "requiredStatuses": [...] }` dans `--json` ; une déclaration illisible s'affiche `unreadable (…)`. `sf workflow set-local-ci` enregistre
+la liste.
+
 ### Skills personnelles
 
 Claude Code donne à une skill **personnelle** (`~/.claude/skills/<nom>`) la priorité sur une skill de **projet** (`.claude/skills/<nom>`), comme l'indique sa
