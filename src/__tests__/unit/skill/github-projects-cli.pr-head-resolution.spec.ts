@@ -73,7 +73,7 @@ case "$1 $2" in
   'pr create') echo 'https://github.com/FakeOrg/FakeRepo/pull/123';;
   'pr ready') if [ "$4" = --undo ]; then echo true; else echo false; fi > "$READY_MARKER";;
   'pr comment') ;;
-  'api '*) if [ "$2" = "repos/FakeOrg/FakeRepo/commits/$STATUS_SHA/status" ]; then printf '%s' "$STATUSES"; else echo '[]'; fi;;
+  'api '*) if [ "$2" = "repos/FakeOrg/FakeRepo/commits/$STATUS_SHA/status?per_page=100" ]; then printf '%s' "$STATUSES"; else echo '[]'; fi;;
   *) exit 1;;
 esac
 `
@@ -101,7 +101,10 @@ esac
           workingBranch: 'develop',
           prTargetBranch: 'develop',
           releaseBranch: 'master',
-          branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' }
+          branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' },
+          // This suite pins which pull request and which commit are resolved, not the local CI gate (#1104 covers it):
+          // an empty list is the project's deliberate "no local CI"
+          localCi: { requiredStatuses: [] }
         }
       })
     )

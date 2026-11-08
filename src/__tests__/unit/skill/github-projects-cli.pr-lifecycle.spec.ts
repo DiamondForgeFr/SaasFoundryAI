@@ -54,7 +54,7 @@ case "$1 $2" in
   'pr create') echo 'https://github.com/FakeOrg/FakeRepo/pull/123';;
   'pr ready') [ "$READY_FAIL" = 1 ] && exit 1; if [ "$4" = --undo ]; then echo true; else echo false; fi > "$READY_MARKER";;
   'pr comment') ;;
-  'api repos/FakeOrg/FakeRepo/commits/abc123/status') printf '%s' "\${STATUSES:-[]}";;
+  'api repos/FakeOrg/FakeRepo/commits/abc123/status?per_page=100') printf '%s' "\${STATUSES:-[]}";;
   *) exit 1;;
 esac
 `
@@ -75,7 +75,15 @@ esac
       writeFileSync(file, content)
       chmodSync(file, 0o755)
     }
-    env = { ...process.env, PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, CALLS: log, READY_MARKER: path.join(dir, 'ready'), PRS: JSON.stringify([pr]) }
+    // A project that declares nothing needs the status its agent publishes after the suite ran (#1104)
+    env = {
+      ...process.env,
+      PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+      CALLS: log,
+      READY_MARKER: path.join(dir, 'ready'),
+      PRS: JSON.stringify([pr]),
+      STATUSES: JSON.stringify([{ context: 'AI testing / Local CI', state: 'success' }])
+    }
   })
   afterEach(async () => rm(dir, { recursive: true, force: true }))
 
@@ -195,9 +203,17 @@ esac
       expect(result.stderr).toContain('local-check: failure')
       expect(calls()).not.toContain('pr ready')
     })
-    it('changes nothing for a project that declares no gate', async () => {
-      expect((await run(['ready-pr', '42'])).code).toBe(0)
+    it('changes nothing for a project that records an empty list: it declares no local CI', async () => {
+      await writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { workingBranch: 'develop', prTargetBranch: 'develop', localCi: { requiredStatuses: [] } } }))
+      const result = await run(['ready-pr', '42'], { STATUSES: '[]' })
+      expect(result.code).toBe(0)
       expect(calls()).not.toContain('commits/abc123/status')
+    })
+    it('no longer passes silently for a project that declares nothing: it needs the agent status (#1104)', async () => {
+      const result = await run(['ready-pr', '42'], { STATUSES: '[]' })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain('AI testing / Local CI: missing')
+      expect(calls()).not.toContain('pr ready')
     })
   })
 
