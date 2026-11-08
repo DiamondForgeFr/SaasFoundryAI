@@ -29,10 +29,10 @@
     "react": "^19.0.0"
   },
   "devDependencies": {
-    "@tanstack/react-query": "5.100.8",
-    "@types/react": "19.2.14",
+    "@tanstack/react-query": "5.107.1",
+    "@types/react": "19.2.18",
     "orval": "8.28.1",
-    "react": "19.2.5",
+    "react": "19.2.9",
     "typescript": "6.0.3"
   }
 }
