@@ -42,7 +42,7 @@ The skill invokes the `sf` CLI exclusively in **non-interactive mode**:
 - Scaffolding: `sf new --non-interactive --profile <full|harness|stack> --project-name <name> [--structure <monorepo|multirepo>] [flags…]`
 - Additive updates: `sf update --non-interactive [--target-profile full] [--add-modules <m1,m2>] [--dry-run --json]`
 - Catalogue lookups: `sf modules list --json` / `sf modules info <slug> --json` / `sf modules match <query> --json`
-- Skill lifecycle: `sf skill install [--project]` / `sf skill update` / `sf skill uninstall`
+- Skill lifecycle: `sf skill install [--project|--user]` / `sf skill update` / `sf skill uninstall`. Inside a SaaSFoundryAI project the default is the project scope (`.claude/skills/`); Claude Code gives a personal `~/.claude/skills/` copy precedence over the project's, so pass `--user` only on purpose
 - Feedback loop: `sf feedback request <name>` / `sf feedback bug --source cli|scaffold` / `sf feedback list` / `sf feedback vote --list` / `sf feedback vote <n> up|down|comment`
 
 Before mutating, always prefer `--dry-run` where available (notably `sf update --dry-run --json`) to preview the plan for the user.
