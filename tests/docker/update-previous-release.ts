@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile, mkdir, lstat, open, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -334,6 +335,17 @@ async function assertHistoricalSourceCanaries(projectRoot: string, expected: Rea
   }
 }
 
+/**
+ * The published web scaffold shipped a stale Playwright report and last-run file. The current
+ * templates no longer do (#1092), so the template refresh removes them as obsolete template files
+ * left unchanged since generation, and the repeated update must not bring them back.
+ */
+async function assertHistoricalSourceCanariesRemoved(projectRoot: string): Promise<void> {
+  for (const path of HISTORICAL_SOURCE_CANARIES) {
+    if (existsSync(join(projectRoot, ...path.split('/')))) throw new Error(`The obsolete published test output survived the template refresh: ${path}`)
+  }
+}
+
 async function assertNoTransitionArtifacts(projectRoot: string): Promise<void> {
   const leftovers: string[] = []
   const walk = async (directory: string, prefix: string): Promise<void> => {
@@ -461,7 +473,7 @@ export async function runPreviousReleaseUpdateLifecycle(options: PreviousRelease
   assertUpdatedManifest(manifest)
   await assertDeposits(projectRoot)
   await assertNoTransitionArtifacts(projectRoot)
-  await assertHistoricalSourceCanaries(projectRoot, historicalCanaries)
+  await assertHistoricalSourceCanariesRemoved(projectRoot)
   if ((await readFile(join(projectRoot, 'USER-CANARY.md'), 'utf8')) !== 'SaaSFoundry fixture user canary — preserve byte-for-byte.\n') {
     throw new Error('The unmanaged user canary changed during the update lifecycle.')
   }
@@ -474,7 +486,7 @@ export async function runPreviousReleaseUpdateLifecycle(options: PreviousRelease
   await assertNoTransitionArtifacts(projectRoot)
   const repeatedDigest = await canonicalTreeDigest(projectRoot, { exclude: RUNTIME_EXCLUSIONS })
   if (repeatedDigest !== stableDigest) throw new Error(`The second identical update was not idempotent (${stableDigest} != ${repeatedDigest}).`)
-  await assertHistoricalSourceCanaries(projectRoot, historicalCanaries)
+  await assertHistoricalSourceCanariesRemoved(projectRoot)
 
   return { projectRoot, adoptionFingerprint, manifest, stableDigest }
 }
