@@ -4,6 +4,10 @@ import { join } from 'node:path'
 
 import { executePreviousReleaseUpdateProcess, parsePreviousReleaseJsonOutput, runPreviousReleaseLifecycleHook } from '../../../../tests/docker/update-previous-release'
 
+// The process tests start Node commands, and the deadline test may retry with doubled deadlines on a loaded machine
+// (#1171): more than the 20 s of the unit project. The bound is a hang guard, not what the tests check.
+jest.setTimeout(90_000)
+
 describe('previous-release lifecycle diagnostics', () => {
   it('bounds and redacts malformed JSON diagnostics', () => {
     const secret = 'super-secret-test-token'
@@ -42,12 +46,13 @@ describe('previous-release lifecycle diagnostics', () => {
           cwd: root,
           args: [],
           env: { PATH: process.env.PATH },
-          timeoutMs: 5_000,
+          // The cap is the subject; the deadline is a safety net a loaded machine must not reach first (#1171).
+          timeoutMs: 60_000,
           maxOutputBytes: 1_024
         })
       ).rejects.toThrow(/bounded diagnostic output limit/)
     } finally {
-      await rm(root, { recursive: true, force: true })
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
   })
 
@@ -101,32 +106,47 @@ describe('previous-release lifecycle diagnostics', () => {
         ].join('\n')
       )
 
-      await expect(
-        executePreviousReleaseUpdateProcess({
-          cliEntry,
-          cwd: root,
-          args: [],
-          env: { PATH: process.env.PATH },
-          timeoutMs: 150
-        })
-      ).rejects.toThrow(/Lifecycle deadline exceeded/)
-
-      const pids = JSON.parse(await readFile(pidFile, 'utf8')) as number[]
+      // The deadline must expire after the command has started its descendant, or there is no tree to kill: 150 ms is
+      // enough idle, not on a loaded machine where Node itself takes longer to start (#1171). A deadline that fired
+      // before the tree was up proves nothing, so the test doubles it and tries again until it did.
+      let pids: number[] | undefined
+      for (let timeoutMs = 150; !pids; timeoutMs *= 2) {
+        if (timeoutMs > 20_000) throw new Error('The command never started its descendant before the deadline.')
+        await expect(
+          executePreviousReleaseUpdateProcess({
+            cliEntry,
+            cwd: root,
+            args: [],
+            env: { PATH: process.env.PATH },
+            timeoutMs
+          })
+        ).rejects.toThrow(/Lifecycle deadline exceeded/)
+        pids = await readFile(pidFile, 'utf8').then(
+          (text) => JSON.parse(text) as number[],
+          () => undefined
+        )
+      }
       for (const pid of pids) {
         await expectProcessGone(pid)
       }
     } finally {
-      await rm(root, { recursive: true, force: true })
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
   })
 })
 
+/**
+ * ESRCH: the process is gone. EPERM: the pid now belongs to another user's process, so ours is gone too. A killed
+ * process that is not reaped yet still answers, and a loaded machine reaps late: the wait is wall-clock and wide (#1171).
+ */
 async function expectProcessGone(pid: number): Promise<void> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
     try {
       process.kill(pid, 0)
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ESRCH' || code === 'EPERM') return
       throw error
     }
     await new Promise((resolve) => setTimeout(resolve, 50))

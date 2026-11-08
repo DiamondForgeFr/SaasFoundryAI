@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import path from 'path'
@@ -23,8 +23,17 @@ interface Sandbox {
   /** The calls the fake CLIs recorded; the command runs in the background, so wait for the calls expected (or, none expected, long enough to see none). */
   calls: (expected?: number) => Promise<string[]>
   install: (relative: string, script: string) => Promise<void>
+  /** Waits until a file the background CLI writes exists. */
+  waitFor: (file: string) => Promise<void>
   cleanup: () => Promise<void>
 }
+
+// Every test spawns the workflow CLI, which spawns a dozen more processes: a loaded machine needs more than the 20 s of
+// the unit project for two transitions (#1171). The bound is a hang guard, not what the tests check.
+jest.setTimeout(60_000)
+
+/** How long a background CLI may take to start on a loaded machine; the waits end as soon as it has. */
+const BACKGROUND_DEADLINE_MS = 30_000
 
 async function sandbox(options: { toolExitCode?: number } = {}): Promise<Sandbox> {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-wfcli-status-event-'))
@@ -54,7 +63,7 @@ esac
     // A PATH with the system tools only: a developer machine's own saasfoundryai or sf must not leak in.
     env: { ...process.env, PWD: dir, PATH: hermeticPath('/usr/bin:/bin:/usr/local/bin') },
     calls: async (expected = 0) => {
-      const deadline = Date.now() + (expected ? 8000 : 700)
+      const deadline = Date.now() + (expected ? BACKGROUND_DEADLINE_MS : 700)
       while (Date.now() < deadline) {
         if (expected && (await read()).length >= expected) break
         await new Promise((resolve) => setTimeout(resolve, 50))
@@ -67,7 +76,15 @@ esac
       writeFileSync(target, `#!/bin/sh\n${script}\n`)
       chmodSync(target, 0o755)
     },
-    cleanup: () => rm(dir, { recursive: true, force: true })
+    waitFor: async (file) => {
+      const deadline = Date.now() + BACKGROUND_DEADLINE_MS
+      while (!existsSync(file)) {
+        if (Date.now() > deadline) throw new Error(`${file} was never written`)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+    },
+    // A background CLI may still be writing its log while the directory goes: retry the ENOTEMPTY race (#1171).
+    cleanup: () => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 }
 
@@ -87,13 +104,21 @@ describe('workflow-cli update-status tells the ledger of the clone (#1067)', () 
     }
   })
 
-  it('never waits for it: a CLI that takes seconds does not delay the transition', async () => {
+  it('never waits for it: a CLI that has not finished does not hold the transition', async () => {
+    // No wall-clock bound (#1171): a loaded machine took 6.5 s for the transition alone. The CLI blocks until the test
+    // releases it, so a transition that waited for it could not return before the release, whatever the load. It gives
+    // up on its own after 30 s (300 sleeps), so that a transition that waits fails on `finished` rather than on a hang.
     const box = await sandbox()
+    const release = path.join(box.dir, 'release')
+    const finished = path.join(box.dir, 'finished')
     try {
-      await box.install('node_modules/.bin/saasfoundryai', `${recorder(box.dir)}\nsleep 6`)
-      const started = Date.now()
-      await transition(box)
-      expect(Date.now() - started).toBeLessThan(5000)
+      await box.install('node_modules/.bin/saasfoundryai', `${recorder(box.dir)}\ni=0\nwhile [ ! -f '${release}' ] && [ "$i" -lt 300 ]; do sleep 0.1; i=$((i + 1)); done\ntouch '${finished}'`)
+      const { stdout } = await transition(box)
+      expect(stdout).toContain('✓ Ticket #1067 → In progress')
+      expect(await box.calls(1)).toHaveLength(1)
+      expect(existsSync(finished)).toBe(false)
+      await writeFile(release, '')
+      await box.waitFor(finished)
     } finally {
       await box.cleanup()
     }
