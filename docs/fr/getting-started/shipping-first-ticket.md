@@ -69,7 +69,8 @@ L'agent exécute la même commande `create-ticket`.
 ### Complexité
 
 La complexité est portée par une **étiquette**, pas par le statut. `--complexity` la pose à la création, et `$WF retag 42 <niveau>` la change ensuite. Le workflow refuse de sortir un ticket du Backlog
-sans elle. L'installation du harness crée les étiquettes ; sur un dépôt qui ne les a pas, créez-les une fois :
+sans elle. `sf new` crée les étiquettes sur votre dépôt GitHub, avec le profil `harness` comme avec le profil `full`, et son récapitulatif l'indique. S'il n'a pas pu (pas encore de remote GitHub, `gh`
+non authentifié), il affiche un avertissement à la place ; créez-les alors une fois :
 
 ```bash
 gh label create "complexity: low"    --color 7CFC00 --description "🟢 Low complexity"

@@ -229,3 +229,50 @@ export function resolveRepoSlug(run: CommandRunner = defaultRun): string | null 
     return null
   }
 }
+
+/** A runner whose commands run in `cwd`: `gh repo view` answers the repository of that directory. */
+export function runnerIn(cwd: string): CommandRunner {
+  return (cmd) => execSync(cmd, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).toString()
+}
+
+/** One line of the install summary: a step done (`ok`) or one left to the user. */
+export interface ProvisionNote {
+  ok: boolean
+  message: string
+}
+
+/**
+ * Create the workflow labels on the GitHub repository of each directory, and say what happened.
+ *
+ * Both `sf new` paths go through here (#973): the harness path on the repository it runs in, the
+ * full path on the monorepo or on each multirepo app, so a project is never left without the labels
+ * its guards read, and both report it in the same words. Best-effort, like `ensureWorkflowLabels`:
+ * a directory without a GitHub remote or a `gh` without auth becomes a note, never a failure.
+ */
+export function provisionWorkflowLabels(opts: { srs: boolean; dirs: string[] }, runnerFor: (dir: string) => CommandRunner = runnerIn): ProvisionNote[] {
+  const notes: ProvisionNote[] = []
+  const done = new Set<string>()
+
+  for (const dir of opts.dirs) {
+    const run = runnerFor(dir)
+    const slug = resolveRepoSlug(run)
+    if (!slug) {
+      const where = dir === '.' ? '' : ` of ${dir}`
+      notes.push({
+        ok: false,
+        message: `Could not resolve the GitHub repo${where} — skipped label creation (run 'gh auth login' and give it a GitHub remote, then create them with the commands in .claude/docs/github-labels.md)`
+      })
+      continue
+    }
+    if (done.has(slug)) continue
+    done.add(slug)
+
+    const labels = ensureWorkflowLabels(slug, { srs: opts.srs }, run)
+    const created = labels.created.length
+    if (created > 0) notes.push({ ok: true, message: `Created ${created} workflow label${created > 1 ? 's' : ''} on ${slug}` })
+    if (labels.failed.length > 0) notes.push({ ok: false, message: `${labels.failed.length} label(s) could not be created on ${slug} — check 'gh auth status' (repo scope)` })
+    if (created === 0 && labels.failed.length === 0) notes.push({ ok: true, message: `All ${labels.existing.length} workflow labels already exist on ${slug}` })
+  }
+
+  return notes
+}

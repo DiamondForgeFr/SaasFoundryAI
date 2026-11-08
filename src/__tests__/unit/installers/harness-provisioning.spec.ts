@@ -3,7 +3,16 @@ import { mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { buildWorkflowLabels, describeBranchProvision, ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug, type CommandRunner } from '../../../installers/harness-provisioning'
+import {
+  buildWorkflowLabels,
+  describeBranchProvision,
+  ensureWorkflowLabels,
+  ensureWorkingBranch,
+  provisionWorkflowLabels,
+  resolveRepoSlug,
+  runnerIn,
+  type CommandRunner
+} from '../../../installers/harness-provisioning'
 
 const sh = (cmd: string, cwd: string) => execSync(cmd, { cwd, stdio: ['pipe', 'pipe', 'pipe'] })
 
@@ -194,6 +203,89 @@ describe('harness-provisioning', () => {
 
       expect(result.failed).toHaveLength(7)
       expect(result.existing).toHaveLength(0)
+    })
+  })
+
+  // #973 — one helper for the harness and the full paths, so both create and report the labels alike
+  describe('provisionWorkflowLabels', () => {
+    /** A fake `gh`: each directory answers its own slug (or none), each label call is recorded with its directory. */
+    function fakeGh(slugs: Record<string, string | null>, onLabel: (dir: string) => void = () => {}) {
+      const labelCalls: { dir: string; cmd: string }[] = []
+      const runnerFor = (dir: string): CommandRunner => {
+        return (cmd) => {
+          if (cmd.startsWith('gh repo view')) {
+            const slug = slugs[dir]
+            if (!slug) throw new Error('no git remotes found')
+            return `${slug}\n`
+          }
+          labelCalls.push({ dir, cmd })
+          onLabel(dir)
+          return ''
+        }
+      }
+      return { runnerFor, labelCalls }
+    }
+
+    it('creates the labels on the repository of the directory and reports the count', () => {
+      const gh = fakeGh({ '.': 'acme/acme' })
+
+      const notes = provisionWorkflowLabels({ srs: true, dirs: ['.'] }, gh.runnerFor)
+
+      expect(notes).toEqual([{ ok: true, message: 'Created 10 workflow labels on acme/acme' }])
+      expect(gh.labelCalls).toHaveLength(10)
+      expect(gh.labelCalls.every((call) => call.dir === '.' && call.cmd.includes("--repo 'acme/acme'"))).toBe(true)
+    })
+
+    it('provisions every repository of a multirepo, each through its own directory', () => {
+      const gh = fakeGh({ 'apps/acme-api': 'acme/acme-api', 'apps/acme-web': 'acme/acme-web' })
+
+      const notes = provisionWorkflowLabels({ srs: false, dirs: ['apps/acme-api', 'apps/acme-web'] }, gh.runnerFor)
+
+      expect(notes.map((note) => note.message)).toEqual(['Created 7 workflow labels on acme/acme-api', 'Created 7 workflow labels on acme/acme-web'])
+      expect(gh.labelCalls.filter((call) => call.dir === 'apps/acme-api')).toHaveLength(7)
+      expect(gh.labelCalls.filter((call) => call.dir === 'apps/acme-web')).toHaveLength(7)
+    })
+
+    it('provisions a repository shared by two directories once', () => {
+      const gh = fakeGh({ a: 'acme/acme', b: 'acme/acme' })
+
+      expect(provisionWorkflowLabels({ srs: false, dirs: ['a', 'b'] }, gh.runnerFor)).toHaveLength(1)
+      expect(gh.labelCalls).toHaveLength(7)
+    })
+
+    it('says so when every label was already there', () => {
+      const gh = fakeGh({ '.': 'acme/acme' }, () => {
+        throw Object.assign(new Error('exit 1'), { stderr: 'label with name "x" already exists' })
+      })
+
+      expect(provisionWorkflowLabels({ srs: false, dirs: ['.'] }, gh.runnerFor)).toEqual([{ ok: true, message: 'All 7 workflow labels already exist on acme/acme' }])
+    })
+
+    it('warns about the labels it could not create', () => {
+      const gh = fakeGh({ '.': 'acme/acme' }, () => {
+        throw Object.assign(new Error('HTTP 403'), { stderr: 'must have admin rights' })
+      })
+
+      expect(provisionWorkflowLabels({ srs: false, dirs: ['.'] }, gh.runnerFor)).toEqual([{ ok: false, message: "7 label(s) could not be created on acme/acme — check 'gh auth status' (repo scope)" }])
+    })
+
+    it('warns, naming the directory and the way out, when the repository cannot be resolved', () => {
+      const gh = fakeGh({})
+
+      const notes = provisionWorkflowLabels({ srs: false, dirs: ['.', 'apps/acme-web'] }, gh.runnerFor)
+
+      expect(notes).toHaveLength(2)
+      expect(notes.every((note) => !note.ok)).toBe(true)
+      expect(notes[0].message).toMatch(/^Could not resolve the GitHub repo — skipped label creation/)
+      expect(notes[1].message).toMatch(/^Could not resolve the GitHub repo of apps\/acme-web — skipped label creation/)
+      expect(notes[0].message).toContain("'gh auth login'")
+      expect(notes[0].message).toContain('.claude/docs/github-labels.md')
+      expect(gh.labelCalls).toHaveLength(0)
+    })
+
+    it('runs gh in the directory it is given', () => {
+      expect(runnerIn(tmpdir())('pwd').trim()).toBe(execSync('pwd', { cwd: tmpdir(), encoding: 'utf-8' }).trim())
+      expect(() => runnerIn(join(tmpdir(), `sf-missing-${Date.now()}`))('pwd')).toThrow()
     })
   })
 

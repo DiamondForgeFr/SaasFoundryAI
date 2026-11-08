@@ -8,7 +8,7 @@ import terminalLink from 'terminal-link'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
-import { describeBranchProvision, ensureWorkflowLabels, ensureWorkingBranch, resolveRepoSlug } from '../installers/harness-provisioning'
+import { describeBranchProvision, ensureWorkingBranch, provisionWorkflowLabels } from '../installers/harness-provisioning'
 import { missingBoardWarning } from '../utils/workflow-board'
 import { pwaInstallerMeta } from '../installers/pwa.installer'
 import { installSkills } from '../installers/skills.installer'
@@ -121,6 +121,9 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   const originalConsoleLog = console.log
   const originalConsoleError = console.error
 
+  // Best-effort provisioning notes, surfaced after the spinner stops (as on the harness path).
+  const provisioning: string[] = []
+
   try {
     console.log = (message) => {
       // Only allow critical errors to pass through
@@ -221,6 +224,10 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     await writeMultirepoAgentManifests(manifest, startProjectAnswers.projectName)
     await installSelectedAgentInstructions(manifest, startProjectAnswers.projectName, selectedAgents)
 
+    // The guard labels, on the repository each git root pushes to: the monorepo, or each multirepo app (#973)
+    spinner.text = 'Provisioning workflow labels...'
+    provisioning.push(...workflowLabelLines(manifest, startProjectAnswers.isMonorepo ? ['.'] : [apiPath, webPath]))
+
     spinner.succeed(chalk.green('Project setup completed successfully'))
   } catch (error) {
     spinner.fail(chalk.red('Failed to setup project'))
@@ -229,6 +236,12 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   } finally {
     console.log = originalConsoleLog
     console.error = originalConsoleError
+  }
+
+  // Printed once the console is restored: setup silences every line that is not an error
+  if (provisioning.length > 0) {
+    console.log()
+    for (const line of provisioning) console.log(`  ${line}`)
   }
 
   /**
@@ -591,6 +604,16 @@ export async function newCommand(opts: NewCommandOptions = {}) {
 }
 
 /**
+ * The workflow guard labels (`complexity:*`, `nature:*`, `srs:*`) on the GitHub repository of each
+ * directory, as summary lines. Shared by the harness and full paths (#973): the full path used to
+ * skip them, and the first `create-ticket --complexity` of a new project failed half-way.
+ */
+function workflowLabelLines(manifest: SaaSFoundryManifest, dirs: string[]): string[] {
+  if (manifest.workflow?.tool !== 'github-projects') return []
+  return provisionWorkflowLabels({ srs: Boolean(manifest.tools?.srs?.enabled), dirs }).map((note) => (note.ok ? chalk.green(`✓ ${note.message}`) : chalk.yellow(`⚠️  ${note.message}`)))
+}
+
+/**
  * SRS workspace bootstrap shared by the scaffold and harness install paths:
  * skill deposit, Notion root page creation, optional pending-ingestion stamp,
  * token persistence to .env (gitignored).
@@ -722,16 +745,7 @@ async function runHarnessInstall(config: Answers): Promise<void> {
       const board = missingBoardWarning(manifest.workflow)
       if (board) provisioning.push(chalk.yellow(`⚠️  ${board}`))
 
-      if (manifest.workflow.tool === 'github-projects') {
-        const slug = resolveRepoSlug()
-        if (slug) {
-          const labels = ensureWorkflowLabels(slug, { srs: Boolean(manifest.tools?.srs?.enabled) })
-          if (labels.created.length > 0) provisioning.push(chalk.green(`✓ Created ${labels.created.length} workflow label${labels.created.length > 1 ? 's' : ''} on ${slug}`))
-          if (labels.failed.length > 0) provisioning.push(chalk.yellow(`⚠️  ${labels.failed.length} label(s) could not be created on ${slug} — check 'gh auth status' (repo scope)`))
-        } else {
-          provisioning.push(chalk.yellow("⚠️  Could not resolve the GitHub repo — skipped label creation (run 'gh auth login')"))
-        }
-      }
+      provisioning.push(...workflowLabelLines(manifest, ['.']))
     }
 
     spinner.succeed(chalk.green('AI harness installed'))
