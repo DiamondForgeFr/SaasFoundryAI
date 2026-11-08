@@ -267,8 +267,9 @@ the Tailwind v4 theme tokens, the `cn()` className helper, and shared UI hooks (
 **App wiring** — `scaffolds/overlays/monorepo/web/`:
 
 - `package.json` declares the workspace dep (`"@<projectName>/ui-primitives": "*"`) and no longer carries Radix/lucide/cva/cmdk/clsx/tailwind-merge/tw-animate-css.
-- `src/index.css` is reduced to a two-liner: `@import "@<projectName>/ui-primitives/theme.css"` + `@source "../../../node_modules/@<projectName>/ui-primitives/src"`. The `@source` directive tells
-  Tailwind v4 to scan the package source so utility classes used inside primitives end up in the final CSS bundle.
+- `src/index.css` is reduced to a two-liner: `@import "@<projectName>/ui-primitives/theme.css"` + `@source "../../../packages/ui-primitives/src"`. The `@source` directive tells Tailwind v4 to scan the
+  package source so utility classes used inside primitives end up in the final CSS bundle. It names the workspace folder, not the `node_modules` symlink: a git worktree has no root `node_modules`, and
+  Tailwind would find nothing to scan (#1048).
 
 **Build-time rewrites** — `src/builders/web.builder.ts` (mono branch only):
 

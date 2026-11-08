@@ -188,7 +188,22 @@ export function assertMonorepoUiPrimitives(projectPath: string, projectName: str
   const viteConfig = join(projectPath, 'apps', 'web', 'vite.config.ts')
   results.push(assertFileContains(viteConfig, `'/ui-primitives/src/'`))
 
+  // Tailwind must scan the package: a class only the sidebar primitive uses reaches the built CSS
+  // (#1048 — an `@source` into root node_modules found nothing to scan in a git worktree)
+  results.push(assertFileContains(join(projectPath, 'apps', 'web', 'src', 'index.css'), `@source '../../../packages/ui-primitives/src'`))
+  results.push(assertBuiltCssContains(join(projectPath, 'apps', 'web', 'dist', 'assets'), 'sidebar-width-icon'))
+
   return results
+}
+
+/** Pass when one of the built stylesheets in `assetsDir` contains `needle`. */
+function assertBuiltCssContains(assetsDir: string, needle: string): AssertionResult {
+  if (!existsSync(assetsDir)) return { passed: false, message: `FAIL: ${assetsDir} does not exist (web app not built)` }
+  const stylesheets = readdirSync(assetsDir).filter((name) => name.endsWith('.css'))
+  const found = stylesheets.some((name) => readFileSync(join(assetsDir, name), 'utf8').includes(needle))
+  return found
+    ? { passed: true, message: `OK: built CSS in ${assetsDir} contains ${needle}` }
+    : { passed: false, message: `FAIL: none of ${stylesheets.length} built stylesheets in ${assetsDir} contains ${needle}` }
 }
 
 /**
