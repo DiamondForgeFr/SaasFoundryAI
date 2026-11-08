@@ -405,6 +405,45 @@ describe('instruction preconditions (#939)', () => {
   })
 })
 
+describe('instruction references precondition (#1152)', () => {
+  const find = (report: StatusReport) => evaluatePreconditions(report).find((p) => p.name === 'instructionReferences')
+  const stale = (file: string, line: number, reference: string) => ({ file, line, reference, target: reference })
+
+  it('is skipped when the declaration could not be read, so no instruction file was diagnosed', () => {
+    expect(find(makeReport({ instructions: { shadowing: [] } }))).toMatchObject({ status: 'skip' })
+    expect(find(makeReport())).toMatchObject({ status: 'skip' })
+  })
+
+  it('is satisfied when no AGENTS.md names a missing CLAUDE.md', () => {
+    expect(find(makeReport({ instructions: { agents: ['codex'], shadowing: [], staleReferences: [] } }))?.status).toBe('ok')
+  })
+
+  it('names each mention of a missing CLAUDE.md with its file and line, factually', () => {
+    const report = makeReport({
+      instructions: { agents: ['claude-code'], shadowing: [], staleReferences: [stale('AGENTS.md', 32, 'CLAUDE.md'), stale('AGENTS.md', 221, 'apps/api/CLAUDE.md')] }
+    })
+
+    const references = find(report)
+    expect(references?.status).toBe('warn')
+    expect(references?.details).toBe('AGENTS.md:32 names CLAUDE.md; AGENTS.md:221 names apps/api/CLAUDE.md: those files do not exist')
+    expect(references?.remediation).toContain('AGENTS.md that replaced the file')
+  })
+
+  it('lists the first five and counts the rest', () => {
+    const many = Array.from({ length: 8 }, (_, index) => stale('AGENTS.md', index + 1, 'CLAUDE.md'))
+    const references = find(makeReport({ instructions: { agents: ['claude-code'], shadowing: [], staleReferences: many } }))
+
+    expect(references?.details?.match(/names CLAUDE\.md/g)).toHaveLength(5)
+    expect(references?.details).toContain(', and 3 more')
+  })
+
+  it('says "that file does not exist" for a single mention', () => {
+    const references = find(makeReport({ instructions: { agents: ['claude-code'], shadowing: [], staleReferences: [stale('apps/api/AGENTS.md', 7, 'CLAUDE.md')] } }))
+
+    expect(references?.details).toBe('apps/api/AGENTS.md:7 names CLAUDE.md: that file does not exist')
+  })
+})
+
 describe('tier agent precondition (#933)', () => {
   const routing = (state: Partial<StatusRoutingState> = {}): StatusRoutingState => ({
     gridVersion: 1,

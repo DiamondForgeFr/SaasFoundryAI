@@ -7,6 +7,7 @@ import {
   compareCliVersions,
   compareVersions,
   findShadowingFiles,
+  findStaleClaudeMdReferences,
   importsOf,
   measureCodexInstructions,
   readClaudeCodeVersion
@@ -176,5 +177,52 @@ describe('collectInstructionDiagnostics', () => {
 
   it('diagnoses nothing where there is no instruction file', async () => {
     await expect(collectInstructionDiagnostics(base, [], null)).resolves.toEqual({ shadowing: [] })
+  })
+
+  it('reports the missing CLAUDE.md files an AGENTS.md still names (#1152)', async () => {
+    project(['claude-code'])
+    write(join(base, 'AGENTS.md'), '# acme\n\n- **App-specific context**: Check `apps/api/CLAUDE.md` and `apps/web/CLAUDE.md`\n')
+
+    const diagnostics = await collectInstructionDiagnostics(base, ['apps/api', 'apps/web'], null)
+
+    expect(diagnostics.staleReferences).toEqual([
+      { file: 'AGENTS.md', line: 3, reference: 'apps/api/CLAUDE.md', target: 'apps/api/CLAUDE.md' },
+      { file: 'AGENTS.md', line: 3, reference: 'apps/web/CLAUDE.md', target: 'apps/web/CLAUDE.md' }
+    ])
+  })
+})
+
+describe('findStaleClaudeMdReferences (#1152)', () => {
+  it('reads a bare name from the directory of the AGENTS.md that holds it', () => {
+    write(join(base, 'AGENTS.md'), 'tree\n│   └── CLAUDE.md     # API-specific context\n')
+    write(join(base, 'apps', 'api', 'AGENTS.md'), 'Update this CLAUDE.md as the project evolves.\n')
+
+    expect(findStaleClaudeMdReferences(base, ['apps/api', 'apps/web'])).toEqual([
+      { file: 'AGENTS.md', line: 2, reference: 'CLAUDE.md', target: 'CLAUDE.md' },
+      { file: 'apps/api/AGENTS.md', line: 1, reference: 'CLAUDE.md', target: 'apps/api/CLAUDE.md' }
+    ])
+  })
+
+  it('does not report a CLAUDE.md that is there', () => {
+    write(join(base, 'AGENTS.md'), 'Check `apps/api/CLAUDE.md`.\n')
+    write(join(base, 'apps', 'api', 'CLAUDE.md'), '# api\n')
+
+    expect(findStaleClaudeMdReferences(base, ['apps/api'])).toEqual([])
+  })
+
+  it('does not report a file it does not look for: CLAUDE.local.md, the home directory, a URL', () => {
+    write(join(base, 'AGENTS.md'), 'Notes in CLAUDE.local.md, ~/.claude/CLAUDE.md, https://example.com/CLAUDE.md.\n')
+
+    expect(findStaleClaudeMdReferences(base, [])).toEqual([])
+  })
+
+  it('does not read the heading and the comments the migration writes as references', () => {
+    write(join(base, 'AGENTS.md'), '<!-- saasfoundry:migrated-from-claude-md — the sections below come from CLAUDE.md. -->\n\n## Kept from CLAUDE.md for review\n\nSome text.\n')
+
+    expect(findStaleClaudeMdReferences(base, [])).toEqual([])
+  })
+
+  it('reports nothing where there is no AGENTS.md', () => {
+    expect(findStaleClaudeMdReferences(base, ['apps/api'])).toEqual([])
   })
 })

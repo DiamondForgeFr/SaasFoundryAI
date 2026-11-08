@@ -303,7 +303,8 @@ git checkout HEAD -- path/to/removed-file.ts
 Depuis le harness v4, `AGENTS.md` est le fichier d'instructions que lisent tous les agents, Claude Code compris. `sf update` a déplacé chaque section de `CLAUDE.md` dans `AGENTS.md` avant de le
 supprimer, et a gardé toute copie modifiée d'une section générée sous **Kept from CLAUDE.md for review**. Comparez avec `git show HEAD:CLAUDE.md` ;
 [le déplacement](/fr/cli/sf-update#claude-md-passe-dans-agents-md-harness-v4) indique ce qui va où. Si votre propre `AGENTS.md` existait déjà, cherchez plutôt `AGENTS.md.saasfoundry.new` : `CLAUDE.md`
-reste jusqu'à ce que vous le fusionniez.
+reste jusqu'à ce que vous le fusionniez. Une section déplacée qui citait un `CLAUDE.md` supprimé par le déplacement (`apps/api/CLAUDE.md`, une ligne d'arborescence) cite maintenant l'`AGENTS.md`
+voisin. La version 1.1.0 a laissé ces références telles quelles : `sf status` les liste sous `instructionReferences`, et vous faites pointer chacune vers l'`AGENTS.md` qui a remplacé le fichier.
 
 ### Où sont les tests de fusion ?
 

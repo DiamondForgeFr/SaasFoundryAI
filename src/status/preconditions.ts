@@ -317,6 +317,27 @@ function checkCodexInstructionSize(report: StatusReport): Precondition {
   }
 }
 
+/** A reference that names a CLAUDE.md the project does not hold: the file the v3 → v4 migration deleted (#1152). Listed up to this many. */
+const STALE_REFERENCES_SHOWN = 5
+
+function checkInstructionReferences(report: StatusReport): Precondition {
+  const name = 'instructionReferences'
+  const description = 'AGENTS.md names no CLAUDE.md that is missing'
+  const stale = report.instructions?.staleReferences
+  if (!stale) return { name, description, status: 'skip', details: 'No instruction file or agent declaration to diagnose' }
+  if (stale.length === 0) return { name, description, status: 'ok' }
+  const shown = stale.slice(0, STALE_REFERENCES_SHOWN).map((reference) => `${reference.file}:${reference.line} names ${reference.reference}`)
+  const more = stale.length > shown.length ? `, and ${stale.length - shown.length} more` : ''
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `${shown.join('; ')}${more}: ${stale.length === 1 ? 'that file does not' : 'those files do not'} exist`,
+    remediation:
+      'Point each mention at the AGENTS.md that replaced the file, or delete it. `sf update` does this for the sections it moves out of a CLAUDE.md; a project already migrated by an earlier release is edited by hand.'
+  }
+}
+
 /**
  * Tier agents — whether the delegation agents on disk are the ones the routing renders (#933). Each
  * problem is a `warn`: a delegation still starts, on a model or an effort the routing no longer says.
@@ -435,6 +456,7 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkInstructionShadowing(report),
     checkClaudeCodeVersion(report),
     checkCodexInstructionSize(report),
+    checkInstructionReferences(report),
     checkTierAgents(report),
     checkDependencies(report),
     checkDatabase(report),

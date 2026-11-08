@@ -131,7 +131,13 @@ The generated bridges are recognised by their bytes, whichever release wrote the
 `AGENTS.md` is removed, because it hides `AGENTS.md` from Claude Code; it is not treated as a `CLAUDE.md` you wrote, which would have left your `AGENTS.md` beside a sidecar. An `AGENTS.md` that is
 only the generated bridge to your `CLAUDE.md` is replaced, not kept as a file of yours.
 
-Preview the move first: `sf update --dry-run --json` lists every section under `moduleMigrations`, with its action (`move`, `refresh`, `drop`, `keep-for-review`), its source and its target.
+A section moved verbatim can name a file the move deletes: a project-structure tree line such as `└── CLAUDE.md     # API-specific context`, or "Check `apps/api/CLAUDE.md`". The update points each
+such reference at the `AGENTS.md` beside it (`apps/api/CLAUDE.md` becomes `apps/api/AGENTS.md`), so the moved text does not name a file that no longer exists. Only a path to a `CLAUDE.md` the update
+removes is rewritten: a `CLAUDE.md` that stays (an app whose `AGENTS.md` you wrote), `CLAUDE.local.md`, `~/.claude/CLAUDE.md`, a link to another site and every other word keep their text. A project
+moved by release 1.1.0, which left those references behind, gets them reported by [`sf status`](/cli/sf-status#agent-instructions) (`instructionReferences`) and edits them by hand.
+
+Preview the move first: `sf update --dry-run --json` lists every section under `moduleMigrations`, with its action (`move`, `refresh`, `drop`, `keep-for-review`), its source and its target. Each
+reference it would point at an `AGENTS.md` is its own `rewrite` entry, with the line of `CLAUDE.md` it comes from.
 
 When adding a technical stack to a harness project, SaaSFoundry uses a journaled transaction. A later `sf update --target-profile full` first attempts safe recovery if a previous process stopped
 mid-transition. If it cannot prove a complete commit or safe rollback, it stops and reports the unresolved paths rather than guessing.

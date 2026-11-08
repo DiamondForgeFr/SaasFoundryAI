@@ -4,6 +4,7 @@ import path from 'path'
 
 import type { HarnessAgent } from '../harness/agent-registry'
 import { readAgentSupport } from '../harness/agent-support'
+import { findClaudeMdReferences, isMigrationMarker, resolveClaudeMdReference } from '../harness/instruction-references'
 
 /**
  * Facts about the instruction files the declared coding agents will load (#939).
@@ -22,6 +23,18 @@ export interface InstructionDiagnostics {
   claudeCode?: ClaudeCodeVersion
   /** What Codex loads for each directory holding an AGENTS.md; absent when Codex is not declared. */
   codexSizes?: CodexInstructionSize[]
+  /** Mentions in an AGENTS.md of a CLAUDE.md that is not there (#1152); absent when the declaration could not be read. */
+  staleReferences?: StaleInstructionReference[]
+}
+
+export interface StaleInstructionReference {
+  /** The AGENTS.md that holds the mention, relative to the project root. */
+  file: string
+  line: number
+  /** The path as written in the file. */
+  reference: string
+  /** The file it names, relative to the project root. */
+  target: string
 }
 
 export interface ClaudeCodeVersion {
@@ -63,6 +76,7 @@ export async function collectInstructionDiagnostics(projectRoot: string, appDirs
     diagnostics.claudeCode = await readClaudeCodeVersion(projectRoot)
   }
   if (agents.includes('codex')) diagnostics.codexSizes = measureCodexInstructions(projectRoot, appDirs, gitRoot)
+  diagnostics.staleReferences = findStaleClaudeMdReferences(projectRoot, appDirs)
   return diagnostics
 }
 
@@ -94,6 +108,31 @@ export function findShadowingFiles(projectRoot: string, appDirs: string[]): stri
     }
   }
   return found
+}
+
+/**
+ * The AGENTS.md of the project and of each app that names a CLAUDE.md the project does not hold (#1152).
+ * The v3 → v4 migration deletes the CLAUDE.md files and, until it rewrote the references in the sections it
+ * moved, left lines such as `apps/api/CLAUDE.md` behind; a project migrated by that release still has them.
+ * The mentions the migration writes itself, to say where a block came from, are not references.
+ */
+export function findStaleClaudeMdReferences(projectRoot: string, appDirs: string[]): StaleInstructionReference[] {
+  const root = path.resolve(projectRoot)
+  const stale: StaleInstructionReference[] = []
+  for (const dir of ['', ...appDirs]) {
+    const file = dir ? `${dir}/AGENTS.md` : 'AGENTS.md'
+    const absolute = path.join(root, file)
+    if (!isFile(absolute) || fs.statSync(absolute).size > MAX_FILE_BYTES) continue
+    const lines = fs.readFileSync(absolute, 'utf8').split('\n')
+    lines.forEach((text, index) => {
+      if (isMigrationMarker(text)) return
+      for (const reference of findClaudeMdReferences(text)) {
+        const target = resolveClaudeMdReference(dir, reference)
+        if (target !== undefined && !isFile(path.join(root, target))) stale.push({ file, line: index + 1, reference: reference.text, target })
+      }
+    })
+  }
+  return stale
 }
 
 /**
