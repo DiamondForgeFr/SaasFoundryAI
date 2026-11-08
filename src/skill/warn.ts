@@ -26,7 +26,7 @@ export async function maybeEmitStaleSkillWarning(argv: string[], bundledVersion:
   try {
     const status = await checkSkillStatus('user', bundledVersion)
     if (!status.installed || !status.stale) return
-    process.stderr.write(chalk.yellow(`⚠  ${SKILL_NAME} skill is out of date (${status.installedVersion} → ${bundledVersion}). Run: sf skill update\n`))
+    process.stderr.write(chalk.yellow(`⚠  ${SKILL_NAME} skill is out of date (${status.installedVersion} → ${bundledVersion}). Run: sf skill update --user\n`))
   } catch {
     // never block on a best-effort advisory
   }

@@ -215,7 +215,7 @@ program
   .command('skill')
   .description('Manage the tool-saasfoundry Claude Code skill (install, update, uninstall)')
   .argument('[subcommand]', 'Subcommand to execute (install)')
-  .argument('[args...]', 'Additional arguments for the subcommand (--project, --force, --yes)')
+  .argument('[args...]', 'Additional arguments for the subcommand (--project, --user, --force, --yes)')
   .allowUnknownOption()
   .action((subcommand, args) => skillCommand(subcommand, ...(Array.isArray(args) ? args : [args])))
 program
