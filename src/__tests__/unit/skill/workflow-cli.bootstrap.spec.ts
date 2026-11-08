@@ -11,6 +11,10 @@ const CLI = path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/work
 const BASH = '/bin/bash'
 const GIT_IDENTITY = { GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 'test@example.com' }
 
+// A bootstrap runs git (commit, two pushes to a bare origin) and the workflow CLI's tool calls, and a test may run two:
+// a loaded machine goes past the 20 s of the unit project (#1171). The bound is a hang guard, not what the tests check.
+jest.setTimeout(60_000)
+
 /**
  * A fresh `git init -b main` project with a bare `origin`, a tool CLI that logs its calls
  * (FAKE_NO_COMPLEXITY drops the complexity label) and a `gh` that knows no pull request.
@@ -69,7 +73,17 @@ exit 0
       return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', code: e.code ?? 1 }
     }
   }
-  return { dir, origin, git, run, toolCalls, comment: () => readFileSync(commentFile, 'utf8'), cleanup: () => rm(root, { recursive: true, force: true }) }
+  return {
+    dir,
+    origin,
+    git,
+    run,
+    toolCalls,
+    comment: () => readFileSync(commentFile, 'utf8'),
+    // git may still be writing in .git (an auto-gc, a lock released late) when the directory goes: retry the ENOTEMPTY
+    // race rather than fail a test that passed (#1171).
+    cleanup: () => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  }
 }
 
 // #833 — on a repository with no commit the first ticket had no branch to start from nor

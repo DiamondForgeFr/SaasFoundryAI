@@ -10,6 +10,10 @@ const REPO_ROOT = path.resolve(__dirname, '../../../..')
 const CLI = path.resolve(REPO_ROOT, '.claude/skills/sf-workflow/workflow-cli.sh')
 const BASH = '/bin/bash'
 
+// Each transition runs the workflow CLI, which spawns a dozen tool and gh calls, and several tests run two: a loaded
+// machine went past the 20 s of the unit project (#1171). The bound is a hang guard, not what the tests check.
+jest.setTimeout(60_000)
+
 interface Options {
   statuses?: string[]
   childStatuses?: string | null
@@ -82,7 +86,7 @@ fi
   const ghPath = path.join(binDir, 'gh')
   writeFileSync(ghPath, gh)
   chmodSync(ghPath, 0o755)
-  return { dir, log, env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ''}` }, cleanup: () => rm(dir, { recursive: true, force: true }) }
+  return { dir, log, env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ''}` }, cleanup: () => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) }
 }
 
 async function run(s: Awaited<ReturnType<typeof sandbox>>, args: string[]) {

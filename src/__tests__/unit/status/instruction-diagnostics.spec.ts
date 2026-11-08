@@ -19,7 +19,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  rmSync(base, { recursive: true, force: true })
+  rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 function write(file: string, content: string): void {
@@ -57,23 +57,33 @@ describe('readClaudeCodeVersion', () => {
     process.env.PATH = originalPath
   })
 
-  function stubClaude(output: string): void {
+  // A stub answers in milliseconds idle, but a loaded machine can take seconds to start a shell: the production bound
+  // (3 s) is not what these tests check, so they give the probe a bound of their own (#1171).
+  const PROBE_TIMEOUT_MS = 15_000
+
+  function stubClaude(body: string): void {
     const bin = join(base, 'bin')
-    write(join(bin, 'claude'), `#!/bin/sh\necho '${output}'\n`)
+    write(join(bin, 'claude'), `#!/bin/sh\n${body}\n`)
     chmodSync(join(bin, 'claude'), 0o755)
     process.env.PATH = `${bin}:/usr/bin:/bin`
   }
 
   it('reads the version the local binary prints', async () => {
-    stubClaude('2.1.200 (Claude Code)')
-    await expect(readClaudeCodeVersion(base)).resolves.toEqual({ version: '2.1.200' })
+    stubClaude("echo '2.1.200 (Claude Code)'")
+    await expect(readClaudeCodeVersion(base, PROBE_TIMEOUT_MS)).resolves.toEqual({ version: '2.1.200' })
   })
 
   it('names why no version was read', async () => {
-    stubClaude('unexpected')
-    await expect(readClaudeCodeVersion(base)).resolves.toEqual({ reason: '`claude --version` printed no version' })
+    stubClaude("echo 'unexpected'")
+    await expect(readClaudeCodeVersion(base, PROBE_TIMEOUT_MS)).resolves.toEqual({ reason: '`claude --version` printed no version' })
     process.env.PATH = join(base, 'empty')
-    await expect(readClaudeCodeVersion(base)).resolves.toEqual({ reason: '`claude` not found on PATH' })
+    await expect(readClaudeCodeVersion(base, PROBE_TIMEOUT_MS)).resolves.toEqual({ reason: '`claude` not found on PATH' })
+  })
+
+  it('gives up on a binary that does not answer within its bound', async () => {
+    // `exec` so that the timeout's signal reaches the sleep itself, which holds the output pipe.
+    stubClaude('exec sleep 30')
+    await expect(readClaudeCodeVersion(base, 200)).resolves.toEqual({ reason: '`claude --version` did not answer' })
   })
 })
 
