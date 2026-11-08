@@ -59,6 +59,7 @@ All via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh <cmd> [ar
 | `create-pr <ticket> [--draft] [--head <branch>]`                                                                   | Push branch + open/reuse PR against `workingBranch`; preserve existing draft state                                                            |
 | `ready-pr <ticket> [--head <branch> \| --pr <number>]`                                                             | Mark the ticket's PR ready for review (local CI gate); from any checkout                                                                      |
 | `draft-pr <ticket> [--head <branch> \| --pr <number>]`                                                             | Return the ticket's PR to draft; from any checkout                                                                                            |
+| `local-ci-gate <ticket> [--head <branch> \| --pr <number>] [--skip-local-ci "<reason>"]`                           | Check the required local CI statuses on the ticket PR head, changing nothing; the gate of Human Testing                                       |
 | `list [status]`                                                                                                    | List project items, optionally filtered by status                                                                                             |
 | `ensure-issue-types [--dry-run]`                                                                                   | Idempotently create org-level issue types from `workflow.issueTypes` in `.saasfoundry.json`                                                   |
 | `assign-type <issue> <type>`                                                                                       | Attach a native GitHub Issue Type chip (sf-epic/sf-story/sf-task/sf-issue) to the issue                                                       |
@@ -80,8 +81,19 @@ names `--head`. `create-pr` then pushes nothing and opens the pull request from 
 Several candidates are refused and listed, so pick one with `--pr`. The pull request's head commit must be origin's commit for its branch, and the local CI gate reads that commit. Run them from the
 primary checkout: never enter the agent's worktree to change a pull request's draft state.
 
-A project that declares `workflow.localCi.requiredStatuses` in `.saasfoundry.json` gates review on its local CI: `create-pr` without `--draft` and `ready-pr` refuse a head commit on which any declared
-status is missing or not green, and say which. A draft still opens early. `--skip-local-ci "<reason>"` bypasses the gate explicitly and records the reason on the pull request.
+Every project gates review on its local CI: `create-pr` without `--draft`, `ready-pr` and `local-ci-gate` refuse a head commit on which a required status is missing or not green, and say which, where
+the required list comes from and the command that produces the statuses. A draft still opens early. `--skip-local-ci "<reason>"` bypasses the gate explicitly and records the reason on the pull
+request. The required statuses come from one of three sources, in this order:
+
+1. **The manifest**: `workflow.localCi.requiredStatuses` in `.saasfoundry.json`. It always wins. An empty list is a deliberate "this project has no local CI": the gate prints a notice and checks
+   nothing. Record it with `sf workflow set-local-ci <context...>`, `--from-molten`, `--none` or `--clear`.
+2. **A Molten pipeline**: with the key absent, `.molten/project.json` declares at least one job in `ci.jobs` and `"ci": { "statuses": "github" }`: each job `<name>` publishes the status
+   `local-<name>`, and all of them are required. This is read on every run, so a job added to the pipeline is required at once. A pipeline file that cannot be read is a refusal, never a fallback.
+3. **Neither**: the status `AI testing / Local CI`, which the agent publishes with `workflow-cli.sh ai-status <ticket> "Local CI" success "<what ran>"` once the project's own suite (`npm test`,
+   `npm run test:pre-push` when `package.json` declares them) is green on the pushed commit. It needs an open pull request to carry it: open the draft first.
+
+`local-ci-gate <ticket> [--head <branch> | --pr <number>] [--skip-local-ci "<reason>"]` runs the same gate on its own, on the head commit of the ticket's open pull request, from the ticket branch or
+from any other checkout, and changes nothing. `workflow-cli.sh update-status <ticket> "Human testing"` calls it, so the gate also guards the entry to Human Testing.
 
 On a project with an SRS backend (`tools.srs.backend` in `.saasfoundry.json`), `create-ticket`, `create-subtask` and `create-epic` refuse to run (exit code `2`) unless the ticket comes from the SRS
 spawner or you pass `--bypass-srs <reason>`. The reason is echoed, not stored on the ticket, so pick a grep-able token (`meta-srs-tooling`, `bootstrap-epic-<N>`) and repeat it in the ticket body. When

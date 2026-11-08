@@ -25,7 +25,8 @@ async function buildSandbox(): Promise<{ dir: string; env: NodeJS.ProcessEnv; cl
   await writeFile(
     path.join(dir, '.saasfoundry.json'),
     JSON.stringify({
-      workflow: { projectUrl: 'https://github.com/orgs/FakeOrg/projects/42', workingBranch: 'develop' }
+      // This suite pins how `gh pr create` failures surface, not the local CI gate (#1104): an empty list declares no local CI
+      workflow: { projectUrl: 'https://github.com/orgs/FakeOrg/projects/42', workingBranch: 'develop', localCi: { requiredStatuses: [] } }
     })
   )
 
