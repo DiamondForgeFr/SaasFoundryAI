@@ -47,14 +47,14 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
 - [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
 - [ ] **Per normal child:** branch → code → PR → verify merge → close the child; per bundled child: one atomic commit on the parent's branch → validate → close the child
-- [ ] **Parent implementation done:** `npm run build && npm run lint` → tests → push. Child tickets may continue through their own lifecycle.
+- [ ] **Parent implementation done:** `npm run build && npm run lint` → tests → commit and push. Child tickets may continue through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have, and names the command to run (a bundled child is checked on its delivery parent's branch).
 
 ## Errors to avoid
 
 - Coding without creating a branch first
 - Mixing multiple tickets in the same branch
 - Moving to AI Testing with lint/build errors
-- Forgetting to push before AI Testing
+- Forgetting to commit or push before AI Testing (the pushed-commits guard refuses the move)
 - Switching mid-delivery to another ticket: one agent per ticket. With delegation `allowed`, another ticket gets its own agent and worktree while this one stays with its agent; otherwise finish this one first (unless the developer explicitly asks to pause)
 - The session building a ticket itself while delegation is `allowed`, a trivial change excepted
 - A delegated agent recording the delegation consent: only the developer's own reply does

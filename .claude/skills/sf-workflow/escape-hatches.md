@@ -26,24 +26,26 @@ This file lists every hatch the workflow scripts accept, what each one switches 
 7. **The automated listener ignores them.** The pull-request listener (`sync-pr-review`: Ready for review and merge events) runs `update-status` with every `SF_WORKFLOW_BYPASS_*` variable cleared, so
    a variable present in a CI environment never reaches it.
 
-Guards run in this order on `update-status`: SRS, complexity, Epic derived status, nature, incomplete children, bundled-PR parent, PR existence, PR merged. A refusal exits with code `2`.
+Guards run in this order on `update-status`: SRS, complexity, Epic derived status, nature, incomplete children, bundled-PR parent, pushed commits, PR existence, local CI, PR merged. A refusal exits
+with code `2`.
 
 ## Quick reference
 
-| Hatch                                       | Switches off                                                        | Applies to                                                |
-| ------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
-| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`            | SRS drafting guard (`srs:*` tickets stay off the code path)         | `update-status` to AI testing, Human testing, In review   |
-| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`     | Complexity label required                                           | `update-status` to any status except Backlog              |
-| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`         | Nature axis (Human testing / In review routing)                     | `update-status` from AI testing to In review or Done      |
-| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`       | Parent Done requires every native child Done                        | `update-status` to Done                                   |
-| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1` | Bundled-PR child must have a verified, non-Epic native parent       | `update-status` to Done for `nature:bundled-pr` tickets   |
-| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`   | Matching open PR (draft or ready) required                          | `update-status` to Human testing or In review             |
-| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`      | Verified merged PR required                                         | `update-status` to Done                                   |
-| `--bypass-srs <reason>`                     | Rule 8: SRS-enabled projects spawn tickets from drafted SRS pages   | `create-ticket`, `create-subtask`, `create-epic`          |
-| `--bypass-reason <text>`                    | Sets the `--bypass-srs` reason the SRS spawner passes (not a guard) | `srs-cli.sh spawn`, `transition-drafting <t> spawning`    |
-| `--skip-local-ci "<reason>"`                | Local CI statuses green on the head commit                          | `create-pr` (not draft), `ready-pr`                       |
-| `SF_CACHE_BUST=1`                           | Nothing: refetches the cached board schema                          | any `github-projects-cli.sh` command that reads the board |
-| `SF_DISABLE_SRS_HOOK=1`                     | Nothing: silences the SRS intent-detector reminder                  | the `UserPromptSubmit` hook of the `sf-srs` skill         |
+| Hatch                                       | Switches off                                                        | Applies to                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`            | SRS drafting guard (`srs:*` tickets stay off the code path)         | `update-status` to AI testing, Human testing, In review                                    |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`     | Complexity label required                                           | `update-status` to any status except Backlog                                               |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`         | Nature axis (Human testing / In review routing)                     | `update-status` from AI testing to In review or Done                                       |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`       | Parent Done requires every native child Done                        | `update-status` to Done                                                                    |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1` | Bundled-PR child must have a verified, non-Epic native parent       | `update-status` to Done for `nature:bundled-pr` tickets                                    |
+| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`         | Ticket work committed and pushed to origin                          | `update-status` to AI testing                                                              |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`   | Matching open PR (draft or ready) required                          | `update-status` to Human testing or In review                                              |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`      | Verified merged PR required                                         | `update-status` to Done                                                                    |
+| `--bypass-srs <reason>`                     | Rule 8: SRS-enabled projects spawn tickets from drafted SRS pages   | `create-ticket`, `create-subtask`, `create-epic`                                           |
+| `--bypass-reason <text>`                    | Sets the `--bypass-srs` reason the SRS spawner passes (not a guard) | `srs-cli.sh spawn`, `transition-drafting <t> spawning`                                     |
+| `--skip-local-ci "<reason>"`                | Local CI statuses green on the head commit                          | `create-pr` (not draft), `ready-pr`, `local-ci-gate`, and `update-status` to Human testing |
+| `SF_CACHE_BUST=1`                           | Nothing: refetches the cached board schema                          | any `github-projects-cli.sh` command that reads the board                                  |
+| `SF_DISABLE_SRS_HOOK=1`                     | Nothing: silences the SRS intent-detector reminder                  | the `UserPromptSubmit` hook of the `sf-srs` skill                                          |
 
 The Epic derived-status guard (an aggregate Epic cannot enter AI testing, Human testing or In review) has no hatch: an Epic's status is derived from its children, there is nothing to skip.
 
@@ -110,6 +112,20 @@ When a pull request exists, add `Escape hatch: <hatch> (#<ticket>), see ticket c
 - **Illegitimate:** declaring a child bundled to avoid opening a PR; pointing a bundled child at an Epic.
 - **Record:** ticket comment naming the parent ticket and its PR.
 
+### `SF_WORKFLOW_BYPASS_PUSHED_GUARD`
+
+- **Protects:** a ticket enters AI testing with its work committed and pushed, so that the test plan and the report describe code anyone can fetch. The guard reads git alone, in the checkout that
+  holds the work: the ticket branch of this checkout; the delivery parent's branch for a `nature:bundled-pr` child; a branch the host named (`worktree-agent-<id>`) against the one ticket branch of
+  `origin`; from the primary checkout, the worktree that holds the ticket branch (with none, `origin` alone is checked and the notice says so). Tracked changes, staged or not, a branch `origin` lacks,
+  a commit it does not have, a branch it moved past, an unreachable `origin` and a detached HEAD all refuse, and the message names the add, commit and push (or `git pull --rebase`) command to run.
+  Untracked files only warn.
+- **Applies to:** `update-status <ticket> "AI testing"`, from any status, so the return from Human testing ("fix, commit, push, return to AI testing") is covered. Every tool: it needs git, not the
+  board.
+- **Legitimate:** `origin` is down or refuses the push and the work is safe elsewhere (a bundle, another remote) that you name. Not a case for the hatch: a dirty tree (commit it), an unpushed commit
+  (push it), a branch named off the convention (rename it, or push to the ticket branch).
+- **Illegitimate:** "I will push after the tests", leaving the work uncommitted so a test run is not disturbed, pushing later "for the report".
+- **Record:** automatic, a ticket comment naming the variable and `SF_WORKFLOW_BYPASS_REASON`. Complete it with what is unpushed and where the work is.
+
 ### `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD`
 
 - **Protects:** Human testing needs an open draft PR and In review needs an open, ready PR whose head branch matches the ticket (`feature/<N>-...`, `fix/<N>-...` or the project's `branchNaming`) and
@@ -156,13 +172,22 @@ When a pull request exists, add `Escape hatch: <hatch> (#<ticket>), see ticket c
 
 ### `--skip-local-ci "<reason>"`
 
-- **Protects:** a project that declares `workflow.localCi.requiredStatuses` in `.saasfoundry.json` gates review on its local CI. A PR opened for review, or marked ready, needs every declared commit
-  status green on its exact head commit. No diff is too small. A draft PR opens early and waits.
-- **Applies to:** `create-pr <ticket>` without `--draft`, and `ready-pr <ticket>`. A project that declares no required status has no gate.
-- **Legitimate:** the local CI infrastructure is unavailable (runner offline, status publisher broken) and the same checks were verified another way that you describe in the reason.
+- **Protects:** every project gates review on its local CI. A PR opened for review, marked ready or moved to Human testing needs every required commit status green on its exact head commit. No diff is
+  too small. A draft PR opens early and waits. The required statuses come from one of three sources, in this order, and the refusal names the one that applies and the command to run:
+  1. `workflow.localCi.requiredStatuses` in `.saasfoundry.json`, which always wins (`sf workflow set-local-ci <context...>`). An empty list is a deliberate "this project has no local CI": the gate
+     prints a notice and checks nothing (`sf workflow set-local-ci --none`).
+  2. With the key absent, the jobs of `.molten/project.json` when it declares at least one job in `ci.jobs` and `"ci": { "statuses": "github" }`: each job publishes `local-<job>` and every one is
+     required. A pipeline file that cannot be read is a refusal, never a fallback. A recorded list is pinned: a job added to the pipeline later is not required until the list is recorded again.
+  3. Neither: the status `AI testing / Local CI`, published with `workflow-cli.sh ai-status <ticket> "Local CI" success "<what ran>"` once the project's own suite is green on the pushed commit.
+- **Applies to:** `create-pr <ticket>` without `--draft`, `ready-pr <ticket>`, `local-ci-gate <ticket>` and `update-status <ticket> "Human testing" --skip-local-ci "<reason>"` (the flag may stand
+  anywhere after the ticket). The Human testing guard follows the PR existence guard and reads the head commit of the one pull request it matched, from any checkout. It fails closed: a pull request, a
+  commit or statuses that cannot be read refuse. Other workflow tools have no pull request commands, so they get a notice instead of a gate.
+- **Legitimate:** the local CI infrastructure is unavailable (runner offline, status publisher broken), a teammate has no MoltenTerm on a project that declares a Molten pipeline, and the same checks
+  were verified another way that you describe in the reason. A first run of a changed Molten pipeline waits for the user's trust click in Mission Control: that is not a case for the hatch, the user
+  unblocks it.
 - **Illegitimate:** "the diff is small", "a narrower check passed" (`lint`, `check`), "CI is slow". Run the local CI on the exact head commit instead.
-- **Record:** automatic. The CLI prints a warning, then writes `Local CI gate skipped: <reason>` in the PR body (`create-pr`) or as a PR comment (`ready-pr`). Add the evidence of the alternative check
-  to the PR test plan.
+- **Record:** automatic. The CLI prints a warning, then writes `Local CI gate skipped: <reason>` in the PR body (`create-pr`) or as a PR comment (`ready-pr`, `local-ci-gate`, the move to Human
+  testing; on the ticket when the PR existence guard was bypassed and no pull request can carry it). Add the evidence of the alternative check to the PR test plan.
 
 ## Not guard bypasses
 
@@ -193,12 +218,13 @@ These are switches you may meet in the same scripts. They do not weaken a guard.
 
 ## Choosing quickly
 
-| The guard says                        | Do this first                                                   | Hatch only if                                           |
-| ------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------- |
-| no `complexity:` label                | `detect-complexity`, then `retag <ticket> <level>`              | the label cannot be written at all                      |
-| lacks `nature:internal`               | take the ticket through Human testing, or add the label if true | the label cannot be applied and routing is justified    |
-| no open PR / wrong draft state        | `create-pr`, `ready-pr`, or rename the branch to the convention | the PR exists on a branch that cannot be renamed        |
-| no verified merged PR                 | wait for the merge, then `update-status <ticket> Done`          | the work is on the working branch without a matching PR |
-| children not Done                     | finish or close each child                                      | a child has no Done status on the board and says why    |
-| SRS enabled, `create-subtask` refused | draft the page, then `transition-drafting <t> spawning`         | meta-SRS or bootstrap work, with a grep-able reason     |
-| local CI not green                    | run the local CI on the exact head commit                       | the local CI infrastructure is down                     |
+| The guard says                        | Do this first                                                    | Hatch only if                                           |
+| ------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
+| no `complexity:` label                | `detect-complexity`, then `retag <ticket> <level>`               | the label cannot be written at all                      |
+| lacks `nature:internal`               | take the ticket through Human testing, or add the label if true  | the label cannot be applied and routing is justified    |
+| work not committed or not pushed      | commit it, then `git push` (the message names the command)       | `origin` is down and the work is safe elsewhere         |
+| no open PR / wrong draft state        | `create-pr`, `ready-pr`, or rename the branch to the convention  | the PR exists on a branch that cannot be renamed        |
+| no verified merged PR                 | wait for the merge, then `update-status <ticket> Done`           | the work is on the working branch without a matching PR |
+| children not Done                     | finish or close each child                                       | a child has no Done status on the board and says why    |
+| SRS enabled, `create-subtask` refused | draft the page, then `transition-drafting <t> spawning`          | meta-SRS or bootstrap work, with a grep-able reason     |
+| local CI not green                    | run the local CI on the exact head commit (the message names it) | the local CI infrastructure is down                     |

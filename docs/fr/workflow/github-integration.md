@@ -94,6 +94,32 @@ Le commit de tête de la pull request doit être celui qu'origin porte pour sa b
 `HEAD` local, origin et la pull request doivent concorder. L'axe de nature reste appliqué par `update-status` : le passage en In review exige toujours une pull request sortie du brouillon, et Human
 testing une pull request en brouillon.
 
+### La porte de CI locale
+
+Une pull request ouverte pour la revue (`create-pr` sans `--draft`), rendue prête (`ready-pr`) et un ticket passé en **Human testing** exigent que les statuts de CI locale du projet soient verts sur
+le commit de tête exact de la pull request. Un brouillon s'ouvre toujours tôt et les attend. Ces statuts viennent de l'une de trois sources, dans cet ordre, et le refus nomme celle qui s'applique
+ainsi que la commande à lancer :
+
+1. **Le manifeste** : `workflow.localCi.requiredStatuses`, écrit par `sf workflow set-local-ci`. Il l'emporte toujours. Une liste vide (`--none`) est un « ce projet n'a pas de CI locale » délibéré :
+   la porte affiche un avis et ne vérifie rien.
+2. **Un pipeline Molten** : la clé étant absente, `.molten/project.json` déclare au moins un job dans `ci.jobs` et `"ci": { "statuses": "github" }`. Chaque job `<nom>` publie le statut `local-<nom>`,
+   et tous sont exigés. `molten ci run <branche>` les publie. Un fichier de pipeline illisible est un refus, jamais un repli.
+3. **Aucune des deux** : le statut `AI testing / Local CI`, que l'agent publie avec `workflow-cli.sh ai-status 42 "Local CI" success "<ce qui a tourné>"` une fois la suite propre au projet
+   (`npm test`, `npm run test:pre-push`) verte sur le commit poussé. La pull request en brouillon doit exister pour le porter.
+
+```bash
+# La même vérification, seule : lit le commit de tête de la pull request ouverte du ticket, ne change rien
+.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42
+# Une liste enregistrée, ou un « pas de CI locale » délibéré
+sf workflow set-local-ci --from-molten
+sf workflow set-local-ci --none
+```
+
+`update-status 42 "Human testing"` lance la porte après ses contrôles de pull request, sur la pull request en brouillon qu'il a identifiée, depuis n'importe quel checkout, et refuse par défaut : une
+pull request, un commit ou des statuts illisibles refusent. `--skip-local-ci "<raison>"` (après le ticket, sur `update-status`) est la seule échappatoire, tracée sur la pull request. Le passage en
+**AI testing** est lui gardé par le garde-fou des commits poussés : les modifications suivies du ticket doivent être commitées et ses commits sur `origin`, sinon le passage est refusé avec la commande
+à lancer.
+
 ## Routage depuis `sf-workflow`
 
 `workflow-cli.sh` est le point d'entrée indépendant de l'outil :
@@ -121,12 +147,13 @@ $CLI create-subtask 42 "API backend"
 git commit -m "feat(#SUB-1): add backend API" && git push
 $CLI update-status <SUB-1> "Done"
 
-# Validation automatisée
+# Validation automatisée (le travail est commité et poussé : le garde-fou des commits poussés le vérifie)
 $CLI update-status 42 "AI testing"
-npm run test:pre-push # ou : molten ci run <branche>, quand .molten/project.json déclare au moins un job dans ci.jobs
-
-# Validation fonctionnelle sur PR brouillon
 $CLI create-pr 42 --draft
+npm run test:pre-push # ou : molten ci run <branche>, quand .molten/project.json déclare au moins un job dans ci.jobs
+$CLI ai-status 42 "Local CI" success "npm run test:pre-push vert sur <sha>" # seulement sans liste enregistrée et sans pipeline Molten qui publie vers GitHub
+
+# Validation fonctionnelle sur la PR brouillon (le garde-fou de CI locale lit son commit de tête)
 $CLI update-status 42 "Human testing"
 
 # Après validation fonctionnelle : le développeur clique sur Ready for review (ready-pr n'est à l'agent que sans Human testing)

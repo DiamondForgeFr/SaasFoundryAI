@@ -63,14 +63,16 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child
       that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
 - [ ] **Per normal child:** branch → code → PR → verify merge → `update-status <child> Done`; per bundled child: one atomic commit on the parent's branch → validate → `update-status <child> Done`
-- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → `npm test` → push. Child tickets may continue through their own lifecycle.
+- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → `npm test` → commit and push. Child tickets may continue through their own
+      lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have, and names the
+      command to run (a bundled child is checked on its delivery parent's branch)
 
 ## Errors to avoid
 
 - Coding without creating a branch first
 - Mixing multiple tickets in the same branch
 - Moving to AI Testing with lint/build errors
-- Forgetting to push before AI Testing
+- Forgetting to commit or push before AI Testing (the pushed-commits guard refuses the move)
 - Leaving delivered child tickets open, or marking the parent Done before every child is Done
 - Switching mid-delivery to another ticket: one agent per ticket. With delegation `allowed`, another ticket gets its own agent and worktree while this one stays with its agent; otherwise finish this
   one first (unless the developer explicitly asks to pause)

@@ -53,6 +53,12 @@ An Epic only groups delivery parents and never owns this PR.
   Human Testing first. Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`.
 - **PR-state guard** — `→ Human Testing` requires an open draft PR; `→ In Review` requires an open non-draft PR. Unknown PR state blocks these transitions. Epic groupers without a PR keep their
   derived lifecycle. Escape hatch: `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`.
+- **Pushed-commits guard** — `→ AI Testing` requires the ticket's work committed and pushed to `origin`, read from git in the checkout that holds it (the ticket branch, a bundled child's parent
+  branch, a host-named branch against the ticket branch of `origin`, or the worktree of the ticket branch from the primary checkout). Tracked changes and unpushed commits are refused with the command
+  to run; untracked files only warn. Escape hatch: `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`.
+- **Local CI guard** — `→ Human Testing` requires the project's required local CI statuses green on the exact head commit of the draft PR: `workflow.localCi.requiredStatuses` when recorded
+  (`sf workflow set-local-ci`), otherwise `local-<job>` for each job of `.molten/project.json` when it publishes to GitHub, otherwise the `AI testing / Local CI` status published with
+  `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: `--skip-local-ci "<reason>"` on `update-status`, recorded on the PR.
 - **Nature guard** on `→ Done` from `AI Testing` — allowed **only** for `nature:bundled-pr` (everyone else must go through `In Review` first). Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`.
 - **PR-merged guard** on `→ Done` — normal delivery tickets require a matching PR verified merged into the working branch. Aggregate Epics and verified `nature:bundled-pr` children are exempt because
   they own no PR. Escape hatch: `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`.
