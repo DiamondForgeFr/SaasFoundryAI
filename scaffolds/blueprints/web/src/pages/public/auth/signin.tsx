@@ -13,7 +13,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useIsSessionActive } from '@/hooks/auth/useIsSession'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
 import { decodeJwtPayload } from '@/hooks/auth/useTokenDecoder'
-import { extractTokenFromUrl } from '@/utils/tokenExtractor'
+import { readTokenFromUrl, removeTokenFromUrl } from '@/utils/tokenExtractor'
 
 /**
  * Components
@@ -73,7 +73,13 @@ export function SignIn() {
   const { t: tAuth } = useTranslation('auth')
   const { t: tCommon } = useTranslation('common')
   const [authError, setAuthError] = useState<string | null>(null)
-  const [confirmAccountToken] = useState(() => extractTokenFromUrl('confirmAccountToken'))
+  const [confirmAccountToken] = useState(() => readTokenFromUrl('confirmAccountToken'))
+
+  // The token is read without side effect (React reruns a render that suspends), then the
+  // address bar is cleaned once the page has committed.
+  useEffect(() => {
+    if (confirmAccountToken) removeTokenFromUrl()
+  }, [confirmAccountToken])
 
   // Decode token once on mount
   const tokenData = confirmAccountToken ? decodeJwtPayload<{ firstname?: string; lastname?: string; email?: string }>(confirmAccountToken) : null

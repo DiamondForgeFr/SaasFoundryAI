@@ -1,9 +1,9 @@
 /**
  * Resources
  */
-import { extractTokenFromUrl } from '@/utils/tokenExtractor'
+import { readTokenFromUrl, removeTokenFromUrl } from '@/utils/tokenExtractor'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -38,7 +38,13 @@ export function ResetPassword() {
   const { t: tAuth } = useTranslation('auth')
   const { t: tCommon } = useTranslation('common')
   const navigate = useNavigate()
-  const [resetPasswordToken] = useState(() => extractTokenFromUrl('resetPasswordToken'))
+  const [resetPasswordToken] = useState(() => readTokenFromUrl('resetPasswordToken'))
+
+  // The token is read without side effect (React reruns a render that suspends), then the
+  // address bar is cleaned once the page has committed.
+  useEffect(() => {
+    if (resetPasswordToken) removeTokenFromUrl()
+  }, [resetPasswordToken])
 
   const resetPasswordMutation = useResetPassword()
   const isPasswordReset = resetPasswordMutation.isSuccess
