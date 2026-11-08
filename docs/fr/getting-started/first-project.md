@@ -158,6 +158,9 @@ La commande délègue à `apps/api/docker-compose.dev-services.yml` et démarre 
 - PostgreSQL sur le port 5435 ;
 - MinIO S3 sur le port 9000, avec la console sur 9001.
 
+Les services rejoignent le réseau Docker du projet, `<projet>-network`, que partagent les conteneurs de l'API et du web. La commande le crée d'abord s'il n'existe pas encore : elle fonctionne donc
+aussi sur un clone neuf, et `npm run services:down` le laisse en place.
+
 Vérifiez que les services fonctionnent :
 
 ```bash
