@@ -2,6 +2,7 @@ import chalk from 'chalk'
 
 import { describeCliVersion } from '../cli-channel'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
+import { localCiGateSummary } from '../local-ci-gate'
 import type { StatusCli, StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
@@ -125,6 +126,7 @@ export function renderHuman(payload: RenderPayload): string {
     lines.push(`${chalk.gray('Git:')} ${report.git.branch ?? 'detached'}${unborn}${dirty}${tracking}`)
   }
   if (report.localCi) lines.push(`${chalk.gray('local-ci:')} ${localCiSummary(report.localCi)}`)
+  if (report.localCiGate) lines.push(`${chalk.gray('local-ci gate:')} ${localCiGateSummary(report.localCiGate)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`${chalk.gray('Skills:')} ${report.installedSkills.join(', ')}`)
   }
@@ -176,6 +178,8 @@ export function renderJson(payload: RenderPayload): string {
     routing: report.routing ?? null,
     // Additive (#943): the local CI pipeline the project declares in .molten/project.json, null without that file
     localCi: report.localCi ?? null,
+    // Additive (#1104): the commit statuses the local CI gate requires and where that list comes from, null unless the workflow tool is github-projects
+    localCiGate: report.localCiGate ?? null,
     // Additive (#1103): the CLI that produced the report and, in the CLI's own repository, how its build stands
     cli: report.cli ?? null,
     git: report.git,
@@ -237,6 +241,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
     lines.push(`- git: ${report.git.branch ?? 'detached'} (${state})`)
   }
   if (report.localCi) lines.push(`- local-ci: ${localCiSummary(report.localCi)}`)
+  if (report.localCiGate) lines.push(`- local-ci-gate: ${localCiGateSummary(report.localCiGate)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`- skills: ${report.installedSkills.join(', ')}`)
   }

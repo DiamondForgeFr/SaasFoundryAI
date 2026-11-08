@@ -10,6 +10,7 @@ import { captureState, type CaptureProbe, type CaptureState } from '../harness/d
 import { resolveLedgerDir } from '../harness/delegation-ledger'
 import { ROUTING_GRID_VERSION, type RoutingOverrides } from '../harness/routing-grid'
 import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
+import { type LocalCiGateResult, resolveLocalCiGate } from '../local-ci-gate'
 import { readMoltenCiJobs } from '../molten-pipeline'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
@@ -64,6 +65,8 @@ export interface StatusReport {
   routing?: StatusRouting
   /** The local CI pipeline the project declares in `.molten/project.json` (#943); absent without that file. */
   localCi?: StatusLocalCi
+  /** The commit statuses the local CI gate requires and where that list comes from (#1104); absent unless the workflow tool is github-projects. */
+  localCiGate?: LocalCiGateResult
   /** The CLI that produced this report (#1103); absent for a caller that does not say which CLI runs. */
   cli?: StatusCli
 }
@@ -469,6 +472,8 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   const delegation = await collectDelegation(projectRoot, manifest)
   const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
   const localCi = collectLocalCi(projectRoot)
+  // The gate is applied by the github-projects tool's pull request commands only
+  const localCiGate = manifest?.workflow?.tool === 'github-projects' ? resolveLocalCiGate(projectRoot, manifest) : undefined
   const cli = collectCli(projectRoot, options)
 
   // Only asked when the project hosts a database and the network may be touched. On
@@ -494,6 +499,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     ...(delegation ? { delegation } : {}),
     ...(routing ? { routing } : {}),
     ...(localCi ? { localCi } : {}),
+    ...(localCiGate ? { localCiGate } : {}),
     ...(cli ? { cli } : {}),
     ...(database ? { database } : {})
   }

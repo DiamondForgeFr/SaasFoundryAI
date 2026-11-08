@@ -1,6 +1,7 @@
 import inquirer from 'inquirer'
 import chalk from 'chalk'
 import fs from 'fs/promises'
+import { readFileSync } from 'fs'
 import path from 'path'
 import os from 'os'
 import { spawnSync } from 'child_process'
@@ -20,6 +21,8 @@ import { mutateProjectManifestSafe } from '../manifest-file'
 import { assertGitBranchName } from '../run'
 import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { getRemoteUrl } from '../utils/git-info'
+import { AGENT_LOCAL_CI_CONTEXT, localCiGateSummary, moltenPublishesToGithub, moltenStatusContexts, resolveLocalCiGate } from '../local-ci-gate'
+import { MOLTEN_PROJECT_FILE } from '../molten-pipeline'
 import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
@@ -37,8 +40,8 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
     return
   }
 
-  // Options reach the subcommands as arguments; only `use` takes any (#821)
-  const stray = subcommand === 'use' ? undefined : args.find((arg) => arg.startsWith('-'))
+  // Options reach the subcommands as arguments; only `use` and `set-local-ci` take any (#821, #1104)
+  const stray = subcommand === 'use' || subcommand === 'set-local-ci' ? undefined : args.find((arg) => arg.startsWith('-'))
   if (stray) {
     console.error(chalk.red(`\n❌ Unknown option for \`sf workflow ${subcommand}\`: ${stray}\n`))
     showUsage()
@@ -70,6 +73,9 @@ export async function workflowCommand(subcommand?: string, ...args: string[]) {
       break
     case 'set-pr-target-branch':
       await setWorkflowBranch(manifest!, 'prTargetBranch', args[0])
+      break
+    case 'set-local-ci':
+      await setLocalCi(manifest!, args)
       break
     case 'set-ai-rules':
       await setAIRules(manifest!)
@@ -110,6 +116,8 @@ function showUsage() {
   console.log('      [--project-url <url> | --create-board]  Attach an existing board, or create a GitHub Projects one')
   console.log('  set-working-branch <branch> Change the working branch')
   console.log('  set-pr-target-branch <branch> Change the branch pull requests target')
+  console.log('  set-local-ci <context...>   Record the commit statuses that must be green before review (local CI gate)')
+  console.log('      [--from-molten | --none | --clear]  From the jobs of .molten/project.json, "no local CI", or back to the derived list')
   console.log('  set-ai-rules                Modify AI development rules')
   console.log('  validate                    Validate workflow configuration')
   console.log('  save <name>                 Save as global template')
@@ -145,6 +153,12 @@ function showWorkflowConfig(manifest: SaaSFoundryManifest) {
   console.log(chalk.bold('Branch de travail:'), chalk.cyan(workflow.workingBranch))
   console.log(chalk.bold('PR target branch:'), workflow.prTargetBranch)
   console.log(chalk.bold('Require code review:'), workflow.requireCodeReview ? 'Yes' : 'No')
+  // The statuses the local CI gate requires before review, and where that list comes from (#1104)
+  const gate = resolveLocalCiGate(process.cwd(), manifest)
+  console.log(chalk.bold('Local CI gate:'), 'error' in gate ? chalk.red(localCiGateSummary(gate)) : localCiGateSummary(gate))
+  if (!('error' in gate) && gate.source !== 'manifest-none') {
+    for (const context of gate.requiredStatuses) console.log(chalk.gray(`  - ${context}`))
+  }
 
   if (workflow.validated !== undefined) {
     console.log(chalk.bold('Validated:'), workflow.validated ? chalk.green('Yes') : chalk.yellow('No'))
@@ -370,6 +384,101 @@ async function setWorkflowBranch(manifest: SaaSFoundryManifest, field: keyof typ
     console.log(chalk.yellow(`⚠️  Branch "${branch}" does not exist yet — create it: git branch ${branch} && git push -u origin ${branch}`))
   }
   console.log()
+}
+
+export type SetLocalCiMode = { kind: 'list'; contexts: string[] } | { kind: 'from-molten' } | { kind: 'none' } | { kind: 'clear' }
+
+/**
+ * `set-local-ci <context...> | --from-molten | --none | --clear` (#1104): exactly one of the four, and no other
+ * flag. A list is checked here so that a bad entry never reaches the manifest: no blank context, no duplicate.
+ */
+export function parseSetLocalCiArgs(args: string[]): SetLocalCiMode {
+  const flags = args.filter((arg) => arg.startsWith('-'))
+  const contexts = args.filter((arg) => !arg.startsWith('-'))
+  const known = ['--from-molten', '--none', '--clear']
+  const unknown = flags.find((flag) => !known.includes(flag))
+  if (unknown) throw new Error(`Unknown option for \`sf workflow set-local-ci\`: ${unknown}`)
+  if (flags.length > 1) throw new Error(`${flags.join(' and ')} are exclusive: pick one.`)
+  if (flags.length === 1) {
+    if (contexts.length > 0) throw new Error(`${flags[0]} takes no status context (got: ${contexts.join(', ')}).`)
+    return { kind: flags[0] === '--from-molten' ? 'from-molten' : flags[0] === '--none' ? 'none' : 'clear' }
+  }
+  if (contexts.length === 0) throw new Error('Name the commit status contexts to require, or pass --from-molten, --none or --clear.')
+  const blank = contexts.find((context) => context.trim() === '')
+  if (blank !== undefined) throw new Error('A status context cannot be blank.')
+  const duplicate = contexts.find((context, index) => contexts.indexOf(context) !== index)
+  if (duplicate !== undefined) throw new Error(`Status context listed twice: ${duplicate}`)
+  return { kind: 'list', contexts }
+}
+
+/**
+ * `set-local-ci`: records `workflow.localCi.requiredStatuses`, the commit statuses that `create-pr`, `ready-pr` and
+ * the move to Human Testing require on a pull request's head. The field already exists in the manifest: this
+ * command is the way to write it, there is no manifest shape change. `--from-molten` pins the `local-<job>` list
+ * of `.molten/project.json` (a job added later is required only once the list is recorded again), `--none` records
+ * a deliberate "no local CI" and `--clear` removes the key, which hands the list back to the derivation.
+ */
+async function setLocalCi(manifest: SaaSFoundryManifest, args: string[]) {
+  const fail = (message: string): never => {
+    console.error(chalk.red(`\n❌ ${message}\n`))
+    process.exit(1)
+  }
+  if (!manifest.workflow) return fail('No workflow configured')
+
+  let mode: SetLocalCiMode
+  try {
+    mode = parseSetLocalCiArgs(args)
+  } catch (error) {
+    console.log('Usage: sf workflow set-local-ci <context...> | --from-molten | --none | --clear\n')
+    return fail(error instanceof Error ? error.message : String(error))
+  }
+
+  let requiredStatuses: string[] | undefined
+  if (mode.kind === 'list') requiredStatuses = mode.contexts
+  else if (mode.kind === 'none') requiredStatuses = []
+  else if (mode.kind === 'from-molten') requiredStatuses = moltenRequiredStatuses(process.cwd(), fail)
+
+  await mutateProjectManifestSafe(process.cwd(), (current) => {
+    if (!current.workflow) throw new Error('No workflow configured in the current project manifest.')
+    if (requiredStatuses === undefined) delete current.workflow.localCi
+    else current.workflow.localCi = { requiredStatuses }
+  })
+
+  if (requiredStatuses === undefined) {
+    console.log(chalk.green('\n✅ workflow.localCi removed'))
+    console.log(chalk.gray(`   The gate derives its list again: the jobs of ${MOLTEN_PROJECT_FILE} when they publish to GitHub, otherwise ${AGENT_LOCAL_CI_CONTEXT}.`))
+  } else if (requiredStatuses.length === 0) {
+    console.log(chalk.green('\n✅ Recorded: this project declares no local CI'))
+    console.log(chalk.gray('   The gate prints a notice and checks nothing (workflow.localCi.requiredStatuses is an empty list).'))
+  } else {
+    console.log(chalk.green(`\n✅ Required local CI statuses recorded (${requiredStatuses.length}):`))
+    for (const context of requiredStatuses) console.log(`   - ${chalk.cyan(context)}`)
+    if (mode.kind === 'from-molten') {
+      console.log(chalk.gray(`   The list is pinned: a job added to ${MOLTEN_PROJECT_FILE} later is not required until you record it again (or run --clear to follow the pipeline).`))
+    }
+  }
+  if (manifest.workflow.tool !== 'github-projects') {
+    console.log(chalk.yellow(`⚠️  The gate reads GitHub commit statuses; it is applied by the github-projects tool only (this project uses ${manifest.workflow.tool}).`))
+  }
+  console.log(chalk.gray('   Commit the manifest change with your branch.\n'))
+}
+
+/** The `local-<job>` list `.molten/project.json` declares, or a reason why it cannot be recorded. */
+function moltenRequiredStatuses(projectRoot: string, fail: (message: string) => never): string[] {
+  const file = path.join(projectRoot, MOLTEN_PROJECT_FILE)
+  let project: unknown
+  try {
+    project = JSON.parse(readFileSync(file, 'utf8'))
+  } catch (error) {
+    const reason = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'the file does not exist' : error instanceof Error ? error.message : String(error)
+    return fail(`Could not read ${MOLTEN_PROJECT_FILE}: ${reason}`)
+  }
+  const statuses = moltenStatusContexts(project)
+  if (statuses.length === 0) return fail(`${MOLTEN_PROJECT_FILE} declares no job in ci.jobs: there is no pipeline to derive the required statuses from.`)
+  if (!moltenPublishesToGithub(project)) {
+    return fail(`${MOLTEN_PROJECT_FILE} does not publish its verdicts as GitHub commit statuses: set "ci": { "statuses": "github" } in it, so that the gate can read local-<job>.`)
+  }
+  return statuses
 }
 
 /** Local or on origin. Outside a git repository nothing can be checked, so the branch is not reported missing. */

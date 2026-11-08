@@ -208,8 +208,12 @@ export interface WorkflowConfig {
   workingBranch?: string
   prTargetBranch?: string
   /**
-   * The project's local CI gate (#918): the commit statuses its local CI publishes, which must
-   * be green on a pull request's head before it is opened for review or marked ready.
+   * The project's local CI gate (#918, #1104): the commit statuses its local CI publishes, which must be green
+   * on a pull request's head before it is opened for review (`create-pr` without `--draft`), marked ready
+   * (`ready-pr`) or moved to Human Testing. Written by `sf workflow set-local-ci`; this list always wins.
+   * Absent, the list is derived at run time: `local-<job>` for each job of `.molten/project.json` when it
+   * publishes to GitHub, otherwise the `AI testing / Local CI` status the agent publishes. An empty list is a
+   * deliberate "this project has no local CI".
    */
   localCi?: { requiredStatuses: string[] }
   requireCodeReview?: boolean
