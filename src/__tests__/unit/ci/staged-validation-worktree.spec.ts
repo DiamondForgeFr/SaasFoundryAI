@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -111,5 +111,103 @@ describe('staged impact validation from a real pre-commit hook (#1153)', () => {
     expect(git(linked, 'log', '-1', '--format=%s')).toBe('base')
     expect(readFileSync(path.join(linked, 'README.md'), 'utf8')).toBe('bad\n')
     expect(git(main, 'worktree', 'list', '--porcelain')).not.toContain('sf-impact-staged-')
+  })
+})
+
+/**
+ * An npm-workspaces layout as `npm install` leaves it: a root `node_modules` holding the hoisted
+ * dependencies and a relative link to each workspace, and a workspace with its own nested
+ * `node_modules` for the version it pins. The fixture builds that layout by hand, so the test
+ * needs no registry.
+ */
+describe('staged impact validation in an npm-workspaces repository (#1027)', () => {
+  let fixture: string
+  let main: string
+
+  function write(file: string, content: string) {
+    mkdirSync(path.dirname(path.join(main, file)), { recursive: true })
+    writeFileSync(path.join(main, file), content)
+  }
+
+  // Run in the snapshot: each import must resolve the way it does in the checkout, but against
+  // the snapshot's own workspace sources.
+  const WEB_CHECK = `const { realpathSync, writeFileSync } = require('node:fs')
+const path = require('node:path')
+const root = realpathSync(path.resolve(__dirname, '../..'))
+const fail = (code, message) => { console.error(message); process.exit(code) }
+// The workspace's own pin, not the hoisted root version.
+if (require('tool').version !== 'nested') fail(5, 'tool resolved ' + require('tool').version)
+// A dependency only the root holds still resolves from the workspace.
+if (require('root-only').version !== 'root') fail(6, 'root-only did not resolve')
+// The workspace link reaches the snapshot's copy of the package, not the checkout's.
+const shared = realpathSync(require.resolve('@fx/shared'))
+if (!shared.startsWith(root + path.sep)) fail(7, 'shared resolved outside the snapshot: ' + shared)
+if (require('@fx/shared').source !== 'staged') fail(8, 'shared is not the staged source')
+writeFileSync(path.join(root, 'checked'), '')
+`
+
+  beforeEach(() => {
+    fixture = realpathSync(mkdtempSync(path.join(tmpdir(), 'sf-workspaces-')))
+    main = path.join(fixture, 'main')
+    mkdirSync(main)
+    git(main, 'init', '-q')
+    git(main, 'config', 'user.email', 'tests@example.com')
+    git(main, 'config', 'user.name', 'Tests')
+    write('package.json', JSON.stringify({ private: true, workspaces: ['apps/*', 'packages/*'], scripts: { check: 'node apps/web/check.cjs' } }))
+    write('.gitignore', 'node_modules/\nchecked\n')
+    write('.saasfoundry/validation.commit.json', validationConfig('check'))
+    write('apps/web/package.json', JSON.stringify({ name: '@fx/web', private: true }))
+    write('apps/web/check.cjs', WEB_CHECK)
+    write('packages/shared/package.json', JSON.stringify({ name: '@fx/shared', main: 'index.js' }))
+    write('packages/shared/index.js', "exports.source = 'committed'\n")
+    write('README.md', 'base\n')
+    git(main, 'add', '.')
+    git(main, 'commit', '-qm', 'base')
+
+    write('node_modules/tool/index.js', "exports.version = 'root'\n")
+    write('node_modules/root-only/index.js', "exports.version = 'root'\n")
+    write('node_modules/.bin/.keep', '')
+    mkdirSync(path.join(main, 'node_modules/@fx'))
+    symlinkSync('../../packages/shared', path.join(main, 'node_modules/@fx/shared'))
+    symlinkSync('../../apps/web', path.join(main, 'node_modules/@fx/web'))
+    write('apps/web/node_modules/tool/index.js', "exports.version = 'nested'\n")
+  })
+
+  afterEach(() => rmSync(fixture, { recursive: true, force: true }))
+
+  function validateStaged() {
+    return spawnSync(process.execPath, [RUNNER, '--staged', '--config', '.saasfoundry/validation.commit.json'], { cwd: main, encoding: 'utf8', env: cleanEnv() })
+  }
+
+  it('resolves nested workspace dependencies and workspace links inside the snapshot', () => {
+    write('packages/shared/index.js', "exports.source = 'staged'\n")
+    git(main, 'add', 'packages/shared/index.js')
+    // An unstaged edit the snapshot must not see.
+    write('packages/shared/index.js', "exports.source = 'unstaged'\n")
+
+    const result = validateStaged()
+    expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' })
+    // The check ran in the snapshot, and nothing it wrote landed in the checkout.
+    expect(existsSync(path.join(main, 'checked'))).toBe(false)
+    expect(git(main, 'worktree', 'list', '--porcelain')).not.toContain('sf-impact-staged-')
+  })
+
+  it('leaves the checkout dependencies and sources intact after cleanup', () => {
+    write('packages/shared/index.js', "exports.source = 'staged'\n")
+    git(main, 'add', 'packages/shared/index.js')
+    expect(validateStaged().status).toBe(0)
+    expect(readFileSync(path.join(main, 'node_modules/tool/index.js'), 'utf8')).toContain('root')
+    expect(readFileSync(path.join(main, 'apps/web/node_modules/tool/index.js'), 'utf8')).toContain('nested')
+    expect(readlinkSync(path.join(main, 'node_modules/@fx/shared'))).toBe('../../packages/shared')
+    expect(readFileSync(path.join(main, 'packages/shared/index.js'), 'utf8')).toContain('staged')
+  })
+
+  it('still fails when the staged workspace source is wrong', () => {
+    // Nothing staged changes the shared source: the snapshot keeps 'committed', so the check refuses it.
+    write('README.md', 'staged\n')
+    git(main, 'add', 'README.md')
+    const result = validateStaged()
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('npm exited with status 8')
   })
 })

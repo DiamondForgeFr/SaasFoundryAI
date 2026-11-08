@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
@@ -84,6 +84,63 @@ function readConfig(path, cwd) {
   return config
 }
 
+/**
+ * Give the snapshot the checkout's installed dependencies: the root `node_modules` and the one
+ * beside every tracked `package.json` (a workspace may pin its own version, e.g. of TypeScript;
+ * #1027). Each is rebuilt in the snapshot, entry by entry, as links to the checkout's entries,
+ * except the workspace links (`node_modules/@scope/pkg -> ../../packages/pkg`): they lead to the
+ * snapshot's own copy of the package, where the validation builds it, not to the checkout's.
+ * Linking a whole `node_modules` would resolve those relative links from the checkout.
+ */
+function linkDependencies(cwd, worktree, commit, env) {
+  const listed = spawnSync('git', ['ls-tree', '-r', '-z', '--name-only', commit], { cwd, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 })
+  if (listed.error || listed.status !== 0) throw new Error((listed.stderr || listed.error?.message || 'git ls-tree failed').trim())
+  const folders = new Set(['.'])
+  for (const path of listed.stdout.split('\0')) {
+    if (path === 'package.json') continue
+    if (path.endsWith('/package.json')) folders.add(path.slice(0, -'/package.json'.length))
+  }
+  const checkout = realpathSync(cwd)
+  for (const folder of folders) {
+    const source = join(cwd, folder, 'node_modules')
+    const target = join(worktree, folder, 'node_modules')
+    if (existsSync(source) && existsSync(join(worktree, folder)) && !lstatOrNull(target)) mirrorModules(source, target, checkout, worktree)
+  }
+}
+
+function lstatOrNull(path) {
+  try {
+    return lstatSync(path)
+  } catch {
+    return null
+  }
+}
+
+function mirrorModules(source, target, checkout, worktree) {
+  mkdirSync(target)
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const from = join(source, entry.name)
+    const to = join(target, entry.name)
+    if (entry.name.startsWith('@') && entry.isDirectory()) mirrorModules(from, to, checkout, worktree)
+    else symlinkSync(snapshotTarget(from, checkout, worktree), to)
+  }
+}
+
+/** Where a snapshot entry links: the snapshot's copy of a workspace package, or the checkout's entry. */
+function snapshotTarget(entry, checkout, worktree) {
+  if (!lstatSync(entry).isSymbolicLink()) return entry
+  let resolved
+  try {
+    resolved = realpathSync(entry)
+  } catch {
+    return entry
+  }
+  const inside = relative(checkout, resolved)
+  if (!inside || inside.startsWith('..') || isAbsolute(inside) || inside.split(sep).includes('node_modules')) return entry
+  const copy = join(worktree, inside)
+  return existsSync(copy) ? copy : entry
+}
+
 function createStagedWorktree(cwd, tree) {
   const parent = mkdtempSync(join(tmpdir(), 'sf-impact-staged-'))
   const worktree = join(parent, 'worktree')
@@ -113,8 +170,13 @@ function createStagedWorktree(cwd, tree) {
     rmSync(parent, { recursive: true, force: true })
     throw new Error((added.stderr || added.error?.message || 'git worktree add failed').trim())
   }
-  const modules = join(cwd, 'node_modules')
-  if (existsSync(modules)) symlinkSync(modules, join(worktree, 'node_modules'), 'dir')
+  try {
+    linkDependencies(cwd, worktree, commit.stdout.trim(), env)
+  } catch (error) {
+    spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd, encoding: 'utf8', env })
+    rmSync(parent, { recursive: true, force: true })
+    throw error
+  }
   return {
     cwd: worktree,
     env,

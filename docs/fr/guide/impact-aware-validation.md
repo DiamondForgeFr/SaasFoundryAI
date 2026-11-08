@@ -53,6 +53,10 @@ Le script fige l'arbre indexé dans un commit jetable, l'extrait dans un worktre
 (`GIT_INDEX_FILE`, `GIT_PREFIX`, et `GIT_DIR` depuis un worktree lié) ; le script retire ces variables, celles que liste `git rev-parse --local-env-vars` hors variables de configuration, pour créer et
 supprimer le worktree temporaire et pour les commandes qu'il y lance. Un commit fait depuis un worktree lié ou un sous-dossier valide donc l'instantané sans toucher à l'index du dépôt.
 
+L'instantané reprend les dépendances installées du dépôt : le `node_modules` racine et celui qui se trouve à côté de chaque `package.json` suivi par Git. Un workspace qui fixe sa propre version d'un
+outil (TypeScript, par exemple) l'utilise donc aussi dans l'instantané. Chaque `node_modules` y est reconstruit en liens vers les entrées du dépôt, sauf les liens de workspace
+(`node_modules/@scope/pkg -> ../../packages/pkg`), qui mènent à la copie du paquet dans l'instantané : ce que la validation y construit est ce qu'importent les autres workspaces.
+
 Pour les **contributeurs au dépôt SaaSFoundryAI lui-même**, cette commande utilise `.saasfoundry/validation.commit.json` : même classifieur, même isolation de l'index, mais aucune commande Docker au
 commit. Les changements de documentation, frontend, backend et harness conservent leurs contrôles ciblés. Un changement limité au cycle de vie lance les gardes et tests de contrat ; ses vrais
 scénarios Docker restent obligatoires avant livraison. Un changement du cœur, partagé, de la racine ou d'un fichier inconnu passe par `test:commit:scoped`, qui vérifie ce que le commit touche :
