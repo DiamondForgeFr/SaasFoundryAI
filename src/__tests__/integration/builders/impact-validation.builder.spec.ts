@@ -92,6 +92,14 @@ describe.each<ImpactValidationProfile>(['monorepo', 'api', 'web'])('%s generated
     if (profile !== 'web') expect(ignored).toContain(profile === 'monorepo' ? 'apps/api/docs/openapi.json' : 'docs/openapi.json')
   })
 
+  // A Playwright report holds megabytes of minified trace-viewer scripts (#1092)
+  it('keeps the test and tool outputs out of the format check', async () => {
+    await installImpactValidation(target, profile)
+
+    const ignored = (await readFile(path.join(target, '.prettierignore'), 'utf8')).split('\n')
+    expect(ignored).toEqual(expect.arrayContaining(['**/playwright-report/', '**/test-results/', '**/blob-report/', '**/coverage/', '**/coverage-e2e/', '**/dev-dist/']))
+  })
+
   it('renders the shared trusted-base workflow with only project placeholders left', async () => {
     await installImpactValidation(target, profile)
 

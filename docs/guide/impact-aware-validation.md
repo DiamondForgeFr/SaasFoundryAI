@@ -75,7 +75,8 @@ unchanged. These scoped commit checks are contributor-only and do not alter gene
 guards instead of `test:e2e`, and full validation runs the guards and the shared-contract checks. Every API or web change selects the lifecycle lane, so a hook that ran the E2E suite ran it on almost
 every commit. CI keeps `.saasfoundry/validation.json`, where the lifecycle lane still runs `test:e2e`. The generated `.prettierignore` keeps the files SaaSFoundryAI writes and refreshes on `sf update`
 (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, agent instructions, the validation workflow) and generated artefacts out of `npm run format:check`; formatting them would turn the next update
-into conflicts.
+into conflicts. It also skips what the test and build tools write (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), which the
+generated ESLint configs ignore as well: a Playwright report holds megabytes of minified scripts.
 
 Inspect an explicit range without executing its commands:
 

@@ -82,6 +82,22 @@ function commitConfiguration(profile: ImpactValidationProfile) {
 }
 
 /**
+ * What the generated test and build tools write: Playwright (`test-results/`, `playwright-report/`,
+ * `blob-report/`), Jest and Vitest coverage (`coverage/`, `coverage-e2e/`, `.nyc_output/`) and the
+ * PWA dev build (`dev-dist/`). A Playwright report holds megabytes of minified scripts (#1092).
+ */
+export const TEST_OUTPUT_PRETTIER_IGNORES = [
+  '**/test-results/',
+  '**/playwright-report/',
+  '**/blob-report/',
+  '**/playwright/.cache/',
+  '**/coverage/',
+  '**/coverage-e2e/',
+  '**/.nyc_output/',
+  '**/dev-dist/'
+] as const
+
+/**
  * Paths `prettier --check .` leaves alone: what SaaSFoundryAI writes and refreshes on
  * `sf update`, and what is generated. Checking them failed the format check of every
  * freshly generated project, and formatting them would turn the next update into
@@ -105,6 +121,9 @@ function prettierIgnore(profile: ImpactValidationProfile): string {
     '# Generated',
     '**/src/generated/',
     ...(apiDocs ? [`${apiDocs}openapi.json`, `${apiDocs}index.html`] : []),
+    '',
+    '# Test and tool outputs',
+    ...TEST_OUTPUT_PRETTIER_IGNORES,
     ''
   ].join('\n')
 }
