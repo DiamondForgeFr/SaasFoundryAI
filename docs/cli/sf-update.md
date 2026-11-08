@@ -132,12 +132,14 @@ The generated bridges are recognised by their bytes, whichever release wrote the
 only the generated bridge to your `CLAUDE.md` is replaced, not kept as a file of yours.
 
 A section moved verbatim can name a file the move deletes: a project-structure tree line such as `└── CLAUDE.md     # API-specific context`, or "Check `apps/api/CLAUDE.md`". The update points each
-such reference at the `AGENTS.md` beside it (`apps/api/CLAUDE.md` becomes `apps/api/AGENTS.md`), so the moved text does not name a file that no longer exists. Only a path to a `CLAUDE.md` the update
-removes is rewritten: a `CLAUDE.md` that stays (an app whose `AGENTS.md` you wrote), `CLAUDE.local.md`, `~/.claude/CLAUDE.md`, a link to another site and every other word keep their text. A project
-moved by release 1.1.0, which left those references behind, gets them reported by [`sf status`](/cli/sf-status#agent-instructions) (`instructionReferences`) and edits them by hand.
+such reference at the `AGENTS.md` beside it (`apps/api/CLAUDE.md` becomes `apps/api/AGENTS.md`), so the moved text does not name a file that no longer exists. It does so only where the text leaves no
+doubt: a path with a directory, or an entry of a drawn tree, that names a `CLAUDE.md` the update removes. A bare name in running text ("Update CLAUDE.md when…") can label the file as well as name it,
+so it is kept as you wrote it and reported (see the preview below, and the notice the update prints). A `CLAUDE.md` that stays (an app whose `AGENTS.md` you wrote), `CLAUDE.local.md`,
+`~/.claude/CLAUDE.md`, a link to another site and every other word keep their text. A project moved by release 1.1.0, which left those references behind, gets what is still there reported by
+[`sf status`](/cli/sf-status#agent-instructions) (`instructionReferences`) and edits it by hand.
 
 Preview the move first: `sf update --dry-run --json` lists every section under `moduleMigrations`, with its action (`move`, `refresh`, `drop`, `keep-for-review`), its source and its target. Each
-reference it would point at an `AGENTS.md` is its own `rewrite` entry, with the line of `CLAUDE.md` it comes from.
+reference it would point at an `AGENTS.md` is its own `rewrite` entry, with the line of `CLAUDE.md` it comes from; each bare name it would leave is a `report` entry with its line.
 
 When adding a technical stack to a harness project, SaaSFoundry uses a journaled transaction. A later `sf update --target-profile full` first attempts safe recovery if a previous process stopped
 mid-transition. If it cannot prove a complete commit or safe rollback, it stops and reports the unresolved paths rather than guessing.
