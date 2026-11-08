@@ -287,7 +287,11 @@ async function signalProcessGroup(pid: number, signal: 'SIGTERM' | 'SIGKILL'): P
   try {
     process.kill(-pid, signal)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+    // macOS answers EPERM, not ESRCH, for a group whose members have all exited but are not reaped yet: there is
+    // nothing left to signal. Under load the zombies wait longer for their reaper, and the teardown threw `kill EPERM`
+    // (#1171). The group's end is still verified by processGroupSettlesWithin and verifyReleased.
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== 'ESRCH' && code !== 'EPERM') throw error
   }
 }
 

@@ -99,11 +99,12 @@ export function findShadowingFiles(projectRoot: string, appDirs: string[]): stri
 /**
  * Asked of the binary itself, locally: `claude --version` makes no network call. The path on
  * disk cannot be trusted for this — a terminal's launcher shim resolves to a file whose path
- * carries no version.
+ * carries no version. The probe is bounded by `timeoutMs`; the tests pass their own, because a
+ * stub that answers in milliseconds idle can take seconds to start on a loaded machine (#1171).
  */
-export function readClaudeCodeVersion(cwd: string): Promise<ClaudeCodeVersion> {
+export function readClaudeCodeVersion(cwd: string, timeoutMs: number = VERSION_TIMEOUT_MS): Promise<ClaudeCodeVersion> {
   return new Promise((resolve) => {
-    execFile('claude', ['--version'], { cwd, env: process.env, timeout: VERSION_TIMEOUT_MS, encoding: 'utf8' }, (error, stdout) => {
+    execFile('claude', ['--version'], { cwd, env: process.env, timeout: timeoutMs, encoding: 'utf8' }, (error, stdout) => {
       if (error) {
         const code = (error as NodeJS.ErrnoException).code
         resolve({ reason: code === 'ENOENT' ? '`claude` not found on PATH' : '`claude --version` did not answer' })
