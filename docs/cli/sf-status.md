@@ -1,7 +1,7 @@
 # sf status
 
-Report the current SaaSFoundryAI project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI, the CLI that answers, agent instruction files, routing and tier
-agents). The report states facts; the rules for reading it are in the project instructions.
+Report the current SaaSFoundryAI project state and workflow preconditions (manifest, workflow, SRS module, git, optional GitHub CLI, the CLI that answers, agent instruction files, routing, tier agents
+and personal skills that shadow the project's). The report states facts; the rules for reading it are in the project instructions.
 
 ## Usage
 
@@ -139,6 +139,36 @@ file: it never runs `molten` or any project code, and a damaged file shows as `u
 
 A pipeline counts only when `ci.jobs` lists at least one job. A `.molten/project.json` that holds only the project name and icon, or an empty `ci.jobs`, declares no pipeline: the line reads
 `local-ci: npm suite (.molten/project.json declares no CI job)` (`{ "runner": "npm", "reason": "no-ci-jobs" }` in `--json`), and AI Testing runs the npm suite.
+
+### Personal skills
+
+Claude Code gives a **personal** skill (`~/.claude/skills/<name>`) precedence over a **project** skill (`.claude/skills/<name>`), as its [skills documentation](https://code.claude.com/docs/en/skills)
+says. A personal copy of a project skill therefore runs in place of the one the project versions, and nothing in the session says so: an older personal `tool-saasfoundry` kept its own
+`plan-milestone.sh`, and a personal `tool-github-projects` answered the triggers of the project's `sf-tool-github-projects`. [`sf skill install`](./sf-skill.md#default-scope) wrote into
+`~/.claude/skills` by default, which is how most of these copies get there.
+
+The `personalSkills` precondition sets the skills in the home directory against the project's (`.claude/skills`, plus the app directories of a multirepo). Each finding is a `warn`: the session still
+runs, on skills the project does not control. It reads folders and files only: no process, no network, so it also answers under `--no-network`.
+
+| Finding              | Checks                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same name            | A folder in `~/.claude/skills` named like a project skill hides it, whatever it contains. When both folders record a `.version` (`sf skill install` writes `{ "cliVersion": … }`; a bare version text is read too), the details say whether the personal copy is the older. A skill with no readable `.version` is reported without a claim about its age |
+| Overlapping triggers | A personal skill with another name that repeats a quoted trigger phrase from the `description` of a project skill, for example a personal `tool-github-projects` quoting `"create ticket"` beside the project's `sf-tool-github-projects`. The shared phrases are listed so you can judge each one                                                        |
+
+The remediation names each folder to remove, with the command: `sf skill uninstall --user` for the `tool-saasfoundry` copy that `sf skill install` wrote, `rm -r <folder>` for the others. Nothing is
+removed for you: deleting a personal skill is your decision, and moving the folder out of `~/.claude/skills` works as well.
+
+The trigger check is deliberately simple and deterministic. Its limits:
+
+- It compares the **double-quoted phrases** of the frontmatter `description` (the part Claude Code uses to pick a skill), lower-cased with their white space collapsed. Phrases of fewer than three
+  characters are ignored. One shared phrase is enough to be reported.
+- It does not see paraphrases, unquoted keywords, or anything in the body of the skill; a personal skill that competes without quoting the same phrase goes unreported.
+- It can report a generic phrase that two unrelated skills happen to quote. The report lists the phrases, so a false positive is easy to dismiss.
+- It looks at `~/.claude/skills` against the project's `.claude/skills` only: skills that plugins or other agents (`.agents/skills`) provide are not compared.
+- A personal folder that is a link to the project's own folder is one skill, not a shadow; so is the whole set when you run `sf status` from your home directory.
+
+`--json` returns the facts under `personalSkills`: `{ directory, checked, projectSkills, findings: [{ name, path, shadows?, overlaps }] }`, where `shadows` carries both versions and `older` when they
+compare, and `overlaps` lists `{ projectSkill, phrases }`. The precondition is left out when there is no manifest, and is `skip` (never a failure) when the folders cannot be read.
 
 ### Runtime
 

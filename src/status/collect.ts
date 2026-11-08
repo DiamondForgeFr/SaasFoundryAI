@@ -16,6 +16,7 @@ import { classifyProjectCapabilities, type ProjectCapabilities } from '../projec
 import type { HarnessAgent, SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
 import { collectInstructionDiagnostics, type InstructionDiagnostics } from './instruction-diagnostics'
+import { collectPersonalSkills, type StatusPersonalSkills } from './personal-skills'
 
 export interface GitInfo {
   available: boolean
@@ -46,6 +47,8 @@ export interface StatusReport {
   tools: ToolAvailability[]
   checkedNetwork: boolean
   installedSkills: string[]
+  /** The personal skills (`~/.claude/skills`) set against the project's (#1107); absent without a manifest. */
+  personalSkills?: StatusPersonalSkills
   /** Derived installation profile. Optional only for callers constructing legacy reports. */
   capabilities?: StatusCapabilities | null
   /**
@@ -230,6 +233,8 @@ export interface CollectOptions {
   cliChannel?: CliChannel
   /** `currentVersion` of the harness installer the running CLI ships. */
   harnessCurrentVersion?: number
+  /** The home directory whose `.claude/skills` holds the personal skills; defaults to the current user's (`$HOME`). Injectable for a spec. */
+  userHome?: string
 }
 
 function runSafe(cmd: string, cwd: string): string | null {
@@ -460,6 +465,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   if (options.checkGh) tools.push(checkTool('gh', 'gh --version', projectRoot))
 
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
+  const personalSkills = collectPersonalSkills(projectRoot, manifest, options.userHome)
   const delegation = await collectDelegation(projectRoot, manifest)
   const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
   const localCi = collectLocalCi(projectRoot)
@@ -482,6 +488,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     tools,
     checkedNetwork: options.checkNetwork === true,
     installedSkills,
+    ...(personalSkills ? { personalSkills } : {}),
     capabilities,
     instructions,
     ...(delegation ? { delegation } : {}),

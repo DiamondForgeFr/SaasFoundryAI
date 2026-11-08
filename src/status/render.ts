@@ -180,6 +180,8 @@ export function renderJson(payload: RenderPayload): string {
     cli: report.cli ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
+    // Additive (#1107): the personal skills set against the project's, null without a manifest
+    personalSkills: report.personalSkills ?? null,
     // Additive: the facts behind the three instruction preconditions (#939)
     instructions: report.instructions ?? null,
     preconditions: preconditions.map((p) => ({

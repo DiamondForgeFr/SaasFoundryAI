@@ -1,7 +1,7 @@
 # sf status
 
-Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, CLI qui répond, fichiers d'instructions des agents, routage et agents de palier
-et, facultativement, CLI GitHub. Le rapport énonce des faits ; les règles pour le lire sont dans les instructions du projet.
+Présentez l'état courant du projet SaaSFoundryAI et les préconditions du workflow : manifest, workflow, module SRS, Git, CLI qui répond, fichiers d'instructions des agents, routage, agents de palier,
+skills personnelles qui masquent celles du projet et, facultativement, CLI GitHub. Le rapport énonce des faits ; les règles pour le lire sont dans les instructions du projet.
 
 ## Utilisation
 
@@ -144,6 +144,37 @@ pipeline.
 
 Un pipeline ne compte que si `ci.jobs` liste au moins un job. Un `.molten/project.json` qui ne contient que le nom et l'icône du projet, ou un `ci.jobs` vide, ne déclare aucun pipeline : la ligne
 indique `local-ci: npm suite (.molten/project.json declares no CI job)` (`{ "runner": "npm", "reason": "no-ci-jobs" }` dans `--json`), et l'étape AI testing lance la suite npm.
+
+### Skills personnelles
+
+Claude Code donne à une skill **personnelle** (`~/.claude/skills/<nom>`) la priorité sur une skill de **projet** (`.claude/skills/<nom>`), comme l'indique sa
+[documentation des skills](https://code.claude.com/docs/en/skills). Une copie personnelle d'une skill du projet s'exécute donc à la place de celle que le projet versionne, et rien dans la session ne
+le dit : un ancien `tool-saasfoundry` personnel gardait son propre `plan-milestone.sh`, et un `tool-github-projects` personnel répondait aux déclencheurs du `sf-tool-github-projects` du projet.
+[`sf skill install`](./sf-skill.md#portee-par-defaut) écrivait par défaut dans `~/.claude/skills`, ce qui explique la plupart de ces copies.
+
+La précondition `personalSkills` confronte les skills du dossier personnel à celles du projet (`.claude/skills`, plus les dossiers d'applications d'un multirepo). Chaque constat est un `warn` : la
+session démarre quand même, avec des skills que le projet ne maîtrise pas. Elle ne lit que des dossiers et des fichiers : aucun processus, aucun réseau, donc elle répond aussi avec `--no-network`.
+
+| Constat                       | Vérifie                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Même nom                      | Un dossier de `~/.claude/skills` qui porte le nom d'une skill du projet la masque, quel que soit son contenu. Quand les deux dossiers consignent un `.version` (`sf skill install` écrit `{ "cliVersion": … }` ; un simple texte de version est lu aussi), le détail dit si la copie personnelle est la plus ancienne. Une skill sans `.version` lisible est signalée sans affirmation sur son âge |
+| Déclencheurs qui se recoupent | Une skill personnelle d'un autre nom qui reprend une expression entre guillemets des déclencheurs de la `description` d'une skill du projet, par exemple un `tool-github-projects` personnel qui cite `"create ticket"` à côté du `sf-tool-github-projects` du projet. Les expressions communes sont listées pour que vous jugiez chacune                                                          |
+
+La remédiation nomme chaque dossier à supprimer, avec la commande : `sf skill uninstall --user` pour la copie `tool-saasfoundry` qu'a écrite `sf skill install`, `rm -r <dossier>` pour les autres. Rien
+n'est supprimé à votre place : supprimer une skill personnelle est votre décision, et sortir le dossier de `~/.claude/skills` fonctionne aussi.
+
+La vérification des déclencheurs est volontairement simple et déterministe. Ses limites :
+
+- Elle compare les **expressions entre guillemets doubles** de la `description` du frontmatter (la partie que Claude Code utilise pour choisir une skill), en minuscules et espaces réduits. Les
+  expressions de moins de trois caractères sont ignorées. Une seule expression commune suffit à signaler.
+- Elle ne voit ni les paraphrases, ni les mots-clés sans guillemets, ni rien du corps de la skill : une skill personnelle qui concurrence sans citer la même expression n'est pas signalée.
+- Elle peut signaler une expression générique que deux skills sans rapport citent par hasard. Le rapport liste les expressions, donc un faux positif s'écarte facilement.
+- Elle ne regarde que `~/.claude/skills` face au `.claude/skills` du projet : les skills fournies par des plugins ou d'autres agents (`.agents/skills`) ne sont pas comparées.
+- Un dossier personnel qui est un lien vers le dossier même du projet est une seule skill, pas un masquage ; il en va de même de tout l'ensemble quand vous lancez `sf status` depuis votre dossier
+  personnel.
+
+`--json` renvoie les faits sous `personalSkills` : `{ directory, checked, projectSkills, findings: [{ name, path, shadows?, overlaps }] }`, où `shadows` porte les deux versions et `older` quand elles
+se comparent, et `overlaps` liste des `{ projectSkill, phrases }`. La précondition est absente quand il n'y a pas de manifest, et `skip` (jamais un échec) quand les dossiers ne se lisent pas.
 
 ### Exécution
 
