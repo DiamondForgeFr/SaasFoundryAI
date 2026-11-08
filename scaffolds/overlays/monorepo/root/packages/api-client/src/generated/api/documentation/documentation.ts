@@ -63,6 +63,10 @@ export const getApiDocsControllerGetOpenApiJsonQueryOptions = <TData = Awaited<R
 export type ApiDocsControllerGetOpenApiJsonQueryResult = NonNullable<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>>
 export type ApiDocsControllerGetOpenApiJsonQueryError = ErrorType<void>
 
+/**
+ * Returns the OpenAPI specification in JSON format for the API documentation
+ * @summary Get OpenAPI documentation
+ */
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> &
@@ -70,6 +74,10 @@ export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<ty
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns the OpenAPI specification in JSON format for the API documentation
+ * @summary Get OpenAPI documentation
+ */
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> &
@@ -77,14 +85,18 @@ export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<ty
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns the OpenAPI specification in JSON format for the API documentation
+ * @summary Get OpenAPI documentation
+ */
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Returns the OpenAPI specification in JSON format for the API documentation
  * @summary Get OpenAPI documentation
  */
-
 export function useApiDocsControllerGetOpenApiJson<TData = Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof apiDocsControllerGetOpenApiJson>>, TError, TData>> },
   queryClient?: QueryClient

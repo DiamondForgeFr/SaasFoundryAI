@@ -18,16 +18,10 @@ export type AccountControllerFetchAccountRolesParams = {
    * @minimum 1
    */
   limit?: number
-  /**
-   * Search term to filter roles
-   */
+  /** Search term to filter roles */
   search?: string
-  /**
-   * Filter by active status
-   */
+  /** Filter by active status */
   isActive?: boolean
-  /**
-   * Order by field
-   */
+  /** Order by field */
   orderBy?: AccountControllerFetchAccountRolesOrderBy
 }

@@ -48,6 +48,7 @@ export type EntitiesControllerCreateEntityMutationError = ErrorType<void>
 export type EntitiesControllerCreateEntityMutationVariables = { data: BodyType<CreateEntityDto> }
 
 /**
+ * Create a new entity and link it to an account and organization.
  * @summary Create entity
  */
 export const useEntitiesControllerCreateEntity = <TError = ErrorType<void>, TContext = unknown>(
@@ -91,6 +92,7 @@ export type EntitiesControllerCreateOwnEntityMutationError = ErrorType<unknown>
 export type EntitiesControllerCreateOwnEntityMutationVariables = { data: BodyType<CreateEntityDto> }
 
 /**
+ * Multi-entity feature — an entity-admin with ENTITY_OWN_CREATE creates a brand-new entity inside the same parent account, becoming entity-admin of it.
  * @summary Create an additional entity owned by the current user
  */
 export const useEntitiesControllerCreateOwnEntity = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -134,6 +136,7 @@ export type EntitiesControllerUpdateEntityMutationError = ErrorType<unknown>
 export type EntitiesControllerUpdateEntityMutationVariables = { id: string }
 
 /**
+ * Update an entity name/description/isActive and its profile organization fields.
  * @summary Update entity
  */
 export const useEntitiesControllerUpdateEntity = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -177,6 +180,7 @@ export type EntitiesControllerUpdateEntityUsersMutationError = ErrorType<void>
 export type EntitiesControllerUpdateEntityUsersMutationVariables = { id: string; data: BodyType<UpdateEntityUsersDto> }
 
 /**
+ * Update the users linked to an entity.
  * @summary Update entity users
  */
 export const useEntitiesControllerUpdateEntityUsers = <TError = ErrorType<void>, TContext = unknown>(
