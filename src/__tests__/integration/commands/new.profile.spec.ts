@@ -13,6 +13,11 @@ jest.mock('../../../utils', () => ({
 }))
 
 jest.mock('../../../renderers/technical-stack.renderer', () => ({ renderTechnicalStack: jest.fn() }))
+// Label provisioning talks to GitHub: observed here, its behaviour is covered by the unit spec (#973).
+jest.mock('../../../installers/harness-provisioning', () => ({
+  ...jest.requireActual('../../../installers/harness-provisioning'),
+  provisionWorkflowLabels: jest.fn(() => [{ ok: true, message: 'Created 7 workflow labels on acme/acme' }])
+}))
 jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
 
 jest.mock('../../../runners/database.runner', () => ({ initAndStartDb: jest.fn() }))
@@ -44,12 +49,14 @@ import { newCommand } from '../../../commands/new'
 import { GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
 import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { harnessInstallerMeta } from '../../../installers/harness.installer'
+import { provisionWorkflowLabels } from '../../../installers/harness-provisioning'
 import { renderTechnicalStack } from '../../../renderers/technical-stack.renderer'
 import { collectStatus } from '../../../status/collect'
 import { evaluatePreconditions } from '../../../status/preconditions'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
 const mockedRenderTechnicalStack = renderTechnicalStack as jest.MockedFunction<typeof renderTechnicalStack>
+const mockedProvisionWorkflowLabels = provisionWorkflowLabels as jest.MockedFunction<typeof provisionWorkflowLabels>
 
 describe('newCommand (--profile integration)', () => {
   let tempDir: string
@@ -207,6 +214,40 @@ describe('newCommand (--profile integration)', () => {
     for (const file of statusDocs) {
       expect(manifest.fileHashes[`.agents/skills/sf-workflow/statuses/${file}`]).toBeDefined()
     }
+  })
+
+  // #973 — only the harness path created the workflow labels: the first `create-ticket --complexity` of a full project failed
+  describe('workflow labels', () => {
+    const fullOpts = { ...stackOpts, profile: 'full' as const, workflow: 'solo', tracker: 'github-projects' }
+
+    it('harness profile provisions them on the repository it runs in', async () => {
+      await newCommand({ nonInteractive: true, profile: 'harness', projectName: 'acme', mainBranch: 'main', workflow: 'solo', tracker: 'github-projects' })
+
+      expect(mockedProvisionWorkflowLabels).toHaveBeenCalledTimes(1)
+      expect(mockedProvisionWorkflowLabels).toHaveBeenCalledWith({ srs: false, dirs: ['.'] })
+      expect(logSpy.mock.calls.flat().join('\n')).toContain('Created 7 workflow labels on acme/acme')
+    })
+
+    it('full monorepo profile provisions them on the monorepo and reports it', async () => {
+      await newCommand({ ...fullOpts, structure: 'monorepo' })
+
+      expect(mockedProvisionWorkflowLabels).toHaveBeenCalledTimes(1)
+      expect(mockedProvisionWorkflowLabels).toHaveBeenCalledWith({ srs: false, dirs: ['.'] })
+      expect(logSpy.mock.calls.flat().join('\n')).toContain('Created 7 workflow labels on acme/acme')
+    })
+
+    it('full multirepo profile provisions them on the backend and the frontend repositories', async () => {
+      await newCommand(fullOpts)
+
+      expect(mockedProvisionWorkflowLabels).toHaveBeenCalledWith({ srs: false, dirs: [join('apps', 'acme-api'), join('apps', 'acme-web')] })
+      expect(logSpy.mock.calls.flat().join('\n')).toContain('Created 7 workflow labels on acme/acme')
+    })
+
+    it('full profile without a GitHub Projects workflow creates none', async () => {
+      await newCommand({ ...stackOpts, profile: 'full' })
+
+      expect(mockedProvisionWorkflowLabels).not.toHaveBeenCalled()
+    })
   })
 
   // #822 — a solo project working on main no longer has to edit the manifest after setup

@@ -71,7 +71,8 @@ The agent runs the same `create-ticket` command.
 ### Complexity
 
 Complexity lives on a **label**, not the status. `--complexity` sets it at creation, and `$WF retag 42 <level>` changes it later. The workflow refuses to move a ticket out of Backlog without one. The
-harness setup creates the labels; on a repository that lacks them, create them once:
+`sf new` setup creates the labels on your GitHub repository, with the `harness` and the `full` profile alike, and its summary says so. When it could not (no GitHub remote yet, `gh` not authenticated),
+it prints a warning instead; create them once:
 
 ```bash
 gh label create "complexity: low"    --color 7CFC00 --description "🟢 Low complexity"
