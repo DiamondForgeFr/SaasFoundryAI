@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
+import { resolveLocalCiGate } from '../../../local-ci-gate'
+import type { SaaSFoundryManifest } from '../../../types'
+
 const exec = promisify(execFile)
 const CLI = path.resolve(__dirname, '../../../../.claude/skills/sf-tool-github-projects/github-projects-cli.sh')
 const AGENT_CONTEXT = 'AI testing / Local CI'
@@ -333,6 +336,52 @@ esac
       const result = await run(['create-pr', '42', '--draft'], { PRS: '[]' })
       expect(result.code).toBe(0)
       expect(calls()).toContain('pr create')
+    })
+  })
+
+  // `sf workflow show`, `sf status` and `sf workflow set-local-ci` read the list with src/local-ci-gate.ts, the gate reads it in
+  // shell: on the same project the two must ask for the same statuses, or the CLI would print one list and enforce another
+  describe('the shell resolver and src/local-ci-gate.ts read the same project the same way', () => {
+    const fixtures: Array<[string, { localCi?: unknown; molten?: unknown }]> = [
+      ['a manifest list', { localCi: { requiredStatuses: ['custom-a', 'custom-b'] }, molten: pipeline() }],
+      ['a Molten pipeline that publishes to GitHub', { molten: pipeline({ statuses: 'github' }, ['unit', 'lint', 'docker-normal']) }],
+      ['a Molten pipeline that does not', { molten: pipeline({}) }],
+      ['a Molten pipeline with no job', { molten: { ci: { statuses: 'github', jobs: [] } } }],
+      ['jobs without a usable name', { molten: { ci: { statuses: 'github', jobs: [{ name: 'unit' }, { title: 'anonymous' }, { name: '  ' }, 'x', null] } } }],
+      ['nothing declared', {}]
+    ]
+
+    it.each(fixtures)('asks for the same statuses with %s', async (_label, fixture) => {
+      await manifest(fixture.localCi)
+      if (fixture.molten !== undefined) await molten(fixture.molten)
+      const gate = resolveLocalCiGate(work, JSON.parse(readFileSync(path.join(work, '.saasfoundry.json'), 'utf8')) as SaaSFoundryManifest)
+      if ('error' in gate) throw new Error(gate.error)
+
+      // Every statuses TS asks for is enough for the shell…
+      const green = await run(['local-ci-gate', '42'], { STATUSES: statuses(...gate.requiredStatuses.map((context): [string, string] => [context, 'success'])) })
+      expect(green.code).toBe(0)
+      // …and each one of them is needed
+      for (const missing of gate.requiredStatuses) {
+        const others = gate.requiredStatuses.filter((context) => context !== missing).map((context): [string, string] => [context, 'success'])
+        const refused = await run(['local-ci-gate', '42'], { STATUSES: statuses(...others) })
+        expect(refused.code).not.toBe(0)
+        expect(refused.stderr).toContain(`${missing}: missing`)
+      }
+    })
+
+    it.each([
+      ['a Molten file that cannot be parsed', { molten: '{ "ci": ' }, 'Could not read .molten/project.json'],
+      ['a Molten file that is not an object', { molten: '[]' }, 'Could not read .molten/project.json'],
+      ['a list that is not a list of contexts', { localCi: { requiredStatuses: 'custom' } }, 'must be a list of commit status contexts']
+    ])('both refuse %s with the same reason', async (_label, fixture, reason) => {
+      await manifest((fixture as { localCi?: unknown }).localCi)
+      if ((fixture as { molten?: unknown }).molten !== undefined) await molten((fixture as { molten?: unknown }).molten)
+      const gate = resolveLocalCiGate(work, JSON.parse(readFileSync(path.join(work, '.saasfoundry.json'), 'utf8')) as SaaSFoundryManifest)
+      expect(gate).toHaveProperty('error')
+      expect((gate as { error: string }).error).toContain(reason)
+      const refused = await run(['local-ci-gate', '42'])
+      expect(refused.code).not.toBe(0)
+      expect(refused.stderr).toContain(reason)
     })
   })
 })
