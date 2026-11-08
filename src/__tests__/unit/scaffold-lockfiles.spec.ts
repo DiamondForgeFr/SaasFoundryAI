@@ -36,8 +36,14 @@ const ROOT = resolve(__dirname, '../../..')
 const MULTIREPO = join(ROOT, 'scaffolds', 'overlays', 'multirepo')
 const MONOREPO_ROOT = join(ROOT, 'scaffolds', 'overlays', 'monorepo', 'root', 'package.json')
 const MONOREPO_WEB = join(ROOT, 'scaffolds', 'overlays', 'monorepo', 'web', 'package.json')
+const MONOREPO_API_CLIENT = join(ROOT, 'scaffolds', 'overlays', 'monorepo', 'root', 'packages', 'api-client', 'package.json')
 // Vite 8.2.0 to 8.2.3 carry six advisories: 8.2.4 is the first patched release, and the templates pin a later one.
 const VITE_PATCHED_FLOOR = '8.2.4'
+// The monorepo has no committed lock, so its development tree resolves whatever the pinned parents allow. vitest pins its own
+// `@vitest/mocker` (three advisories, fixed from vitest 4.1.12) and orval pins its own `js-yaml` (GHSA-2883-xcg3-v3hh: 4.3.1 from
+// orval 8.30.0 and earlier, 4.3.2 from orval 8.31.0). Without a lock, the template pins are the only guard.
+const VITEST_PATCHED_FLOOR = '4.1.12'
+const ORVAL_PATCHED_FLOOR = '8.31.0'
 const SECURITY_OVERRIDES = {
   '@nestjs/platform-express': { multer: '2.5.0' },
   '@nestjs/swagger': { 'js-yaml': '5.5.0' },
@@ -78,26 +84,27 @@ function manifestLockDrift(manifest: PackageManifest, lock: PackageLock): string
   return drift
 }
 
-function minimumResolutionDrift(lock: PackageLock, expected: Record<string, string>): string[] {
-  const toParts = (version: string): number[] | undefined => {
-    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
-    return match ? match.slice(1).map(Number) : undefined
-  }
+function versionParts(version: string): number[] | undefined {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
+  return match ? match.slice(1).map(Number) : undefined
+}
 
+/** True when `version` is an exact `x.y.z` release at or above `minimum`. Anything else (a range, a tag) is not. */
+function isAtLeast(version: string, minimum: string): boolean {
+  const parts = versionParts(version)
+  const minimumParts = versionParts(minimum)!
+  if (!parts) return false
+  for (let index = 0; index < parts.length; index += 1) {
+    if (parts[index] > minimumParts[index]) return true
+    if (parts[index] < minimumParts[index]) return false
+  }
+  return true
+}
+
+function minimumResolutionDrift(lock: PackageLock, expected: Record<string, string>): string[] {
   return Object.entries(expected).flatMap(([dependency, minimum]) => {
-    const minimumParts = toParts(minimum)!
     const resolved = versionsOf(lock, dependency)
-    const isPatched =
-      resolved.length > 0 &&
-      resolved.every((version) => {
-        const parts = toParts(version)
-        if (!parts) return false
-        for (let index = 0; index < parts.length; index += 1) {
-          if (parts[index] > minimumParts[index]) return true
-          if (parts[index] < minimumParts[index]) return false
-        }
-        return true
-      })
+    const isPatched = resolved.length > 0 && resolved.every((version) => isAtLeast(version, minimum))
     return isPatched ? [] : [`${dependency}: expected every resolution to be at least ${minimum}, received ${resolved.join(', ') || 'nothing'}`]
   })
 }
@@ -251,6 +258,31 @@ describe('committed multirepo lockfiles', () => {
       'source-map-js: expected every resolution to be at least 1.2.2, received 1.2.1'
     ])
     expect(resolutionDrift(staleLock, { vite: web.manifest.devDependencies!.vite })).toEqual([`vite: expected only ${web.manifest.devDependencies!.vite}, received 8.2.2`])
+  })
+})
+
+describe('monorepo development tree, which has no committed lock', () => {
+  const monorepoWeb = readJson<PackageManifest>(MONOREPO_WEB)
+  const apiClient = readJson<PackageManifest>(MONOREPO_API_CLIENT)
+
+  it('pins a vitest and an orval whose own dependencies are patched', () => {
+    const vitest = monorepoWeb.devDependencies?.vitest
+    const orval = apiClient.devDependencies?.orval
+
+    expect(vitest).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(orval).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(isAtLeast(vitest!, VITEST_PATCHED_FLOOR)).toBe(true)
+    expect(isAtLeast(orval!, ORVAL_PATCHED_FLOOR)).toBe(true)
+  })
+
+  it('rejects a vitest or an orval below the patched floor, and anything that is not an exact release', () => {
+    expect(isAtLeast('4.1.11', VITEST_PATCHED_FLOOR)).toBe(false)
+    expect(isAtLeast('4.1.12', VITEST_PATCHED_FLOOR)).toBe(true)
+    expect(isAtLeast('4.2.0', VITEST_PATCHED_FLOOR)).toBe(true)
+    expect(isAtLeast('8.30.0', ORVAL_PATCHED_FLOOR)).toBe(false)
+    expect(isAtLeast('8.31.0', ORVAL_PATCHED_FLOOR)).toBe(true)
+    // A range could resolve below the floor on a fresh install.
+    expect(isAtLeast('^4.1.12', VITEST_PATCHED_FLOOR)).toBe(false)
   })
 })
 
