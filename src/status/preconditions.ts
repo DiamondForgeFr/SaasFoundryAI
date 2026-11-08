@@ -6,6 +6,7 @@ import { BOOTSTRAP_COMMAND } from '../installers/harness-provisioning'
 import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
 import { CODEX_INSTRUCTION_LIMIT, compareCliVersions, compareVersions, MIN_CLAUDE_CODE_VERSION } from './instruction-diagnostics'
+import { checkPersonalSkills } from './personal-skills'
 
 export type PreconditionStatus = 'ok' | 'warn' | 'fail' | 'skip'
 
@@ -451,6 +452,7 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
   const ghRepository = checkGhRepository(report)
   const cliVersion = checkCliVersion(report)
   const cliBuild = checkCliBuild(report)
+  const personalSkills = checkPersonalSkills(report)
   return [
     checkManifest(report),
     checkWorkflow(report),
@@ -465,6 +467,7 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkCodexInstructionSize(report),
     checkInstructionReferences(report),
     checkTierAgents(report),
+    ...(personalSkills ? [personalSkills] : []),
     checkDependencies(report),
     checkDatabase(report),
     checkOrmClient(report)
