@@ -30,7 +30,8 @@ system evolve in one place, and keeps every consumer pixel-aligned.
 @source '../../../packages/ui-primitives/src';
 ```
 
-The `@source` directive tells Tailwind v4 to scan the package's primitives for utility classes so they end up in the final CSS bundle. It points at the workspace folder rather than `node_modules/@{{PROJECT_NAME}}/ui-primitives`: a git worktree has no root `node_modules`, and Tailwind would then find nothing to scan.
+The `@source` directive tells Tailwind v4 to scan the package's primitives for utility classes so they end up in the final CSS bundle. It points at the workspace folder rather than the package's
+symlink in `node_modules`: a git worktree has no root `node_modules`, and Tailwind would then find nothing to scan.
 
 ### 2. Cherry-pick primitives
 
