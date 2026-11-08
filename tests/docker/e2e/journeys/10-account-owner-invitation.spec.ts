@@ -1,5 +1,5 @@
 import { test, expect, observeLivePage } from '../fixtures'
-import { assertApiStatus, apiJson, signInBrowser } from '../support/api'
+import { assertApiStatus, apiJson, signInBrowser, submitAndWaitForApi } from '../support/api'
 import { expectRowCount, queryRows } from '../support/assertions'
 import { LIVE_NEW_PASSWORD, LIVE_PASSWORD, liveIdentity, liveName } from '../support/data'
 import { messageLink, resetMailbox, waitForMail } from '../support/mailbox'
@@ -20,7 +20,7 @@ test.describe.serial('live account-owner invitation', () => {
     await dialog.getByLabel(/First name/i).fill(owner.firstName)
     await dialog.getByLabel(/Last name/i).fill(owner.lastName)
     await dialog.getByLabel(/Suggested account name/i).fill(accountName)
-    await dialog.getByRole('button', { name: /Send invitation/i }).click()
+    await submitAndWaitForApi(adminPage, dialog.getByRole('button', { name: /Send invitation/i }), 'POST', '/invitations')
     await expect(dialog).toBeHidden()
 
     const invitation = await waitForMail(contract, owner.email)
