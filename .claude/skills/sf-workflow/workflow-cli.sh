@@ -605,6 +605,272 @@ check_bundled_pr_parent_guard() {
   return 0
 }
 
+# ───────────────────────────────────────────────────────────────────────────
+# Pushed-commits guard — AI Testing starts from work that is on the remote (#1104)
+# ───────────────────────────────────────────────────────────────────────────
+#
+# "Commit and push before AI Testing" was an instruction, and instructions get skipped: a ticket reached
+# AI Testing with its work uncommitted, or committed and never pushed, and its test report then described
+# code that nobody else could fetch. The guard reads it from git alone, so it holds for every tool. It
+# fires on `→ AI testing` from any status, which covers the Human Testing loop "fix, commit, push, return
+# to AI Testing". Escape hatch: SF_WORKFLOW_BYPASS_PUSHED_GUARD=1.
+
+# The jq definitions that turn workflow.branchNaming into branch regexes, as the PR guards read them: the
+# ticket placeholder is replaced by the ticket's number, `{description}` by `.+`, and everything else is
+# literal text. `any_ticket_pattern` matches a branch of any ticket.
+DELIVERY_BRANCH_JQ_DEFS='
+  def literal: explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
+    then [92,$c] else [$c] end) | flatten | implode;
+  def usable: select(type == "string")
+    | select(([scan("\\{(?:N|ticket|number|issue-number)\\}")] | length) == 1)
+    | select(([scan("\\{(?:description|name)\\}")] | length) <= 1);
+  def ticket_pattern($ticket): usable
+    | gsub("\\{(?:N|ticket|number|issue-number)\\}"; $ticket)
+    | gsub("\\{(?:description|name)\\}"; "\u0000")
+    | split("\u0000") | map(literal) | join(".+") | "^" + . + "$";
+  def any_ticket_pattern: usable
+    | gsub("\\{(?:N|ticket|number|issue-number)\\}"; "\u0001")
+    | gsub("\\{(?:description|name)\\}"; "\u0000")
+    | split("\u0000") | map(split("\u0001") | map(literal) | join("[1-9][0-9]*")) | join(".+") | "^" + . + "$";
+  def release_pattern: select(type == "string") | select((split("{version}") | length) == 2)
+    | split("{version}") | map(literal) | join(".+") | "^" + . + "$";
+'
+
+# One branch regex per line: the branches that deliver ticket $1 (feature, fix), "any" for a delivery branch
+# of any ticket, "release" for the release branches. Nothing when the naming has no usable pattern.
+delivery_branch_patterns() {
+  local which=$1
+  [[ -f .saasfoundry.json ]] || return 0
+  jq -r --arg t "$which" "${DELIVERY_BRANCH_JQ_DEFS}"'
+    if $t == "release" then (.workflow.branchNaming.release // "rc-{version}" | release_pattern)
+    else [(.workflow.branchNaming.feature // "feature/{N}-{description}"), (.workflow.branchNaming.fix // "fix/{N}-{description}")]
+      | .[] | if $t == "any" then any_ticket_pattern else ticket_pattern($t) end
+    end' .saasfoundry.json 2>/dev/null
+}
+
+# Whether branch $1 matches one of the regexes in $2 (one per line).
+branch_follows() {
+  local branch=$1 patterns=$2 re
+  while IFS= read -r re; do
+    if [[ -n "$re" && "$branch" =~ $re ]]; then return 0; fi
+  done <<<"$patterns"
+  return 1
+}
+
+check_pushed_commits_guard() {
+  local ticket=$1 target=$2 normalized
+  [[ "${SF_WORKFLOW_BYPASS_PUSHED_GUARD:-}" == "1" ]] && return 0
+  normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
+  [[ "$normalized" == "ai testing" ]] || return 0
+
+  local hatch="  Escape hatch (rare): SF_WORKFLOW_BYPASS_PUSHED_GUARD=1"
+  local refusal="✗ Ticket #${ticket} cannot enter 'AI Testing'"
+  local nature owner=$ticket parent patterns any_patterns current origin_heads
+  local target_branch release_branch mode dir branch=""
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo -e "${RED}${refusal}: this directory is not a git repository, so the push of its work cannot be checked.${NC}" >&2
+    echo "$hatch" >&2
+    return 1
+  fi
+
+  # The branch that carries the ticket's commits: its own, or its delivery parent's for a bundled child.
+  # Labels that cannot be read (offline, auth) do not block ordinary tickets, as in the other label guards.
+  nature=$(get_ticket_nature_label "$ticket" 2>/dev/null) || nature=""
+  if [[ "$nature" == "bundled-pr" ]]; then
+    parent=$(get_native_parent_number "$ticket") || {
+      echo "Error: unable to find the delivery parent of bundled-PR ticket #${ticket}, whose branch carries its commit." >&2
+      echo "$hatch" >&2
+      return 1
+    }
+    owner=$parent
+  fi
+  patterns=$(delivery_branch_patterns "$owner")
+  if [[ -z "$patterns" ]]; then
+    echo -e "${RED}${refusal}: no branch can be matched to #${owner}.${NC}" >&2
+    report_unusable_delivery_patterns
+    echo "$hatch" >&2
+    return 1
+  fi
+  patterns+=$'\n'$(delivery_branch_patterns release)
+  any_patterns=$(delivery_branch_patterns any)
+
+  current=$(git symbolic-ref --short -q HEAD) || current=""
+  if [[ -z "$current" ]]; then
+    echo -e "${RED}${refusal}: HEAD is detached, so no branch holds the work.${NC}" >&2
+    echo "  Check out the ticket branch (or create it with git switch -c <branch>), commit and push, then retry." >&2
+    echo "$hatch" >&2
+    return 1
+  fi
+  origin_heads=$(git ls-remote --heads origin 2>/dev/null) || {
+    echo -e "${RED}${refusal}: origin could not be read, so the push of the work cannot be verified.${NC}" >&2
+    echo "  Retry once origin is reachable." >&2
+    echo "$hatch" >&2
+    return 1
+  }
+
+  # Which checkout holds the work (this one, or the worktree of the ticket branch) and which branch of origin it is
+  target_branch=$(jq -r '.workflow.prTargetBranch // empty' .saasfoundry.json 2>/dev/null)
+  release_branch=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json 2>/dev/null)
+  dir=$(pwd)
+  if branch_follows "$current" "$patterns"; then
+    mode=branch
+    branch=$current
+  elif branch_follows "$current" "$any_patterns"; then
+    echo -e "${RED}${refusal}: this checkout is on ${current}, which delivers another ticket (the commits of #${owner} are on its own branch).${NC}" >&2
+    echo "  Switch to the branch of #${owner}, or run the command from the checkout that holds it." >&2
+    echo "$hatch" >&2
+    return 1
+  elif [[ "$current" == "$WORKING_BRANCH" || "$current" == "$target_branch" || "$current" == "$release_branch" ]]; then
+    mode=primary
+  else
+    mode=host
+  fi
+
+  local line name sha
+  local -a names=() shas=()
+  while IFS= read -r line; do
+    sha=${line%%$'\t'*}
+    name=${line#*refs/heads/}
+    [[ -n "$sha" && "$line" == *refs/heads/* ]] || continue
+    if branch_follows "$name" "$patterns"; then
+      names+=("$name")
+      shas+=("$sha")
+    fi
+  done <<<"$origin_heads"
+
+  if [[ "$mode" == primary ]]; then
+    # The working branch holds no ticket work: look for the worktree on the ticket's branch
+    local wt_path="" wt_branch="" found_path="" found_branch="" found=0
+    while IFS= read -r line; do
+      case "$line" in
+        "worktree "*) wt_path=${line#worktree } ;;
+        "branch refs/heads/"*)
+          wt_branch=${line#branch refs/heads/}
+          if branch_follows "$wt_branch" "$patterns"; then
+            found=$((found + 1))
+            found_path=$wt_path
+            found_branch=$wt_branch
+          fi
+          ;;
+      esac
+    done < <(git worktree list --porcelain 2>/dev/null)
+    if [[ "$found" -gt 1 ]]; then
+      echo -e "${RED}${refusal}: several worktrees hold a branch of #${owner}; run the command from the one that has the work.${NC}" >&2
+      echo "$hatch" >&2
+      return 1
+    elif [[ "$found" -eq 1 ]]; then
+      mode=worktree
+      dir=$found_path
+      branch=$found_branch
+    elif [[ ${#names[@]} -eq 1 ]]; then
+      echo -e "${YELLOW}⚠ Pushed-commits check for #${ticket}: this checkout is on ${current} and no worktree holds a branch of #${owner}; only origin was checked, and origin has ${names[0]} (${shas[0]:0:8}). The work itself is not in this checkout.${NC}" >&2
+      return 0
+    elif [[ ${#names[@]} -eq 0 ]]; then
+      echo -e "${RED}${refusal}: origin holds no branch of #${owner}, and no worktree of this repository holds one.${NC}" >&2
+      echo "  Push the ticket branch first: git push -u origin <branch>   (pattern: workflow.branchNaming.feature / .fix)" >&2
+      echo "$hatch" >&2
+      return 1
+    else
+      echo -e "${RED}${refusal}: origin holds several branches of #${owner} (${names[*]}) and no worktree here says which one has the work.${NC}" >&2
+      echo "  Run the command from the checkout that holds the work." >&2
+      echo "$hatch" >&2
+      return 1
+    fi
+  elif [[ "$mode" == host ]]; then
+    # A branch the host named (worktree-agent-<id>): its work is pushed to the ticket's branch with HEAD:<branch>
+    local head_sha idx pick=-1 at_head=0
+    head_sha=$(git rev-parse HEAD 2>/dev/null)
+    if [[ ${#names[@]} -eq 0 ]]; then
+      echo -e "${RED}${refusal}: this checkout is on ${current} and origin holds no branch of #${owner}.${NC}" >&2
+      echo "  Push the work to the ticket branch: git push origin HEAD:<branch>   (pattern: workflow.branchNaming.feature / .fix)" >&2
+      echo "$hatch" >&2
+      return 1
+    fi
+    for idx in "${!names[@]}"; do
+      if [[ "${shas[$idx]}" == "$head_sha" ]]; then
+        at_head=$((at_head + 1))
+        pick=$idx
+      fi
+    done
+    if [[ "$at_head" -eq 0 && ${#names[@]} -eq 1 ]]; then
+      pick=0
+    elif [[ "$at_head" -ne 1 ]]; then
+      echo -e "${RED}${refusal}: origin holds several branches of #${owner} (${names[*]}) and none is the only one at HEAD.${NC}" >&2
+      echo "  Push the work to the right one: git push origin HEAD:<branch>" >&2
+      echo "$hatch" >&2
+      return 1
+    fi
+    branch=${names[$pick]}
+  fi
+
+  # What to run to publish the work, by checkout: a branch of this checkout, a worktree, or a host-named branch
+  local head remote git_dir_arg="" push_cmd push_new_cmd pull_cmd
+  [[ "$mode" == worktree ]] && git_dir_arg="-C ${dir} "
+  case "$mode" in
+    host)
+      push_cmd="git push origin HEAD:${branch}"
+      push_new_cmd=$push_cmd
+      pull_cmd="git pull --rebase origin ${branch}"
+      ;;
+    *)
+      push_cmd="git ${git_dir_arg}push"
+      push_new_cmd="git ${git_dir_arg}push -u origin ${branch}"
+      pull_cmd="git ${git_dir_arg}pull --rebase"
+      ;;
+  esac
+  remote=$(awk -v ref="refs/heads/${branch}" '$2 == ref {print $1; exit}' <<<"$origin_heads")
+
+  # Tracked changes, staged or not, are work that is not committed. Untracked files only warn: a primary checkout
+  # carries output folders and scratch files that are not part of any ticket.
+  local dirty untracked paths shown
+  dirty=$(git -C "$dir" status --porcelain --untracked-files=no 2>/dev/null) || {
+    echo -e "${RED}${refusal}: the state of ${dir} could not be read.${NC}" >&2
+    echo "$hatch" >&2
+    return 1
+  }
+  if [[ -n "$dirty" ]]; then
+    paths=$(printf '%s\n' "$dirty" | cut -c4-)
+    shown=$(printf '%s\n' "$paths" | head -n 5 | sed 's/^/    /')
+    echo -e "${RED}${refusal}: $(printf '%s\n' "$dirty" | grep -c .) tracked file(s) of ${dir} are modified and not committed:${NC}" >&2
+    echo "$shown" >&2
+    [[ "$(printf '%s\n' "$paths" | grep -c .)" -gt 5 ]] && echo "    ..." >&2
+    echo "  Commit them, then push:" >&2
+    echo "    git ${git_dir_arg}add <paths> && git ${git_dir_arg}commit -m \"<type>(#${ticket}): <description>\" && $([[ -n "$remote" ]] && echo "$push_cmd" || echo "$push_new_cmd")" >&2
+    echo "$hatch" >&2
+    return 1
+  fi
+  untracked=$(git -C "$dir" status --porcelain 2>/dev/null | grep '^??' | cut -c4- | head -n 3 || true)
+  if [[ -n "$untracked" ]]; then
+    echo -e "${YELLOW}⚠ Untracked files in ${dir} are not committed (not blocking): $(printf '%s\n' "$untracked" | paste -sd ',' - | sed 's/,/, /g')${NC}" >&2
+  fi
+
+  # The committed work against origin
+  head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || {
+    echo -e "${RED}${refusal}: the HEAD commit of ${dir} could not be read.${NC}" >&2
+    echo "$hatch" >&2
+    return 1
+  }
+  if [[ -z "$remote" ]]; then
+    echo -e "${RED}${refusal}: ${branch} is not on origin.${NC}" >&2
+    echo "  Push it: ${push_new_cmd}" >&2
+    echo "$hatch" >&2
+    return 1
+  fi
+  if [[ "$remote" != "$head" ]]; then
+    if git -C "$dir" merge-base --is-ancestor "$remote" "$head" 2>/dev/null; then
+      echo -e "${RED}${refusal}: $(git -C "$dir" rev-list --count "${remote}..${head}" 2>/dev/null || echo some) commit(s) of ${branch} (${head:0:8}) are not on origin (${remote:0:8}).${NC}" >&2
+      echo "  Push them: ${push_cmd}" >&2
+    else
+      echo -e "${RED}${refusal}: origin/${branch} is at ${remote:0:8}, which this checkout (${head:0:8}) does not contain.${NC}" >&2
+      echo "  Integrate origin first, then push: ${pull_cmd} && ${push_cmd}" >&2
+    fi
+    echo "$hatch" >&2
+    return 1
+  fi
+  return 0
+}
+
 # Whether .saasfoundry.json declares a board status, case-insensitively. A manifest
 # that lists no statuses uses the default Team set, which has every status.
 manifest_declares_status() {
@@ -1795,6 +2061,9 @@ case "$COMMAND" in
       exit 2
     fi
     if ! check_bundled_pr_parent_guard "$TICKET" "$TARGET"; then
+      exit 2
+    fi
+    if ! check_pushed_commits_guard "$TICKET" "$TARGET"; then
       exit 2
     fi
     if ! check_pr_existence_guard "$TICKET" "$TARGET"; then
