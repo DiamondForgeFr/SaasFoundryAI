@@ -991,8 +991,15 @@ report_unusable_delivery_patterns() {
 # are rejected earlier by check_epic_derived_status_guard and never reach this
 # PR lifecycle. Escape hatch: SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1.
 
+# The one pull request this guard matched, for the guards that follow (the local CI guard reads its
+# head): empty when the guard did not run to a match, bypass included.
+GUARD_PR_NUMBER=""
+# `update-status … --skip-local-ci "<reason>"`: the explicit hatch of the local CI guard
+LOCAL_CI_SKIP_REASON=""
+
 check_pr_existence_guard() {
   local ticket=$1 target=$2 normalized
+  GUARD_PR_NUMBER=""
   [[ "${SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD:-}" == "1" ]] && return 0
   normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
   [[ "$normalized" == "in review" || "$normalized" == "human testing" ]] || return 0
@@ -1066,7 +1073,50 @@ check_pr_existence_guard() {
     echo "Error: In Review requires a non-draft PR. After human approval run workflow-cli.sh ready-pr ${ticket}." >&2
     return 1
   fi
+  GUARD_PR_NUMBER=$(echo "$matches" | jq -r '.[0].number | select(type == "number")')
   return 0
+}
+
+# Local CI guard (#1104) — Human Testing is where a person starts to test, so the project's local CI
+# must be green on the exact head commit of the ticket's draft pull request before it. Which statuses
+# are required, and where that list comes from, is the tool's `local-ci-gate` command (the manifest list,
+# the jobs of the Molten pipeline, or the status the agent publishes after the project's suite ran): the
+# same gate `ready-pr` applies, run on its own. Fires on `→ Human testing` from any status, so a PR
+# returned to draft with `draft-pr` is gated again. The one hatch is `--skip-local-ci "<reason>"` on
+# `update-status`, recorded on the pull request. A pull request that cannot be read, or statuses that
+# cannot be read, refuse: an unverified gate is not a green one.
+check_local_ci_guard() {
+  local ticket=$1 target=$2 normalized
+  normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
+  if [[ "$normalized" != "human testing" ]]; then
+    if [[ -n "$LOCAL_CI_SKIP_REASON" ]]; then
+      echo -e "${YELLOW}⚠ --skip-local-ci only applies to a move to Human testing; it is ignored for '${target}'.${NC}" >&2
+    fi
+    return 0
+  fi
+  if [[ "$WORKFLOW_TOOL" != "github-projects" ]]; then
+    echo -e "${YELLOW}⚠ The local CI gate is not available for ${WORKFLOW_TOOL} (it reads the pull request of github-projects): run the project's heavy validation as statuses/4-ai-testing.md says.${NC}" >&2
+    return 0
+  fi
+  local -a args=("$ticket") skip_args=()
+  [[ -n "$GUARD_PR_NUMBER" ]] && args+=(--pr "$GUARD_PR_NUMBER")
+  [[ -n "$LOCAL_CI_SKIP_REASON" ]] && skip_args=(--skip-local-ci "$LOCAL_CI_SKIP_REASON")
+  if route_to_tool "$WORKFLOW_TOOL" local-ci-gate "${args[@]}" ${skip_args[@]+"${skip_args[@]}"}; then
+    return 0
+  fi
+  # The PR existence guard was bypassed, so no pull request is known to carry the skip: record it on the ticket
+  if [[ -n "$LOCAL_CI_SKIP_REASON" && -z "$GUARD_PR_NUMBER" ]]; then
+    echo -e "${YELLOW}⚠ No pull request could be resolved for #${ticket}; the skip is recorded on the ticket.${NC}" >&2
+    printf 'Local CI gate skipped: %s\n\nThe move to Human testing could not read a pull request head (the PR existence guard was bypassed).\n' "$LOCAL_CI_SKIP_REASON" |
+      route_to_tool "$WORKFLOW_TOOL" comment "$ticket" - >/dev/null 2>&1 ||
+      echo -e "${YELLOW}  The skip could not be recorded on #${ticket}; record it by hand.${NC}" >&2
+    return 0
+  fi
+  echo -e "${RED}✗ Ticket #${ticket} cannot enter 'Human testing': its local CI is not green on the pull request head.${NC}" >&2
+  if [[ -z "$LOCAL_CI_SKIP_REASON" ]]; then
+    echo "  Make the statuses green, then retry. Escape hatch (infrastructure down only): update-status ${ticket} \"Human testing\" --skip-local-ci \"<reason>\"" >&2
+  fi
+  return 1
 }
 
 # Function to show next status
@@ -1705,10 +1755,27 @@ case "$COMMAND" in
 
   update-status)
     load_config
-    TICKET=$1
-    TARGET=$2
+    # `--skip-local-ci "<reason>"` belongs to this script's local CI guard: it is read here, wherever it
+    # stands after the ticket, and never reaches the tool's update-status
+    UPDATE_STATUS_ARGS=()
+    while [[ "$#" -gt 0 ]]; do
+      if [[ "$1" == "--skip-local-ci" ]]; then
+        if [[ -z "${2:-}" || "${2:-}" == --* ]]; then
+          echo "Error: --skip-local-ci requires a reason" >&2
+          exit 1
+        fi
+        LOCAL_CI_SKIP_REASON=$2
+        shift 2
+      else
+        UPDATE_STATUS_ARGS+=("$1")
+        shift
+      fi
+    done
+    set -- ${UPDATE_STATUS_ARGS[@]+"${UPDATE_STATUS_ARGS[@]}"}
+    TICKET=${1:-}
+    TARGET=${2:-}
     if [[ -z "$TICKET" || -z "$TARGET" ]]; then
-      echo "Usage: workflow-cli.sh update-status <ticket> <status-name>" >&2
+      echo "Usage: workflow-cli.sh update-status <ticket> <status-name> [--skip-local-ci \"<reason>\"]" >&2
       exit 1
     fi
     announce_bypasses "$TICKET" "$TARGET"
@@ -1731,6 +1798,9 @@ case "$COMMAND" in
       exit 2
     fi
     if ! check_pr_existence_guard "$TICKET" "$TARGET"; then
+      exit 2
+    fi
+    if ! check_local_ci_guard "$TICKET" "$TARGET"; then
       exit 2
     fi
     if ! check_pr_merged_guard "$TICKET" "$TARGET"; then
@@ -1859,7 +1929,7 @@ case "$COMMAND" in
     route_to_tool "$WORKFLOW_TOOL" milestone "$SUB" "$@"
     ;;
 
-  create-pr|ready-pr|draft-pr)
+  create-pr|ready-pr|draft-pr|local-ci-gate)
     load_config
     TICKET=$1
     ISSUE_TYPE=$(get_ticket_issue_type "$TICKET" 2>/dev/null || true)
@@ -2105,7 +2175,11 @@ case "$COMMAND" in
     echo "                               Create a top-level ticket on the board in Backlog, typed and labelled"
     echo "  create-subtask ...           Create a sub-issue/task"
     echo "  create-epic <title> [body]   Create a top-level Epic (no parent)"
-    echo "  update-status ...            Update ticket status (SRS-label guarded)"
+    echo "  update-status <ticket> <status> [--skip-local-ci \"<reason>\"]"
+    echo "                               Update ticket status (guarded); a move to Human testing needs the required local CI"
+    echo "                               statuses green on the pull request head, --skip-local-ci being the recorded hatch"
+    echo "  local-ci-gate <ticket> [--head <branch> | --pr <number>] [--skip-local-ci \"<reason>\"]"
+    echo "                               Check the required local CI statuses on the ticket's pull request head (changes nothing)"
     echo "  create-pr <ticket> [--draft] [--head <branch>]  Create pull request"
     echo "                               --head: the ticket branch pushed to origin, when the checkout is on another branch"
     echo "                               (a worktree agent's host branch); origin must hold it at the local HEAD"
@@ -2124,7 +2198,7 @@ case "$COMMAND" in
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
     echo ""
-    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, bootstrap, create-ticket, create-subtask, create-epic, add-to-project, update-status, create-pr, ready-pr, draft-pr, sync-pr-review, ai-status, list, get-labels, inspect-srs-tickets, link-subtask, unlink-subtask, transition-drafting"
+    echo "Available commands: status, next, validate, help, detect-complexity, retag, prepare, test, bootstrap, create-ticket, create-subtask, create-epic, add-to-project, update-status, create-pr, ready-pr, draft-pr, local-ci-gate, sync-pr-review, ai-status, list, get-labels, inspect-srs-tickets, link-subtask, unlink-subtask, transition-drafting"
     echo "Run 'workflow-cli.sh help' for usage details"
     exit 1
     ;;

@@ -1896,25 +1896,153 @@ verify_pr_head_on_origin() {
   PR_HEAD_COMMIT=$pr_head
 }
 
-# The project's local CI gate (#918). A project that verifies pull requests locally declares
-# the commit statuses its local CI publishes in `workflow.localCi.requiredStatuses`. An agent
-# once ran a narrower check, judged a one-file diff did not need more, and opened a PR that
-# waited forever for statuses nobody would publish. No diff is too small: a PR opened for
-# review, or marked ready, needs every declared status green on its exact head commit. A draft
-# is allowed — it is opened early and waits for them. `--skip-local-ci "<reason>"` is the
-# explicit escape hatch, recorded on the pull request.
+# The project's local CI gate (#918, #1104). A project that verifies pull requests locally has
+# its local CI publish commit statuses, and a pull request opened for review, marked ready or
+# moved to Human Testing needs every required one green on its exact head commit. An agent once
+# ran a narrower check, judged a one-file diff did not need more, and opened a PR that waited
+# forever for statuses nobody would publish. No diff is too small. A draft is allowed — it is
+# opened early and waits for them. `--skip-local-ci "<reason>"` is the explicit escape hatch,
+# recorded on the pull request.
+#
+# Which statuses are required comes from one place, resolve_local_ci_required, in this order:
+#   manifest  workflow.localCi.requiredStatuses (a list; an empty list is a deliberate "no local CI")
+#   molten    the jobs of .molten/project.json, published as `local-<job>` ("ci.statuses": "github")
+#   agent     neither: the status `AI testing / Local CI` the agent publishes with
+#             `workflow-cli.sh ai-status <ticket> "Local CI" success` after the project's suite ran
+# The gate never passes silently for a project that declares nothing: it asks for the agent status.
 LOCAL_CI_SKIP_REASON=""
+LOCAL_CI_SKIPPED=false
+LOCAL_CI_REQUIRED=""
+LOCAL_CI_SOURCE=""
+LOCAL_CI_MOLTEN_NOTE=""
+LOCAL_CI_AGENT_CONTEXT="AI testing / Local CI"
+MOLTEN_PROJECT_FILE=".molten/project.json"
 
+# The CI jobs `.molten/project.json` declares, one name per line: the entries of `ci.jobs` that carry
+# a non-blank name, the reading of src/molten-pipeline.ts (a pipeline with no job is no pipeline, #1155).
+molten_job_names() {
+  jq -r '(.ci // {}) as $ci
+    | if ($ci | type) == "object" and ($ci.jobs | type) == "array"
+      then $ci.jobs[] | select(type == "object" and (.name | type) == "string" and (.name | gsub("\\s"; "") | length) > 0) | .name
+      else empty end' "$MOLTEN_PROJECT_FILE"
+}
+
+# Sets LOCAL_CI_REQUIRED (one status context per line), LOCAL_CI_SOURCE (manifest | manifest-none |
+# molten | agent) and, when a Molten pipeline exists that the gate cannot read, LOCAL_CI_MOLTEN_NOTE.
+# Returns 1 with the reason on stderr when a declaration cannot be read: a broken file never
+# silently weakens the gate.
+resolve_local_ci_required() {
+  local kind jobs err
+  LOCAL_CI_REQUIRED=""
+  LOCAL_CI_SOURCE=""
+  LOCAL_CI_MOLTEN_NOTE=""
+  kind=$(jq -r '.workflow.localCi.requiredStatuses
+    | if . == null then "absent"
+      elif type == "array" and all(.[]; type == "string" and length > 0) then "list"
+      else "invalid" end' .saasfoundry.json 2>/dev/null) || {
+    echo -e "${RED}✗ Could not read workflow.localCi.requiredStatuses from .saasfoundry.json.${NC}" >&2
+    return 1
+  }
+  case "$kind" in
+    list)
+      LOCAL_CI_REQUIRED=$(jq -r '.workflow.localCi.requiredStatuses[]' .saasfoundry.json)
+      if [[ -n "$LOCAL_CI_REQUIRED" ]]; then LOCAL_CI_SOURCE=manifest; else LOCAL_CI_SOURCE=manifest-none; fi
+      return 0
+      ;;
+    invalid)
+      echo -e "${RED}✗ workflow.localCi.requiredStatuses in .saasfoundry.json must be a list of commit status contexts (strings).${NC}" >&2
+      echo "  Record it with: sf workflow set-local-ci <context...>   (or --from-molten, --none, --clear)" >&2
+      return 1
+      ;;
+  esac
+  if [[ -f "$MOLTEN_PROJECT_FILE" ]]; then
+    err=$(jq -e 'type == "object"' "$MOLTEN_PROJECT_FILE" 2>&1 >/dev/null) || {
+      echo -e "${RED}✗ Could not read ${MOLTEN_PROJECT_FILE}: ${err:-it is not a JSON object}${NC}" >&2
+      echo "  Fix the file, or record the required statuses with: sf workflow set-local-ci <context...>" >&2
+      return 1
+    }
+    jobs=$(molten_job_names) || {
+      echo -e "${RED}✗ Could not read the CI jobs of ${MOLTEN_PROJECT_FILE}.${NC}" >&2
+      return 1
+    }
+    if [[ -n "$jobs" ]]; then
+      if [[ "$(jq -r '.ci.statuses // ""' "$MOLTEN_PROJECT_FILE")" == github ]]; then
+        LOCAL_CI_REQUIRED=$(printf '%s\n' "$jobs" | sed 's/^/local-/')
+        LOCAL_CI_SOURCE=molten
+        return 0
+      fi
+      LOCAL_CI_MOLTEN_NOTE="${MOLTEN_PROJECT_FILE} declares a pipeline but not \"ci\": { \"statuses\": \"github\" }, so its verdicts are not published as commit statuses the gate can read. Adding it would make the gate require local-<job> instead."
+    fi
+  fi
+  LOCAL_CI_REQUIRED=$LOCAL_CI_AGENT_CONTEXT
+  LOCAL_CI_SOURCE=agent
+}
+
+# Where the required statuses come from, for the refusal and the success line.
+local_ci_source_label() {
+  local count
+  count=$(grep -c . <<<"$LOCAL_CI_REQUIRED" || true)
+  case "$LOCAL_CI_SOURCE" in
+    manifest) echo "${count} status(es) of workflow.localCi.requiredStatuses (.saasfoundry.json)" ;;
+    molten) echo "${count} job(s) of ${MOLTEN_PROJECT_FILE} (local-<job>; workflow.localCi.requiredStatuses is not set)" ;;
+    agent) echo "${LOCAL_CI_AGENT_CONTEXT} (no workflow.localCi.requiredStatuses and no Molten pipeline publishing to GitHub)" ;;
+  esac
+}
+
+# The suite the project declares in package.json, for the agent source's refusal.
+local_ci_declared_suite() {
+  local suite=""
+  if [[ -f package.json ]]; then
+    if jq -e '.scripts.test // empty' package.json >/dev/null 2>&1; then suite="npm test"; fi
+    if jq -e '.scripts["test:pre-push"] // empty' package.json >/dev/null 2>&1; then
+      suite="${suite:+${suite} and }npm run test:pre-push"
+    fi
+  fi
+  printf '%s' "${suite:-the build and test suite the project declares}"
+}
+
+# What to do about a gate that is not green: the command that produces the statuses.
+print_local_ci_remedy() {
+  local ticket=$1 branch=$2 pr=$3
+  case "$LOCAL_CI_SOURCE" in
+    molten)
+      echo "  Run: molten ci run ${branch:-<branch>}   (or \`molten ci run\` in the worktree that holds it), then retry." >&2
+      ;;
+    manifest)
+      if [[ -f "$MOLTEN_PROJECT_FILE" ]] && [[ -n "$(molten_job_names 2>/dev/null)" ]]; then
+        echo "  Run: molten ci run ${branch:-<branch>}   (or \`molten ci run\` in the worktree that holds it), then retry." >&2
+      else
+        echo "  Run the project's local CI on this exact commit so that it publishes these statuses, then retry." >&2
+      fi
+      ;;
+    agent)
+      echo "  Run $(local_ci_declared_suite) on this exact commit, then publish the verdict and retry:" >&2
+      echo "    workflow-cli.sh ai-status ${ticket:-<ticket>} \"Local CI\" success \"<command, commit, result>\"" >&2
+      [[ -z "$pr" ]] && echo "  A pull request must exist to carry that status: open it first with workflow-cli.sh create-pr ${ticket:-<ticket>} --draft." >&2
+      [[ -n "$LOCAL_CI_MOLTEN_NOTE" ]] && echo "  Note: ${LOCAL_CI_MOLTEN_NOTE}" >&2
+      echo "  A project with no local CI records that with: sf workflow set-local-ci --none" >&2
+      ;;
+  esac
+  echo "  Escape hatch (infrastructure down only): --skip-local-ci \"<reason>\"" >&2
+}
+
+# local_ci_gate <head-sha> [<ticket> <branch> [<pr-number>]]: 0 when the gate is green, skipped or
+# not applicable, 1 when it refuses. Sets LOCAL_CI_SKIPPED when --skip-local-ci bypassed a real gate.
 local_ci_gate() {
-  local head=$1 required statuses name state
+  local head=$1 ticket=${2:-} branch=${3:-} pr=${4:-} statuses name state
   local -a failing=()
-  required=$(jq -r '.workflow.localCi.requiredStatuses // [] | .[]' .saasfoundry.json 2>/dev/null)
-  [[ -z "$required" ]] && return 0
-  if [[ -n "$LOCAL_CI_SKIP_REASON" ]]; then
-    echo -e "${YELLOW}⚠ Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}${NC}" >&2
+  LOCAL_CI_SKIPPED=false
+  resolve_local_ci_required || return 1
+  if [[ "$LOCAL_CI_SOURCE" == manifest-none ]]; then
+    echo -e "${YELLOW}⚠ Local CI gate: workflow.localCi.requiredStatuses is an empty list, so this project declares no local CI and nothing is checked.${NC}" >&2
     return 0
   fi
-  statuses=$(gh api "repos/$(get_repo_owner_name)/commits/${head}/status" --jq '[.statuses[] | {context, state}]' 2>/dev/null) || {
+  if [[ -n "$LOCAL_CI_SKIP_REASON" ]]; then
+    echo -e "${YELLOW}⚠ Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}${NC}" >&2
+    LOCAL_CI_SKIPPED=true
+    return 0
+  fi
+  statuses=$(gh api "repos/$(get_repo_owner_name)/commits/${head}/status?per_page=100" --jq '[.statuses[] | {context, state}]' 2>/dev/null) || {
     echo -e "${RED}✗ Could not read the commit statuses of ${head:0:8}, so the local CI gate cannot be checked.${NC}" >&2
     return 1
   }
@@ -1922,14 +2050,19 @@ local_ci_gate() {
     [[ -z "$name" ]] && continue
     state=$(echo "$statuses" | jq -r --arg c "$name" 'map(select(.context == $c))[0].state // "missing"')
     [[ "$state" == success ]] || failing+=("${name}: ${state}")
-  done <<<"$required"
+  done <<<"$LOCAL_CI_REQUIRED"
   if [[ ${#failing[@]} -gt 0 ]]; then
-    echo -e "${RED}✗ The project's local CI is not green on ${head:0:8}:${NC}" >&2
+    local where=""
+    [[ -n "$branch" ]] && where=" (${branch}"
+    [[ -n "$where" && -n "$pr" ]] && where+=", PR #${pr}"
+    [[ -n "$where" ]] && where+=")"
+    echo -e "${RED}✗ The project's local CI is not green on ${head:0:8}${where}:${NC}" >&2
     printf '    %s\n' "${failing[@]}" >&2
-    echo "  Run the local CI on this exact commit (no diff is too small), or pass --skip-local-ci \"<reason>\"." >&2
+    echo "  Required statuses: $(local_ci_source_label)." >&2
+    print_local_ci_remedy "$ticket" "$branch" "$pr"
     return 1
   fi
-  echo -e "${GREEN}✓ Local CI green on ${head:0:8}: $(echo "$required" | paste -sd ',' - | sed 's/,/, /g')${NC}"
+  echo -e "${GREEN}✓ Local CI green on ${head:0:8}: $(local_ci_source_label)${NC}"
 }
 
 # `--skip-local-ci "<reason>"`, `--head <branch>` (#1036), `--pr <number>` (#1125, ready-pr and
@@ -2021,13 +2154,13 @@ cmd_create_pr() {
 
   # A PR opened for review needs the local CI verdict; a draft waits for it
   if [[ ${#draft_args[@]} -eq 0 ]]; then
-    local_ci_gate "$LOCAL_HEAD" || { echo "  No pull request was created." >&2; return 1; }
+    local_ci_gate "$LOCAL_HEAD" "$TICKET_NUMBER" "$CURRENT_BRANCH" || { echo "  No pull request was created." >&2; return 1; }
   fi
 
   local PR_CREATE_STATUS=0 PR_OUTPUT PR_URL PR_BODY
   PR_BODY="Resolves #${TICKET_NUMBER}"
   [[ "$PR_CONTEXT_KIND" == release ]] && PR_BODY="Closes #${TICKET_NUMBER}"
-  [[ -n "$LOCAL_CI_SKIP_REASON" && ${#draft_args[@]} -eq 0 ]] && PR_BODY+=$'\n\n'"Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}"
+  [[ "$LOCAL_CI_SKIPPED" == true ]] && PR_BODY+=$'\n\n'"Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}"
   PR_OUTPUT=$(gh pr create --title "[#${TICKET_NUMBER}] $ISSUE_TITLE" \
     --body "$PR_BODY" --base "$PR_TARGET_BRANCH" ${head_args[@]+"${head_args[@]}"} "${draft_args[@]}" 2>&1) || PR_CREATE_STATUS=$?
   PR_URL=$(echo "$PR_OUTPUT" | grep -oE 'https://[^[:space:]]+/pull/[0-9]+' | head -n 1 || true)
@@ -2038,6 +2171,47 @@ cmd_create_pr() {
     echo -e "${RED}Error creating PR (gh exit ${PR_CREATE_STATUS}):${NC}"
     echo "$PR_OUTPUT"
     return 1
+  fi
+}
+
+# The ticket's one open pull request and its verified head commit, for ready-pr, draft-pr and
+# local-ci-gate (#1125): from the ticket branch itself, or from any other checkout through the
+# pull request found on GitHub. Sets CURRENT_BRANCH, BRANCH_PRS and PR_HEAD_COMMIT.
+resolve_ticket_pr_with_head() {
+  pr_branch_context "$1" true origin || return 1
+  read_branch_pr || return 1
+  [[ $(echo "$BRANCH_PRS" | jq length) -eq 1 ]] || { echo "Error: no open PR for ticket #$1 on ${CURRENT_BRANCH}." >&2; return 1; }
+  if [[ "$PR_ORIGIN_RESOLVED" == true ]]; then
+    verify_pr_head_on_origin || return 1
+  else
+    verify_pr_head || return 1
+  fi
+}
+
+# local-ci-gate <ticket> [--head <branch> | --pr <number>] [--skip-local-ci "<reason>"] (#1104):
+# the local CI gate of ready-pr, run on its own. It reads the head commit of the ticket's open pull
+# request the way ready-pr does, from the ticket worktree or from the primary checkout, and changes
+# no pull request state. `update-status <ticket> "Human testing"` calls it. Exit 0 when the required
+# statuses are green on that head, or the gate was skipped with a recorded reason; 1 when it refuses.
+cmd_local_ci_gate() {
+  parse_local_ci_args "$@" || return 1
+  set -- ${PR_ARGS[@]+"${PR_ARGS[@]}"}
+  if [[ "$#" -ne 1 ]]; then
+    echo "Usage: $0 local-ci-gate <ticket-number> [--head <branch> | --pr <number>] [--skip-local-ci \"<reason>\"]" >&2
+    return 1
+  fi
+  if [[ -n "$PR_NUMBER_OPTION" && -n "$PR_HEAD_OPTION" ]]; then
+    echo "Error: name the pull request with --pr <number> or its branch with --head <branch>, not both." >&2
+    return 1
+  fi
+  resolve_ticket_pr_with_head "$1" || return 1
+  local pr_number
+  pr_number=$(echo "$BRANCH_PRS" | jq -r '.[0].number')
+  local_ci_gate "$PR_HEAD_COMMIT" "$1" "$CURRENT_BRANCH" "$pr_number" || { echo "  Pull request #${pr_number} has not passed the local CI gate." >&2; return 1; }
+  if [[ "$LOCAL_CI_SKIPPED" == true ]]; then
+    gh pr comment "$pr_number" --body "Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}" >/dev/null || {
+      echo -e "${YELLOW}⚠ The skip could not be recorded on pull request #${pr_number}; add the comment by hand.${NC}" >&2
+    }
   fi
 }
 
@@ -2054,20 +2228,13 @@ cmd_set_pr_draft() {
     echo "Error: name the pull request with --pr <number> or its branch with --head <branch>, not both." >&2
     return 1
   fi
-  pr_branch_context "$1" true origin || return 1
-  read_branch_pr || return 1
-  [[ $(echo "$BRANCH_PRS" | jq length) -eq 1 ]] || { echo "Error: no open PR for ticket #$1 on ${CURRENT_BRANCH}." >&2; return 1; }
-  if [[ "$PR_ORIGIN_RESOLVED" == true ]]; then
-    verify_pr_head_on_origin || return 1
-  else
-    verify_pr_head || return 1
-  fi
+  resolve_ticket_pr_with_head "$1" || return 1
   local pr_number state_args=()
   pr_number=$(echo "$BRANCH_PRS" | jq -r '.[0].number')
   # Marking ready asks for review: the local CI verdict must be on the head first (#918)
   if [[ "$desired_draft" == false ]]; then
-    local_ci_gate "$PR_HEAD_COMMIT" || { echo "  Pull request #${pr_number} stays a draft." >&2; return 1; }
-    [[ -n "$LOCAL_CI_SKIP_REASON" ]] && gh pr comment "$pr_number" --body "Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}" >/dev/null
+    local_ci_gate "$PR_HEAD_COMMIT" "$1" "$CURRENT_BRANCH" "$pr_number" || { echo "  Pull request #${pr_number} stays a draft." >&2; return 1; }
+    [[ "$LOCAL_CI_SKIPPED" == true ]] && gh pr comment "$pr_number" --body "Local CI gate skipped: ${LOCAL_CI_SKIP_REASON}" >/dev/null
   fi
   [[ "$desired_draft" == true ]] && state_args=(--undo)
   if [[ $(echo "$BRANCH_PRS" | jq -r '.[0].isDraft') != "$desired_draft" ]]; then
@@ -2808,6 +2975,7 @@ case "$COMMAND" in
   create-pr)          cmd_create_pr "$@" ;;
   ready-pr)           cmd_ready_pr "$@" ;;
   draft-pr)           cmd_draft_pr "$@" ;;
+  local-ci-gate)      cmd_local_ci_gate "$@" ;;
   list)               cmd_list "$@" ;;
   cache-clear)        cmd_cache_clear "$@" ;;
   ensure-issue-types) cmd_ensure_issue_types "$@" ;;
@@ -2849,6 +3017,8 @@ case "$COMMAND" in
     echo "                                           Return the ticket PR to draft"
     echo "                                           Off the ticket branch (the primary checkout), the ticket's one open PR is found"
     echo "                                           on GitHub from the branch naming; its head must be origin's commit for that branch"
+    echo "  local-ci-gate <ticket> [--head <branch> | --pr <number>] [--skip-local-ci \"<reason>\"]"
+    echo "                                           Check the required local CI statuses on the ticket PR head (changes nothing)"
     echo "  list [status]                            List project items (optionally filtered)"
     echo "  milestone <sub> [args]                   create|list|show|scope|assign|associate|readiness"
     echo "  cache-clear                              Drop the on-disk schema cache"
@@ -2859,7 +3029,7 @@ case "$COMMAND" in
     ;;
   *)
     echo -e "${RED}Error: Unknown command '${COMMAND}'${NC}"
-    echo "Available: create-ticket, create-subtask, create-epic, comment, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, unlink-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type, milestone"
+    echo "Available: create-ticket, create-subtask, create-epic, comment, status, update-status, add-to-project, set-complexity, get-complexity, get-labels, list-incomplete-children, inspect-srs-tickets, link-subtask, unlink-subtask, get-parent, get-issue-type, get-ticket, create-pr, ready-pr, draft-pr, local-ci-gate, list, cache-clear, ensure-issue-types, assign-type, delete-issue-type, milestone"
     exit 1
     ;;
 esac
