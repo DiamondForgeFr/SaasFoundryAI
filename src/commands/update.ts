@@ -54,6 +54,7 @@ import {
 import { handleProfileTransition } from './update.profile-transition'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
+import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
 import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
 import { TIER_AGENT_PATH } from '../harness/tier-agents'
 import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
@@ -1479,6 +1480,21 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       const settingsResults = await syncHarnessSettingsForProject('.', manifest, { dryRun })
       if (dryRunReport && settingsResults.some((result) => result.status !== 'unchanged')) dryRunReport.harnessSettings = settingsResults.filter((result) => result.status !== 'unchanged')
       logHarnessSettings(settingsResults, { dryRun })
+    }
+
+    // The agent-instruction refresh above raises Codex's `project_doc_max_bytes` when the AGENTS.md chain a
+    // declared Codex loads is over it (#1154); the dry run, which refreshes nothing, says so beforehand.
+    if (dryRun) {
+      const migrationPending = pendingModuleMigrations.some((pending) => pending.migrations.some((migration) => migration.name === 'move-claude-md-to-agents-md'))
+      const limits = await previewCodexInstructionLimits('.', manifest, migrationPending)
+      if (dryRunReport && limits.length > 0) dryRunReport.codexInstructionLimit = limits
+      for (const limit of limits) {
+        console.log(
+          chalk.yellow(
+            `  Would set project_doc_max_bytes = ${limit.to} in ${limit.path}: Codex would load ${limit.bytes} bytes of AGENTS.md in ${limit.directory}, past ${limit.from ?? 'its 32 KiB default'}.`
+          )
+        )
+      }
     }
 
     // ─── FLOW 2: Module addition ───

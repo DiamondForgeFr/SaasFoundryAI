@@ -302,18 +302,25 @@ function checkClaudeCodeVersion(report: StatusReport): Precondition {
 
 function checkCodexInstructionSize(report: StatusReport): Precondition {
   const name = 'codexInstructionSize'
-  const description = `AGENTS.md fits Codex's ${CODEX_INSTRUCTION_LIMIT / 1024} KiB limit`
+  // The limit `.codex/config.toml` sets, once `sf update` or `sf agents refresh` raised it (#1154), or Codex's default.
+  const configured = report.instructions?.codexLimit
+  const limit = configured ?? CODEX_INSTRUCTION_LIMIT
+  const description = configured === undefined ? `AGENTS.md fits Codex's ${limit / 1024} KiB limit` : `AGENTS.md fits Codex's project_doc_max_bytes (${limit} bytes, .codex/config.toml)`
   const skipped = agentNotDeclared(name, description, report, 'codex')
   if (skipped) return skipped
   const sizes = report.instructions?.codexSizes ?? []
-  const over = sizes.filter((size) => size.bytes > CODEX_INSTRUCTION_LIMIT)
-  if (over.length === 0) return { name, description, status: 'ok', details: sizes.map((size) => `${size.directory}: ${size.bytes} bytes`).join(', ') || 'No AGENTS.md' }
+  const over = sizes.filter((size) => size.bytes > limit)
+  if (over.length === 0) {
+    const measured = sizes.map((size) => `${size.directory}: ${size.bytes} bytes`).join(', ') || 'No AGENTS.md'
+    // Codex reads a project's `.codex/config.toml` only once it trusts the project.
+    return { name, description, status: 'ok', details: configured === undefined ? measured : `${measured} (applies once Codex trusts the project)` }
+  }
   return {
     name,
     description,
     status: 'warn',
-    details: `Codex cuts what it loads past ${CODEX_INSTRUCTION_LIMIT} bytes: ${over.map((size) => `${size.directory} loads ${size.bytes} bytes (${size.files.join(' + ')})`).join('; ')}`,
-    remediation: 'Move detail out of AGENTS.md and its imports into docs or skills it names, or raise `project_doc_max_bytes` in `.codex/config.toml`.'
+    details: `Codex cuts what it loads past ${limit} bytes: ${over.map((size) => `${size.directory} loads ${size.bytes} bytes (${size.files.join(' + ')})`).join('; ')}`,
+    remediation: 'Run `sf agents refresh` (or `sf update`) to raise `project_doc_max_bytes` in `.codex/config.toml`, or move detail out of AGENTS.md and its imports into docs or skills it names.'
   }
 }
 

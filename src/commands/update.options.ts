@@ -1,4 +1,5 @@
 import type { CliChannel } from '../cli-channel'
+import type { CodexInstructionLimitPreview } from '../harness/codex-instruction-limit-preview'
 import type { HarnessSettingsResult } from '../harness/harness-settings'
 import type { PendingModuleMigrations } from '../migrations/module/registry'
 import { AdvancedSkillCredentials } from '../prompts/skills.prompts'
@@ -125,6 +126,11 @@ export interface UpdateDryRunReport {
    * pending harness migration already lists it.
    */
   harnessSettings?: HarnessSettingsResult[]
+  /**
+   * The `.codex/config.toml` files whose `project_doc_max_bytes` the real update would raise (#1154): a
+   * declared Codex loads the AGENTS.md chain only up to it. Absent when every chain fits.
+   */
+  codexInstructionLimit?: CodexInstructionLimitPreview[]
   harnessRefresh?:
     | { status: 'adoption-needed' }
     | {
