@@ -75,10 +75,10 @@ describe('createMonorepoRoot (integration)', () => {
 
     const pkg = JSON.parse(await readFile(join(tempDir, 'package.json'), 'utf8'))
     expect(pkg.devDependencies).toMatchObject({
-      eslint: '10.3.0',
-      'eslint-plugin-prettier': '5.5.5',
-      globals: '17.6.0',
-      'typescript-eslint': '8.59.1'
+      eslint: '10.14.0',
+      'eslint-plugin-prettier': '5.5.7',
+      globals: '17.14.0',
+      'typescript-eslint': '8.72.1'
     })
   })
 

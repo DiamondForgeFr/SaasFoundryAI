@@ -63,16 +63,16 @@
     "turborepo"
   ],
   "devDependencies": {
-    "@commitlint/cli": "21.2.2",
-    "@commitlint/config-conventional": "21.2.2",
-    "eslint": "10.3.0",
-    "eslint-plugin-prettier": "5.5.5",
-    "globals": "17.6.0",
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "eslint": "10.14.0",
+    "eslint-plugin-prettier": "5.5.7",
+    "globals": "17.14.0",
     "husky": "9.1.7",
-    "prettier": "3.8.3",
-    "turbo": "2.10.11",
+    "prettier": "3.8.5",
+    "turbo": "2.11.10",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.59.1"
+    "typescript-eslint": "8.72.1"
   },
   "overrides": {
     "@nestjs/platform-express": {
