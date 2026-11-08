@@ -135,12 +135,15 @@ n'est que le pont généré vers votre `CLAUDE.md` est remplacé, pas conservé 
 
 Une section déplacée à l'identique peut citer un fichier que le déplacement supprime : une ligne de l'arborescence du projet comme `└── CLAUDE.md     # API-specific context`, ou « Check
 `apps/api/CLAUDE.md` ». La mise à jour fait pointer chacune de ces références vers l'`AGENTS.md` voisin (`apps/api/CLAUDE.md` devient `apps/api/AGENTS.md`), pour que le texte déplacé ne cite pas un
-fichier qui n'existe plus. Seul un chemin vers un `CLAUDE.md` que la mise à jour supprime est réécrit : un `CLAUDE.md` qui reste (une application dont vous avez écrit l'`AGENTS.md`),
-`CLAUDE.local.md`, `~/.claude/CLAUDE.md`, un lien vers un autre site et tout le reste du texte sont conservés. Un projet déplacé par la version 1.1.0, qui a laissé ces références, les voit signalées
-par [`sf status`](/fr/cli/sf-status#instructions-des-agents) (`instructionReferences`) et les corrige à la main.
+fichier qui n'existe plus. Elle ne le fait que là où le texte ne laisse aucun doute : un chemin avec un dossier, ou une entrée d'une arborescence dessinée, qui cite un `CLAUDE.md` que la mise à jour
+supprime. Un nom seul dans une phrase (« Mettez CLAUDE.md à jour quand… ») peut désigner le fichier comme simplement l'étiqueter : il est conservé tel que vous l'avez écrit et signalé (voir l'aperçu
+ci-dessous et l'avis que la mise à jour affiche). Un `CLAUDE.md` qui reste (une application dont vous avez écrit l'`AGENTS.md`), `CLAUDE.local.md`, `~/.claude/CLAUDE.md`, un lien vers un autre site et
+tout le reste du texte sont conservés. Un projet déplacé par la version 1.1.0, qui a laissé ces références, voit ce qui reste signalé par [`sf status`](/fr/cli/sf-status#instructions-des-agents)
+(`instructionReferences`) et le corrige à la main.
 
 Prévisualisez d'abord : `sf update --dry-run --json` liste chaque section sous `moduleMigrations`, avec son action (`move`, `refresh`, `drop`, `keep-for-review`), sa source et sa cible. Chaque
-référence qu'elle ferait pointer vers un `AGENTS.md` a sa propre entrée `rewrite`, avec la ligne du `CLAUDE.md` dont elle vient.
+référence qu'elle ferait pointer vers un `AGENTS.md` a sa propre entrée `rewrite`, avec la ligne du `CLAUDE.md` dont elle vient ; chaque nom seul qu'elle laisserait est une entrée `report` avec sa
+ligne.
 
 Lorsqu'un projet `harness` reçoit le stack technique, SaaSFoundry utilise une transaction journalisée. Un prochain `sf update --target-profile full` tente d'abord une récupération sûre si un processus
 s'est arrêté pendant la transition. S'il ne peut prouver ni commit complet ni retour arrière sûr, il s'arrête et signale les chemins non résolus.

@@ -20,8 +20,9 @@ import { hashFileContent } from '../utils'
  * - a section still identical to a shipped template version is refreshed to the current,
  *   tool-neutral wording when the template still has it;
  * - everything else (the user's sections, the workflow section) moves verbatim, in order, except that a
- *   reference to a CLAUDE.md this migration removes (a project-structure tree line, "Check
- *   `apps/api/CLAUDE.md`") is pointed at the AGENTS.md beside it (#1152). Any other mention is left as written.
+ *   reference to a CLAUDE.md this migration removes is pointed at the AGENTS.md beside it (#1152) when
+ *   it is a path with a directory ("Check `apps/api/CLAUDE.md`") or an entry of a drawn tree. A bare name
+ *   in running text can label the file as well as name it, so it is kept as written and reported.
  *
  * CLAUDE.md is removed only once AGENTS.md is written and every moved section is read back in it.
  * An AGENTS.md the user wrote is never overwritten: the proposal goes to a `.saasfoundry.new`
@@ -61,6 +62,8 @@ export interface SectionMove {
   action: SectionAction
   /** References to a CLAUDE.md this migration removes, pointed at the AGENTS.md beside it (#1152). */
   rewrites?: ReferenceRewrite[]
+  /** Lines of CLAUDE.md where a bare name in running text names a removed file and was left as written (#1152). */
+  mentions?: number[]
 }
 
 export interface InstructionDirectoryPlan {
@@ -176,6 +179,10 @@ function removesClaudeMd(manifest: SaaSFoundryManifest, files: DirectoryFiles): 
 }
 
 const newlines = (text: string): number => text.split('\n').length - 1
+const references = (rewrites: ReferenceRewrite[], mentions: number[]): Pick<SectionMove, 'rewrites' | 'mentions'> => ({
+  ...(rewrites.length > 0 ? { rewrites } : {}),
+  ...(mentions.length > 0 ? { mentions } : {})
+})
 
 async function planDirectory(manifest: SaaSFoundryManifest, files: DirectoryFiles, removed: ReadonlySet<string>): Promise<InstructionDirectoryPlan | undefined> {
   const { dir, kind, region, claude, agents, localShadow } = files
@@ -197,8 +204,8 @@ async function planDirectory(manifest: SaaSFoundryManifest, files: DirectoryFile
     if (section.heading && REGION_HEADINGS.includes(section.heading)) {
       if (isShippedAnywhere(section)) moves.push({ heading: section.heading, action: 'drop' })
       else {
-        const { text, rewrites } = rewriteRemovedClaudeMdReferences(section.text, dir, removed, firstLine)
-        moves.push({ heading: section.heading, action: 'keep-for-review', ...(rewrites.length > 0 ? { rewrites } : {}) })
+        const { text, rewrites, mentions } = rewriteRemovedClaudeMdReferences(section.text, dir, removed, firstLine)
+        moves.push({ heading: section.heading, action: 'keep-for-review', ...references(rewrites, mentions) })
         kept.push(text)
         verbatim.push(text.trimEnd())
       }
@@ -210,8 +217,8 @@ async function planDirectory(manifest: SaaSFoundryManifest, files: DirectoryFile
       placed.push(refreshed)
       continue
     }
-    const { text, rewrites } = rewriteRemovedClaudeMdReferences(section.text, dir, removed, firstLine)
-    moves.push({ heading: section.heading, action: 'move', ...(rewrites.length > 0 ? { rewrites } : {}) })
+    const { text, rewrites, mentions } = rewriteRemovedClaudeMdReferences(section.text, dir, removed, firstLine)
+    moves.push({ heading: section.heading, action: 'move', ...references(rewrites, mentions) })
     placed.push(text)
     verbatim.push(text.trimEnd())
   }
@@ -268,6 +275,14 @@ export function previewClaudeMdMigration(plan: ClaudeMdMigrationPlan): ModuleMig
       for (const rewrite of move.rewrites ?? []) {
         entries.push({ action: 'rewrite', source, target, reason: `${claude} line ${rewrite.line}: ${rewrite.from} → ${rewrite.to}; the file it names is removed by this migration` })
       }
+      for (const line of move.mentions ?? []) {
+        entries.push({
+          action: 'report',
+          source,
+          target,
+          reason: `${claude} line ${line} names a removed CLAUDE.md in running text; left as written, because a bare name can be a label. Edit it if it means the file`
+        })
+      }
     }
     if (dirPlan.agentsContent !== undefined && dirPlan.outcome === 'migrate') entries.push({ action: 'delete', source: claude, reason: 'every section is placed in AGENTS.md' })
     if (dirPlan.outcome === 'sidecar')
@@ -285,8 +300,8 @@ export interface ClaudeMdMigrationResult {
   removedBridges: string[]
   keptForReview: string[]
   localShadows: string[]
-  /** The AGENTS.md files that got references to a removed CLAUDE.md pointed at their replacement (#1152). */
-  rewritten: { path: string; count: number }[]
+  /** The AGENTS.md files that got references to a removed CLAUDE.md pointed at their replacement, and the bare names left as written (#1152). */
+  rewritten: { path: string; rewrites: number; mentions: number }[]
 }
 
 /** Apply a plan. Idempotent: once CLAUDE.md is gone, a new plan has nothing left to move. */
@@ -331,8 +346,9 @@ export async function applyClaudeMdMigration(projectDir: string, manifest: SaaSF
     }
     result.migrated.push(rel(dirPlan.dir, 'CLAUDE.md'))
     if (dirPlan.sections.some((move) => move.action === 'keep-for-review')) result.keptForReview.push(rel(dirPlan.dir, 'AGENTS.md'))
-    const count = dirPlan.sections.reduce((total, move) => total + (move.rewrites?.length ?? 0), 0)
-    if (count > 0) result.rewritten.push({ path: rel(dirPlan.dir, 'AGENTS.md'), count })
+    const rewrites = dirPlan.sections.reduce((total, move) => total + (move.rewrites?.length ?? 0), 0)
+    const mentions = dirPlan.sections.reduce((total, move) => total + (move.mentions?.length ?? 0), 0)
+    if (rewrites > 0 || mentions > 0) result.rewritten.push({ path: rel(dirPlan.dir, 'AGENTS.md'), rewrites, mentions })
   }
 
   if (plan.claudeRule && result.migrated.length > 0) {

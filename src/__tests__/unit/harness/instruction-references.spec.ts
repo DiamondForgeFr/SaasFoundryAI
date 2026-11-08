@@ -25,6 +25,26 @@ describe('findClaudeMdReferences (#1152)', () => {
   it('accepts the punctuation a sentence puts after the name', () => {
     expect(names('See CLAUDE.md. Then (CLAUDE.md), "CLAUDE.md": **CLAUDE.md**, CLAUDE.md;')).toHaveLength(5)
   })
+
+  describe('form', () => {
+    const forms = (content: string): string[] => findClaudeMdReferences(content).map((reference) => reference.form)
+
+    it('is "path" for a name written with a directory', () => {
+      expect(forms('Check `apps/api/CLAUDE.md`, [web](./CLAUDE.md) and ../x/CLAUDE.md')).toEqual(['path', 'path', 'path'])
+    })
+
+    it('is "tree" for the name of an entry in a drawn tree, in any of its glyphs', () => {
+      const tree = ['│   │   └── CLAUDE.md     # API-specific context', '├── CLAUDE.md', '|-- CLAUDE.md', '+-- CLAUDE.md', '`-- CLAUDE.md', '    └─ CLAUDE.md'].join('\n')
+
+      expect(forms(tree)).toEqual(['tree', 'tree', 'tree', 'tree', 'tree', 'tree'])
+    })
+
+    it('is "name" for a bare name in running text, a list item or a table cell: it can label the file as well as name it', () => {
+      const text = ['Read CLAUDE.md first.', '- CLAUDE.md: the project instructions', '* CLAUDE.md', '| `CLAUDE.md` | rules |', 'SaaSFoundry fixture CLAUDE.md canary', '└── see CLAUDE.md'].join('\n')
+
+      expect(forms(text)).toEqual(['name', 'name', 'name', 'name', 'name', 'name'])
+    })
+  })
 })
 
 describe('resolveClaudeMdReference (#1152)', () => {
@@ -51,29 +71,43 @@ describe('resolveClaudeMdReference (#1152)', () => {
 describe('rewriteRemovedClaudeMdReferences (#1152)', () => {
   const removed = new Set(['CLAUDE.md', 'apps/api/CLAUDE.md'])
 
-  it('points each reference to a removed file at the AGENTS.md beside it, keeping the path as written', () => {
-    const text = 'Check `apps/api/CLAUDE.md`.\nUpdate this CLAUDE.md as the project evolves.\n'
+  it('points each path and tree entry that names a removed file at the AGENTS.md beside it, keeping the path as written', () => {
+    const text = 'Check `apps/api/CLAUDE.md`.\n```\n│   └── CLAUDE.md     # context\n```\n'
 
     expect(rewriteRemovedClaudeMdReferences(text, '', removed, 10)).toEqual({
-      text: 'Check `apps/api/AGENTS.md`.\nUpdate this AGENTS.md as the project evolves.\n',
+      text: 'Check `apps/api/AGENTS.md`.\n```\n│   └── AGENTS.md     # context\n```\n',
       rewrites: [
         { line: 10, from: 'apps/api/CLAUDE.md', to: 'apps/api/AGENTS.md' },
-        { line: 11, from: 'CLAUDE.md', to: 'AGENTS.md' }
-      ]
+        { line: 12, from: 'CLAUDE.md', to: 'AGENTS.md' }
+      ],
+      mentions: []
     })
+  })
+
+  it('leaves a bare name in running text as written and returns its line: it can label the file instead of naming it', () => {
+    const text = 'Update this CLAUDE.md as the project evolves.\nSaaSFoundry fixture CLAUDE.md canary.\n'
+
+    expect(rewriteRemovedClaudeMdReferences(text, '', removed, 5)).toEqual({ text, rewrites: [], mentions: [5, 6] })
   })
 
   it('leaves a reference to a file that stays, and everything else, byte for byte', () => {
     const text = 'Check apps/web/CLAUDE.md, ~/.claude/CLAUDE.md, CLAUDE.local.md and https://example.com/CLAUDE.md.\r\nTwo  spaces\tand a tab.\n'
 
-    expect(rewriteRemovedClaudeMdReferences(text, '', removed)).toEqual({ text, rewrites: [] })
+    expect(rewriteRemovedClaudeMdReferences(text, '', removed)).toEqual({ text, rewrites: [], mentions: [] })
   })
 
-  it('resolves a bare name against the directory the text is written in', () => {
-    const text = 'Update this CLAUDE.md. Root: ../../CLAUDE.md\n'
+  it('resolves a name against the directory the text is written in', () => {
+    const text = 'Update this CLAUDE.md. Root: ../../CLAUDE.md\n│   └── CLAUDE.md\n'
 
-    expect(rewriteRemovedClaudeMdReferences(text, 'apps/api', removed).text).toBe('Update this AGENTS.md. Root: ../../AGENTS.md\n')
-    expect(rewriteRemovedClaudeMdReferences(text, 'apps/web', removed).text).toBe('Update this CLAUDE.md. Root: ../../AGENTS.md\n')
+    expect(rewriteRemovedClaudeMdReferences(text, 'apps/api', removed)).toMatchObject({
+      text: 'Update this CLAUDE.md. Root: ../../AGENTS.md\n│   └── AGENTS.md\n',
+      mentions: [1]
+    })
+    // In apps/web the bare name and the tree entry name apps/web/CLAUDE.md, which stays
+    expect(rewriteRemovedClaudeMdReferences(text, 'apps/web', removed)).toMatchObject({
+      text: 'Update this CLAUDE.md. Root: ../../AGENTS.md\n│   └── CLAUDE.md\n',
+      mentions: []
+    })
   })
 })
 

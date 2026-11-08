@@ -225,6 +225,8 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
     }
     const monorepo = (): SaaSFoundryManifest => manifest({ structure: 'monorepo', fileHashes: {} })
 
+    const PROSE = '- ✅ Use CLAUDE.md files in apps/ for app-specific context'
+
     it('points the project-structure tree and the app-specific links at the AGENTS.md files that replace them', async () => {
       await put({ 'CLAUDE.md': await customised(), 'apps/api/CLAUDE.md': await fixture('api'), 'apps/web/CLAUDE.md': await fixture('web') })
 
@@ -233,14 +235,31 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
       const agents = await read('AGENTS.md')
       expect(agents).toContain('│   │   └── AGENTS.md     # API-specific context')
       expect(agents).toContain('│       └── AGENTS.md     # Web-specific context')
-      expect(agents).toContain('- ✅ Use AGENTS.md files in apps/ for app-specific context')
       expect(agents).toContain('- **App-specific context**: Check `apps/api/AGENTS.md` and `apps/web/AGENTS.md`')
       // The customisations that kept these sections out of the template refresh are still there
       expect(agents).toContain('DiamondForge')
       expect(agents).toContain('docs/runbook.md')
-      // Nothing is left that names a file the migration deleted (the notes section names other files, and is checked below)
-      expect(agents.replace(UNRELATED.trimEnd(), '')).not.toContain('CLAUDE.md')
-      expect(output()).toContain('Rewrote 5 reference(s) in AGENTS.md to a removed CLAUDE.md')
+      // What names a deleted file with no doubt is gone; the one bare name in running text is the only CLAUDE.md left (the notes section is checked below)
+      const remaining = agents
+        .replace(UNRELATED.trimEnd(), '')
+        .split('\n')
+        .filter((line) => line.includes('CLAUDE.md'))
+      expect(remaining).toEqual([PROSE])
+      expect(output()).toContain('Rewrote 4 reference(s) in AGENTS.md to a removed CLAUDE.md')
+    })
+
+    it('keeps a bare name in running text as the user wrote it, because it can be a label, and reports it', async () => {
+      const canary = 'SaaSFoundry fixture CLAUDE.md canary — moves to AGENTS.md line for line.'
+      const claude = `# acme\n\n## Fixture conventions\n\n${canary}\n`
+      await put({ 'CLAUDE.md': claude })
+
+      const preview = await moveClaudeMdToAgentsMd.preview!(dir, manifest())
+      await moveClaudeMdToAgentsMd.up(dir, manifest())
+
+      expect(await read('AGENTS.md')).toContain(`## Fixture conventions\n\n${canary}`)
+      expect(preview).toContainEqual(expect.objectContaining({ action: 'report', source: 'CLAUDE.md#Fixture conventions', reason: expect.stringContaining('CLAUDE.md line 5') }))
+      expect(preview.filter((entry) => entry.action === 'rewrite')).toEqual([])
+      expect(output()).toContain('AGENTS.md: 1 mention(s) of a removed CLAUDE.md in running text were kept as you wrote them')
     })
 
     it('leaves every mention of a CLAUDE.md it does not remove as written', async () => {
@@ -274,11 +293,12 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
       expect(rewrites.map((entry) => entry.reason)).toEqual([
         expect.stringContaining(`CLAUDE.md line ${lineOf('API-specific context')}: CLAUDE.md → AGENTS.md`),
         expect.stringContaining(`CLAUDE.md line ${lineOf('Web-specific context')}: CLAUDE.md → AGENTS.md`),
-        expect.stringContaining(`CLAUDE.md line ${lineOf('Use CLAUDE.md files in apps/')}: CLAUDE.md → AGENTS.md`),
         expect.stringContaining(`CLAUDE.md line ${lineOf('Check `apps/api/CLAUDE.md`')}: apps/api/CLAUDE.md → apps/api/AGENTS.md`),
         expect.stringContaining(`CLAUDE.md line ${lineOf('Check `apps/api/CLAUDE.md`')}: apps/web/CLAUDE.md → apps/web/AGENTS.md`)
       ])
       expect(rewrites[0]).toMatchObject({ source: 'CLAUDE.md#🏗️ Monorepo Structure', target: 'AGENTS.md' })
+      // The bare name in running text is listed too, so nothing that names a deleted file goes unreported
+      expect(preview.filter((entry) => entry.action === 'report')).toEqual([expect.objectContaining({ reason: expect.stringContaining(`CLAUDE.md line ${lineOf(PROSE)} names a removed CLAUDE.md`) })])
       // Each rewrite sits beside the section it belongs to, which the preview still lists as moved verbatim
       expect(preview).toContainEqual(expect.objectContaining({ action: 'move', source: 'CLAUDE.md#🏗️ Monorepo Structure', target: 'AGENTS.md' }))
       expect(await read('CLAUDE.md')).toBe(claude)
