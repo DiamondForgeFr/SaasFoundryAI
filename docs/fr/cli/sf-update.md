@@ -133,7 +133,14 @@ Les ponts générés sont reconnus à leurs octets, quelle que soit la version q
 `AGENTS.md` est supprimé, car il cache `AGENTS.md` à Claude Code ; il n'est pas pris pour un `CLAUDE.md` que vous avez écrit, ce qui laissait votre `AGENTS.md` à côté d'un sidecar. Un `AGENTS.md` qui
 n'est que le pont généré vers votre `CLAUDE.md` est remplacé, pas conservé comme un fichier à vous.
 
-Prévisualisez d'abord : `sf update --dry-run --json` liste chaque section sous `moduleMigrations`, avec son action (`move`, `refresh`, `drop`, `keep-for-review`), sa source et sa cible.
+Une section déplacée à l'identique peut citer un fichier que le déplacement supprime : une ligne de l'arborescence du projet comme `└── CLAUDE.md     # API-specific context`, ou « Check
+`apps/api/CLAUDE.md` ». La mise à jour fait pointer chacune de ces références vers l'`AGENTS.md` voisin (`apps/api/CLAUDE.md` devient `apps/api/AGENTS.md`), pour que le texte déplacé ne cite pas un
+fichier qui n'existe plus. Seul un chemin vers un `CLAUDE.md` que la mise à jour supprime est réécrit : un `CLAUDE.md` qui reste (une application dont vous avez écrit l'`AGENTS.md`),
+`CLAUDE.local.md`, `~/.claude/CLAUDE.md`, un lien vers un autre site et tout le reste du texte sont conservés. Un projet déplacé par la version 1.1.0, qui a laissé ces références, les voit signalées
+par [`sf status`](/fr/cli/sf-status#instructions-des-agents) (`instructionReferences`) et les corrige à la main.
+
+Prévisualisez d'abord : `sf update --dry-run --json` liste chaque section sous `moduleMigrations`, avec son action (`move`, `refresh`, `drop`, `keep-for-review`), sa source et sa cible. Chaque
+référence qu'elle ferait pointer vers un `AGENTS.md` a sa propre entrée `rewrite`, avec la ligne du `CLAUDE.md` dont elle vient.
 
 Lorsqu'un projet `harness` reçoit le stack technique, SaaSFoundry utilise une transaction journalisée. Un prochain `sf update --target-profile full` tente d'abord une récupération sûre si un processus
 s'est arrêté pendant la transition. S'il ne peut prouver ni commit complet ni retour arrière sûr, il s'arrête et signale les chemins non résolus.

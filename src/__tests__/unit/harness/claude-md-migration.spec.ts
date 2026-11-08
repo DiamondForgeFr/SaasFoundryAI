@@ -240,7 +240,7 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
       expect(agents).toContain('docs/runbook.md')
       // Nothing is left that names a file the migration deleted (the notes section names other files, and is checked below)
       expect(agents.replace(UNRELATED.trimEnd(), '')).not.toContain('CLAUDE.md')
-      expect(output()).toContain('Pointed 5 reference(s) in AGENTS.md')
+      expect(output()).toContain('Rewrote 5 reference(s) in AGENTS.md to a removed CLAUDE.md')
     })
 
     it('leaves every mention of a CLAUDE.md it does not remove as written', async () => {
@@ -313,7 +313,7 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
 
       expect(preview.filter((entry) => entry.action === 'rewrite')).toEqual([])
       expect(await read('AGENTS.md')).toContain(UNRELATED.trimEnd())
-      expect(output()).not.toContain('Pointed')
+      expect(output()).not.toContain('Rewrote')
     })
   })
 })
