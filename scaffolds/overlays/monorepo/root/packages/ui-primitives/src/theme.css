@@ -5,8 +5,9 @@
  *   @import "@{{PROJECT_NAME}}/ui-primitives/theme.css";
  *
  * Apps also need to add `@source` so Tailwind scans primitive files
- * for utility classes:
- *   @source "../../../node_modules/@{{PROJECT_NAME}}/ui-primitives/src";
+ * for utility classes. Point it at the workspace folder, which exists in
+ * every checkout, including a git worktree with no root node_modules:
+ *   @source "../../../packages/ui-primitives/src";
  *
  * Theme: Warm Editorial · Sora + Mulish · Radius 2px
  */
