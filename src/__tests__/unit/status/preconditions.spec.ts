@@ -403,6 +403,15 @@ describe('instruction preconditions (#939)', () => {
     expect(size?.details).not.toContain('20000')
     expect(size?.remediation).toContain('project_doc_max_bytes')
   })
+
+  it('measures against the project_doc_max_bytes .codex/config.toml sets (#1154)', () => {
+    const codexSizes = [{ directory: 'apps/api', bytes: 36024, files: ['AGENTS.md', 'apps/api/AGENTS.md'] }]
+    const raised = find(makeReport({ instructions: { agents: ['codex'], shadowing: [], codexSizes, codexLimit: 49152 } }), 'codexInstructionSize')
+    expect(raised).toMatchObject({ status: 'ok', description: expect.stringContaining('49152 bytes, .codex/config.toml') })
+    expect(raised?.details).toContain('once Codex trusts the project')
+    const tooLow = find(makeReport({ instructions: { agents: ['codex'], shadowing: [], codexSizes, codexLimit: 36000 } }), 'codexInstructionSize')
+    expect(tooLow).toMatchObject({ status: 'warn', details: expect.stringContaining('past 36000 bytes') })
+  })
 })
 
 describe('instruction references precondition (#1152)', () => {

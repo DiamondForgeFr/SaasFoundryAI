@@ -4,6 +4,7 @@ import path from 'path'
 
 import type { HarnessAgent } from '../harness/agent-registry'
 import { readAgentSupport } from '../harness/agent-support'
+import { MAX_FILE_BYTES, measureCodexInstructions, readProjectCodexDocLimit, type CodexInstructionSize } from '../harness/codex-instruction-size'
 import { findClaudeMdReferences, isMigrationMarker, resolveClaudeMdReference } from '../harness/instruction-references'
 
 /**
@@ -23,6 +24,8 @@ export interface InstructionDiagnostics {
   claudeCode?: ClaudeCodeVersion
   /** What Codex loads for each directory holding an AGENTS.md; absent when Codex is not declared. */
   codexSizes?: CodexInstructionSize[]
+  /** The `project_doc_max_bytes` the project's `.codex/config.toml` sets; absent when it sets none (#1154). */
+  codexLimit?: number
   /** Mentions in an AGENTS.md of a CLAUDE.md that is not there (#1152); absent when the declaration could not be read. */
   staleReferences?: StaleInstructionReference[]
 }
@@ -44,28 +47,15 @@ export interface ClaudeCodeVersion {
   reason?: string
 }
 
-export interface CodexInstructionSize {
-  /** Directory, relative to the project root ('.' for the root). */
-  directory: string
-  /** Bytes of every AGENTS.md from the Git root down to `directory`, imports included. */
-  bytes: number
-  /** The files counted, relative to the project root. */
-  files: string[]
-}
+// The measurement is shared with the harness refresh, which raises the limit (#1154).
+export { CODEX_INSTRUCTION_LIMIT, importsOf, measureCodexInstructions } from '../harness/codex-instruction-size'
+export type { CodexInstructionSize } from '../harness/codex-instruction-size'
 
 /** First Claude Code release that reads AGENTS.md (#937). */
 export const MIN_CLAUDE_CODE_VERSION = '2.1.277'
-/** Codex's default `project_doc_max_bytes`: instructions past this are silently cut. */
-export const CODEX_INSTRUCTION_LIMIT = 32 * 1024
 
 const SHADOWING_FILES = ['CLAUDE.md', path.join('.claude', 'CLAUDE.md'), 'CLAUDE.local.md']
 const VERSION_TIMEOUT_MS = 3000
-/** Claude Code follows imports five hops deep; so does the count. */
-const MAX_IMPORT_DEPTH = 5
-const MAX_FILE_BYTES = 1024 * 1024
-
-const FENCE = /^ {0,3}(`{3,}|~{3,})/
-const IMPORT = /(?:^|\s)@([^\s`]+)/g
 
 export async function collectInstructionDiagnostics(projectRoot: string, appDirs: string[], gitRoot: string | null): Promise<InstructionDiagnostics> {
   const agents = await declaredAgents(projectRoot)
@@ -75,7 +65,11 @@ export async function collectInstructionDiagnostics(projectRoot: string, appDirs
     diagnostics.shadowing = findShadowingFiles(projectRoot, appDirs)
     diagnostics.claudeCode = await readClaudeCodeVersion(projectRoot)
   }
-  if (agents.includes('codex')) diagnostics.codexSizes = measureCodexInstructions(projectRoot, appDirs, gitRoot)
+  if (agents.includes('codex')) {
+    diagnostics.codexSizes = measureCodexInstructions(projectRoot, appDirs, gitRoot)
+    const limit = readProjectCodexDocLimit(projectRoot)
+    if (limit !== undefined) diagnostics.codexLimit = limit
+  }
   diagnostics.staleReferences = findStaleClaudeMdReferences(projectRoot, appDirs)
   return diagnostics
 }
@@ -201,75 +195,10 @@ export function compareCliVersions(a: string, b: string): number | undefined {
   return comparePrerelease(left[4], right[4])
 }
 
-/**
- * What Codex loads when started in each directory holding an AGENTS.md: it concatenates the
- * AGENTS.md (or AGENTS.override.md) of every directory from the Git root down to the working
- * directory, and stops at `project_doc_max_bytes`.
- */
-export function measureCodexInstructions(projectRoot: string, appDirs: string[], gitRoot: string | null): CodexInstructionSize[] {
-  const root = path.resolve(projectRoot)
-  const top = gitRoot && isWithin(root, path.resolve(gitRoot)) ? path.resolve(gitRoot) : root
-  const sizes: CodexInstructionSize[] = []
-  for (const dir of ['.', ...appDirs]) {
-    const target = path.join(root, dir)
-    if (!instructionFileIn(target)) continue
-    const chain: string[] = []
-    for (let current = target; ; current = path.dirname(current)) {
-      const file = instructionFileIn(current)
-      if (file) chain.unshift(file)
-      if (current === top || path.dirname(current) === current) break
-    }
-    const counted = new Set<string>()
-    for (const file of chain) collectImports(file, root, counted, 0)
-    let bytes = 0
-    for (const file of counted) bytes += fs.statSync(file).size
-    sizes.push({ directory: dir, bytes, files: [...counted].map((file) => path.relative(root, file) || file) })
-  }
-  return sizes
-}
-
-function instructionFileIn(dir: string): string | undefined {
-  return ['AGENTS.override.md', 'AGENTS.md'].map((name) => path.join(dir, name)).find(isFile)
-}
-
-/** Add `file` and, recursively, every `@path` it imports that stays inside the project. */
-function collectImports(file: string, projectRoot: string, counted: Set<string>, depth: number): void {
-  if (counted.has(file)) return
-  counted.add(file)
-  if (depth >= MAX_IMPORT_DEPTH || fs.statSync(file).size > MAX_FILE_BYTES) return
-  for (const target of importsOf(fs.readFileSync(file, 'utf8'))) {
-    const resolved = path.resolve(path.dirname(file), target)
-    if (isWithin(resolved, projectRoot) && isFile(resolved)) collectImports(resolved, projectRoot, counted, depth + 1)
-  }
-}
-
-/** `@path` references outside fenced blocks and inline code, as Claude Code reads them. */
-export function importsOf(content: string): string[] {
-  const imports: string[] = []
-  let fence: string | undefined
-  for (const line of content.split('\n')) {
-    const fenceMatch = FENCE.exec(line)
-    if (fenceMatch) {
-      const marker = fenceMatch[1]
-      if (!fence) fence = marker
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined
-      continue
-    }
-    if (fence) continue
-    for (const match of line.replace(/`[^`]*`/g, '').matchAll(IMPORT)) imports.push(match[1].replace(/[.,;:!?)\]]+$/, ''))
-  }
-  return imports
-}
-
 function isFile(candidate: string): boolean {
   try {
     return fs.statSync(candidate).isFile()
   } catch {
     return false
   }
-}
-
-function isWithin(candidate: string, root: string): boolean {
-  const relative = path.relative(root, candidate)
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }

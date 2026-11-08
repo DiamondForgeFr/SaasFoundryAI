@@ -200,6 +200,31 @@ templates : un changement de template ne transforme jamais un fichier déjà mis
 Prévisualisez : `sf update --dry-run` liste le fichier sous `harnessSettings` du rapport (`merged`, `created`, `sidecar`), ou dans l'aperçu de la migration `wire-delegation-capture` en attente quand
 le harness est encore sous la v5.
 
+### Limite d'instructions de Codex
+
+Codex charge l'`AGENTS.md` de chaque dossier, de la racine Git jusqu'à celui où il démarre, et cesse d'ajouter des fichiers dès que la taille cumulée atteint `project_doc_max_bytes`, 32 Kio par
+défaut. Ce qu'il coupe, c'est la fin, là où se trouvent les règles de workflow, de délégation et de worktrees. Une fois un monorepo passé à `AGENTS.md`, le fichier racine plus celui d'une application
+(`apps/api/AGENTS.md`, `apps/web/AGENTS.md`) peut dépasser cette limite.
+
+Quand le projet déclare l'agent `codex` et qu'une de ces chaînes dépasse la limite, le rafraîchissement des instructions d'agent que lance `sf update` (comme `sf agents refresh` et
+`sf agents enable codex`) règle `project_doc_max_bytes` dans `.codex/config.toml` sur la plus longue chaîne plus un quart, arrondie aux 16 Kio supérieurs (une chaîne de 37 Ko donne 49152).
+
+| Situation                                                                   | Résultat                                                                                                             |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Pas de `.codex/config.toml`.                                                | Il est créé avec la seule clé, sous un commentaire qui dit pourquoi.                                                 |
+| Le fichier existe sans la clé.                                              | La clé est ajoutée à la table racine, avant la première `[table]` ; toutes les autres lignes restent telles quelles. |
+| Le fichier fixe une valeur plus petite.                                     | Seule cette valeur est remplacée ; le reste de la ligne, commentaire compris, reste.                                 |
+| Le fichier fixe une valeur qui couvre déjà la plus longue chaîne.           | Rien n'est écrit. La valeur n'est jamais abaissée.                                                                   |
+| La valeur n'est pas un entier simple, ou le fichier est un lien symbolique. | Il reste tel quel et un avertissement le signale.                                                                    |
+| Codex n'est pas déclaré, ou toutes les chaînes tiennent.                    | Rien n'est écrit.                                                                                                    |
+
+`sf update --dry-run` l'annonce sous `codexInstructionLimit` dans le rapport (fichier, valeur actuelle et nouvelle, dossier et sa taille), en mesurant les `AGENTS.md` tels que la mise à jour les
+laissera, y compris le passage de CLAUDE.md à AGENTS.md en attente. Codex ne lit le `.codex/config.toml` d'un projet qu'une fois ce projet approuvé (trusted) ; `sf status` rapporte alors
+`codexInstructionSize` à `ok`.
+
+Aucune version de module n'est incrémentée : la clé est écrite par le rafraîchissement des instructions d'agent qui tourne à chaque mise à jour, comme `.codex/hooks.json`, pas par le jeu de fichiers
+d'un installeur. Les instructions ne sont pas raccourcies ici ; ce travail est suivi à part.
+
 ## Ajouter des capacités après la création
 
 Sélection interactive :

@@ -4,6 +4,16 @@ import { join, posix, resolve } from 'path'
 
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentProfile, needsSharedSkills } from './agent-registry'
+import {
+  CODEX_CONFIG_PATH,
+  CODEX_DOC_LIMIT_KEY,
+  CODEX_INSTRUCTION_LIMIT,
+  findGitRoot,
+  instructionAppDirs,
+  measureCodexInstructions,
+  planCodexDocLimit,
+  type PendingFiles
+} from './codex-instruction-size'
 import { CODEX_HOOKS_PATH, renderCodexHooks } from './delegation-hooks'
 import { withCodexSessionStart } from './session-start-hook'
 import { BridgeKind, isReleasedBridge, isReleasedBridgeHash, normalizeBridgeText } from './released-bridges'
@@ -59,7 +69,7 @@ export class AgentInstructionsError extends Error {
 export interface InstallAgentInstructionsParams {
   targetPath: string
   agents: HarnessAgent[]
-  manifest?: { fileHashes?: Record<string, string>; modules?: { harness?: { routing?: RoutingOverrides } } }
+  manifest?: { fileHashes?: Record<string, string>; modules?: { harness?: { routing?: RoutingOverrides } }; structure?: string; projectName?: string }
   /** Adoption references source instructions without copying or normalizing skills. */
   referenceOnly?: boolean
 }
@@ -708,7 +718,67 @@ export interface AgentInstructionPlan {
 }
 
 /** Render the complete candidate set without changing the target project. */
-export async function planAgentInstructions({ targetPath, agents, manifest, referenceOnly = false }: InstallAgentInstructionsParams): Promise<AgentInstructionPlan> {
+export async function planAgentInstructions(params: InstallAgentInstructionsParams): Promise<AgentInstructionPlan> {
+  const { plan, referenceOnly } = await planInstructionFiles(params)
+  // Once the instructions are rendered, a declared Codex must still load them whole (#1154).
+  if (!referenceOnly && params.agents.includes('codex')) {
+    const pending = new Map(plan.files.map((file) => [join(resolve(params.targetPath), file.path), file.content]))
+    const limit = await planCodexInstructionLimit(params.targetPath, params.manifest, pending)
+    if (limit.warning) plan.warnings.push(limit.warning)
+    if (limit.file) plan.files.push(limit.file)
+  }
+  return plan
+}
+
+export interface CodexInstructionLimitPlan {
+  /** The merged `.codex/config.toml`, when the limit has to be raised. */
+  file?: AgentInstructionFile
+  /** The change, as `sf update --dry-run` reports it. */
+  change?: { path: string; from?: number; to: number; directory: string; bytes: number }
+  /** What the refresh tells the developer: the raise, or why it was not made. */
+  warning?: string
+}
+
+/**
+ * The `.codex/config.toml` that lets Codex load the project's longest AGENTS.md chain (#1154). Codex stops
+ * adding instruction files at `project_doc_max_bytes`, 32 KiB by default, and a migrated monorepo's chain
+ * (root AGENTS.md + an app's) is over it: what Codex cuts is the end, where the workflow rules are. The
+ * file is the project's, like `.codex/hooks.json`: only the key is set, every other line stays, and a value
+ * that already covers the chain is never lowered. `pending` holds the instruction files about to be
+ * written, measured as they will be.
+ */
+export async function planCodexInstructionLimit(targetPath: string, manifest: InstallAgentInstructionsParams['manifest'], pending: PendingFiles = new Map()): Promise<CodexInstructionLimitPlan> {
+  const sizes = measureCodexInstructions(targetPath, instructionAppDirs(manifest), findGitRoot(targetPath), pending)
+  if (!sizes.some((size) => size.bytes > CODEX_INSTRUCTION_LIMIT)) return {}
+  if (await hasLinkedAncestor(targetPath, CODEX_CONFIG_PATH)) {
+    return { warning: `${CODEX_CONFIG_PATH}: symbolic link destination left untouched; Codex cuts the AGENTS.md files it loads past its limit.` }
+  }
+  let existing: string | undefined
+  try {
+    existing = await readFile(join(targetPath, CODEX_CONFIG_PATH), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return { warning: `${CODEX_CONFIG_PATH}: ${(error as Error).message}; ${CODEX_DOC_LIMIT_KEY} was not raised.` }
+  }
+  const change = planCodexDocLimit(sizes, existing)
+  if (!change) return {}
+  if ('error' in change) return { warning: `${change.error}; Codex cuts the AGENTS.md files it loads past its limit.` }
+  const mode = existing === undefined ? 0o644 : (await lstat(join(targetPath, CODEX_CONFIG_PATH))).mode & 0o777
+  return {
+    file: { path: CODEX_CONFIG_PATH, content: Buffer.from(change.content), mode, merge: true },
+    change: { path: CODEX_CONFIG_PATH, ...(change.from !== undefined ? { from: change.from } : {}), to: change.to, directory: change.largest.directory, bytes: change.largest.bytes },
+    warning:
+      `${CODEX_CONFIG_PATH}: ${CODEX_DOC_LIMIT_KEY} set to ${change.to} — Codex loads ${change.largest.bytes} bytes of AGENTS.md in ${change.largest.directory} ` +
+      `(${change.largest.files.join(' + ')}), past ${change.from ?? `its ${CODEX_INSTRUCTION_LIMIT / 1024} KiB default`}. Codex reads this file once it trusts the project.`
+  }
+}
+
+async function planInstructionFiles({ targetPath, agents, manifest, referenceOnly = false }: InstallAgentInstructionsParams): Promise<{ plan: AgentInstructionPlan; referenceOnly: boolean }> {
+  const plan = await planInstructionFileSet({ targetPath, agents, manifest, referenceOnly })
+  const inspected = await inspectInstructionFiles(targetPath)
+  return { plan, referenceOnly: referenceOnly || inspected.referenceOnly || recordsReferenceOnlyBridge(manifest?.fileHashes) }
+}
+
+async function planInstructionFileSet({ targetPath, agents, manifest, referenceOnly = false }: InstallAgentInstructionsParams): Promise<AgentInstructionPlan> {
   const report: AgentInstructionsReport = { written: [], unchanged: [], conflicts: [], warnings: [], fileHashes: {} }
   const plan: AgentInstructionPlan = { files: [], warnings: report.warnings }
   const profiles = [...new Set(agents)].map((agent) => getAgentProfile(agent))
