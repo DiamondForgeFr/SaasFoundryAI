@@ -27,7 +27,37 @@ npm run test:docker:list -- --lane full
 npm run test:docker:scenario -- update-previous-release --depth smoke
 ```
 
-The local runner builds the image once, uses `--init --ipc=host`, mounts diagnostics only, and executes lane entries sequentially.
+The local runner builds the image once, uses `--init --ipc=host`, mounts diagnostics and the npm cache volume below, and executes lane entries sequentially.
+
+## npm inside the lifecycle containers
+
+The generated project's dependencies are installed by the CLI itself: `sf new` and `sf update` shell out to `npm install` in the generated project, and the lifecycle passes them only an allowlisted
+environment. Settings on the lane's own processes never reached those installs, so a registry reset failed a scenario, and a stalled install held it until the 1800 s budget expired (#908, #1198).
+
+Every `npm` the container runs goes through the lane's wrapper, `lifecycle/npm-lane/npm`, which `Dockerfile.test` puts first on `PATH`. It changes nothing generated projects ship.
+
+| Setting                             | Value    | Effect                                                                                                               |
+| ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `npm_config_fetch_retries`          | `5`      | npm retries a failed request five times (its default is 2)                                                           |
+| `npm_config_fetch_retry_mintimeout` | `10000`  | first back-off, in ms                                                                                                |
+| `npm_config_fetch_retry_maxtimeout` | `60000`  | longest back-off, in ms                                                                                              |
+| `npm_config_fetch_timeout`          | `120000` | one request is abandoned and retried after 2 min (npm's default holds a dead socket for 5)                           |
+| `npm_config_update_notifier`        | `false`  | no registry call to check for a newer npm                                                                            |
+| `SF_LANE_NPM_INSTALL_TIMEOUT_MS`    | `600000` | budget of one `npm install` / `npm ci`; a stalled install is stopped with its process group, exit 124                |
+| `SF_LANE_NPM_INSTALL_ATTEMPTS`      | `2`      | an install that failed on `ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`, `ECONNREFUSED` or `network aborted` runs once more |
+
+The wrapper sets each `npm_config_*` value only when the caller did not; `lifecycle/npm-network.ts` holds the same values for the lane's own `npm ci` calls, and a unit test keeps the two equal. A
+stalled install is not run again: a second stall would take the rest of the scenario budget.
+
+When a step fails on the registry, the lifecycle says so: the step reads `failed on the environment (npm registry), not on the product under test`, and `FINAL RESULTS` marks the scenario
+`ENVIRONMENT FAILURE at "<step>"`. Rerun the lane; a product failure never carries that mark.
+
+`run-docker-tests.sh` mounts one named volume, `saasfoundry-lifecycle-npm-cache`, at `/root/.npm` in every scenario container, so a tarball is downloaded once across scenarios and runs. npm checks
+each cached tarball's integrity and still revalidates registry metadata, so the cache changes how much is fetched, not what is installed. Set `SF_DOCKER_NPM_CACHE_VOLUME=` (empty) to run without it,
+or another name to isolate a run; `docker volume rm saasfoundry-lifecycle-npm-cache` empties it. CI runs each scenario on its own runner and mounts no cache.
+
+`src/__tests__/unit/docker/npm-lane.spec.ts` checks the wrapper without a real outage: a stalled fake install is stopped at its budget, and a real `npm install` against a local registry that resets
+its first three connections fails without retries, and succeeds with the retries the wrapper adds (npm's default of 2 would not survive three).
 
 ## Production images
 

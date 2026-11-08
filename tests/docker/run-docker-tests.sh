@@ -5,6 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 IMAGE_NAME="${SF_DOCKER_IMAGE_NAME:-sf-build-test}"
 ARTIFACTS_DIR="${SF_DOCKER_ARTIFACTS_DIR:-$PROJECT_ROOT/.tmp/docker-artifacts}"
+# One npm cache shared by the lane's scenarios and runs, so a tarball downloaded once is not
+# fetched again from the registry (#1198). Set SF_DOCKER_NPM_CACHE_VOLUME= (empty) to disable.
+NPM_CACHE_VOLUME="${SF_DOCKER_NPM_CACHE_VOLUME-saasfoundry-lifecycle-npm-cache}"
+NPM_CACHE_MOUNT=()
+if [[ -n "$NPM_CACHE_VOLUME" ]]; then
+  NPM_CACHE_MOUNT=(--mount "type=volume,source=$NPM_CACHE_VOLUME,target=/root/.npm")
+fi
 SCENARIO=""
 DEPTH="full"
 LANE=""
@@ -62,6 +69,7 @@ run_scenario() {
     -e "TEST_LIVE_DEPTH=$depth" \
     -e "SF_TEST_ARTIFACTS_DIR=/artifacts" \
     --mount "type=bind,source=$output,target=/artifacts" \
+    ${NPM_CACHE_MOUNT[@]+"${NPM_CACHE_MOUNT[@]}"} \
     "$IMAGE_NAME"
   status=$?
   set -e
