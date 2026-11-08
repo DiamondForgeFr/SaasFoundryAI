@@ -1,5 +1,5 @@
 import { test, expect, observeLivePage } from '../fixtures'
-import { signInBrowser } from '../support/api'
+import { signInBrowser, submitAndWaitForApi } from '../support/api'
 import { expectRowCount, queryRows } from '../support/assertions'
 import { LIVE_NEW_PASSWORD, LIVE_PASSWORD, liveIdentity, liveName, liveRoleName } from '../support/data'
 import { messageLink, resetMailbox, waitForMail } from '../support/mailbox'
@@ -74,7 +74,7 @@ test.describe.serial('live users, roles and scope switching', () => {
       const customRole = invitationDialog.getByTestId('invite-role-tile').filter({ hasText: roleName })
       await expect(customRole).toBeVisible()
       await customRole.click()
-      await invitationDialog.getByTestId('invite-user-submit').click()
+      await submitAndWaitForApi(ownerPage, invitationDialog.getByTestId('invite-user-submit'), 'POST', '/invitations')
       await expect(invitationDialog).toBeHidden()
 
       const invitation = await waitForMail(contract, member.email)
@@ -127,7 +127,7 @@ test.describe.serial('live users, roles and scope switching', () => {
       const entityUserRole = entityDialog.locator(`[data-testid="invite-role-tile"][data-role-id="${entityUserRoleId}"]`)
       await expect(entityUserRole).toBeVisible()
       await entityUserRole.click()
-      await entityDialog.getByTestId('invite-user-submit').click()
+      await submitAndWaitForApi(ownerPage, entityDialog.getByTestId('invite-user-submit'), 'POST', '/invitations')
       await expect(entityDialog).toBeHidden()
 
       const entityInvitation = await waitForMail(contract, entityMember.email)
