@@ -18,6 +18,7 @@ const lane = require(join(LANE_DIR, 'npm-lane.cjs')) as {
   ENVIRONMENT_FAILURE_MARKER: string
   npmCommand: (args: readonly string[]) => string | undefined
   resolveRealNpm: (env: NodeJS.ProcessEnv, ownDir: string) => string | undefined
+  laneEnvironment: (env: NodeJS.ProcessEnv) => NodeJS.ProcessEnv
 }
 
 interface Outcome {
@@ -132,6 +133,29 @@ if (mode === 'env') {
     const seen = JSON.parse(outcome.stdout) as Record<string, string>
     expect(seen).toMatchObject({ ...NPM_NETWORK_RETRY_ENV, npm_config_fetch_retries: '9' })
   })
+
+  // The stall the lane saw on 2026-11-08 was this postinstall downloading 183 MiB of browsers
+  it.each(['scaffolds/overlays/monorepo/web/package.json', 'scaffolds/overlays/multirepo/web/package.json'])(
+    'keeps the generated web postinstall in %s from installing browsers in the lane, and only in the lane',
+    (manifest) => {
+      const postinstall = (JSON.parse(readFileSync(resolve(manifest), 'utf8')) as { scripts: Record<string, string> }).scripts.postinstall
+      const bin = join(root, 'fake-npx-bin')
+      mkdirSync(bin, { recursive: true })
+      const calls = join(root, 'npx-calls')
+      writeFileSync(join(bin, 'npx'), `#!/bin/sh\necho "$@" >> "${calls}"\n`)
+      chmodSync(join(bin, 'npx'), 0o755)
+      const base = { PATH: [bin, process.env.PATH].join(delimiter), CI: 'true', HUSKY: '0', PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' }
+      const project = mkdtempSync(join(root, 'web-'))
+
+      writeFileSync(calls, '')
+      expect(spawnSync('sh', ['-c', postinstall], { cwd: project, env: lane.laneEnvironment(base) }).status).toBe(0)
+      expect(readFileSync(calls, 'utf8')).toBe('')
+
+      // Without the lane, a CI install still installs them: the lane changes nothing generated projects do
+      expect(spawnSync('sh', ['-c', postinstall], { cwd: project, env: base }).status).toBe(0)
+      expect(readFileSync(calls, 'utf8')).toContain('playwright install --with-deps')
+    }
+  )
 
   it('stops a stalled install at its budget, with its whole process group, and names it an environment failure', async () => {
     const env = fakeEnv('stall', { SF_LANE_NPM_INSTALL_TIMEOUT_MS: '400' })

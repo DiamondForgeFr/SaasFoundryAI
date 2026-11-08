@@ -73,7 +73,7 @@ const LIFECYCLE_ABORT = new AbortController()
 const TEARDOWN_RESERVE_MS = 30_000
 let ACTIVE_SCENARIO_DEADLINE: number | undefined
 let ACTIVE_LIFECYCLE_TIMING: LifecycleTimingStart | undefined
-/** The first step of the running scenario that failed on the npm registry, not on the product (#1198). */
+/** The first step of the running scenario that failed on the npm install environment, not on the product (#1198). */
 let ACTIVE_ENVIRONMENT_FAILURE: string | undefined
 
 function scenarioDeadline(timeoutSeconds: number): number {
@@ -988,7 +988,7 @@ async function runStep<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
     const detail = formatErrorDetails(err)
     if (isNpmEnvironmentFailure(detail)) {
       ACTIVE_ENVIRONMENT_FAILURE ??= label
-      throw new Error(`step "${label}" failed on the environment (npm registry), not on the product under test: ${detail}`)
+      throw new Error(`step "${label}" failed on the environment (npm install), not on the product under test: ${detail}`)
     }
     throw new Error(`step "${label}" failed: ${detail}`)
   }
@@ -1733,7 +1733,7 @@ async function main() {
   const failed = results.filter((r) => !r.passed).length
 
   for (const result of results) {
-    const environment = result.environmentFailure ? ` — ENVIRONMENT FAILURE at "${result.environmentFailure}" (npm registry, not the product under test; rerun)` : ''
+    const environment = result.environmentFailure ? ` — ENVIRONMENT FAILURE at "${result.environmentFailure}" (npm install, not the product under test; rerun)` : ''
     console.log(`  ${result.passed ? 'PASS' : 'FAIL'} ${result.name}${environment}`)
   }
 
