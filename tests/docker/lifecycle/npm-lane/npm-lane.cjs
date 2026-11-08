@@ -31,6 +31,16 @@ const LANE_NPM_ENV = Object.freeze({
   npm_config_update_notifier: 'false'
 })
 
+/**
+ * The generated web's postinstall runs `npx playwright install --with-deps` when CI=true: 183 MiB
+ * of browsers from Playwright's CDN plus apt, inside every `sf new`, which is what stalled the lane
+ * (#1198). PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD does not stop an explicit install. The lane drives the
+ * browsers the image carries (live-suite.ts), so it uses the switch the generated scripts honour.
+ */
+const LANE_INSTALL_ENV = Object.freeze({
+  SF_SKIP_PLAYWRIGHT_INSTALL: '1'
+})
+
 /** Ten minutes: a loaded machine installs a generated monorepo in four to five. */
 const DEFAULT_INSTALL_TIMEOUT_MS = 600_000
 const DEFAULT_INSTALL_ATTEMPTS = 2
@@ -83,7 +93,7 @@ function resolveRealNpm(env, ownDir) {
 
 function laneEnvironment(env) {
   const next = { ...env }
-  for (const [name, value] of Object.entries(LANE_NPM_ENV)) {
+  for (const [name, value] of Object.entries({ ...LANE_NPM_ENV, ...LANE_INSTALL_ENV })) {
     if (next[name] === undefined || next[name] === '') next[name] = value
   }
   return next
@@ -171,7 +181,7 @@ async function main(args, env = process.env, ownDir = __dirname) {
       // Not retried: a second stall would take the rest of the scenario budget with it.
       process.stderr.write(
         `${ENVIRONMENT_FAILURE_MARKER}: npm ${command} in ${process.cwd()} did not finish within ${Math.round(timeoutMs / 1000)}s and was stopped. ` +
-          'The registry stalled; this is not a product failure (#1198).\n'
+          'A download or install script stalled; this is an environment failure, not a product one (#1198).\n'
       )
       return 124
     }
@@ -181,7 +191,7 @@ async function main(args, env = process.env, ownDir = __dirname) {
   }
 }
 
-module.exports = { DEFAULT_INSTALL_TIMEOUT_MS, ENVIRONMENT_FAILURE_MARKER, LANE_NPM_ENV, laneEnvironment, main, npmCommand, resolveRealNpm }
+module.exports = { DEFAULT_INSTALL_TIMEOUT_MS, ENVIRONMENT_FAILURE_MARKER, LANE_INSTALL_ENV, LANE_NPM_ENV, laneEnvironment, main, npmCommand, resolveRealNpm }
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(

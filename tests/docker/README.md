@@ -43,14 +43,20 @@ Every `npm` the container runs goes through the lane's wrapper, `lifecycle/npm-l
 | `npm_config_fetch_retry_maxtimeout` | `60000`  | longest back-off, in ms                                                                                              |
 | `npm_config_fetch_timeout`          | `120000` | one request is abandoned and retried after 2 min (npm's default holds a dead socket for 5)                           |
 | `npm_config_update_notifier`        | `false`  | no registry call to check for a newer npm                                                                            |
+| `SF_SKIP_PLAYWRIGHT_INSTALL`        | `1`      | the generated web postinstall skips `npx playwright install --with-deps` (183 MiB from Playwright's CDN, plus apt)   |
 | `SF_LANE_NPM_INSTALL_TIMEOUT_MS`    | `600000` | budget of one `npm install` / `npm ci`; a stalled install is stopped with its process group, exit 124                |
 | `SF_LANE_NPM_INSTALL_ATTEMPTS`      | `2`      | an install that failed on `ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`, `ECONNREFUSED` or `network aborted` runs once more |
 
-The wrapper sets each `npm_config_*` value only when the caller did not; `lifecycle/npm-network.ts` holds the same values for the lane's own `npm ci` calls, and a unit test keeps the two equal. A
-stalled install is not run again: a second stall would take the rest of the scenario budget.
+The stalls were mostly not the npm registry. With `CI=true`, the generated web's `postinstall` downloaded Playwright's browsers and ran apt inside every `sf new` (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD`
+does not stop an explicit `playwright install`). On a loaded machine that download outlived the scenario budget. The lane drives the browsers the image already carries (`lifecycle/live-suite.ts`), so
+the wrapper sets `SF_SKIP_PLAYWRIGHT_INSTALL=1`, the switch the generated scripts and the generated CI workflow already use. A generated project's own CI install is unchanged, and a unit test runs
+both web postinstalls with and without the lane environment.
 
-When a step fails on the registry, the lifecycle says so: the step reads `failed on the environment (npm registry), not on the product under test`, and `FINAL RESULTS` marks the scenario
-`ENVIRONMENT FAILURE at "<step>"`. Rerun the lane; a product failure never carries that mark.
+The wrapper sets each value only when the caller did not; `lifecycle/npm-network.ts` holds the same values for the lane's own `npm ci` calls, and a unit test keeps the two equal. A stalled install is
+not run again: a second stall would take the rest of the scenario budget.
+
+When a step fails on a registry error or a stopped install, the lifecycle says so: the step reads `failed on the environment (npm install), not on the product under test`, and `FINAL RESULTS` marks
+the scenario `ENVIRONMENT FAILURE at "<step>"`. Rerun the lane; a product failure never carries that mark.
 
 `run-docker-tests.sh` mounts one named volume, `saasfoundry-lifecycle-npm-cache`, at `/root/.npm` in every scenario container, so a tarball is downloaded once across scenarios and runs. npm checks
 each cached tarball's integrity and still revalidates registry metadata, so the cache changes how much is fetched, not what is installed. Set `SF_DOCKER_NPM_CACHE_VOLUME=` (empty) to run without it,
