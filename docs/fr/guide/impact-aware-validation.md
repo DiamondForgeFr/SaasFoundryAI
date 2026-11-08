@@ -49,6 +49,10 @@ Le hook de pre-commit valide l'instantané préparé dans l'index Git, pas les m
 npm run test:staged
 ```
 
+Le script fige l'arbre indexé dans un commit jetable, l'extrait dans un worktree Git temporaire et y lance les commandes retenues. Git transmet à ses hooks l'emplacement du dépôt en cours de commit
+(`GIT_INDEX_FILE`, `GIT_PREFIX`, et `GIT_DIR` depuis un worktree lié) ; le script retire ces variables, celles que liste `git rev-parse --local-env-vars` hors variables de configuration, pour créer et
+supprimer le worktree temporaire et pour les commandes qu'il y lance. Un commit fait depuis un worktree lié ou un sous-dossier valide donc l'instantané sans toucher à l'index du dépôt.
+
 Pour les **contributeurs au dépôt SaaSFoundryAI lui-même**, cette commande utilise `.saasfoundry/validation.commit.json` : même classifieur, même isolation de l'index, mais aucune commande Docker au
 commit. Les changements de documentation, frontend, backend et harness conservent leurs contrôles ciblés. Un changement limité au cycle de vie lance les gardes et tests de contrat ; ses vrais
 scénarios Docker restent obligatoires avant livraison. Un changement du cœur, partagé, de la racine ou d'un fichier inconnu passe par `test:commit:scoped`, qui vérifie ce que le commit touche :

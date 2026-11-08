@@ -10,6 +10,35 @@ import { classifyChanges, readGitChanges } from './impact-classifier.mjs'
 
 const COMMAND_LANES = ['guards', 'docs', 'frontend', 'backend', 'shared', 'harnessScaffold', 'lifecycle', 'full']
 
+/**
+ * What git exports to a hook to say where the repository is: `git rev-parse --local-env-vars`,
+ * less the configuration variables, which carry `git -c` options and no location. In a hook
+ * they describe the checkout being committed (`GIT_INDEX_FILE=.git/index` in the main checkout;
+ * `GIT_DIR` and the worktree's `index.lock` in a linked one), so in the staged snapshot, whose
+ * `.git` is a file, they send git to the wrong index or directory (#1153).
+ */
+const HOOK_REPOSITORY_VARIABLES = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_PREFIX',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_GRAFT_FILE',
+  'GIT_SHALLOW_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE'
+]
+
+/** The environment without the hook's repository location, for git and commands run against the snapshot. */
+export function withoutHookRepository(env = process.env) {
+  const clean = { ...env }
+  for (const name of HOOK_REPOSITORY_VARIABLES) delete clean[name]
+  return clean
+}
+
 function parseArgs(argv) {
   const options = { rangeMode: 'two-dot', full: false, staged: false, dryRun: false, config: '.saasfoundry/validation.json' }
   for (let index = 0; index < argv.length; index += 1) {
@@ -77,7 +106,9 @@ function createStagedWorktree(cwd, tree) {
     rmSync(parent, { recursive: true, force: true })
     throw new Error((commit.stderr || commit.error?.message || 'git commit-tree failed').trim())
   }
-  const added = spawnSync('git', ['worktree', 'add', '--detach', worktree, commit.stdout.trim()], { cwd, encoding: 'utf8' })
+  // `write-tree` above must read the hook's index; from here on, git finds the repository from `cwd`.
+  const env = withoutHookRepository()
+  const added = spawnSync('git', ['worktree', 'add', '--detach', worktree, commit.stdout.trim()], { cwd, encoding: 'utf8', env })
   if (added.error || added.status !== 0) {
     rmSync(parent, { recursive: true, force: true })
     throw new Error((added.stderr || added.error?.message || 'git worktree add failed').trim())
@@ -86,8 +117,9 @@ function createStagedWorktree(cwd, tree) {
   if (existsSync(modules)) symlinkSync(modules, join(worktree, 'node_modules'), 'dir')
   return {
     cwd: worktree,
+    env,
     cleanup: () => {
-      spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd, encoding: 'utf8' })
+      spawnSync('git', ['worktree', 'remove', '--force', worktree], { cwd, encoding: 'utf8', env })
       rmSync(parent, { recursive: true, force: true })
     }
   }
@@ -124,6 +156,7 @@ function renderCommand(command) {
 export function run(argv = process.argv.slice(2), cwd = process.cwd()) {
   const options = parseArgs(argv)
   let executionCwd = cwd
+  let executionEnv = process.env
   let cleanup = () => {}
   if (options.staged) {
     const head = spawnSync('git', ['write-tree'], { cwd, encoding: 'utf8' })
@@ -133,6 +166,7 @@ export function run(argv = process.argv.slice(2), cwd = process.cwd()) {
     console.log(`Staged tree: ${options.base}..${options.head}`)
     const snapshot = createStagedWorktree(cwd, options.head)
     executionCwd = snapshot.cwd
+    executionEnv = snapshot.env
     cleanup = snapshot.cleanup
   }
   try {
@@ -164,7 +198,7 @@ export function run(argv = process.argv.slice(2), cwd = process.cwd()) {
     for (const command of commands) {
       console.log(`> ${renderCommand(command)}`)
       if (options.dryRun) continue
-      const execution = spawnSync(command[0], command.slice(1), { cwd: executionCwd, stdio: 'inherit', env: process.env })
+      const execution = spawnSync(command[0], command.slice(1), { cwd: executionCwd, stdio: 'inherit', env: executionEnv })
       if (execution.error) throw execution.error
       if (execution.status !== 0) throw new Error(`${command[0]} exited with status ${execution.status ?? 'unknown'}.`)
     }

@@ -49,6 +49,10 @@ The pre-commit hook validates the staged snapshot, not every unstaged edit in th
 npm run test:staged
 ```
 
+The runner commits the staged tree to a throwaway commit, checks it out in a temporary Git worktree and runs the selected commands there. Git exports the checkout's location to its hooks
+(`GIT_INDEX_FILE`, `GIT_PREFIX`, and `GIT_DIR` from a linked worktree); the runner clears those variables, the ones `git rev-parse --local-env-vars` lists except the configuration ones, before it
+creates and removes the temporary worktree and for the commands it runs there, so a commit from a linked worktree or a subdirectory validates the snapshot and leaves the checkout's index alone.
+
 For **contributors to SaaSFoundryAI itself**, this command uses `.saasfoundry/validation.commit.json`: the same classifier and staged isolation, with no Docker commands at commit time. Docs, frontend,
 backend and harness changes keep their targeted checks. Lifecycle-only changes run guard/contract checks; their real Docker scenarios remain mandatory before delivery. Core, shared, root or unknown
 changes go to `test:commit:scoped`, which checks what the commit touches: prettier and ESLint on the staged files, `tsc --noEmit`, and the Jest tests whose imports reach them
