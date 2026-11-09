@@ -430,7 +430,9 @@ ticket to In Review only once the developer has taken the PR out of draft. Use `
 their own: the delivery parent's PR follows its route.
 
 `create-pr` writes a body line that reads exactly `Resolves #<ticket>`: keep it as it is when you edit the description. A pull request to a branch other than the default one links its ticket only
-through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`).
+through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`). A pull request that delivers only part of a
+ticket that must stay open replaces that line with one that reads exactly `Part of #<ticket>`, naming the branch ticket: the listener then moves nothing, on the Ready for review click as on the merge,
+and leaves a notice instead of a failing check. The pull request that completes the ticket carries the `Resolves` line.
 
 With the updated CI policy, draft PRs skip test/build CI. When adopting these skills in an existing project, inspect its checked-in workflows and hooks: refreshing instructions alone does not update
 external CI configuration or remove custom push hooks. Readiness and subsequent ready-PR pushes run full CI; returning to draft cancels obsolete runs. Quick commit checks remain enabled; heavy local
