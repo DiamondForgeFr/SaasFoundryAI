@@ -81,15 +81,75 @@ Refresh a lock for an advisory with a targeted update, not a full regeneration, 
 
 `npm audit --omit=dev` on a generated project reports no advisory that has a patched release, on either topology. One advisory has no fix at all: `deepmerge` (GHSA-gcqx-w48m-w2h4, low, reached through
 `nestjs-zod` in the API, and through the PWA toolchain in the web app's development tree). The development trees also carry `minimatch` (GHSA-g3hv-75wg-m249, fixed only in `minimatch` 11) and `glob`
-(GHSA-3g3m-2fjr-6pw4, fixed only in `glob` 14). A cross-major override would move the lint, test and build tooling off the major it targets, so these wait for their parents to move: they are tracked
-in [#1111](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1111). Recheck this list whenever a lock is regenerated: on 2026-11-08, on a monorepo and a multirepo generated from the final
-templates of #1110, `npm audit --omit=dev` listed only `deepmerge` (API and monorepo; the web app of a multirepo reported nothing), and `npm audit` with the development tree listed only `deepmerge`,
-`glob` and `minimatch`.
+(GHSA-3g3m-2fjr-6pw4, fixed only in `glob` 14). A cross-major override would move the lint, test and build tooling off the major it targets, so these wait for their parents to move. They are an
+**accepted risk with no owner ticket** (decided in [#1111](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1111), 2026-11-09): the fix for each is a major bump of a parent that is held on
+purpose, none of them has a Dependabot alert (only `npm audit` reports them), `minimatch` and `glob` live in development tooling, and `deepmerge` is low severity with no patched release at all.
+Recheck this list whenever a lock is regenerated: on 2026-11-08, on a monorepo and a multirepo generated from the final templates of #1110, `npm audit --omit=dev` listed only `deepmerge` (API and
+monorepo; the web app of a multirepo reported nothing), and `npm audit` with the development tree listed only `deepmerge`, `glob` and `minimatch`.
 
 The monorepo has no committed lock, so a fresh install resolves whatever the pinned parents allow. Its development tree can therefore report advisories that the multirepo locks do not, because a
 parent is pinned exactly (`vitest` pins `@vitest/mocker`, `orval` pins its own `js-yaml`). Those are in-major bumps for a dependency-upgrade ticket, not overrides: #1110 cleared both with `vitest`
 4.1.12 (`@vitest/mocker` 4.1.12) and `orval` 8.47.0 (`js-yaml` 4.3.2), and the lock guard asserts those two versions as floors on the monorepo templates, so a later downgrade cannot bring the
 advisories back unnoticed.
+
+## Dependabot
+
+### Alert triage (#1111, 2026-11-09)
+
+The raw alert count lied in both directions, so the open list was recomputed from the lockfiles and the manifests of `develop` (`af0fd9d6`), one alert at a time, and not from the alert titles. Of the
+227 open alerts:
+
+| Class                              | Count | What it means                                                                                                                                                                   | Outcome                                                                                    |
+| ---------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Fixed in a lockfile                | 141   | Every copy of the package in that lock is outside the vulnerable range                                                                                                          | dismissed, reason `fix_started`, "fixed in <versions> (...)"                               |
+| Fixed by an exact pin              | 38    | A manifest without a lock (the monorepo overlays), or a multirepo manifest whose lock agrees, pins a release above the patched one                                              | dismissed, reason `fix_started`, "fixed in <version> (...)"                                |
+| Not a dependency                   | 42    | `hono`, `@hono/node-server`, `simple-git`, `esbuild`, `tmp`, `uuid` and `serialize-javascript` appear in no lockfile or manifest of `develop`                                   | dismissed, reason `inaccurate`                                                             |
+| Still vulnerable in the CLI's lock | 6     | `fast-uri` 3.1.6 (alerts 223, 275, 276, 277), `@humanfs/node` 0.16.6 (190) and the `js-yaml` 3.15.1 under `@istanbuljs/load-nyc-config` (216), all CLI development dependencies | fixed by the lock refresh of #1111; Dependabot closes them once the pull request is merged |
+
+`fix_started` is the closest reason GitHub offers for "already fixed on the default branch"; the comment carries the resolved version and the `develop` commit it was read from. The six are
+deliberately not dismissed: the fix is in the pull request, and the merge is what closes them.
+
+The six moved inside their declared ranges (`npm update fast-uri @humanfs/node js-yaml`: `fast-uri` 3.1.9, `@humanfs/node` 0.16.8, `js-yaml` 3.15.2 for the nested 3.x copy), so **no override was
+needed** for the CLI root. Add one only when no in-range update reaches a nested copy, scope it to its parent as the generated API's overrides are, and record it in the table above.
+
+Zero open alerts is not a clean `npm audit`. On 2026-11-09 the CLI root lock reported 19 findings before the refresh and 16 after it, and Dependabot has no alert for any of the 16. `handlebars` (three
+advisories, two of them critical), `nanoid`, `postcss`, `source-map-js`, `vue` and `@vue/server-renderer` report a fix inside their ranges (`npm audit fix`). `vite` 5 and `esbuild` 0.21 sit under
+`vitepress` 1.6.4, `esbuild` 0.27 under `tsx` 4.21.0, and the `jest` chain only reaches `deepmerge`, which has no patched release. All of them are development tooling: `npm audit --omit=dev` on the
+CLI root reports nothing, so none of it ships in the package or in a generated project. They were not part of the six alerts and were left untouched; run `npm audit` next to the alert list on every
+triage.
+
+To triage again: for each open alert, take the manifest the alert names, list every copy of the package in it (a lock: every `node_modules/**/<name>` entry; a manifest without a lock: its dependency,
+override and resolution entries) and compare each with the alert's vulnerable range. Dismiss the alert when no copy is inside the range (`fix_started`) or when the package is not there at all
+(`inaccurate`), and leave it open, with a fix in a pull request, when one is.
+
+### `.github/dependabot.yml`
+
+The repository has a Dependabot configuration for **security updates only**, grouped per surface:
+
+| Group          | Directories                                                                                                  | Why this grouping                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `cli`          | `/`                                                                                                          | The published package and its development tooling                                            |
+| `scaffold-api` | `/scaffolds/overlays/multirepo/api`, `/scaffolds/overlays/monorepo/api`, `/scaffolds/overlays/monorepo/root` | Both topologies of the API; the monorepo root holds the API's security overrides (see above) |
+| `scaffold-web` | `/scaffolds/overlays/multirepo/web`, `/scaffolds/overlays/monorepo/web`                                      | Both topologies of the web app                                                               |
+
+The reasons, so that nobody has to rediscover them:
+
+- **`open-pull-requests-limit: 0` on every entry.** That is GitHub's documented way to keep security updates and drop version updates. A positive limit would start version updates on the templates,
+  which hold their versions on purpose (see "Deliberate holds") and move by dependency-upgrade tickets, not by a bot. Security update pull requests have a limit of their own that the file does not
+  control, so the groups are what keep the count down: one pull request per surface instead of one per package.
+- **Groups with `applies-to: security-updates`.** An advisory batch otherwise opens a pull request per dependency across four overlays. Cross-directory grouping of security updates is best effort on
+  GitHub's side; if the first pull requests come back split by directory, that is the platform, not the file.
+- **The switch is not in the file.** Dependabot security updates are **disabled in the repository settings** (checked 2026-11-09: `automated-security-fixes` is off), so alerts are raised but no pull
+  request is opened. The file shapes the pull requests once the maintainer turns the setting on (Settings, Advanced Security, Dependabot security updates). It is the maintainer's decision, not a
+  change to make from a ticket.
+- **A Dependabot pull request on a scaffold surface is a signal, not a change to merge as it stands.** A pin moves in all four overlays and in the installers together, the multirepo locks are
+  refreshed with the targeted update (not rewritten by the bot), and `scaffold-lockfiles.spec.ts` asserts the floors. An advisory whose only fix crosses a deliberate hold (`chalk` 6, `prisma` 8,
+  `prettier` 3.9, the Playwright image, `@types/node` 25 and later) stays an alert with a recorded decision; close the pull request with `@dependabot ignore this major version`.
+- **Expect noise from the review listener.** `pr-review-sync.yml` runs on every non-draft pull request of this repository, and a Dependabot branch names no ticket, so its check is expected to fail on
+  those pull requests. Changing the listener is a decision about `.github/workflows/`, which `CODEOWNERS` reserves to the owner.
+
+Generated projects do not get this file yet. Shipping it is a scaffold and installer decision of its own: which surfaces the generated project has, whether its owner wants the bot, and what the
+Dependabot pull requests do to a project that pins exactly and commits no monorepo lock.
 
 ## Pins
 
