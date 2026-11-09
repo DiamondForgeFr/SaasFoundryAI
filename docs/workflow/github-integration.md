@@ -96,11 +96,27 @@ When the current branch is not the ticket's, `ready-pr` and `draft-pr` do not lo
 
 - **Without an option**, the ticket's one open pull request of this repository whose head branch follows the ticket's `branchNaming` (feature or fix) is used, and the command prints a line naming it.
   When none matches, the command refuses. Several are refused with the list of candidates (`#123 (feature/42-…), #124 (fix/42-…)`): pick one with `--pr <number>`.
-- **With `--pr <number>`**, the pull request is the one named. Its head branch must still follow the ticket's naming.
+- **With `--pr <number>`**, the pull request is the one named. Its head branch must still follow the ticket's naming, unless the pull request resolves the ticket (see below).
 - **With `--head <branch>`**, the open pull request of that branch is used.
 
 The pull request's head commit must be the commit origin holds for its branch, and that commit is the one the local CI gate checks. On the ticket branch itself nothing changes: the local `HEAD`,
 origin and the pull request must all match. The nature axis is enforced by `update-status` as before: the In review transition still requires a non-draft pull request, and Human testing a draft one.
+
+### One pull request that delivers several tickets
+
+A pull request may deliver several tickets, for example the stories of one Epic. Its body then carries one line per ticket, each reading exactly `Resolves #<ticket>`:
+
+```markdown
+Resolves #170 Resolves #171 Resolves #172
+```
+
+A ticket with no pull request of its own finds that one: an open pull request of this repository, from another ticket's branch, into the PR target, whose body names the ticket on such a line or that
+GitHub links to it as a closing reference. The ticket's own branch always wins. This holds for `ai-status`, `ready-pr`, `draft-pr` and `local-ci-gate`, for the PR-state guard of Human testing and In
+review, for the PR-merged guard of Done, and for the pushed-commits guard of AI testing, which then checks the branch of that pull request. A line that only mentions the ticket (`See #171`), a fork,
+or a pull request into another branch does not count, and two pull requests that both resolve the ticket are refused as ambiguous.
+
+`sync-pr-review` moves every ticket the pull request resolves: the closing references GitHub verified on a pull request into the default branch, the `Resolves` lines on any other target. When it
+cannot move one of them, it still moves the others and ends with one line per ticket that names the cause; the check then fails. The same ticket on two `Resolves` lines is refused.
 
 ### The local CI gate
 

@@ -1724,37 +1724,55 @@ resolve_remote_ticket_branch() {
 # this repository whose head branch follows the ticket's delivery naming (feature, fix), or the
 # one --head names (release convention allowed) or --pr picks. Several candidates are refused and
 # listed. verify_pr_head_on_origin then checks its head commit against origin, and the local CI
-# gate reads that commit. Another ticket's pull request is never accepted.
+# gate reads that commit. Another ticket's pull request is accepted only when it resolves this ticket
+# (#1093): one pull request into the delivery branch that delivers several tickets, with one body line
+# per ticket that reads exactly `Resolves #<ticket>` or GitHub's closing reference to it. The ticket's
+# own branch always wins over such a pull request.
 # Sets CURRENT_BRANCH to the PR's head branch, PR_RESOLVED_NUMBER and PR_ORIGIN_RESOLVED=true.
 resolve_ticket_pr_on_origin() {
   local ticket=$1 allow_release=$2 feature=$3 fix=$4 release=$5 host_branch=$CURRENT_BRANCH
-  local payload number branch found_number="" found_branch=""
-  local -a candidates=()
-  if [[ -n "${PR_HEAD_OPTION:-}" ]]; then
-    classify_pr_branch "$PR_HEAD_OPTION" "$allow_release" "$feature" "$fix" "$release" || {
-      echo "Error: --head ${PR_HEAD_OPTION} does not match ticket #${ticket}'s configured branch naming." >&2
-      return 1
-    }
+  local payload number branch resolves found_number="" found_branch="" found_resolves=false head_own=false
+  local -a candidates=() resolving=() resolving_numbers=() resolving_branches=()
+  if [[ -n "${PR_HEAD_OPTION:-}" ]] && classify_pr_branch "$PR_HEAD_OPTION" "$allow_release" "$feature" "$fix" "$release"; then
+    head_own=true
   fi
-  payload=$(gh pr list --state open --limit 200 --json number,headRefName,isCrossRepository 2>/dev/null) || {
+  payload=$(gh pr list --state open --limit 200 --json number,headRefName,baseRefName,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to read open PRs. Retry after restoring GitHub access." >&2; return 1;
   }
   echo "$payload" | jq -e 'type == "array"' >/dev/null 2>&1 || {
     echo "Error: unreadable open PR list; no pull request was changed." >&2; return 1;
   }
-  while IFS=$'\t' read -r number branch; do
+  while IFS=$'\t' read -r number branch resolves; do
     [[ -n "$number" && -n "$branch" ]] || continue
     if [[ -n "${PR_NUMBER_OPTION:-}" ]]; then
       [[ "$number" == "$PR_NUMBER_OPTION" ]] || continue
     elif [[ -n "${PR_HEAD_OPTION:-}" ]]; then
       [[ "$branch" == "$PR_HEAD_OPTION" ]] || continue
-    else
-      [[ "$branch" =~ $feature || "$branch" =~ $fix ]] || continue
+    elif ! [[ "$branch" =~ $feature || "$branch" =~ $fix ]]; then
+      if [[ "$resolves" == true ]]; then
+        resolving+=("#${number} (${branch})")
+        resolving_numbers+=("$number")
+        resolving_branches+=("$branch")
+      fi
+      continue
     fi
     candidates+=("#${number} (${branch})")
     found_number=$number
     found_branch=$branch
-  done < <(echo "$payload" | jq -r '.[] | select(.isCrossRepository == false and (.number | type) == "number" and (.headRefName | type) == "string") | "\(.number)\t\(.headRefName)"')
+    found_resolves=$resolves
+  done < <(echo "$payload" | jq -r --arg t "$ticket" --arg base "$DELIVERY_TARGET_BRANCH" '
+    .[] | select(.isCrossRepository == false and (.number | type) == "number" and (.headRefName | type) == "string")
+    | (.baseRefName == $base
+       and ((([(.body // "") | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]]
+             + [(.closingIssuesReferences // [])[] | .number | select(type == "number") | tostring]) | index($t)) != null)) as $resolves
+    | "\(.number)\t\(.headRefName)\t\($resolves)"')
+  # No pull request of its own: the one that resolves it among other tickets
+  if [[ ${#candidates[@]} -eq 0 && ${#resolving[@]} -gt 0 ]]; then
+    candidates=("${resolving[@]}")
+    found_number=${resolving_numbers[${#resolving_numbers[@]}-1]}
+    found_branch=${resolving_branches[${#resolving_branches[@]}-1]}
+    found_resolves=true
+  fi
   if [[ ${#candidates[@]} -eq 0 ]]; then
     if [[ -n "${PR_NUMBER_OPTION:-}" ]]; then
       echo "Error: --pr ${PR_NUMBER_OPTION}: no open pull request of this repository has that number." >&2
@@ -1771,18 +1789,37 @@ resolve_ticket_pr_on_origin() {
     echo "Error: several open pull requests match ticket #${ticket}: ${list}. Name the one to use with --pr <number>." >&2
     return 1
   fi
+  local via_resolves=false
   if [[ -n "${PR_NUMBER_OPTION:-}" ]]; then
-    classify_pr_branch "$found_branch" "$allow_release" "$feature" "$fix" "$release" || {
-      echo "Error: --pr ${PR_NUMBER_OPTION}: its head branch ${found_branch} does not match ticket #${ticket}'s configured branch naming." >&2
-      return 1
-    }
-  elif [[ -z "${PR_HEAD_OPTION:-}" ]]; then
-    classify_pr_branch "$found_branch" false "$feature" "$fix" "$release" || return 1
+    if ! classify_pr_branch "$found_branch" "$allow_release" "$feature" "$fix" "$release"; then
+      [[ "$found_resolves" == true ]] || {
+        echo "Error: --pr ${PR_NUMBER_OPTION}: its head branch ${found_branch} does not match ticket #${ticket}'s configured branch naming, and its body has no line that reads exactly 'Resolves #${ticket}'." >&2
+        return 1
+      }
+      via_resolves=true
+    fi
+  elif [[ -n "${PR_HEAD_OPTION:-}" ]]; then
+    if [[ "$head_own" != true ]]; then
+      [[ "$found_resolves" == true ]] || {
+        echo "Error: --head ${PR_HEAD_OPTION} does not match ticket #${ticket}'s configured branch naming, and its pull request #${found_number} does not resolve #${ticket}." >&2
+        return 1
+      }
+      via_resolves=true
+    fi
+  elif ! classify_pr_branch "$found_branch" false "$feature" "$fix" "$release"; then
+    [[ "$found_resolves" == true ]] || return 1
+    via_resolves=true
   fi
+  # A pull request of another ticket branch that resolves this one is an ordinary delivery PR
+  [[ "$via_resolves" == true ]] && PR_CONTEXT_KIND=delivery PR_TARGET_BRANCH=$DELIVERY_TARGET_BRANCH
   CURRENT_BRANCH=$found_branch
   PR_RESOLVED_NUMBER=$found_number
   PR_ORIGIN_RESOLVED=true
-  echo -e "${BLUE}→ This checkout is on ${host_branch}: using origin/${CURRENT_BRANCH}, the head of ticket #${ticket}'s open pull request #${found_number}.${NC}"
+  if [[ "$via_resolves" == true ]]; then
+    echo -e "${BLUE}→ This checkout is on ${host_branch}: using origin/${CURRENT_BRANCH}, the head of open pull request #${found_number}, which resolves ticket #${ticket}.${NC}"
+  else
+    echo -e "${BLUE}→ This checkout is on ${host_branch}: using origin/${CURRENT_BRANCH}, the head of ticket #${ticket}'s open pull request #${found_number}.${NC}"
+  fi
 }
 
 # Resolve only the ticket's own branch. Never promote another developer's PR.

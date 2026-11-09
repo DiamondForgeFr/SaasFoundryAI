@@ -272,6 +272,50 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     expect(toolCalls).toHaveLength(1)
   })
 
+  // #1093 — DiamondForge PR 178 merged five stories of one Epic: each of them is Done through it.
+  it('allows "Done" for a ticket that a merged PR of another ticket branch resolves', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: JSON.stringify([
+        {
+          number: 178,
+          headRefName: 'feature/170-five-stories',
+          baseRefName: 'develop',
+          isCrossRepository: false,
+          body: 'Stories\n\nResolves #170\nResolves #42',
+          closingIssuesReferences: [],
+          mergedAt: '2026-09-09T10:00:00Z'
+        }
+      ])
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(0)
+    expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))).toHaveLength(1)
+  })
+
+  it.each([
+    ['only mentions the ticket', { body: 'Resolves #170\nSee #42' }],
+    ['comes from a fork', { isCrossRepository: true }],
+    ['was merged into another branch', { baseRefName: 'master' }]
+  ])('still blocks "Done" when the merged PR %s', async (_label, changes) => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: JSON.stringify([
+        {
+          number: 178,
+          headRefName: 'feature/170-five-stories',
+          baseRefName: 'develop',
+          isCrossRepository: false,
+          body: 'Resolves #170\nResolves #42',
+          closingIssuesReferences: [],
+          mergedAt: '2026-09-09T10:00:00Z',
+          ...changes
+        }
+      ])
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('no verified merged PR')
+  })
+
   it('resolves delivery branches from a non-default manifest convention', async () => {
     sandbox = await buildSandbox('[{"number":333,"headRefName":"work/item-42-do-the-thing","baseRefName":"develop","body":"","mergedAt":null}]', {
       branchNaming: {

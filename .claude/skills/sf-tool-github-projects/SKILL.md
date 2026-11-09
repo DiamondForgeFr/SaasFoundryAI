@@ -79,7 +79,8 @@ names `--head`. `create-pr` then pushes nothing and opens the pull request from 
 `ready-pr` and `draft-pr` off the ticket branch (the session in the primary checkout, on the working branch, while the ticket branch lives in a delegated agent's worktree) do not look at the local
 `HEAD`: they find the ticket's one open pull request of this repository whose head branch follows its feature or fix naming, `--head <branch>` names that branch and `--pr <number>` the pull request.
 Several candidates are refused and listed, so pick one with `--pr`. The pull request's head commit must be origin's commit for its branch, and the local CI gate reads that commit. Run them from the
-primary checkout: never enter the agent's worktree to change a pull request's draft state.
+primary checkout: never enter the agent's worktree to change a pull request's draft state. A ticket with no pull request of its own uses the one that resolves it from another ticket's branch: a body
+line that reads exactly `Resolves #<ticket>`, or GitHub's closing reference to it (one pull request that delivers several tickets, #1093).
 
 Every project gates review on its local CI: `create-pr` without `--draft`, `ready-pr` and `local-ci-gate` refuse a head commit on which a required status is missing or not green, and say which, where
 the required list comes from and the command that produces the statuses. A draft still opens early. `--skip-local-ci "<reason>"` bypasses the gate explicitly and records the reason on the pull

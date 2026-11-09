@@ -279,7 +279,8 @@ esac
     it("never picks another ticket's branch without --head", async () => {
       pushTo('feature/43-other')
       pushTo('feature/420-other')
-      const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([pr('feature/43-other')]) })
+      // A PR that resolves #42 from another branch is #1093's case; this one resolves only its own ticket
+      const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([pr('feature/43-other', { body: 'Resolves #43', closingIssuesReferences: [] })]) })
       expect(result.code).not.toBe(0)
       expect(calls()).not.toContain('pr ready')
     })
@@ -377,7 +378,8 @@ esac
     it("never takes another ticket's PR, a fork's PR or an unknown --pr", async () => {
       pushTo('feature/43-other')
       pushTo('feature/420-other')
-      const others = [prAt('feature/43-other', { number: 130 }), prAt('feature/420-other', { number: 131 }), prAt('feature/42-work', { number: 132, isCrossRepository: true })]
+      const own = (n: number) => ({ body: `Resolves #${n}`, closingIssuesReferences: [{ number: n, url: `https://github.com/FakeOrg/FakeRepo/issues/${n}` }] })
+      const others = [prAt('feature/43-other', { number: 130, ...own(43) }), prAt('feature/420-other', { number: 131, ...own(420) }), prAt('feature/42-work', { number: 132, isCrossRepository: true })]
       const none = await run(['ready-pr', '42'], { PRS: JSON.stringify(others) })
       expect(none.code).not.toBe(0)
       expect(none.stderr).toContain("no open pull request of this repository has a head branch that follows ticket #42's configured branch naming")
@@ -388,6 +390,52 @@ esac
       expect(unknown.code).not.toBe(0)
       expect(unknown.stderr).toContain('--pr 999: no open pull request')
       expect(calls()).not.toContain('pr ready')
+    })
+
+    // #1093 — DiamondForge PR 178 delivered five stories: ready-pr of any of them finds it.
+    describe('a pull request of another ticket branch that resolves the ticket (#1093)', () => {
+      const bundle = (overrides: Record<string, unknown> = {}) =>
+        prAt('feature/43-five-stories', { number: 178, url: 'https://github.com/FakeOrg/FakeRepo/pull/178', body: 'Stories\n\nResolves #43\nResolves #42', closingIssuesReferences: [], ...overrides })
+      beforeEach(() => {
+        git('push', 'origin', `${agentCommit}:refs/heads/feature/43-five-stories`)
+      })
+
+      it('ready-pr uses it when the ticket has no pull request of its own, and says why', async () => {
+        const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([bundle()]) })
+        expect(result.code).toBe(0)
+        expect(result.stdout).toContain('using origin/feature/43-five-stories, the head of open pull request #178, which resolves ticket #42')
+        expect(calls()).toContain('pr ready 178')
+      })
+
+      it('also reads the closing references GitHub links', async () => {
+        const result = await run(['draft-pr', '42'], {
+          PRS: JSON.stringify([bundle({ body: 'Stories', closingIssuesReferences: [{ number: 42, url: 'https://github.com/FakeOrg/FakeRepo/issues/42' }], isDraft: false })])
+        })
+        expect(result.code).toBe(0)
+        expect(calls()).toContain('pr ready 178 --undo')
+      })
+
+      it('accepts it through --pr and --head', async () => {
+        expect((await run(['ready-pr', '42', '--pr', '178'], { PRS: JSON.stringify([bundle()]) })).code).toBe(0)
+        expect((await run(['draft-pr', '42', '--head', 'feature/43-five-stories'], { PRS: JSON.stringify([bundle({ isDraft: false })]) })).code).toBe(0)
+      })
+
+      it('prefers the ticket own pull request', async () => {
+        const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([bundle(), prAt('feature/42-work')]) })
+        expect(result.code).toBe(0)
+        expect(calls()).toContain('pr ready 123')
+        expect(calls()).not.toContain('pr ready 178')
+      })
+
+      it('refuses one that only mentions the ticket, or that targets another branch', async () => {
+        for (const overrides of [{ body: 'Resolves #43\nSee #42' }, { baseRefName: 'master' }]) {
+          const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([bundle(overrides)]) })
+          expect(result.code).not.toBe(0)
+        }
+        const named = await run(['ready-pr', '42', '--head', 'feature/43-five-stories'], { PRS: JSON.stringify([bundle({ body: 'Resolves #43' })]) })
+        expect(named.stderr).toContain('its pull request #178 does not resolve #42')
+        expect(calls()).not.toContain('pr ready')
+      })
     })
 
     it('refuses a PR whose head is not the commit origin holds for its branch', async () => {
