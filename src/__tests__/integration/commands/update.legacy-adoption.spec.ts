@@ -18,7 +18,17 @@ const CLI_ROOT = resolve(__dirname, '../../../..')
 const CLI = join(CLI_ROOT, 'bin/sf.js')
 const PROJECT_NAME = 'previous-release'
 const FIXTURE = join(CLI_ROOT, 'tests/docker/fixtures/previous-release/1.0.0-beta/multirepo.fixture.json.gz')
-const CHILD_TIMEOUT = 120_000
+/**
+ * One `sf update` child process. Idle it takes a few seconds; the bound only stops a hung CLI.
+ */
+const CHILD_TIMEOUT = 300_000
+/**
+ * A whole test: the adoption tests run five CLI processes in sequence after materializing the release fixture. Idle that
+ * is under 10 s; on 2026-11-09, beside the unit job and other pipelines at a load average of 40 to 76 on 10 cores, it
+ * went past the former 120 s budget (#1205). A slow machine stretches every process alike, so the budget is wide rather
+ * than the file serialized: see the note above FULL_TRANSITION_BUDGET_MS in update.profile-transition.spec.ts.
+ */
+const TEST_BUDGET_MS = 600_000
 const MAX_BUFFER = 32 * 1024 * 1024
 const FIXTURE_UNMANAGED_PATHS = [
   `apps/${PROJECT_NAME}-api/.env`,
@@ -29,7 +39,7 @@ const FIXTURE_UNMANAGED_PATHS = [
   `apps/${PROJECT_NAME}-web/package-lock.json`
 ] as const
 
-jest.setTimeout(CHILD_TIMEOUT)
+jest.setTimeout(TEST_BUDGET_MS)
 
 describe('sf update --adopt-legacy', () => {
   let fixtureBytes: Buffer
@@ -96,7 +106,7 @@ describe('sf update --adopt-legacy', () => {
   afterEach(async () => {
     logSpy?.mockRestore()
     if (originalCwd) process.chdir(originalCwd)
-    await rm(parent, { recursive: true, force: true }).catch(() => {})
+    await rm(parent, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {})
   })
 
   it('uses the real CLI to adopt, refresh, add a late capability, and remain idempotent', async () => {
