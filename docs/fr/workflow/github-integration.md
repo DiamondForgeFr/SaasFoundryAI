@@ -182,6 +182,10 @@ corps ou une case Markdown ne la remplace pas.
 
 `list-incomplete-children` parcourt cette relation et vérifie le statut Projects V2 de chaque enfant ; l'état ouvert/fermé de l'issue ne suffit pas.
 
+Le premier enfant qui passe `In progress` y amène son Epic en suivant les statuts déclarés dans `workflow.statuses` : par `Ready` sur le tableau Team, directement depuis `Backlog` en Solo. Un
+manifeste qui ne liste aucun statut suppose le jeu Team ; si le tableau refuse alors `Ready`, l'Epic atteint quand même `In progress` et la CLI affiche une notice demandant de déclarer les statuts du
+tableau.
+
 ## Quand une opération échoue
 
 - **Transition impossible** : comparer les statuts du tableau à `workflow.statuses`.

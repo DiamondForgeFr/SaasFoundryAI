@@ -101,6 +101,9 @@ An Epic is an aggregate with two derived transitions:
 | The first native child enters `In progress`    | `Backlog → Ready → In progress`, or `Ready → In progress` (`Backlog → In progress` on a board that declares no Ready, such as Solo) |
 | The last incomplete native child enters `Done` | `In progress → Done`                                                                                                                |
 
+The roll-up walks the statuses `.saasfoundry.json` → `workflow.statuses` declares; a manifest that lists none assumes the Team set. Ready is a waypoint, never a precondition: when the board refuses
+it, the Epic goes straight to `In progress` and the CLI says so.
+
 The Epic stays `In progress` while its children pass through testing and review. It never owns a branch or PR and may span multiple milestones; its delivery children carry their own milestone
 assignments. The parent Done guard checks every native child's project-board Status. Backlog, Ready, In progress, AI Testing, Human Testing, In Review, or an unknown status blocks Done. Incomplete
 children do not block the parent's testing or review phases.

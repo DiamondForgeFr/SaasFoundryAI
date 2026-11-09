@@ -25,6 +25,8 @@ interface Options {
   parentType?: string
   issueType?: string | null
   merged?: boolean
+  template?: string
+  boardStatuses?: string[]
 }
 
 async function sandbox(options: Options = {}) {
@@ -41,6 +43,7 @@ async function sandbox(options: Options = {}) {
         tool: 'github-projects',
         projectUrl: 'https://github.com/orgs/Fake/projects/42',
         workingBranch: 'develop',
+        ...(options.template ? { template: options.template } : {}),
         ...(options.statuses ? { statuses: options.statuses.map((name) => ({ name, color: 'GRAY' })) } : {})
       }
     })
@@ -49,6 +52,10 @@ async function sandbox(options: Options = {}) {
   const labels = ['complexity: low', ...(options.nature ? [`nature:${options.nature}`] : [])]
   const listResponse = options.childStatuses ?? '[]'
   const parent = options.parent === undefined ? null : options.parent
+  // The board refuses a status it has no option for, as github-projects-cli.sh does.
+  const boardCheck = options.boardStatuses
+    ? `case "$(printf '%s' "$3" | tr '[:upper:]' '[:lower:]')" in ${options.boardStatuses.map((name) => `'${name.toLowerCase()}'`).join('|')}) ;; *) echo "Status '$3' not found" >&2; exit 1 ;; esac`
+    : ':'
   const tool = `#!/bin/bash
 printf '%s\\n' "$*" >> '${log}'
 case "$1" in
@@ -71,7 +78,10 @@ case "$1" in
       printf '%s' '{"name":"${options.issueType ?? 'sf-story'}"}'
     fi
     ;;
-  update-status) printf 'updated %s %s\\n' "$2" "$3" ;;
+  update-status)
+    ${boardCheck}
+    printf 'updated %s %s\\n' "$2" "$3"
+    ;;
 esac
 `
   const toolPath = path.join(toolDir, 'github-projects-cli.sh')
@@ -195,6 +205,27 @@ describe('sf-workflow CLI — native parent/child guards and rollup', () => {
     expect(calls).toContain('update-status 7 In progress')
     expect(result.stdout).toContain('Derived rollup: Epic #7 → In progress')
     expect(result.stderr).not.toContain('could not roll')
+  })
+
+  // #965 — a Solo manifest that lists no statuses falls back to the Team set, whose Ready the board has no option
+  // for: the Epic must still reach In progress, and the skipped Ready is named.
+  it('still rolls the Epic to In progress when the board refuses the Ready step', async () => {
+    s = await sandbox({
+      currentStatus: 'Backlog',
+      parent: 7,
+      parentType: 'sf-epic',
+      parentStatus: 'Backlog',
+      template: 'SaaSFoundry Solo',
+      boardStatuses: ['Backlog', 'In Progress', 'AI Testing', 'In Review', 'Done']
+    })
+    const result = await run(s, ['update-status', '42', 'In progress'])
+    expect(result.code).toBe(0)
+    const calls = readFileSync(s.log, 'utf8')
+    expect(calls).toContain('update-status 7 In progress')
+    expect(result.stdout).toContain('Derived rollup: Epic #7 → In progress')
+    expect(result.stdout).not.toContain('Derived rollup: Epic #7 → Ready')
+    expect(result.stderr).toContain('Epic #7 skipped Ready')
+    expect(result.stderr).not.toContain('could not roll parent Epic #7 to In progress')
   })
 
   it('rolls a verified Epic parent to Done after the last child reaches Done', async () => {
