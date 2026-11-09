@@ -582,4 +582,72 @@ esac
       expect(changedTicket()).toBe(false)
     })
   })
+
+  // #1065 — a pull request that delivers only part of a ticket says `Part of #N` and leaves the ticket where it is.
+  describe('partial pull requests (#1065)', () => {
+    // The PR target (develop) is not the default branch, as in a Solo workflow released from master.
+    async function partial(body: string, { defaultBranch = 'master', ref = 'fix/42-probe' } = {}) {
+      await writeFile(
+        path.join(dir, 'event.json'),
+        JSON.stringify({
+          ...event,
+          repository: { ...event.repository, default_branch: defaultBranch },
+          pull_request: { ...event.pull_request, body, head: { ...event.pull_request.head, ref } }
+        })
+      )
+      return { LIVE: JSON.stringify({ ...live, headRefName: ref, body, closingIssuesReferences: [] }) }
+    }
+
+    it('turns a `Part of #N` pull request into a green no-op with a notice and no ticket change', async () => {
+      const result = await run(await partial('Signing probe.\n\nPart of #42'))
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('::notice::Pull request #100 delivers part of ticket #42')
+      expect(result.stdout).toContain('no ticket changed')
+      expect(changedTicket()).toBe(false)
+      expect(calls()).not.toContain('tool status')
+    })
+    it('is neutral too when the PR target is the default branch', async () => {
+      const result = await run(await partial('Part of #42', { defaultBranch: 'develop' }))
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('delivers part of ticket #42')
+      expect(changedTicket()).toBe(false)
+    })
+    it('still syncs a pull request that carries its Resolves line next to a Part of line', async () => {
+      const result = await run(await partial('Part of #41\n\nResolves #42'))
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 In review')
+    })
+    it('still fails a pull request with neither line, and names the partial marker', async () => {
+      const result = await run(await partial('Delivery'))
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('(found 0)')
+      expect(result.stderr).toContain('`Part of #<ticket>`')
+      expect(changedTicket()).toBe(false)
+    })
+    it('still fails a Part of line that names another ticket than the branch', async () => {
+      const result = await run(await partial('Part of #43'))
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('no verified closing association to ticket #42')
+      expect(result.stderr).toContain('`Part of #42`')
+      expect(changedTicket()).toBe(false)
+    })
+    it('leaves the ticket where it is when a partial pull request is merged', async () => {
+      const mergeSha = 'c'.repeat(40)
+      await writeFile(
+        path.join(dir, 'event.json'),
+        JSON.stringify({
+          ...event,
+          action: 'closed',
+          pull_request: { ...event.pull_request, state: 'closed', merged: true, merge_commit_sha: mergeSha, head: { ...event.pull_request.head, ref: 'fix/42-probe' } }
+        })
+      )
+      const result = await run({
+        LIVE: JSON.stringify({ ...live, state: 'MERGED', headRefName: 'fix/42-probe', mergeCommit: { oid: mergeSha }, body: 'Part of #42', closingIssuesReferences: [] }),
+        STATUS: 'In review'
+      })
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('::notice::Pull request #100 delivers part of ticket #42')
+      expect(changedTicket()).toBe(false)
+    })
+  })
 })
