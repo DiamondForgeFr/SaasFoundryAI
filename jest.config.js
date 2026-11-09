@@ -13,8 +13,12 @@ module.exports = {
       // 23 unit specs drive workflow-cli.sh / github-projects-cli.sh / srs-cli.sh
       // through execFile. Each costs ~300 ms idle, which is comfortable against
       // 5 s until the runner is loaded — on CI this project runs alongside the
-      // Docker matrix, and one spec crossed the line on PR #521.
-      globals: { TEST_TIMEOUT: 20000 }
+      // Docker matrix, and one spec crossed the line on PR #521. 20 s held until
+      // the local CI ran beside several agents' pipelines: on 2026-11-09, at a
+      // load average of 40 to 76 on 10 cores, a long tail of spawn-heavy specs
+      // that no one had listed went past it in turn (#1205). The budget is a hang
+      // guard; the specs whose cost is known declare their own above it.
+      globals: { TEST_TIMEOUT: 60000 }
     },
     {
       displayName: 'integration',

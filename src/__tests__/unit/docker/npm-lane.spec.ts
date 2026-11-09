@@ -22,7 +22,7 @@ const lane = require(join(LANE_DIR, 'npm-lane.cjs')) as {
 }
 
 // Every test starts the lane wrapper, a Node process, and the fake or real npm behind it; the stall test may run it a
-// few times with doubled budgets, and the registry tests run a real npm install. A loaded machine goes past the 20 s of
+// few times with doubled budgets, and the registry tests run a real npm install. A loaded machine goes past the former 20 s of
 // the unit project (#1205). The bound is a hang guard, not what the tests check.
 const SPAWN_HEAVY_TIMEOUT_MS = 120_000
 jest.setTimeout(SPAWN_HEAVY_TIMEOUT_MS)

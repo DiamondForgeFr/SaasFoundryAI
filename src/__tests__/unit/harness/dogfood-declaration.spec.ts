@@ -11,7 +11,7 @@ const ROOT = resolve(__dirname, '../../../..')
 const CODEX_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.codex/agents/sf-${tier}.toml`)
 
 // The tests hash every baselined file of this repository, run git ls-files and project every skill: a loaded machine
-// went past the 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
+// went past the former 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
 jest.setTimeout(90_000)
 
 describe('SaaSFoundryAI shared harness dogfood declaration', () => {

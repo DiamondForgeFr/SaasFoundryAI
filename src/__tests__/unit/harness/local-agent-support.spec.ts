@@ -18,7 +18,7 @@ const exec = promisify(execFile)
 const manifest = { version: '1', structure: 'cli', projectName: 'local-test' }
 
 // Each test starts with a git init and commit, then enables, refreshes or replaces agents, each of which reads the
-// index and the excludes through git: a loaded machine goes past the 20 s of the unit project (#1205). The bound is a
+// index and the excludes through git: a loaded machine goes past the former 20 s of the unit project (#1205). The bound is a
 // hang guard, not what the tests check.
 jest.setTimeout(90_000)
 
