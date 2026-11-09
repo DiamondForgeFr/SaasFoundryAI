@@ -12,7 +12,8 @@ const BASH = '/bin/bash'
 
 /**
  * A sandbox whose `gh` logs every call. FAKE_ON_BOARD=<status> puts the issue on board 42 in
- * that status; FAKE_NO_BACKLOG removes the Backlog option from the board.
+ * that status; FAKE_ON_BOARD_NO_STATUS puts it there with an empty Status; FAKE_NO_BACKLOG
+ * removes the Backlog option from the board.
  */
 async function buildSandbox(): Promise<{ dir: string; env: NodeJS.ProcessEnv; logPath: string; cleanup: () => Promise<void> }> {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-gh-add-to-project-'))
@@ -38,7 +39,9 @@ case "$1 $2" in
   "project item-edit") echo '{"id":"PVTI_NEW"}' ;;
   "issue view") echo "https://github.com/FakeOrg/FakeRepo/issues/7" ;;
   "api graphql")
-    if [ -n "$FAKE_ON_BOARD" ]; then
+    if [ -n "$FAKE_ON_BOARD_NO_STATUS" ]; then
+      echo '{"data":{"repository":{"issue":{"title":"T","state":"OPEN","projectItems":{"nodes":[{"id":"PVTI_OLD","project":{"number":42},"fieldValueByName":null}]}}}}}'
+    elif [ -n "$FAKE_ON_BOARD" ]; then
       echo '{"data":{"repository":{"issue":{"title":"T","state":"OPEN","projectItems":{"nodes":[{"id":"PVTI_OLD","project":{"number":42},"fieldValueByName":{"name":"'"$FAKE_ON_BOARD"'"}}]}}}}}'
     else
       echo '{"data":{"repository":{"issue":{"title":"T","state":"OPEN","projectItems":{"nodes":[]}}}}}'
@@ -103,9 +106,47 @@ describe('github-projects-cli.sh add-to-project', () => {
     const result = await run(['7'], { FAKE_ON_BOARD: 'In progress' })
 
     expect(result.code).toBe(0)
-    expect(result.stdout).toContain('already on project board 42 (status kept)')
+    expect(result.stdout).toContain('already on project board 42 (status kept: In progress)')
     const log = calls(sandbox.logPath)
     expect(log.some((call) => call.startsWith('project item-add') || call.startsWith('project item-edit'))).toBe(false)
+  })
+
+  // #1118 — an item the board's auto-add or `create-subtask` had put there had no Status, and
+  // that empty Status was "kept": spawned Stories sat on the board in no column at all.
+  it('gives an issue already on the board with no status the requested status', async () => {
+    const result = await run(['7'], { FAKE_ON_BOARD_NO_STATUS: '1' })
+
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('#7 was on project board 42 with no status → Backlog')
+    const log = calls(sandbox.logPath)
+    expect(log.some((call) => call.startsWith('project item-add'))).toBe(false)
+    expect(log.find((call) => call.startsWith('project item-edit'))).toContain('--id PVTI_OLD --project-id PVT_FAKE --field-id PVTSSF_FAKE --single-select-option-id opt_backlog')
+  })
+
+  it('gives an issue on the board with no status the --status it is asked for', async () => {
+    await expect(run(['7', '--status', 'In progress'], { FAKE_ON_BOARD_NO_STATUS: '1' })).resolves.toMatchObject({ code: 0 })
+    expect(calls(sandbox.logPath).find((call) => call.startsWith('project item-edit'))).toContain('--id PVTI_OLD --project-id PVT_FAKE --field-id PVTSSF_FAKE --single-select-option-id opt_ip')
+  })
+
+  it('leaves an issue on the board with no status untouched when the board has no such status', async () => {
+    const result = await run(['7'], { FAKE_ON_BOARD_NO_STATUS: '1', FAKE_NO_BACKLOG: '1' })
+
+    expect(result.code).not.toBe(0)
+    expect(result.stderr).toContain("Unknown status 'Backlog'")
+    expect(calls(sandbox.logPath).some((call) => call.startsWith('project item-edit'))).toBe(false)
+  })
+
+  describe('--json', () => {
+    it.each([
+      [{}, { ticket: 7, action: 'added', status: 'Backlog' }],
+      [{ FAKE_ON_BOARD_NO_STATUS: '1' }, { ticket: 7, action: 'status-set', status: 'Backlog' }],
+      [{ FAKE_ON_BOARD: 'In progress' }, { ticket: 7, action: 'kept', status: 'In progress' }]
+    ])('states the status the board holds afterwards (%o)', async (env, expected) => {
+      const result = await run(['7', '--json'], env)
+
+      expect(result.code).toBe(0)
+      expect(JSON.parse(result.stdout)).toEqual(expected)
+    })
   })
 
   it('takes another starting status', async () => {
