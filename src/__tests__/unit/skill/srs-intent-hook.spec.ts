@@ -15,7 +15,7 @@ import path from 'node:path'
 const HOOK = path.resolve(__dirname, '../../../../.claude/skills/sf-srs/scripts/srs-intent-hook.sh')
 
 // The budget test starts the hook 20 times, and each start is several processes: a loaded machine takes
-// more than the 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
+// more than the former 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
 jest.setTimeout(90_000)
 
 interface RunResult {

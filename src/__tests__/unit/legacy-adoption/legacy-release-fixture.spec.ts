@@ -18,7 +18,7 @@ import {
 const CLI_ROOT = resolve(__dirname, '../../../..')
 const AUTHORITATIVE_FIXTURE_ROOT = join(CLI_ROOT, 'tests/docker/fixtures/previous-release/1.0.0-beta')
 
-// The tests hash and write real fixture trees, one of them 800 files: a loaded machine goes past the 20 s of the unit
+// The tests hash and write real fixture trees, one of them 800 files: a loaded machine goes past the former 20 s of the unit
 // project (#1205). The bound is a hang guard, not what the tests check.
 jest.setTimeout(90_000)
 
