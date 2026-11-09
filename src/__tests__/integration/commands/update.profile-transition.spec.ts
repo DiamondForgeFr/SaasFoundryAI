@@ -50,11 +50,23 @@ const stackManifest = (): SaaSFoundryManifest => ({
 })
 
 /**
- * A whole `sf update` profile transition. Alone it takes about 2 minutes; a full `npm test`
- * beside Docker builds took it past the former 120 s budget (#892). The budget is for a
- * loaded machine, not a fast one.
+ * A whole `sf update` profile transition. Alone it takes 40 s to 2 minutes; a full `npm test`
+ * beside Docker builds took it past the former 120 s budget (#892), and on 2026-11-09, at a load
+ * average of 40 to 76 on 10 cores, it went past 300 s (#1205). The budget is for a loaded machine,
+ * not a fast one, and it applies to every test of the file: the first preview also pays for loading
+ * the update command and rendering the stack, and a preview that overruns keeps writing to the next
+ * test's captured stdout.
+ *
+ * Why a wider budget rather than running this file, update.legacy-adoption and
+ * scaffold/technical-stack.adoption serially (#1205): the time they lose on a loaded runner is the
+ * machine's, not each other's. There they ran beside the 50 other integration files on Jest's 9
+ * workers, the unit job's 9 more, and other pipelines and agents. Serializing the three removes two
+ * busy processes out of 40 to 76 runnable ones, and lengthens the job by two of them on every run
+ * (the whole integration job takes 150 to 290 s when green). A wider budget costs nothing when the
+ * tests pass, and only delays the report of a test that really hangs.
  */
-const FULL_TRANSITION_BUDGET_MS = 300_000
+const FULL_TRANSITION_BUDGET_MS = 600_000
+jest.setTimeout(FULL_TRANSITION_BUDGET_MS)
 
 describe('updateCommand profile transition', () => {
   let projectDir: string

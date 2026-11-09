@@ -62,7 +62,7 @@ describe.each([
   })
 
   afterEach(async () => {
-    await rm(sandbox, { recursive: true, force: true })
+    await rm(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
   })
 
   it('adds the rendered stack, preserves the harness and becomes idempotent', async () => {
@@ -123,6 +123,8 @@ describe.each([
         created: []
       })
     })
-    // Renders a whole project twice; beside the Docker lane of the local CI it took 158 s.
-  }, 300_000)
+    // Renders a whole project twice: about 40 s alone, 158 s beside the Docker lane of the local CI, and past 300 s on
+    // 2026-11-09 at a load average of 40 to 76 on 10 cores (#1205). Why a wider budget rather than serial execution: see
+    // the note above FULL_TRANSITION_BUDGET_MS in commands/update.profile-transition.spec.ts.
+  }, 600_000)
 })
