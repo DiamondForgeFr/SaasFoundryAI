@@ -189,6 +189,9 @@ checkbox is not a substitute.
 
 `list-incomplete-children` follows those native relationships and checks each child's Projects V2 status. An issue being closed does not prove that its board status is `Done`.
 
+The first child entering `In progress` brings its Epic there through the statuses `workflow.statuses` declares: through `Ready` on the Team board, straight from `Backlog` on Solo. A manifest that
+lists no statuses assumes the Team set; when the board then refuses `Ready`, the Epic still reaches `In progress` and the CLI prints a notice asking you to declare the board's statuses.
+
 ## Troubleshooting
 
 - **Transition refused**: compare the board options with `workflow.statuses`.

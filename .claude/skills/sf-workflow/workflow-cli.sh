@@ -904,11 +904,15 @@ rollup_parent_status() {
     case "$(echo "$parent_status" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')" in
       backlog)
         # Walk the statuses this board declares: the Solo preset has no Ready (#838).
+        # Ready is only a waypoint: a board that refuses it (a manifest listing no
+        # statuses assumes the Team set) must not leave the Epic in Backlog (#965).
         if manifest_declares_status "Ready"; then
-          route_to_tool "$WORKFLOW_TOOL" update-status "$parent" "Ready" || {
-            echo "Warning: could not roll parent Epic #${parent} from Backlog to Ready." >&2; return 0;
-          }
-          echo "Derived rollup: Epic #${parent} → Ready (child #${child} entered In progress)."
+          if route_to_tool "$WORKFLOW_TOOL" update-status "$parent" "Ready"; then
+            echo "Derived rollup: Epic #${parent} → Ready (child #${child} entered In progress)."
+          else
+            echo "Notice: Epic #${parent} skipped Ready, which the board refused; rolling it straight to In progress." >&2
+            echo "  Declare the board's statuses in .saasfoundry.json → workflow.statuses to skip this attempt." >&2
+          fi
         fi
         route_to_tool "$WORKFLOW_TOOL" update-status "$parent" "In progress" || {
           echo "Warning: could not roll parent Epic #${parent} to In progress." >&2; return 0;
