@@ -1462,6 +1462,7 @@ explain_pr_event_rejection() {
     | .pull_request as $pr
     | ([$pr.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$")] | length) as $resolves
     | ([$pr.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$")] | length) as $closes
+    | ([$pr.body // "" | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$")] | length) as $parts
     | if ((.action // "") | IN("ready_for_review", "opened", "reopened") | not) then
         "event action \"\(.action)\" is not opened, reopened or ready_for_review"
       elif .number != $n or .repository.full_name != $repo then "the event belongs to another pull request or repository"
@@ -1472,8 +1473,8 @@ explain_pr_event_rejection() {
         "pull request #\($n) targets \"\($pr.base.ref)\", which is neither the PR target \"\($target)\" nor the release branch \"\($release)\""
       elif $pr.base.ref == $release and $closes != 1 then
         "a release pull request body must contain exactly one line that reads `Closes #<ticket>` (found \($closes))"
-      elif $pr.base.ref != .repository.default_branch and $pr.base.ref == $target and $resolves != 1 then
-        "pull request #\($n) targets \"\($pr.base.ref)\", not the default branch, so GitHub links no ticket: its body must contain exactly one line that reads `Resolves #<ticket>` and nothing else (found \($resolves)); a line such as `Resolves #7 — summary` does not count"
+      elif $pr.base.ref != .repository.default_branch and $pr.base.ref == $target and $resolves != 1 and ($resolves != 0 or $parts == 0) then
+        "pull request #\($n) targets \"\($pr.base.ref)\", not the default branch, so GitHub links no ticket: its body must contain exactly one line that reads `Resolves #<ticket>` and nothing else (found \($resolves)); a line such as `Resolves #7 — summary` does not count. A pull request that delivers only part of the ticket, which stays open, has no `Resolves` line and a line that reads `Part of #<ticket>` instead"
       else "the event could not be validated (malformed or stale payload)" end
   ' "$event_path" 2>/dev/null || echo "the event payload could not be read"
 }
@@ -1521,6 +1522,23 @@ ai_status() {
     echo "Error: unable to publish the commit status on pull request #${pr}." >&2; return 2;
   }
   echo "AI testing / ${step}: ${state} — ${description} (PR #${pr})"
+}
+
+# A pull request that delivers only part of its ticket, which must stay open,
+# has no `Resolves` line and a `Part of #N` line naming the branch ticket: the
+# listener leaves the ticket where it is with a notice instead of a red check
+# that developers learned to distrust (#1065).
+pr_declares_partial_delivery() {
+  local live=$1 ticket=$2
+  echo "$live" | jq -e --arg t "$ticket" '
+    ([.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$")] | length) == 0
+    and any(.body | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$") | .[0]; . == $t)
+  ' >/dev/null 2>&1
+}
+
+partial_delivery_notice() {
+  local pr_number=$1 ticket=$2 when=$3
+  echo "::notice::Pull request #${pr_number} delivers part of ticket #${ticket} (\`Part of #${ticket}\`, no \`Resolves\` line): ${when}; no ticket changed. The pull request that completes the ticket carries \`Resolves #${ticket}\`."
 }
 
 # A pull request merged into the configured PR target moves its delivery ticket
@@ -1583,7 +1601,11 @@ sync_pr_merge() {
     [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t]
     or any(.closingIssuesReferences[]; (.number | tostring) == $t)
   ' >/dev/null 2>&1; then
-    echo "Error: the merged pull request has no verified closing association to ticket #${ticket}; no ticket changed." >&2
+    if pr_declares_partial_delivery "$live" "$ticket"; then
+      partial_delivery_notice "$pr_number" "$ticket" "the merge leaves the ticket open at its status"
+      return 0
+    fi
+    echo "Error: the merged pull request has no verified closing association to ticket #${ticket}; no ticket changed. A pull request that delivers only part of it says \`Part of #${ticket}\`." >&2
     return 2
   fi
   local GH_REPO="$repo"
@@ -1662,15 +1684,23 @@ sync_pr_review() {
     | {number, title, kind: $kind, head: .head.ref, headSha: .head.sha, base: .base.ref, baseSha: .base.sha,
        defaultBranch: $default_branch,
        body: (if $kind == "sync" then (.body // "") else null end),
+       # A partial delivery (#1065) has no Resolves line and a `Part of #N` one instead.
        bodyVerb: (if $kind == "release" then "closes"
-         elif .base.ref != $default_branch then "resolves" else null end),
+         elif .base.ref != $default_branch then
+           (if ([.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$")] | length) == 0
+              and ([.body // "" | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$")] | length) > 0
+            then "part-of" else "resolves" end)
+         else null end),
        bodyTicket: (if $kind == "release" then
          ([.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]]
           | if length == 1 then .[0] else error("Invalid release ticket association") end)
        elif $kind == "sync" then null
        elif .base.ref != $default_branch then
-         ([.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]]
-          | if length == 1 then .[0] else error("Invalid non-default delivery ticket association") end)
+         ([.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] as $resolved
+          | ([.body // "" | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$")] | length) as $parts
+          | if ($resolved | length) == 1 then $resolved[0]
+            elif ($resolved | length) == 0 and $parts > 0 then null
+            else error("Invalid non-default delivery ticket association") end)
        else null end)}
   ' "$event_path" 2>/dev/null) || {
     echo "Error: $(explain_pr_event_rejection "$repo" "$pr_number" "$event_path"); no ticket changed." >&2
@@ -1703,6 +1733,9 @@ sync_pr_review() {
         [.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$event.bodyTicket]
       elif $event.bodyVerb == "resolves" then
         [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$event.bodyTicket]
+      elif $event.bodyVerb == "part-of" then
+        ([.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$")] | length) == 0
+        and ([.body | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$")] | length) > 0
       else false end)
     and ((.headRepositoryOwner.login + "/" + .headRepository.name) == $repo)
     and (.closingIssuesReferences | type) == "array"
@@ -1773,7 +1806,11 @@ sync_pr_review() {
       else (any(.closingIssuesReferences[]; .number == $n and .url == $url)
         or [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [($n | tostring)]) end
   ' >/dev/null 2>&1; then
-    echo "Error: PR has no verified closing association to ticket #${ticket}; no ticket changed." >&2
+    if [[ "$(echo "$event" | jq -r .kind)" != release ]] && pr_declares_partial_delivery "$live" "$ticket"; then
+      partial_delivery_notice "$pr_number" "$ticket" "the ticket stays open and does not move to review"
+      return 0
+    fi
+    echo "Error: PR has no verified closing association to ticket #${ticket}; no ticket changed. A pull request that delivers only part of it says \`Part of #${ticket}\` and has no \`Resolves\` line." >&2
     return 2
   fi
   local status labels nature GH_REPO="$repo"
