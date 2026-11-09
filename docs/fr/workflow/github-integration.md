@@ -87,12 +87,30 @@ Quand la branche courante n'est pas celle du ticket, `ready-pr` et `draft-pr` ne
 
 - **Sans option**, la seule pull request ouverte de ce dépôt dont la branche de tête respecte le `branchNaming` du ticket (feature ou fix) est utilisée, et la commande affiche une ligne qui la nomme.
   Si aucune ne correspond, la commande refuse. Plusieurs sont refusées avec la liste des candidates (`#123 (feature/42-…), #124 (fix/42-…)`) : en choisir une avec `--pr <numéro>`.
-- **Avec `--pr <numéro>`**, la pull request est celle qui est nommée. Sa branche de tête doit tout de même respecter la convention du ticket.
+- **Avec `--pr <numéro>`**, la pull request est celle qui est nommée. Sa branche de tête doit tout de même respecter la convention du ticket, sauf si la pull request résout le ticket (voir plus bas).
 - **Avec `--head <branche>`**, la pull request ouverte de cette branche est utilisée.
 
 Le commit de tête de la pull request doit être celui qu'origin porte pour sa branche, et c'est ce commit que vérifie la porte de CI locale. Sur la branche du ticket elle-même, rien ne change : le
 `HEAD` local, origin et la pull request doivent concorder. L'axe de nature reste appliqué par `update-status` : le passage en In review exige toujours une pull request sortie du brouillon, et Human
 testing une pull request en brouillon.
+
+### Une pull request qui livre plusieurs tickets
+
+Une pull request peut livrer plusieurs tickets, par exemple les stories d'une même Epic. Son corps porte alors une ligne par ticket, chacune exactement `Resolves #<ticket>` :
+
+```markdown
+Resolves #170 Resolves #171 Resolves #172
+```
+
+Un ticket sans pull request à lui trouve celle-ci : une pull request ouverte de ce dépôt, depuis la branche d'un autre ticket, vers la cible des PR, dont le corps nomme le ticket sur une telle ligne
+ou que GitHub lui relie comme référence de fermeture. La branche propre du ticket l'emporte toujours. C'est vrai pour `ai-status`, `ready-pr`, `draft-pr` et `local-ci-gate`, pour le garde-fou d'état
+de PR de Human testing et In review, pour le garde-fou de PR fusionnée de Done, et pour le garde-fou des commits poussés d'AI testing, qui vérifie alors la branche de cette pull request. Une ligne qui
+ne fait que mentionner le ticket (`See #171`), un fork ou une pull request vers une autre branche ne comptent pas, et deux pull requests qui résolvent toutes deux le ticket sont refusées comme
+ambiguës.
+
+`sync-pr-review` fait avancer chaque ticket que la pull request résout : les références de fermeture vérifiées par GitHub sur une pull request vers la branche par défaut, les lignes `Resolves` vers
+toute autre cible. Quand il ne peut pas faire avancer l'un d'eux, il fait quand même avancer les autres et termine par une ligne par ticket qui en donne la cause ; la vérification échoue alors. Le
+même ticket sur deux lignes `Resolves` est refusé.
 
 ### La porte de CI locale
 

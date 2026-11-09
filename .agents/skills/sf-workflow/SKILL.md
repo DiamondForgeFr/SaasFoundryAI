@@ -430,9 +430,14 @@ ticket to In Review only once the developer has taken the PR out of draft. Use `
 their own: the delivery parent's PR follows its route.
 
 `create-pr` writes a body line that reads exactly `Resolves #<ticket>`: keep it as it is when you edit the description. A pull request to a branch other than the default one links its ticket only
-through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated or extended (`Resolves #7 — summary`). A pull request that delivers only part of a
-ticket that must stay open replaces that line with one that reads exactly `Part of #<ticket>`, naming the branch ticket: the listener then moves nothing, on the Ready for review click as on the merge,
-and leaves a notice instead of a failing check. The pull request that completes the ticket carries the `Resolves` line.
+through that line, and `sync-pr-review` refuses the event, naming the reason, when the line is missing, repeated for the same ticket or extended (`Resolves #7 — summary`). A pull request that delivers
+only part of a ticket that must stay open replaces that line with one that reads exactly `Part of #<ticket>`, naming the branch ticket: the listener then moves nothing, on the Ready for review click
+as on the merge, and leaves a notice instead of a failing check. The pull request that completes the ticket carries the `Resolves` line.
+
+**One pull request, several tickets.** A pull request that delivers several tickets carries one line per ticket (`Resolves #170`, `Resolves #171`, …). A ticket with no pull request of its own then
+finds that one, opened from another ticket's branch into the PR target in the same repository, through its `Resolves #<ticket>` line or GitHub's closing reference to it: `ai-status`, `ready-pr`,
+`draft-pr`, `local-ci-gate`, the pushed-commits guard (which checks that branch), the PR-state guard and the PR-merged guard. A ticket's own branch always wins. `sync-pr-review` moves every ticket the
+pull request resolves (GitHub's closing references into the default branch, the `Resolves` lines elsewhere) and ends with one line per ticket that names the cause of any it did not move.
 
 With the updated CI policy, draft PRs skip test/build CI. When adopting these skills in an existing project, inspect its checked-in workflows and hooks: refreshing instructions alone does not update
 external CI configuration or remove custom push hooks. Readiness and subsequent ready-PR pushes run full CI; returning to draft cancels obsolete runs. Quick commit checks remain enabled; heavy local
@@ -443,8 +448,8 @@ validation belongs to AI Testing instead of every push.
 For GitHub Projects, `.github/workflows/pr-review-sync.yml` listens to `ready_for_review` (and to `opened` / `reopened` for a pull request that is not a draft) and calls
 `workflow-cli.sh sync-pr-review <PR>`. The button is the developer's approval to enter review; the job still enforces the workflow guards. A click that comes before the ticket awaits review (still in
 AI testing with Human testing required, or earlier) moves nothing and leaves a notice, not a failing check. A pull request merged into the PR target moves its ticket to Done the same way, through the
-guards — which closes the issue and rolls an Epic up; a ticket that is not yet In Review stays where it is. The PR must close the ticket named by its configured feature/fix branch convention.
-Same-repository PRs are supported; fork PRs require the normal manual CLI transition.
+guards — which closes the issue and rolls an Epic up; a ticket that is not yet In Review stays where it is. The PR must close the ticket named by its configured feature/fix branch convention, and
+closes the other tickets it resolves the same way. Same-repository PRs are supported; fork PRs require the normal manual CLI transition.
 
 Configure the Actions secret `SF_PROJECTS_TOKEN` with access to the repository and write access to the configured organization Project (a dedicated token with `repo` and `project` scopes, or an
 equivalent appropriately scoped credential). The default `GITHUB_TOKEN` cannot access Projects. Never put credentials in the manifest or PR.

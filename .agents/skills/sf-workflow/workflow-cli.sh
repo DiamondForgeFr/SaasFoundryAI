@@ -632,8 +632,22 @@ DELIVERY_BRANCH_JQ_DEFS='
     | gsub("\\{(?:N|ticket|number|issue-number)\\}"; "\u0001")
     | gsub("\\{(?:description|name)\\}"; "\u0000")
     | split("\u0000") | map(split("\u0001") | map(literal) | join("[1-9][0-9]*")) | join(".+") | "^" + . + "$";
+  def ticket_capture_pattern: usable
+    | gsub("\\{(?:N|ticket|number|issue-number)\\}"; "\u0001")
+    | gsub("\\{(?:description|name)\\}"; "\u0000")
+    | split("\u0000") | map(split("\u0001") | map(literal) | join("(?<ticket>[1-9][0-9]*)")) | join(".+") | "^" + . + "$";
   def release_pattern: select(type == "string") | select((split("{version}") | length) == 2)
     | split("{version}") | map(literal) | join(".+") | "^" + . + "$";
+'
+
+# The tickets a pull request resolves (#1093): a PR that delivers several tickets carries one body line per
+# ticket that reads exactly `Resolves #<ticket>`, and GitHub links the tickets of a PR into the default branch
+# in closingIssuesReferences. Read on a PR object of `gh pr list|view --json body,closingIssuesReferences`.
+PR_RESOLVES_JQ_DEFS='
+  def body_resolved_tickets: [(.body // "") | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]];
+  def resolved_tickets: (body_resolved_tickets
+    + [(.closingIssuesReferences // [])[] | .number | select(type == "number") | tostring]) | unique;
+  def resolves_ticket($t): resolved_tickets | index($t) != null;
 '
 
 # One branch regex per line: the branches that deliver ticket $1 (feature, fix), "any" for a delivery branch
@@ -655,6 +669,27 @@ branch_follows() {
     if [[ -n "$re" && "$branch" =~ $re ]]; then return 0; fi
   done <<<"$patterns"
   return 1
+}
+
+# The ticket whose delivery branch carries ticket $1's work when $1 has no open PR of its own and one
+# same-repository open PR into the delivery branch resolves it from another ticket's branch (#1093),
+# as "<owner>\t<pr>". Nothing otherwise, an unreadable PR list included: the guard then checks $1's own branch.
+resolving_pr_owner() {
+  local ticket=$1 payload
+  payload=$(gh pr list --state open --limit 1000 --json number,headRefName,baseRefName,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || return 0
+  printf '%s' "$payload" | jq -r --arg t "$ticket" --slurpfile manifest .saasfoundry.json "${DELIVERY_BRANCH_JQ_DEFS}${PR_RESOLVES_JQ_DEFS}"'
+    ($manifest[0].workflow.prTargetBranch // $manifest[0].workflow.workingBranch // "develop") as $delivery_branch
+    | [$manifest[0].workflow.branchNaming.feature // "feature/{N}-{description}",
+       $manifest[0].workflow.branchNaming.fix // "fix/{N}-{description}"] as $naming
+    | [$naming[] | ticket_pattern($t)] as $own_patterns
+    | [$naming[] | ticket_capture_pattern] as $capture_patterns
+    | if type != "array" then empty
+      elif any(.[]; (.headRefName | type) == "string" and (.headRefName as $b | any($own_patterns[]; . as $p | $b | test($p)))) then empty
+      else [.[] | select(.baseRefName == $delivery_branch and .isCrossRepository == false and (.headRefName | type) == "string" and resolves_ticket($t))
+          | . as $pr | [$capture_patterns[] as $p | $pr.headRefName | try capture($p).ticket catch empty] | unique
+          | select(length == 1 and .[0] != $t) | "\(.[0])\t\($pr.number)"]
+        | if length == 1 then .[0] else empty end
+      end' 2>/dev/null || true
 }
 
 check_pushed_commits_guard() {
@@ -684,6 +719,14 @@ check_pushed_commits_guard() {
       return 1
     }
     owner=$parent
+  else
+    # One PR that delivers several tickets: the work of this one is on the branch of the PR that resolves it (#1093)
+    local resolver
+    resolver=$(resolving_pr_owner "$ticket")
+    if [[ -n "$resolver" ]]; then
+      owner=${resolver%%$'\t'*}
+      echo "→ Ticket #${ticket} is delivered by pull request #${resolver#*$'\t'}, which resolves it from the branch of #${owner}: checking that branch." >&2
+    fi
   fi
   patterns=$(delivery_branch_patterns "$owner")
   if [[ -z "$patterns" ]]; then
@@ -963,13 +1006,16 @@ is_done_target() {
 # PRs must target the working branch. Release tickets use the configured RC
 # pattern, target the release branch, and carry exactly one explicit `Closes #N`
 # directive because GitHub omits native closing references for non-default bases.
+#
+# A ticket with no PR of its own matches the same-repository PR into the delivery branch that resolves it
+# (PR_RESOLVES_JQ_DEFS): one PR that delivers several tickets (#1093). Its own branch always wins.
 get_pr_for_ticket() {
   local ticket=$1 state=$2 payload
   payload=$(gh pr list --state "$state" --limit 1000 \
-    --json number,title,headRefName,headRefOid,headRepository,headRepositoryOwner,isCrossRepository,baseRefName,body,mergedAt,mergeCommit 2>/dev/null) || return 1
+    --json number,title,headRefName,headRefOid,headRepository,headRepositoryOwner,isCrossRepository,baseRefName,body,mergedAt,mergeCommit,closingIssuesReferences 2>/dev/null) || return 1
   echo "$payload" | jq -r \
     --arg t "$ticket" --arg working "$WORKING_BRANCH" --arg state "$state" \
-    --slurpfile manifest .saasfoundry.json '
+    --slurpfile manifest .saasfoundry.json "${PR_RESOLVES_JQ_DEFS}"'
       def literal:
         explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
           then [92,$c] else [$c] end) | flatten | implode;
@@ -1006,7 +1052,12 @@ get_pr_for_ticket() {
                  and .baseRefName == $delivery_branch
                ) or $is_release
              )
-           | {pr: ., is_release: $is_release}] as $matches
+           | {pr: ., is_release: $is_release}] as $own
+          | (if ($own | length) > 0 then $own
+             else [$payload[]
+               | select(.baseRefName == $delivery_branch and .isCrossRepository == false
+                 and (.headRefName | type) == "string" and (.headRefName | test($release_pattern) | not) and resolves_ticket($t))
+               | {pr: ., is_release: false}] end) as $matches
           | if $state == "merged" then
               ($matches | map(select(.is_release))) as $release_matches
               | if ($release_matches | length) > 0 then
@@ -1281,10 +1332,11 @@ check_pr_existence_guard() {
     echo "Error: nature:bundled-pr tickets cannot enter Human Testing or In Review; use AI Testing → Done." >&2
     return 1
   fi
-  payload=$(gh pr list --state open --limit 1000 --json number,headRefName,baseRefName,isDraft,body,closingIssuesReferences 2>/dev/null) || {
+  payload=$(gh pr list --state open --limit 1000 --json number,headRefName,baseRefName,isDraft,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to verify PR state; no status transition was made." >&2; return 1;
   }
-  matches=$(echo "$payload" | jq -ce --arg t "$ticket" --slurpfile manifest .saasfoundry.json '
+  # The ticket's own branch, or else the PR that resolves it among others (#1093)
+  matches=$(echo "$payload" | jq -ce --arg t "$ticket" --slurpfile manifest .saasfoundry.json "${PR_RESOLVES_JQ_DEFS}"'
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
         then [92,$c] else [$c] end) | flatten | implode;
@@ -1316,7 +1368,10 @@ check_pr_existence_guard() {
             and (.headRefName | test($release_pattern))
             and .baseRefName == $release_branch
             and [.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t])
-        )]
+        )] as $own
+        | if ($own | length) > 0 then $own
+          else [$payload[] | select(.baseRefName == $delivery_branch and .isCrossRepository == false
+              and (.headRefName | type) == "string" and (.headRefName | test($release_pattern) | not) and resolves_ticket($t))] end
       else error("Expected PR array") end') || {
     echo "Error: invalid PR response; no status transition was made." >&2; return 1;
   }
@@ -1324,6 +1379,7 @@ check_pr_existence_guard() {
   if [[ "$count" -eq 0 ]]; then
     echo "✗ Ticket #${ticket} has no open PR — cannot transition to '$(if [[ "$normalized" == 'in review' ]]; then echo 'In Review'; else echo 'Human Testing'; fi)'." >&2
     echo "  Open a draft with workflow-cli.sh create-pr ${ticket} --draft for Human Testing." >&2
+    echo "  Delivered by another ticket's PR: add a body line to that PR that reads exactly 'Resolves #${ticket}'." >&2
     echo "  After approval, use workflow-cli.sh ready-pr ${ticket} before In Review." >&2
     echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1" >&2
     report_unusable_delivery_patterns
@@ -1460,7 +1516,8 @@ explain_pr_event_rejection() {
     | ($manifest[0].workflow.prTargetBranch // $working) as $target
     | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release
     | .pull_request as $pr
-    | ([$pr.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$")] | length) as $resolves
+    | [$pr.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] as $resolved
+    | ($resolved | length) as $resolves
     | ([$pr.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$")] | length) as $closes
     | ([$pr.body // "" | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$")] | length) as $parts
     | if ((.action // "") | IN("ready_for_review", "opened", "reopened") | not) then
@@ -1473,8 +1530,10 @@ explain_pr_event_rejection() {
         "pull request #\($n) targets \"\($pr.base.ref)\", which is neither the PR target \"\($target)\" nor the release branch \"\($release)\""
       elif $pr.base.ref == $release and $closes != 1 then
         "a release pull request body must contain exactly one line that reads `Closes #<ticket>` (found \($closes))"
-      elif $pr.base.ref != .repository.default_branch and $pr.base.ref == $target and $resolves != 1 and ($resolves != 0 or $parts == 0) then
-        "pull request #\($n) targets \"\($pr.base.ref)\", not the default branch, so GitHub links no ticket: its body must contain exactly one line that reads `Resolves #<ticket>` and nothing else (found \($resolves)); a line such as `Resolves #7 — summary` does not count. A pull request that delivers only part of the ticket, which stays open, has no `Resolves` line and a line that reads `Part of #<ticket>` instead"
+      elif $pr.base.ref != .repository.default_branch and $pr.base.ref == $target and $resolves == 0 and $parts == 0 then
+        "pull request #\($n) targets \"\($pr.base.ref)\", not the default branch, so GitHub links no ticket: its body must contain one line per ticket that reads exactly `Resolves #<ticket>` and nothing else (found 0); a line such as `Resolves #7 — summary` does not count. A pull request that delivers only part of the ticket, which stays open, has no `Resolves` line and a line that reads `Part of #<ticket>` instead"
+      elif $pr.base.ref != .repository.default_branch and $pr.base.ref == $target and ($resolved | unique | length) != $resolves then
+        "pull request #\($n) names the same ticket on several `Resolves #<ticket>` lines (\([$resolved | group_by(.)[] | select(length > 1) | "#" + .[0]] | join(", "))): keep one line per ticket"
       else "the event could not be validated (malformed or stale payload)" end
   ' "$event_path" 2>/dev/null || echo "the event payload could not be read"
 }
@@ -1552,11 +1611,12 @@ sync_pr_merge() {
     ($manifest[0].workflow.workingBranch // "develop") as $working
     | ($manifest[0].workflow.prTargetBranch // $working) as $target
     | select(.action == "closed" and .number == $n and .repository.full_name == $repo)
+    | (.repository.default_branch // null) as $default_branch
     | .pull_request
     | select(.number == $n and .merged == true
       and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .base.ref == $target
       and (.head.ref | type) == "string" and ((.merge_commit_sha // "") | test("^[0-9a-f]{40}$")))
-    | {number, head: .head.ref, base: .base.ref, mergeSha: .merge_commit_sha}
+    | {number, head: .head.ref, base: .base.ref, mergeSha: .merge_commit_sha, defaultBranch: $default_branch}
   ' "$event_path" 2>/dev/null) || {
     echo "Pull request #${pr_number} was not merged into the configured PR target; nothing to synchronize."
     return 0
@@ -1598,7 +1658,7 @@ sync_pr_merge() {
     return 2
   }
   if ! echo "$live" | jq -e --arg t "$ticket" '
-    [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t]
+    ([.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] | index($t) != null)
     or any(.closingIssuesReferences[]; (.number | tostring) == $t)
   ' >/dev/null 2>&1; then
     if pr_declares_partial_delivery "$live" "$ticket"; then
@@ -1608,7 +1668,22 @@ sync_pr_merge() {
     echo "Error: the merged pull request has no verified closing association to ticket #${ticket}; no ticket changed. A pull request that delivers only part of it says \`Part of #${ticket}\`." >&2
     return 2
   fi
-  local GH_REPO="$repo"
+  # The other tickets it delivers (#1093), read as the ready sync reads them: GitHub's closing references
+  # to this repository's issues into the default branch, the exact `Resolves #<ticket>` lines elsewhere.
+  local server=${GITHUB_SERVER_URL:-https://github.com} t
+  local -a tickets=()
+  while IFS= read -r t; do [[ "$t" =~ ^[1-9][0-9]*$ ]] && tickets+=("$t"); done < <(echo "$live" | jq -r --argjson event "$event" --arg t "$ticket" --arg prefix "${server%/}/${repo}/issues/" '
+    ([$t] + (if $event.defaultBranch != null and $event.base != $event.defaultBranch
+        then [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]]
+        else [.closingIssuesReferences[] | select((.number | type) == "number" and .url == $prefix + (.number | tostring)) | .number | tostring] end))
+    | reduce .[] as $x ([]; if index($x) then . else . + [$x] end) | .[]' 2>/dev/null)
+  [[ ${#tickets[@]} -gt 0 ]] || tickets=("$ticket")
+  sync_pr_tickets "$repo" "$pr_number" "Done" sync_ticket_merge "${tickets[@]}"
+}
+
+# The merge sync of one ticket: an In Review delivery ticket goes to Done through the guarded update-status.
+sync_ticket_merge() {
+  local repo=$1 ticket=$2 labels status GH_REPO="$1"
   export GH_REPO
   labels=$(route_to_tool "$WORKFLOW_TOOL" get-labels "$ticket") || {
     echo "Error: unable to verify ticket labels; no ticket changed." >&2; return 2;
@@ -1694,11 +1769,13 @@ sync_pr_review() {
        bodyTicket: (if $kind == "release" then
          ([.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]]
           | if length == 1 then .[0] else error("Invalid release ticket association") end)
-       elif $kind == "sync" then null
-       elif .base.ref != $default_branch then
+       else null end),
+       # One line per ticket the PR delivers (#1093); one ticket twice is refused, and none only
+       # passes as a partial delivery (#1065), which names its ticket on a `Part of #N` line instead
+       bodyTickets: (if $kind == "delivery" and .base.ref != $default_branch then
          ([.body // "" | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] as $resolved
           | ([.body // "" | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$")] | length) as $parts
-          | if ($resolved | length) == 1 then $resolved[0]
+          | if ($resolved | length) > 0 and ($resolved | unique | length) == ($resolved | length) then $resolved
             elif ($resolved | length) == 0 and $parts > 0 then null
             else error("Invalid non-default delivery ticket association") end)
        else null end)}
@@ -1732,7 +1809,7 @@ sync_pr_review() {
       elif $event.bodyVerb == "closes" then
         [.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$event.bodyTicket]
       elif $event.bodyVerb == "resolves" then
-        [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$event.bodyTicket]
+        [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == $event.bodyTickets
       elif $event.bodyVerb == "part-of" then
         ([.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$")] | length) == 0
         and ([.body | scan("(?im)^\\s*part\\s+of\\s+#([1-9][0-9]*)\\s*$")] | length) > 0
@@ -1804,7 +1881,7 @@ sync_pr_review() {
         (.title | test("^\\[#" + ($n | tostring) + "\\](?:\\s|$)|^[[:alnum:]_.-]+\\(#" + ($n | tostring) + "\\)(?:!)?:"))
         and [.body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [($n | tostring)]
       else (any(.closingIssuesReferences[]; .number == $n and .url == $url)
-        or [.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [($n | tostring)]) end
+        or ([.body | scan("(?im)^\\s*resolves\\s+#([1-9][0-9]*)\\s*$") | .[0]] | index($n | tostring) != null)) end
   ' >/dev/null 2>&1; then
     if [[ "$(echo "$event" | jq -r .kind)" != release ]] && pr_declares_partial_delivery "$live" "$ticket"; then
       partial_delivery_notice "$pr_number" "$ticket" "the ticket stays open and does not move to review"
@@ -1813,7 +1890,59 @@ sync_pr_review() {
     echo "Error: PR has no verified closing association to ticket #${ticket}; no ticket changed. A pull request that delivers only part of it says \`Part of #${ticket}\` and has no \`Resolves\` line." >&2
     return 2
   fi
-  local status labels nature GH_REPO="$repo"
+  # The other tickets the PR delivers (#1093): GitHub's closing references to this repository's issues on
+  # the default branch, the exact `Resolves #<ticket>` lines elsewhere. A release PR keeps its one ticket.
+  local -a tickets=()
+  local t
+  while IFS= read -r t; do [[ "$t" =~ ^[1-9][0-9]*$ ]] && tickets+=("$t"); done < <(echo "$live" | jq -r --argjson event "$event" --arg t "$ticket" --arg prefix "${server%/}/${repo}/issues/" '
+    ([$t] + (if $event.kind != "delivery" then []
+      elif $event.bodyTickets != null then $event.bodyTickets
+      else [.closingIssuesReferences[] | select((.number | type) == "number" and .url == $prefix + (.number | tostring)) | .number | tostring] end))
+    | reduce .[] as $x ([]; if index($x) then . else . + [$x] end) | .[]' 2>/dev/null)
+  [[ ${#tickets[@]} -gt 0 ]] || tickets=("$ticket")
+  sync_pr_tickets "$repo" "$pr_number" "In review" sync_ticket_review "${tickets[@]}"
+}
+
+# Run one ticket sync per ticket a pull request resolves (#1093), and say what became of each. One ticket
+# keeps the plain output; several end with one line per ticket that names the cause of any it did not move.
+# Exit 2 when any ticket failed, 0 otherwise. $4 is the per-ticket function: <fn> <repo> <ticket>.
+sync_pr_tickets() {
+  local repo=$1 pr_number=$2 target=$3 fn=$4 t rc failed=0 output plain line esc=$'\033'
+  shift 4
+  if [[ "$#" -eq 1 ]]; then
+    "$fn" "$repo" "$1"
+    return $?
+  fi
+  echo "Pull request #${pr_number} resolves $# tickets: $(printf '#%s ' "$@")"
+  local -a summary=()
+  for t in "$@"; do
+    echo "── Ticket #${t}"
+    output=$("$fn" "$repo" "$t" 2>&1)
+    rc=$?
+    printf '%s\n' "$output"
+    plain=$(printf '%s\n' "$output" | sed -E "s/${esc}\\[[0-9;]*m//g; s/^::notice:://; s/^[[:space:]]+//" | grep -v '^$')
+    if [[ "$rc" -ne 0 ]]; then
+      failed=1
+      line=$(printf '%s\n' "$plain" | grep -E '^(Error|✗)' | head -n 1)
+      [[ -n "$line" ]] || line=$(printf '%s\n' "$plain" | tail -n 1)
+      summary+=("  #${t}: not synchronized — ${line:-no output}")
+    else
+      summary+=("  #${t}: $(printf '%s\n' "$plain" | grep -Ev '^(▶|⏳)' | tail -n 1)")
+    fi
+  done
+  echo "Summary of pull request #${pr_number} (${target}):"
+  printf '%s\n' "${summary[@]}"
+  if [[ "$failed" -ne 0 ]]; then
+    echo "Error: pull request #${pr_number} could not synchronize every ticket it resolves; see the summary above." >&2
+    return 2
+  fi
+  return 0
+}
+
+# The ready-for-review sync of one ticket: its board status and labels decide, then the guarded
+# update-status moves it to In review.
+sync_ticket_review() {
+  local repo=$1 ticket=$2 status labels nature GH_REPO="$1"
   export GH_REPO
   status=$(get_current_status "$ticket") || return 2
   case "$(status_slug "$status")" in

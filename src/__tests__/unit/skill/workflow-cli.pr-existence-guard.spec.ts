@@ -210,6 +210,64 @@ describe('sf-workflow CLI — PR-existence guard (→ In Review)', () => {
     expect(res.code).toBe(0)
   })
 
+  // #1093 — one PR delivers several tickets: each ticket it resolves finds it.
+  describe('a pull request that resolves several tickets (#1093)', () => {
+    const bundle = (changes: Record<string, unknown> = {}) =>
+      JSON.stringify([
+        {
+          number: 178,
+          isDraft: true,
+          isCrossRepository: false,
+          headRefName: 'feature/170-five-stories',
+          baseRefName: 'develop',
+          body: 'Stories\n\nResolves #170\nResolves #42\n',
+          closingIssuesReferences: [],
+          ...changes
+        }
+      ])
+
+    it('finds it for a ticket named on one of its Resolves lines', async () => {
+      sandbox = await buildSandbox(bundle())
+      const res = await runCli(['update-status', '42', 'Human testing'], sandbox)
+      expect(res.code).toBe(0)
+      expect(readLog(sandbox.toolLogPath)).toContain('update-status 42 Human testing')
+    })
+
+    it('finds it for a ticket GitHub links in its closing references', async () => {
+      sandbox = await buildSandbox(bundle({ body: 'Stories', closingIssuesReferences: [{ number: 170 }, { number: 42 }] }))
+      expect((await runCli(['update-status', '42', 'Human testing'], sandbox)).code).toBe(0)
+    })
+
+    it('prefers the ticket branch own pull request over a pull request that also resolves it', async () => {
+      const prs = JSON.parse(bundle()) as object[]
+      sandbox = await buildSandbox(
+        JSON.stringify([...prs, { number: 555, isDraft: true, isCrossRepository: false, headRefName: 'feature/42-own', baseRefName: 'develop', body: '', closingIssuesReferences: [] }])
+      )
+      expect((await runCli(['update-status', '42', 'Human testing'], sandbox)).code).toBe(0)
+    })
+
+    it.each([
+      ['comes from a fork', { isCrossRepository: true }],
+      ['targets another branch', { baseRefName: 'master' }],
+      ['only mentions the ticket', { body: 'Resolves #170\nSee #42' }],
+      ['is a release branch', { headRefName: 'rc-1.1.1' }]
+    ])('ignores a pull request that %s', async (_label, changes) => {
+      sandbox = await buildSandbox(bundle(changes))
+      const res = await runCli(['update-status', '42', 'Human testing'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('has no open PR')
+      expect(res.stderr).toContain("reads exactly 'Resolves #42'")
+    })
+
+    it('refuses as ambiguous two pull requests that both resolve it', async () => {
+      const prs = JSON.parse(bundle()) as object[]
+      sandbox = await buildSandbox(JSON.stringify([...prs, { ...(prs[0] as object), number: 179, headRefName: 'feature/171-more' }]))
+      const res = await runCli(['update-status', '42', 'Human testing'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('ambiguous')
+    })
+  })
+
   it('rejects a delivery PR that targets the release branch', async () => {
     sandbox = await buildSandbox('[{"number":555,"isDraft":false,"headRefName":"feature/42-add-stuff","baseRefName":"master"}]', { natureLabel: 'internal' })
     const res = await runCli(['update-status', '42', 'In review'], sandbox)

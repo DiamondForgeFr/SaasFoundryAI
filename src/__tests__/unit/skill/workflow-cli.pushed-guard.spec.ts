@@ -24,7 +24,7 @@ interface Sandbox {
   cleanup: () => Promise<void>
 }
 
-async function buildSandbox(options: { natureLabel?: 'bundled-pr' | 'internal'; parent?: number; branch?: string; init?: boolean } = {}): Promise<Sandbox> {
+async function buildSandbox(options: { natureLabel?: 'bundled-pr' | 'internal'; parent?: number; branch?: string; init?: boolean; openPrs?: unknown[] } = {}): Promise<Sandbox> {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-wfcli-pushed-'))
   const toolDir = path.join(dir, '.claude/skills/sf-tool-github-projects')
   const binDir = path.join(dir, 'bin')
@@ -64,7 +64,8 @@ esac
 `
   )
   chmodSync(toolPath, 0o755)
-  writeFileSync(path.join(binDir, 'gh'), '#!/bin/bash\nexit 0\n')
+  const openPrs = JSON.stringify(options.openPrs ?? []).replace(/'/g, "'\\''")
+  writeFileSync(path.join(binDir, 'gh'), `#!/bin/bash\nif [ "$1 $2" = "pr list" ]; then printf '%s' '${openPrs}'; fi\nexit 0\n`)
   chmodSync(path.join(binDir, 'gh'), 0o755)
 
   const repo = initPushedRepo(dir, options.branch)
@@ -210,6 +211,24 @@ describe('sf-workflow CLI — pushed-commits guard (→ AI testing)', () => {
 
     it('refuses a branch that delivers another ticket', async () => {
       sandbox = await buildSandbox({ branch: 'feature/43-other' })
+      const res = await toAiTesting()
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('delivers another ticket')
+    })
+
+    // #1093 — one PR delivers several tickets: the work of #42 is on the branch of the PR that resolves it.
+    const bundle = { number: 178, headRefName: 'feature/43-other', baseRefName: 'develop', isCrossRepository: false, body: 'Resolves #43\nResolves #42', closingIssuesReferences: [] }
+
+    it('checks the branch of the open pull request that resolves the ticket from another ticket branch', async () => {
+      sandbox = await buildSandbox({ branch: 'feature/43-other', openPrs: [bundle] })
+      const res = await toAiTesting()
+      expect(res.code).toBe(0)
+      expect(res.stderr).toContain('Ticket #42 is delivered by pull request #178, which resolves it from the branch of #43')
+      expect(statusCalls()).toEqual(['update-status 42 AI testing'])
+    })
+
+    it('still refuses another ticket branch when its pull request does not resolve the ticket', async () => {
+      sandbox = await buildSandbox({ branch: 'feature/43-other', openPrs: [{ ...bundle, body: 'Resolves #43\nSee #42' }] })
       const res = await toAiTesting()
       expect(res.code).toBe(2)
       expect(res.stderr).toContain('delivers another ticket')
