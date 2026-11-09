@@ -21,6 +21,12 @@ const lane = require(join(LANE_DIR, 'npm-lane.cjs')) as {
   laneEnvironment: (env: NodeJS.ProcessEnv) => NodeJS.ProcessEnv
 }
 
+// Every test starts the lane wrapper, a Node process, and the fake or real npm behind it; the stall test may run it a
+// few times with doubled budgets, and the registry tests run a real npm install. A loaded machine goes past the 20 s of
+// the unit project (#1205). The bound is a hang guard, not what the tests check.
+const SPAWN_HEAVY_TIMEOUT_MS = 120_000
+jest.setTimeout(SPAWN_HEAVY_TIMEOUT_MS)
+
 interface Outcome {
   status: number | null
   stdout: string
@@ -42,13 +48,23 @@ function runLane(args: readonly string[], env: NodeJS.ProcessEnv, cwd: string): 
   })
 }
 
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
+/**
+ * Waits for a killed process to be reaped. ESRCH: gone. EPERM: the pid now belongs to another user's process, so ours
+ * is gone too. A loaded machine reaps late: the wait is wall-clock and wide (#1205), and only a live process fails it.
+ */
+async function expectGone(pid: number): Promise<void> {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ESRCH' || code === 'EPERM') return
+      throw error
+    }
+    await new Promise((wake) => setTimeout(wake, 50))
   }
+  throw new Error(`Process ${pid} is still alive after the lane stopped its group.`)
 }
 
 describe('lifecycle npm lane wrapper', () => {
@@ -158,17 +174,25 @@ if (mode === 'env') {
   )
 
   it('stops a stalled install at its budget, with its whole process group, and names it an environment failure', async () => {
-    const env = fakeEnv('stall', { SF_LANE_NPM_INSTALL_TIMEOUT_MS: '400' })
-    const outcome = await runLane(['install'], env, root)
-    expect(outcome.status).toBe(124)
-    expect(outcome.stderr).toContain(NPM_ENVIRONMENT_FAILURE_MARKER)
-    expect(outcome.stderr).toContain('did not finish within')
-    expect(isNpmEnvironmentFailure(outcome.stderr)).toBe(true)
-    expect(outcome.durationMs).toBeLessThan(10_000)
+    // The budget must expire after the fake npm has started its sleeper, or there is no group to stop: 400 ms is
+    // enough idle, not on a loaded machine where Node itself takes longer to start (#1205). A budget that fired
+    // before the sleeper was up proves nothing, so the test doubles it and tries again until it did.
+    let env: NodeJS.ProcessEnv | undefined
+    for (let timeoutMs = 400; !env; timeoutMs *= 2) {
+      if (timeoutMs > 30_000) throw new Error('The fake npm never started its sleeper before the budget expired.')
+      const attempt = fakeEnv('stall', { SF_LANE_NPM_INSTALL_TIMEOUT_MS: String(timeoutMs), FAKE_PID: join(root, `pid-stall-${timeoutMs}`) })
+      const outcome = await runLane(['install'], attempt, root)
+      // The fake never exits by itself: a 124 can only come from the budget, so no wall-clock bound is needed.
+      expect(outcome.status).toBe(124)
+      expect(outcome.stderr).toContain(NPM_ENVIRONMENT_FAILURE_MARKER)
+      expect(outcome.stderr).toContain('did not finish within')
+      expect(isNpmEnvironmentFailure(outcome.stderr)).toBe(true)
+      // Not retried: a stall runs npm once, whatever the attempt count.
+      expect(callCount(attempt)).toBeLessThanOrEqual(1)
+      if (existsSync(attempt.FAKE_PID!)) env = attempt
+    }
     expect(callCount(env)).toBe(1)
-    const sleeper = Number(readFileSync(env.FAKE_PID!, 'utf8'))
-    for (let waited = 0; isAlive(sleeper) && waited < 2_000; waited += 50) await new Promise((wake) => setTimeout(wake, 50))
-    expect(isAlive(sleeper)).toBe(false)
+    await expectGone(Number(readFileSync(env.FAKE_PID!, 'utf8')))
   })
 
   it('does not put a budget on commands other than install and ci', async () => {
@@ -268,24 +292,32 @@ describe('lifecycle npm lane against a registry that resets connections', () => 
     ...extra
   })
 
-  it('fails on the resets with npm alone, and the lane reads it as an environment failure', async () => {
-    const dir = project('without-lane-retries')
-    resetsLeft = 3
-    resets = 0
-    const outcome = await runLane(['install', PACKAGE], installEnv(dir, { npm_config_fetch_retries: '0', SF_LANE_NPM_INSTALL_ATTEMPTS: '1' }), dir)
-    expect(outcome.status).not.toBe(0)
-    expect(outcome.stderr).toMatch(/ECONNRESET|network/)
-    expect(isNpmEnvironmentFailure(outcome.stderr)).toBe(true)
-    expect(existsSync(join(dir, 'node_modules', PACKAGE, 'package.json'))).toBe(false)
-  }, 60_000)
+  it(
+    'fails on the resets with npm alone, and the lane reads it as an environment failure',
+    async () => {
+      const dir = project('without-lane-retries')
+      resetsLeft = 3
+      resets = 0
+      const outcome = await runLane(['install', PACKAGE], installEnv(dir, { npm_config_fetch_retries: '0', SF_LANE_NPM_INSTALL_ATTEMPTS: '1' }), dir)
+      expect(outcome.status).not.toBe(0)
+      expect(outcome.stderr).toMatch(/ECONNRESET|network/)
+      expect(isNpmEnvironmentFailure(outcome.stderr)).toBe(true)
+      expect(existsSync(join(dir, 'node_modules', PACKAGE, 'package.json'))).toBe(false)
+    },
+    SPAWN_HEAVY_TIMEOUT_MS
+  )
 
-  it('installs through the same resets with the lane settings', async () => {
-    const dir = project('with-lane-retries')
-    resetsLeft = 3
-    resets = 0
-    const outcome = await runLane(['install', PACKAGE], installEnv(dir, {}), dir)
-    expect({ status: outcome.status, stderr: outcome.stderr }).toEqual({ status: 0, stderr: expect.any(String) })
-    expect(resets).toBe(3)
-    expect(existsSync(join(dir, 'node_modules', PACKAGE, 'package.json'))).toBe(true)
-  }, 60_000)
+  it(
+    'installs through the same resets with the lane settings',
+    async () => {
+      const dir = project('with-lane-retries')
+      resetsLeft = 3
+      resets = 0
+      const outcome = await runLane(['install', PACKAGE], installEnv(dir, {}), dir)
+      expect({ status: outcome.status, stderr: outcome.stderr }).toEqual({ status: 0, stderr: expect.any(String) })
+      expect(resets).toBe(3)
+      expect(existsSync(join(dir, 'node_modules', PACKAGE, 'package.json'))).toBe(true)
+    },
+    SPAWN_HEAVY_TIMEOUT_MS
+  )
 })
