@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -14,6 +14,10 @@ import path from 'node:path'
 //     confidence
 const HOOK = path.resolve(__dirname, '../../../../.claude/skills/sf-srs/scripts/srs-intent-hook.sh')
 
+// The budget test starts the hook 20 times, and each start is several processes: a loaded machine takes
+// more than the 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
+jest.setTimeout(90_000)
+
 interface RunResult {
   stdout: string
   stderr: string
@@ -21,10 +25,10 @@ interface RunResult {
   ms: number
 }
 
-function runHook(prompt: string, opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): Promise<RunResult> {
+function runHook(prompt: string, opts: { cwd?: string; env?: NodeJS.ProcessEnv; argv?: string[] } = {}): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     const started = process.hrtime.bigint()
-    const child = spawn('/bin/bash', [HOOK], {
+    const child = spawn('/bin/bash', opts.argv ?? [HOOK], {
       cwd: opts.cwd,
       env: { ...process.env, ...(opts.env ?? {}) }
     })
@@ -50,6 +54,18 @@ function runHook(prompt: string, opts: { cwd?: string; env?: NodeJS.ProcessEnv }
     child.stdin.write(envelope, () => {})
     child.stdin.end()
   })
+}
+
+/**
+ * The CPU time (user + system) of the processes a bash wrapper waited for, from the last line of its
+ * `times` builtin: `0m0.014s 0m0.026s`. Unlike elapsed time, it does not grow while a loaded machine
+ * keeps the processes waiting for a core (#1205).
+ */
+function childCpuMs(timesOutput: string): number {
+  const last = timesOutput.trim().split('\n').pop() ?? ''
+  const fields = [...last.matchAll(/(\d+)m(\d+)[.,](\d+)s/g)]
+  if (fields.length !== 2) throw new Error(`Unexpected output of bash's times builtin: ${JSON.stringify(timesOutput)}`)
+  return fields.reduce((total, [, minutes, seconds, fraction]) => total + Number(minutes) * 60_000 + Number(`${seconds}.${fraction}`) * 1000, 0)
 }
 
 describe('sf-srs intent-detector hook (#316)', () => {
@@ -189,19 +205,45 @@ describe('sf-srs intent-detector hook (#316)', () => {
     })
   })
 
+  // The hook runs on every prompt, so it must stay a handful of bash, jq and tr processes. The point is to
+  // fail loud if someone sneaks an HTTP call or a heavy node import into it. #316 bounded its wall-clock
+  // p95 at 500 ms, and a loaded machine broke that bound on its own (#1205: 542 ms and 1445 ms at a load
+  // average of 40 to 76 on 10 cores, against about 70 ms idle). What such a regression adds is measured
+  // here without the scheduler: the CPU time the work costs, and the programs the hook starts.
   describe('performance budget', () => {
-    it('p95 cold-spawn latency stays under 500ms over 20 runs', async () => {
+    const PROMPTS = ['merci', 'users should be able to reset their password']
+
+    it('spends under 110 ms of CPU per prompt, the hook and its children together (median over 20 runs)', async () => {
       const samples: number[] = []
       for (let i = 0; i < 20; i++) {
-        const r = await runHook('merci', { cwd })
-        samples.push(r.ms)
+        const r = await runHook(PROMPTS[i % PROMPTS.length], { cwd, argv: ['-c', '/bin/bash "$1" >/dev/null 2>&1; times', 'srs-hook-cpu', HOOK] })
+        samples.push(childCpuMs(r.stdout))
       }
       samples.sort((a, b) => a - b)
-      const p95 = samples[Math.floor(samples.length * 0.95)]
-      // 500ms is generous: target is ≤250ms p95 in real shells, but Jest
-      // spawn overhead inflates measurements. The point is to fail loud if
-      // someone sneaks an HTTP call or a heavy node import into the hook.
-      expect(p95).toBeLessThan(500)
+      const median = samples[Math.floor(samples.length / 2)]
+      // 50 to 55 ms today, at a load average of 16 as at 60: the bound is twice that. Starting Node to import
+      // the TypeScript compiler brings the median to about 160 ms (measured for #1205). A regression costs
+      // that on every run and moves the median, where one run slowed by a busy core does not.
+      expect(median).toBeLessThan(110)
+    })
+
+    it('starts no Node runtime and no network client, whether it fires or not', async () => {
+      const spyDir = mkdtempSync(path.join(tmpdir(), 'sf-intent-hook-spy-'))
+      const calls = path.join(spyDir, 'calls.log')
+      try {
+        for (const program of ['node', 'npx', 'npm', 'curl', 'wget', 'nc', 'gh', 'python', 'python3']) {
+          writeFileSync(path.join(spyDir, program), `#!/bin/sh\necho ${program} >> "${calls}"\nexit 1\n`, { mode: 0o755 })
+        }
+        const env = { PATH: `${spyDir}${path.delimiter}${process.env.PATH ?? ''}` }
+        const fired = await runHook(PROMPTS[1], { cwd, env })
+        const silent = await runHook(PROMPTS[0], { cwd, env })
+        // The spies sit first on PATH and the hook still classifies, so they shadowed nothing it needs.
+        expect(fired.stdout).toContain('<system-reminder>')
+        expect(silent.stdout).toBe('')
+        expect(existsSync(calls) ? readFileSync(calls, 'utf8') : '').toBe('')
+      } finally {
+        rmSync(spyDir, { recursive: true, force: true })
+      }
     })
   })
 })
