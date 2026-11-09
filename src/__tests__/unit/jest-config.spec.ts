@@ -34,7 +34,7 @@ describe('jest configuration', () => {
    */
   it.each([
     ['unit', 60000],
-    ['integration', 30000],
+    ['integration', 120000],
     ['e2e', 60000],
     ['smoke', 120000]
   ])('gives %s a %ims budget, and the setup file that applies it', (name, expected) => {

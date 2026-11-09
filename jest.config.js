@@ -29,7 +29,11 @@ module.exports = {
       testPathIgnorePatterns: ['/node_modules/', '/dist/', '/scaffolds/', '/.turbo/', '/coverage/'],
       globalSetup: '<rootDir>/jest.cli.global-setup.js',
       setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-      globals: { TEST_TIMEOUT: 30000 }
+      // Many specs generate a whole project: 10 to 20 s beside the unit job, and
+      // past 30 s once the machine also carries other agents' pipelines (#1205,
+      // builders/project-identity). A hang guard, like the unit one; the
+      // transitions declare their own, wider budgets.
+      globals: { TEST_TIMEOUT: 120000 }
     },
     {
       displayName: 'e2e',
