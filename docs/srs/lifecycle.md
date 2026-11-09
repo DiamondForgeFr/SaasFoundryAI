@@ -113,7 +113,8 @@ Each spawned child :
 - Lands in the version Epic's sub-issues list
 - Has a body read from its FR page and rendered by `renderStoryTicketBody` : the description, the URs with their narratives, the acceptance criteria, the DS references and the constraints, with the FR
   page link
-- Sits on the project board in **Backlog** — ready to flow through the normal code-path workflow from there
+- Sits on the project board in **Backlog** — ready to flow through the normal code-path workflow from there. A reused ticket already on the board keeps its status; one there with no status (the
+  board's auto-add puts items there empty) gets Backlog. The spawn summary states the status each ticket holds on the board, and names the tickets it had to set
 
 If a create response is interrupted, rerun the same command and plan. The spawner inspects open and closed tickets, recovers a single exact canonical match, and attaches it only when it has no parent.
 It refuses contradictory FR ids, multiple canonical matches, and implicit reparenting rather than claiming unconditional idempotency.

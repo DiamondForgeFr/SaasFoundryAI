@@ -977,17 +977,23 @@ cmd_status() {
 # ───────────────────────────────────────────────────────────────────────────
 
 # Put an issue on the board in its starting status (Backlog unless --status says otherwise).
-# An issue already there keeps its status, so a reused Story is never sent back to Backlog.
-# Spawned tickets reached the milestone and their Epic but never the board, and every later
-# `update-status` on them failed (#836).
+# An issue already there with a status keeps it, so a reused Story is never sent back to
+# Backlog. Spawned tickets reached the milestone and their Epic but never the board, and every
+# later `update-status` on them failed (#836).
+# An issue already there with no status gets the starting status: the board's auto-add and
+# `create-subtask` put items there with an empty Status, and keeping that empty value left
+# spawned Stories in no column at all (#1118).
+# --json prints {"ticket","action":"added"|"status-set"|"kept","status"}: the status the board
+# holds afterwards, so a caller reports the board and not the status it asked for.
 cmd_add_to_project() {
   if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 add-to-project <ticket-number> [--status <status-name>]" >&2
+    echo "Usage: $0 add-to-project <ticket-number> [--status <status-name>] [--json]" >&2
     exit 1
   fi
   local ticket=$1
   shift
   local status_name="Backlog"
+  local json_mode=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --status)
@@ -998,6 +1004,10 @@ cmd_add_to_project() {
         fi
         shift 2
         ;;
+      --json)
+        json_mode=1
+        shift
+        ;;
       *)
         echo "Error: unknown add-to-project option '$1'" >&2
         exit 1
@@ -1006,8 +1016,17 @@ cmd_add_to_project() {
   done
   load_project_schema
 
-  if [ -n "$(get_project_item_id "$ticket")" ]; then
-    echo -e "${GREEN}✓ Ticket #${ticket} is already on project board ${PROJECT_NUMBER} (status kept)${NC}"
+  local info item_id current_status
+  info=$(query_project_item "$ticket") || true
+  item_id=$(echo "$info" | jq -r '.itemId // ""')
+  current_status=$(echo "$info" | jq -r '.status // ""')
+
+  if [ -n "$item_id" ] && [ -n "$current_status" ]; then
+    if [ "$json_mode" = 1 ]; then
+      jq -nc --argjson t "$ticket" --arg s "$current_status" '{ticket:$t, action:"kept", status:$s}'
+    else
+      echo -e "${GREEN}✓ Ticket #${ticket} is already on project board ${PROJECT_NUMBER} (status kept: ${current_status})${NC}"
+    fi
     return 0
   fi
 
@@ -1020,21 +1039,36 @@ cmd_add_to_project() {
     echo "$STATUS_OPTIONS_JSON" | jq -r '.[].name' | sed 's/^/  - /' >&2
     exit 1
   fi
+  # The board's own spelling, whatever the case of --status
+  status_name=$(echo "$STATUS_OPTIONS_JSON" | jq -r --arg id "$option_id" '[.[] | select(.id == $id) | .name][0] // empty')
 
-  local url item_id
-  url=$(gh issue view "$ticket" --json url --jq .url) || exit 1
-  item_id=$(gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --url "$url" --format json --jq .id)
+  local action="status-set"
   if [ -z "$item_id" ]; then
-    echo -e "${RED}Error: could not add #${ticket} to project board ${PROJECT_NUMBER}${NC}" >&2
-    exit 1
+    action="added"
+    local url
+    url=$(gh issue view "$ticket" --json url --jq .url) || exit 1
+    item_id=$(gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --url "$url" --format json --jq .id)
+    if [ -z "$item_id" ]; then
+      echo -e "${RED}Error: could not add #${ticket} to project board ${PROJECT_NUMBER}${NC}" >&2
+      exit 1
+    fi
   fi
-  gh project item-edit \
+  if ! gh project item-edit \
     --id "$item_id" \
     --project-id "$PROJECT_ID" \
     --field-id "$STATUS_FIELD_ID" \
-    --single-select-option-id "$option_id" >/dev/null
+    --single-select-option-id "$option_id" >/dev/null; then
+    echo -e "${RED}Error: #${ticket} is on project board ${PROJECT_NUMBER} but its status could not be set to ${status_name}${NC}" >&2
+    exit 1
+  fi
 
-  echo -e "${GREEN}✓ Ticket #${ticket} added to project board ${PROJECT_NUMBER} → ${status_name}${NC}"
+  if [ "$json_mode" = 1 ]; then
+    jq -nc --argjson t "$ticket" --arg a "$action" --arg s "$status_name" '{ticket:$t, action:$a, status:$s}'
+  elif [ "$action" = "added" ]; then
+    echo -e "${GREEN}✓ Ticket #${ticket} added to project board ${PROJECT_NUMBER} → ${status_name}${NC}"
+  else
+    echo -e "${GREEN}✓ Ticket #${ticket} was on project board ${PROJECT_NUMBER} with no status → ${status_name}${NC}"
+  fi
 }
 
 cmd_update_status() {
