@@ -6,24 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
-
-- A `PreToolUse` guard hook refuses the Bash calls through which an agent got past a workflow guard on its own: a `SF_WORKFLOW_BYPASS_*` assignment, `--skip-local-ci`, and `nature:internal` or
-  `nature:bundled-pr` put on a ticket; and, for a delegated agent, `sf agents delegation allow|decline|clear`, `ready-pr`, `gh pr ready`, `gh pr merge` and `create-ticket … --nature internal`. It is
-  written into `.claude/settings.json` and `.codex/hooks.json` by `sf new`, `sf update` and `sf agents refresh`, runs `sf agents guard`, and fails open. `sf status` reports its state on the `routing:`
-  line and in the `guardHook` precondition. Codex runs the hook once you trust it with `/hooks` ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-- `workflow-cli.sh` and `github-projects-cli.sh` refuse a hatch, `--skip-local-ci` and `ready-pr` themselves when they run in a delegated worktree (`.claude/worktrees/` or `.codex/worktrees/`), which
-  holds against what a hook cannot read and on every host ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-
-### Changed
-
-- A guard refusal no longer tells the agent how to get past the guard. It keeps the next legitimate command and ends with a line that sends the agent to the developer, naming the guard and its section
-  of `escape-hatches.md`; the relabel command of the nature guard is gone, and so is the `Escape hatch (rare): SF_WORKFLOW_BYPASS_*=1` line. A failed nature label at `create-ticket` asks the developer
-  to add it instead of printing a command. An escape hatch is the developer's to apply, with `!` in Claude Code or from their own terminal at the primary checkout
-  ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-- The tier agents and the generated instructions say that an escape hatch and the nature label of a ticket are the developer's, and that a delegated agent never runs `ready-pr`, whichever route the
-  ticket takes ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-
 ## [1.1.0] - 2026-11-01
 
 A feature release. Delegated ticket delivery is now routed by task kind, the agent instructions move to `AGENTS.md`, and an existing functional requirement can be changed in place. It also fixes the
