@@ -557,7 +557,7 @@ async function mergeCaptureSettings(root: string, report: AgentInstructionsRepor
     if (result.status === 'created' || result.status === 'merged') report.written.push(result.path)
     for (const line of summarizeHarnessSettings([result])) if (line.needsAttention) report.warnings.push(line.text)
   } catch (error) {
-    report.warnings.push(`.claude/settings.json: ${error instanceof Error ? error.message : String(error)}; the delegation capture hooks were not added.`)
+    report.warnings.push(`.claude/settings.json: ${error instanceof Error ? error.message : String(error)}; the delegation capture and guard hooks were not added.`)
   }
 }
 

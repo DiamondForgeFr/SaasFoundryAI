@@ -7,6 +7,7 @@ import { promisify } from 'util'
 
 import { appendCaptureError } from '../../../harness/capture-errors'
 import { CLAUDE_CAPTURE_HOOKS, type CaptureProbe } from '../../../harness/delegation-hooks'
+import { CLAUDE_GUARD_HOOKS, CODEX_GUARD_COMMAND } from '../../../harness/guard-hook'
 import { ROUTING_GRID_VERSION } from '../../../harness/routing-grid'
 import { emptyLocalRouting, localRoutingPath, updateLocalRouting } from '../../../harness/routing-local'
 import { renderTierAgents } from '../../../harness/tier-agents'
@@ -112,6 +113,30 @@ describe('the automatic routing in sf status (#1035)', () => {
       expect(summary).not.toContain('enforced')
     })
 
+    // #1106 — the PreToolUse guard hook is said for each declared agent, next to the capture hook, so that a hook which fails open is never silent
+    it('says whether the guard hook is in place for each agent, and what is missing when it is not', () => {
+      expect(routingSummary(routingState({ guard: [{ agent: 'claude-code', state: 'enforced' }] }))).toContain('claude-code capture enforced; claude-code guard enforced')
+      const summary = routingSummary(
+        routingState({
+          guard: [
+            { agent: 'claude-code', state: 'declared-not-runnable' },
+            { agent: 'codex', state: 'declared' },
+            { agent: 'cursor', state: 'not-enforced' },
+            { agent: 'other', state: 'missing' }
+          ]
+        })
+      )
+      expect(summary).toContain('claude-code guard hook declared but no CLI can run it')
+      expect(summary).toContain('an agent is not stopped from setting an escape hatch')
+      expect(summary).toContain('codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)')
+      expect(summary).toContain('cursor guard not enforced')
+      expect(summary).toContain('other guard hook missing (run sf agents refresh --scope shared)')
+    })
+
+    it('says nothing of the guard when the report does not carry it', () => {
+      expect(routingSummary(routingState())).not.toContain('guard')
+    })
+
     it('says an earlier release hook needs a refresh', () => {
       expect(routingSummary(routingState({ capture: [{ agent: 'claude-code', state: 'outdated' }] }))).toContain('capture hook outdated (run sf agents refresh --scope shared)')
     })
@@ -164,10 +189,15 @@ describe('the automatic routing in sf status (#1035)', () => {
           { agent: 'claude-code', state: 'missing' },
           { agent: 'codex', state: 'missing' }
         ],
+        guard: [
+          { agent: 'claude-code', state: 'missing' },
+          { agent: 'codex', state: 'missing' }
+        ],
         captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
-        `- routing: grid v${ROUTING_GRID_VERSION}, 0 overrides; shipped grid and shared overrides, no local adjustment; claude-code capture hook missing (run sf agents refresh --scope shared); codex capture hook missing`
+        `- routing: grid v${ROUTING_GRID_VERSION}, 0 overrides; shipped grid and shared overrides, no local adjustment; claude-code capture hook missing (run sf agents refresh --scope shared); codex capture hook missing (run sf agents refresh --scope shared); ` +
+          'claude-code guard hook missing (run sf agents refresh --scope shared); codex guard hook missing (run sf agents refresh --scope shared)'
       )
     })
 
@@ -192,6 +222,7 @@ describe('the automatic routing in sf status (#1035)', () => {
         adjustments: [{ ...move }],
         holds: [{ kind: 'terminal-ci', provider: 'claude-code', reason: 'top-of-ladder', since: AT }],
         capture: [{ agent: 'claude-code', state: 'enforced' }],
+        guard: [{ agent: 'claude-code', state: 'missing' }],
         captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
@@ -209,6 +240,57 @@ describe('the automatic routing in sf status (#1035)', () => {
       await writeFile(join(root, '.claude', 'settings.json'), JSON.stringify({ hooks: CLAUDE_CAPTURE_HOOKS }))
       expect(((await report(notRunnable)).routing as { capture: unknown }).capture).toEqual([{ agent: 'claude-code', state: 'declared-not-runnable' }])
       expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code capture hook declared but no CLI can run it')
+    })
+
+    // #1106 — the PreToolUse guard hook: said on the routing line for each declared agent, and a warning when it cannot work
+    describe('the guard hook', () => {
+      const guardOf = async (probe: CaptureProbe = runnable) => ((await report(probe)).routing as StatusRoutingState).guard
+      const checkOf = async (probe: CaptureProbe = runnable) => {
+        const status = await report(probe)
+        return evaluatePreconditions(status).find((entry) => entry.name === 'guardHook')!
+      }
+      const settings = (hooks: object) => mkdir(join(root, '.claude'), { recursive: true }).then(() => writeFile(join(root, '.claude', 'settings.json'), JSON.stringify({ hooks })))
+      const codexHooks = (hooks: object) => mkdir(join(root, '.codex'), { recursive: true }).then(() => writeFile(join(root, '.codex', 'hooks.json'), JSON.stringify({ hooks })))
+
+      it('is enforced for Claude Code when the hook is declared and the project resolves a CLI that has the command', async () => {
+        await manifest({ version: 5, agents: ['claude-code'] })
+        await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
+        expect(await guardOf()).toEqual([{ agent: 'claude-code', state: 'enforced' }])
+        expect(await render(renderAgentFriendly)).toContain('claude-code capture enforced; claude-code guard enforced')
+        expect(await checkOf()).toMatchObject({ name: 'guardHook', status: 'ok', details: 'claude-code enforced' })
+      })
+
+      it('is declared for Codex, which runs a project hook once it is trusted', async () => {
+        await manifest({ version: 5, agents: ['codex'] })
+        await codexHooks({ PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: CODEX_GUARD_COMMAND }] }] })
+        expect(await guardOf()).toEqual([{ agent: 'codex', state: 'declared' }])
+        expect(await render(renderAgentFriendly)).toContain('codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)')
+        expect(await checkOf()).toMatchObject({ status: 'ok' })
+      })
+
+      it('warns when the hook is declared and no CLI can run it: the call would go through unchecked', async () => {
+        await manifest({ version: 5, agents: ['claude-code'] })
+        await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
+        expect(await guardOf(notRunnable)).toEqual([{ agent: 'claude-code', state: 'declared-not-runnable' }])
+        expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code guard hook declared but no CLI can run it')
+        expect(await checkOf(notRunnable)).toMatchObject({ status: 'warn', details: 'claude-code guard hook declared but no CLI can run it' })
+        expect((await checkOf(notRunnable)).remediation).toContain('sf agents refresh --scope shared')
+      })
+
+      it('warns when the hook is missing, for the agents that lack it only', async () => {
+        await manifest({ version: 4, agents: ['claude-code', 'codex'] })
+        await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
+        expect(await guardOf()).toEqual([
+          { agent: 'claude-code', state: 'enforced' },
+          { agent: 'codex', state: 'missing' }
+        ])
+        expect(await checkOf()).toMatchObject({ status: 'warn', details: 'codex guard hook missing' })
+      })
+
+      it('is skipped without a harness', async () => {
+        await manifest()
+        expect(await checkOf()).toMatchObject({ status: 'skip', details: 'No managed harness' })
+      })
     })
 
     it('reads a manifest that switches the adjustment off', async () => {
@@ -300,7 +382,7 @@ describe('the automatic routing in sf status (#1035)', () => {
         await failure('the ledger is locked', 1)
         const status = await collect()
         const json = JSON.parse(renderJson({ report: status, preconditions: evaluatePreconditions(status) }))
-        expect(Object.keys(json.routing)).toEqual(['gridVersion', 'overrides', 'tierAgents', 'adjustment', 'adjustments', 'holds', 'capture', 'captureErrors'])
+        expect(Object.keys(json.routing)).toEqual(['gridVersion', 'overrides', 'tierAgents', 'adjustment', 'adjustments', 'holds', 'capture', 'guard', 'captureErrors'])
         expect(json.routing.captureErrors).toMatchObject({ count: 1, since: '2026-10-31T10:00:00.000Z', last: { stage: 'ledger', message: 'the ledger is locked' } })
       })
 

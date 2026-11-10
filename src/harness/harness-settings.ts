@@ -4,6 +4,7 @@ import { join } from 'path'
 
 import { isReferenceOnlyAdoption } from './agent-instructions'
 import { CLAUDE_CAPTURE_HOOKS, isLegacyCaptureCommand } from './delegation-hooks'
+import { CLAUDE_GUARD_HOOKS } from './guard-hook'
 import { isLegacySessionStartCommand, SESSION_START_HOOKS } from './session-start-hook'
 import type { ModuleMigrationPreview } from '../migrations/module/types'
 import type { SaaSFoundryManifest } from '../types'
@@ -27,7 +28,9 @@ export const HARNESS_HOOKS: ClaudeHooksConfig = {
   // The project status at the start of a session, from the CLI the project resolves and not a bare `sf` (#1103).
   ...SESSION_START_HOOKS,
   // Every routed delegation appends its outcome to the clone ledger the routing adjusts itself from (#1035).
-  ...CLAUDE_CAPTURE_HOOKS
+  ...CLAUDE_CAPTURE_HOOKS,
+  // A Bash call that sets an escape hatch, labels a ticket's nature, or (for a delegated agent) merges is refused before it runs (#1106).
+  ...CLAUDE_GUARD_HOOKS
 }
 
 const WORKFLOW_CLI = '.claude/skills/sf-workflow/workflow-cli.sh'
@@ -286,15 +289,15 @@ export function summarizeHarnessSettings(results: HarnessSettingsResult[], { dry
             }
           ]
         case 'skipped':
-          return [{ needsAttention: true, text: `${result.path} ${result.reason}: left as it is; the delegation capture hooks were not added.` }]
+          return [{ needsAttention: true, text: `${result.path} ${result.reason}: left as it is; the delegation capture and guard hooks were not added.` }]
         case 'created':
-          return [{ needsAttention: false, text: `${result.path}: ${dryRun ? 'would be written' : 'written'} with the delegation capture hooks and the harness permissions.` }]
+          return [{ needsAttention: false, text: `${result.path}: ${dryRun ? 'would be written' : 'written'} with the delegation capture and guard hooks and the harness permissions.` }]
         default: {
           const removed = result.removed ?? []
           return [
             {
               needsAttention: false,
-              text: `${result.path}: delegation capture hooks and harness permissions ${dryRun ? 'would be merged in' : 'merged in'}; your own keys, hooks and rules are kept${removed.length > 0 ? ', except the rule named below' : ''}.`
+              text: `${result.path}: delegation capture and guard hooks and harness permissions ${dryRun ? 'would be merged in' : 'merged in'}; your own keys, hooks and rules are kept${removed.length > 0 ? ', except the rule named below' : ''}.`
             },
             ...removed.map((rule) => ({ needsAttention: true, text: `${result.path}: ${dryRun ? 'would remove' : 'removed'} the rule ${rule}: ${REVOKED_REASON}.` }))
           ]
@@ -319,7 +322,7 @@ export function previewHarnessSettings(results: HarnessSettingsResult[]): Module
       reason:
         result.status === 'sidecar' || result.status === 'skipped'
           ? `${result.reason}: the file stays as it is${result.sidecar ? `, the merged proposal goes to ${result.sidecar}` : ''}`
-          : `delegation capture hooks and harness permissions are added; your own keys, hooks and rules are kept${
+          : `delegation capture and guard hooks and harness permissions are added; your own keys, hooks and rules are kept${
               result.removed?.length
                 ? `, except ${result.removed.length === 1 ? 'this rule, which is removed' : 'these rules, which are removed'}: ${result.removed.join(', ')} (${REVOKED_REASON})`
                 : ''

@@ -17,6 +17,7 @@ import {
   syncHarnessSettings,
   syncHarnessSettingsForProject
 } from '../../../harness/harness-settings'
+import { CLAUDE_GUARD_COMMAND, CLAUDE_GUARD_HOOKS } from '../../../harness/guard-hook'
 import { SESSION_START_COMMAND, SESSION_START_HOOKS } from '../../../harness/session-start-hook'
 import type { SaaSFoundryManifest } from '../../../types'
 
@@ -87,7 +88,8 @@ describe('renderHarnessSettings (#935)', () => {
 
     expect(after.model).toBe('opus')
     expect(after.env).toEqual({ FOO: 'bar' })
-    expect(after.hooks?.PreToolUse).toEqual(own.hooks.PreToolUse)
+    // The guard hook (#1106) joins the project's own PreToolUse hook; it does not replace it
+    expect(after.hooks?.PreToolUse).toEqual([...own.hooks.PreToolUse, ...CLAUDE_GUARD_HOOKS.PreToolUse])
     expect(after.hooks?.SessionStart?.[0]).toEqual(own.hooks.SessionStart[0])
     expect(after.hooks?.SessionStart?.map((group) => group.hooks[0].command)).toContain(SESSION_START_COMMAND)
     expect(after.hooks?.SubagentStop?.[0]).toEqual(own.hooks.SubagentStop[0])
@@ -95,6 +97,33 @@ describe('renderHarnessSettings (#935)', () => {
     expect(after.permissions).toMatchObject({ deny: ['Bash(rm -rf *)'] })
     expect(after.permissions?.allow?.[0]).toBe('Bash(make test)')
     expect(after.permissions?.ask?.slice(0, 1)).toEqual(['Bash(git push *)'])
+  })
+
+  // #1106 — a PreToolUse hook refuses an agent's own bypass of a guard, in every project the harness manages
+  describe('the PreToolUse guard hook (#1106)', () => {
+    const preToolUse = (settings: Settings) => (settings.hooks?.PreToolUse ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('is part of the harness settings written when there is no file', () => {
+      expect(parsed(undefined).hooks?.PreToolUse).toEqual(CLAUDE_GUARD_HOOKS.PreToolUse)
+      expect(preToolUse(parsed(undefined))).toEqual([CLAUDE_GUARD_COMMAND])
+    })
+
+    it('is added to a project that has none, next to the PreToolUse hooks it wrote, and only once', () => {
+      const own = { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: './check.sh' }] }] } }
+
+      const first = rendered(JSON.stringify(own))
+      const after = JSON.parse(first.content) as Settings
+
+      expect(first.changed).toBe(true)
+      expect(preToolUse(after)).toEqual(['./check.sh', CLAUDE_GUARD_COMMAND])
+      const second = rendered(first.content)
+      expect(second.changed).toBe(false)
+      expect(second.content).toBe(first.content)
+    })
+
+    it('is added to a project updated from the 1.0.1 and the 1.0.0 harness', async () => {
+      for (const version of ['1.0.1', '1.0.0']) expect(preToolUse(parsed(await released(version)))).toEqual([CLAUDE_GUARD_COMMAND])
+    })
   })
 
   it('replaces the bare-sf capture command the first build wrote, and nothing else', () => {
@@ -122,6 +151,8 @@ describe('renderHarnessSettings (#935)', () => {
       expect(eventCommands(after, 'PostToolUse')).toEqual([CLAUDE_CAPTURE_COMMAND])
       expect(after.hooks?.SubagentStop).toEqual(CLAUDE_CAPTURE_HOOKS.SubagentStop)
       expect(eventCommands(after, 'SessionStart')).toEqual([SESSION_START_COMMAND])
+      // #1106 — the guard hook v1.1.0 did not have is added
+      expect(after.hooks?.PreToolUse).toEqual(CLAUDE_GUARD_HOOKS.PreToolUse)
       expect(after.hooks?.UserPromptSubmit).toEqual(before.hooks?.UserPromptSubmit)
       expect(after.permissions?.allow?.slice(0, before.permissions!.allow!.length)).toEqual(before.permissions?.allow)
       expect(after.permissions?.ask).toEqual([...HARNESS_ASK_COMMANDS])
@@ -240,9 +271,9 @@ describe('renderHarnessSettings (#935)', () => {
   })
 
   it('still merges when the shapes it would add to are absent or right: other keys may be of any shape', () => {
-    const after = parsed(JSON.stringify({ env: ['not', 'an', 'object'], permissions: { deny: 'whatever', additionalDirectories: { a: 1 } }, hooks: { PreToolUse: 'not mine to judge' } }))
+    const after = parsed(JSON.stringify({ env: ['not', 'an', 'object'], permissions: { deny: 'whatever', additionalDirectories: { a: 1 } }, hooks: { Notification: 'not mine to judge' } }))
     expect(after.env).toEqual(['not', 'an', 'object'])
-    expect(after.hooks?.PreToolUse).toBe('not mine to judge')
+    expect(after.hooks?.Notification).toBe('not mine to judge')
     expect(after.hooks?.SubagentStop).toBeDefined()
     expect(after.permissions).toMatchObject({ deny: 'whatever', additionalDirectories: { a: 1 } })
   })

@@ -31,6 +31,18 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(cat); case \"$p\" in *SF_WORKFLOW_BYPASS_*|*skip-local-ci*|*[Nn][Aa][Tt][Uu][Rr][Ee]*|*addLabels*|*delegation*|*ready*|*merge*) ;; *) exit 0;; esac; d=\"${CLAUDE_PROJECT_DIR:-.}\"; run() { printf %s \"$p\" | \"$@\" agents guard --host codex 2>/dev/null; exit 0; }; [ -x \"$d/node_modules/.bin/saasfoundryai\" ] && run \"$d/node_modules/.bin/saasfoundryai\"; [ -f \"$d/bin/sf.js\" ] && grep -q '\"name\": \"saasfoundryai-cli\"' \"$d/package.json\" 2>/dev/null && [ -f \"$d/dist/index.js\" ] && run node \"$d/bin/sf.js\"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

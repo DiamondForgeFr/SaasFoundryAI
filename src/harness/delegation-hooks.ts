@@ -93,7 +93,7 @@ function groupsOf(config: unknown, event: string): HookGroup[] {
   return hooks && Array.isArray(hooks[event]) ? (hooks[event] as HookGroup[]) : []
 }
 
-function registers(config: unknown, event: string, accepts: (command: unknown) => boolean): boolean {
+export function registers(config: unknown, event: string, accepts: (command: unknown) => boolean): boolean {
   return groupsOf(config, event).some((group) => Array.isArray(group?.hooks) && group.hooks.some((hook) => accepts(hook?.command)))
 }
 
@@ -138,7 +138,7 @@ export const CODEX_RETRUST_NOTICE = `${CODEX_HOOKS_PATH}: the delegation capture
  */
 export type CaptureState = 'enforced' | 'declared' | 'declared-not-runnable' | 'outdated' | 'missing' | 'not-enforced'
 
-async function readJson(path: string): Promise<unknown> {
+export async function readJson(path: string): Promise<unknown> {
   try {
     const info = await lstat(path)
     if (!info.isFile() || info.isSymbolicLink()) return undefined
@@ -148,7 +148,7 @@ async function readJson(path: string): Promise<unknown> {
   }
 }
 
-async function executable(path: string): Promise<boolean> {
+export async function executable(path: string): Promise<boolean> {
   try {
     await access(path, constants.X_OK)
     return (await lstat(path)).isFile() || true

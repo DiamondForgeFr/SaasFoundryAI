@@ -33,6 +33,7 @@ jest.mock('ora', () => () => {
 import { updateCommand } from '../../../commands/update'
 import { GENERATED_REGION_START } from '../../../harness/agent-instructions'
 import { CLAUDE_CAPTURE_COMMAND, CODEX_CAPTURE_COMMAND, CODEX_HOOKS_PATH, CODEX_RETRUST_NOTICE, V1_1_0_CAPTURE_COMMANDS } from '../../../harness/delegation-hooks'
+import { CLAUDE_GUARD_COMMAND, CLAUDE_GUARD_HOOKS, CODEX_GUARD_COMMAND, CODEX_GUARD_TRUST_NOTICE } from '../../../harness/guard-hook'
 import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../../../installers/harness.installer'
 
@@ -117,8 +118,9 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       expect(settings.hooks?.PostToolUse?.some((group) => group.hooks.some((hook) => hook.command === CLAUDE_CAPTURE_COMMAND))).toBe(true)
       expect(settings.hooks?.SessionStart?.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual([SESSION_START_COMMAND])
       expect(settings.model).toBe('opus')
-      expect(settings.hooks?.PreToolUse).toEqual(own.hooks.PreToolUse)
-      expect(output()).toContain('.claude/settings.json: delegation capture hooks and harness permissions merged in')
+      // #1106 — the guard hook is added next to the PreToolUse hook the project wrote
+      expect(settings.hooks?.PreToolUse).toEqual([...own.hooks.PreToolUse, ...CLAUDE_GUARD_HOOKS.PreToolUse])
+      expect(output()).toContain('.claude/settings.json: delegation capture and guard hooks and harness permissions merged in')
     })
 
     it('writes nothing the second time: same bytes, same modification time, nothing said', async () => {
@@ -314,6 +316,29 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       }
     })
 
+    // #1106 — v1.1.0 had no PreToolUse hook: sf update adds the guard to both hosts, and keeps the hooks it had
+    it('adds the PreToolUse guard hook of both hosts, keeps the other hooks, and tells the developer that Codex has to trust it', async () => {
+      const before = JSON.parse(await read(SETTINGS)) as Settings
+      const codexBefore = JSON.parse(await read(CODEX_HOOKS_PATH)) as Settings
+      expect(before.hooks?.PreToolUse).toBeUndefined()
+      expect(codexBefore.hooks?.PreToolUse).toBeUndefined()
+
+      await updateCommand({ nonInteractive: true })
+
+      const settings = JSON.parse(await read(SETTINGS)) as Settings
+      expect(settings.hooks?.PreToolUse).toEqual(CLAUDE_GUARD_HOOKS.PreToolUse)
+      expect(commands(settings, 'PreToolUse')).toEqual([CLAUDE_GUARD_COMMAND])
+      expect(commands(settings, 'SessionStart')).toEqual([SESSION_START_COMMAND])
+      const codex = JSON.parse(await read(CODEX_HOOKS_PATH)) as Settings
+      expect(commands(codex, 'PreToolUse')).toEqual([CODEX_GUARD_COMMAND])
+      expect(commands(codex, 'SubagentStop')).toEqual([CODEX_CAPTURE_COMMAND])
+      expect(warnSpy.mock.calls.flat()).toContain(CODEX_GUARD_TRUST_NOTICE)
+
+      warnSpy.mockClear()
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).not.toContain(CODEX_GUARD_TRUST_NOTICE)
+    })
+
     it('tells the developer that Codex has to trust the replaced hook, once', async () => {
       await updateCommand({ nonInteractive: true })
       expect(warnSpy.mock.calls.flat()).toContain(CODEX_RETRUST_NOTICE)
@@ -405,7 +430,7 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       const report = JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0])
       const harness = report.moduleMigrations.find((pending: { module: string }) => pending.module === 'harness')
       const capture = harness.migrations.find((migration: { name: string }) => migration.name === 'wire-delegation-capture')
-      expect(capture.preview).toEqual([{ action: 'merge', source: SETTINGS, reason: expect.stringContaining('delegation capture hooks') }])
+      expect(capture.preview).toEqual([{ action: 'merge', source: SETTINGS, reason: expect.stringContaining('delegation capture and guard hooks') }])
       // The migration lists it: the every-run merge does not list it a second time
       expect(report.harnessSettings).toBeUndefined()
       expect(await read(SETTINGS)).toBe(await released('1.0.1', 'settings.json'))
