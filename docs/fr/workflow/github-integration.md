@@ -134,9 +134,9 @@ sf workflow set-local-ci --none
 ```
 
 `update-status 42 "Human testing"` lance la porte après ses contrôles de pull request, sur la pull request en brouillon qu'il a identifiée, depuis n'importe quel checkout, et refuse par défaut : une
-pull request, un commit ou des statuts illisibles refusent. `--skip-local-ci "<raison>"` (après le ticket, sur `update-status`) est la seule échappatoire, tracée sur la pull request. Le passage en
-**AI testing** est lui gardé par le garde-fou des commits poussés : les modifications suivies du ticket doivent être commitées et ses commits sur `origin`, sinon le passage est refusé avec la commande
-à lancer.
+pull request, un commit ou des statuts illisibles refusent. `--skip-local-ci "<raison>"` (après le ticket, sur `update-status`) est la seule échappatoire, tracée sur la pull request, et elle est à
+vous : le refus renvoie un agent vers vous, et le [hook de garde](/fr/guide/workflow-system#qui-applique-une-echappatoire) refuse l’agent qui passe le drapeau. Le passage en **AI testing** est lui
+gardé par le garde-fou des commits poussés : les modifications suivies du ticket doivent être commitées et ses commits sur `origin`, sinon le passage est refusé avec la commande à lancer.
 
 ## Routage depuis `sf-workflow`
 

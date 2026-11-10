@@ -226,9 +226,10 @@ Utilisez `workflow-cli.sh transition-drafting` ; le CLI refuse pour ces tickets 
 ## Échappatoires
 
 Le refus d’un garde-fou signifie qu’une condition ou une preuve manque : la réponse est de la fournir. Pour le cas rare où un garde-fou se trompe ou ne peut pas être satisfait, les scripts acceptent
-quelques échappatoires explicites. Positionnez la variable en ligne pour une seule commande, jamais avec `export`, accompagnée de `SF_WORKFLOW_BYPASS_REASON="<raison>"`. `update-status` affiche alors
-un avertissement qui nomme la variable et l’enregistre, avec la raison, dans un commentaire du ticket ; complétez ce commentaire avec les preuves. Un agent de développement n’en active jamais une de
-lui-même ; il s’arrête et vous demande.
+quelques échappatoires explicites. Elles sont à vous, pas à l’agent : positionnez la variable en ligne pour une seule commande, jamais avec `export`, accompagnée de
+`SF_WORKFLOW_BYPASS_REASON="<raison>"`. `update-status` affiche alors un avertissement qui nomme la variable et l’enregistre, avec la raison, dans un commentaire du ticket ; complétez ce commentaire
+avec les preuves. Un refus n’indique pas à un agent de développement comment contourner le garde-fou : il nomme la prochaine commande légitime et renvoie l’agent vers vous, et un hook refuse l’agent
+qui active tout de même une échappatoire ([plus bas](#qui-applique-une-echappatoire)).
 
 | Échappatoire                                                                                | Ce qu’elle désactive                                                                     |
 | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -249,6 +250,36 @@ lui-même ; il s’arrête et vous demande.
 `--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`. `--bypass-srs` la publie sur le ticket
 créé et `--skip-local-ci` l’écrit sur la pull request (ou sur le ticket quand aucune pull request ne peut le porter). Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à
 laisser, sont décrits dans `.claude/skills/sf-workflow/escape-hatches.md` de tout projet qui installe le workflow.
+
+### Qui applique une échappatoire
+
+Une échappatoire est votre décision, comme chaque choix qu’un garde-fou protège : un ticket saute-t-il Human testing, une pull request est-elle prête, est-elle fusionnée. Un hook `PreToolUse`, écrit
+dans `.claude/settings.json` et `.codex/hooks.json` par `sf new`, `sf update` et `sf agents refresh`, refuse un appel Bash d’agent avant qu’il ne s’exécute (et PowerShell sur Claude Code). Il refuse,
+dans la session principale comme dans un agent délégué :
+
+- une affectation `SF_WORKFLOW_BYPASS_<X>=…` devant une commande, dans `export`, `env`, `bash -c` ou `eval` (la variable de raison seule n’est pas refusée) ;
+- `--skip-local-ci` passé à `workflow-cli.sh` ou à `github-projects-cli.sh` ;
+- `nature:internal` ou `nature:bundled-pr` posé sur un ticket avec `gh issue edit` ou `gh api`.
+
+Pour un **agent délégué** seulement (un identifiant d’agent dans l’événement, ou un répertoire de travail sous `.claude/worktrees/` ou `.codex/worktrees/`), il refuse aussi
+`sf agents delegation allow|decline|clear`, `ready-pr` et `gh pr ready`, `gh pr merge`, et `create-ticket … --nature internal`. Les mêmes appels depuis le checkout principal sont permis. Les scripts
+ajoutent une seconde barrière qui ne dépend pas du hook : `update-status`, `create-pr`, `ready-pr`, `draft-pr` et `local-ci-gate` refusent eux-mêmes une échappatoire, `--skip-local-ci` et `ready-pr`
+quand ils s’exécutent dans un worktree délégué.
+
+Vous appliquez une échappatoire depuis le checkout principal, de l’une de ces deux façons :
+
+- **Claude Code :** tapez la commande dans la session avec un `!` en tête. Elle s’exécute directement, sans passer par l’outil Bash de l’agent, donc le hook ne se déclenche pas, et sa sortie rejoint
+  la conversation. `! SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1 SF_WORKFLOW_BYPASS_REASON="hotfix a1b2c3d poussé directement" .claude/skills/sf-workflow/workflow-cli.sh update-status 42 Done`. Le script
+  publie toujours le commentaire de contournement.
+- **Tout hôte :** votre propre terminal, à la racine du checkout principal. `update-status` et `local-ci-gate` y retrouvent le worktree ou la pull request du ticket.
+
+Les labels de nature, c’est vous qui les ajoutez sur GitHub, ou avec `!` dans Claude Code.
+
+Le hook est un garde-corps contre le chemin ordinaire que les refus enseignaient, pas une frontière de sécurité : il lit la commande que l’agent a écrite, ne couvre que l’outil Bash, et laisse passer
+en cas d’échec (pas de CLI, un CLI ancien ou une charge qu’il ne sait pas lire laisse l’appel passer). `sf status` le dit sur sa ligne `routing:` (`guard enforced`, `guard declared`,
+`guard hook missing`…) et avertit quand le hook ne peut pas fonctionner. Claude Code lit ses réglages au démarrage d’une session : une session en cours garde ses anciens hooks jusqu’à son redémarrage.
+Codex n’exécute un hook de projet que lorsque la couche `.codex/` et le hook sont approuvés : après `sf update`, relisez et approuvez le garde avec `/hooks`. Voir
+[`sf agents guard`](/fr/cli/sf-agents#le-hook-de-garde).
 
 ## Continuer
 

@@ -50,21 +50,24 @@ An Epic only groups delivery parents and never owns this PR.
 **Guards** (all enforced by `update-status`):
 
 - **Nature guard** on `→ In Review` from `AI Testing` — requires `nature:internal`. `nature:bundled-pr` is rejected here (must go to `Done` instead). Default (no label / `user-facing`) must go through
-  Human Testing first. Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`.
+  Human Testing first. Only the developer labels a ticket `nature:internal`. Escape hatch: the developer's (see [escape-hatches.md](escape-hatches.md)).
 - **PR-state guard** — `→ Human Testing` requires an open draft PR; `→ In Review` requires an open non-draft PR. Unknown PR state blocks these transitions. Epic groupers without a PR keep their
-  derived lifecycle. Escape hatch: `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`.
+  derived lifecycle. Escape hatch: the developer's.
 - **Pushed-commits guard** — `→ AI Testing` requires the ticket's work committed and pushed to `origin`, read from git in the checkout that holds it (the ticket branch, a bundled child's parent
   branch, a host-named branch against the ticket branch of `origin`, or the worktree of the ticket branch from the primary checkout). Tracked changes and unpushed commits are refused with the command
-  to run; untracked files only warn. Escape hatch: `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`.
+  to run; untracked files only warn. Escape hatch: the developer's.
 - **Local CI guard** — `→ Human Testing` requires the project's required local CI statuses green on the exact head commit of the draft PR: `workflow.localCi.requiredStatuses` when recorded
   (`sf workflow set-local-ci`), otherwise `local-<job>` for each job of `.molten/project.json` when it publishes to GitHub, otherwise the `AI testing / Local CI` status published with
-  `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: `--skip-local-ci "<reason>"` on `update-status`, recorded on the PR.
-- **Nature guard** on `→ Done` from `AI Testing` — allowed **only** for `nature:bundled-pr` (everyone else must go through `In Review` first). Escape hatch: `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`.
+  `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: the developer's, recorded on the PR.
+- **Nature guard** on `→ Done` from `AI Testing` — allowed **only** for `nature:bundled-pr` (everyone else must go through `In Review` first). Whether a ticket is bundled in its parent's PR is the
+  developer's call. Escape hatch: the developer's.
 - **PR-merged guard** on `→ Done` — normal delivery tickets require a matching PR verified merged into the working branch. Aggregate Epics and verified `nature:bundled-pr` children are exempt because
-  they own no PR. Escape hatch: `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`.
+  they own no PR. Escape hatch: the developer's.
 
 Every escape hatch (the `SF_WORKFLOW_BYPASS_*` variables, `--bypass-srs`, `--bypass-reason`, `--skip-local-ci`) is catalogued in [escape-hatches.md](escape-hatches.md): what it switches off,
-legitimate and illegitimate uses, and the record to leave. An agent never sets one on its own.
+legitimate and illegitimate uses, and the record to leave. An agent never sets one: when a guard refuses, it stops, reports the refusal and asks the developer, and a guard hook refuses an agent's Bash
+call that sets a hatch, labels the nature of its own ticket, or (for a delegated agent) merges or marks a pull request ready. The developer applies a hatch with `!` in Claude Code or from their own
+terminal, at the primary checkout.
 
 ## 🧩 Ticket Hierarchy (Epic / Delivery parent / Child ticket)
 
@@ -158,10 +161,10 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
    the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it
    (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
 2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`: it delivers the children, posts the `## Test plan` comment, runs the automated and heavy checks, posts
-   the `## Test report` comment and opens the draft PR, then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` on the Human Testing route and never records the
-   delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md` names. The session runs `ready-pr <ticket>` and
-   `draft-pr <ticket>` from the primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the ticket's one open pull request on GitHub and check
-   its head on origin (several candidates are listed: pick one with `--pr <number>`).
+   the `## Test report` comment and opens the draft PR, then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human
+   Testing route, the session on the other) and never records the delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md`
+   names. The session runs `ready-pr <ticket>` and `draft-pr <ticket>` from the primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the
+   ticket's one open pull request on GitHub and check its head on origin (several candidates are listed: pick one with `--pr <number>`).
 3. **One agent per ticket.** Several tickets may be in flight, each with its own agent and worktree. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own,
    handed to its own agent.
 4. **Hand-backs.** A defect reported in Human Testing or in review, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree,
@@ -245,7 +248,7 @@ Developer always has final say.
 
 **Guard** — `update-status <ticket> <target>` is rejected for any target other than `Backlog` if the ticket has no `complexity: *` label. Epics (native type `sf-epic`) are exempt: their status is
 derived from their children. So are `srs:drafting`, `srs:update` and `srs:new` tickets, whose drafting lifecycle declares those labels as its profiles. `detect-complexity` only suggests — you must
-call `retag` to persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1` (rare; see [escape-hatches.md](escape-hatches.md)).
+call `retag` to persist. The guard fails open if label fetch errors (offline / auth issues). Escape hatch: the developer's (rare; see [escape-hatches.md](escape-hatches.md)).
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 

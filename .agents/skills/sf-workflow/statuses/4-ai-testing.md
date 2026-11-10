@@ -45,7 +45,8 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
       GitHub (`"ci": { "statuses": "github" }`), which `molten ci run <branch>` publishes; otherwise it is the status `AI testing / Local CI`, which you publish once the project's suite (`npm test`,
       `npm run test:pre-push` when declared) is green on that commit: `workflow-cli.sh ai-status <ticket> "Local CI" success "<command, commit, result>"` (the draft PR must exist to carry it). No diff
       is too small for it: a narrower check (`lint`, `check`) does not count. `create-pr` (without `--draft`), `ready-pr` and the move to **Human Testing** refuse a head without them and name the
-      command to run (`workflow-cli.sh local-ci-gate <ticket>` runs the same check on its own); `--skip-local-ci "<reason>"` is the explicit escape hatch, recorded on the pull request.
+      command to run (`workflow-cli.sh local-ci-gate <ticket>` runs the same check on its own); when it cannot be made green, stop and ask the developer: an escape hatch for the gate is theirs to
+      apply (escape-hatches.md).
 - [ ] **Show progress on the PR** — around every heavy run, `workflow-cli.sh ai-status <ticket> "<step>" pending "<what runs>"`, then `success` or `failure` with a one-line result. The developer
       follows it from the PR's checks, which link to one progress comment; open the draft PR first (`create-pr <ticket> --draft`).
 - [ ] **Execute test plan** step by step — verify each scenario, document any failure
@@ -53,17 +54,17 @@ Aggregate Epics never enter this status. They stay `In progress` while their del
 - [ ] **Complex only:** `.claude/skills/sf-workflow/scripts/examine.sh <ticket>` — 3 parallel `review` delegations (security / logic / perf). Fix Critical/High findings. If any fix committed, restart
       from automated tests.
 - [ ] **Delegated ticket** — the agent that built it stops when the report is posted and every check is green, with the ticket still in AI Testing and the PR still a draft. It never merges, never runs
-      `ready-pr` on the Human Testing route, never records the delegation consent and never moves the ticket itself past AI Testing. On a branch the host named (`worktree-agent-<id>`), `create-pr`
-      takes the ticket branch from the tip match or from `--head <branch>`, and needs it pushed at `HEAD` (`statuses/3-in-progress.md`). The session takes over: it runs the Examine of a `complex`
-      ticket (the agent that built the work does not review it) and hands the Critical/High findings back to that agent, then makes the transition below (SKILL.md → Delegated ticket delivery), running
-      `ready-pr` or `draft-pr` from the primary checkout: off the ticket branch they find the ticket's open pull request on GitHub (`--pr <number>` picks one of several). Findings handed back, or work
-      the session had to redo, mean the delegation did not do the job: `sf agents outcome mark <ticket> rework` records it for the routing
+      `ready-pr` (the session or the developer does), never records the delegation consent and never moves the ticket itself past AI Testing. On a branch the host named (`worktree-agent-<id>`),
+      `create-pr` takes the ticket branch from the tip match or from `--head <branch>`, and needs it pushed at `HEAD` (`statuses/3-in-progress.md`). The session takes over: it runs the Examine of a
+      `complex` ticket (the agent that built the work does not review it) and hands the Critical/High findings back to that agent, then makes the transition below (SKILL.md → Delegated ticket
+      delivery), running `ready-pr` or `draft-pr` from the primary checkout: off the ticket branch they find the ticket's open pull request on GitHub (`--pr <number>` picks one of several). Findings
+      handed back, or work the session had to redo, mean the delegation did not do the job: `sf agents outcome mark <ticket> rework` records it for the routing
 - [ ] **Returning from review** — if human retesting is needed, use `workflow-cli.sh draft-pr <ticket>` before returning to Human Testing. `create-pr --draft` reuses a PR without changing its state.
 - [ ] **On green** — post the test report as a comment starting with the heading `## Test report` (layout below; include examine findings if complex), then transition:
 
   - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing**. Do not mark it ready: after Human Testing, the developer does
-  - `nature:internal`: no Human Testing, so taking the PR out of draft is yours: `workflow-cli.sh ready-pr <ticket>`, then → **In Review** directly (see SKILL.md "Nature axis" section). The transition
-    is enforced by the workflow guard.
+  - `nature:internal` (the developer labels it): no Human Testing, so the session takes the PR out of draft: `workflow-cli.sh ready-pr <ticket>`, then → **In Review** directly (see SKILL.md "Nature
+    axis" section). The transition is enforced by the workflow guard.
 
   - `nature:bundled-pr`: → **Done** after validation; no individual draft or ready PR. The delivery parent owns the branch, PR, and human validation.
 

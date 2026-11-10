@@ -164,6 +164,9 @@ projet : un fichier intact est réécrit, un fichier modifié reçoit un fichier
 - les **hooks** : celui qui met l'état du projet sous les yeux de la session à son démarrage (`SessionStart`, qui exécute le CLI propre au projet et non un `sf` nu, voir
   [le hook de début de session](/fr/cli/sf-status#le-hook-de-debut-de-session)), et ceux qui enregistrent chaque délégation routée dans le registre du clone (`SubagentStop` pour les agents
   `sf-<tier>`, `PostToolUse` sur l'outil de délégation), voir [capture et signaux](/fr/cli/sf-agents#capture-et-signaux) ;
+- le **hook de garde** (`PreToolUse` sur les outils Bash et PowerShell), qui refuse l'échappatoire, le `--skip-local-ci` et le label de nature qu'un agent s'applique de lui-même, ainsi que la fusion,
+  le `ready-pr` et le consentement à la délégation d'un agent délégué, voir [le hook de garde](/fr/cli/sf-agents#le-hook-de-garde). La v1.1.0 n'en avait pas : la mise à jour l'ajoute, après un hook
+  `PreToolUse` que vous avez écrit, qui reste ;
 - les **règles de permission** qui laissent l'agent lire une route, le consentement à déléguer et le rapport de routage sans demander, tandis que les formes qui écrivent une preuve (`--record`,
   `--retry-of`) demandent toujours.
 
@@ -190,6 +193,11 @@ prochaine session. **Codex n'exécute un hook de projet qu'une fois approuvé, e
 `.codex/hooks.json`, il affiche
 `.codex/hooks.json: the delegation capture hook was replaced. Codex skips a changed project hook until it is trusted: review and trust it with /hooks, or delegations stay unrecorded.` Tant que vous ne
 l'avez pas fait, les délégations Codex ne sont pas enregistrées. L'avis n'est donné qu'une fois : la mise à jour suivante n'a plus rien à remplacer.
+
+**Le hook de garde est nouveau, et Codex doit lui aussi l'approuver.** La même fusion ajoute le garde `PreToolUse` à `.claude/settings.json` (matcher `Bash|PowerShell`) et à `.codex/hooks.json`
+(matcher `Bash`), après les hooks `PreToolUse` que vous avez écrits, qui sont conservés. `sf update` et `sf agents refresh` affichent une fois
+`.codex/hooks.json: the PreToolUse guard hook was added. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` Tant que vous ne l'avez pas
+approuvé, Codex n'exécute pas le garde ; `sf status` dit `guard declared` pour Codex, jamais `enforced`. Un projet qui a modifié une commande `PreToolUse` à lui n'est pas touché.
 
 Aucune version de module n'est incrémentée pour cela : le hook est livré par la fusion des réglages qui s'exécute à chaque mise à jour, et non par le jeu de fichiers d'un installeur, il n'y a donc
 aucune migration de module à prévisualiser ou à lancer. Un projet qui a écrit lui-même exactement `sf status --claude-friendly --no-network` perd cette ligne à la prochaine mise à jour, puisqu'on ne

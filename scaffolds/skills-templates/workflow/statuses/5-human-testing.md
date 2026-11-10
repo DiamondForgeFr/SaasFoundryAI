@@ -7,8 +7,8 @@ entry_conditions:
   - All AI Testing steps passed
   - Test plan ready for human validation
   - An open draft PR exists for the ticket, containing the test plan and AI test results (the `## Test plan` and `## Test report` comments)
-  - The project's required local CI statuses are green on that draft PR's head commit (the local CI guard of `update-status … "Human testing"` reads them; `--skip-local-ci "<reason>"` is the recorded
-    hatch)
+  - The project's required local CI statuses are green on that draft PR's head commit (the local CI guard of `update-status … "Human testing"` reads them; a hatch for it is the developer's to apply,
+    see escape-hatches.md)
 mandatory_actions:
   - Wait for developer validation
   - On bug report — the session collects it and hands the fix to the ticket's own agent (or fixes it itself when delegation is not allowed); commit, push, return to AI Testing
