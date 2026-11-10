@@ -18,6 +18,7 @@ import {
   resolveCaptureCli,
   V1_1_0_CAPTURE_COMMANDS
 } from '../../../harness/delegation-hooks'
+import { CODEX_GUARD_COMMAND, CODEX_GUARD_TRUST_NOTICE, guardState } from '../../../harness/guard-hook'
 import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../../../utils/claude-settings'
 import { hermeticPath, nodeBinDir } from '../../helpers/hermetic-path'
 
@@ -413,6 +414,34 @@ describe('the hooks that capture delegations (#1035)', () => {
       const first = await installAgentInstructions({ targetPath: root, agents: ['codex'] })
       expect(first.written).toContain(CODEX_HOOKS_PATH)
       expect(first.warnings).not.toContain(CODEX_RETRUST_NOTICE)
+    })
+
+    // #1106 — the PreToolUse guard goes in the same file as the capture hook, and Codex trusts it the same way
+    it('adds the PreToolUse guard hook beside the capture hook, says once that it has to be trusted, and then changes nothing', async () => {
+      const first = await installAgentInstructions({ targetPath: root, agents: ['codex'] })
+      const config = JSON.parse(await get(CODEX_HOOKS_PATH))
+      expect(config.hooks.PreToolUse).toEqual([{ matcher: 'Bash', hooks: [{ type: 'command', command: CODEX_GUARD_COMMAND, timeout: 10 }] }])
+      expect(config.hooks.SubagentStop).toHaveLength(1)
+      expect(first.warnings).toContain(CODEX_GUARD_TRUST_NOTICE)
+      expect(await guardState(root, 'codex', async () => true)).toBe('declared')
+      const second = await installAgentInstructions({ targetPath: root, agents: ['codex'], manifest: { fileHashes: first.fileHashes } })
+      expect(second.warnings).not.toContain(CODEX_GUARD_TRUST_NOTICE)
+      expect(second.written).not.toContain(CODEX_HOOKS_PATH)
+    })
+
+    it('adds the guard after the PreToolUse hooks a project wrote, and keeps them', async () => {
+      const own = { matcher: 'apply_patch', hooks: [{ type: 'command', command: './check.sh' }] }
+      await put(CODEX_HOOKS_PATH, JSON.stringify({ hooks: { PreToolUse: [own] } }))
+      await installAgentInstructions({ targetPath: root, agents: ['codex'] })
+      const config = JSON.parse(await get(CODEX_HOOKS_PATH))
+      expect(config.hooks.PreToolUse).toHaveLength(2)
+      expect(config.hooks.PreToolUse[0]).toEqual(own)
+      expect(config.hooks.PreToolUse[1].hooks[0].command).toBe(CODEX_GUARD_COMMAND)
+    })
+
+    it('is not added for Claude Code alone, which keeps its hooks in .claude/settings.json', async () => {
+      await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
+      expect(await readFile(join(root, CODEX_HOOKS_PATH), 'utf8').catch(() => '')).toBe('')
     })
 
     it('warns and leaves a hooks file that is not JSON exactly as it is', async () => {

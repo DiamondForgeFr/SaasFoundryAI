@@ -50,7 +50,26 @@ export function routingSummary(routing: StatusRouting): string {
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
   const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
-  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${guardSummary(routing.guard)}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+}
+
+/**
+ * Whether the PreToolUse hook that refuses an agent's own bypass of a guard is in place for each declared coding
+ * agent (#1106): `; claude-code guard enforced; codex guard declared (...)`. Said for every agent, like the capture
+ * hook: a fail-open hook is acceptable only if its absence is visible.
+ */
+export function guardSummary(guard: StatusRoutingState['guard']): string {
+  if (!guard?.length) return ''
+  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry.agent)}`).join('; ')}`
+}
+
+const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (agent: string) => string> = {
+  enforced: () => 'guard enforced',
+  declared: (agent) => `guard declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  'declared-not-runnable': () =>
+    'guard hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): an agent is not stopped from setting an escape hatch',
+  missing: () => 'guard hook missing (run sf agents refresh --scope shared)',
+  'not-enforced': () => 'guard not enforced (the guard hook is for Claude Code and Codex; an agent here is told to ask the developer, nothing stops it)'
 }
 
 /**

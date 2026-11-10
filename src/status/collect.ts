@@ -9,6 +9,7 @@ import { captureErrorWindowStart, readCaptureErrors, type CaptureErrorSummary } 
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
 import { captureState, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
+import { guardState, type GuardProbe, type GuardState } from '../harness/guard-hook'
 import { ROUTING_GRID_VERSION, type RoutingOverrides } from '../harness/routing-grid'
 import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
 import { type LocalCiGateResult, resolveLocalCiGate } from '../local-ci-gate'
@@ -132,6 +133,11 @@ export interface StatusRoutingState {
   holds: { kind: string; provider: string; reason: string; since: string }[]
   capture: { agent: string; state: CaptureState }[]
   /**
+   * Whether the PreToolUse guard hook (#1106), which refuses an agent's own bypass of a guard, is declared for each
+   * declared coding agent and could run. Optional for a caller that builds a report by hand.
+   */
+  guard?: { agent: string; state: GuardState }[]
+  /**
    * The failures the capture hooks logged in the last 7 days (#1105): a hook that fails leaves no other trace, since
    * the host discards its output. Optional for a caller that builds a report without reading the log.
    */
@@ -236,6 +242,8 @@ export interface CollectOptions {
   checkGh?: boolean
   /** Whether the project's CLI can run the capture hook; defaults to asking the CLI it resolves. Injectable for a spec that spawns nothing. */
   captureProbe?: CaptureProbe
+  /** Whether the project's CLI can run the guard hook (#1106); defaults to the capture probe when only that one is injected, otherwise to asking the CLI it resolves. */
+  guardProbe?: GuardProbe
   /** Version of the running CLI. Without it the report carries no `cli` block, and the CLI preconditions are left out. */
   cliVersion?: string
   /** Where the running CLI comes from; defaults to a published package. */
@@ -377,7 +385,8 @@ async function collectRouting(
   manifest: SaaSFoundryManifest | null,
   declaredAgents: HarnessAgent[] | undefined,
   probe?: CaptureProbe,
-  now: () => Date = () => new Date()
+  now: () => Date = () => new Date(),
+  guardProbe?: GuardProbe
 ): Promise<StatusRouting | undefined> {
   const harness = manifest?.modules?.harness
   if (!manifest || !harness) return undefined
@@ -404,6 +413,7 @@ async function collectRouting(
       })),
       holds: listLocalHolds(local).map(({ kind, provider, hold }) => ({ kind, provider, reason: hold.reason, since: hold.since })),
       capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) }))),
+      guard: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await guardState(projectRoot, agent, guardProbe) }))),
       captureErrors
     }
   } catch (error) {
@@ -487,7 +497,7 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
   const personalSkills = collectPersonalSkills(projectRoot, manifest, options.userHome)
   const delegation = await collectDelegation(projectRoot, manifest)
-  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe, options.now)
+  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe, options.now, options.guardProbe ?? options.captureProbe)
   const localCi = collectLocalCi(projectRoot)
   // The gate is applied by the github-projects tool's pull request commands only
   const localCiGate = manifest?.workflow?.tool === 'github-projects' ? resolveLocalCiGate(projectRoot, manifest) : undefined

@@ -15,6 +15,7 @@ import {
   type PendingFiles
 } from './codex-instruction-size'
 import { CODEX_HOOKS_PATH, CODEX_RETRUST_NOTICE, renderCodexHooks } from './delegation-hooks'
+import { CODEX_GUARD_TRUST_NOTICE, withCodexGuard } from './guard-hook'
 import { withCodexSessionStart } from './session-start-hook'
 import { BridgeKind, isReleasedBridge, isReleasedBridgeHash, normalizeBridgeText } from './released-bridges'
 import type { RoutingOverrides } from './routing-grid'
@@ -940,7 +941,12 @@ async function planCaptureHooks(targetPath: string, agents: HarnessAgent[], warn
   // A bare-`sf` SessionStart command an earlier build wrote is replaced by the resolved one (#1103). The file is
   // the project's: a session-start hook it does not have is not added.
   const withSessionStart = withCodexSessionStart(rendered.content)
-  return [{ path: CODEX_HOOKS_PATH, content: Buffer.from('error' in withSessionStart ? rendered.content : withSessionStart.content), mode: 0o644, merge: true }]
+  const content = 'error' in withSessionStart ? rendered.content : withSessionStart.content
+  // The PreToolUse guard (#1106) is added next to the capture hook, and trusted the same way: a new hook is skipped until reviewed.
+  const withGuard = withCodexGuard(content)
+  if ('error' in withGuard) return [{ path: CODEX_HOOKS_PATH, content: Buffer.from(content), mode: 0o644, merge: true }]
+  if (withGuard.added) warnings.push(CODEX_GUARD_TRUST_NOTICE)
+  return [{ path: CODEX_HOOKS_PATH, content: Buffer.from(withGuard.content), mode: 0o644, merge: true }]
 }
 
 /**

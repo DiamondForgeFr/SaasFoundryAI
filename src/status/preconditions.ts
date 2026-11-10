@@ -384,6 +384,33 @@ function checkTierAgents(report: StatusReport): Precondition {
 }
 
 /**
+ * Guard hook — whether the PreToolUse hook that refuses an agent's own bypass of a guard is in place (#1106). The
+ * hook fails open by design, so its absence must not be silent: a project whose hook is missing, or declared but with
+ * no CLI that can run it, lets an agent set an escape hatch or label its own ticket. A `warn`: the guards of the
+ * workflow scripts still refuse, it is the agent's way round them that is no longer stopped. Codex runs a project
+ * hook only once it is trusted, which nothing here can see: `declared` is an `ok`, said as such on the `routing:` line.
+ */
+function checkGuardHook(report: StatusReport): Precondition {
+  const name = 'guardHook'
+  const description = 'Guard hook stops an agent from bypassing a guard'
+  const routing = report.routing
+  if (!routing) return { name, description, status: 'skip', details: 'No managed harness' }
+  if ('error' in routing) return { name, description, status: 'skip', details: 'The routing could not be read' }
+  const guard = routing.guard
+  if (!guard?.length) return { name, description, status: 'skip', details: 'The guard hook was not read' }
+  const off = guard.filter((entry) => entry.state === 'missing' || entry.state === 'declared-not-runnable')
+  if (off.length === 0) return { name, description, status: 'ok', details: guard.map((entry) => `${entry.agent} ${entry.state}`).join('; ') }
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: off.map((entry) => `${entry.agent} guard hook ${entry.state === 'missing' ? 'missing' : 'declared but no CLI can run it'}`).join('; '),
+    remediation:
+      'Run `sf agents refresh --scope shared` to add the PreToolUse guard hook, and make sure the project resolves a CLI that has `sf agents guard` (saasfoundryai-cli installed in the project, or saasfoundryai on the PATH). Until then an agent is told to ask the developer for an escape hatch, but nothing refuses it when it sets one.'
+  }
+}
+
+/**
  * Capture errors — whether the hooks that record every delegation have failed lately (#1105). The host discards a
  * hook's output and the hook always exits 0, so a payload that could not be read, a ledger that could not be written
  * or a routing adjustment that was skipped left no trace, and the routing learned from fewer outcomes. The capture now
@@ -496,6 +523,7 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkInstructionReferences(report),
     checkTierAgents(report),
     ...(personalSkills ? [personalSkills] : []),
+    checkGuardHook(report),
     checkCaptureErrors(report),
     checkDependencies(report),
     checkDatabase(report),
