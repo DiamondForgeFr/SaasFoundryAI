@@ -11,6 +11,7 @@ import { COMPLEXITIES, NATURES, type Complexity, type Nature } from '../harness/
 import { getRoutingGrid, isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider } from '../harness/routing-grid'
 import { issueRoutes, loadRoutingState } from '../harness/routing-runtime'
 import { resolveRouteFacts, type RouteFacts } from '../harness/ticket-labels'
+import { registerGuardCommand } from './agents.guard'
 import { registerOutcomeCommands } from './agents.outcome'
 import { registerRoutingCommands } from './agents.routing'
 import { errorPayload, parsePositiveInteger } from './agents.shared'
@@ -375,5 +376,6 @@ export function registerAgentCommands(command: Command): void {
     .option('--json', 'Output a machine-readable inventory')
     .action((options: AgentCommandOptions) => agentsCommand('list', [], options))
   registerOutcomeCommands(command)
+  registerGuardCommand(command)
   registerRoutingCommands(command)
 }
