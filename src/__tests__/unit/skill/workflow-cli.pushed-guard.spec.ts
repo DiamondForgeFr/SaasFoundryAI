@@ -125,7 +125,8 @@ describe('sf-workflow CLI — pushed-commits guard (→ AI testing)', () => {
       expect(res.stderr).toContain("cannot enter 'AI Testing'")
       expect(res.stderr).toContain('work.txt')
       expect(res.stderr).toContain('git add <paths> && git commit -m "<type>(#42): <description>" && git push')
-      expect(res.stderr).toContain('SF_WORKFLOW_BYPASS_PUSHED_GUARD=1')
+      expect(res.stderr).not.toContain('SF_WORKFLOW_BYPASS_')
+      expect(res.stderr).toContain('ask the developer')
       expect(statusCalls()).toEqual([])
     })
 

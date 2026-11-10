@@ -305,6 +305,17 @@ announce_bypasses() {
     echo -e "${YELLOW}  The bypass could not be recorded on #${ticket}; record it by hand.${NC}" >&2
 }
 
+# A refusal never teaches how to get past its guard. An escape hatch is the developer's to apply
+# (escape-hatches.md, ground rule 2), and a guard hook refuses an agent call that sets one. Every
+# refusal that used to print the hatch ends with this line instead: it names the guard, so that the
+# matching section of the catalogue is easy to find, and sends the agent back to the developer. The
+# next legitimate command of the refusal stays above it.
+ESCAPE_HATCHES_DOC="$(cd "$SKILL_DIR" && pwd -P)/escape-hatches.md"
+ESCAPE_HATCHES_DOC="${ESCAPE_HATCHES_DOC#"$(pwd -P)"/}"
+developer_hatch_line() {
+  echo "  If this guard cannot be satisfied, stop and ask the developer: an escape hatch is theirs to apply (${ESCAPE_HATCHES_DOC}, \"$1\")." >&2
+}
+
 check_srs_guard() {
   # Returns 0 if the caller may proceed, 1 if blocked (message already printed).
   local ticket=$1
@@ -390,7 +401,7 @@ check_complexity_guard() {
     echo "    .claude/skills/sf-workflow/workflow-cli.sh retag ${ticket} <level>" >&2
     echo "" >&2
     echo "  See .claude/skills/sf-workflow/complexity/README.md for level guidance." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1" >&2
+    developer_hatch_line "Complexity guard"
     return 1
   fi
   return 0
@@ -477,19 +488,21 @@ check_nature_guard() {
       echo "  Move to Done instead:" >&2
       echo "    .claude/skills/sf-workflow/workflow-cli.sh update-status ${ticket} Done" >&2
       echo "" >&2
-      echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
+      developer_hatch_line "Nature guard"
       return 1
     fi
     echo -e "${RED}✗ Ticket #${ticket} is in 'AI Testing' and lacks 'nature:internal' — cannot skip Human Testing.${NC}" >&2
     echo "" >&2
     echo "  Default workflow requires AI Testing → Human Testing → In Review." >&2
-    echo "  To allow skipping Human Testing, tag the ticket as internal:" >&2
-    echo "    gh issue edit ${ticket} --add-label 'nature:internal'" >&2
+    echo "  Next: open the draft PR if there is none, then move the ticket to Human testing:" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh create-pr ${ticket} --draft" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh update-status ${ticket} \"Human testing\"" >&2
     echo "" >&2
-    echo "  Use 'nature:internal' for refactors, scaffolding, internal tooling, or" >&2
-    echo "  non-terminal stories of a multi-step Epic that ship their own PR." >&2
-    echo "  Use 'nature:bundled-pr' for native children delivered by their parent PR." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
+    echo "  If the ticket has no user-visible surface, ask the developer whether it is internal:" >&2
+    echo "  only the developer labels a ticket 'nature:internal' (refactors, scaffolding, internal" >&2
+    echo "  tooling, non-terminal stories of a multi-step Epic that ship their own PR) or" >&2
+    echo "  'nature:bundled-pr' (native children delivered by their parent PR)." >&2
+    developer_hatch_line "Nature guard"
     return 1
   fi
 
@@ -502,10 +515,12 @@ check_nature_guard() {
     echo "  Default workflow goes through 'In Review' (where the PR is opened, reviewed," >&2
     echo "  and merged). Only 'nature:bundled-pr' subs may go AI Testing → Done directly." >&2
     echo "" >&2
-    echo "  Either open a PR and move to In Review, or tag the ticket bundled-pr:" >&2
-    echo "    gh issue edit ${ticket} --add-label 'nature:bundled-pr'" >&2
+    echo "  Next: open the PR, then follow AI Testing → Human testing → In Review:" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh create-pr ${ticket} --draft" >&2
     echo "" >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_NATURE_GUARD=1" >&2
+    echo "  Whether this ticket is delivered by its parent's PR ('nature:bundled-pr') is the" >&2
+    echo "  developer's call: ask the developer." >&2
+    developer_hatch_line "Nature guard"
     return 1
   fi
 
@@ -540,7 +555,7 @@ check_incomplete_children_guard() {
   echo -e "${RED}✗ Ticket #${ticket} has ${count} native child issue(s) not verified Done — cannot transition to 'Done'.${NC}" >&2
   printf '%s' "$children" | jq -r '.[] | "  #\(.number) \(.title // "untitled"): \(.status // "status unavailable")"' >&2
   echo "  Move every child to Done on the project board before completing its parent." >&2
-  echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1" >&2
+  developer_hatch_line "Children guard"
   return 1
 }
 
@@ -582,24 +597,29 @@ check_bundled_pr_parent_guard() {
 
   nature=$(get_ticket_nature_label "$ticket") || {
     echo "Error: unable to verify ticket nature for bundled-PR transition." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
+    echo "  Retry once the labels can be read." >&2
+    developer_hatch_line "Bundled-PR parent guard"
     return 1
   }
   [[ "$nature" == "bundled-pr" ]] || return 0
 
   parent_number=$(get_native_parent_number "$ticket") || {
     echo "Error: unable to verify that bundled-PR ticket #${ticket} is a native child issue." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
+    echo "  If it has no parent yet, link it to its delivery parent:" >&2
+    echo "    .claude/skills/sf-workflow/workflow-cli.sh link-subtask <parent> ${ticket}" >&2
+    developer_hatch_line "Bundled-PR parent guard"
     return 1
   }
   parent_type=$(get_ticket_issue_type "$parent_number") || {
     echo "Error: unable to verify native parent #${parent_number} for bundled-PR ticket #${ticket}." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
+    echo "  Retry once the issue type of #${parent_number} can be read." >&2
+    developer_hatch_line "Bundled-PR parent guard"
     return 1
   }
   if [[ "$parent_type" == "sf-epic" ]]; then
     echo "Error: bundled-PR ticket #${ticket} cannot use an aggregate sf-epic as its delivery parent." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1" >&2
+    echo "  Link it to a Story, Task or Issue that owns the branch and PR instead." >&2
+    developer_hatch_line "Bundled-PR parent guard"
     return 1
   fi
   return 0
@@ -698,7 +718,8 @@ check_pushed_commits_guard() {
   normalized=$(echo "$target" | tr '[:upper:]' '[:lower:]' | awk '{$1=$1;print}')
   [[ "$normalized" == "ai testing" ]] || return 0
 
-  local hatch="  Escape hatch (rare): SF_WORKFLOW_BYPASS_PUSHED_GUARD=1"
+  local hatch
+  hatch=$(developer_hatch_line "Pushed-commits guard" 2>&1)
   local refusal="✗ Ticket #${ticket} cannot enter 'AI Testing'"
   local nature owner=$ticket parent patterns any_patterns current origin_heads
   local target_branch release_branch mode dir branch=""
@@ -1173,7 +1194,7 @@ check_pr_merged_guard() {
     echo "  Current ticket should stay in 'In review'. After PR merge:" >&2
     echo "    .claude/skills/sf-workflow/workflow-cli.sh update-status ${ticket} Done" >&2
     echo "" >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1" >&2
+    developer_hatch_line "PR merged guard"
     return 1
   fi
 
@@ -1185,7 +1206,7 @@ check_pr_merged_guard() {
   if [[ -z "$merged_pr" ]]; then
     echo -e "${RED}✗ Ticket #${ticket} has no verified merged PR into its configured working or release branch — cannot transition to 'Done'.${NC}" >&2
     echo "  Open and merge the ticket PR before marking the ticket Done." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1" >&2
+    developer_hatch_line "PR merged guard"
     report_unusable_delivery_patterns
     return 1
   fi
@@ -1380,8 +1401,8 @@ check_pr_existence_guard() {
     echo "✗ Ticket #${ticket} has no open PR — cannot transition to '$(if [[ "$normalized" == 'in review' ]]; then echo 'In Review'; else echo 'Human Testing'; fi)'." >&2
     echo "  Open a draft with workflow-cli.sh create-pr ${ticket} --draft for Human Testing." >&2
     echo "  Delivered by another ticket's PR: add a body line to that PR that reads exactly 'Resolves #${ticket}'." >&2
-    echo "  After approval, use workflow-cli.sh ready-pr ${ticket} before In Review." >&2
-    echo "  Escape hatch (rare): SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1" >&2
+    echo "  After the developer's approval (Ready for review, or workflow-cli.sh ready-pr ${ticket} from the session on a route without Human Testing), the PR is ready for In Review." >&2
+    developer_hatch_line "PR existence guard"
     report_unusable_delivery_patterns
     return 1
   fi
@@ -1396,7 +1417,7 @@ check_pr_existence_guard() {
     return 1
   fi
   if [[ "$normalized" == "in review" && "$draft" != false ]]; then
-    echo "Error: In Review requires a non-draft PR. After human approval run workflow-cli.sh ready-pr ${ticket}." >&2
+    echo "Error: In Review requires a non-draft PR. The developer takes it out of draft after Human Testing (Ready for review); on a route without Human Testing the session runs workflow-cli.sh ready-pr ${ticket}." >&2
     return 1
   fi
   GUARD_PR_NUMBER=$(echo "$matches" | jq -r '.[0].number | select(type == "number")')
@@ -1440,7 +1461,8 @@ check_local_ci_guard() {
   fi
   echo -e "${RED}✗ Ticket #${ticket} cannot enter 'Human testing': its local CI is not green on the pull request head.${NC}" >&2
   if [[ -z "$LOCAL_CI_SKIP_REASON" ]]; then
-    echo "  Make the statuses green, then retry. Escape hatch (infrastructure down only): update-status ${ticket} \"Human testing\" --skip-local-ci \"<reason>\"" >&2
+    echo "  Make the statuses green (the gate above names the command), then retry." >&2
+    developer_hatch_line "Local CI guard"
   fi
   return 1
 }

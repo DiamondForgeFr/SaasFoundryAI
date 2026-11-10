@@ -29,6 +29,23 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# A refusal never teaches how to get past its guard. An escape hatch is the developer's to apply
+# (the workflow skill's escape-hatches.md, ground rule 2), and a guard hook refuses an agent call that
+# sets one. A refusal that used to print the hatch ends with this line instead: it names the guard, so
+# that the matching section of the catalogue is easy to find, and sends the agent back to the developer.
+# The workflow skill sits next to this tool skill; a project that runs this CLI without it gets the
+# file's name only.
+ESCAPE_HATCHES_DOC="the workflow skill's escape-hatches.md"
+_sf_tool_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+if [[ -n "$_sf_tool_dir" && -f "${_sf_tool_dir}/../sf-workflow/escape-hatches.md" ]]; then
+  ESCAPE_HATCHES_DOC="$(cd "${_sf_tool_dir}/../sf-workflow" && pwd -P)/escape-hatches.md"
+  ESCAPE_HATCHES_DOC="${ESCAPE_HATCHES_DOC#"$(pwd -P)"/}"
+fi
+unset _sf_tool_dir
+developer_hatch_line() {
+  echo "  If this guard cannot be satisfied, stop and ask the developer: an escape hatch is theirs to apply (${ESCAPE_HATCHES_DOC}, \"$1\")." >&2
+}
+
 COMMAND=$1
 shift || true
 
@@ -848,6 +865,7 @@ cmd_create_ticket() {
   # Each step below is reported; the ticket exists whatever happens next, so a failed
   # step names the command that finishes it rather than pretending nothing was done
   local -a MISSING=()
+  local NATURE_FAILED=""
   "$0" add-to-project "$TICKET_NUMBER" || MISSING+=("$0 add-to-project ${TICKET_NUMBER}")
 
   local declared_types
@@ -863,16 +881,24 @@ cmd_create_ticket() {
     if gh issue edit "$TICKET_NUMBER" --add-label "nature:${NATURE}" >/dev/null; then
       echo -e "${GREEN}✓ Ticket #${TICKET_NUMBER} nature → ${NATURE}${NC}"
     else
-      MISSING+=("gh issue edit ${TICKET_NUMBER} --add-label nature:${NATURE}")
+      NATURE_FAILED=$NATURE
     fi
   fi
   if [ -n "$MILESTONE" ]; then
     "$0" milestone assign "$TICKET_NUMBER" "$MILESTONE" || MISSING+=("$0 milestone assign ${TICKET_NUMBER} \"${MILESTONE}\"")
   fi
 
-  if [ "${#MISSING[@]}" -gt 0 ]; then
-    echo -e "${RED}✗ Ticket #${TICKET_NUMBER} exists, but these steps failed — finish them with:${NC}" >&2
-    printf '    %s\n' "${MISSING[@]}" >&2
+  if [ "${#MISSING[@]}" -gt 0 ] || [ -n "$NATURE_FAILED" ]; then
+    if [ "${#MISSING[@]}" -gt 0 ]; then
+      echo -e "${RED}✗ Ticket #${TICKET_NUMBER} exists, but these steps failed — finish them with:${NC}" >&2
+      printf '    %s\n' "${MISSING[@]}" >&2
+    else
+      echo -e "${RED}✗ Ticket #${TICKET_NUMBER} exists, but one step failed:${NC}" >&2
+    fi
+    # A nature label decides whether the ticket goes through Human Testing: it is the developer's to apply
+    if [ -n "$NATURE_FAILED" ]; then
+      echo "    nature:${NATURE_FAILED} could not be applied to #${TICKET_NUMBER}: ask the developer to add the label." >&2
+    fi
     exit 1
   fi
 }
@@ -2094,7 +2120,7 @@ print_local_ci_remedy() {
       echo "  A project with no local CI records that with: sf workflow set-local-ci --none" >&2
       ;;
   esac
-  echo "  Escape hatch (infrastructure down only): --skip-local-ci \"<reason>\"" >&2
+  developer_hatch_line "Local CI guard"
 }
 
 # local_ci_gate <head-sha> [<ticket> <branch> [<pr-number>]]: 0 when the gate is green, skipped or
