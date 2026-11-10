@@ -44,7 +44,8 @@ export const WHOLE_TICKET_LINE =
   'A whole ticket is the exception: when the brief hands you a ticket to deliver (not a subtask of one), you own it from In progress to the end of AI Testing ' +
   '(the branch in your own worktree, the children, the test plan, the checks, the report and the draft pull request), through the workflow CLIs, ' +
   'and stop there with the ticket still in AI Testing. Build it yourself and never hand it on again. ' +
-  "Never merge, never run `ready-pr` on a ticket that goes through Human Testing, and never record the delegation consent (`sf agents delegation allow|decline`): only the developer's own reply does."
+  "Never merge, never run `ready-pr` (the developer or the session takes the pull request out of draft), and never record the delegation consent (`sf agents delegation allow|decline`): only the developer's own reply does. " +
+  "An escape hatch, and the nature label of a ticket, are the developer's to apply: when a guard refuses, stop and report it, and a hook refuses your call if you set one."
 
 /**
  * What every tier agent ends its final message with (#1035). The host hooks know what a delegation cost;

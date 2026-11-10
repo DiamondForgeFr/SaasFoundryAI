@@ -113,6 +113,24 @@ recorded); `codex capture declared` when the hook is there but Codex has to trus
 `capture hook missing` (`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local layer shows as `unreadable (…)` and
 never fails the status.
 
+### The guard hook
+
+The `PreToolUse` hook that refuses an agent's own escape hatch, nature label and (for a delegated agent) merge (see [the guard hook](./sf-agents.md#the-guard-hook)) fails open by design: with no CLI
+that has `agents guard`, a call goes through unchecked. So its state is never silent. The `routing:` line says it for each declared coding agent, after the capture state, and `--json` carries it as
+`routing.guard` (`[{ agent, state }]`, additive):
+
+| State                   | Line                                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `enforced`              | `claude-code guard enforced`: the hook is declared and the project's own CLI answers `agents guard`                         |
+| `declared`              | `codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)`: Codex is never `enforced`           |
+| `declared-not-runnable` | `guard hook declared but no CLI can run it`: install `saasfoundryai-cli` in the project, or put `saasfoundryai` on the PATH |
+| `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                 |
+| `not-enforced`          | `guard not enforced`: a host without a guard hook; its agent is told to ask the developer, and nothing stops it             |
+
+The `guardHook` precondition, "Guard hook stops an agent from bypassing a guard", is a `warn` when an agent's hook is `missing` or `declared-not-runnable`, with the remediation to run
+`sf agents refresh --scope shared` and to make a CLI with `agents guard` resolvable. It is `ok` otherwise, and skipped without a harness or when the routing cannot be read. The probe asks the CLI the
+hook would run for `agents guard --help` and starts nothing else.
+
 ### Capture errors
 
 The hooks that record delegations run with their output discarded and exit 0, so a capture that fails (a payload it cannot read, a ledger it cannot write, a routing adjustment it skipped) used to

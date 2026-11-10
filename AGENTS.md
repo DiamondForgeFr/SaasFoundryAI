@@ -258,6 +258,8 @@ When a workflow step names a task kind, resolve its tier with
 model or an effort yourself. When the route fails or the agent cannot delegate, run the step
 in the session.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
+An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook
+refuses an agent call that sets one.
 The project manifest and workflow rules take precedence over generic skill examples,
 including branch names, commit formats, staging, pushing and approval requirements.
 Legacy /task examples name roles: use native delegation if available and authorized,
@@ -295,9 +297,10 @@ team's default; a clone may override it locally, and the line reports the effect
 - `declined`, or the current agent cannot delegate or run in the background: deliver the tickets
   in the session, one after the other, and say so explicitly.
 
-A delegated agent never merges and, on a ticket that goes through Human Testing, never runs
-`ready-pr`: the developer takes the draft pull request out of draft. The session collects the
-Human Testing feedback and hands a defect, or AI work left after the validation, back to the
+A delegated agent never merges, never runs `ready-pr` (the developer takes the draft pull
+request out of draft on a ticket that goes through Human Testing, the session on one that does
+not), and never labels the nature of a ticket. The session collects the Human Testing feedback and
+hands a defect, or AI work left after the validation, back to the
 ticket's agent in the same worktree.
 
 Every delegation is measured, and the routing learns from it. Route it with

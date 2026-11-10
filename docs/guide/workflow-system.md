@@ -220,8 +220,9 @@ Use `workflow-cli.sh transition-drafting`; the CLI rejects code-path transitions
 ## Escape hatches
 
 A guard refusal means a condition or a piece of proof is missing; the answer is to supply it. For the rare case where a guard is wrong or cannot be satisfied, the scripts accept a few explicit escape
-hatches. Set a variable inline for one command only, never with `export`, with `SF_WORKFLOW_BYPASS_REASON="<why>"` beside it. `update-status` then prints a warning naming the variable and records it,
-with the reason, as a ticket comment; add the evidence to that comment. A coding agent never sets one on its own; it stops and asks you.
+hatches. They are yours to apply, not the agent's: set a variable inline for one command only, never with `export`, with `SF_WORKFLOW_BYPASS_REASON="<why>"` beside it. `update-status` then prints a
+warning naming the variable and records it, with the reason, as a ticket comment; add the evidence to that comment. A refusal does not tell a coding agent how to get past the guard: it names the next
+legitimate command and sends the agent back to you, and a hook refuses the agent that sets a hatch anyway ([below](#who-applies-a-hatch)).
 
 | Hatch                                                                                      | What it switches off                                                         |
 | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
@@ -242,6 +243,34 @@ with the reason, as a ticket comment; add the evidence to that comment. A coding
 `--bypass-srs` and `--skip-local-ci` carry a mandatory reason. The reason is the record: choose a grep-able token such as `meta-srs-tooling`. `--bypass-srs` posts it on the created ticket and
 `--skip-local-ci` writes it on the pull request (or on the ticket when no pull request can carry it). The legitimate and illegitimate uses of each hatch, and the record to leave, are in
 `.claude/skills/sf-workflow/escape-hatches.md` in every project that installs the workflow.
+
+### Who applies a hatch
+
+An escape hatch is your decision, and so is every choice a guard protects: whether a ticket skips Human testing, whether a pull request is ready, whether it merges. A `PreToolUse` hook, written into
+`.claude/settings.json` and `.codex/hooks.json` by `sf new`, `sf update` and `sf agents refresh`, refuses an agent's Bash call before it runs (and PowerShell on Claude Code). It refuses, in the main
+session as well as in a delegated agent:
+
+- a `SF_WORKFLOW_BYPASS_<X>=…` assignment in front of a command, in `export`, `env`, `bash -c` or `eval` (the reason variable alone is not refused);
+- `--skip-local-ci` given to `workflow-cli.sh` or `github-projects-cli.sh`;
+- `nature:internal` or `nature:bundled-pr` put on a ticket with `gh issue edit` or `gh api`.
+
+For a **delegated agent** only (an agent id in the event, or a working directory under `.claude/worktrees/` or `.codex/worktrees/`) it also refuses `sf agents delegation allow|decline|clear`,
+`ready-pr` and `gh pr ready`, `gh pr merge`, and `create-ticket … --nature internal`. The same calls from the primary checkout are allowed. The scripts add a second barrier that does not depend on the
+hook: `update-status`, `create-pr`, `ready-pr`, `draft-pr` and `local-ci-gate` refuse a hatch, `--skip-local-ci` and `ready-pr` themselves when they run in a delegated worktree.
+
+You apply a hatch from the primary checkout, in either of two ways:
+
+- **Claude Code:** type the command in the session with a leading `!`. It runs directly, without going through the agent's Bash tool, so the hook does not fire, and its output joins the conversation.
+  `! SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1 SF_WORKFLOW_BYPASS_REASON="hotfix a1b2c3d pushed directly" .claude/skills/sf-workflow/workflow-cli.sh update-status 42 Done`. The script still posts the
+  bypass comment.
+- **Any host:** your own terminal, at the root of the primary checkout. `update-status` and `local-ci-gate` find the ticket's worktree or pull request from there.
+
+Nature labels are added by you on GitHub, or with `!` in Claude Code.
+
+The hook is a guardrail against the ordinary path the refusals used to teach, not a security boundary: it reads the command the agent wrote, covers the Bash tool only, and fails open (no CLI, an old
+CLI or a payload it cannot read lets the call through). `sf status` says so on its `routing:` line (`guard enforced`, `guard declared`, `guard hook missing`…) and warns when the hook cannot work.
+Claude Code reads its settings when a session starts, so a running session keeps its old hooks until it restarts. Codex runs a project hook only once the `.codex/` layer and the hook are trusted:
+after `sf update`, review and trust the guard with `/hooks`. See [`sf agents guard`](/cli/sf-agents#the-guard-hook).
 
 ## Continue
 

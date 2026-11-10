@@ -178,11 +178,21 @@ describe('shared agent instructions', () => {
       expect(instructions).toMatch(/never switches to coding a\s+ticket mid-delivery/)
       expect(instructions).toMatch(/becomes a ticket of its own, handed to its own\s+agent/)
       expect(instructions).toMatch(/deliver the tickets\s+in the session, one after the other, and say so explicitly/)
-      expect(instructions).toMatch(/never merges and, on a ticket that goes through Human Testing, never runs\s+`ready-pr`/)
+      expect(instructions).toMatch(
+        /never merges, never runs `ready-pr` \(the developer takes the draft pull\s+request out of draft on a ticket that goes through Human Testing, the session on one that does\s+not\)/
+      )
       expect(instructions).toMatch(/hands a defect, or AI work left after the validation, back to the\s+ticket's agent in the same worktree/)
       // The decision belongs to the developer and to the manifest, never to a model name.
       expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
       expect(instructions).not.toMatch(/\bdevelop\b/)
+    }
+  })
+
+  // #1106 — a guard refusal is reported, never worked around: the escape hatch is the developer's, and a hook enforces it.
+  it('says an escape hatch is the developer to apply, and that a hook refuses an agent that sets one (#1106)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook\s+refuses an agent call that sets one/)
+      expect(instructions).toMatch(/never labels the nature of a ticket/)
     }
   })
 

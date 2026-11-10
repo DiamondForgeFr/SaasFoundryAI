@@ -117,6 +117,24 @@ délégations ne sont pas enregistrées) ; `codex capture declared` quand le hoo
 que la v1.1.0 a livré ; `capture hook missing` (`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale
 endommagée s'affiche `unreadable (…)` et ne fait jamais échouer le statut.
 
+### Le hook de garde
+
+Le hook `PreToolUse` qui refuse l'échappatoire, le label de nature et (pour un agent délégué) la fusion qu'un agent s'applique de lui-même (voir [le hook de garde](./sf-agents.md#le-hook-de-garde))
+laisse passer en cas d'échec, par conception : sans CLI qui ait `agents guard`, un appel passe sans contrôle. Son état n'est donc jamais silencieux. La ligne `routing:` le dit pour chaque agent de
+code déclaré, après l'état de la capture, et `--json` le porte sous `routing.guard` (`[{ agent, state }]`, additif) :
+
+| État                    | Ligne                                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `enforced`              | `claude-code guard enforced` : le hook est déclaré et le CLI propre au projet répond à `agents guard`                              |
+| `declared`              | `codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)` : Codex n'est jamais `enforced`             |
+| `declared-not-runnable` | `guard hook declared but no CLI can run it` : installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH |
+| `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                        |
+| `not-enforced`          | `guard not enforced` : un hôte sans hook de garde ; son agent a pour consigne de demander au développeur, rien ne l'arrête         |
+
+La précondition `guardHook`, « Guard hook stops an agent from bypassing a guard », est un `warn` quand le hook d'un agent est `missing` ou `declared-not-runnable`, avec pour remède de lancer
+`sf agents refresh --scope shared` et de rendre un CLI qui a `agents guard` résolvable. Elle est `ok` sinon, et ignorée sans harness ou quand le routage est illisible. La sonde demande au CLI que le
+hook exécuterait `agents guard --help` et ne lance rien d'autre.
+
 ### Erreurs de capture
 
 Les hooks qui enregistrent les délégations s'exécutent avec leur sortie écartée et sortent avec 0 : une capture qui échoue (une charge illisible, un registre impossible à écrire, un ajustement de

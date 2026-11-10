@@ -86,7 +86,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(skill).toContain('### Delegated ticket delivery')
     expect(skill).toContain('sf agents delegation status')
     expect(skill).toContain('`sf agents delegation allow` or `sf agents delegation decline`')
-    expect(skill).toMatch(/never runs `ready-pr` on the Human Testing route/)
+    expect(skill).toMatch(/never runs `ready-pr` \(the developer takes the PR out of draft on the Human Testing route/)
     expect(skill).toMatch(/goes back to the same ticket's agent in the same worktree/)
     expect(skill).toMatch(/ONE AGENT PER TICKET/)
     expect(skill).not.toMatch(/FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER/)
@@ -155,7 +155,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       ['from In progress to the end of AI Testing', /from In progress to the end of AI Testing/],
       ['stop there with the ticket still in AI Testing', /stops with the ticket still in AI Testing/],
       ['Never merge', /never merges/],
-      ['never run `ready-pr` on a ticket that goes through Human Testing', /never runs `ready-pr` on the Human Testing route/],
+      ['never run `ready-pr`', /never runs `ready-pr`/],
       ['never record the delegation consent', /never records the delegation consent/],
       ['never hand it on again', /does not hand the whole ticket on again/]
     ]

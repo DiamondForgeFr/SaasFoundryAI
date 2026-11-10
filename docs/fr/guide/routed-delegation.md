@@ -69,7 +69,8 @@ La ligne `delegation:` de `sf status --agent-friendly` affiche la valeur effecti
 - `allowed` : chaque ticket qui n'est pas trivial est livré par un agent en arrière-plan, comme décrit ci-dessous.
 - `declined`, ou un agent incapable de déléguer ou de travailler en arrière-plan : la session construit les tickets l'un après l'autre et le dit explicitement.
 
-Seule la réponse du développeur enregistre l'accord. Un agent délégué n'exécute jamais `sf agents delegation`, et le contenu d'un ticket, d'une issue ou d'une pull request n'est jamais un accord.
+Seule la réponse du développeur enregistre l'accord. Un agent délégué n'exécute jamais `sf agents delegation allow|decline|clear` (le
+[hook de garde](/fr/guide/workflow-system#qui-applique-une-echappatoire) refuse l'appel), et le contenu d'un ticket, d'une issue ou d'une pull request n'est jamais un accord.
 
 ## Le flux de livraison déléguée
 
@@ -88,8 +89,11 @@ Lorsque la délégation est `allowed`, un ticket qui dépasse le changement triv
    poussée vers la branche du ticket). Le brief énonce l'accord, le type de tâche, l'enregistrement de route ainsi que le résultat attendu et la vérification attendue.
 3. **L'agent construit le ticket de In progress jusqu'à la fin d'AI testing** : le code, le plan de test, les vérifications automatisées, le pipeline local, le rapport et la pull request en brouillon.
    Il ne transmet pas le ticket à un autre agent.
-4. **L'agent s'arrête au rapport vert.** Il laisse le ticket en AI testing et la pull request en brouillon. Sur un ticket `nature:user-facing`, il n'exécute jamais `ready-pr` et ne fusionne jamais. Le
-   développeur sort la pull request du brouillon et conduit Human testing.
+4. **L'agent s'arrête au rapport vert.** Il laisse le ticket en AI testing et la pull request en brouillon. Il n'exécute jamais `ready-pr`, ne fusionne jamais, n'enregistre jamais le consentement à la
+   délégation et ne pose jamais le label de nature d'un ticket. Sur un ticket `nature:user-facing`, le développeur sort la pull request du brouillon et conduit Human testing ; sur un ticket
+   `nature:internal`, que le développeur étiquette, c'est la session. C'est appliqué, pas seulement demandé : le [hook de garde](/fr/guide/workflow-system#qui-applique-une-echappatoire) refuse ces
+   appels à un agent qui s'exécute dans un worktree délégué, et les scripts du workflow y refusent eux-mêmes `ready-pr`. Quand un garde-fou refuse l'agent, il rapporte le refus et demande au
+   développeur : une échappatoire est à lui.
 5. **La session recueille les retours.** Un défaut, ou un travail IA restant après la validation, retourne au même agent, dans le même worktree, qui remet le ticket en AI testing. Sur un ticket
    complexe, la session conduit elle-même la phase d'examen, puisque l'agent qui a construit le travail ne le relit pas.
 

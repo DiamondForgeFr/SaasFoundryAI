@@ -160,6 +160,8 @@ files are left as they are.
 - the **hooks**: the one that puts the project status in front of the session at its start (`SessionStart`, which runs the project's own CLI and not a bare `sf`, see
   [the session-start hook](/cli/sf-status#the-session-start-hook)), and those that record each routed delegation in the clone's ledger (`SubagentStop` for the `sf-<tier>` agents, `PostToolUse` on the
   delegation tool), see [capture and signals](/cli/sf-agents#capture-and-signals);
+- the **guard hook** (`PreToolUse` on the Bash and PowerShell tools), which refuses an agent's own escape hatch, `--skip-local-ci` and nature label, and a delegated agent's merge, `ready-pr` and
+  delegation consent, see [the guard hook](/cli/sf-agents#the-guard-hook). v1.1.0 had none: the update adds it, next to a `PreToolUse` hook you wrote, which stays;
 - the **permission rules** that let the agent read a route, the delegation consent and the routing report without asking, while the forms that write evidence (`--record`, `--retry-of`) still ask.
 
 It is the same merge as `sf agents refresh --scope shared`, so `sf agents refresh` is no longer required after an update for these. The harness v4 → v5 migration (`wire-delegation-capture`) is that
@@ -183,6 +185,11 @@ the v1.1.0 text is recognised, byte for byte, and replaced in both files. Claude
 the text of the hook**: when `sf update` or `sf agents refresh` replaces the command in `.codex/hooks.json`, it prints
 `.codex/hooks.json: the delegation capture hook was replaced. Codex skips a changed project hook until it is trusted: review and trust it with /hooks, or delegations stay unrecorded.` Until you do,
 Codex delegations are not recorded. The notice is given once: the next update finds nothing to replace.
+
+**The guard hook is new, and Codex has to trust it too.** The same merge adds the `PreToolUse` guard to `.claude/settings.json` (matcher `Bash|PowerShell`) and to `.codex/hooks.json` (matcher `Bash`),
+after the `PreToolUse` hooks you wrote, which are kept. `sf update` and `sf agents refresh` print
+`.codex/hooks.json: the PreToolUse guard hook was added. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` once. Until you trust it, Codex
+does not run the guard; `sf status` says `guard declared` for Codex and never `enforced`. A project that changed a `PreToolUse` command of its own is not touched.
 
 No module version is bumped for this: the hook is delivered by the settings merge that runs on every update, not by an installer's file set, so there is no module migration to preview or run. A
 project that wrote exactly `sf status --claude-friendly --no-network` itself loses that line on the next update, since it cannot be told from the one the harness wrote; the resolved command takes its

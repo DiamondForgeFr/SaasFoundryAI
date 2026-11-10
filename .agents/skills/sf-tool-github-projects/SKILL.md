@@ -18,6 +18,8 @@ When a workflow step names a task kind, resolve its tier with
 model or an effort yourself. When the route fails or the agent cannot delegate, run the step
 in the session.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
+An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook
+refuses an agent call that sets one.
 The project manifest and workflow rules take precedence over generic skill examples,
 including branch names, commit formats, staging, pushing and approval requirements.
 Legacy /task examples name roles: use native delegation if available and authorized,
@@ -132,7 +134,8 @@ line that reads exactly `Resolves #<ticket>`, or GitHub's closing reference to i
 
 Every project gates review on its local CI: `create-pr` without `--draft`, `ready-pr` and `local-ci-gate` refuse a head commit on which a required status is missing or not green, and say which, where
 the required list comes from and the command that produces the statuses. A draft still opens early. `--skip-local-ci "<reason>"` bypasses the gate explicitly and records the reason on the pull
-request. The required statuses come from one of three sources, in this order:
+request: it is the developer's to apply, never an agent's (the guard hook refuses the call, see the escape hatches catalogue of the workflow skill). The required statuses come from one of three
+sources, in this order:
 
 1. **The manifest**: `workflow.localCi.requiredStatuses` in `.saasfoundry.json`. It always wins. An empty list is a deliberate "this project has no local CI": the gate prints a notice and checks
    nothing. Record it with `sf workflow set-local-ci <context...>`, `--from-molten`, `--none` or `--clear`.

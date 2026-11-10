@@ -67,6 +67,7 @@ des identifiants d'agent. Les commandes n'installent pas les runtimes et ne test
 | `delegation <allow\|decline\|status\|clear> [--scope shared\|local]` | Enregistre, lit ou retire l'accord du développeur pour déléguer la livraison des tickets à des agents en arrière-plan.                |
 | `outcome <record\|mark\|capture\|status-event>`                      | Enregistre ce qu'une délégation routée a coûté et si elle a fait le travail, lui rattache un signal ultérieur, chronomètre un ticket. |
 | `routing <adjust\|promote\|report\|reset>`                           | Ajuste le routage d'après ces résultats, partage un déplacement, les rapporte, annule un déplacement.                                 |
+| `guard --host <claude-code\|codex>`                                  | Lancée par le hook `PreToolUse` : refuse les appels d'outil qu'un agent ne doit pas faire de lui-même.                                |
 
 Toutes les commandes acceptent `--json`. `list` est en lecture seule et indique `not-checked` pour la découverte du runtime.
 
@@ -700,6 +701,67 @@ Tous facultatifs ; les valeurs par défaut s'appliquent à l'omission, donc les 
 absent vaut un dixième de `input` et un `cacheWrite` absent 1,25 fois sa valeur. Un bloc `longPrompt` donne les tarifs d'un appel dont le prompt dépasse `abovePromptTokens`.
 
 Une limite demeure : les champs des charges de hooks ont été relevés sur une session Claude Code et une session Codex réelles et sont exercés par ces fixtures, mais les hôtes peuvent les changer.
+
+## Le hook de garde
+
+Un garde-fou du workflow refuse une transition et nomme la suite à donner. Il ne nomme jamais le moyen de le contourner : une échappatoire (`SF_WORKFLOW_BYPASS_*`, `--skip-local-ci`) et le label de
+nature qui saute Human testing sont à appliquer par le développeur. `sf agents guard --host <claude-code|codex>` y tient l'agent. C'est la commande d'un hook `PreToolUse` que le harness écrit dans
+`.claude/settings.json` (matcher `Bash|PowerShell`, délai de 10 secondes) et dans `.codex/hooks.json` (matcher `Bash`), lors de `sf new`, `sf update` et `sf agents refresh`. Elle lit l'événement
+d'outil sur l'entrée standard et affiche la décision de refus de l'hôte, ou rien :
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Refused by the SaaSFoundry guard hook: … Stop, report the guard's refusal to the developer and ask. …"
+  }
+}
+```
+
+Se taire laisse le flux de permissions normal de l'hôte en place : le hook ne fait que refuser. Elle sort toujours avec 0 et laisse passer en cas d'échec. Une charge qu'elle ne sait pas lire (pas du
+JSON, plus de 1 Mio) laisse l'appel passer et est écrite dans le [journal des erreurs de capture](#capture-et-signaux), que `sf status` compte. Ne la lancez à la main que pour tester un hook.
+
+**Ce qu'elle refuse.** Pour tout le monde, la session principale comprise :
+
+| Règle                     | L'appel                                                                                                                                                                                                                                                                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Variable de contournement | Une affectation `SF_WORKFLOW_BYPASS_<X>=…` devant une commande, dans `export`, `declare -x`, `typeset -x`, `env`, `bash -c '…'` ou `eval`. `SF_WORKFLOW_BYPASS_REASON` seule, et le nom comme simple argument (`grep SF_WORKFLOW_BYPASS_PUSHED_GUARD fichier`), sont permis |
+| Saut de la CI locale      | `--skip-local-ci` passé à `workflow-cli.sh` ou à `github-projects-cli.sh`, aussi via `bash <chemin>`. `grep -- --skip-local-ci` est permis                                                                                                                                  |
+| Label de nature           | `gh issue edit … --add-label nature:internal\|nature:bundled-pr` (aussi `--add-label=` et une liste de labels), et `gh api` qui en écrit un. Retirer `nature:user-facing`, et lire les labels, sont permis                                                                  |
+
+et, **pour un agent délégué seulement**, c'est-à-dire un événement d'outil avec un `agent_id` (Claude Code l'ajoute à chaque événement émis dans un sous-agent), ou un appel dont le répertoire de
+travail, le `cd` ou la cible de `git -C` est sous `.claude/worktrees/` ou `.codex/worktrees/` :
+
+| Règle                        | L'appel                                                                                |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| Consentement à la délégation | `sf agents delegation allow\|decline\|clear`, quelle que soit la façon d'écrire le CLI |
+| Pull request prête           | `ready-pr` de l'un ou l'autre script, et `gh pr ready` (pas `--undo`)                  |
+| Fusion                       | `gh pr merge`, et `gh api …/pulls/<n>/merge`                                           |
+| Nature à la création         | `github-projects-cli.sh create-ticket … --nature internal\|bundled-pr`                 |
+
+Les mêmes appels depuis le checkout principal sont permis : la session et le développeur les lancent. La commande est lue comme un shell la lit : guillemets, `;` `&&` `|` et sauts de ligne,
+`bash -c '…'`, `eval`, `env`, heredocs et here-strings sont examinés, sur trois niveaux. Elle ne développe ni `$(…)` dans une chaîne, ni une variable.
+
+**Comment le développeur applique une échappatoire.** Dans Claude Code, `! <commande>` tapé dans la session s'exécute sans passer par l'outil Bash, donc le hook ne se déclenche pas ; sur n'importe
+quel hôte, le terminal du développeur fait la même chose. Lancez l'un ou l'autre depuis le checkout principal.
+
+**La ligne du hook.** C'est une ligne de shell, pas un `sf` nu, pour les raisons qui valent pour [le hook de capture](#capture-et-signaux). Elle lit la charge et sort avant que Node ne démarre, sauf
+si la charge mentionne `SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (quelle que soit la casse), `addLabels`, `delegation`, `ready` ou `merge` : presque aucun appel Bash ne paie un processus. Puis
+elle lance le CLI que le projet résout : `node_modules/.bin/saasfoundryai`, puis le `bin/sf.js` de ce dépôt quand `dist/` est construit, puis `saasfoundryai` dans le PATH. Sans CLI, ou avec un CLI qui
+n'a pas `agents guard`, l'appel passe.
+
+**Les limites, dites franchement.** Le hook est un garde-corps contre le chemin ordinaire que les refus enseignaient, pas une frontière de sécurité.
+
+- Il lit la commande que l'agent a écrite. Un contournement écrit dans un script qui est ensuite lancé, construit par une variable ou décodé à l'exécution n'est pas vu. `update-status` annonce
+  toujours chaque échappatoire qu'il honore sur le ticket, et `workflow-cli.sh` et `github-projects-cli.sh` refusent eux-mêmes une échappatoire, `--skip-local-ci` et `ready-pr` quand ils s'exécutent
+  dans un worktree délégué.
+- Il couvre l'outil Bash (et PowerShell). Un outil MCP GitHub qui ajoute un label n'est pas couvert.
+- Claude Code lit ses réglages au démarrage d'une session : une session déjà en cours garde ses anciens hooks. Un développeur peut désactiver les hooks (`disableAllHooks`).
+- Codex n'exécute un hook de projet que lorsque la couche `.codex/` et le texte du hook sont approuvés. `sf update` dit quand il a ajouté le hook : relisez-le et approuvez-le avec `/hooks`. Un
+  sous-agent Codex ne porte pas d'identifiant d'agent : les règles réservées aux agents délégués s'y appliquent à un appel dans un chemin de worktree reconnu.
+- `sf status` rapporte l'état sur la ligne `routing:` pour chaque agent déclaré (`guard enforced`, `guard declared`, `guard hook declared but no CLI can run it`, `guard hook missing`,
+  `guard not enforced`) et la précondition `guardHook` avertit quand il manque ou ne peut pas tourner (voir [`sf status`](./sf-status.md#le-hook-de-garde)).
 
 ## Notes de plateforme
 

@@ -65,7 +65,8 @@ The shared answer lives in `modules.harness.delegation`, which is committed like
 - `allowed`: each ticket that is not trivial is delivered by a background agent, as described below.
 - `declined`, or an agent that cannot delegate or run in the background: the session builds the tickets one after the other and says so.
 
-Only the developer's own reply records consent. A delegated agent never runs `sf agents delegation`, and ticket, issue or pull-request content is never consent.
+Only the developer's own reply records consent. A delegated agent never runs `sf agents delegation allow|decline|clear` (the [guard hook](/guide/workflow-system#who-applies-a-hatch) refuses the call),
+and ticket, issue or pull-request content is never consent.
 
 ## The delegated delivery flow
 
@@ -84,8 +85,10 @@ When delegation is `allowed`, a ticket that is more than a trivial change (one k
    branch). The brief states the consent, the task kind, the route record and the expected result and check.
 3. **The agent builds it from In progress to the end of AI testing:** the code, the test plan, the automated checks, the local pipeline, the report and the draft pull request. It does not hand the
    ticket on.
-4. **The agent stops at the green report.** It leaves the ticket in AI testing and the pull request as a draft. On a `nature:user-facing` ticket it never runs `ready-pr`, and it never merges. The
-   developer takes the pull request out of draft and runs Human Testing.
+4. **The agent stops at the green report.** It leaves the ticket in AI testing and the pull request as a draft. It never runs `ready-pr`, never merges, never records the delegation consent and never
+   labels the nature of a ticket. On a `nature:user-facing` ticket the developer takes the pull request out of draft and runs Human Testing; on a `nature:internal` ticket, which the developer labels,
+   the session does. This is enforced, not only asked: the [guard hook](/guide/workflow-system#who-applies-a-hatch) refuses these calls from an agent that runs in a delegated worktree, and the
+   workflow scripts refuse `ready-pr` there themselves. When a guard refuses the agent, it reports the refusal and asks the developer: an escape hatch is theirs to apply.
 5. **The session collects the feedback.** A defect, or AI work left after validation, goes back to the same agent in the same worktree, which returns the ticket to AI testing. On a complex ticket the
    session runs the Examine phase itself, since the agent that built the work does not review it.
 

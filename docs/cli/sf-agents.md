@@ -63,6 +63,7 @@ runtimes or probe their native discovery behavior.
 | `delegation <allow\|decline\|status\|clear> [--scope shared\|local]` | Records, reads or clears the developer's consent to delegate ticket delivery to background agents.           |
 | `outcome <record\|mark\|capture\|status-event>`                      | Records what a routed delegation cost and whether it did the job, ties a later signal to it, times a ticket. |
 | `routing <adjust\|promote\|report\|reset>`                           | Adjusts the routing from those outcomes, shares a move, reports the outcomes, undoes a move.                 |
+| `guard --host <claude-code\|codex>`                                  | Run by the `PreToolUse` hook: refuses the tool calls an agent must not make on its own.                      |
 
 All commands accept `--json`. `list` is read-only and reports runtime discovery as `not-checked`.
 
@@ -659,6 +660,65 @@ All optional; the defaults apply to omission, so older manifests keep validating
 missing `cacheWrite` 1.25 times it. A `longPrompt` block gives the rates of a call whose prompt is over `abovePromptTokens`.
 
 One limit remains: the hook payload fields were captured from a live Claude Code and a live Codex session and are exercised through those fixtures, but the hosts may change them.
+
+## The guard hook
+
+A workflow guard refuses a transition and names what to do next. It never names the way round the guard: an escape hatch (`SF_WORKFLOW_BYPASS_*`, `--skip-local-ci`) and the nature label that skips
+Human testing are the developer's to apply. `sf agents guard --host <claude-code|codex>` is what keeps an agent to that. It is the command of a `PreToolUse` hook that the harness writes into
+`.claude/settings.json` (matcher `Bash|PowerShell`, 10 second timeout) and `.codex/hooks.json` (matcher `Bash`), on `sf new`, `sf update` and `sf agents refresh`. It reads the tool event on stdin and
+prints the host's deny decision, or nothing:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Refused by the SaaSFoundry guard hook: … Stop, report the guard's refusal to the developer and ask. …"
+  }
+}
+```
+
+Staying silent leaves the host's normal permission flow in place: the hook only ever denies. It always exits 0 and fails open. A payload it cannot read (not JSON, larger than 1 MiB) lets the call
+through and is written to the [capture error log](#capture-and-signals), which `sf status` counts. Run it by hand only to test a hook.
+
+**What it refuses.** For everyone, the main session included:
+
+| Rule            | The call                                                                                                                                                                                                                                                               |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bypass variable | A `SF_WORKFLOW_BYPASS_<X>=…` assignment in front of a command, in `export`, `declare -x`, `typeset -x`, `env`, `bash -c '…'` or `eval`. `SF_WORKFLOW_BYPASS_REASON` alone, and the name as a plain argument (`grep SF_WORKFLOW_BYPASS_PUSHED_GUARD file`), are allowed |
+| Local CI skip   | `--skip-local-ci` given to `workflow-cli.sh` or `github-projects-cli.sh`, also through `bash <path>`. `grep -- --skip-local-ci` is allowed                                                                                                                             |
+| Nature label    | `gh issue edit … --add-label nature:internal\|nature:bundled-pr` (also `--add-label=` and a list of labels), and `gh api` that writes one. Removing `nature:user-facing`, and reading labels, are allowed                                                              |
+
+and, **for a delegated agent only**, that is a tool event with an `agent_id` (Claude Code adds it to every event fired inside a subagent), or a call whose working directory, `cd` or `git -C` target is
+under `.claude/worktrees/` or `.codex/worktrees/`:
+
+| Rule               | The call                                                                       |
+| ------------------ | ------------------------------------------------------------------------------ |
+| Delegation consent | `sf agents delegation allow\|decline\|clear`, whichever way the CLI is spelled |
+| Pull request ready | `ready-pr` of either script, and `gh pr ready` (not `--undo`)                  |
+| Merge              | `gh pr merge`, and `gh api …/pulls/<n>/merge`                                  |
+| Nature at creation | `github-projects-cli.sh create-ticket … --nature internal\|bundled-pr`         |
+
+The same calls from the primary checkout are allowed: the session and the developer run them. The command is read the way a shell reads it: quotes, `;` `&&` `|` and newlines, `bash -c '…'`, `eval`,
+`env`, heredocs and here-strings are looked into, to three levels. It does not expand `$(…)` in a string or a variable.
+
+**How the developer applies a hatch.** In Claude Code, `! <command>` typed in the session runs without going through the Bash tool, so the hook does not fire; on any host, the developer's own terminal
+does the same. Run either from the primary checkout.
+
+**The hook line.** It is a shell line, not a bare `sf`, for the reasons [the capture hook](#capture-and-signals) is. It reads the payload and leaves before Node starts unless the payload mentions
+`SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (in any case), `addLabels`, `delegation`, `ready` or `merge`, so almost no Bash call pays for a process. Then it runs the CLI the project resolves:
+`node_modules/.bin/saasfoundryai`, then this repository's own `bin/sf.js` when `dist/` is built, then `saasfoundryai` on the PATH. With no CLI, or one that lacks `agents guard`, the call goes through.
+
+**Limits, stated plainly.** The hook is a guardrail against the ordinary path the refusals used to teach, not a security boundary.
+
+- It reads the command the agent wrote. A bypass written into a script that is then run, built through a variable, or decoded at run time is not seen. `update-status` still announces every hatch it
+  honours on the ticket, and `workflow-cli.sh` and `github-projects-cli.sh` refuse a hatch, `--skip-local-ci` and `ready-pr` themselves when they run in a delegated worktree.
+- It covers the Bash tool (and PowerShell). A GitHub MCP tool that adds a label is not covered.
+- Claude Code reads its settings when a session starts: a session that is already running keeps its old hooks. A developer can switch hooks off (`disableAllHooks`).
+- Codex runs a project hook only once the `.codex/` layer and the hook's text are trusted. `sf update` says when it added the hook: review and trust it with `/hooks`. A Codex subagent carries no agent
+  id, so the delegated-only rules apply there to a call in a recognised worktree path.
+- `sf status` reports the state on the `routing:` line for each declared agent (`guard enforced`, `guard declared`, `guard hook declared but no CLI can run it`, `guard hook missing`,
+  `guard not enforced`) and the `guardHook` precondition warns when it is missing or cannot run (see [`sf status`](./sf-status.md#the-guard-hook)).
 
 ## Platform notes
 

@@ -139,8 +139,9 @@ sf workflow set-local-ci --none
 ```
 
 `update-status 42 "Human testing"` runs the gate after its pull request checks, on the draft pull request it matched, from any checkout, and fails closed: a pull request, a commit or statuses that
-cannot be read refuse. `--skip-local-ci "<reason>"` (after the ticket, on `update-status`) is the only hatch, recorded on the pull request. The same transition to **AI testing** is guarded by the
-pushed-commits guard: the ticket's tracked changes must be committed and its commits on `origin`, or the move is refused with the command to run.
+cannot be read refuse. `--skip-local-ci "<reason>"` (after the ticket, on `update-status`) is the only hatch, recorded on the pull request, and it is yours to apply: the refusal sends an agent back to
+you, and the [guard hook](/guide/workflow-system#who-applies-a-hatch) refuses an agent that passes the flag. The same transition to **AI testing** is guarded by the pushed-commits guard: the ticket's
+tracked changes must be committed and its commits on `origin`, or the move is refused with the command to run.
 
 ## Routing from `sf-workflow`
 
