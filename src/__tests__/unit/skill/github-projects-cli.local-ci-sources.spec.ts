@@ -142,7 +142,8 @@ esac
       expect(result.stderr).toContain('custom-e2e: failure')
       expect(result.stderr).not.toContain('custom-ci:')
       expect(result.stderr).toContain('2 status(es) of workflow.localCi.requiredStatuses')
-      expect(result.stderr).toContain('--skip-local-ci')
+      expect(result.stderr).not.toContain('--skip-local-ci')
+      expect(result.stderr).toContain('ask the developer')
     })
 
     it('does not read a broken Molten file when the manifest already says what is required', async () => {

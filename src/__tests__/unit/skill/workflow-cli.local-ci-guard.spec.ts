@@ -120,13 +120,14 @@ describe('sf-workflow CLI — local CI guard (→ Human testing)', () => {
     expect(readLog(sandbox.toolLogPath).findIndex((l) => l.startsWith('local-ci-gate'))).toBeLessThan(readLog(sandbox.toolLogPath).findIndex((l) => l.startsWith('update-status')))
   })
 
-  it('refuses with exit 2 when the gate is not green, moves nothing and names the only hatch', async () => {
+  it('refuses with exit 2 when the gate is not green, moves nothing and sends the agent to the developer', async () => {
     sandbox = await buildSandbox(DRAFT_PR)
     const res = await runCli(['update-status', '42', 'Human testing'], sandbox, { GATE_EXIT: '1' })
     expect(res.code).toBe(2)
     expect(res.stderr).toContain("cannot enter 'Human testing'")
     expect(res.stderr).toContain('local CI is not green')
-    expect(res.stderr).toContain('--skip-local-ci')
+    expect(res.stderr).not.toContain('--skip-local-ci')
+    expect(res.stderr).toContain('ask the developer')
     expect(statusCalls()).toEqual([])
   })
 
