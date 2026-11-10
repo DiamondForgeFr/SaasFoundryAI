@@ -316,6 +316,42 @@ developer_hatch_line() {
   echo "  If this guard cannot be satisfied, stop and ask the developer: an escape hatch is theirs to apply (${ESCAPE_HATCHES_DOC}, \"$1\")." >&2
 }
 
+# A delegated agent works in a worktree under .claude/worktrees/ or .codex/worktrees/ (#1106). It never applies
+# an escape hatch and never marks a pull request ready: the developer, or the coordinating session, runs those
+# from the primary checkout. The guard hook refuses the Bash calls that say so; this refusal holds against what a
+# hook cannot read (a script, a variable, an encoded command) and on every host, as long as the command runs in
+# the worktree. The SRS hatch is the one transition-drafting sets itself, and the reason switches nothing off.
+in_delegated_worktree() {
+  local where
+  for where in "$(pwd -P)" "$(git rev-parse --show-toplevel 2>/dev/null)"; do
+    case "$where/" in
+      */.claude/worktrees/* | */.codex/worktrees/*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# refuse_in_delegated_worktree <command> [argument...]: exits 2 when the command applies a hatch or marks a pull
+# request ready from a delegated worktree; returns 0 otherwise.
+refuse_in_delegated_worktree() {
+  local command=$1 var arg why=""
+  shift
+  in_delegated_worktree || return 0
+  for var in $(compgen -v SF_WORKFLOW_BYPASS_); do
+    [[ "$var" == "SF_WORKFLOW_BYPASS_REASON" || "$var" == "SF_WORKFLOW_BYPASS_SRS_GUARD" ]] && continue
+    [[ "${!var}" == "1" ]] && why="an escape hatch is set in the environment"
+  done
+  for arg in "$@"; do
+    [[ "$arg" == "--skip-local-ci" || "$arg" == "--skip-local-ci="* ]] && why="the local CI gate is skipped"
+  done
+  [[ "$command" == "ready-pr" ]] && why="the pull request is marked ready"
+  [[ -z "$why" ]] && return 0
+  echo -e "${RED}✗ ${command} refused: ${why}, and a delegated worktree never does that.${NC}" >&2
+  echo "  This checkout is the worktree of a delegated agent. An escape hatch, and taking a pull request out of draft, belong to the developer or the coordinating session: they run it from the primary checkout." >&2
+  echo "  Stop with the ticket in AI Testing, report this refusal and ask the developer." >&2
+  exit 2
+}
+
 check_srs_guard() {
   # Returns 0 if the caller may proceed, 1 if blocked (message already printed).
   local ticket=$1
@@ -2236,6 +2272,7 @@ case "$COMMAND" in
       echo "Usage: workflow-cli.sh update-status <ticket> <status-name> [--skip-local-ci \"<reason>\"]" >&2
       exit 1
     fi
+    refuse_in_delegated_worktree update-status ${LOCAL_CI_SKIP_REASON:+--skip-local-ci}
     announce_bypasses "$TICKET" "$TARGET"
     if ! check_srs_guard "$TICKET" "$TARGET"; then
       exit 2
@@ -2392,6 +2429,7 @@ case "$COMMAND" in
 
   create-pr|ready-pr|draft-pr|local-ci-gate)
     load_config
+    refuse_in_delegated_worktree "$COMMAND" "$@"
     TICKET=$1
     ISSUE_TYPE=$(get_ticket_issue_type "$TICKET" 2>/dev/null || true)
     if [[ "$ISSUE_TYPE" == "sf-epic" ]]; then
