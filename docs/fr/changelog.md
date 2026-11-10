@@ -6,25 +6,6 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
-### Ajouts
-
-- Un hook de garde `PreToolUse` refuse les appels Bash par lesquels un agent contournait de lui-même un garde-fou du workflow : une affectation `SF_WORKFLOW_BYPASS_*`, `--skip-local-ci`, et
-  `nature:internal` ou `nature:bundled-pr` posé sur un ticket ; et, pour un agent délégué, `sf agents delegation allow|decline|clear`, `ready-pr`, `gh pr ready`, `gh pr merge` et
-  `create-ticket … --nature internal`. Il est écrit dans `.claude/settings.json` et `.codex/hooks.json` par `sf new`, `sf update` et `sf agents refresh`, exécute `sf agents guard`, et laisse passer en
-  cas d'échec. `sf status` rapporte son état sur la ligne `routing:` et dans la précondition `guardHook`. Codex exécute le hook une fois que vous l'avez approuvé avec `/hooks`
-  ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-- `workflow-cli.sh` et `github-projects-cli.sh` refusent eux-mêmes une échappatoire, `--skip-local-ci` et `ready-pr` quand ils s'exécutent dans un worktree délégué (`.claude/worktrees/` ou
-  `.codex/worktrees/`), ce qui tient face à ce qu'un hook ne peut pas lire et sur tous les hôtes ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-
-### Modifications
-
-- Un refus de garde-fou n'indique plus à l'agent comment le contourner. Il garde la prochaine commande légitime et se termine par une ligne qui renvoie l'agent vers le développeur, en nommant le
-  garde-fou et sa section de `escape-hatches.md` ; la commande de relabellisation du garde de nature a disparu, tout comme la ligne `Escape hatch (rare): SF_WORKFLOW_BYPASS_*=1`. Un label de nature
-  qui échoue à `create-ticket` demande au développeur de l'ajouter au lieu d'afficher une commande. Une échappatoire est à appliquer par le développeur, avec `!` dans Claude Code ou depuis son propre
-  terminal au checkout principal ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-- Les agents de palier et les instructions générées disent qu'une échappatoire et le label de nature d'un ticket sont au développeur, et qu'un agent délégué n'exécute jamais `ready-pr`, quelle que
-  soit la route du ticket ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106)).
-
 ## [1.1.0] - 2026-11-01
 
 Version de fonctionnalités. La délégation des tickets est désormais routée selon le type de tâche, les instructions des agents passent dans `AGENTS.md`, et une exigence fonctionnelle existante peut
