@@ -84,8 +84,28 @@ names an account or entity that does not exist answers `404`, and an account the
 The services check what the guard cannot see. `PATCH /accounts/:id/users/:userId` checks each change in the scope it acts on (`ACCOUNT_USER_MANAGEMENT` at account scope to change the active flag,
 `USER_ROLE_ALLOCATION` at account scope for the account roles, `USER_ROLE_ALLOCATION` in that entity's scope for each entity slice), and `POST /invitations`, `POST /entities` and the role routes check
 the permission in the scope of each target. An entity administrator therefore reads the users and roles of its account, invites users and allocates roles inside its own entity and that entity's
-subtree, and manages the custom roles of `ENTITY` scope of the account (these are account-wide role definitions, not limited to its own entity). It changes nothing else at the account level: no
-account role, no user status, no account setting.
+subtree, and manages the custom roles of `ENTITY` scope that are used only inside that subtree (see below). It changes nothing else at the account level: no account role, no user status, no account
+setting.
+
+### Who may change a role
+
+The role routes (`POST /accounts/:id/roles`, `POST /accounts/platform/roles`, `PATCH` and `DELETE /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`) carry a role id, so the service
+decides, and answers `403`:
+
+| Role                                        | Who may create, edit, toggle or delete it                                                                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| System role or global template              | Only a holder of `ROLE_CUSTOM_MANAGEMENT` through a **platform** role. A platform role that merely reads the console does not count.          |
+| Custom `ACCOUNT` role of account A          | `ROLE_CUSTOM_MANAGEMENT` on A (an account role on A, or a platform role). An entity role never counts.                                        |
+| Custom `ENTITY` role of account A           | `ROLE_CUSTOM_MANAGEMENT` in **every entity the role is assigned in**: the account administrator, or an entity administrator of their subtree. |
+| Custom `ENTITY` role of A, assigned nowhere | `ROLE_CUSTOM_MANAGEMENT` on A or on one of its entities.                                                                                      |
+
+Two more rules hold for everyone below the platform:
+
+- **Nobody grants what they do not hold.** Each permission or section a request adds to a role must be held by the caller where the role applies; sending back what the role already has, or removing
+  from it, needs nothing more. A user who holds a custom role cannot extend it to climb above its editor.
+- **No account or entity role carries a platform section.** A `PLATFORM_ADMINISTRATION` section is refused on an `ACCOUNT` or `ENTITY` role, whoever asks, the platform included.
+
+System roles stay renamable by nobody and deletable by nobody; a platform administrator maintains their grants.
 
 ::: warning Scope-less endpoints
 
@@ -114,6 +134,12 @@ Three things change for code you wrote:
 An invitation to an address that already has a pending one now carries over its targets and roles only if you are allowed to grant them: the merged invitation is authorized as if you had submitted it.
 The `accountIds`, `entityIds` and `roleIds` lists are deduplicated and capped (100, 100 and 20).
 
+Before 1.1.1 the role routes also let any holder of `ROLE_CUSTOM_MANAGEMENT` (the seeded `entity-admin` among them) rewrite the grants of a system role for the whole platform, put a platform section
+on an account or entity role, and edit the `ENTITY` roles of a sibling entity or extend a role it holds itself. 1.1.1 applies the rules of "Who may change a role" above. The fix lives in
+`account.service.ts`, `account-access.service.ts`, `permission-checker.ts` and the web page `account-roles.tsx` (plus the test mock `service-mocks.ts`), merged by `sf update` in the same way; no
+module migration is needed, because no file is renamed, split or added. If you call `getPermissionChecker` or `ScopedPermissionChecker` yourself, the new third argument is optional. A non-platform
+caller that touches a system role, or an entity administrator that creates an `ACCOUNT` role, now gets `403` where it used to get `401`.
+
 :::
 
 ## Roles included in a generated project
@@ -128,8 +154,9 @@ The `accountIds`, `entityIds` and `roleIds` lists are deduplicated and capped (1
 | `entity-user`    | Entity   | Member restricted to an entity                                    |
 | `entity-admin`   | Entity   | Administration of an entity and its governed subtree              |
 
-These are protected system templates, not hard-coded conditionals. Administrators can maintain their grants through the supported role API, and database updates preserve those choices. Account-owned
-custom roles can be created from the generated role editor; their permissions are filtered by `applicableScopes` so an entity role cannot receive a platform-only action.
+These are protected system templates, not hard-coded conditionals. Platform administrators can maintain their grants through the supported role API, and database updates preserve those choices.
+Account-owned custom roles can be created from the generated role editor; their permissions are filtered by `applicableScopes` so an entity role cannot receive a platform-only action, and their editor
+can only grant what it holds itself.
 
 ## Invitations preserve the same boundary
 
