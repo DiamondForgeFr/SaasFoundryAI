@@ -1028,7 +1028,8 @@ class AccountServiceScopeTest extends AccountServiceTest {
         ])
         const tx = {
           user: { update: jest.fn(), findUniqueOrThrow: jest.fn().mockResolvedValue({ id: targetId, isActive: true }) },
-          userRoleAssignment: { deleteMany: jest.fn(), createMany: jest.fn() }
+          userRoleAssignment: { deleteMany: jest.fn(), createMany: jest.fn() },
+          userToken: { deleteMany: jest.fn() }
         }
         prisma.$transaction.mockImplementation(async (callback: (client: unknown) => unknown) => callback(tx))
         return { prisma, tx, checker }
@@ -1050,6 +1051,23 @@ class AccountServiceScopeTest extends AccountServiceTest {
         await this.service.updateAccountUser(actorId, accountId, targetId, { isActive: false })
 
         expect(tx.user.update).toHaveBeenCalledWith({ where: { id: targetId }, data: { isActive: false } })
+      })
+
+      it('ends the sessions of a deactivated user: its refresh tokens are deleted in the same transaction', async () => {
+        const { tx } = given({ targetIsActive: true })
+
+        await this.service.updateAccountUser(actorId, accountId, targetId, { isActive: false })
+
+        expect(tx.userToken.deleteMany).toHaveBeenCalledWith({ where: { userId: targetId, type: 'SESSION_REFRESH' } })
+      })
+
+      it('deletes no token on reactivation', async () => {
+        const { tx } = given({ targetIsActive: false })
+
+        await this.service.updateAccountUser(actorId, accountId, targetId, { isActive: true })
+
+        expect(tx.user.update).toHaveBeenCalledWith({ where: { id: targetId }, data: { isActive: true } })
+        expect(tx.userToken.deleteMany).not.toHaveBeenCalled()
       })
 
       it('treats an unchanged isActive as a no-op: no permission needed, nothing written', async () => {
