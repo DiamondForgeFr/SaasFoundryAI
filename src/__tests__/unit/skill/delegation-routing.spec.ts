@@ -211,4 +211,29 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(doc('statuses/5-human-testing.md')).toMatch(/hands the defect to the ticket's own agent/)
     expect(doc('statuses/5-human-testing.md')).toMatch(/AI work the validation leaves/)
   })
+
+  // The test strategy (#1157) lives in the status documents, so the brief does not repeat it: the affected tests
+  // while the agent works, the full suites once at the end of AI testing, the ready pull request's CI as the final check.
+  it('has the status documents hold the test strategy: affected tests while working, full suites once at AI testing (#1157)', () => {
+    const doc = (name: string) => {
+      const content = all.find(({ file }) => file === name)?.content
+      return content === undefined ? undefined : flat(content)
+    }
+    for (const name of ['statuses/3-in-progress.md', 'statuses/4-ai-testing.md', 'statuses-solo/3-ai-testing.md']) {
+      const content = doc(name)
+      if (content === undefined) continue // statuses-solo ships with the template only
+      const lower = content.toLowerCase()
+      expect({ name, strategy: content.includes('**Test strategy**') }).toEqual({ name, strategy: true })
+      expect({ name, once: lower.includes('full suites run once, at the end of ai testing') }).toEqual({ name, once: true })
+      expect({ name, rebase: lower.includes('rerun the affected tests') }).toEqual({ name, rebase: true })
+      expect({ name, ci: lower.includes("the ready pull request's ci stays the final check") }).toEqual({ name, ci: true })
+    }
+    expect(doc('statuses/3-in-progress.md')).toContain('while you work, run the tests the change affects')
+    expect(doc('statuses/4-ai-testing.md')).toContain('not after every iteration')
+    const solo = doc('statuses-solo/2-in-progress.md')
+    if (solo !== undefined) expect(solo).toContain('the full suites run once, at AI Testing')
+    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    expect(skill).toContain('which hold the test strategy')
+    expect(skill).toContain('the brief does not restate it')
+  })
 })

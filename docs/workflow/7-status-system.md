@@ -51,7 +51,9 @@ Before AI testing, the implementation must compile, lint, pass the relevant test
 
 ## 4. AI testing — build the evidence
 
-The agent publishes a test plan, runs the configured automated and manual scenarios, documents results, and fixes failures before proceeding. Complex work also receives independent adversarial review.
+The agent publishes a test plan, runs the configured automated and manual scenarios, documents results, and fixes failures before proceeding. The full suites run once, here, at the end of AI testing,
+not after every iteration: while it works, the agent runs the tests its change affects, and after a rebase it reruns those rather than everything. Complex work also receives independent adversarial
+review.
 
 The agent opens the **draft pull request** during AI testing at the latest, or reuses the one it opened at the first push. The draft contains the diff, test plan and current evidence but does not
 start ready-PR CI yet. This gives Human testing a stable artifact to validate.

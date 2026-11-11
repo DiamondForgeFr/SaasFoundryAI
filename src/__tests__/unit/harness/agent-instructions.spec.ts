@@ -196,6 +196,16 @@ describe('shared agent instructions', () => {
     }
   })
 
+  // The test strategy (#1157): affected tests while the agent works, the full suites once at AI Testing, the CI as the final check
+  it('has the delegated agent run the affected tests while it works and the full suites once, in the generated region (#1157)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/runs the tests the change\s+affects while it works, and the full suites once, at the end of AI Testing/)
+      expect(instructions).toMatch(/After a rebase it reruns the affected tests, and the full suites only when the rebase\s+brought changes to shared files/)
+      expect(instructions).toMatch(/ready pull request's CI stays the final check/)
+      expect(instructions).toMatch(/the workflow status documents hold it/)
+    }
+  })
+
   // The routing learns from the delegations it routes (#1035): the session issues a route record, puts its id in the
   // brief, and follows the workflow skill for the rest. The always-loaded text stays short (Examine finding 27): two
   // lines and a pointer, the whole rule lives in the skill.

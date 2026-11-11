@@ -461,10 +461,11 @@ SF-DELEGATION: pass route=0a1b2c3d4e5f60718293 checks=type-check,automated-tests
 ```
 
 `pass` means the check the brief named was run and met; `fail` that it failed or the result is incomplete. The checks are the codes of the calibration library: `self-review`, `type-check`,
-`automated-tests`, `integration-tests`, `independent-review`, `security-tests`; the prompt lists them, because a delegate that is not told the codes writes free text. A `pass` that names no check, or
-only `self-review`, is recorded as unknown. The line is the **last non-empty line of the message outside a code fence**. The fences are tracked over the **whole message** from its first line (a fence
-closes only with the same mark, at least as long, and nothing after it), however long the message is, so an example quoted earlier or a long fenced block cannot decide the verdict. Any other key on
-the line (`kind=`, `ticket=`, `trial=`) is ignored. A message without the line is an unknown outcome, and the delegate is asked for it once (next section).
+`automated-tests`, `affected-tests` (the tests a change affects, run while it works), `integration-tests`, `independent-review`, `security-tests`; the prompt lists them, because a delegate that is not
+told the codes writes free text. A `pass` that names no check, or only `self-review`, is recorded as unknown. The line is the **last non-empty line of the message outside a code fence**. The fences
+are tracked over the **whole message** from its first line (a fence closes only with the same mark, at least as long, and nothing after it), however long the message is, so an example quoted earlier
+or a long fenced block cannot decide the verdict. Any other key on the line (`kind=`, `ticket=`, `trial=`) is ignored. A message without the line is an unknown outcome, and the delegate is asked for
+it once (next section).
 
 ### Asking for the missing line
 

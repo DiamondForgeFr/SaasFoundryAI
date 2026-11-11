@@ -210,11 +210,12 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
    name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (`statuses/3-in-progress.md`). When
    the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it
    (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
-2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`: it delivers the children, posts the `## Test plan` comment, runs the automated and heavy checks, posts
-   the `## Test report` comment and opens the draft PR, then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human
-   Testing route, the session on the other) and never records the delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md`
-   names. The session runs `ready-pr <ticket>` and `draft-pr <ticket>` from the primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the
-   ticket's one open pull request on GitHub and check its head on origin (several candidates are listed: pick one with `--pr <number>`).
+2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI
+   testing; the brief does not restate it): it delivers the children, posts the `## Test plan` comment, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR,
+   then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never
+   records the delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md` names. The session runs `ready-pr <ticket>` and
+   `draft-pr <ticket>` from the primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the ticket's one open pull request on GitHub and check
+   its head on origin (several candidates are listed: pick one with `--pr <number>`).
 3. **One agent per ticket.** Several tickets may be in flight, each with its own agent and worktree. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own,
    handed to its own agent.
 4. **Hand-backs.** A defect reported in Human Testing or in review, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree,

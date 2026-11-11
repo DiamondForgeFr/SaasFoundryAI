@@ -11,12 +11,12 @@ mandatory_actions:
   - Move ticket to `In Progress`
   - Create subtasks as real GitHub issues (NOT checkboxes)
   - Deliver each child ticket in its declared mode; close it immediately when its PR is merged or its bundled commit is validated
-  - Final validation — build, lint, unit tests green
+  - Final validation — build, lint, and the tests the change affects green (the full suites run once, at AI Testing)
   - Push branch
 exit_conditions:
   - Code compiles without errors
   - Lint passes
-  - Existing tests pass
+  - The tests the change affects pass
   - Branch pushed to remote
 next_status: AI Testing
 ---
@@ -63,9 +63,12 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child
       that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
 - [ ] **Per normal child:** branch → code → PR → verify merge → `update-status <child> Done`; per bundled child: one atomic commit on the parent's branch → validate → `update-status <child> Done`
-- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → `npm test` → commit and push. Child tickets may continue through their own
-      lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have, and names the
-      command to run (a bundled child is checked on its delivery parent's branch)
+- [ ] **Test strategy** — while you work, run the tests the change affects: the related tests of the touched files (the runner's related-tests option, or the project's own selection when it declares
+      one), not the full suites, and not after every iteration. The full suites run once, at the end of AI Testing. After a rebase, rerun the affected tests, not everything, unless the rebase brought
+      changes to shared files (build, configuration, test helpers). The ready pull request's CI stays the final check.
+- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → the tests the change affects → commit and push. Child tickets may continue
+      through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have,
+      and names the command to run (a bundled child is checked on its delivery parent's branch)
 
 ## Errors to avoid
 
