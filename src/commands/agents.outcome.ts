@@ -275,7 +275,7 @@ export function registerOutcomeCommands(agents: Command): Command {
     .option('--output-tokens <n>', 'Output tokens of the whole run')
     .option('--cache-read-tokens <n>', 'Cache read tokens')
     .option('--cache-write-tokens <n>', 'Cache write tokens')
-    .option('--checks <codes>', 'Comma-separated check codes the delegate ran: self-review, type-check, automated-tests, integration-tests, independent-review, security-tests')
+    .option('--checks <codes>', 'Comma-separated check codes the delegate ran: self-review, type-check, automated-tests, affected-tests, integration-tests, independent-review, security-tests')
     .option('--trial', 'The run tried a cheaper tier than the one the kind is routed to')
     .option('--evidence <ref>', 'A short reference to the evidence (a commit, a report); repeatable', collect, [])
     .option('--json', 'Output the versioned result')

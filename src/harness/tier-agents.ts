@@ -55,7 +55,7 @@ export const WHOLE_TICKET_LINE =
  */
 export const DELEGATION_REPORT_LINE =
   'End your final message with one line, `SF-DELEGATION: <pass|fail> route=<id from the brief> checks=<codes>`, ' +
-  'the codes being what you really ran among type-check, automated-tests, integration-tests, independent-review, security-tests, self-review (`none` if nothing): ' +
+  'the codes being what you really ran among type-check, automated-tests, affected-tests, integration-tests, independent-review, security-tests, self-review (`none` if nothing): ' +
   '`pass` only if the check the brief named was run and met. Without the line the outcome is recorded as unknown.'
 
 function instructions(assignment: TierAssignment): string {

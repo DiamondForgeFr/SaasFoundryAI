@@ -67,7 +67,7 @@ l’air authentifiée et ne l’est pas.
 Le [registre des délégations](/fr/cli/sf-agents#delegations-mesurees-et-routage-ajuste) tient donc son propre enregistrement et réutilise ce que cette bibliothèque définit déjà :
 
 - les **codes de résultat** (`success`, `execution-failed`, `validation-failed`, `candidate-unavailable`, `outcome-unknown`, `cancelled`) et les **codes de contrôle** (`self-review`, `type-check`,
-  `automated-tests`, `integration-tests`, `independent-review`, `security-tests`) ;
+  `automated-tests`, `affected-tests`, `integration-tests`, `independent-review`, `security-tests`) ;
 - le **filtre de secrets** appliqué à chaque champ de texte libre ;
 - la **règle de censure** : une exécution sans résultat exploitable est conservée pour l’audit et ne compte jamais comme un succès, un échec ni un coût ;
 - l’**argent exact** : chaînes décimales et rationnels exacts, arrondis une seule fois vers le haut pour l’affichage.

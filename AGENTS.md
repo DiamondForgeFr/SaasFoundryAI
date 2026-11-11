@@ -297,6 +297,8 @@ team's default; a clone may override it locally, and the line reports the effect
 - `declined`, or the current agent cannot delegate or run in the background: deliver the tickets
   in the session, one after the other, and say so explicitly.
 
+A delegated agent runs the tests the change affects while it works, and the full suites once, at the end of AI Testing, not after every iteration. After a rebase it reruns the affected tests, and the full suites only when the rebase brought changes to shared files. The ready pull request's CI stays the final check. The brief does not restate this rule: the workflow status documents hold it.
+
 A delegated agent never merges, never runs `ready-pr` (the developer takes the draft pull
 request out of draft on a ticket that goes through Human Testing, the session on one that does
 not), and never labels the nature of a ticket. The session collects the Human Testing feedback and

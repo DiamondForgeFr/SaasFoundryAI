@@ -491,11 +491,11 @@ SF-DELEGATION: pass route=0a1b2c3d4e5f60718293 checks=type-check,automated-tests
 ```
 
 `pass` signifie que le contrôle nommé par le brief a été exécuté et satisfait ; `fail` qu'il a échoué ou que le résultat est incomplet. Les contrôles sont les codes de la bibliothèque de calibrage :
-`self-review`, `type-check`, `automated-tests`, `integration-tests`, `independent-review`, `security-tests` ; le prompt les liste, car un délégué à qui on ne les donne pas écrit du texte libre. Un
-`pass` qui ne nomme aucun contrôle, ou seulement `self-review`, est enregistré comme inconnu. La ligne est la **dernière ligne non vide du message hors d'un bloc de code**. Les blocs de code sont
-suivis sur **tout le message** depuis sa première ligne (un bloc ne se ferme qu'avec la même marque, au moins aussi longue, et rien après), quelle que soit la longueur du message : un exemple cité
-plus haut ou un long bloc de code ne peut pas décider du verdict. Toute autre clé de la ligne (`kind=`, `ticket=`, `trial=`) est ignorée. Un message sans cette ligne est un résultat inconnu, et le
-délégué la réclame une fois (section suivante).
+`self-review`, `type-check`, `automated-tests`, `affected-tests` (les tests que le changement touche, lancés pendant le travail), `integration-tests`, `independent-review`, `security-tests` ; le
+prompt les liste, car un délégué à qui on ne les donne pas écrit du texte libre. Un `pass` qui ne nomme aucun contrôle, ou seulement `self-review`, est enregistré comme inconnu. La ligne est la
+**dernière ligne non vide du message hors d'un bloc de code**. Les blocs de code sont suivis sur **tout le message** depuis sa première ligne (un bloc ne se ferme qu'avec la même marque, au moins
+aussi longue, et rien après), quelle que soit la longueur du message : un exemple cité plus haut ou un long bloc de code ne peut pas décider du verdict. Toute autre clé de la ligne (`kind=`,
+`ticket=`, `trial=`) est ignorée. Un message sans cette ligne est un résultat inconnu, et le délégué la réclame une fois (section suivante).
 
 ### Réclamer la ligne manquante
 

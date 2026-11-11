@@ -39,6 +39,17 @@ describe('the delegate line (#1035)', () => {
     })
   })
 
+  // The affected tests a delegate ran while it worked are a real check, next to the full suites (#1157)
+  it('accepts affected-tests as a check code, next to automated-tests', () => {
+    expect(parseDelegationLine('Done.\n\nSF-DELEGATION: pass route=0123456789abcdef0123 checks=affected-tests,automated-tests')).toEqual({
+      verdict: 'pass',
+      route: '0123456789abcdef0123',
+      checks: ['affected-tests', 'automated-tests'],
+      ignored: []
+    })
+    expect(CHECKS).toContain('affected-tests')
+  })
+
   it('reads a claim of kind, ticket or trial as noise: it is reported as ignored, never believed', () => {
     expect(parseDelegationLine('SF-DELEGATION: pass route=0123456789abcdef0123 kind=review ticket=1 trial=yes checks=type-check')).toEqual({
       verdict: 'pass',

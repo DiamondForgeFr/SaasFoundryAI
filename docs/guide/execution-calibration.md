@@ -65,7 +65,7 @@ a prior from public benchmarks. A project corrects it from its own runs with the
 The [delegation ledger](../cli/sf-agents.md#measured-delegations-and-the-adjusted-routing) therefore keeps its own record and reuses what this library already defines:
 
 - the **outcome codes** (`success`, `execution-failed`, `validation-failed`, `candidate-unavailable`, `outcome-unknown`, `cancelled`) and the **check codes** (`self-review`, `type-check`,
-  `automated-tests`, `integration-tests`, `independent-review`, `security-tests`);
+  `automated-tests`, `affected-tests`, `integration-tests`, `independent-review`, `security-tests`);
 - the **secret filter** applied to every free-text field;
 - the **censoring rule**: a run without a usable outcome is kept for audit and never counts as a success, a failure or a cost;
 - **exact money**: decimal strings and exact rationals, rounded up once for display.

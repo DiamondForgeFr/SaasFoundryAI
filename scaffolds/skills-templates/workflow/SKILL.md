@@ -164,7 +164,7 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
    `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it
    (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local
    `HEAD`, found on its own or passed as `--head <ticket branch>`.
-2. **The agent's line.** It follows the In progress and AI Testing status documents: it delivers the children, posts the
+2. **The agent's line.** It follows the In progress and AI Testing status documents, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI testing; the brief does not restate it): it delivers the children, posts the
    test plan, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR, then stops with the ticket
    still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never records the
    delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition the AI

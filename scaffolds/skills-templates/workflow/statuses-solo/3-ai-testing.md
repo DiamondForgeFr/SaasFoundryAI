@@ -37,7 +37,8 @@ and review, then roll directly to `Done` after the last child reaches `Done`.
 - [ ] **Test plan** — post a comment starting with the heading `## Test plan`, covering: setup, nominal + edge scenarios, expected results per scenario, non-regression coverage
 - [ ] **Move ticket** to `AI Testing` via `workflow-cli.sh update-status`. The pushed-commits guard checks the work first: a tracked file that is not committed, a commit `origin` does not have, a branch
       `origin` lacks or an unreachable `origin` refuses the move and names the command to run (commit, then `git push`). Untracked files only warn
-- [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`
+- [ ] **Automated tests:** `npm run build` → `npm run lint` → `npm run type-check` (if TS) → `npm run test:unit`: the full suites, run once here at the end of AI testing (Test strategy below)
+- [ ] **Test strategy** — the full suites run once, at the end of AI testing, not after every iteration. After a fix or a rebase, rerun the affected tests (the related tests of the touched files), and the full suites only when the rebase brought changes to shared files (build, configuration, test helpers). The local CI gate checks the exact head, and the ready pull request's CI stays the final check.
 - [ ] **Heavy local validation** — run the project's declared local pipeline on the pushed commit before marking the PR ready. A Molten pipeline counts only when `.molten/project.json` declares at least
       one job in `ci.jobs` and `molten ci status` answers (exit 0, 1 or 2: a MoltenTerm runner is reachable): then run `molten ci run <branch>` and record its verdict. A file with no job in `ci.jobs`
       declares no pipeline (`molten ci status` says "the pipeline declares no CI job", `sf status` shows `local-ci: npm suite`). Otherwise run the project's configured build/integration suite (for example `npm test` and `npm run test:pre-push`
