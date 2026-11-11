@@ -133,6 +133,45 @@ describe('AccountAccessService (scope resolution)', () => {
       expect(select.role.select.permissionsLinked).toEqual({ select: { permission: { select: { name: true } } } })
     })
 
+    it('loads the active sections only when asked (withSubModules), and answers them per scope', async () => {
+      givenEntityTree()
+      const withSections = (row: ReturnType<typeof accountRow> | ReturnType<typeof entityRow>, subModuleIds: number[]) => ({
+        ...row,
+        role: { ...row.role, subModulesLinked: subModuleIds.map((subModuleId) => ({ subModuleId })) }
+      })
+      givenAssignments(withSections(accountRow(A, {}), [10]), withSections(entityRow('e1', A, {}), [11]))
+
+      const checker = await service.getPermissionChecker('user-1', ['e3', 's1'], { withSubModules: true })
+
+      const { select } = prisma.userRoleAssignment.findMany.mock.calls[0][0]
+      expect(select.role.select.subModulesLinked).toEqual({ where: { subModule: { isActive: true } }, select: { subModuleId: true } })
+      expect(checker.hasSubModule(10, { kind: 'ACCOUNT', accountId: A })).toBe(true)
+      expect(checker.hasSubModule(10, { kind: 'ACCOUNT', accountId: B })).toBe(false)
+      expect(checker.hasSubModule(11, { kind: 'ACCOUNT', accountId: A })).toBe(false)
+      expect(checker.hasSubModule(11, { kind: 'ACCOUNT', accountId: A, includeEntityAssignments: true })).toBe(true)
+      expect(checker.hasSubModule(11, { kind: 'ENTITY', entityId: 'e3' })).toBe(true)
+      expect(checker.hasSubModule(11, { kind: 'ENTITY', entityId: 's1' })).toBe(false)
+    })
+
+    it('refuses to answer for sections it was not built with (a programming error, not a silent denial)', async () => {
+      givenAssignments(accountRow(A, {}))
+      const checker = await service.getPermissionChecker('user-1')
+
+      expect(() => checker.hasSubModule(10, { kind: 'ACCOUNT', accountId: A })).toThrow('without the sections')
+    })
+
+    it('hasOnPlatform counts PLATFORM assignments only, whatever the user holds elsewhere', async () => {
+      givenAssignments(platformRow({ subModules: ['PLATFORM_ACCOUNTS'] }), accountRow(A, { permissions: ['ROLE_CUSTOM_MANAGEMENT'] }), entityRow('e1', A, { permissions: ['ROLE_CUSTOM_MANAGEMENT'] }))
+      const reader = await service.getPermissionChecker('user-1')
+
+      expect(reader.hasOnPlatform('ROLE_CUSTOM_MANAGEMENT')).toBe(false)
+
+      givenAssignments(platformRow({ permissions: ['ROLE_CUSTOM_MANAGEMENT'] }))
+      const admin = await service.getPermissionChecker('user-1')
+
+      expect(admin.hasOnPlatform('ROLE_CUSTOM_MANAGEMENT')).toBe(true)
+    })
+
     it('asserts with a 403 and the given message', async () => {
       givenAssignments()
       const checker = await service.getPermissionChecker('user-1')

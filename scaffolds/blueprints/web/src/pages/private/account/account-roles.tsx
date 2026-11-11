@@ -407,6 +407,17 @@ export function AccountRoles() {
     return !role.isSystem && !role.isGlobal && Boolean(accountId) && role.scope !== 'PLATFORM'
   }
 
+  /**
+   * Edit / delete affordances of the detail sheet. A system role or a global template belongs to the
+   * platform (account.service.ts:assertRoleAuthority), so only a platform admin sees them there. The
+   * server still decides the rest: an ENTITY role used in an entity the caller does not administer, or
+   * a grant the caller does not hold, answers 403.
+   */
+  const canManageRole = (role: RoleListItem | null): boolean => {
+    if (!role || !canManageCustomRoles) return false
+    return isPlatformAdmin || (!role.isSystem && !role.isGlobal)
+  }
+
   const handleToggle = async (role: RoleListItem, next: boolean) => {
     setTogglingRoleId(role.id)
     try {
@@ -538,7 +549,7 @@ export function AccountRoles() {
         </div>
       )}
 
-      <RoleDetailSheet role={openRole} onOpenChange={(open) => !open && setOpenRoleId(null)} onEdit={handleEdit} onDelete={handleDelete} canManage={canManageCustomRoles} />
+      <RoleDetailSheet role={openRole} onOpenChange={(open) => !open && setOpenRoleId(null)} onEdit={handleEdit} onDelete={handleDelete} canManage={canManageRole(openRole)} />
 
       {editorTarget && <CreateRoleDialog isOpen={editorTarget !== null} onOpenChange={(open) => !open && setEditorTarget(null)} target={editorTarget} />}
     </div>
