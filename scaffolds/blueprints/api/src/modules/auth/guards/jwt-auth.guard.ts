@@ -90,6 +90,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') implements OnModuleInit {
           throw new UnauthorizedException('User not found')
         }
 
+        // Same rule as JwtStrategy.validate(): a user deactivated between the refresh and this read is refused
+        if (!user.isActive) {
+          this.logger.warn(`Inactive user after token refresh: ${payload.sub}`, 'JwtAuthGuard')
+          throw new UnauthorizedException('User is inactive')
+        }
+
         // Define the user in the request
         request.user = user
         return true

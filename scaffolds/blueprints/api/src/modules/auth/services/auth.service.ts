@@ -685,12 +685,20 @@ export class AuthService {
           userId: payload.sub,
           token: refreshToken,
           type: 'SESSION_REFRESH'
-        }
+        },
+        include: { user: { select: { isActive: true } } }
       })
 
       if (!tokenRecord) {
         this.logger.warn(`Invalid refresh token: ${refreshToken}`, 'refreshTokens')
         throw new UnauthorizedException('Invalid refresh token')
+      }
+
+      // A deactivated user's session must not rotate: deactivation deletes its refresh tokens, and this
+      // check refuses any that would still exist (a token issued in a race, or a flag set by hand).
+      if (!tokenRecord.user.isActive) {
+        this.logger.warn(`Refresh refused for inactive user: ${payload.sub}`, 'refreshTokens')
+        throw new UnauthorizedException('User is inactive')
       }
 
       return this.generateTokens({ id: payload.sub, email: payload.email }, tokenRecord)
