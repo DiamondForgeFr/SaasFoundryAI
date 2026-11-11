@@ -279,7 +279,8 @@ describe('the automatic routing in sf status (#1035)', () => {
         const line = routingSummary(routing)
         expect(line).toContain('; 2 capture errors in 7 days, last 2026-11-06: the routing adjustment was skipped (EACCES)')
         expect(renderAgentFriendly({ report: status, preconditions: evaluatePreconditions(status) })).toContain(`- routing: grid v${ROUTING_GRID_VERSION}`)
-        expect(await render(renderHuman)).toMatch(/Routing:.*2 capture errors in 7 days/)
+        // Rendered from the status collected at NOW: `render` collects again with the real clock, and the errors above are seeded against NOW
+        expect(renderHuman({ report: status, preconditions: evaluatePreconditions(status) })).toMatch(/Routing:.*2 capture errors in 7 days/)
         const warning = await checkOf()
         expect(warning).toMatchObject({ status: 'warn', details: '2 capture errors in the last 7 days; last 2026-11-06T10:00:00.000Z (adjustment): the routing adjustment was skipped (EACCES)' })
         expect(warning.remediation).toContain('capture-errors.jsonl')
