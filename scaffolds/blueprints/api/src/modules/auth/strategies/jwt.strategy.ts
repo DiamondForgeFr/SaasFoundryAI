@@ -48,6 +48,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found')
     }
 
+    // A deactivated user loses access at once: the access token it still holds is refused here, and
+    // the refresh path (AuthService.refreshTokens) refuses its session as well.
+    if (!user.isActive) {
+      this.logger.warn(`Inactive user: ${payload.sub}`, 'JwtStrategy')
+      throw new UnauthorizedException('User is inactive')
+    }
+
     return user
   }
 }

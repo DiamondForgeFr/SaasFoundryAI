@@ -1954,6 +1954,10 @@ export class AccountService {
       const updated = await this.prisma.$transaction(async (tx) => {
         if (plan.setActive !== null) {
           await tx.user.update({ where: { id: targetUserId }, data: { isActive: plan.setActive } })
+          // Deactivation ends the user's sessions: without its refresh tokens, no session can rotate.
+          if (!plan.setActive) {
+            await tx.userToken.deleteMany({ where: { userId: targetUserId, type: 'SESSION_REFRESH' } })
+          }
         }
 
         if (plan.accountRoleIds !== null) {
