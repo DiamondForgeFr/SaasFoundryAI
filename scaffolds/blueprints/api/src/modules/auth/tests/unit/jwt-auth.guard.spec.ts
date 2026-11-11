@@ -41,7 +41,7 @@ describe('authenticatedUserInclude', () => {
 })
 
 describe('JwtAuthGuard (session refresh)', () => {
-  const user = { id: 'user-1', roleAssignments: [] }
+  const user = { id: 'user-1', isActive: true, roleAssignments: [] }
   const prisma = { user: { findUnique: jest.fn() } }
   const authService = {
     refreshTokens: jest.fn(),
@@ -73,6 +73,25 @@ describe('JwtAuthGuard (session refresh)', () => {
 
     expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user-1' }, include: authenticatedUserInclude })
     expect(request.user).toBe(user)
+  })
+
+  it('refuses the session of a deactivated user when the refresh path refuses it', async () => {
+    authService.refreshTokens.mockRejectedValue(new UnauthorizedException('User is inactive'))
+    const request: Record<string, unknown> = { cookies: { refresh_token: 'token' }, ip: '127.0.0.1' }
+
+    await expect(refresh(request)).rejects.toBeInstanceOf(UnauthorizedException)
+
+    expect(authService.setAuthCookies).not.toHaveBeenCalled()
+    expect(request.user).toBeUndefined()
+  })
+
+  it('refuses a user deactivated between the refresh and the read of request.user', async () => {
+    prisma.user.findUnique.mockResolvedValue({ ...user, isActive: false })
+    const request: Record<string, unknown> = { cookies: { refresh_token: 'token' }, ip: '127.0.0.1' }
+
+    await expect(refresh(request)).rejects.toBeInstanceOf(UnauthorizedException)
+
+    expect(request.user).toBeUndefined()
   })
 
   it('refuses a refresh with no refresh token', async () => {

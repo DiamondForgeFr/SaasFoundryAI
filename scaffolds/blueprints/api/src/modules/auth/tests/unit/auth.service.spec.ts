@@ -889,6 +889,23 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
           // Act & Assert
           await TestAssertions.assertThrows(() => this.service.refreshTokens('valid.refresh.token'), UnauthorizedException)
         })
+
+        it('should throw UnauthorizedException and issue no token if the user has been deactivated', async () => {
+          // Arrange — the refresh token row still exists, but its user is no longer active
+          const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          const inactiveUser = TestDataFactory.user().withActiveStatus(false).build()
+          const token = TestDataFactory.token().withToken(refreshToken).withUserId(inactiveUser.id).withValidToken().build()
+          this.jwtService.verify.mockReturnValue({ email: inactiveUser.email, sub: inactiveUser.id })
+          prismaServiceAny.userToken.findFirst.mockResolvedValue({ ...token, user: inactiveUser })
+          this.jwtService.sign.mockClear()
+          prismaServiceAny.userToken.create.mockClear()
+
+          // Act & Assert
+          await TestAssertions.assertThrows(() => this.service.refreshTokens(refreshToken), UnauthorizedException)
+          expect(prismaServiceAny.userToken.findFirst).toHaveBeenCalledWith(expect.objectContaining({ include: { user: { select: { isActive: true } } } }))
+          expect(this.jwtService.sign).not.toHaveBeenCalled()
+          expect(prismaServiceAny.userToken.create).not.toHaveBeenCalled()
+        })
       })
     })
   }
