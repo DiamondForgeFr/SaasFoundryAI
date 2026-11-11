@@ -98,6 +98,10 @@ export interface FakePermissionCheckerOptions {
   denied?: string[]
   /** The account each entity belongs to (an entity not listed has no known account). */
   entityAccounts?: Record<string, string>
+  /** Permissions held through a PLATFORM role (`hasOnPlatform`). None by default. */
+  platform?: string[]
+  /** Sections (sub-module ids) the user does NOT hold (everything else is held). */
+  deniedSubModules?: number[]
 }
 
 /** Stands in for the ScopedPermissionChecker that `AccountAccessService.getPermissionChecker` resolves. */
@@ -105,6 +109,8 @@ export const fakePermissionChecker = (options: FakePermissionCheckerOptions = {}
   const denied = options.denied ?? []
   return {
     has: jest.fn((permission: string) => !denied.includes(permission)),
+    hasOnPlatform: jest.fn((permission: string) => (options.platform ?? []).includes(permission)),
+    hasSubModule: jest.fn((subModuleId: number) => !(options.deniedSubModules ?? []).includes(subModuleId)),
     assert: jest.fn((permission: string, _scope: unknown, message = 'You do not have the required permissions') => {
       if (denied.includes(permission)) throw new ForbiddenException(message)
     }),

@@ -9,6 +9,7 @@ import { BadRequestException, ForbiddenException, NotFoundException, Provider, U
  * Dependencies
  */
 import { AccountAccessService } from '@common/services/account-access/account-access.service'
+import { ScopedPermissionChecker } from '@common/services/account-access/permission-checker'
 import { Logger } from '@common/services/logger/logger.service'
 import { PaginationService } from '@common/services/pagination/pagination.service'
 import { PrismaService } from '@configs/prisma/services/prisma.service'
@@ -1163,60 +1164,313 @@ class AccountServiceScopeTest extends AccountServiceTest {
   }
 
   testRoleRoutesAreCheckedInTheRoleAccount(): void {
-    describe('custom role routes (ROLE_CUSTOM_MANAGEMENT in the role account)', () => {
+    describe('role routes (who may change a role, and what they may grant)', () => {
       const actorId = 'actor-1'
-      const forbidden = () => new ForbiddenException('denied')
+      const A = 'acc-1'
+      const B = 'acc-2'
+      // E1 is administered by the entity admin below, E1_CHILD lies in its subtree, E2 is a sibling.
+      const E1 = 'ent-1'
+      const E1_CHILD = 'ent-1-child'
+      const E2 = 'ent-2'
+      const ancestors: Record<string, string[]> = { [E1]: [E1], [E1_CHILD]: [E1_CHILD, E1], [E2]: [E2] }
+
+      const USERS = { id: 10, name: 'USERS', module: { name: 'ACCOUNT_ADMINISTRATION' } }
+      const ENTITIES = { id: 11, name: 'ENTITIES', module: { name: 'ACCOUNT_ADMINISTRATION' } }
+      const PLATFORM_ACCOUNTS = { id: 90, name: 'PLATFORM_ACCOUNTS', module: { name: 'PLATFORM_ADMINISTRATION' } }
+      const ALLOCATION = { id: 1, name: 'USER_ROLE_ALLOCATION', applicableScopes: ['PLATFORM', 'ACCOUNT', 'ENTITY'] }
+      const ENTITY_CREATION = { id: 2, name: 'ENTITY_CREATION', applicableScopes: ['PLATFORM', 'ACCOUNT', 'ENTITY'] }
+      const ACCOUNT_UPDATE = { id: 3, name: 'ACCOUNT_UPDATE', applicableScopes: ['PLATFORM', 'ACCOUNT'] }
+
+      /** One role assignment of the actor: its scope, where it is held, and what its role grants. */
+      interface Holding {
+        scope: 'PLATFORM' | 'ACCOUNT' | 'ENTITY'
+        on?: string
+        permissions: string[]
+        subModuleIds?: number[]
+      }
+      const entityAdminOfE1: Holding[] = [{ scope: 'ENTITY', on: E1, permissions: ['ROLE_CUSTOM_MANAGEMENT', 'USER_ROLE_ALLOCATION'], subModuleIds: [USERS.id] }]
+      const accountAdminOfA: Holding[] = [
+        { scope: 'ACCOUNT', on: A, permissions: ['ROLE_CUSTOM_MANAGEMENT', 'USER_ROLE_ALLOCATION', 'ENTITY_CREATION', 'ACCOUNT_UPDATE'], subModuleIds: [USERS.id, ENTITIES.id] }
+      ]
+      const platformAdmin: Holding[] = [{ scope: 'PLATFORM', permissions: ['ROLE_CUSTOM_MANAGEMENT'] }]
+      // Reads the platform console without managing roles there, and administers E1: the union holds ROLE_CUSTOM_MANAGEMENT, the platform does not.
+      const platformReaderAndEntityAdmin: Holding[] = [{ scope: 'PLATFORM', permissions: [], subModuleIds: [PLATFORM_ACCOUNTS.id] }, ...entityAdminOfE1]
+      const accountAdminOfB: Holding[] = [{ scope: 'ACCOUNT', on: B, permissions: ['ROLE_CUSTOM_MANAGEMENT', 'USER_ROLE_ALLOCATION'], subModuleIds: [USERS.id] }]
+
+      /** A real checker over the actor's holdings: the scope rule is the production one. */
+      const checkerFor = (holdings: Holding[], entityIds: string[]) =>
+        new ScopedPermissionChecker(
+          holdings.map((holding) => ({
+            accountId: holding.scope === 'ACCOUNT' ? (holding.on ?? null) : null,
+            entityId: holding.scope === 'ENTITY' ? (holding.on ?? null) : null,
+            entity: holding.scope === 'ENTITY' && holding.on ? { id: holding.on, accountId: A } : null,
+            role: {
+              scope: holding.scope,
+              permissionsLinked: holding.permissions.map((name) => ({ permission: { name } })),
+              subModulesLinked: (holding.subModuleIds ?? []).map((subModuleId) => ({ subModuleId }))
+            }
+          })),
+          new Map(entityIds.map((entityId) => [entityId, { kind: 'ENTITY' as const, entityId, accountId: A, ancestorEntityIds: ancestors[entityId] ?? [entityId] }])),
+          true
+        )
+
+      interface Given {
+        actor: Holding[]
+        role?: { id: number; scope: string; accountId: string | null; isSystem?: boolean; name?: string; permissionIds?: number[]; subModuleIds?: number[] }
+        /** Entities the role is assigned in. */
+        assignedIn?: string[]
+      }
 
       /* eslint-disable @typescript-eslint/no-explicit-any */
-      const givenRole = (role: { id: number; scope: string; accountId: string | null; isSystem?: boolean; name?: string }) => {
+      const given = ({ actor, role = { id: 5, scope: 'ENTITY', accountId: A }, assignedIn = [] }: Given) => {
         const prisma = this.prismaService as any
-        prisma.role.findUnique = jest.fn().mockResolvedValue({ name: 'custom', description: null, isSystem: false, isActive: true, ...role })
+        const permissionCatalog = [ALLOCATION, ENTITY_CREATION, ACCOUNT_UPDATE]
+        const sectionCatalog = [USERS, ENTITIES, PLATFORM_ACCOUNTS]
+        prisma.role.findUnique = jest.fn().mockResolvedValue({
+          name: 'custom',
+          description: null,
+          isSystem: false,
+          isActive: true,
+          ...role,
+          permissionsLinked: (role.permissionIds ?? []).map((permissionId) => ({ permissionId })),
+          subModulesLinked: (role.subModuleIds ?? []).map((subModuleId) => ({ subModuleId }))
+        })
         prisma.role.update = jest.fn().mockResolvedValue({ id: role.id, name: 'custom', isActive: false })
         prisma.role.delete = jest.fn().mockResolvedValue({})
-        prisma.userRoleAssignment.findFirst.mockResolvedValue(null)
+        prisma.userRoleAssignment.findMany.mockReset()
+        prisma.userRoleAssignment.findMany.mockResolvedValue(assignedIn.map((entityId) => ({ entityId })))
+        const findPermissions = jest.fn(async ({ where }: any) => permissionCatalog.filter((permission) => where.id.in.includes(permission.id)))
+        const findSections = jest.fn(async ({ where }: any) => sectionCatalog.filter((section) => where.id.in.includes(section.id)))
+        prisma.modulePermission = { findMany: findPermissions }
+        prisma.subModule = { ...prisma.subModule, findMany: findSections }
+        const links = () => ({ createMany: jest.fn(), deleteMany: jest.fn() })
+        const tx = {
+          role: { create: jest.fn().mockResolvedValue({ id: 99, name: 'new-role', scope: role.scope }), update: jest.fn().mockResolvedValue({ id: role.id, name: 'renamed' }) },
+          roleModuleLink: links(),
+          roleSubModuleLink: links(),
+          rolePermissionLink: links(),
+          modulePermission: { findMany: findPermissions },
+          subModule: { findMany: findSections }
+        }
+        prisma.$transaction.mockReset()
+        prisma.$transaction.mockImplementation(async (callback: (client: unknown) => unknown) => callback(tx))
+        this.accountAccessService.validateUserAccountAccess.mockReset()
         this.accountAccessService.validateUserAccountAccess.mockResolvedValue({} as never)
-        this.accountAccessService.assertPermissionInScope.mockReset()
-        this.accountAccessService.assertPermissionInScope.mockResolvedValue(undefined)
-        return prisma
+        this.accountAccessService.getPermissionChecker.mockReset()
+        this.accountAccessService.getPermissionChecker.mockImplementation(async (_userId: string, entityIds: string[] = []) => checkerFor(actor, entityIds) as never)
+        return { prisma, tx }
       }
       /* eslint-enable @typescript-eslint/no-explicit-any */
 
-      it.each([
-        ['updateCustomRole', (service: AccountService) => service.updateCustomRole(actorId, 5, { name: 'renamed' })],
-        ['deleteCustomRole', (service: AccountService) => service.deleteCustomRole(actorId, 5)],
-        ['toggleRoleStatus', (service: AccountService) => service.toggleRoleStatus(actorId, 5, false)]
-      ])('%s answers 403 (not 400) when ROLE_CUSTOM_MANAGEMENT is missing in the role account', async (_name, call) => {
-        givenRole({ id: 5, scope: 'ENTITY', accountId: 'acc-1' })
-        this.accountAccessService.assertPermissionInScope.mockRejectedValueOnce(forbidden())
+      /** A 403 whose message contains `containing` (the messages name what is missing). */
+      const assertForbidden = async (call: () => Promise<unknown>, containing?: string) => {
+        const error = await TestAssertions.assertThrows(call, ForbiddenException)
+        if (containing) expect(error.message).toContain(containing)
+      }
+      const update = (payload: Parameters<AccountService['updateCustomRole']>[2]) => this.service.updateCustomRole(actorId, 5, payload)
+      const routes: [string, (service: AccountService) => Promise<unknown>][] = [
+        ['updateCustomRole', (service) => service.updateCustomRole(actorId, 5, { permissionIds: [] })],
+        ['deleteCustomRole', (service) => service.deleteCustomRole(actorId, 5)],
+        ['toggleRoleStatus', (service) => service.toggleRoleStatus(actorId, 5, false)]
+      ]
 
-        await TestAssertions.assertThrows(() => call(this.service), ForbiddenException)
+      describe('system roles belong to the platform', () => {
+        const systemRole = { id: 5, scope: 'ENTITY', accountId: null, isSystem: true, name: 'entity-user', permissionIds: [ALLOCATION.id] }
+
+        it.each(routes)('%s on a system role answers 403 to an entity admin, and changes nothing', async (_name, call) => {
+          const { prisma } = given({ actor: entityAdminOfE1, role: systemRole })
+
+          await assertForbidden(() => call(this.service), 'Only a platform administrator')
+
+          expect(prisma.$transaction).not.toHaveBeenCalled()
+          expect(prisma.role.update).not.toHaveBeenCalled()
+          expect(prisma.role.delete).not.toHaveBeenCalled()
+        })
+
+        it.each(routes)('%s on a system role answers 403 to an account admin', async (_name, call) => {
+          given({ actor: accountAdminOfA, role: systemRole })
+
+          await assertForbidden(() => call(this.service), 'Only a platform administrator')
+        })
+
+        it('a platform role that only reads the console is not platform authority, even with ROLE_CUSTOM_MANAGEMENT held in an entity', async () => {
+          given({ actor: platformReaderAndEntityAdmin, role: systemRole })
+
+          await assertForbidden(() => this.service.toggleRoleStatus(actorId, 5, false))
+          await assertForbidden(() => update({ permissionIds: [ALLOCATION.id, ENTITY_CREATION.id] }))
+        })
+
+        it('ROLE_CUSTOM_MANAGEMENT through a PLATFORM role rewrites the grants of a system role, and grants what it does not hold itself', async () => {
+          const { tx } = given({ actor: platformAdmin, role: systemRole })
+
+          await update({ permissionIds: [ALLOCATION.id, ENTITY_CREATION.id], subModuleIds: [USERS.id] })
+
+          expect(tx.rolePermissionLink.createMany).toHaveBeenCalledWith({ data: [ALLOCATION.id, ENTITY_CREATION.id].map((permissionId) => ({ roleId: 5, permissionId })) })
+          expect(this.accountAccessService.validateUserAccountAccess).not.toHaveBeenCalled()
+        })
+
+        it('ROLE_CUSTOM_MANAGEMENT through a PLATFORM role toggles a system role', async () => {
+          const { prisma } = given({ actor: platformAdmin, role: systemRole })
+
+          await this.service.toggleRoleStatus(actorId, 5, false)
+
+          expect(prisma.role.update).toHaveBeenCalledWith({ where: { id: 5 }, data: { isActive: false } })
+        })
+
+        it('a system role still cannot be renamed or deleted, even by the platform', async () => {
+          given({ actor: platformAdmin, role: systemRole })
+
+          await TestAssertions.assertThrows(() => update({ name: 'renamed' }), UnauthorizedException)
+          await TestAssertions.assertThrows(() => this.service.deleteCustomRole(actorId, 5), UnauthorizedException)
+        })
       })
 
-      it('asks for ROLE_CUSTOM_MANAGEMENT in the account that owns the role, entity assignments included for an ENTITY role', async () => {
-        givenRole({ id: 5, scope: 'ENTITY', accountId: 'acc-1' })
+      describe('an account-owned role is managed where it applies', () => {
+        it.each(routes)('%s answers 403 when ROLE_CUSTOM_MANAGEMENT is held in another account only', async (_name, call) => {
+          given({ actor: accountAdminOfB })
 
-        await this.service.deleteCustomRole(actorId, 5)
+          await assertForbidden(() => call(this.service), 'You are not allowed to manage the roles of this account')
+        })
 
-        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(
-          actorId,
-          'ROLE_CUSTOM_MANAGEMENT',
-          { kind: 'ACCOUNT', accountId: 'acc-1', includeEntityAssignments: true },
-          expect.any(String)
-        )
+        it.each(routes)('%s answers 403 to an entity admin on an ENTITY role used in a sibling entity', async (_name, call) => {
+          const { prisma } = given({ actor: entityAdminOfE1, assignedIn: [E1, E2] })
+
+          await assertForbidden(() => call(this.service), 'This role is used in an entity you do not administer')
+
+          expect(prisma.role.update).not.toHaveBeenCalled()
+          expect(prisma.role.delete).not.toHaveBeenCalled()
+        })
+
+        it.each(routes)('%s lets an entity admin manage an ENTITY role used only in its subtree', async (_name, call) => {
+          given({ actor: entityAdminOfE1, assignedIn: [E1, E1_CHILD] })
+
+          await call(this.service)
+        })
+
+        it.each(routes)('%s lets an entity admin of the account manage an ENTITY role assigned nowhere yet', async (_name, call) => {
+          given({ actor: entityAdminOfE1, assignedIn: [] })
+
+          await call(this.service)
+        })
+
+        it.each(routes)('%s answers 403 to an entity admin on an ACCOUNT role', async (_name, call) => {
+          given({ actor: entityAdminOfE1, role: { id: 5, scope: 'ACCOUNT', accountId: A } })
+
+          await assertForbidden(() => call(this.service))
+        })
+
+        it.each(routes)('%s lets the account admin manage an ENTITY role wherever it is used in its account', async (_name, call) => {
+          given({ actor: accountAdminOfA, assignedIn: [E1, E2] })
+
+          await call(this.service)
+        })
+
+        it('reads the role assignments and the caller once: one checker, built with the entities the role is used in and the sections', async () => {
+          const { prisma } = given({ actor: accountAdminOfA, assignedIn: [E1, E2] })
+
+          await update({ permissionIds: [ALLOCATION.id] })
+
+          expect(prisma.userRoleAssignment.findMany).toHaveBeenCalledTimes(1)
+          expect(prisma.userRoleAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { roleId: 5, entityId: { not: null } } }))
+          expect(this.accountAccessService.getPermissionChecker).toHaveBeenCalledTimes(1)
+          expect(this.accountAccessService.getPermissionChecker).toHaveBeenCalledWith(actorId, [E1, E2], { withSubModules: true })
+        })
+
+        it('keeps the membership check first (its 404 / 401 answers)', async () => {
+          given({ actor: entityAdminOfE1 })
+          this.accountAccessService.validateUserAccountAccess.mockRejectedValueOnce(new UnauthorizedException('not a member'))
+
+          await TestAssertions.assertThrows(() => this.service.deleteCustomRole(actorId, 5), UnauthorizedException)
+          expect(this.accountAccessService.getPermissionChecker).not.toHaveBeenCalled()
+        })
       })
 
-      it('does not accept entity assignments for an ACCOUNT-scoped role', async () => {
-        const prisma = givenRole({ id: 6, scope: 'ACCOUNT', accountId: 'acc-1' })
-        prisma.userRoleAssignment.findFirst.mockResolvedValue({ id: 'admin-assignment' })
+      describe('nobody grants what they do not hold where the role applies', () => {
+        it('an entity admin cannot add a permission it does not hold to a role used in its entity (it could hold that role itself)', async () => {
+          const { prisma } = given({ actor: entityAdminOfE1, assignedIn: [E1], role: { id: 5, scope: 'ENTITY', accountId: A, permissionIds: [ALLOCATION.id] } })
 
-        await this.service.deleteCustomRole(actorId, 6)
+          await assertForbidden(() => update({ permissionIds: [ALLOCATION.id, ENTITY_CREATION.id] }), 'ENTITY_CREATION')
 
-        expect(this.accountAccessService.assertPermissionInScope).toHaveBeenCalledWith(
-          actorId,
-          'ROLE_CUSTOM_MANAGEMENT',
-          { kind: 'ACCOUNT', accountId: 'acc-1', includeEntityAssignments: false },
-          expect.any(String)
-        )
+          expect(prisma.$transaction).not.toHaveBeenCalled()
+        })
+
+        it('an entity admin cannot add a section it does not hold', async () => {
+          given({ actor: entityAdminOfE1, assignedIn: [E1], role: { id: 5, scope: 'ENTITY', accountId: A, subModuleIds: [USERS.id] } })
+
+          await assertForbidden(() => update({ permissionIds: [], subModuleIds: [USERS.id, ENTITIES.id] }), 'ENTITIES')
+        })
+
+        it('what the role already holds needs nothing: sending it back, or removing from it, is allowed', async () => {
+          const { tx } = given({
+            actor: entityAdminOfE1,
+            assignedIn: [E1],
+            role: { id: 5, scope: 'ENTITY', accountId: A, permissionIds: [ALLOCATION.id, ENTITY_CREATION.id], subModuleIds: [USERS.id, ENTITIES.id] }
+          })
+
+          await update({ permissionIds: [ALLOCATION.id, ENTITY_CREATION.id], subModuleIds: [USERS.id, ENTITIES.id] })
+          await update({ permissionIds: [ALLOCATION.id], subModuleIds: [USERS.id] })
+
+          expect(tx.rolePermissionLink.createMany).toHaveBeenCalledTimes(2)
+        })
+
+        it('an entity admin cannot mint a role carrying a permission it does not hold, nor an ACCOUNT role', async () => {
+          given({ actor: entityAdminOfE1 })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, { name: 'minted', scope: 'ENTITY', permissionIds: [ENTITY_CREATION.id] }), 'ENTITY_CREATION')
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, { name: 'minted', scope: 'ACCOUNT', permissionIds: [] }), 'You are not allowed to manage the roles of this account')
+        })
+
+        it('an entity admin creates an ENTITY role with what it holds', async () => {
+          const { tx } = given({ actor: entityAdminOfE1 })
+
+          await this.service.createCustomRole(actorId, A, { name: 'mine', scope: 'ENTITY', subModuleIds: [USERS.id], permissionIds: [ALLOCATION.id] })
+
+          expect(tx.role.create).toHaveBeenCalled()
+          expect(this.accountAccessService.getPermissionChecker).toHaveBeenCalledWith(actorId, [], { withSubModules: true })
+        })
+
+        it('the account admin creates an ACCOUNT role with what it holds', async () => {
+          const { tx } = given({ actor: accountAdminOfA })
+
+          await this.service.createCustomRole(actorId, A, { name: 'mine', scope: 'ACCOUNT', subModuleIds: [ENTITIES.id], permissionIds: [ACCOUNT_UPDATE.id] })
+
+          expect(tx.role.create).toHaveBeenCalled()
+        })
+
+        it('a global template needs platform authority', async () => {
+          given({ actor: accountAdminOfA })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, null, { name: 'template', scope: 'ENTITY', permissionIds: [] }))
+        })
+      })
+
+      describe('no account or entity role carries a platform section', () => {
+        it.each([
+          ['an entity admin', 'ENTITY', entityAdminOfE1],
+          ['the account admin', 'ACCOUNT', accountAdminOfA],
+          ['the platform', 'ACCOUNT', platformAdmin]
+        ] as const)('%s cannot create a %s role with one (403, nothing written)', async (_who, scope, actor) => {
+          const { tx } = given({ actor })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, { name: 'probe', scope, subModuleIds: [PLATFORM_ACCOUNTS.id], permissionIds: [] }), 'PLATFORM_ACCOUNTS')
+          expect(tx.role.create).not.toHaveBeenCalled()
+        })
+
+        it('nor add one to an existing role, even a system role edited by the platform', async () => {
+          given({ actor: entityAdminOfE1, assignedIn: [E1] })
+          await assertForbidden(() => update({ permissionIds: [], subModuleIds: [PLATFORM_ACCOUNTS.id] }), 'PLATFORM_ACCOUNTS')
+
+          given({ actor: platformAdmin, role: { id: 5, scope: 'ENTITY', accountId: null, isSystem: true } })
+          await assertForbidden(() => update({ permissionIds: [], subModuleIds: [PLATFORM_ACCOUNTS.id] }), 'PLATFORM_ACCOUNTS')
+        })
+
+        it('a PLATFORM global template may carry one', async () => {
+          const { tx } = given({ actor: platformAdmin })
+
+          await this.service.createCustomRole(actorId, null, { name: 'console', scope: 'PLATFORM', subModuleIds: [PLATFORM_ACCOUNTS.id], permissionIds: [] })
+
+          expect(tx.role.create).toHaveBeenCalled()
+        })
       })
     })
   }

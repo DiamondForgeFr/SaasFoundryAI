@@ -895,12 +895,153 @@ describe('Accounts Module (e2e)', () => {
 
     describe('PLATFORM_ADMINISTRATION is platform-only', () => {
       it('an ACCOUNT role carrying a platform section does not open the platform console', async () => {
+        // The role API refuses such a role (#1129, below), so it is written straight to the database: the guard must hold on its own.
         const platformAccounts = await prismaService.subModule.findFirstOrThrow({ where: { name: 'PLATFORM_ACCOUNTS' } })
-        const sectionRole = await createRoleAsAccountAdmin({ name: 'scope-probe-section', scope: 'ACCOUNT', subModuleIds: [platformAccounts.id], permissionIds: [] })
+        const sectionRole = await prismaService.role.create({ data: { name: 'scope-probe-section', scope: 'ACCOUNT', isSystem: false, isActive: true, accountId } })
+        createdRoleIds.push(sectionRole.id)
+        await prismaService.roleModuleLink.create({ data: { roleId: sectionRole.id, moduleId: platformAccounts.moduleId } })
+        await prismaService.roleSubModuleLink.create({ data: { roleId: sectionRole.id, subModuleId: platformAccounts.id } })
         const probe = await createProbeUser('scope-section-probe@saasfoundryai.test', { roleId: sectionRole.id, accountId }, { accountId })
 
         await probe.agent.get('/api/accounts/platform/overview').expect(403)
         await probe.agent.get('/api/accounts/platform/users').expect(403)
+      })
+    })
+
+    /**
+     * Role management (#1129): a system role belongs to the platform, a custom ENTITY role is managed only by who administers
+     * every entity it is used in, no role of an account or an entity carries a platform section, and nobody grants a
+     * permission or a section they do not hold where the role applies.
+     */
+    describe('role management stays within the actor authority', () => {
+      const grantsOf = async (roleId: number) => {
+        const role = await prismaService.role.findUniqueOrThrow({ where: { id: roleId }, include: { permissionsLinked: true, subModulesLinked: true } })
+        return {
+          name: role.name,
+          isActive: role.isActive,
+          permissionIds: role.permissionsLinked.map((link) => link.permissionId).sort((a, b) => a - b),
+          subModuleIds: role.subModulesLinked.map((link) => link.subModuleId).sort((a, b) => a - b)
+        }
+      }
+      const permissionIdOf = async (name: string) => (await prismaService.modulePermission.findFirstOrThrow({ where: { name } })).id
+      const systemRole = () => prismaService.role.findFirstOrThrow({ where: { name: 'entity-user', accountId: null, isSystem: true } })
+
+      it('a seeded entity-admin cannot rewrite, toggle or delete a system role (403, nothing changes)', async () => {
+        const role = await systemRole()
+        const before = await grantsOf(role.id)
+        const roleManagement = await permissionIdOf('ROLE_CUSTOM_MANAGEMENT')
+
+        await entityAdminAgent
+          .patch(`/api/accounts/roles/${role.id}`)
+          .send({ permissionIds: [...before.permissionIds, roleManagement], subModuleIds: before.subModuleIds })
+          .expect(403)
+        await entityAdminAgent.patch(`/api/accounts/roles/${role.id}/status`).send({ isActive: false }).expect(403)
+        await entityAdminAgent.delete(`/api/accounts/roles/${role.id}`).expect(403)
+
+        expect(await grantsOf(role.id)).toEqual(before)
+      })
+
+      it('an account admin cannot rewrite a system role either (403)', async () => {
+        const role = await systemRole()
+        const before = await grantsOf(role.id)
+
+        await agent.patch(`/api/accounts/roles/${role.id}`).send({ permissionIds: [], subModuleIds: [] }).expect(403)
+
+        expect(await grantsOf(role.id)).toEqual(before)
+      })
+
+      it('a platform admin still maintains the grants of a system role', async () => {
+        const role = await systemRole()
+        const before = await grantsOf(role.id)
+
+        await platformAdminAgent.patch(`/api/accounts/roles/${role.id}`).send({ permissionIds: before.permissionIds, subModuleIds: before.subModuleIds }).expect(200)
+
+        expect(await grantsOf(role.id)).toEqual(before)
+      })
+
+      it('no account or entity role carries a platform section, whoever asks (403, nothing written)', async () => {
+        const platformAccounts = await prismaService.subModule.findFirstOrThrow({ where: { name: 'PLATFORM_ACCOUNTS' } })
+
+        await entityAdminAgent
+          .post(`/api/accounts/${accountId}/roles`)
+          .send({ name: 'scope-probe-platform-section', scope: 'ENTITY', subModuleIds: [platformAccounts.id], permissionIds: [] })
+          .expect(403)
+        await agent
+          .post(`/api/accounts/${accountId}/roles`)
+          .send({ name: 'scope-probe-platform-section', scope: 'ACCOUNT', subModuleIds: [platformAccounts.id], permissionIds: [] })
+          .expect(403)
+        expect(await prismaService.role.count({ where: { name: 'scope-probe-platform-section' } })).toBe(0)
+
+        // An existing custom role used only in the entity-admin's own entity: the section is refused there too.
+        const ownRole = await createRoleAsAccountAdmin({ name: 'scope-probe-own-section', scope: 'ENTITY', permissionIds: [] })
+        const before = await grantsOf(ownRole.id)
+        await entityAdminAgent
+          .patch(`/api/accounts/roles/${ownRole.id}`)
+          .send({ subModuleIds: [platformAccounts.id], permissionIds: [] })
+          .expect(403)
+        expect(await grantsOf(ownRole.id)).toEqual(before)
+      })
+
+      it('a seeded entity-admin cannot edit, toggle or delete an ENTITY role used in a sibling entity (403)', async () => {
+        const siblingRole = await createRoleAsAccountAdmin({ name: 'scope-probe-sibling', scope: 'ENTITY', permissionIds: [] })
+        await createProbeUser('scope-sibling-holder@saasfoundryai.test', { roleId: siblingRole.id, entityId: siblingEntityId }, { entityId: siblingEntityId })
+
+        await entityAdminAgent.patch(`/api/accounts/roles/${siblingRole.id}`).send({ name: 'hijacked' }).expect(403)
+        await entityAdminAgent.patch(`/api/accounts/roles/${siblingRole.id}/status`).send({ isActive: false }).expect(403)
+        await entityAdminAgent.delete(`/api/accounts/roles/${siblingRole.id}`).expect(403)
+
+        expect(await grantsOf(siblingRole.id)).toMatchObject({ name: 'scope-probe-sibling', isActive: true })
+      })
+
+      it('nobody adds a permission it does not hold: the holder of a custom role cannot extend it, nor mint one (403)', async () => {
+        const roleManagement = await permissionIdOf('ROLE_CUSTOM_MANAGEMENT')
+        const entityCreation = await permissionIdOf('ENTITY_CREATION')
+        const selfRole = await createRoleAsAccountAdmin({ name: 'scope-probe-self', scope: 'ENTITY', permissionIds: [roleManagement] })
+        const holder = await createProbeUser('scope-self-holder@saasfoundryai.test', { roleId: selfRole.id, entityId }, { entityId })
+
+        await holder.agent
+          .patch(`/api/accounts/roles/${selfRole.id}`)
+          .send({ permissionIds: [roleManagement, entityCreation] })
+          .expect(403)
+        expect((await grantsOf(selfRole.id)).permissionIds).toEqual([roleManagement])
+
+        await holder.agent
+          .post(`/api/accounts/${accountId}/roles`)
+          .send({ name: 'scope-probe-minted', scope: 'ENTITY', permissionIds: [entityCreation] })
+          .expect(403)
+        expect(await prismaService.role.count({ where: { name: 'scope-probe-minted' } })).toBe(0)
+      })
+
+      it('a seeded entity-admin still manages an ENTITY role used only in its own entity, with what it holds', async () => {
+        const ownRole = await createRoleAsAccountAdmin({ name: 'scope-probe-mine', scope: 'ENTITY', permissionIds: [] })
+        await createProbeUser('scope-own-holder@saasfoundryai.test', { roleId: ownRole.id, entityId }, { entityId })
+        const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+        await entityAdminAgent
+          .patch(`/api/accounts/roles/${ownRole.id}`)
+          .send({ name: 'scope-probe-mine-2', permissionIds: [allocation] })
+          .expect(200)
+        expect(await grantsOf(ownRole.id)).toMatchObject({ name: 'scope-probe-mine-2', permissionIds: [allocation] })
+        await entityAdminAgent.patch(`/api/accounts/roles/${ownRole.id}/status`).send({ isActive: false }).expect(200)
+        // A role still assigned cannot be deleted (the assignment's foreign key): detach the holder first.
+        await prismaService.userRoleAssignment.deleteMany({ where: { roleId: ownRole.id } })
+        await entityAdminAgent.delete(`/api/accounts/roles/${ownRole.id}`).expect(200)
+        expect(await prismaService.role.count({ where: { id: ownRole.id } })).toBe(0)
+      })
+
+      it('the account admin still manages every custom role of its account, wherever it is used', async () => {
+        const siblingRole = await createRoleAsAccountAdmin({ name: 'scope-probe-admin', scope: 'ENTITY', permissionIds: [] })
+        await createProbeUser('scope-admin-holder@saasfoundryai.test', { roleId: siblingRole.id, entityId: siblingEntityId }, { entityId: siblingEntityId })
+        const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+        await agent
+          .patch(`/api/accounts/roles/${siblingRole.id}`)
+          .send({ name: 'scope-probe-admin-2', permissionIds: [allocation] })
+          .expect(200)
+        await agent.patch(`/api/accounts/roles/${siblingRole.id}/status`).send({ isActive: false }).expect(200)
+        await prismaService.userRoleAssignment.deleteMany({ where: { roleId: siblingRole.id } })
+        await agent.delete(`/api/accounts/roles/${siblingRole.id}`).expect(200)
+        expect(await prismaService.role.count({ where: { id: siblingRole.id } })).toBe(0)
       })
     })
   })

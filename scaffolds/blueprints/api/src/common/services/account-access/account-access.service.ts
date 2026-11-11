@@ -294,14 +294,21 @@ export class AccountAccessService {
    * The user's active role assignments with only what a permission check reads: scope, target ids, the
    * entity's account and the permission names of the role. Current rows (a revocation is seen at once).
    */
-  private async loadPermissionAssignments(userId: string): Promise<PermissionAssignment[]> {
+  private async loadPermissionAssignments(userId: string, withSubModules: boolean): Promise<PermissionAssignment[]> {
     return this.prisma.userRoleAssignment.findMany({
       where: { userId, role: { isActive: true } },
       select: {
         accountId: true,
         entityId: true,
         entity: { select: { id: true, accountId: true } },
-        role: { select: { scope: true, permissionsLinked: { select: { permission: { select: { name: true } } } } } }
+        role: {
+          select: {
+            scope: true,
+            permissionsLinked: { select: { permission: { select: { name: true } } } },
+            // The sections only when asked (granting a role): a permission check reads the permission names alone.
+            ...(withSubModules ? { subModulesLinked: { where: { subModule: { isActive: true } }, select: { subModuleId: true } } } : {})
+          }
+        }
       }
     })
   }
@@ -309,11 +316,13 @@ export class AccountAccessService {
   /**
    * A checker for one request: the user's assignments are read once and the named entities resolved in
    * bulk, then every `has` / `assert` is answered from memory. Name every entity the request will check
-   * (`entityIds`); an account needs no preparation.
+   * (`entityIds`); an account needs no preparation. `withSubModules` also loads the sections each role
+   * holds, for `hasSubModule` (checking that a role editor holds what it grants).
    */
-  async getPermissionChecker(userId: string, entityIds: string[] = []): Promise<ScopedPermissionChecker> {
-    const [assignments, entityTargets] = await Promise.all([this.loadPermissionAssignments(userId), this.resolveEntityTargets(entityIds)])
-    return new ScopedPermissionChecker(assignments, entityTargets)
+  async getPermissionChecker(userId: string, entityIds: string[] = [], options: { withSubModules?: boolean } = {}): Promise<ScopedPermissionChecker> {
+    const withSubModules = options.withSubModules === true
+    const [assignments, entityTargets] = await Promise.all([this.loadPermissionAssignments(userId, withSubModules), this.resolveEntityTargets(entityIds)])
+    return new ScopedPermissionChecker(assignments, entityTargets, withSubModules)
   }
 
   /**
