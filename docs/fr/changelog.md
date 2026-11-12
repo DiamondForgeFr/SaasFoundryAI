@@ -6,6 +6,103 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
+## [1.2.0] - 2026-11-12
+
+Version de fiabilité et de sécurité. Les applications générées contrôlent l'accès plus strictement : un utilisateur désactivé perd aussitôt l'accès à l'API, et un rôle ne donne de droits que là où il
+s'applique. Le workflow impose désormais ce qu'il se contentait de demander : des commits poussés avant AI Testing, une CI locale verte avant Human Testing, et aucun contournement appliqué par un
+agent à lui-même.
+
+### Ajouts
+
+#### CLI et workflow
+
+- `sf workflow set-local-ci` enregistre les statuts de CI locale qui doivent être verts sur la tête d'une pull request, et `workflow-cli.sh local-ci-gate` les vérifie. Sans liste enregistrée, la porte
+  la déduit de `.molten/project.json` ; une liste vide signifie que le projet n'a pas de CI locale ([#1104](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1104),
+  [#1172](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1172), [#1175](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1175)).
+- `update-status` refuse AI Testing tant que le travail du ticket n'est pas commité et poussé, et Human Testing tant que les statuts de CI locale requis ne sont pas verts sur la tête de la pull
+  request ([#1173](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1173), [#1174](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1174),
+  [#1176](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1176)).
+- `sf agents guard --host <claude-code|codex>` est un hook qui refuse qu'un agent s'applique lui-même un contournement (`SF_WORKFLOW_BYPASS_*`, `--skip-local-ci`, labels `nature:`) ou lance `ready-pr`
+  depuis un worktree délégué. `sf update` l'installe pour Claude Code et Codex ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106),
+  [#1212](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1212), [#1213](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1213),
+  [#1215](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1215)).
+- Une pull request peut résoudre plusieurs tickets : les gardes et `sync-pr-review` traitent chaque ticket qu'elle ferme, et une pull request marquée « Part of #N » reste verte sans déplacer ce ticket
+  ([#964](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/964), [#1093](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1093),
+  [#1065](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1065)).
+
+#### Statut et mesure des délégations
+
+- `sf status` nomme la CLI qui a produit le rapport et avertit quand elle est plus ancienne que le harness du projet. Le hook de démarrage de session lance la CLI du projet et s'en tient aux faits
+  ([#1103](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1103), [#1145](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1145),
+  [#1146](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1146), [#1147](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1147),
+  [#1148](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1148)).
+- `sf status` signale les skills personnels qui masquent un skill du projet, et `sf skill install` installe par défaut dans le projet quand celui-ci est géré
+  ([#1107](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1107)).
+- Les échecs de capture des délégations vont dans un journal d'erreurs, affiché par `sf status` et `sf agents routing report`. Un agent qui omet sa ligne `SF-DELEGATION` se la voit demander une fois,
+  et `sf agents route --record` enregistre la complexité et la nature du ticket ([#1105](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1105),
+  [#1159](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1159), [#1160](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1160),
+  [#1161](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1161), [#1162](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1162),
+  [#1163](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1163)).
+
+#### Harness et instructions des agents
+
+- Les agents délégués ne lancent que les tests concernés pendant le travail, et les suites complètes une seule fois, en AI Testing
+  ([#1157](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1157)).
+
+### Modifications
+
+- Les refus des scripts de workflow et de board indiquent que la décision revient au développeur, et le catalogue des contournements précise qui peut appliquer chacun
+  ([#1211](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1211), [#1214](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1214)).
+- La stack générée est rafraîchie sans changer de version majeure : outillage partagé de lint, de format et de build, runtime et outillage de test de l'API, runtime du web, versions du module storage,
+  Radix UI, lucide-react, react-hook-form, React 19.3, orval (client API commité régénéré) et Playwright 1.64 ([#1110](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1110),
+  [#1189](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1189) à [#1196](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1196)).
+
+### Sécurité
+
+Changement de comportement pour les projets générés existants : après `sf update`, un accès qui ne fonctionnait qu'à cause de ces défauts est refusé. Vérifiez les attributions de rôles avant la mise à
+jour.
+
+- Un rôle attribué sur une entité ne compte plus sur les routes du compte : un admin d'entité ne passe plus les contrôles d'admin du compte. Les routes d'entité et les invitations sont autorisées
+  selon leur cible ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072), [#1133](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1133) à
+  [#1137](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1137)).
+- Seule la plateforme peut modifier un rôle système. Modifier un rôle personnalisé exige le droit de gérer les rôles partout où ce rôle est attribué
+  ([#1129](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1129)).
+- Les jetons d'accès et de rafraîchissement d'un utilisateur désactivé sont refusés, et la désactivation met fin à ses sessions ([#1140](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1140)).
+- Les alertes de dépendances sont corrigées dans la CLI (dont une paire critique sur handlebars ; `simple-git`, inutilisé, est retiré) et dans l'API et le web générés (js-yaml via swagger, fast-uri,
+  handlebars, Vite 8.3.5, source-map-js) ([#1108](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1108), [#1109](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1109),
+  [#1130](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1130), [#1131](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1131),
+  [#1132](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1132), [#1203](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1203)).
+
+### Corrections
+
+#### CLI et workflow
+
+- `update-status` peut faire avancer un Epic parent sur un board sans statut Ready ([#965](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/965)).
+- `sf new --profile full` crée les labels du workflow, et le premier `create-ticket --complexity` fonctionne ([#973](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/973)).
+- Les Stories créées par spawn reçoivent un statut sur le board ([#1118](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1118)).
+- Le message de consentement à la délégation ne propose plus de commit direct sur une branche de travail protégée ([#1124](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1124)).
+- `ready-pr` et `draft-pr` fonctionnent depuis le checkout principal ([#1125](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1125)).
+- `sf update` conserve l'expéditeur des e-mails du projet dans `deployment-api.yml` ([#1151](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1151)).
+- La migration vers `AGENTS.md` réécrit les références aux fichiers `CLAUDE.md` qu'elle supprime, et les monorepos migrés restent sous la limite de 32 Kio de Codex
+  ([#1152](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1152), [#1154](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1154)).
+- AI Testing ne prend plus un pipeline MoltenTerm sans job pour la CI locale déclarée ([#1155](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1155)).
+
+#### Projets générés
+
+- `npm run services:up` fonctionne sur un projet neuf : le réseau Docker externe est créé ([#978](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/978)).
+- La validation d'impact du pre-commit utilise le TypeScript de chaque workspace et n'hérite plus des variables du hook qui cassaient son worktree temporaire
+  ([#1027](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1027), [#1153](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1153)).
+- Les classes des primitives d'interface sont générées dans les worktrees ([#1048](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1048)).
+- Le lint ignore les sorties de test et ne bloque plus après un run E2E ([#1092](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1092)).
+- Le dialogue d'invitation d'entité se ferme après l'envoi ([#1200](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1200)).
+
+#### Outillage
+
+- La CI locale est hermétique : les tests ne lisent plus le `sf` global, et le contrôle de format ignore `.tmp/` ([#1128](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1128)).
+- Les tests unitaires et d'intégration tiennent sous charge, la lane Docker réessaie après une erreur passagère du registre npm, et le test de cycle de vie depuis la release précédente passe à nouveau
+  ([#1171](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1171), [#1205](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1205),
+  [#1198](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1198), [#1080](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1080)).
+
 ## [1.1.0] - 2026-11-01
 
 Version de fonctionnalités. La délégation des tickets est désormais routée selon le type de tâche, les instructions des agents passent dans `AGENTS.md`, et une exigence fonctionnelle existante peut
